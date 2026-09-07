@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -24,6 +25,8 @@ from marimo_studio._validation.ports import RuntimeChecker
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio.view_providers import BuildRequest
+from marimo_studio.view_providers._host import provider_registry
 
 from ..app_helpers import edit_mode, marimo_app, session_manager
 from ..async_test_support import wait_for_event
@@ -211,6 +214,73 @@ def test_validation_rejects_source_mutation_between_static_and_runtime_stages(
     assert not runtime_called
     assert run.report.ok is False
     assert run.static.checks[-1].code == "validation-source-changed"
+
+
+def test_static_validation_rejects_notebook_changes_during_build(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = studio_authoring.open_workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+    provider = provider_registry().get(
+        load_studio(notebook_path).view("dashboard").provider
+    )
+    build = provider.build
+
+    def change_notebook(request: BuildRequest):
+        result = build(request)
+        notebook_path.write_text(
+            notebook_path.read_text(encoding="utf-8") + "\n# Updated analysis\n",
+            encoding="utf-8",
+        )
+        return result
+
+    monkeypatch.setattr(provider, "build", change_notebook)
+
+    report = asyncio.run(workspace.validate(level="static", view="dashboard"))
+
+    assert not report.ok
+    assert any(issue.code == "validation-source-changed" for issue in report.issues)
+
+
+def test_static_validation_rejects_changed_provider_mounts(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = studio_authoring.open_workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+    project = load_studio(notebook_path).view("dashboard")
+    provider = provider_registry().get(project.provider)
+    build = provider.build
+    inspect = provider.inspect
+    changed = False
+
+    def inspect_mounts(request: Any):
+        inspection = inspect(request)
+        return (
+            replace(
+                inspection,
+                mounts=tuple(
+                    replace(mount, allowed_targets=None) for mount in inspection.mounts
+                ),
+            )
+            if changed
+            else inspection
+        )
+
+    def change_mounts(request: BuildRequest):
+        nonlocal changed
+        result = build(request)
+        changed = True
+        return result
+
+    monkeypatch.setattr(provider, "inspect", inspect_mounts)
+    monkeypatch.setattr(provider, "build", change_mounts)
+
+    report = asyncio.run(workspace.validate(level="static", view="dashboard"))
+
+    assert not report.ok
+    assert any(issue.code == "validation-source-changed" for issue in report.issues)
 
 
 def _validation_entry_reports(

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from threading import Event, Thread
 from typing import Any
 
 import pytest
 
+import marimo_studio._artifacts.inputs as inputs_module
 import marimo_studio._artifacts.publication as publication_module
 import marimo_studio._artifacts.repository as repository_module
 from marimo_studio._artifacts.paths import artifact_root
@@ -24,11 +26,48 @@ from marimo_studio._processes.cancellation import (
 )
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.build import publish_view as publish_artifact_lease
-from marimo_studio.view_providers import BuildRequest, BuildResult, ViewProject
+from marimo_studio._views.inspection import inspection_request
+from marimo_studio.view_providers import (
+    BuildRequest,
+    BuildResult,
+    ProjectInput,
+    ViewProject,
+)
 from marimo_studio.view_providers._host import provider_registry
 
 from ..artifact_test_support import change_document, publish_artifact
 from ..artifact_test_support import project as make_project
+
+
+def test_snapshot_copies_the_inputs_accepted_by_its_source_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = make_project(tmp_path)
+    provider = provider_registry().get(project.provider)
+    inspection = replace(
+        provider.inspect(inspection_request(project)),
+        input_scope=(ProjectInput(PurePosixPath("."), "directory"),),
+    )
+    capture = inputs_module.project_input_state
+    added = project.root / "extra.css"
+
+    def add_at_capture(*args: Any, **kwargs: Any):
+        if not added.exists():
+            added.write_text("body { color: blue; }", encoding="utf-8")
+        return capture(*args, **kwargs)
+
+    monkeypatch.setattr(inputs_module, "project_input_state", add_at_capture)
+    snapshot = inputs_module.snapshot_project(
+        project,
+        inspection,
+        artifact_root(project) / "snapshot",
+    )
+
+    assert (snapshot.project.root / "extra.css").read_text(encoding="utf-8") == (
+        "body { color: blue; }"
+    )
+    assert PurePosixPath("extra.css") in snapshot.input_digests
 
 
 def test_provider_build_reads_one_immutable_input_snapshot(

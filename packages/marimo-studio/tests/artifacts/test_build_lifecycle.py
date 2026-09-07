@@ -44,6 +44,7 @@ from marimo_studio.view_providers import (
     BuildRequest,
     BuildResult,
     ProjectDiagnostic,
+    ProjectInput,
     ViewProject,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -545,6 +546,25 @@ def test_prepared_cache_rechecks_source_before_reporting_success(
     assert [item.code for item in state.diagnostics] == ["project-changed-during-build"]
 
 
+def test_prepared_build_uses_snapshot_mount_declarations(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    provider = provider_registry().get(project.provider)
+    inspection = provider.inspect(inspection_request(project))
+    input_id = project_revision(project, inspection, provider.provenance(inspection))
+
+    with publish_artifact_lease(
+        project,
+        "development",
+        inspection=replace(inspection, mounts=()),
+        input_id=input_id,
+    ) as lease:
+        assert [
+            (mount.kind, mount.allowed_targets) for mount in lease.artifact.mounts
+        ] == [
+            ("value", ("summary",)),
+        ]
+
+
 def test_cached_restore_confirms_source_inside_its_receipt_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -602,6 +622,65 @@ def test_publication_confirms_source_inside_its_receipt_transaction(
     assert {path.name for path in revisions.iterdir()} == {
         published.artifact_revision.removeprefix("sha256:")
     }
+
+
+@pytest.mark.parametrize(
+    ("cached", "added"),
+    (
+        (False, "public/nested/new.css"),
+        (True, "public/new.css"),
+        (False, "optional.css"),
+        (False, "missing/new.css"),
+    ),
+)
+def test_publication_rejects_added_build_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cached: bool,
+    added: str,
+) -> None:
+    project = _project(tmp_path)
+    (project.root / "public" / "nested").mkdir(parents=True)
+    provider = provider_registry().get(project.provider)
+    inspect = provider.inspect
+
+    def inspect_public_inputs(request: Any):
+        inspection = inspect(request)
+        return replace(
+            inspection,
+            input_scope=(
+                *inspection.input_scope,
+                ProjectInput(PurePosixPath("public"), "directory"),
+                ProjectInput(PurePosixPath("missing"), "directory"),
+                ProjectInput(PurePosixPath("optional.css"), "file"),
+            ),
+        )
+
+    monkeypatch.setattr(provider, "inspect", inspect_public_inputs)
+    with publish_artifact_lease(project, "development") as lease:
+        published = lease.artifact
+    if not cached:
+        _change_document(project, "candidate generation")
+    operation_name = (
+        "restore_cached_artifact" if cached else "publish_artifact_candidate"
+    )
+    commit = getattr(build_module, operation_name)
+
+    def add_before_commit(*args: Any, **kwargs: Any):
+        path = project.root / added
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("body { color: blue; }", encoding="utf-8")
+        return commit(*args, **kwargs)
+
+    monkeypatch.setattr(build_module, operation_name, add_before_commit)
+
+    with pytest.raises(ViewProjectError, match="changed while its artifact was built"):
+        publish_artifact_lease(project, "development")
+
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == published.artifact_revision
+    assert read_build_state(project, "development").phase == "failed"
 
 
 def test_publication_rechecks_the_view_owner_inside_its_receipt_transaction(

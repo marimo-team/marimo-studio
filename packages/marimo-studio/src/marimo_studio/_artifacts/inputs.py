@@ -36,7 +36,7 @@ from marimo_studio._artifacts.paths import (
     verified_secure_file,
 )
 from marimo_studio._filesystem.secure import SecureDirectory, secure_directory
-from marimo_studio._filesystem.tree import bounded_regular_files
+from marimo_studio._filesystem.tree import bounded_tree_entries
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
@@ -70,6 +70,8 @@ class ProjectInputFileState:
 class ProjectInputState:
     paths: tuple[PurePosixPath, ...]
     files: Mapping[PurePosixPath, ProjectInputFileState]
+    directories: Mapping[PurePosixPath, tuple[int, int, int, int, int]]
+    absent: tuple[PurePosixPath, ...]
 
 
 @dataclass(frozen=True)
@@ -172,34 +174,55 @@ def project_input_paths(
     inspection: ProjectInspection,
 ) -> tuple[PurePosixPath, ...]:
     """Enumerate one provider input scope through Studio's file budget."""
+    return _input_catalog(project, inspection)[0]
+
+
+def _input_catalog(
+    project: ViewProject,
+    inspection: ProjectInspection,
+) -> tuple[
+    tuple[PurePosixPath, ...], tuple[PurePosixPath, ...], tuple[PurePosixPath, ...]
+]:
     cancellation = current_provider_cancellation()
     paths: set[PurePosixPath] = set()
+    directories: set[PurePosixPath] = set()
+    absent: set[PurePosixPath] = set()
+    seen_entries: set[Path] = set()
     for item in inspection.input_scope:
+        target = project.root.joinpath(*item.path.parts)
+        if not target.exists() and not target.is_symlink():
+            absent.add(item.path)
+            continue
         if item.kind == "file":
-            if project.root.joinpath(*item.path.parts).exists():
-                paths.add(item.path)
+            paths.add(item.path)
             continue
-        directory = project.root.joinpath(*item.path.parts)
-        if not directory.exists():
-            continue
-        discovered = bounded_regular_files(
-            directory,
-            max_files=PROJECT_INPUT_BUDGET.max_files,
+        directories.add(item.path)
+        discovered = bounded_tree_entries(
+            target,
+            max_entries=PROJECT_INPUT_BUDGET.max_files,
             label="View project inputs",
             excluded_paths=(artifact_root(project),),
+            seen=seen_entries,
             cancelled=(
                 (lambda: cancellation.cancelled) if cancellation is not None else None
             ),
         )
-        paths.update(
-            PurePosixPath(path.relative_to(project.root).as_posix())
-            for path in discovered
-        )
+        for entry in discovered:
+            relative = PurePosixPath(entry.path.relative_to(project.root).as_posix())
+            if entry.kind == "symlink":
+                raise ConfigurationError(
+                    f"View project inputs contain a symlink: {entry.path}"
+                )
+            (directories if entry.kind == "directory" else paths).add(relative)
     ordered = tuple(sorted(paths, key=PurePosixPath.as_posix))
     FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project inputs").require_count(
         len(ordered)
     )
-    return ordered
+    return (
+        ordered,
+        tuple(sorted(directories, key=PurePosixPath.as_posix)),
+        tuple(sorted(absent, key=PurePosixPath.as_posix)),
+    )
 
 
 def _manifest_path(project: ViewProject) -> PurePosixPath:
@@ -214,26 +237,44 @@ def _manifest_path(project: ViewProject) -> PurePosixPath:
         ) from error
 
 
-def _state_paths(
-    project: ViewProject,
-    inspection: ProjectInspection,
-    input_paths: tuple[PurePosixPath, ...] | None = None,
-) -> tuple[PurePosixPath, ...]:
-    paths = set(
-        project_input_paths(project, inspection) if input_paths is None else input_paths
-    )
-    paths.add(_manifest_path(project))
-    return tuple(sorted(paths, key=PurePosixPath.as_posix))
-
-
 def _input_state_with_owner(
     project: ViewProject,
     inspection: ProjectInspection,
     files: SecureDirectory,
-    input_paths: tuple[PurePosixPath, ...] | None = None,
+    observed: ProjectInputState | None = None,
 ) -> ProjectInputState:
     files.ensure_attached()
-    paths = _state_paths(project, inspection, input_paths)
+    if observed is None:
+        input_paths, directory_paths, absent = _input_catalog(project, inspection)
+        paths = tuple(
+            sorted({*input_paths, _manifest_path(project)}, key=PurePosixPath.as_posix)
+        )
+    else:
+        paths = observed.paths
+        directory_paths = tuple(observed.directories)
+        missing: list[PurePosixPath] = []
+        for relative in observed.absent:
+            try:
+                present = files.entry_exists(project.root.joinpath(*relative.parts))
+            except FileNotFoundError:
+                present = False
+            if not present:
+                missing.append(relative)
+        absent = tuple(missing)
+    directories: dict[PurePosixPath, tuple[int, int, int, int, int]] = {}
+    for relative in directory_paths:
+        path = project.root.joinpath(*relative.parts)
+        with secure_directory(path) as directory:
+            directory.ensure_attached()
+            state = path.stat(follow_symlinks=False)
+            directory.ensure_attached()
+        directories[relative] = (
+            state.st_dev,
+            state.st_ino,
+            state.st_mode,
+            state.st_mtime_ns,
+            state.st_ctime_ns,
+        )
     states: dict[PurePosixPath, ProjectInputFileState] = {}
     for relative in paths:
         path = project.root.joinpath(*relative.parts)
@@ -253,7 +294,9 @@ def _input_state_with_owner(
             state.st_ctime_ns,
         )
     files.ensure_attached()
-    return ProjectInputState(paths, MappingProxyType(states))
+    return ProjectInputState(
+        paths, MappingProxyType(states), MappingProxyType(directories), absent
+    )
 
 
 def project_input_state(
@@ -261,13 +304,13 @@ def project_input_state(
     inspection: ProjectInspection,
     *,
     files: SecureDirectory | None = None,
-    input_paths: tuple[PurePosixPath, ...] | None = None,
+    observed: ProjectInputState | None = None,
 ) -> ProjectInputState:
     """Capture bounded input metadata without reading file contents."""
     if files is not None:
-        return _input_state_with_owner(project, inspection, files, input_paths)
+        return _input_state_with_owner(project, inspection, files, observed)
     with secure_directory(project.root) as owner:
-        return _input_state_with_owner(project, inspection, owner, input_paths)
+        return _input_state_with_owner(project, inspection, owner, observed)
 
 
 def project_revision_snapshot(
@@ -336,27 +379,9 @@ def snapshot_project(
         "View input snapshot",
         final_kind="directory",
     )
-    try:
-        manifest_relative = normalized_artifact_path(
-            project.manifest.relative_to(project.root).as_posix(),
-            "View project manifest path",
-        )
-    except ValueError as error:
-        raise ConfigurationError(
-            f"View project manifest is outside {project.root}: {project.manifest}"
-        ) from error
-    input_paths = project_input_paths(project, inspection)
-    before = project_input_state(
-        project,
-        inspection,
-        input_paths=input_paths,
-    )
-    entries = tuple(_input_entry(project, path) for path in input_paths)
-    if all(relative != manifest_relative for relative, _path, _label in entries):
-        entries = (
-            *entries,
-            (manifest_relative, project.manifest, "View project manifest"),
-        )
+    manifest_relative = _manifest_path(project)
+    before = project_input_state(project, inspection)
+    entries = tuple(_input_entry(project, path) for path in before.paths)
     budget = FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project inputs")
     budget.require_count(len(entries))
     input_digests: dict[PurePosixPath, bytes] = {}
@@ -384,11 +409,7 @@ def snapshot_project(
             )
         ),
     )
-    after = project_input_state(
-        project,
-        inspection,
-        input_paths=input_paths,
-    )
+    after = project_input_state(project, inspection)
     if before != after:
         raise ConfigurationError(
             f"View project {project.name!r} changed while its snapshot was captured"

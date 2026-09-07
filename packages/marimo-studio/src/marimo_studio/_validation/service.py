@@ -32,9 +32,10 @@ from marimo_studio._validation.static import CheckReport, check_studio
 from marimo_studio._views.presentation_publication import publish_presentation
 from marimo_studio._views.revisions import (
     PreparedViewProject,
+    SourceRevisionSnapshot,
     capture_presentations,
     capture_published_presentations,
-    capture_source_revisions,
+    capture_source_snapshot,
 )
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
@@ -84,21 +85,17 @@ def _views(studio: StudioWorkspace, view_name: str | None) -> tuple[str, ...]:
     return (view_name,)
 
 
-def _source_revisions(
-    studio: StudioWorkspace,
-    views: tuple[str, ...],
-) -> dict[str, str]:
-    return capture_source_revisions(studio, views)
-
-
 def _presentation_revisions(
     studio: StudioWorkspace,
     views: tuple[str, ...],
     expected_generations: Mapping[str, str] | None = None,
+    *,
+    prepared: Mapping[str, PreparedViewProject] | None = None,
 ) -> dict[str, str]:
     with capture_presentations(
         studio,
         views,
+        prepared=prepared,
         expected_generations=expected_generations,
     ) as snapshot:
         return {view: snapshot.revisions[view] for view in views}
@@ -119,8 +116,16 @@ def _try_source_revisions(
     studio: StudioWorkspace,
     views: tuple[str, ...],
 ) -> tuple[dict[str, str] | None, Exception | None]:
+    snapshot, error = _try_source_snapshot(studio, views)
+    return (snapshot.revisions if snapshot is not None else None), error
+
+
+def _try_source_snapshot(
+    studio: StudioWorkspace,
+    views: tuple[str, ...],
+) -> tuple[SourceRevisionSnapshot | None, Exception | None]:
     try:
-        return _source_revisions(studio, views), None
+        return capture_source_snapshot(studio, views), None
     except (KeyError, OSError, MarimoStudioError) as error:
         raise_process_cleanup(error)
         return None, error
@@ -156,47 +161,32 @@ def _prepare_validation(
     revisions: dict[str, str] | None = None,
     expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationPreparation:
-    from marimo_studio._views.inspection import inspect_view_mounts
-
     selected = _views(studio, view_name)
-    before, before_error = _try_source_revisions(studio, selected)
-    try:
-        mounts = {view: inspect_view_mounts(studio.views[view]) for view in selected}
-    except (OSError, MarimoStudioError, UnicodeError, ValueError) as error:
-        raise_process_cleanup(error)
-        mounts = None
+    snapshot, before_error = _try_source_snapshot(studio, selected)
+    before = snapshot.revisions if snapshot is not None else None
+    mounts = (
+        {view: project.inspection.mounts for view, project in snapshot.projects.items()}
+        if snapshot is not None
+        and not any(
+            diagnostic.severity == "error"
+            for project in snapshot.projects.values()
+            for diagnostic in project.inspection.diagnostics
+        )
+        else None
+    )
     static = check_studio(
         studio,
         view_name=view_name,
         _published_mounts=mounts,
     )
-    after, after_error = _try_source_revisions(studio, selected)
-    source_error = before_error or after_error
-    source_stable = source_error is None and before is not None and before == after
-    if source_error is not None:
-        static = static.extend(
-            (
-                source_revision_check(
-                    studio,
-                    f"Studio sources could not be captured: {source_error}",
-                    code="validation-source-unavailable",
-                ),
-            )
-        )
-    elif not source_stable:
-        static = static.extend(
-            (
-                source_revision_check(
-                    studio,
-                    "Studio sources changed during static validation.",
-                    code="validation-source-changed",
-                ),
-            )
-        )
-    source_revisions = after or before or {view: "unavailable" for view in selected}
     try:
         revisions = (
-            _presentation_revisions(studio, selected, expected_generations)
+            _presentation_revisions(
+                studio,
+                selected,
+                expected_generations,
+                prepared=snapshot.projects if snapshot is not None else None,
+            )
             if revisions is None
             else revisions
         )
@@ -221,6 +211,30 @@ def _prepare_validation(
                     ),
                 )
             )
+    after, after_error = _try_source_revisions(studio, selected)
+    source_error = before_error or after_error
+    source_stable = source_error is None and before is not None and before == after
+    if source_error is not None:
+        static = static.extend(
+            (
+                source_revision_check(
+                    studio,
+                    f"Studio sources could not be captured: {source_error}",
+                    code="validation-source-unavailable",
+                ),
+            )
+        )
+    elif not source_stable:
+        static = static.extend(
+            (
+                source_revision_check(
+                    studio,
+                    "Studio sources changed during static validation.",
+                    code="validation-source-changed",
+                ),
+            )
+        )
+    source_revisions = after or before or {view: "unavailable" for view in selected}
     dynamic_browser_required = mounts is not None and any(
         site.allowed_targets is None for sites in mounts.values() for site in sites
     )

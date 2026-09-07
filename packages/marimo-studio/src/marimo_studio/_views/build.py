@@ -215,7 +215,7 @@ def _project_stability_failure(
         actual_state = project_input_state(
             project,
             inspection,
-            input_paths=expected_state.paths,
+            observed=expected_state,
         )
     except Exception as error:
         return ProjectDiagnostic(
@@ -443,17 +443,13 @@ def _publish_locked(
         candidate_owner = capture_artifact_candidate(project, discovered)
         with candidate_owner as candidate:
             snapshot = candidate.snapshot.project
-            snapshot_inspection = (
-                inspection
-                if inspection is not None
-                else _inspect_snapshot(
-                    project,
-                    snapshot,
-                    profile,
-                    provider,
-                    started,
-                    candidate.cache_root,
-                )
+            snapshot_inspection = _inspect_snapshot(
+                project,
+                snapshot,
+                profile,
+                provider,
+                started,
+                candidate.cache_root,
             )
             provenance = provider.provenance(snapshot_inspection)
             revision = snapshot_revision(

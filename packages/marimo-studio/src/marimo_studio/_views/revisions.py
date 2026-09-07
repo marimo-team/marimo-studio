@@ -109,6 +109,22 @@ def capture_source_revisions(
     view_names: tuple[str, ...] | None = None,
 ) -> dict[str, str]:
     """Hash current notebook, configuration, and declared provider inputs."""
+    return capture_source_snapshot(studio, view_names).revisions
+
+
+@dataclass(frozen=True)
+class SourceRevisionSnapshot:
+    """Pair source revisions with the provider inspections that they identify."""
+
+    revisions: dict[str, str]
+    projects: dict[str, PreparedViewProject]
+
+
+def capture_source_snapshot(
+    studio: StudioWorkspace,
+    view_names: tuple[str, ...] | None = None,
+) -> SourceRevisionSnapshot:
+    """Capture selected source identities and their inspected project contracts."""
     selected = _selected_views(studio, view_names)
     source_paths = tuple(dict.fromkeys((studio.config_path, studio.notebook)))
     before = tuple(_source_file_state(path) for path in source_paths)
@@ -119,6 +135,7 @@ def capture_source_revisions(
             "Studio sources changed while validation revisions were captured"
         )
     revisions: dict[str, str] = {}
+    projects: dict[str, PreparedViewProject] = {}
     for name in selected:
         project = studio.views[name]
         provider = provider_registry().get(project.provider)
@@ -133,14 +150,16 @@ def capture_source_revisions(
             base_identity,
             after,
             project_snapshot.revision,
-            project_snapshot.state,
+            project_snapshot.state.files,
+            inspection.to_dict(),
         )
         revisions[name] = hashlib.sha256(repr(identity).encode()).hexdigest()
+        projects[name] = PreparedViewProject(inspection, project_snapshot.revision)
     if tuple(_source_file_state(path) for path in source_paths) != after:
         raise ConfigurationError(
             "Studio sources changed while validation revisions were captured"
         )
-    return revisions
+    return SourceRevisionSnapshot(revisions, projects)
 
 
 def _source_file_state(path: os.PathLike[str]) -> tuple[int, int, int, int, int, int]:
