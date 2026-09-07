@@ -211,8 +211,11 @@ publication lock for revision installation, lease creation, pruning, and
 receipt replacement.
 
 Removal acquires the workspace catalog lock, view build lock, and view mutation
-lock. Its deletion guard then blocks new leases, checks live pins under the
-artifact publication lock, and replaces the project tree. Lease acquisition
+lock. When a build owns the view, removal releases the catalog lock before
+waiting and revalidates ownership after acquiring the ordered locks. Source
+operations on other views remain available during that wait. Its deletion guard
+then blocks new leases, checks live pins under the artifact publication lock,
+and replaces the project tree. Lease acquisition
 takes the lease-admission lock before the artifact publication lock.
 
 Do not wait for provider work, browser I/O, or process cleanup while holding the

@@ -15,7 +15,10 @@ from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._views.remove import delete_view, validate_view_deletion_owner
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
+from marimo_studio._workspace.mutation_lock import (
+    view_removal_lock,
+    workspace_catalog_lock,
+)
 from marimo_studio.errors import ViewDeletionError
 from marimo_studio.errors._internal import ViewDeletionCapacityError
 
@@ -59,23 +62,33 @@ def _start_deletion_claim(
 
         def remove() -> StudioWorkspace | None:
             with workspace_catalog_lock(studio.view_root):
+                _ = validate_view_deletion_owner(
+                    studio,
+                    name,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
+                )
+            loop.call_soon_threadsafe(claimed.set)
+            proceed.wait()
+            if abort.is_set():
+                return None
+            with (
+                presentation.deleting_view(name) as release_artifacts,
+                view_removal_lock(studio.view_root, name),
+            ):
                 current = validate_view_deletion_owner(
                     studio,
                     name,
                     expected_catalog_generation=expected_catalog_generation,
                     expected_generation=expected_generation,
                 )
-                loop.call_soon_threadsafe(claimed.set)
-                proceed.wait()
-                if abort.is_set():
-                    return None
-                with presentation.deleting_view(name):
-                    return delete_view(
-                        current,
-                        name,
-                        expected_catalog_generation=expected_catalog_generation,
-                        expected_generation=expected_generation,
-                    )
+                release_artifacts()
+                return delete_view(
+                    current,
+                    name,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
+                )
 
         def complete() -> None:
             result: StudioWorkspace | None = None

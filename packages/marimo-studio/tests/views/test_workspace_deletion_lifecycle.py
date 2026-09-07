@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event, get_ident
 from typing import Any
 
 import pytest
@@ -15,8 +15,10 @@ import pytest
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.remove as workspace_views
 import marimo_studio._workspace.generation as workspace_generation
+import marimo_studio._workspace.mutation_lock as mutation_locks
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
+from marimo_studio._views.sources import read_source
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.view_owners import load_view_owner, view_owner_path
@@ -36,6 +38,42 @@ from ._workspace_lifecycle_support import (
 from .workspace_test_support import (
     _delete_view_in_process,
 )
+
+
+def test_pending_view_removal_keeps_other_source_documents_available(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
+    studio = load_studio(notebook_path)
+    waiting = Event()
+    deletion_thread: int | None = None
+    lock = mutation_locks._mutation_lock
+
+    @contextmanager
+    def observe_build_wait(root: Path, filename: str, **kwargs: Any):
+        if filename == "dashboard.build.lock" and get_ident() == deletion_thread:
+            waiting.set()
+        with lock(root, filename, **kwargs) as acquired:
+            yield acquired
+
+    monkeypatch.setattr(mutation_locks, "_mutation_lock", observe_build_wait)
+
+    def remove() -> StudioWorkspace:
+        nonlocal deletion_thread
+        deletion_thread = get_ident()
+        return delete_view(studio, "dashboard")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        with mutation_locks.view_build_lock(studio.view_root, "dashboard"):
+            deletion = executor.submit(remove)
+            assert waiting.wait(timeout=5)
+            reading = executor.submit(read_source, studio, "executive", "index.html")
+            document = reading.result(timeout=2)
+            assert document.content
+        updated = deletion.result(timeout=5)
+    assert tuple(updated.views) == ("executive",)
 
 
 def test_concurrent_thread_deletion_keeps_one_final_view(

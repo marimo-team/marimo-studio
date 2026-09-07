@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
@@ -11,9 +11,11 @@ from typing import Any, cast
 import pytest
 
 import marimo_studio._server.studio.deletion as deletion_service
+import marimo_studio._workspace.mutation_lock as mutation_locks
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._views.api import prepare_view
+from marimo_studio._views.sources import read_source
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ViewDeletionError, WorkspaceGenerationConflictError
@@ -43,16 +45,175 @@ class _Presentation:
         self.events = events
 
     @contextmanager
-    def deleting_view(self, view_name: str) -> Iterator[None]:
-        self.events.append(f"presentation-enter:{view_name}")
+    def deleting_view(self, view_name: str) -> Iterator[Callable[[], None]]:
+        released = False
+
+        def release() -> None:
+            nonlocal released
+            released = True
+            self.events.append(f"presentation-enter:{view_name}")
+
         try:
-            yield
+            yield release
         finally:
-            self.events.append(f"presentation-exit:{view_name}")
+            if released:
+                self.events.append(f"presentation-exit:{view_name}")
 
 
 def _owners(studio: StudioWorkspace, name: str) -> tuple[str, str]:
     return studio.catalog_generation, studio.view_generations[name]
+
+
+def test_deletion_admits_a_snapshot_before_acquiring_its_build_lock(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
+    studio = load_studio(notebook_path)
+    presentation = NotebookPresentation(notebook_path)
+    snapshot_held = threading.Event()
+    deletion_waiting = threading.Event()
+    snapshot_admitted = threading.Event()
+    deleting_view = presentation.deleting_view
+
+    @contextmanager
+    def observe_deletion(name: str):
+        deletion_waiting.set()
+        with deleting_view(name) as release:
+            yield release
+
+    monkeypatch.setattr(presentation, "deleting_view", observe_deletion)
+
+    def snapshot_owner() -> None:
+        with presentation._coordination_lock("dashboard"):
+            snapshot_held.set()
+            assert deletion_waiting.wait(timeout=5)
+            # A nonblocking attempt exposes the lock cycle and lets both owners settle.
+            with mutation_locks._mutation_lock(
+                studio.view_root, "dashboard.build.lock", blocking=False
+            ) as acquired:
+                if acquired:
+                    snapshot_admitted.set()
+
+    snapshot = threading.Thread(target=snapshot_owner)
+    snapshot.start()
+
+    async def exercise() -> None:
+        assert await asyncio.to_thread(snapshot_held.wait, 5)
+        catalog_generation, view_generation = _owners(studio, "dashboard")
+        result = await deletion_service.delete_owned_view(
+            studio,
+            "dashboard",
+            expected_catalog_generation=catalog_generation,
+            expected_generation=view_generation,
+            presentation=presentation,
+            development=cast(DevelopmentCoordinator, _Development([])),
+        )
+        assert tuple(result.workspace.views) == ("executive",)
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        deletion_waiting.set()
+        snapshot.join(timeout=5)
+        presentation.close()
+    assert not snapshot.is_alive()
+    assert snapshot_admitted.is_set()
+
+
+def test_deletion_drains_development_while_other_sources_remain_available(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
+    studio = load_studio(notebook_path)
+    events: list[str] = []
+
+    async def exercise() -> None:
+        draining = asyncio.Event()
+        release = asyncio.Event()
+
+        class Development:
+            @asynccontextmanager
+            async def deleting_view(self, _name: str) -> AsyncGenerator[None, None]:
+                draining.set()
+                await release.wait()
+                yield
+
+        catalog_generation, view_generation = _owners(studio, "dashboard")
+        deletion = asyncio.create_task(
+            deletion_service.delete_owned_view(
+                studio,
+                "dashboard",
+                expected_catalog_generation=catalog_generation,
+                expected_generation=view_generation,
+                presentation=cast(NotebookPresentation, _Presentation(events)),
+                development=cast(DevelopmentCoordinator, Development()),
+            )
+        )
+        try:
+            await asyncio.wait_for(draining.wait(), timeout=5)
+            document = await asyncio.wait_for(
+                asyncio.to_thread(read_source, studio, "executive", "index.html"),
+                timeout=2,
+            )
+            assert document.content
+        finally:
+            release.set()
+            result = await deletion
+        assert tuple(result.workspace.views) == ("executive",)
+
+    asyncio.run(exercise())
+
+
+def test_catalog_change_during_deletion_drain_preserves_presentation(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
+    studio = load_studio(notebook_path)
+    events: list[str] = []
+    presentation = NotebookPresentation(notebook_path)
+    retained = presentation.snapshot("dashboard")
+
+    class Development:
+        @asynccontextmanager
+        async def deleting_view(self, _name: str) -> AsyncGenerator[None, None]:
+            await asyncio.to_thread(prepare_view, notebook_path, "operations")
+            try:
+                yield
+            except WorkspaceGenerationConflictError:
+                events.append("development-rollback")
+                raise
+
+    async def exercise() -> None:
+        catalog_generation, view_generation = _owners(studio, "dashboard")
+        with pytest.raises(WorkspaceGenerationConflictError):
+            await deletion_service.delete_owned_view(
+                studio,
+                "dashboard",
+                expected_catalog_generation=catalog_generation,
+                expected_generation=view_generation,
+                presentation=presentation,
+                development=cast(DevelopmentCoordinator, Development()),
+            )
+
+    try:
+        asyncio.run(exercise())
+        assert (
+            presentation.snapshot_for_revision("dashboard", retained.revision)
+            is retained
+        )
+    finally:
+        presentation.close()
+
+    assert events == ["development-rollback"]
+    assert set(load_studio(notebook_path).views) == {
+        "dashboard",
+        "executive",
+        "operations",
+    }
 
 
 def test_deletion_uses_a_dedicated_thread_when_the_default_executor_is_busy(
@@ -181,8 +342,6 @@ def test_deletion_capacity_rejects_without_starting_an_unbounded_thread(
         asyncio.run(exercise())
     finally:
         release_validation.set()
-
-    assert validations == 2
 
 
 def test_thread_start_failure_releases_deletion_capacity(

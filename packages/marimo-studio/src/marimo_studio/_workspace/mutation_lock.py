@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from weakref import WeakValueDictionary
@@ -62,17 +62,25 @@ def _require_lock_owner(
 
 
 @contextmanager
-def _mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
+def _mutation_lock(
+    view_root: Path,
+    filename: str,
+    *,
+    blocking: bool = True,
+) -> Generator[bool, None, None]:
     root = view_root.absolute()
     control = root / ".locks"
     boundary = Path(root.anchor)
     lock_path = control / filename
     reject_mutable_symlinks(boundary, {root, control, lock_path})
     thread_lock = _thread_lock(lock_path)
-    with thread_lock:
+    if not thread_lock.acquire(blocking=blocking):
+        yield False
+        return
+    try:
         held = _held_paths()
         if lock_path in held:
-            yield
+            yield True
             return
         owner = ExitStack()
         try:
@@ -87,8 +95,10 @@ def _mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
             ) from error
         acquired = False
         try:
-            _acquire_file_lock(descriptor, blocking=True)
-            acquired = True
+            acquired = _acquire_file_lock(descriptor, blocking=blocking)
+            if not acquired:
+                yield False
+                return
             lock_state = os.fstat(descriptor)
             lock_owner = (lock_state.st_dev, lock_state.st_ino, lock_state.st_mode)
             _require_lock_owner(
@@ -98,7 +108,7 @@ def _mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
                 "changed before acquisition",
             )
             held.add(lock_path)
-            yield
+            yield True
             _require_lock_owner(
                 filesystem,
                 lock_path,
@@ -111,6 +121,8 @@ def _mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
                 _release_file_lock(descriptor)
             os.close(descriptor)
             owner.close()
+    finally:
+        thread_lock.release()
 
 
 @contextmanager
@@ -156,3 +168,24 @@ def view_build_lock(view_root: Path, view_name: str) -> Iterator[None]:
         raise ConfigurationError(f"Invalid Studio view name {view_name!r}")
     with _mutation_lock(view_root, f"{view_name}.build.lock"):
         yield
+
+
+@contextmanager
+def view_removal_lock(view_root: Path, view_name: str) -> Generator[None, None, None]:
+    """Acquire removal ownership while leaving the catalog available during builds."""
+    if VIEW_PATTERN.fullmatch(view_name) is None:
+        raise ConfigurationError(f"Invalid Studio view name {view_name!r}")
+    while True:
+        with (
+            workspace_catalog_lock(view_root),
+            _mutation_lock(
+                view_root, f"{view_name}.build.lock", blocking=False
+            ) as acquired,
+        ):
+            if acquired:
+                with view_mutation_lock(view_root, view_name):
+                    yield
+                return
+        # Wait for the build owner before retrying the ordered transaction.
+        with view_build_lock(view_root, view_name):
+            pass
