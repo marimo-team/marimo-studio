@@ -1,0 +1,6 @@
+schema: marimo-export.states.v1
+default_state: two
+states:
+  one: { scale: 1 }
+  two: { scale: 2 }
+  three: { scale: 3 }
