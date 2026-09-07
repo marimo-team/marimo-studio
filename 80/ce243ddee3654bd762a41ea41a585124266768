@@ -1,0 +1,33 @@
+apps/e2e/fixtures-installed/dashboard.html
+  s_56e158cb000e90::t_544098a8435dc7 13-14
+apps/e2e/installed-tests/installed-wheel.spec.ts
+  s_56e158cb000e90::t_6dfa730ee259c1 115
+  s_56e158cb000e90::t_9b03555c07f8fd 46-52,70-71,84
+  s_56e158cb000e90::t_9102e093162e72 101-114,116-126,130-149
+  s_56e158cb000e90::t_6c3e51d393f9ad 127-129
+  s_56e158cb000e90::t_544098a8435dc7 7-45,53-69,72-83,85-100
+apps/e2e/fixtures-installed/states.yaml
+  s_56e158cb000e90::t_544098a8435dc7 1-6
+apps/e2e/fixtures-installed/notebook.py
+  s_56e158cb000e90::t_544098a8435dc7 18,27-62
+  s_56e158cb000e90::t_b1e5dfda6a0177 1-5
+apps/e2e/scripts/serve-installed-package.mjs
+  s_56e158cb000e90::t_544098a8435dc7 103,142,194,221-236
+  s_56e158cb000e90::t_cdae8f0b701ec8 155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "80ce243ddee3654bd762a41ea41a585124266768",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
