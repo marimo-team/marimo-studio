@@ -13,15 +13,22 @@ exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
 agent-plugins = false
+gistwidget = false
+jupyter-book-marimo = false
 marimo = false
 marimo-export = false
+marimo-jupyter-extension = false
+marimo-lens = false
 marimo-studio = false
+mkdocs-marimo = false
+moutils = false
 
 [manifest]
 members = [
     "marimo-studio",
     "marimo-studio-e2e-provider",
 ]
+overrides = [{ name = "marimo-export", editable = "/Users/petergy/Projects/opensource/marimo-team/marimo-export/packages/python" }]
 
 [manifest.dependency-groups]
 dev = [
@@ -1192,8 +1199,8 @@ recommended = [
 
 [[package]]
 name = "marimo-export"
-version = "0.0.4"
-source = { registry = "https://pypi.org/simple" }
+version = "0.0.5"
+source = { editable = "/Users/petergy/Projects/opensource/marimo-team/marimo-export/packages/python" }
 dependencies = [
     { name = "agent-plugins" },
     { name = "cryptography" },
@@ -1207,10 +1214,28 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/25/38/fce44bf64e747aed66d38077ed450b164229195043c11b4d78487ffe3c58/marimo_export-0.0.4.tar.gz", hash = "sha256:bd05215ac012f28d02cbbce0ba0ca493db1aad7bba10d1cc3a0432807eba0141", size = 263638, upload-time = "2026-09-07T18:39:23.219Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/8d/d971f30693471e2825bf92089bca7aacf0e838038d12692f2a45bb654953/marimo_export-0.0.4-py3-none-any.whl", hash = "sha256:7ae2b9015bc83020ffa7bfbc470adf6b1fd7018d86c32a93a732f05781ed0c01", size = 356978, upload-time = "2026-09-07T18:39:21.989Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-plugins", specifier = ">=0.1.0" },
+    { name = "altair", marker = "extra == 'all'", specifier = ">=5,<7" },
+    { name = "altair", marker = "extra == 'charts'", specifier = ">=5,<7" },
+    { name = "anywidget", marker = "extra == 'all'", specifier = ">=0.9,<1" },
+    { name = "anywidget", marker = "extra == 'anywidget'", specifier = ">=0.9,<1" },
+    { name = "cryptography", specifier = "==50.0.1" },
+    { name = "idna", specifier = "==3.19" },
+    { name = "marimo", specifier = "==0.24.0" },
+    { name = "msgspec", specifier = ">=0.20" },
+    { name = "numpy", specifier = ">=1.23.5" },
+    { name = "packaging", specifier = "==26.3" },
+    { name = "pyarrow", marker = "extra == 'all'", specifier = ">=15" },
+    { name = "pyarrow", marker = "extra == 'parquet'", specifier = ">=15" },
+    { name = "pydantic", specifier = ">=2,<3" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
+    { name = "vl-convert-python", marker = "extra == 'all'", specifier = ">=1.8" },
+    { name = "vl-convert-python", marker = "extra == 'charts'", specifier = ">=1.8" },
 ]
+provides-extras = ["anywidget", "charts", "parquet", "all"]
 
 [[package]]
 name = "marimo-studio"
@@ -1243,7 +1268,7 @@ requires-dist = [
     { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
     { name = "htpy", specifier = ">=26.5.1,<27" },
     { name = "marimo", specifier = "==0.24.0" },
-    { name = "marimo-export", specifier = "==0.0.4" },
+    { name = "marimo-export", editable = "/Users/petergy/Projects/opensource/marimo-team/marimo-export/packages/python" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },
