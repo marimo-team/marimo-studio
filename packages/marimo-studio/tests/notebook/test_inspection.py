@@ -55,12 +55,9 @@ def _inspect_with_symbolic_budget(
     budget: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Any:
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(
-        loader.__globals__,
-        "_POSSIBLE_OUTPUT_WORK_BUDGET",
-        budget,
-    )
+    from marimo_studio._notebook import output_prediction
+
+    monkeypatch.setattr(output_prediction, "_POSSIBLE_OUTPUT_WORK_BUDGET", budget)
     return inspect_notebook(notebook).cells[0]
 
 
