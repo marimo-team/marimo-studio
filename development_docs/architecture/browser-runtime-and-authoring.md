@@ -93,20 +93,24 @@ begin readiness generation
   -> fetch candidate document
   -> read presentation revision
   -> fetch matching runtime configuration
-  -> parse candidate document
-  -> prepare projection hosts
+  -> select in-place refresh or document reload
+  -> prepare the candidate shell and projection hosts
   -> stage view styles and linked stylesheets
-  -> commit support URL and runtime configuration
-  -> update authored markup around stable projection hosts
-  -> reload when projection host placement changes
-  -> commit styles and document base
+  -> commit document base, styles, shell, and matching runtime configuration
+  -> commit history
+  -> finalize the staged resources
   -> mark ready
 ```
 
-Failure discards staged state and keeps the current document mounted. A script
-change that requires browser evaluation triggers a full document reload. A
-runtime-only change updates runtime configuration. A stylesheet-only artifact
-change can refresh linked styles while preserving the shell.
+`stageShellSwap` owns the incoming and preceding shells together with preserved
+hosts. On failure it reconnects the preceding shell, moves its live hosts back,
+and retires the incoming shell. Configuration, styles, history, and base return
+to the same preceding presentation.
+
+A script change that requires evaluation triggers a full document reload.
+Compatible runtime configuration changes apply in place. Changing runtime ID or
+instance reloads its document. A stylesheet-only artifact change can refresh
+linked styles while preserving the shell.
 
 The controller owns cancellation, rollback, readiness, and failure diagnostics
 as one transaction. `BrowserSessionReplay` owns browser-side server-session

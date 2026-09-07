@@ -202,7 +202,11 @@ export const syncPreservedValueHosts = (source: ParentNode, live: Document): voi
         return;
       }
       const preserved = live.getElementById(host.id);
-      if (preserved?.localName === host.localName && preserved !== host) {
+      if (
+        preserved?.localName === host.localName &&
+        preserved !== host &&
+        isArtifactProjectionHost(preserved)
+      ) {
         syncProjectionHostAttributes(preserved, host);
       }
     });

@@ -146,7 +146,11 @@ export class ProjectionHostRuntime {
             return;
           }
           const current = live.getElementById(candidate.id);
-          if (current?.localName !== candidate.localName || current === candidate) {
+          if (
+            current?.localName !== candidate.localName ||
+            current === candidate ||
+            !isArtifactProjectionHost(current)
+          ) {
             return;
           }
           hosts.push({

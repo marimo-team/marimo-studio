@@ -279,7 +279,11 @@ export const syncPreservedCellHosts = (source: ParentNode, live: Document): void
       return;
     }
     const preserved = live.getElementById(host.id);
-    if (preserved?.localName === "marimo-cell" && preserved !== host) {
+    if (
+      preserved?.localName === "marimo-cell" &&
+      preserved !== host &&
+      isArtifactProjectionHost(preserved)
+    ) {
       syncProjectionHostAttributes(preserved, host);
       prepareCellHost(preserved);
     }

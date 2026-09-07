@@ -1,4 +1,5 @@
 import { syncProjectionHostAttributes } from "../cells/host.ts";
+import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 
 const PROJECTION_HOST_SELECTOR =
   "marimo-cell[data-hx-preserve][id], " +
@@ -6,7 +7,9 @@ const PROJECTION_HOST_SELECTOR =
   "[mo-value][data-hx-preserve][id]";
 
 const isProjectionHost = (node: Node): node is HTMLElement =>
-  node instanceof HTMLElement && node.matches(PROJECTION_HOST_SELECTOR);
+  node instanceof HTMLElement &&
+  node.matches(PROJECTION_HOST_SELECTOR) &&
+  isArtifactProjectionHost(node);
 
 interface HostPosition {
   readonly ancestors: string;
@@ -84,7 +87,9 @@ const morphChildren = (current: Element, source: Element): void => {
   let cursor = current.firstChild;
   for (const sourceChild of Array.from(source.childNodes)) {
     if (isProjectionHost(sourceChild)) {
-      const live = current.ownerDocument.getElementById(sourceChild.id);
+      const live = Array.from(current.children).find(
+        (child): child is HTMLElement => isProjectionHost(child) && child.id === sourceChild.id,
+      );
       if (!live || live.localName !== sourceChild.localName) {
         throw new Error(`Projection host ${JSON.stringify(sourceChild.id)} is unavailable`);
       }
