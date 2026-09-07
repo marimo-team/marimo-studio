@@ -87,3 +87,35 @@ test("wrapper element changes are rejected before the live shell is mutated", ()
   expect(current.querySelector("section")).toBe(wrapper);
   expect(wrapper.firstElementChild).toBe(host);
 });
+
+test("shell updates resolve authored hosts beside native output with matching IDs", () => {
+  const current = shell(`
+    <main id="app-shell">
+      <marimo-output id="outer" value="outer" data-hx-preserve>
+        <div data-marimo-cell-output>
+          <marimo-output id="summary" value="native" data-hx-preserve>Native content</marimo-output>
+        </div>
+      </marimo-output>
+      <marimo-output id="summary" value="summary" data-hx-preserve>Authored content</marimo-output>
+    </main>
+  `);
+  document.body.replaceChildren(current);
+  const native = current.querySelector("[data-marimo-cell-output] marimo-output")!;
+  const nativeParent = native.parentElement;
+  const authored = current.lastElementChild!;
+  const next = shell(`
+    <main id="app-shell">
+      <marimo-output id="outer" value="outer" data-hx-preserve></marimo-output>
+      <marimo-output id="summary" value="summary" class="updated" data-hx-preserve></marimo-output>
+    </main>
+  `);
+
+  morphAuthoredShell(current, next);
+
+  expect(current.lastElementChild).toBe(authored);
+  expect(authored.className).toBe("updated");
+  expect(authored.textContent).toBe("Authored content");
+  expect(native.parentElement).toBe(nativeParent);
+  expect(native.textContent).toBe("Native content");
+  expect(native.getAttribute("value")).toBe("native");
+});

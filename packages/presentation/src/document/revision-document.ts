@@ -1,7 +1,6 @@
-import htmx from "htmx.org";
 import { flushSync } from "react-dom";
 
-import { projectionHosts, type StagedHostPreservation } from "../projections/host-runtime.ts";
+import { projectionHosts } from "../projections/host-runtime.ts";
 import { clearProjectionBindingStale } from "../projections/staleness.ts";
 import {
   commitRuntimeConfig,
@@ -19,6 +18,7 @@ import { samePresentationRevision, type PresentationTarget } from "./presentatio
 import { presentationRefreshUrl, presentationRenewalSupportUrl } from "./refresh-url.ts";
 import { requiresDocumentReload } from "./scripts.ts";
 import { morphAuthoredShell, sameProjectionHostTopology } from "./shell-morph.ts";
+import { stageShellSwap } from "./shell-swap.ts";
 import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
 type RevisionHistoryMode = "push" | "replace";
@@ -97,7 +97,7 @@ export class DocumentRevisionAdapter {
     onTarget(target);
     let stagedStyles: StagedStyles | undefined;
     let stagedViewStyles: StagedViewStyles | undefined;
-    let stagedHosts: StagedHostPreservation | undefined;
+    let stagedShell: ReturnType<typeof stageShellSwap> | undefined;
     let previousShell: HTMLElement | undefined;
     let shellMorphed = false;
     try {
@@ -215,7 +215,11 @@ export class DocumentRevisionAdapter {
       stagedViewStyles = await stageViewStyles(next);
       stagedStyles = await this.styles.stage(nextDocument, nextDocumentUrl, signal);
       if (shellChanged && !morphShell) {
-        stagedHosts = projectionHosts.stagePreservation(next, document);
+        stagedShell = stageShellSwap(
+          current,
+          next,
+          projectionHosts.stagePreservation(next, document),
+        );
       }
       if (morphShell) {
         const clonedShell = current.cloneNode(true);
@@ -231,7 +235,7 @@ export class DocumentRevisionAdapter {
       const previousSupportUrl = getSupportUrl();
       const previousConfig = getRuntimeConfig();
       const previousTitle = document.title;
-      const previousDocumentUrl = this.documentUrl;
+      const previousHistoryUrl = globalThis.location.href;
       const previousBase = document.baseURI;
       const nextBase = resolveDocumentBase(nextDocument, nextDocumentUrl);
       try {
@@ -246,8 +250,8 @@ export class DocumentRevisionAdapter {
           if (morphShell) {
             morphAuthoredShell(current, next);
             shellMorphed = true;
-          } else if (stagedHosts) {
-            this.swap(current, next, stagedHosts);
+          } else if (stagedShell) {
+            stagedShell.commit();
           }
           commitRuntimeConfig(nextConfig);
         });
@@ -267,7 +271,7 @@ export class DocumentRevisionAdapter {
               const shell = previousShell;
               restore(() => morphAuthoredShell(current, shell));
             }
-            restore(() => stagedHosts?.rollback());
+            restore(() => stagedShell?.rollback());
             restore(() => stagedViewStyles?.rollback());
             restore(() => stagedStyles?.rollback());
             restore(() => setSupportUrl(previousSupportUrl));
@@ -278,7 +282,7 @@ export class DocumentRevisionAdapter {
           document.title = previousTitle;
         });
         restore(() =>
-          globalThis.history.replaceState(globalThis.history.state, "", previousDocumentUrl),
+          globalThis.history.replaceState(globalThis.history.state, "", previousHistoryUrl),
         );
         restore(() => documentBase.set(previousBase));
         if (rollbackErrors.length > 0) {
@@ -289,14 +293,14 @@ export class DocumentRevisionAdapter {
         }
         throw error;
       }
-      stagedHosts?.finalize();
+      stagedShell?.finalize();
       stagedViewStyles.finalize();
       stagedStyles.finalize();
       this.documentUrl = nextDocumentUrl;
       this.authoredShell = nextAuthoredShell;
       stagedStyles = undefined;
       stagedViewStyles = undefined;
-      stagedHosts = undefined;
+      stagedShell = undefined;
       scrollToFragment(historyUrl);
       return {
         target,
@@ -306,7 +310,7 @@ export class DocumentRevisionAdapter {
     } finally {
       stagedStyles?.discard();
       stagedViewStyles?.discard();
-      stagedHosts?.discard();
+      stagedShell?.discard();
     }
   }
 
@@ -352,21 +356,5 @@ export class DocumentRevisionAdapter {
       );
     }
     requireMatchingPresentationRevision(response.headers.get("Marimo-Studio-Revision"), config);
-  }
-
-  private swap(current: HTMLElement, next: HTMLElement, hosts: StagedHostPreservation): void {
-    current.before(next);
-    try {
-      hosts.commit();
-    } catch (error) {
-      next.remove();
-      throw error;
-    }
-    current.remove();
-    try {
-      htmx.process(next);
-    } catch {
-      // The committed document remains usable when optional htmx setup fails.
-    }
   }
 }

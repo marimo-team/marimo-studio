@@ -153,7 +153,11 @@ export const syncPreservedOutputHosts = (source: ParentNode, live: Document): vo
       return;
     }
     const preserved = live.getElementById(host.id);
-    if (preserved?.localName === "marimo-output" && preserved !== host) {
+    if (
+      preserved?.localName === "marimo-output" &&
+      preserved !== host &&
+      isArtifactProjectionHost(preserved)
+    ) {
       syncProjectionHostAttributes(preserved, host);
       prepareOutputHost(preserved);
     }

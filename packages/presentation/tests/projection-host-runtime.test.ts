@@ -131,3 +131,34 @@ test("rolling back staged preservation restores live host attributes", () => {
   assert.equal(live.className, "current");
   assert.equal(live.textContent, "Rendered report");
 });
+
+test.each([
+  ["marimo-cell", 'name="summary"'],
+  ["marimo-output", 'value="report"'],
+  ["span", 'mo-value="metric" data-marimo-studio-site="site-value"'],
+])("preserving %s leaves matching native output nodes with their owner", (tag, attributes) => {
+  document.body.innerHTML =
+    `<section data-marimo-cell-output><${tag} id="matching" ${attributes} ` +
+    `class="native">Native content</${tag}></section>`;
+  const nativeParent = document.querySelector("section")!;
+  const native = nativeParent.firstElementChild!;
+  const incoming = new DOMParser()
+    .parseFromString(
+      `<main><${tag} id="matching" ${attributes} class="authored"></${tag}></main>`,
+      "text/html",
+    )
+    .querySelector("main")!;
+  const authored = incoming.firstElementChild;
+  const runtime = new ProjectionHostRuntime();
+  runtime.prepare(incoming);
+
+  const staged = runtime.stagePreservation(incoming, document);
+  document.body.append(incoming);
+  staged.commit();
+  staged.finalize();
+
+  assert.equal(native.parentElement, nativeParent);
+  assert.equal(native.className, "native");
+  assert.equal(native.textContent, "Native content");
+  assert.equal(incoming.firstElementChild, authored);
+});

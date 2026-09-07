@@ -127,7 +127,12 @@ test("a failed history push restores document, styles, runtime, and URL identity
   document.head.innerHTML = "<style>body { color: red; }</style>";
   const previousStyle = document.head.querySelector("style");
   document.title = "Old title";
-  document.body.innerHTML = '<main id="app-shell">Old shell</main>';
+  document.body.innerHTML =
+    '<main id="app-shell">Old shell<marimo-output id="retained" value="report">' +
+    "<strong>Current report</strong></marimo-output></main>";
+  const previousShell = document.querySelector("#app-shell");
+  const previousHost = document.querySelector("marimo-output");
+  const previousOutput = previousHost?.firstElementChild;
   setSupportUrl("/support/old");
   commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
   const previousUrl = globalThis.location.href;
@@ -151,7 +156,9 @@ test("a failed history push restores document, styles, runtime, and URL identity
       if (url.includes("/next/")) {
         return new Response(
           "<html><head><title>New title</title><style>body { color: blue; }</style></head>" +
-            '<body><main id="app-shell">New shell</main></body></html>',
+            '<body><main id="app-shell">New shell' +
+            '<marimo-output id="retained" value="report" aria-label="Incoming report">' +
+            "</marimo-output></main></body></html>",
           {
             headers: {
               "Marimo-Studio-Revision": "revision-new",
@@ -163,18 +170,6 @@ test("a failed history push restores document, styles, runtime, and URL identity
       return Response.json(next);
     }),
   );
-  const rollback = vi.fn(() => {
-    const shell = document.querySelector("#app-shell");
-    if (shell) {
-      shell.textContent = "Old shell";
-    }
-  });
-  vi.spyOn(projectionHosts, "stagePreservation").mockReturnValue({
-    commit: vi.fn(),
-    rollback,
-    finalize: vi.fn(),
-    discard: vi.fn(),
-  });
   const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
   const pushState = vi.spyOn(globalThis.history, "pushState").mockImplementation(() => {
     throw new Error("history push failed");
@@ -190,7 +185,11 @@ test("a failed history push restores document, styles, runtime, and URL identity
   ).rejects.toThrow("Presentation commit and rollback failed");
   unsubscribe();
 
-  expect(document.querySelector("#app-shell")?.textContent).toBe("Old shell");
+  expect(document.querySelector("#app-shell")).toBe(previousShell);
+  expect(previousShell?.textContent).toBe("Old shellCurrent report");
+  expect(document.querySelector("marimo-output")).toBe(previousHost);
+  expect(previousHost?.firstElementChild).toBe(previousOutput);
+  expect(previousHost?.hasAttribute("aria-label")).toBe(false);
   expect(document.head.querySelector("style[data-marimo-studio-page-style]")).toBe(previousStyle);
   expect(document.title).toBe("Old title");
   expect(getSupportUrl()).toBe("/support/old");
@@ -198,7 +197,6 @@ test("a failed history push restores document, styles, runtime, and URL identity
   expect(globalThis.location.href).toBe(previousUrl);
   expect(globalThis.history.length).toBe(previousHistoryLength);
   expect(pushState).toHaveBeenCalledOnce();
-  expect(rollback).toHaveBeenCalledOnce();
 });
 
 test("an unchanged document revision commits refreshed runtime bindings", async () => {
