@@ -1,0 +1,27 @@
+packages/presentation/src/dev-reload.ts
+  s_56e158cb000e90::t_1ff3b3a93868ec 146,152,304
+packages/presentation/src/document/external-refresh-gate.ts
+  s_56e158cb000e90::t_ecda23ea4b613e 24,49-53,63
+  s_56e158cb000e90::t_128e99a6abd931 30,42-48,54-55,159
+packages/presentation/tests/external-refresh-gate.test.ts
+  s_56e158cb000e90::t_ecda23ea4b613e 108,115,123-125
+packages/presentation/tests/events.test.ts
+  s_56e158cb000e90::t_11b7bea4eb6817 410-494
+  s_56e158cb000e90::t_bf504e5b33c90d 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c981ec31dc6f052129e0a42f1ee13cc502f38cc2",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
