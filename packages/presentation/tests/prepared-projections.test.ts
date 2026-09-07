@@ -467,12 +467,7 @@ test("prepared function and stdin resources fail through the capability boundary
   Object.assign(functions.outputs[0]!.resources, {
     functions: { control: ["on_change"] },
   });
-  await assert.rejects(
-    handle.replace(functions),
-    (error) =>
-      error instanceof PreparedProjectionCapabilityError &&
-      error.code === "prepared-functions-unsupported",
-  );
+  await assert.rejects(handle.replace(functions), /must be empty for static replay/u);
 
   const stdin = structuredClone(snapshot("stdin"));
   Object.assign(stdin.cells[0]!, {
@@ -714,7 +709,7 @@ test("prepared UI resources require owner-scoped projection identities", async (
     functions: { [outsideId]: [] },
     uiValues: { [outsideId]: 2 },
   });
-  await assert.rejects(handle.replace(outside), /outside projection owner/u);
+  await assert.rejects(handle.replace(outside), /projection-scoped/u);
 
   const mismatched = structuredClone(snapshot("mismatched-resources"));
   const objectId = projectionUiId("prepared-report-output", "d", "control");
@@ -722,7 +717,7 @@ test("prepared UI resources require owner-scoped projection identities", async (
     functions: { [objectId]: [] },
     uiValues: {},
   });
-  await assert.rejects(handle.replace(mismatched), /mismatched function and UI value/u);
+  await assert.rejects(handle.replace(mismatched), /replay UI value/u);
 });
 
 test("prepared resources deduplicate shared models and reject conflicts", async () => {

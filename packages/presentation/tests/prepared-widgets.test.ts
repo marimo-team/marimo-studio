@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeAll, test } from "vite-plus/test";
+import { afterEach, beforeAll, test, vi } from "vite-plus/test";
 
 import type {
   PreparedProjectionHandle,
@@ -228,6 +228,71 @@ afterEach(async () => {
   delete widgetBrowser.__preparedWidgetLifecycle;
 });
 
+test("prepared widget checkpoints retain browser edits after captured lifecycle updates", async () => {
+  commitRuntimeConfig(config);
+  document.body.innerHTML = `
+    <div id="runtime"></div>
+    <marimo-output value="widget.first"></marimo-output>
+  `;
+  projectionHosts.connect();
+  widgetBrowser.__preparedWidgetLifecycle = {
+    initialize: {},
+    initializeCleanup: {},
+    render: {},
+    renderCleanup: {},
+  };
+  const handle = mountPreparedProjections({
+    root: document.querySelector<HTMLElement>("#runtime")!,
+    presentation,
+    theme,
+  });
+  handles.push(handle);
+  const snapshot = widgetSnapshot("sequence");
+  const output = snapshot.outputs[0]!;
+  const opened = output.resources.modelNotifications[0]!;
+  Object.assign(output.resources, {
+    modelNotifications: [
+      opened,
+      {
+        ...opened,
+        message: {
+          method: "update",
+          state: { value: 17 },
+          buffer_paths: [],
+          buffers: [],
+          esm_spec: null,
+        },
+      },
+    ],
+  });
+
+  await handle.replace(snapshot);
+
+  await vi.waitFor(() => {
+    const widget = document.querySelector("marimo-output marimo-anywidget");
+    assert.equal(widget?.shadowRoot?.querySelector("button")?.textContent, "first: 17");
+  });
+  const button = document
+    .querySelector("marimo-output marimo-anywidget")!
+    .shadowRoot!.querySelector("button")!;
+  button.click();
+  assert.equal(button.textContent, "first: 18");
+  const checkpoint = handle.checkpoint();
+  try {
+    await handle.replace({ values: [], outputs: [], cells: [] });
+    await checkpoint.restore();
+
+    await vi.waitFor(() => {
+      const restored = document
+        .querySelector("marimo-output marimo-anywidget")
+        ?.shadowRoot?.querySelector("button");
+      assert.equal(restored?.textContent, "first: 18");
+    });
+  } finally {
+    checkpoint.dispose();
+  }
+});
+
 test("prepared widget projections preserve browser state through restore and transitions", async () => {
   commitRuntimeConfig(config);
   document.body.innerHTML = `
@@ -271,7 +336,8 @@ test("prepared widget projections preserve browser state through restore and tra
   assert.equal(first.textContent, "first: 8");
   const checkpoint = handle.checkpoint();
 
-  await handle.replace(widgetSnapshot("unrelated"));
+  const unrelated = widgetSnapshot("unrelated");
+  await handle.replace({ ...unrelated, outputs: unrelated.outputs.toReversed() });
   assert.equal(await button("widget.first"), first);
   assert.equal(await button("widget.second"), second);
   assert.equal(first.textContent, "first: 8");

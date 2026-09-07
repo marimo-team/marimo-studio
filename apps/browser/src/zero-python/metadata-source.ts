@@ -5,9 +5,11 @@ import type {
   PreparedPublication,
 } from "@marimo-team/marimo-export/prepared";
 
+import { fetchPreparedManifestDocument } from "@marimo-team/marimo-export/prepared";
+
 import type { StudioPreparedContext, StudioPreparedManifest } from "./metadata-records.ts";
 
-import { fetchStudioPreparedManifest } from "./metadata-fetch.ts";
+import { parseStudioPreparedManifest } from "./metadata-records.ts";
 import { validateStudioPreparedManifest } from "./metadata-validation.ts";
 
 export class StudioPreparedManifestSource {
@@ -24,10 +26,11 @@ export class StudioPreparedManifestSource {
     options: PreparedManifestFetchOptions = {},
     expectedInstance?: string,
   ): Promise<PreparedExportManifest> {
-    const metadata = await fetchStudioPreparedManifest(
-      url,
-      options.fetch ?? this.fetcher,
-      options.signal,
+    const metadata = parseStudioPreparedManifest(
+      await fetchPreparedManifestDocument(url, {
+        ...options,
+        fetch: options.fetch ?? this.fetcher,
+      }),
     );
     validateStudioPreparedManifest(
       metadata,

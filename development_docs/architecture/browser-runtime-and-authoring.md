@@ -165,8 +165,8 @@ stale-binding response.
 
 ## Runtime SPI
 
-`packages/runtime` defines the small lifecycle shared by Server and
-WebAssembly:
+`packages/runtime` defines the small lifecycle shared by Python, Browser, and
+Prepared runtimes:
 
 ```text
 register runtime ID

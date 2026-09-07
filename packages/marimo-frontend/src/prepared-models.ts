@@ -46,10 +46,15 @@ export interface PreparedModelLifecycleHandle {
   dispose(): Promise<void>;
 }
 
+interface OrderedModelNotification {
+  readonly sequence: number;
+  readonly notification: PreparedModelLifecycleNotification;
+}
+
 export interface PreparedModelRecord {
   readonly canonical: string;
   readonly id: WidgetModelId;
-  readonly notifications: readonly PreparedModelLifecycleNotification[];
+  readonly notifications: readonly OrderedModelNotification[];
   readonly active: boolean;
 }
 
@@ -70,7 +75,7 @@ export interface PreparedModelGraphPort {
   changesModule(previous: PreparedModelRecord, next: PreparedModelRecord): boolean;
   capture(id: string): PreparedModelLiveState;
   merge(record: PreparedModelRecord, state: PreparedModelLiveState): PreparedModelRecord;
-  replay(record: PreparedModelRecord, signal?: AbortSignal): Promise<void>;
+  replay(records: readonly PreparedModelRecord[], signal?: AbortSignal): Promise<void>;
   restore(id: string, state: PreparedModelLiveState): void;
   close(id: string): Promise<void>;
   setFiles(files: Readonly<Record<string, string>>): void;
@@ -135,11 +140,11 @@ const widgetModelId = (value: string): WidgetModelId => {
 const modelRecords = (
   notifications: readonly PreparedModelLifecycleNotification[],
 ): ReadonlyMap<string, PreparedModelRecord> => {
-  const grouped = new Map<string, PreparedModelLifecycleNotification[]>();
-  for (const notification of notifications) {
+  const grouped = new Map<string, OrderedModelNotification[]>();
+  for (const [sequence, notification] of notifications.entries()) {
     const id = widgetModelId(notification.model_id);
     const current = grouped.get(id) ?? [];
-    current.push(notification);
+    current.push({ sequence, notification });
     grouped.set(id, current);
   }
   return new Map(
@@ -150,16 +155,22 @@ const modelRecords = (
         {
           id: widgetModelId(id),
           notifications,
-          canonical: JSON.stringify(notifications),
-          active: notifications.at(-1)?.message.method !== "close",
+          canonical: JSON.stringify(notifications.map(({ notification }) => notification)),
+          active: notifications.at(-1)?.notification.message.method !== "close",
         },
       ];
     }),
   );
 };
 
-const replay = async (record: PreparedModelRecord, signal?: AbortSignal): Promise<void> => {
-  for (const notification of record.notifications) {
+const replay = async (
+  records: readonly PreparedModelRecord[],
+  signal?: AbortSignal,
+): Promise<void> => {
+  const notifications = records
+    .flatMap((record) => record.notifications)
+    .toSorted((left, right) => left.sequence - right.sequence);
+  for (const { notification } of notifications) {
     throwIfAborted(signal);
     await handleWidgetMessage(WIDGET_REGISTRY, structuredClone(notification));
   }
@@ -169,7 +180,7 @@ const replay = async (record: PreparedModelRecord, signal?: AbortSignal): Promis
 const validateRecord = async (record: PreparedModelRecord, signal?: AbortSignal): Promise<void> => {
   const registry = new WidgetRegistry(1);
   try {
-    for (const notification of record.notifications) {
+    for (const { notification } of record.notifications) {
       throwIfAborted(signal);
       const method = notification.message.method;
       if (
@@ -193,7 +204,7 @@ const esmSpec = (
   record: PreparedModelRecord,
 ): { readonly hash: string; readonly url: string } | undefined => {
   for (let index = record.notifications.length - 1; index >= 0; index -= 1) {
-    const notification = record.notifications[index]!;
+    const { notification } = record.notifications[index]!;
     if ("esm_spec" in notification.message && notification.message.esm_spec) {
       return notification.message.esm_spec;
     }
@@ -236,13 +247,16 @@ const mergeLiveState = (
   record: PreparedModelRecord,
   live: PreparedModelLiveState,
 ): PreparedModelRecord => {
-  let merged = false;
-  const notifications = record.notifications.map((notification) => {
-    if (merged || notification.message.method !== "open") {
-      return notification;
-    }
-    merged = true;
+  const finalState = record.notifications.findLastIndex(
+    ({ notification }) =>
+      notification.message.method === "open" || notification.message.method === "update",
+  );
+  const notifications = record.notifications.map((entry, index) => {
+    const { notification } = entry;
     const message = notification.message;
+    if (index !== finalState || (message.method !== "open" && message.method !== "update")) {
+      return entry;
+    }
     const decoded = decodeFromWire({
       state: structuredClone(message.state),
       bufferPaths: message.buffer_paths.map((path) => [...path]),
@@ -250,19 +264,22 @@ const mergeLiveState = (
     });
     const wire = serializeBuffersToBase64({ ...decoded, ...structuredClone(live.state) });
     return {
-      ...notification,
-      message: {
-        ...message,
-        state: wire.state,
-        buffer_paths: wire.bufferPaths,
-        buffers: wire.buffers,
+      sequence: entry.sequence,
+      notification: {
+        ...notification,
+        message: {
+          ...message,
+          state: wire.state,
+          buffer_paths: wire.bufferPaths,
+          buffers: wire.buffers,
+        },
       },
     };
   });
   return {
     ...record,
     notifications,
-    canonical: JSON.stringify(notifications),
+    canonical: JSON.stringify(notifications.map(({ notification }) => notification)),
   };
 };
 
@@ -277,12 +294,12 @@ const validateActiveRecord = async (
   record: PreparedModelRecord,
   signal?: AbortSignal,
 ): Promise<void> => {
-  if (!record.notifications.some(({ message }) => message.method === "open")) {
+  if (!record.notifications.some(({ notification }) => notification.message.method === "open")) {
     throw new Error(
       `Prepared model ${JSON.stringify(record.id)} has no complete open notification`,
     );
   }
-  if (record.notifications.some(({ message }) => message.method === "close")) {
+  if (record.notifications.some(({ notification }) => notification.message.method === "close")) {
     throw new Error(
       `Prepared model ${JSON.stringify(record.id)} mixes active and closed lifecycle records`,
     );

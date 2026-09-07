@@ -143,7 +143,7 @@ test("the graph port replays, captures, restores, and closes native Marimo model
   assert.ok(port);
 
   await port.validate(record);
-  await port.replay(record);
+  await port.replay([record]);
   const model = WIDGET_REGISTRY.getModelSync(id);
   assert.ok(model);
   model.set("value", 8);
@@ -156,6 +156,54 @@ test("the graph port replays, captures, restores, and closes native Marimo model
   assert.notEqual(merged.canonical, record.canonical);
   await port.close(id);
   assert.equal(WIDGET_REGISTRY.getModelSync(id), undefined);
+});
+
+test("native model replay preserves cross-model update and custom-message order", async () => {
+  const harness = graphHarness();
+  const lifecycle = createPreparedModelLifecycle(harness.factory);
+  dispose = lifecycle.dispose;
+  const first = modelId("prepared-order-first");
+  const second = modelId("prepared-order-second");
+  const opened = [openNotification(first, { value: 0 }), openNotification(second, { value: 0 })];
+  await lifecycle.replace({ files: {}, modelNotifications: opened });
+  const port = harness.port;
+  assert.ok(port);
+  await port.replay([...graphTarget(harness, 0).records.values()]);
+  const firstModel = WIDGET_REGISTRY.getModelSync(first);
+  const secondModel = WIDGET_REGISTRY.getModelSync(second);
+  assert.ok(firstModel);
+  assert.ok(secondModel);
+  const observed: unknown[] = [];
+  firstModel.on("msg:custom", () => observed.push(["first", secondModel.get("value")]));
+  secondModel.on("msg:custom", () => observed.push(["second", firstModel.get("value")]));
+  const notifications: PreparedModelLifecycleNotification[] = [
+    ...opened,
+    {
+      model_id: second,
+      message: { method: "update", state: { value: 2 }, buffer_paths: [], buffers: [] },
+    },
+    { model_id: first, message: { method: "custom", content: {}, buffers: [] } },
+    {
+      model_id: first,
+      message: { method: "update", state: { value: 1 }, buffer_paths: [], buffers: [] },
+    },
+    { model_id: second, message: { method: "custom", content: {}, buffers: [] } },
+  ];
+  try {
+    await lifecycle.replace({ files: {}, modelNotifications: notifications });
+    const target = graphTarget(harness, 1);
+    await port.replay([...target.records.values()]);
+
+    assert.deepEqual(observed, [
+      ["first", 2],
+      ["second", 1],
+    ]);
+    assert.equal(WIDGET_REGISTRY.getModelSync(first), firstModel);
+    assert.equal(WIDGET_REGISTRY.getModelSync(second), secondModel);
+  } finally {
+    await port.close(first);
+    await port.close(second);
+  }
 });
 
 test("the graph port rejects malformed lifecycle and widget modules before replay", async () => {

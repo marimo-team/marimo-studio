@@ -12,10 +12,10 @@ exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for 
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
-marimo = false
-marimo-studio = false
 agent-plugins = false
+marimo = false
 marimo-export = false
+marimo-studio = false
 
 [manifest]
 members = [
@@ -1192,9 +1192,10 @@ recommended = [
 
 [[package]]
 name = "marimo-export"
-version = "0.0.2"
+version = "0.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "agent-plugins" },
     { name = "cryptography" },
     { name = "idna" },
     { name = "marimo" },
@@ -1202,12 +1203,13 @@ dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/6a/c48fc6d2eab0d35f32f04e470a341bdd9116904d383934e94d736b1dd901/marimo_export-0.0.2.tar.gz", hash = "sha256:2373b6d6f7048ed4771eed0351ad66b6712626cf3841e1a9e98d7329af99bb4c", size = 250093, upload-time = "2026-09-04T10:34:24.929Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2a/1e/f985d7acdbb98c2a0bd20f6fe64c6e4d9f8b3cff066a941736f9ee034c85/marimo_export-0.0.3.tar.gz", hash = "sha256:01520f0e445c5bc85988a133be105fd25914dc757be76d0ca5143ef3dbce27cd", size = 262516, upload-time = "2026-09-07T13:19:41.486Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/70/6f7347de876b1f8a940703d6888b0dc2b99ad6fc0034ac458fe01bdb2574/marimo_export-0.0.2-py3-none-any.whl", hash = "sha256:0fdd14b0f734b4927a95ad76e57fac80998219ac7c145807794ed8e5f862c769", size = 332573, upload-time = "2026-09-04T10:34:23.887Z" },
+    { url = "https://files.pythonhosted.org/packages/00/54/a3eccedf01b96e0c3119e124227658aaed363ea6287511ee8f3c7eedfb83/marimo_export-0.0.3-py3-none-any.whl", hash = "sha256:2c2a802c5ce137b8cc6c5a6ea21e4618933eeaf71bef32d52ff6509c6171a887", size = 355079, upload-time = "2026-09-07T13:19:39.984Z" },
 ]
 
 [[package]]
@@ -1241,7 +1243,7 @@ requires-dist = [
     { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
     { name = "htpy", specifier = ">=26.5.1,<27" },
     { name = "marimo", specifier = "==0.24.0" },
-    { name = "marimo-export", specifier = "==0.0.2" },
+    { name = "marimo-export", specifier = "==0.0.3" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },

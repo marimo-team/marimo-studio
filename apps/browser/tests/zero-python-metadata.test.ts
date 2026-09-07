@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 
-import { fetchStudioPreparedManifest } from "../src/zero-python/metadata-fetch.ts";
 import {
   parseStudioPreparedManifest,
   parseZeroPythonRuntimeData,
@@ -299,85 +298,6 @@ describe("Studio prepared metadata", () => {
     await expect(fetchWithWrongDocument(exports[1]!)).rejects.toThrow(/not match the immutable/);
     await expect(fetchWithWrongDocument(exports[2]!)).rejects.toThrow(/not match the immutable/);
     await expect(fetchWithWrongDocument(exports[0]!)).resolves.toBeDefined();
-  });
-
-  it("rejects a declared oversized manifest before reading its body", async () => {
-    let cancelled = false;
-    const body = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        controller.enqueue(new TextEncoder().encode("{}"));
-        controller.close();
-      },
-      cancel() {
-        cancelled = true;
-      },
-    });
-    const fetcher = vi.fn(
-      async () =>
-        new Response(body, {
-          headers: { "Content-Length": String(256 * 1024 + 1) },
-        }),
-    );
-
-    await expect(
-      fetchStudioPreparedManifest(new URL("https://example.test/current"), fetcher, undefined),
-    ).rejects.toThrow(/exceeds 262144 bytes/);
-    expect(cancelled).toBe(true);
-  });
-
-  it("stops streaming a manifest when its body crosses the byte limit", async () => {
-    let pulls = 0;
-    let cancelled = false;
-    const body = new ReadableStream<Uint8Array>(
-      {
-        pull(controller) {
-          pulls += 1;
-          if (pulls > 4) {
-            controller.close();
-            return;
-          }
-          controller.enqueue(new Uint8Array(128 * 1024));
-        },
-        cancel() {
-          cancelled = true;
-        },
-      },
-      { highWaterMark: 0 },
-    );
-    const fetcher = vi.fn(async () => new Response(body));
-
-    await expect(
-      fetchStudioPreparedManifest(new URL("https://example.test/current"), fetcher, undefined),
-    ).rejects.toThrow(/exceeds 262144 bytes/);
-    expect(cancelled).toBe(true);
-    expect(pulls).toBe(3);
-  });
-
-  it("cancels a response body when the caller aborts as fetch completes", async () => {
-    const controller = new AbortController();
-    const reason = new DOMException("manifest superseded", "AbortError");
-    let cancelled = false;
-    const body = new ReadableStream<Uint8Array>({
-      pull(stream) {
-        stream.enqueue(new TextEncoder().encode("{}"));
-      },
-      cancel() {
-        cancelled = true;
-      },
-    });
-    const fetcher = vi.fn(async () => {
-      controller.abort(reason);
-      return new Response(body);
-    });
-
-    await expect(
-      fetchStudioPreparedManifest(
-        new URL("https://example.test/current"),
-        fetcher,
-        controller.signal,
-      ),
-    ).rejects.toBe(reason);
-    expect(cancelled).toBe(true);
   });
 
   it("parses only the runtime locator and expected plan digest", () => {
