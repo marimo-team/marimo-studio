@@ -29,11 +29,7 @@ from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.metadata import updated_notebook_default_source
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio._workspace.mutation_lock import (
-    view_build_lock,
-    view_mutation_lock,
-    workspace_catalog_lock,
-)
+from marimo_studio._workspace.mutation_lock import view_removal_lock
 from marimo_studio._workspace.transactions import write_file_transaction
 from marimo_studio._workspace.view_owners import view_owner_transition
 from marimo_studio.errors import (
@@ -379,11 +375,7 @@ def delete_view(
     expected_generation: str | None = None,
 ) -> StudioWorkspace:
     """Delete one view directory and return the updated workspace."""
-    with (
-        workspace_catalog_lock(studio.view_root),
-        view_build_lock(studio.view_root, name),
-        view_mutation_lock(studio.view_root, name),
-    ):
+    with view_removal_lock(studio.view_root, name):
         return _delete_view_locked(
             studio,
             name,

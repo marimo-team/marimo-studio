@@ -201,6 +201,15 @@ the staged directory. Python dependencies remain unchanged.
 
 Artifact pins block removal while another process owns a published revision.
 
+Server removal validates the observed catalog and view before draining local
+development work. The catalog stays available during that drain and while a
+build owns the view. Removal then acquires the ordered filesystem locks and
+revalidates both generations before releasing presentation artifacts. A changed
+owner rolls development back and preserves the presentation.
+
+Presentation coordination precedes the filesystem locks, matching snapshot
+capture. Its artifact release is staged until the final owner check succeeds.
+
 ## Notebook symbols
 
 `NotebookSymbolGraph` maps named cells and variables to stable semantic

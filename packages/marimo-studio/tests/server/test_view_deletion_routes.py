@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
@@ -120,10 +120,14 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
     def track_presentation_deletion(
         presentation: NotebookPresentation,
         view_name: str,
-    ) -> Iterator[None]:
-        presentation_deletions.append(view_name)
-        with presentation_deleting_view(presentation, view_name):
-            yield
+    ) -> Iterator[Callable[[], None]]:
+        with presentation_deleting_view(presentation, view_name) as release_artifacts:
+
+            def release() -> None:
+                presentation_deletions.append(view_name)
+                release_artifacts()
+
+            yield release
 
     monkeypatch.setattr(
         DevelopmentCoordinator,

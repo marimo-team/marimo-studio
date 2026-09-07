@@ -18,7 +18,7 @@ snapshot.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import partial
@@ -714,12 +714,11 @@ class NotebookPresentation:
         self._close_leases(released)
 
     @contextmanager
-    def deleting_view(self, view_name: str) -> Iterator[None]:
-        """Release a view's artifacts while serializing its filesystem deletion."""
+    def deleting_view(self, view_name: str) -> Iterator[Callable[[], None]]:
+        """Coordinate deletion and defer artifact release until owner admission."""
         with self._coordination_lock(view_name):
             self._ensure_open()
-            self._discard_views((view_name,))
-            yield
+            yield partial(self._discard_views, (view_name,))
 
     def close(self) -> None:
         """Release every artifact retained by presentation history."""
