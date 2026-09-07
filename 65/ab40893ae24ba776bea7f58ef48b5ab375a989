@@ -1,0 +1,29 @@
+packages/presentation/vite.config.ts
+  s_56e158cb000e90::t_f2e611eab57cfb 5-11,20-34
+packages/marimo-frontend/package.json
+  s_56e158cb000e90::t_02356f546e65d1 22
+packages/studio/vite.config.ts
+  s_56e158cb000e90::t_f2e611eab57cfb 3-8,12-27
+Makefile
+  s_56e158cb000e90::t_68fb58a59460f9 72
+packages/marimo-frontend/tests/prepared-controls.test.ts
+  s_56e158cb000e90::t_0e8e7b0c7796b9 121
+development_docs/frontend.md
+  s_56e158cb000e90::t_68fb58a59460f9 51-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "65ab40893ae24ba776bea7f58ef48b5ab375a989",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
