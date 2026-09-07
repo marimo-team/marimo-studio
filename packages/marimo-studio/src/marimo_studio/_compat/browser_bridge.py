@@ -15,6 +15,11 @@ resources through Marimo's browser kernel lifecycle.
 
 from __future__ import annotations
 
+from marimo_studio._compat.kernel_values.arrow import (
+    _ArrowMaterializationRequired,
+    _dataframe_ipc,
+)
+
 
 def install_browser_bridge(
     *,
@@ -31,10 +36,8 @@ def install_browser_bridge(
     import dataclasses as _studio_dataclasses
     import gc as _studio_gc
     import hashlib as _studio_hashlib
-    import io as _studio_io
     import json as _studio_json
     import re as _studio_re
-    import sys as _studio_sys
     import time as _studio_time
     from collections.abc import Mapping as _StudioMapping
     from typing import Any as _StudioAny
@@ -47,9 +50,6 @@ def install_browser_bridge(
         broadcast_notification as _studio_broadcast_notification,
     )
     from marimo._output.formatting import try_format as _studio_try_format
-    from marimo._plugins.ui._impl.tables.utils import (
-        get_table_manager_or_none as _studio_get_table_manager,
-    )
     from marimo._runtime.cell_lifecycle_item import (
         CellLifecycleItem as _StudioCellLifecycleItem,
     )
@@ -214,66 +214,19 @@ def install_browser_bridge(
                 raise
         _studio_value_resources[selector] = (fingerprint, resource)
 
-    def _studio_write_arrow_stream(table, pyarrow):
-        output = _studio_io.BytesIO()
-        options = pyarrow.ipc.IpcWriteOptions(compression=None)
-        with pyarrow.ipc.new_stream(output, table.schema, options=options) as writer:
-            writer.write_table(table)
-        return output.getvalue()
-
-    def _studio_arrow_ipc(value):
-        manager = _studio_get_table_manager(value)
-        if manager is not None and manager.type in {"pandas", "polars"}:
-            if manager.get_num_rows(force=False) is None:
-                raise _StudioProjectionError(
-                    "arrow-materialization-required",
-                    "Materialize the dataframe before projecting it.",
-                )
-            try:
-                if manager.type == "polars":
-                    if any(dtype.is_object() for dtype in value.schema.values()):
-                        raise TypeError(
-                            "Polars Object columns cannot be serialized as Arrow IPC"
-                        )
-                    output = _studio_io.BytesIO()
-                    value.write_ipc_stream(output, compression="uncompressed")
-                    return output.getvalue()
-                import pyarrow as _studio_pyarrow
-
-                try:
-                    table = _studio_pyarrow.Table.from_pandas(value)
-                except Exception:
-                    source = _studio_pyarrow.ipc.open_file(
-                        _studio_io.BytesIO(manager.to_arrow_ipc())
-                    ).read_all()
-                    return _studio_write_arrow_stream(source, _studio_pyarrow)
-                return _studio_write_arrow_stream(table, _studio_pyarrow)
-            except (ImportError, ModuleNotFoundError) as error:
-                raise _StudioProjectionError(
-                    "arrow-codec-unavailable",
-                    f"PyArrow is required for Arrow IPC: {error}",
-                ) from error
-            except Exception as error:
-                raise _StudioProjectionError(
-                    "arrow-serialization-error",
-                    f"The dataframe could not be serialized as Arrow IPC: {error}",
-                ) from error
-        pyarrow = _studio_sys.modules.get("pyarrow")
-        if pyarrow is None:
-            return None
-        table_type = getattr(pyarrow, "Table", ())
-        batch_type = getattr(pyarrow, "RecordBatch", ())
-        if isinstance(value, batch_type):
-            value = pyarrow.Table.from_batches([value], schema=value.schema)
-        if not isinstance(value, table_type):
-            return None
-        return _studio_write_arrow_stream(value, pyarrow)
-
     def _studio_encode_value(selector, value, limit):
         try:
-            ipc = _studio_arrow_ipc(value)
-        except _StudioProjectionError:
-            raise
+            ipc = _dataframe_ipc(value)
+        except _ArrowMaterializationRequired as error:
+            raise _StudioProjectionError(
+                "arrow-materialization-required",
+                "Materialize the dataframe before projecting it.",
+            ) from error
+        except (ImportError, ModuleNotFoundError) as error:
+            raise _StudioProjectionError(
+                "arrow-codec-unavailable",
+                f"PyArrow is required for Arrow IPC: {error}",
+            ) from error
         except Exception as error:
             raise _StudioProjectionError(
                 "arrow-serialization-error",
