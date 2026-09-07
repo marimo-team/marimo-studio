@@ -1,0 +1,44 @@
+packages/presentation/src/outputs/host.ts
+  s_56e158cb000e90::t_30fdcfe239aaa1 156-160
+packages/presentation/src/cells/host.ts
+  s_56e158cb000e90::t_30fdcfe239aaa1 282-286
+packages/presentation/tests/shell-morph.test.ts
+  s_56e158cb000e90::t_3f4eb5c42a53b6 90-121
+packages/presentation/tests/revision-document.test.ts
+  s_56e158cb000e90::t_235131996693c8 130-131,133-135,159-160,188-192
+  s_56e158cb000e90::t_4a911e4745cb2e 132,161
+packages/presentation/src/document/revision-document.ts
+  s_56e158cb000e90::t_30fdcfe239aaa1 21,219-222,238,285
+  s_56e158cb000e90::t_4a911e4745cb2e 3,100,218,253-254,274,296,303,313
+packages/presentation/src/document/shell-morph.ts
+  s_56e158cb000e90::t_30fdcfe239aaa1 2,10-12
+  s_56e158cb000e90::t_235131996693c8 90-92
+packages/presentation/src/projections/host-runtime.ts
+  s_56e158cb000e90::t_30fdcfe239aaa1 149-153
+packages/presentation/src/document/shell-swap.ts
+  s_56e158cb000e90::t_7380e5a404d475 9
+  s_56e158cb000e90::t_c1daf63811682f 17
+  s_56e158cb000e90::t_30fdcfe239aaa1 1-8,10-16,26-59
+  s_56e158cb000e90::t_6cd2b58b4b998e 18-25
+packages/presentation/tests/projection-host-runtime.test.ts
+  s_56e158cb000e90::t_3f4eb5c42a53b6 134-135,139-144,151-164
+  s_56e158cb000e90::t_4a911e4745cb2e 136-138,145-150
+packages/presentation/src/values/hosts.ts
+  s_56e158cb000e90::t_30fdcfe239aaa1 205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0605c04c8cfa8de533ad208c30e2a894fd12ffae",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
