@@ -452,7 +452,7 @@ def isolated_presentation_document(
         separators=(",", ":"),
     ).replace("<", "\\u003c")
     bridge = _BRIDGE.replace("CONFIG", config, 1)
-    frame_allow = "clipboard-write"
+    frame_allow = "clipboard-write; fullscreen *"
     frame_host: Node = (
         cast(
             Node,
