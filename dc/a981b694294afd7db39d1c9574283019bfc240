@@ -1,0 +1,41 @@
+packages/studio/src/features/preview/controller.ts
+  s_56e158cb000e90::t_f5bc81258706f0 6,29,87,218-223,230,374-376,468,545,547,566,568
+  s_56e158cb000e90::t_7380e5a404d475 71,224-229
+  s_56e158cb000e90::t_4a911e4745cb2e 292-294,694-696
+packages/studio/src/app/active-view-handoff.ts
+  s_56e158cb000e90::t_9e7b4fca6ba506 3
+development_docs/architecture/browser-runtime-and-authoring.md
+  ai_agent 45-53
+packages/studio/src/features/preview/deck.ts
+  s_56e158cb000e90::t_4a911e4745cb2e 519-521
+  s_56e158cb000e90::t_9e7b4fca6ba506 15-19,30,88,173,227-230,569,584
+  s_56e158cb000e90::t_ebcbf34c0cb5e3 29,73,99-104,124,127,165,180,242,245,259,261,265,278,280,293,301,313,330,335,339,363,383-384,421,423,427,439,447,470,482,491,499,506,526,587,606,610,616,655,682,708,728,736,763,777
+packages/studio/src/features/preview/mutation-barriers.ts
+  s_56e158cb000e90::t_9ddf55bd9dc3bc 1,4-152
+  s_56e158cb000e90::t_4a911e4745cb2e 2-3
+packages/studio/src/features/preview/frames.ts
+  s_56e158cb000e90::t_4a911e4745cb2e 5-9,53-57,85
+  s_56e158cb000e90::t_ebcbf34c0cb5e3 1-4,10-52,58-84,86-144
+packages/studio/tests/studio-app.test.tsx
+  s_56e158cb000e90::t_ef8ea93a3aa0ec 160-162,203-205
+packages/studio/src/features/preview/navigation.ts
+  s_56e158cb000e90::t_9e7b4fca6ba506 4-16,18-31,33-38,40-96
+  s_56e158cb000e90::t_4a911e4745cb2e 39
+  s_56e158cb000e90::t_2112fa5bf6f654 1-3,17,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dca981b694294afd7db39d1c9574283019bfc240",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
