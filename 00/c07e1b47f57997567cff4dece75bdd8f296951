@@ -1,0 +1,52 @@
+packages/marimo-studio/src/marimo_studio/_views/remove.py
+  s_56e158cb000e90::t_699162fadb250d 32,378
+development_docs/architecture/product-and-workspace.md
+  s_56e158cb000e90::t_6d4bc1a07a32af 204-209
+  s_56e158cb000e90::t_3d6783538538b1 210-212
+packages/marimo-studio/tests/server/test_presentation.py
+  s_56e158cb000e90::t_3d6783538538b1 373,376
+packages/marimo-studio/tests/server/test_view_deletion_service.py
+  s_56e158cb000e90::t_cd38f250e02aa8 139,182
+  s_56e158cb000e90::t_6fd6da229e900d 14,67-122
+  s_56e158cb000e90::t_117434b4cd07a8 177-178,198,202-203,208-209
+  s_56e158cb000e90::t_1df39fbdbfaefd 212-216
+  s_56e158cb000e90::t_4f8af272b9adf0 204-207
+  s_56e158cb000e90::t_6d4bc1a07a32af 170-176,179-181,183-197,199-201,210-211,217-218
+  s_56e158cb000e90::t_7e1b70bd42bd8e 18,123-138,140-167
+  s_56e158cb000e90::t_3d6783538538b1 5,48-55,57,59-60
+packages/marimo-studio/src/marimo_studio/_server/presentation/service.py
+  s_56e158cb000e90::t_3d6783538538b1 21,717,721
+  s_56e158cb000e90::t_cc334381a18a35 718
+packages/marimo-studio/src/marimo_studio/_workspace/mutation_lock.py
+  s_56e158cb000e90::t_afe43412af9cd5 179-184
+  s_56e158cb000e90::t_cd38f250e02aa8 7,70,174
+  s_56e158cb000e90::t_699162fadb250d 65-69,77-80,83,98-101,111,124-125,171-173,175-178,189-191
+  s_56e158cb000e90::t_23649375308072 185-188
+packages/marimo-studio/tests/views/test_workspace_deletion_lifecycle.py
+  s_56e158cb000e90::t_722ef069e7f037 10,18,21,43-76
+development_docs/architecture/view-providers-and-artifacts.md
+  s_56e158cb000e90::t_3962af67e9ae49 217-218
+  s_56e158cb000e90::t_9dc1da99525907 214-216
+packages/marimo-studio/tests/server/test_view_deletion_routes.py
+  s_56e158cb000e90::t_117434b4cd07a8 4,123-124,126-130
+  s_56e158cb000e90::t_4f8af272b9adf0 125
+packages/marimo-studio/src/marimo_studio/_server/studio/deletion.py
+  s_56e158cb000e90::t_80a7950ba85a01 18-21,65-74
+  s_56e158cb000e90::t_3d6783538538b1 75-78,85-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "00c07e1b47f57997567cff4dece75bdd8f296951",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
