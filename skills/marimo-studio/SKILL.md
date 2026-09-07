@@ -193,6 +193,9 @@ selected_orders
 Edit only project-relative files whose access is `edit`. Use view files for
 structure, wording, styles, and browser interaction.
 
+`studio-view` sets a maximum width and page padding. Mount a component that
+defines its own page layout in a plain `<div id="app-shell"></div>`.
+
 ### Choose visual direction
 
 Choose visual direction in this order:

@@ -27,6 +27,9 @@ The built-in shortcuts are:
 | `studio-button`  | Accessible button treatment               |
 | `studio-eyebrow` | Small uppercase section label             |
 
+`studio-view` sets a maximum width and page padding. Use a plain
+`<div id="app-shell"></div>` when the component defines its own page layout.
+
 [Wind4](https://unocss.dev/presets/wind4) utility classes, a compact convention
 for composing CSS from class names, include `grid`, `gap-6`, `p-6`, `text-sm`,
 and `lg:grid-cols-3`. They use the same scoped generator. Studio observes class

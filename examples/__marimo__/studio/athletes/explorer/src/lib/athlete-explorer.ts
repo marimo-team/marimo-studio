@@ -83,8 +83,10 @@ const enableKeyboardTableSort = (host: HTMLElement) => {
       if (enhanced.has(header)) return;
       enhanced.add(header);
       header.tabIndex = 0;
-      const label = header.textContent?.trim().replaceAll("_", " ") ?? "column";
-      header.textContent = label;
+      const labelNode = header.lastChild;
+      const label = labelNode?.textContent?.trim().replaceAll("_", " ") ??
+        "column";
+      if (labelNode) labelNode.textContent = label;
       header.setAttribute("aria-label", `Sort by ${label}`);
       header.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -289,8 +291,13 @@ export const createAthleteExplorer = async ({
     ),
   );
 
+  const roster = document.createElement("div");
+  roster.setAttribute("aria-label", "Scrollable matching athlete roster");
+  roster.setAttribute("role", "region");
+  roster.tabIndex = 0;
   hosts.table.replaceChildren(
     vg.table({
+      element: roster,
       from: TABLE_NAME,
       filterBy: filters,
       columns: [

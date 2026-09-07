@@ -151,7 +151,7 @@ h1 {
 
 .control-bar-controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(14rem, 1fr));
+  grid-template-columns: repeat(2, minmax(max-content, 1fr));
   gap: 0.75rem;
   align-items: center;
   width: min(100%, 39rem);

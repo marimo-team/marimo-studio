@@ -52,6 +52,9 @@ export const App = () => {
   const hasError = eventsError || summaryError;
   const isLoading =
     (filteredEvents === undefined || eventSummary === undefined) && !hasError;
+  const maximumMagnitude = eventSummary?.events === 0
+    ? "n/a"
+    : formatMagnitude(eventSummary?.maximum_magnitude);
   const statusText = hasError
     ? "Event data unavailable"
     : isLoading
@@ -111,7 +114,7 @@ export const App = () => {
               <span>{label}</span>
               <strong>
                 {key === "maximum_magnitude"
-                  ? formatMagnitude(eventSummary?.[key])
+                  ? maximumMagnitude
                   : formatInteger(eventSummary?.[key])}
               </strong>
             </article>

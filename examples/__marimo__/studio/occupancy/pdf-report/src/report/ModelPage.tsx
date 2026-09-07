@@ -104,11 +104,13 @@ export const ModelPage = ({ report }: { report: OccupancyReportData }) => {
       <Text style={[styles.pageLead, { width: "100%" }]}>
         Light is normalized from zero to this scope's {formatPercentile(
           model.normalization_quantile,
-        )} percentile. CO2 is normalized from this scope's minimum to its {formatPercentile(
+        )} percentile. CO2 is normalized from this scope's minimum to its{" "}
+        {formatPercentile(
           model.normalization_quantile,
         )} percentile. The score combines them at {(
           model.light_weight * 100
-        ).toFixed(0)}% and {(model.co2_weight * 100).toFixed(0)}%. A reading at or above{" "}
+        ).toFixed(0)}% and{" "}
+        {(model.co2_weight * 100).toFixed(0)}%. A reading at or above{" "}
         {model.threshold.toFixed(2)}{" "}
         is classified as occupied, so the threshold is scope-specific.{" "}
         {hasOccupiedReadings
@@ -136,7 +138,7 @@ export const ModelPage = ({ report }: { report: OccupancyReportData }) => {
           title={hasOccupiedReadings
             ? "Accuracy, precision, and recall by threshold"
             : "Accuracy and precision by threshold"}
-          note={`The orange rule marks the selected threshold of ${
+          note={`The orange rule marks the default threshold of ${
             model.threshold.toFixed(2)
           }.`}
         />
