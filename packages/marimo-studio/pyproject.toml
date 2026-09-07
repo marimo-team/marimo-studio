@@ -8,11 +8,11 @@ license-files = ["LICENSE"]
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
 requires-python = ">=3.10,<3.15"
 dependencies = [
-  "agent-plugins>=0.1.0",
+  "agent-plugins>=0.2",
   "click>=8.2",
   "htpy>=26.5.1,<27",
   "marimo==0.24.0",
-  "marimo-export==0.0.3",
+  "marimo-export==0.0.4",
   "markupsafe>=3",
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",
@@ -103,7 +103,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "tests/views/test_workspace_security.py" = ["TID251"]
 
 [build-system]
-requires = ["agent-plugins>=0.1.0", "uv_build==0.12.2"]
+requires = ["agent-plugins>=0.2", "uv_build==0.12.2"]
 build-backend = "agent_plugins.build.uv_build"
 
 [tool.agent-plugins]
