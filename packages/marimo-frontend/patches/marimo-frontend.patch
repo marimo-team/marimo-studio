@@ -203,7 +203,7 @@ index 60af78236..5a17ca0d4 100644
        this.observer.disconnect();
        this.root?.unmount();
 diff --git a/frontend/src/plugins/impl/SliderPlugin.tsx b/frontend/src/plugins/impl/SliderPlugin.tsx
-index 08ecebc6e..84c26e345 100644
+index 08ecebc6e..13ceab124 100644
 --- a/frontend/src/plugins/impl/SliderPlugin.tsx
 +++ b/frontend/src/plugins/impl/SliderPlugin.tsx
 @@ -3,6 +3,7 @@ import { type JSX, useEffect, useId, useMemo, useState } from "react";
@@ -262,14 +262,12 @@ index 08ecebc6e..84c26e345 100644
        id={id}
        align={orientation === "horizontal" ? "left" : "top"}
        fullWidth={fullWidth}
-@@ -236,6 +246,10 @@ const SliderComponent = ({
+@@ -236,6 +246,8 @@ const SliderComponent = ({
        >
          <Slider
            id={id}
-+          aria-label={accessibleName ?? (label ? undefined : "Slider")}
-+          aria-labelledby={
-+            accessibleName ? undefined : label ? labelId : undefined
-+          }
++          aria-label={label ? undefined : (accessibleName ?? "Slider")}
++          aria-labelledby={label ? labelId : undefined}
            className={cn(
              "relative flex items-center select-none",
              !fullWidth && "data-[orientation=horizontal]:w-36 ",
@@ -289,7 +287,7 @@ index d0b3fb840..f8e17b2bd 100644
  
      it("filters options based on search input and handles selection", async () => {
 diff --git a/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx b/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
-index c67866976..beb65b63f 100644
+index c67866976..905037b03 100644
 --- a/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
 +++ b/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
 @@ -11,17 +11,25 @@ import { SliderPlugin } from "../SliderPlugin";
@@ -352,7 +350,7 @@ index c67866976..beb65b63f 100644
          debounce,
          orientation: "horizontal" as const,
          showValue: false,
-@@ -126,6 +138,85 @@ describe("SliderPlugin", () => {
+@@ -126,6 +138,87 @@ describe("SliderPlugin", () => {
      });
    };
  
@@ -393,47 +391,49 @@ index c67866976..beb65b63f 100644
 +    expect(thumb).toHaveAccessibleName(/Loss.*λ.*2/u);
 +  });
 +
-+  it("uses the authored projection host label before the notebook label", async () => {
-+    const plugin = new SliderPlugin();
-+    const cell = document.createElement("div");
-+    cell.id = "cell-projected-slider";
-+    cell.setAttribute("aria-label", "Number of neighbors k");
-+    const shadowHost = document.createElement("div");
-+    const shadow = shadowHost.attachShadow({ mode: "open" });
-+    const host = document.createElement("marimo-slider");
-+    shadow.append(host);
-+    cell.append(shadowHost);
-+    document.body.append(cell);
-+    const props = createProps({
-+      debounce: false,
-+      host,
-+      includeInput: false,
-+      label: "<strong>Notebook</strong> <span>k</span>",
-+      setValue: vi.fn(),
-+    });
++  it.each([
++    { label: "Minimum magnitude", expectedName: "Minimum magnitude" },
++    { label: null, expectedName: "Number of neighbors k" },
++  ])(
++    "names a projected slider as $expectedName",
++    async ({ label, expectedName }) => {
++      const plugin = new SliderPlugin();
++      const cell = document.createElement("div");
++      cell.id = "cell-projected-slider";
++      cell.setAttribute("aria-label", "Number of neighbors k");
++      const shadowHost = document.createElement("div");
++      const shadow = shadowHost.attachShadow({ mode: "open" });
++      const host = document.createElement("marimo-slider");
++      shadow.append(host);
++      cell.append(shadowHost);
++      document.body.append(cell);
++      const props = createProps({
++        debounce: false,
++        host,
++        includeInput: false,
++        label,
++        setValue: vi.fn(),
++      });
 +
-+    const { getByTestId } = render(plugin.render(props));
-+    const control = getByTestId("slider-control");
-+    expect(control).toHaveAttribute("aria-label", "Number of neighbors k");
-+    expect(control).not.toHaveAttribute("aria-labelledby");
-+
-+    const { Slider: ActualSlider } = await vi.importActual<
-+      typeof import("@/components/ui/slider")
-+    >("@/components/ui/slider");
-+    const actual = render(
-+      <ActualSlider
-+        aria-label={control.getAttribute("aria-label") ?? undefined}
-+        max={10}
-+        min={0}
-+        onValueChange={() => {}}
-+        value={[5]}
-+        valueMap={(value) => value}
-+      />,
-+    );
-+    expect(actual.getByRole("slider")).toHaveAccessibleName(
-+      "Number of neighbors k",
-+    );
-+  });
++      const { getByTestId } = render(plugin.render(props));
++      const control = getByTestId("slider-control");
++      const { Slider: ActualSlider } = await vi.importActual<
++        typeof import("@/components/ui/slider")
++      >("@/components/ui/slider");
++      const actual = render(
++        <ActualSlider
++          aria-label={control.getAttribute("aria-label") ?? undefined}
++          aria-labelledby={control.getAttribute("aria-labelledby") ?? undefined}
++          max={10}
++          min={0}
++          onValueChange={() => {}}
++          value={[5]}
++          valueMap={(value) => value}
++        />,
++      );
++      expect(actual.getByRole("slider")).toHaveAccessibleName(expectedName);
++    },
++  );
 +
    it("slider triggers setValue immediately when debounce is false", () => {
      const plugin = new SliderPlugin();
