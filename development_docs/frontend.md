@@ -259,8 +259,10 @@ Prepare dependencies and the exact Marimo frontend source with:
 make setup
 ```
 
-Set `MARIMO_REPO` to use a clean local checkout at the configured release
-commit:
+Set `MARIMO_REPO` to clone the configured release commit from a local
+repository. Studio prepares dependencies and applies its frontend patch in
+its own cached checkout. The local repository must contain that commit and
+keeps its current branch and working files:
 
 ```console
 MARIMO_REPO=/path/to/marimo make setup
