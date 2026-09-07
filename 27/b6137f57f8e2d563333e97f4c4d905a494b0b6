@@ -1,0 +1,26 @@
+development_docs/frontend.md
+  s_56e158cb000e90::t_08ebd6aa0730c2 262-265
+packages/marimo-frontend/tests/source.test.mjs
+  s_56e158cb000e90::t_92225354c506de 606,611
+  s_56e158cb000e90::t_8995145c993b6c 631
+  s_56e158cb000e90::t_222bf5036a1b10 578-584,597-602,622-630,632
+packages/marimo-frontend/scripts/source.mjs
+  s_56e158cb000e90::t_08ebd6aa0730c2 251,313,344-348,356-364,368-369,371-372,398,402,411
+  s_56e158cb000e90::t_8995145c993b6c 4-5,239-250,325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "27b6137f57f8e2d563333e97f4c4d905a494b0b6",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
