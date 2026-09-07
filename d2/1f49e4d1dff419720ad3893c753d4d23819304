@@ -1,0 +1,36 @@
+packages/presentation/src/runtime/cells/cell-host-projections.ts
+  s_56e158cb000e90::t_1961e544484c66 8,48,50
+development_docs/architecture/browser-runtime-and-authoring.md
+  ai_agent 132-137
+packages/presentation/src/values/hosts.ts
+  s_56e158cb000e90::t_1961e544484c66 10,13-14,435,450,528-529,569,588
+  s_56e158cb000e90::t_7380e5a404d475 561-564
+development_docs/architecture/symbolic-projections.md
+  ai_agent 68-71
+packages/presentation/src/runtime/outputs/RuntimeOutputs.tsx
+  s_56e158cb000e90::t_1961e544484c66 10,49,51
+packages/presentation/tests/value-hosts.test.ts
+  s_56e158cb000e90::t_24fac6ab473622 624-654
+packages/presentation/src/projections/instances.ts
+  s_56e158cb000e90::t_1961e544484c66 7,64-66,106-107,109-110
+packages/presentation/src/projections/resolution.ts
+  s_56e158cb000e90::t_8657b613d2c6da 445,455
+  s_56e158cb000e90::t_c50e399f8275b6 457
+  s_56e158cb000e90::t_27ddab094a7a8d 18-22,339,346,363-368,372-381,390,393,397,437-444,446-454,456,458-462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d21f49e4d1dff419720ad3893c753d4d23819304",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
