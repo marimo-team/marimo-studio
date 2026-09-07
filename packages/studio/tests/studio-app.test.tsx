@@ -157,7 +157,9 @@ describe("Studio shell", () => {
     expect(await services.views.choose("report", "preserve", navigation)).toBe(true);
     expect(synchronize).toHaveBeenCalledOnce();
     expect(synchronize).toHaveBeenCalledWith("?region=apac");
-    expect(stageView).toHaveBeenCalledWith("report", navigation);
+    expect(stageView.mock.calls.map(([view, intent]) => ({ view, navigation: intent }))).toEqual([
+      { view: "report", navigation },
+    ]);
     expect(selectSource).toHaveBeenCalledWith("report");
     expect(globalThis.location.search).toContain("region=apac");
     expect(globalThis.location.hash).toBe("#app-shell");
@@ -198,7 +200,9 @@ describe("Studio shell", () => {
 
     expect(await services.views.choose("report")).toBe(true);
 
-    expect(stageView).toHaveBeenCalledWith("report", undefined);
+    expect(stageView.mock.calls.map(([view, navigation]) => ({ view, navigation }))).toEqual([
+      { view: "report", navigation: undefined },
+    ]);
     expect(services.views.getSnapshot().current).toBe("report");
     expect(services.layout.getSnapshot().mode).toBe("preview");
     expect(services.source.getSnapshot()).toMatchObject({

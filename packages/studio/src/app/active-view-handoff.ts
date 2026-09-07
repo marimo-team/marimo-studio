@@ -1,6 +1,6 @@
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
-import type { StagedPreviewView } from "../features/preview/deck.ts";
+import type { StagedPreviewView } from "../features/preview/navigation.ts";
 import type { StagedViewTransition } from "../features/views/transition.ts";
 
 export interface StagedActiveViewHandoff {

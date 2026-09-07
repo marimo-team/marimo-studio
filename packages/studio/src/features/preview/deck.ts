@@ -12,6 +12,11 @@ import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
 import type { ControlFrameConnector } from "./control-sync.ts";
+import type {
+  PreviewNavigationOwner,
+  StagedNavigationQuery,
+  StagedPreviewView,
+} from "./navigation.ts";
 import type { NotebookMutationCompletion } from "./notebook-mutation-coordinator.ts";
 import type { RecordBrowserObservation } from "./observation-remote.ts";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
@@ -21,6 +26,8 @@ import {
   PreviewController,
   type PreviewFrameState,
 } from "./controller.ts";
+import { PreviewFrames, type CachedPreview } from "./frames.ts";
+import { PreviewNavigation } from "./navigation.ts";
 import { NotebookMutationCoordinator } from "./notebook-mutation-coordinator.ts";
 import { observeFrameQuery } from "./query-sync.ts";
 import { cloneRuntimeStatusReport, RuntimeDiagnostics } from "./runtime-diagnostics.ts";
@@ -45,9 +52,6 @@ interface PreviewDeckOptions {
   connectControlFrame?: ControlFrameConnector;
 }
 
-export const PREVIEW_VIEW_CACHE_SIZE = 3;
-export const WASM_PREVIEW_VIEW_CACHE_SIZE = 1;
-
 export interface PreviewFrameDescriptor {
   active: boolean;
   id: string;
@@ -63,55 +67,10 @@ export interface PreviewDeckSnapshot {
   states: Readonly<Record<string, PreviewFrameState>>;
 }
 
-export interface StagedPreviewView {
-  ready: Promise<boolean>;
-  commit?(): void;
-  rollback(): Promise<void>;
-}
-
-interface CachedPreview {
-  readonly id: string;
-  readonly runtime: string;
-  controller?: PreviewController;
-  frame?: HTMLIFrameElement;
-  lastUsed: number;
-  navigation?: ViewNavigationIntent;
-  stale: boolean;
-  state?: PreviewFrameState;
-  view?: string;
-}
-
-interface StagedNavigationQuery {
-  ready: Promise<boolean>;
-  rollback(): Promise<boolean>;
-}
-
-interface PreviewNavigationTransaction {
-  readonly id: number;
-}
-
 type Listener = () => void;
 
-const startingFrameState = (
-  runtime: string,
-  view: string,
-  url: string,
-  lifecycleId: number,
-): PreviewFrameState => {
-  const runtimeStatus = new RuntimeDiagnostics({ runtime, view }).report();
-  return {
-    url,
-    lifecycleId,
-    runtimeStatus,
-    status: previewStatus(runtime, runtimeStatus.current),
-  };
-};
-
-const sameNavigation = (left: ViewNavigationIntent, right: ViewNavigationIntent): boolean =>
-  left.query === right.query && left.hash === right.hash;
-
 export class PreviewDeck {
-  private readonly slots: CachedPreview[] = [];
+  private readonly frames: PreviewFrames;
   private readonly listeners = new Set<Listener>();
   private readonly states = new Map<string, PreviewFrameState>();
   readonly frameIds: readonly string[];
@@ -126,9 +85,7 @@ export class PreviewDeck {
   private readonly notebookMutations: NotebookMutationCoordinator;
   private readonly presentationRevisions = new Map<string, string | null>();
   private readonly presentationBuilds = new Set<string>();
-  private navigationTransaction: PreviewNavigationTransaction | undefined;
-  private navigationGeneration = 0;
-  private lastUsed = 0;
+  private readonly navigationTransaction = new PreviewNavigation();
   private viewSwitch: {
     readonly view: string;
     readonly runtime: string;
@@ -139,6 +96,12 @@ export class PreviewDeck {
     this.runtime = options.initialRuntime;
     this.view = options.initialView;
     this.navigation = options.initialNavigation;
+    this.frames = new PreviewFrames(options.runtimes, options.viewUrl, (view) => {
+      if (view !== this.view) {
+        this.presentationBuilds.delete(view);
+        this.presentationRevisions.delete(view);
+      }
+    });
     this.notebookMutations = new NotebookMutationCoordinator({
       gate: (generation) => this.gateNotebookMutation(generation),
       markCachedViewsStale: () => this.markCachedViewsStale(),
@@ -158,20 +121,10 @@ export class PreviewDeck {
     });
     this.viewSwitch = { view: this.view, runtime: this.runtime };
     for (const runtime of options.runtimes) {
-      const cacheSize =
-        runtime === DEFAULT_RUNTIME_ID ? PREVIEW_VIEW_CACHE_SIZE : WASM_PREVIEW_VIEW_CACHE_SIZE;
-      for (let index = 0; index < cacheSize; index += 1) {
-        this.slots.push({
-          id: index === 0 ? runtime : `${runtime}:${index}`,
-          runtime,
-          lastUsed: 0,
-          stale: false,
-        });
-      }
-      const initial = this.selectSlot(runtime, this.view, this.navigation);
+      const initial = this.frames.select(runtime, this.view, this.navigation);
       this.states.set(runtime, initial.state!);
     }
-    this.frameIds = this.slots.map(({ id }) => id);
+    this.frameIds = this.frames.ids;
     this.updateSnapshot();
   }
 
@@ -209,9 +162,7 @@ export class PreviewDeck {
       return;
     }
     this.editor = editor;
-    for (const slot of this.slots) {
-      slot.frame = frames.get(slot.id);
-    }
+    this.frames.attach(frames);
     this.ensure(this.runtime, this.view);
     this.bindEditor();
   }
@@ -219,14 +170,14 @@ export class PreviewDeck {
   switchRuntime(runtime: string): void {
     if (
       runtime === this.runtime ||
-      this.navigationTransaction !== undefined ||
+      this.navigationTransaction.pending ||
       !this.options.runtimes.includes(runtime)
     ) {
       return;
     }
     this.deactivateActive();
     this.runtime = runtime;
-    const slot = this.selectSlot(runtime, this.view, this.navigation);
+    const slot = this.frames.select(runtime, this.view, this.navigation);
     this.states.set(runtime, slot.state!);
     const controller = this.ensure(runtime, this.view);
     const reload = slot.stale;
@@ -273,75 +224,10 @@ export class PreviewDeck {
     navigation?: ViewNavigationIntent,
     signal?: AbortSignal,
   ): StagedPreviewView {
-    const transaction = { id: ++this.navigationGeneration };
-    this.navigationTransaction = transaction;
-    const query = navigation ? this.stageNavigationQuery(navigation.query, transaction) : undefined;
-    let preview: StagedPreviewView | undefined;
-    let rollingBack = false;
-    let rollback: Promise<void> | undefined;
-    const ready = (async () => {
-      if (
-        (query && !(await query.ready)) ||
-        rollingBack ||
-        this.navigationTransaction !== transaction
-      ) {
-        return false;
-      }
-      if (!changed) {
-        return true;
-      }
-      preview = signal
-        ? this.stageView(view, navigation, signal)
-        : this.stageView(view, navigation);
-      if (rollingBack) {
-        await preview.rollback();
-        return false;
-      }
-      const prepared = await preview.ready;
-      return !rollingBack && this.navigationTransaction === transaction && prepared;
-    })();
-    return {
-      ready,
-      commit: () => {
-        if (this.navigationTransaction === transaction) {
-          this.navigationTransaction = undefined;
-        }
-      },
-      rollback: () => {
-        rollingBack = true;
-        rollback ??= (async () => {
-          if (this.navigationTransaction !== transaction) {
-            return;
-          }
-          const failures: unknown[] = [];
-          try {
-            try {
-              await preview?.rollback();
-            } catch (error) {
-              failures.push(error);
-            }
-            try {
-              if (!((await query?.rollback()) ?? true)) {
-                failures.push(new Error("The previous notebook query could not be restored."));
-              }
-            } catch (error) {
-              failures.push(error);
-            }
-          } finally {
-            if (this.navigationTransaction === transaction) {
-              this.navigationTransaction = undefined;
-            }
-          }
-          if (failures.length === 1) {
-            throw failures[0];
-          }
-          if (failures.length > 1) {
-            throw new AggregateError(failures, "The previous view could not be restored.");
-          }
-        })();
-        return rollback;
-      },
-    };
+    return this.navigationTransaction.stage(
+      navigation ? (owner) => this.stageNavigationQuery(navigation.query, owner) : undefined,
+      changed ? () => this.stageView(view, navigation, signal) : undefined,
+    );
   }
 
   private applyView(
@@ -353,10 +239,10 @@ export class PreviewDeck {
     this.view = view;
     this.navigation = navigation ?? { query: this.navigation.query, hash: "" };
     for (const runtime of this.options.runtimes) {
-      const slot = this.selectSlot(runtime, view, this.navigation);
+      const slot = this.frames.select(runtime, view, this.navigation);
       this.states.set(runtime, slot.state!);
     }
-    const active = this.slotFor(this.runtime, view)!;
+    const active = this.frames.find(this.runtime, view)!;
     const controller = this.ensure(this.runtime, view);
     const reload = active.stale;
     active.stale = false;
@@ -370,13 +256,13 @@ export class PreviewDeck {
     if (view !== this.view || this.viewSwitch.view !== view) {
       return Promise.resolve(false);
     }
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.runtime !== this.runtime || slot.view !== this.view) {
-        this.releaseSlot(slot);
+        this.frames.release(slot);
       }
     }
     for (const runtime of this.options.runtimes) {
-      const selected = this.selectSlot(runtime, this.view, this.navigation);
+      const selected = this.frames.select(runtime, this.view, this.navigation);
       this.states.set(runtime, selected.state!);
     }
     this.publish();
@@ -389,9 +275,9 @@ export class PreviewDeck {
     this.presentationBuilds.delete(view);
     this.presentationRevisions.delete(view);
     let released = false;
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.view === view && !this.isActive(slot)) {
-        this.releaseSlot(slot);
+        this.frames.release(slot);
         released = true;
       }
     }
@@ -404,7 +290,7 @@ export class PreviewDeck {
     this.presentationBuilds.delete(view);
     this.presentationRevisions.delete(view);
     let changed = false;
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.view !== view) {
         continue;
       }
@@ -412,7 +298,7 @@ export class PreviewDeck {
         slot.stale = false;
         slot.controller?.reload();
       } else {
-        this.releaseSlot(slot);
+        this.frames.release(slot);
       }
       changed = true;
     }
@@ -424,7 +310,7 @@ export class PreviewDeck {
   navigateWithinView(navigation: ViewNavigationIntent): void {
     this.navigation = navigation;
     for (const runtime of this.options.runtimes) {
-      const slot = this.selectSlot(runtime, this.view, navigation);
+      const slot = this.frames.select(runtime, this.view, navigation);
       if (runtime === this.runtime) {
         slot.controller?.navigateWithinView(navigation);
       }
@@ -441,16 +327,16 @@ export class PreviewDeck {
   }
 
   cancelNavigation(): void {
-    this.slotFor(this.runtime, this.view)?.controller?.cancelNavigation();
+    this.frames.find(this.runtime, this.view)?.controller?.cancelNavigation();
   }
 
   requestResize(): void {
     this.editor?.contentWindow?.dispatchEvent(new Event("resize"));
-    this.slots.forEach(({ controller }) => controller?.requestResize());
+    this.frames.slots.forEach(({ controller }) => controller?.requestResize());
   }
 
   requestObservation(request: ObserveViewRequest): void {
-    const slot = this.slotFor(request.runtime, request.view);
+    const slot = this.frames.find(request.runtime, request.view);
     if (
       !slot ||
       request.view !== this.view ||
@@ -474,7 +360,7 @@ export class PreviewDeck {
   }
 
   reload(): void {
-    const active = this.slotFor(this.runtime, this.view);
+    const active = this.frames.find(this.runtime, this.view);
     const controller = this.ensure(this.runtime, this.view);
     if (active) {
       active.stale = false;
@@ -494,8 +380,8 @@ export class PreviewDeck {
       return;
     }
     const reload = hadEarlierBinding;
-    const active = this.slotFor(this.runtime, this.view);
-    for (const slot of this.slots) {
+    const active = this.frames.find(this.runtime, this.view);
+    for (const slot of this.frames.slots) {
       if (!slot.controller) {
         continue;
       }
@@ -532,13 +418,13 @@ export class PreviewDeck {
 
   presentationBuildStarted(view: string, _notebookMutationGeneration?: number): void {
     this.presentationBuilds.add(view);
-    const active = this.slotFor(this.runtime, view);
+    const active = this.frames.find(this.runtime, view);
     if (view === this.view && !active?.controller) {
-      const selected = active ?? this.selectSlot(this.runtime, view, this.navigation);
+      const selected = active ?? this.frames.select(this.runtime, view, this.navigation);
       this.states.set(this.runtime, selected.state!);
       this.ensure(this.runtime, view);
     }
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.view === view) {
         slot.controller?.presentationBuildStarted();
       }
@@ -550,7 +436,7 @@ export class PreviewDeck {
     revision: string | null,
     notebookMutationGeneration?: number,
   ): void {
-    const active = view === this.view ? this.slotFor(this.runtime, view) : undefined;
+    const active = view === this.view ? this.frames.find(this.runtime, view) : undefined;
     const activeController = active?.controller;
     this.notebookMutations.buildCompleted(notebookMutationGeneration, () => {
       let interactivityChanged = false;
@@ -558,7 +444,7 @@ export class PreviewDeck {
       if (revision !== null) {
         this.presentationRevisions.set(view, revision);
       }
-      for (const slot of this.slots) {
+      for (const slot of this.frames.slots) {
         if (slot.view === view) {
           if (
             revision !== null &&
@@ -581,7 +467,7 @@ export class PreviewDeck {
 
   presentationStreamAbandoned(view: string): void {
     const incompleteBuild = this.presentationBuilds.delete(view);
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.view === view) {
         slot.controller?.presentationStreamAbandoned(incompleteBuild);
       }
@@ -593,7 +479,7 @@ export class PreviewDeck {
       return;
     }
     this.presentationRevisions.set(view, revision);
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.view === view) {
         slot.controller?.presentationChanged(revision);
       }
@@ -602,7 +488,7 @@ export class PreviewDeck {
 
   presentationBaseline(view: string, revision: string | null): void {
     this.presentationRevisions.set(view, revision);
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.view === view) {
         slot.controller?.presentationBaseline(revision);
       }
@@ -610,14 +496,14 @@ export class PreviewDeck {
   }
 
   runtimeDiagnostics(runtime = this.runtime): RuntimeStatusReport | undefined {
-    const slot = this.slotFor(runtime, this.view);
+    const slot = this.frames.find(runtime, this.view);
     const report = slot?.controller?.runtimeStatus() ?? slot?.state?.runtimeStatus;
     return report === undefined ? undefined : cloneRuntimeStatusReport(report);
   }
 
   dispose(): void {
     this.stopEditorQuerySync?.();
-    this.slots.forEach((slot) => this.releaseSlot(slot));
+    this.frames.dispose();
     this.listeners.clear();
   }
 
@@ -630,16 +516,14 @@ export class PreviewDeck {
       if (operationId === undefined) {
         this.receiveNavigationQuery(query);
       }
-      this.slotFor(this.runtime, this.view)?.controller?.editorQueryChanged(
-        query,
-        operationId,
-        completed,
-      );
+      this.frames
+        .find(this.runtime, this.view)
+        ?.controller?.editorQueryChanged(query, operationId, completed);
     });
   }
 
   private ensure(runtime: string, view: string): PreviewController | undefined {
-    const slot = this.slotFor(runtime, view);
+    const slot = this.frames.find(runtime, view);
     if (!slot || !this.editor || !slot.frame) {
       return undefined;
     }
@@ -682,7 +566,7 @@ export class PreviewDeck {
 
   private stageNavigationQuery(
     query: string,
-    transaction: PreviewNavigationTransaction,
+    transaction: PreviewNavigationOwner,
   ): StagedNavigationQuery {
     const runtime = this.runtime;
     const view = this.view;
@@ -697,10 +581,10 @@ export class PreviewDeck {
       rollback: () => {
         if (!rollback) {
           const currentOwner =
-            this.navigationTransaction === transaction &&
+            this.navigationTransaction.owns(transaction) &&
             this.runtime === runtime &&
             this.view === view
-              ? this.slotFor(runtime, view)?.controller
+              ? this.frames.find(runtime, view)?.controller
               : undefined;
           if (accepted && currentOwner) {
             rollback = currentOwner.rollbackNavigation(previousQuery);
@@ -714,87 +598,22 @@ export class PreviewDeck {
     };
   }
 
-  private selectSlot(
-    runtime: string,
-    view: string,
-    navigation: ViewNavigationIntent,
-  ): CachedPreview {
-    const existing = this.slotFor(runtime, view);
-    if (existing) {
-      this.touch(existing);
-      if (!sameNavigation(existing.navigation!, navigation)) {
-        existing.navigation = navigation;
-        if (!existing.controller && existing.state) {
-          existing.state = {
-            ...existing.state,
-            url: this.options.viewUrl(view, runtime, navigation),
-          };
-        }
-      }
-      return existing;
-    }
-    const candidates = this.slots.filter((slot) => slot.runtime === runtime);
-    const selected =
-      candidates.find(({ view: assigned }) => assigned === undefined) ??
-      candidates.reduce((oldest, slot) => (slot.lastUsed < oldest.lastUsed ? slot : oldest));
-    this.releaseSlot(selected);
-    selected.view = view;
-    selected.navigation = navigation;
-    selected.state = startingFrameState(
-      runtime,
-      view,
-      this.options.viewUrl(view, runtime, navigation),
-      nextPreviewDocumentLifecycleId(),
-    );
-    this.touch(selected);
-    return selected;
-  }
-
-  private slotFor(runtime: string, view: string): CachedPreview | undefined {
-    return this.slots.find((slot) => slot.runtime === runtime && slot.view === view);
-  }
-
-  private touch(slot: CachedPreview): void {
-    this.lastUsed += 1;
-    slot.lastUsed = this.lastUsed;
-  }
-
-  private releaseSlot(slot: CachedPreview): void {
-    const releasedView = slot.view;
-    slot.controller?.deactivate();
-    slot.controller?.dispose();
-    slot.controller = undefined;
-    slot.stale = false;
-    slot.state = undefined;
-    slot.navigation = undefined;
-    slot.view = undefined;
-    slot.lastUsed = 0;
-    if (slot.frame) {
-      delete slot.frame.dataset.sessionId;
-      slot.frame.src = "about:blank";
-    }
-    if (releasedView !== undefined && releasedView !== this.view) {
-      this.presentationBuilds.delete(releasedView);
-      this.presentationRevisions.delete(releasedView);
-    }
-  }
-
   private isActive(slot: CachedPreview): boolean {
     return slot.runtime === this.runtime && slot.view === this.view;
   }
 
   private activeController(): PreviewController | undefined {
-    return this.slotFor(this.runtime, this.view)?.controller;
+    return this.frames.find(this.runtime, this.view)?.controller;
   }
 
   private async gateNotebookMutation(generation: number): Promise<NotebookMutationCompletion> {
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (slot.controller && !this.isActive(slot)) {
         this.invalidateNotebookSlot(slot);
       }
     }
     while (true) {
-      const slot = this.slotFor(this.runtime, this.view);
+      const slot = this.frames.find(this.runtime, this.view);
       const controller = slot?.controller;
       if (!slot || !controller) {
         return { owner: slot ?? {}, complete: () => {} };
@@ -833,7 +652,7 @@ export class PreviewDeck {
   }
 
   private installMutationPlaceholder(): CachedPreview {
-    const slot = this.selectSlot(this.runtime, this.view, this.navigation);
+    const slot = this.frames.select(this.runtime, this.view, this.navigation);
     const runtimeStatus = new RuntimeDiagnostics({ runtime: this.runtime, view: this.view }).record(
       {
         phase: "synchronizing",
@@ -860,7 +679,7 @@ export class PreviewDeck {
       }
       return;
     }
-    const slot = this.slotFor(this.runtime, this.view);
+    const slot = this.frames.find(this.runtime, this.view);
     if (!slot?.state) {
       return;
     }
@@ -886,7 +705,7 @@ export class PreviewDeck {
   }
 
   private markCachedViewsStale(): void {
-    for (const slot of this.slots) {
+    for (const slot of this.frames.slots) {
       if (!slot.controller) {
         continue;
       }
@@ -906,7 +725,7 @@ export class PreviewDeck {
 
   private invalidateNotebookSlot(slot: CachedPreview): void {
     const view = slot.view;
-    this.releaseSlot(slot);
+    this.frames.release(slot);
     if (view !== undefined) {
       this.presentationBuilds.delete(view);
       this.presentationRevisions.delete(view);
@@ -914,7 +733,7 @@ export class PreviewDeck {
   }
 
   private deactivateActive(): void {
-    const active = this.slotFor(this.runtime, this.view);
+    const active = this.frames.find(this.runtime, this.view);
     if (active && this.notebookMutations.pending) {
       this.invalidateNotebookSlot(active);
       return;
@@ -941,7 +760,7 @@ export class PreviewDeck {
     }
     this.navigation = { ...this.navigation, query: next };
     for (const runtime of this.options.runtimes) {
-      const slot = this.selectSlot(runtime, this.view, this.navigation);
+      const slot = this.frames.select(runtime, this.view, this.navigation);
       this.states.set(runtime, slot.state!);
     }
   }
@@ -955,7 +774,7 @@ export class PreviewDeck {
     this.snapshot = {
       runtime: this.runtime,
       states: Object.fromEntries(this.states),
-      frames: this.slots.map(({ controller, id, runtime, stale, view }) => {
+      frames: this.frames.slots.map(({ controller, id, runtime, stale, view }) => {
         const active = runtime === this.runtime && view === this.view;
         return {
           id,

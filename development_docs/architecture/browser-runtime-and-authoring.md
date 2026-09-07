@@ -42,9 +42,15 @@ Presentation document
   owns one artifact shell and projection hosts
 ```
 
-The workspace keeps a bounded cache of preview frames keyed by runtime and
-view. Frames remain mounted while the user changes workspace modes so runtime
-state survives pane rearrangement, view switching, and runtime switching.
+`PreviewFrames` owns the bounded frame cache, runtime/view occupancy, eviction,
+and disposal. `PreviewNavigation` owns query preparation, staged view selection,
+commit, and rollback. `PreviewDeck` coordinates their active selection with the
+notebook mutation owner. Frames remain mounted during pane rearrangement and
+cached view switches.
+
+Each `PreviewController` owns one frame's document and admission policy.
+`PreviewMutationBarriers` owns that document's acknowledgement ports and timers.
+Reload, deactivation, and disposal retire those resources through the same owner.
 
 ## Runtime document assembly
 
