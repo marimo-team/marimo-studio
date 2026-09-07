@@ -25,10 +25,7 @@ import {
   bindViewSwitches,
   DevelopmentEvents,
 } from "./document/events.ts";
-import {
-  ExternalRefreshGate,
-  type ExternalRefreshLease,
-} from "./document/external-refresh-gate.ts";
+import { ExternalRefreshGate } from "./document/external-refresh-gate.ts";
 import { coordinatePresentationMutationBarrier } from "./document/mutation-barrier.ts";
 import { bindDocumentPresence } from "./document/page-lifecycle.ts";
 import { postToStudioParent } from "./document/parent-bridge.ts";
@@ -80,7 +77,6 @@ const externalRefreshGate = new ExternalRefreshGate(projectionReadGate, {
   cancel: cancelProjectedOutputFunctionTransition,
   complete: completeProjectedOutputFunctionTransition,
 });
-let externalBuildRefresh: ExternalRefreshLease | undefined;
 
 const cancelRetry = (): void => {
   if (retryTimer !== undefined) {
@@ -140,7 +136,6 @@ const connectEvents = (): void => {
     () => {
       if (globalThis.__MARIMO_STUDIO_RUNTIME_STATE__ === "failed") {
         externalRefreshGate.cancel();
-        externalBuildRefresh = undefined;
         globalThis.location.reload();
         return;
       }
@@ -148,25 +143,16 @@ const connectEvents = (): void => {
     },
     (build) => {
       if (build.phase === "building") {
-        beginExternalProjectionRefresh();
+        externalRefreshGate.refresh("pending");
       } else if (
         build.revision === null ||
         !hasRuntimeConfig() ||
         build.revision === getRuntimeConfig().revision
       ) {
-        settleExternalProjectionRefresh();
+        externalRefreshGate.refresh("settled");
       }
     },
   );
-};
-
-const beginExternalProjectionRefresh = (): void => {
-  externalBuildRefresh ??= externalRefreshGate.acquire("refresh");
-};
-
-const settleExternalProjectionRefresh = (): void => {
-  externalBuildRefresh?.release();
-  externalBuildRefresh = undefined;
 };
 
 const presentationChanged = (): void => {
@@ -174,7 +160,6 @@ const presentationChanged = (): void => {
     receiverRefreshHandshake.begin();
   }
   externalRefreshGate.presentationChanged();
-  externalBuildRefresh = undefined;
   reload();
 };
 
@@ -316,13 +301,7 @@ const startDevelopmentReload = async (): Promise<void> => {
   });
   const unbindPresentationEvents = bindPresentationEvents({
     changed: presentationChanged,
-    refresh: (phase) => {
-      if (phase === "pending") {
-        beginExternalProjectionRefresh();
-      } else {
-        settleExternalProjectionRefresh();
-      }
-    },
+    refresh: (phase) => externalRefreshGate.refresh(phase),
     barrier: (port, generation, signal, result) => {
       const lease = externalRefreshGate.acquire("mutation");
       void coordinatePresentationMutationBarrier({
@@ -363,7 +342,6 @@ const startDevelopmentReload = async (): Promise<void> => {
       developmentEvents.close();
       unbindProjectionBindingStale();
       externalRefreshGate.cancel();
-      externalBuildRefresh = undefined;
       receiverRefreshHandshake.release();
       unbindPresentationEvents();
       unbindViewSwitches();
