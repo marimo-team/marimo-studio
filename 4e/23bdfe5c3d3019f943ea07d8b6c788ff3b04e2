@@ -1,0 +1,23 @@
+packages/marimo-frontend/patches/marimo-frontend.patch
+  s_56e158cb000e90::t_4e91357725660d 206,265,269-270,290,353,394-416,418-436
+packages/marimo-frontend/patches/marimo-frontend.json
+  s_56e158cb000e90::t_4e91357725660d 4
+packages/marimo-studio/src/marimo_studio/_compat/release.json
+  s_56e158cb000e90::t_4e91357725660d 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4e23bdfe5c3d3019f943ea07d8b6c788ff3b04e2",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
