@@ -1,7 +1,32 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vite-plus/test";
 
-import { PreviewFrame } from "../src/features/workspace/TrustedFrame.tsx";
+import { PreviewFrame, TrustedFrame } from "../src/features/workspace/TrustedFrame.tsx";
+
+it("forwards the host's browser permissions", () => {
+  render(
+    <TrustedFrame
+      allow="clipboard-read; clipboard-write"
+      frameRef={vi.fn()}
+      title="Trusted document"
+    />,
+  );
+  expect(screen.getByTitle("Trusted document")).toHaveAttribute(
+    "allow",
+    "clipboard-read; clipboard-write",
+  );
+});
+
+it("delegates fullscreen to an opaque preview document", () => {
+  render(
+    <PreviewFrame frameRef={vi.fn()} runtime="server" title="Presentation" view="dashboard" />,
+  );
+  const frame = screen.getByTitle("Presentation");
+  expect(frame.getAttribute("allow")?.split(/;\s*/u)).toContain("fullscreen *");
+  const sandbox = frame.getAttribute("sandbox")?.split(/\s+/u);
+  expect(sandbox).toContain("allow-scripts");
+  expect(sandbox).not.toContain("allow-same-origin");
+});
 
 it("keeps a visible preview inert until its runtime is ready", () => {
   const frameRef = vi.fn();
@@ -16,7 +41,6 @@ it("keeps a visible preview inert until its runtime is ready", () => {
     />,
   );
   const frame = screen.getByTitle("dashboard custom view using server");
-  expect(frame).toHaveAttribute("allow", "clipboard-write");
   expect(frame).toHaveAttribute("inert");
   expect(frame).toHaveAttribute("aria-busy", "true");
 

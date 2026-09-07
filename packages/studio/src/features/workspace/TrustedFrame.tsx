@@ -11,6 +11,7 @@ type TrustedFrameProps = Omit<IframeHTMLAttributes<HTMLIFrameElement>, "ref" | "
 
 export const TrustedFrame = ({
   active = true,
+  allow = "clipboard-write",
   frameRef,
   interactive = active,
   title,
@@ -23,7 +24,7 @@ export const TrustedFrame = ({
       ref={frameRef}
       {...attributes}
       title={title}
-      allow="clipboard-write"
+      allow={allow}
       aria-busy={active && !interactive ? true : undefined}
       hidden={!active}
       inert={!active || !interactive}
@@ -39,6 +40,7 @@ export const PreviewFrame = ({
 }: TrustedFrameProps & { primary?: boolean; runtime: string; view?: string }) => (
   <TrustedFrame
     {...props}
+    allow="clipboard-write; fullscreen *"
     data-preview-frame=""
     data-preview-cache-runtime={runtime}
     data-preview-runtime-frame={primary ? runtime : undefined}

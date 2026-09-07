@@ -135,6 +135,9 @@ The trusted wrapper loads provider-authored content in an iframe whose sandbox
 permits scripts, forms, downloads, modals, pointer lock, and popups. The iframe
 has an opaque origin because `allow-same-origin` is absent.
 
+The host delegates the [Fullscreen API](https://fullscreen.spec.whatwg.org/)
+for presentation controls. The browser requires a user gesture to enter fullscreen.
+
 The child receives no Studio credential or same-origin authority. A validated
 message bridge carries navigation, public query, fragment, readiness, replay,
 diagnostic, and observation messages. The wrapper accepts child messages from
