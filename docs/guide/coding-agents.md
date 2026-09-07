@@ -121,8 +121,20 @@ if not report.ok:
 ```
 
 The report belongs to the current saved notebook, source revisions, runtime,
-Studio tab, and presentation. Repair each issue, then repeat build, show,
-interaction, and validation.
+Studio tab, and presentation. A concurrent source edit invalidates that evidence.
+Read the current source and repeat validation after it settles.
+
+Browser validation checks runtime and projection readiness. Inspect the rendered
+page at desktop and narrow widths for spacing, overflow, and interaction. Repair
+each issue, then repeat build, show, interaction, and validation.
+
+## Verify the delivery visitors will use
+
+Use [Run or export a view](run-and-share.md) to select Python, Browser, or
+Prepared delivery. A live Python preview does not prove a static export's
+behavior. For Prepared delivery, declare the finite control states, run
+preflight, serve the completed export over HTTP, and exercise those states in
+the browser. Include a failed state change when the interface needs recovery.
 
 Use [`marimo_studio.authoring`](../reference/python-api.md) for scripts that
 open a saved notebook outside code mode. Use the [CLI
