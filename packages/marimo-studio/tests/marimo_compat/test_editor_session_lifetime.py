@@ -7,13 +7,12 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from marimo._server.api.endpoints.ws.session_handler import SessionHandler
 from marimo._server.api.endpoints.ws.sse_handler import SSESessionHandler
 from marimo._server.api.endpoints.ws_endpoint import WebSocketHandler
+from marimo._session.events import SessionEventBus
 from marimo._session.model import ConnectionState, SessionMode
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
-import marimo_studio._compat.server.editor_session_lifetimes as lifetime_module
 import marimo_studio._compat.server.existing_session as existing_session_module
 from marimo_studio._compat.server.existing_session import (
     PrivateExistingSessionAttachment,
@@ -64,7 +63,12 @@ class _SessionManager:
     ttl_seconds: int | None = None
 
     def __init__(self, session: _Session) -> None:
+        self._event_bus = SessionEventBus()
         self.session: _Session | None = session
+
+    @property
+    def sessions(self) -> dict[str, _Session]:
+        return {"s_native": self.session} if self.session is not None else {}
 
     def get_session(self, session_id: object) -> _Session | None:
         return self.session if str(session_id) == "s_native" else None
@@ -147,20 +151,18 @@ def test_websocket_safe_close_settles_a_transport_disconnect_race() -> None:
 
 
 @pytest.mark.parametrize("handler_type", [WebSocketHandler, SSESessionHandler])
-def test_studio_editor_session_ttl_closes_only_the_disconnected_claim(
+@pytest.mark.parametrize("ttl", [None, 0])
+def test_editor_disconnect_follows_native_session_ttl(
     handler_type: type[WebSocketHandler] | type[SSESessionHandler],
+    ttl: int | None,
 ) -> None:
     async def exercise() -> None:
         session = _Session()
         manager = _SessionManager(session)
-        _adapter, handle = _open(cast(Any, manager))
+        manager.ttl_seconds = ttl
+        adapter, handle = _open(cast(Any, manager))
         closed = asyncio.Event()
-        admission = _accepted_admission(
-            _adapter,
-            manager,
-            session,
-            closed.set,
-        )
+        admission = _accepted_admission(adapter, manager, session, closed.set)
         handler = cast(
             Any,
             SimpleNamespace(
@@ -185,148 +187,18 @@ def test_studio_editor_session_ttl_closes_only_the_disconnected_claim(
                 RuntimeError("closed"),
                 lambda: cleaned.append(session),
             )
-            await asyncio.wait_for(closed.wait(), timeout=1)
+            if ttl is None:
+                barrier = asyncio.Event()
+                asyncio.get_running_loop().call_soon(barrier.set)
+                await barrier.wait()
+                assert manager.session is session
+                assert not closed.is_set()
+            else:
+                await asyncio.wait_for(closed.wait(), timeout=1)
+                assert manager.session is None
+            assert cleaned == [session]
         finally:
             handle.close()
-
-        assert cleaned == [session]
-        assert manager.session is None
         assert closed.is_set()
-
-    asyncio.run(exercise())
-
-
-def test_studio_editor_session_ttl_is_cancelled_by_reconnect() -> None:
-    async def exercise() -> None:
-        session = _Session()
-        manager = _SessionManager(session)
-        _adapter, handle = _open(cast(Any, manager))
-        admission = _accepted_admission(
-            _adapter,
-            manager,
-            session,
-            lambda: None,
-        )
-        handler = cast(
-            Any,
-            SimpleNamespace(
-                manager=manager,
-                websocket=SimpleNamespace(
-                    scope={NATIVE_SESSION_ADMISSION_SCOPE_KEY: admission}
-                ),
-                params=SimpleNamespace(session_id="s_native"),
-                mode=SessionMode.EDIT,
-                status=ConnectionState.OPEN,
-                cancel_close_handle=None,
-            ),
-        )
-        try:
-            SessionHandler._on_disconnect(handler, RuntimeError("closed"), lambda: None)
-            timer = lifetime_module._STUDIO_SESSION_LIFETIMES[session].timer
-            assert timer is not None
-            session.state = ConnectionState.OPEN
-            lifetime_module._accept_studio_session(
-                manager,
-                "s_native",
-                session,
-                admission.on_close,
-                admission.lifetime_owner,
-            )
-            assert timer.cancelled()
-            assert lifetime_module._STUDIO_SESSION_LIFETIMES[session].timer is None
-            assert manager.session is session
-        finally:
-            handle.close()
-
-        assert manager.session is None
-
-    asyncio.run(exercise())
-
-
-def test_configured_native_session_ttl_remains_the_only_close_owner() -> None:
-    async def exercise() -> None:
-        session = _Session(
-            ttl_seconds=60,
-            state=ConnectionState.CLOSED,
-            disconnect_closes=False,
-        )
-        manager = _SessionManager(session)
-        manager.ttl_seconds = 30
-        _adapter, handle = _open(cast(Any, manager))
-        admission = _accepted_admission(
-            _adapter,
-            manager,
-            session,
-            lambda: None,
-        )
-        handler = cast(
-            Any,
-            SimpleNamespace(
-                manager=manager,
-                websocket=SimpleNamespace(
-                    scope={NATIVE_SESSION_ADMISSION_SCOPE_KEY: admission}
-                ),
-                params=SimpleNamespace(session_id="s_native"),
-                mode=SessionMode.EDIT,
-                status=ConnectionState.OPEN,
-                cancel_close_handle=None,
-            ),
-        )
-        try:
-            SessionHandler._on_disconnect(handler, RuntimeError("closed"), lambda: None)
-            assert handler.cancel_close_handle is not None
-            lifetime = lifetime_module._STUDIO_SESSION_LIFETIMES[session]
-            assert lifetime.timer is None
-            handler.cancel_close_handle.cancel()
-            assert manager.session is session
-        finally:
-            handle.close()
-
-        assert manager.session is None
-
-    asyncio.run(exercise())
-
-
-def test_studio_editor_session_ttl_survives_disconnect_cleanup_failure() -> None:
-    async def exercise() -> None:
-        session = _Session()
-        manager = _SessionManager(session)
-        closed = asyncio.Event()
-        _adapter, handle = _open(cast(Any, manager))
-        admission = _accepted_admission(
-            _adapter,
-            manager,
-            session,
-            closed.set,
-        )
-        handler = cast(
-            Any,
-            SimpleNamespace(
-                manager=manager,
-                websocket=SimpleNamespace(
-                    scope={NATIVE_SESSION_ADMISSION_SCOPE_KEY: admission}
-                ),
-                params=SimpleNamespace(session_id="s_native"),
-                mode=SessionMode.EDIT,
-                status=ConnectionState.OPEN,
-                cancel_close_handle=None,
-            ),
-        )
-
-        def fail_cleanup() -> None:
-            raise RuntimeError("cleanup failed")
-
-        try:
-            with pytest.raises(RuntimeError, match="cleanup failed"):
-                SessionHandler._on_disconnect(
-                    handler,
-                    RuntimeError("closed"),
-                    fail_cleanup,
-                )
-            await asyncio.wait_for(closed.wait(), timeout=1)
-        finally:
-            handle.close()
-
-        assert manager.session is None
 
     asyncio.run(exercise())

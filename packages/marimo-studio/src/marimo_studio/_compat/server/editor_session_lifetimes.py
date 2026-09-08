@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import Lock, RLock
 from typing import Any
-from weakref import WeakKeyDictionary, WeakSet, ref
+from weakref import WeakKeyDictionary, WeakSet, WeakValueDictionary, ref
+
+from marimo._session.events import SessionEventListener
 
 
 @dataclass
 class _StudioSessionLifetime:
     manager: Callable[[], Any | None]
-    session_id: object
-    callbacks: dict[object, Callable[[], object]]
-    generation: int = 0
-    timer: asyncio.TimerHandle | None = None
+    owners: set[object]
+    # Active client bindings retain callbacks across transport reconnects.
+    callbacks: WeakValueDictionary[tuple[object, object], Callable[[], object]]
     settling: bool = False
     settlement_lock: Lock = field(default_factory=Lock, repr=False)
 
@@ -56,51 +56,22 @@ def _accept_studio_session(
             or owner not in owners
         ):
             return False
+        if _canonical_session_id(manager, session) is None:
+            return False
         lifetime = _STUDIO_SESSION_LIFETIMES.get(session)
         if lifetime is None:
             lifetime = _StudioSessionLifetime(
                 ref(manager),
-                session_id,
-                {owner: on_close},
+                {owner},
+                WeakValueDictionary(),
             )
             _STUDIO_SESSION_LIFETIMES[session] = lifetime
         elif lifetime.settling:
             return False
-        elif lifetime.timer is not None:
-            lifetime.timer.cancel()
         lifetime.manager = ref(manager)
-        lifetime.session_id = session_id
-        lifetime.callbacks[owner] = on_close
-        lifetime.generation += 1
-        lifetime.timer = None
+        lifetime.owners.add(owner)
+        lifetime.callbacks[owner, session_id] = on_close
         return True
-
-
-def _schedule_studio_session_close(session: Any) -> None:
-    released: _StudioSessionLifetime | None = None
-    with _STUDIO_SESSION_LIFETIMES_LOCK:
-        lifetime = _STUDIO_SESSION_LIFETIMES.get(session)
-        if lifetime is None:
-            return
-        manager = lifetime.manager()
-        if manager is None or manager.get_session(lifetime.session_id) is not session:
-            released = lifetime
-        else:
-            if lifetime.timer is not None:
-                lifetime.timer.cancel()
-            lifetime.generation += 1
-            generation = lifetime.generation
-            lifetime.timer = asyncio.get_running_loop().call_later(
-                session.ttl_seconds,
-                _close_studio_session,
-                session,
-                generation,
-            )
-    if released is not None:
-        _release_studio_session_lifetimes(
-            ((session, released),),
-            require_detached=True,
-        )
 
 
 def _notify_closed_studio_session(session: Any) -> None:
@@ -110,7 +81,7 @@ def _notify_closed_studio_session(session: Any) -> None:
         if lifetime is None:
             return
         manager = lifetime.manager()
-        if manager is not None and manager.get_session(lifetime.session_id) is session:
+        if manager is not None and _canonical_session_id(manager, session) is not None:
             return
         released = lifetime
     if released is not None:
@@ -150,6 +121,8 @@ def _close_studio_session_lifetimes() -> None:
     with _STUDIO_SESSION_LIFETIMES_LOCK:
         _STUDIO_SESSION_LIFETIME_OWNERS = 0
         _STUDIO_SESSION_LIFETIMES_CLOSING = False
+        for manager in tuple(_STUDIO_SESSION_LIFETIME_MANAGERS):
+            manager._event_bus.unsubscribe(_SESSION_LIFETIME_LISTENER)
         _STUDIO_SESSION_LIFETIME_MANAGERS.clear()
 
 
@@ -160,7 +133,12 @@ def _track_manager_session_lifetimes(manager: Any, owner: object) -> bool:
             or manager in _STUDIO_SESSION_LIFETIME_CLOSING_MANAGERS
         ):
             return False
-        _STUDIO_SESSION_LIFETIME_MANAGERS.setdefault(manager, set()).add(owner)
+        owners = _STUDIO_SESSION_LIFETIME_MANAGERS.get(manager)
+        if owners is None:
+            manager._event_bus.subscribe(_SESSION_LIFETIME_LISTENER)
+            owners = set()
+            _STUDIO_SESSION_LIFETIME_MANAGERS[manager] = owners
+        owners.add(owner)
         return True
 
 
@@ -177,7 +155,7 @@ def _close_manager_session_lifetimes(manager: Any, owner: object) -> None:
         owned = tuple(
             (session, lifetime)
             for session, lifetime in _STUDIO_SESSION_LIFETIMES.items()
-            if lifetime.manager() is manager and owner in lifetime.callbacks
+            if lifetime.manager() is manager and owner in lifetime.owners
         )
     try:
         for session, lifetime in owned:
@@ -192,6 +170,7 @@ def _close_manager_session_lifetimes(manager: Any, owner: object) -> None:
             owners.discard(owner)
             if not owners:
                 _STUDIO_SESSION_LIFETIME_MANAGERS.pop(manager, None)
+                manager._event_bus.unsubscribe(_SESSION_LIFETIME_LISTENER)
         _STUDIO_SESSION_LIFETIME_CLOSING_MANAGERS.discard(manager)
 
 
@@ -204,39 +183,54 @@ def _release_studio_session_lifetime_owner(
         with _STUDIO_SESSION_LIFETIMES_LOCK:
             if _STUDIO_SESSION_LIFETIMES.get(session) is not lifetime:
                 return
-            callback = lifetime.callbacks.pop(owner, None)
-            if callback is None:
+            callbacks = {
+                key: callback
+                for key, callback in lifetime.callbacks.items()
+                if key[0] is owner
+            }
+            for key in callbacks:
+                lifetime.callbacks.pop(key, None)
+            if owner not in lifetime.owners:
                 return
+            lifetime.owners.remove(owner)
             lifetime.settling = True
-            final_owner = not lifetime.callbacks
-            if final_owner and lifetime.timer is not None:
-                lifetime.timer.cancel()
+            final_owner = not lifetime.owners
         try:
             if final_owner:
                 _close_exact_studio_session(session, lifetime)
-            callback()
         except BaseException:
             with _STUDIO_SESSION_LIFETIMES_LOCK:
                 if _STUDIO_SESSION_LIFETIMES.get(session) is lifetime:
-                    lifetime.callbacks[owner] = callback
+                    lifetime.owners.add(owner)
+                    lifetime.callbacks.update(callbacks)
                     lifetime.settling = False
             raise
+        failure: BaseException | None = None
+        for key, callback in tuple(callbacks.items()):
+            try:
+                callback()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+            else:
+                callbacks.pop(key)
         with _STUDIO_SESSION_LIFETIMES_LOCK:
             if _STUDIO_SESSION_LIFETIMES.get(session) is lifetime:
+                lifetime.callbacks.update(callbacks)
+                if callbacks:
+                    lifetime.owners.add(owner)
                 lifetime.settling = False
-                if final_owner:
+                if final_owner and not callbacks:
                     _STUDIO_SESSION_LIFETIMES.pop(session, None)
+        if failure is not None:
+            raise failure
 
 
 def _release_studio_session_lifetimes(
     owned: tuple[tuple[Any, _StudioSessionLifetime], ...],
     *,
-    expected_generation: int | None = None,
     require_detached: bool = False,
-    require_disconnected: bool = False,
 ) -> None:
-    from marimo._session.model import ConnectionState
-
     failure: BaseException | None = None
     for session, lifetime in owned:
         with lifetime.settlement_lock:
@@ -244,26 +238,14 @@ def _release_studio_session_lifetimes(
                 if _STUDIO_SESSION_LIFETIMES.get(session) is not lifetime:
                     continue
                 if (
-                    (
-                        expected_generation is not None
-                        and lifetime.generation != expected_generation
-                    )
-                    or (
-                        require_detached
-                        and (manager := lifetime.manager()) is not None
-                        and manager.get_session(lifetime.session_id) is session
-                    )
-                    or (
-                        require_disconnected
-                        and session.connection_state() is ConnectionState.OPEN
-                    )
+                    require_detached
+                    and (manager := lifetime.manager()) is not None
+                    and _canonical_session_id(manager, session) is not None
                 ):
                     continue
                 lifetime.settling = True
-                callbacks = dict(lifetime.callbacks)
+                callbacks = dict(lifetime.callbacks.items())
                 lifetime.callbacks.clear()
-                if lifetime.timer is not None:
-                    lifetime.timer.cancel()
             try:
                 _close_exact_studio_session(session, lifetime)
             except BaseException as error:
@@ -274,7 +256,7 @@ def _release_studio_session_lifetimes(
                 if failure is None:
                     failure = error
                 continue
-            failed_callbacks: dict[object, Callable[[], object]] = {}
+            failed_callbacks: dict[tuple[object, object], Callable[[], object]] = {}
             for owner, callback in callbacks.items():
                 try:
                     callback()
@@ -297,20 +279,24 @@ def _close_exact_studio_session(
     lifetime: _StudioSessionLifetime,
 ) -> None:
     manager = lifetime.manager()
-    if manager is not None and manager.get_session(lifetime.session_id) is session:
-        manager.close_session(lifetime.session_id)
-    if manager is not None and manager.get_session(lifetime.session_id) is session:
-        raise RuntimeError("Marimo retained a closed Studio editor session")
+    if manager is not None:
+        canonical_id = _canonical_session_id(manager, session)
+        if canonical_id is not None:
+            manager.close_session(canonical_id)
+        if _canonical_session_id(manager, session) is not None:
+            raise RuntimeError("Marimo retained a closed Studio editor session")
 
 
-def _close_studio_session(session: Any, generation: int) -> None:
-    with _STUDIO_SESSION_LIFETIMES_LOCK:
-        lifetime = _STUDIO_SESSION_LIFETIMES.get(session)
-        if lifetime is None or lifetime.generation != generation:
-            return
-        lifetime.timer = None
-    _release_studio_session_lifetimes(
-        ((session, lifetime),),
-        expected_generation=generation,
-        require_disconnected=True,
+def _canonical_session_id(manager: Any, session: Any) -> object | None:
+    return next(
+        (key for key, current in manager.sessions.items() if current is session),
+        None,
     )
+
+
+class _SessionLifetimeListener(SessionEventListener):
+    async def on_session_closed(self, session: Any) -> None:
+        _notify_closed_studio_session(session)
+
+
+_SESSION_LIFETIME_LISTENER = _SessionLifetimeListener()

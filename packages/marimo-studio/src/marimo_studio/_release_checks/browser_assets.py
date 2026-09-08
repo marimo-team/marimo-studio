@@ -76,7 +76,12 @@ def browser_asset_graphs(
             raise AssertionError(f"Browser entry asset is unavailable: {relative}")
         return path
 
-    def graph(roots: tuple[str, ...], styles: tuple[str, ...] = ()) -> tuple[Path, ...]:
+    def graph(
+        roots: tuple[str, ...],
+        styles: tuple[str, ...] = (),
+        *,
+        dynamic_imports: set[str] | None = None,
+    ) -> tuple[Path, ...]:
         pending = list(roots)
         visited: set[str] = set()
         paths = {path for item in styles if (path := asset(item)) is not None}
@@ -94,10 +99,12 @@ def browser_asset_graphs(
             css = chunk.get("css", [])
             assets = chunk.get("assets", [])
             imports = chunk.get("imports", [])
+            dynamic = chunk.get("dynamicImports", [])
             if (
                 not isinstance(css, list)
                 or not isinstance(assets, list)
                 or not isinstance(imports, list)
+                or not isinstance(dynamic, list)
             ):
                 raise TypeError(f"Browser entry chunk is malformed: {key}")
             paths.update(path for item in css if (path := asset(item)) is not None)
@@ -106,22 +113,24 @@ def browser_asset_graphs(
                 for item in assets
                 if (path := asset(item, emitted=False)) is not None
             )
-            if not all(isinstance(item, str) for item in imports):
+            if not all(isinstance(item, str) for item in (*imports, *dynamic)):
                 raise AssertionError(f"Browser entry imports are malformed: {key}")
+            if dynamic_imports is not None:
+                dynamic_imports.update(dynamic)
             pending.extend(imports)
         return tuple(sorted(paths))
 
+    entry_imports: dict[str, set[str]] = {entry: set() for entry in entries}
     entry_graphs = {
-        entry: graph((key,), BROWSER_ENTRY_STYLES.get(entry, ()))
+        entry: graph(
+            (key,),
+            BROWSER_ENTRY_STYLES.get(entry, ()),
+            dynamic_imports=entry_imports[entry],
+        )
         for entry, key in sorted(entries.items())
     }
     runtime_key = entries["runtime.js"]
-    runtime = manifest.get(runtime_key)
-    if not isinstance(runtime, dict) or not isinstance(
-        runtime.get("dynamicImports"), list
-    ):
-        raise TypeError("Browser runtime entry has no dynamic import catalog")
-    dynamic_imports = runtime["dynamicImports"]
+    dynamic_imports = entry_imports["runtime.js"]
     runtime_imports: dict[str, str] = {}
     for name, suffix in RUNTIME_IMPORT_SUFFIXES.items():
         matches = [
@@ -135,14 +144,9 @@ def browser_asset_graphs(
     runtime_styles = BROWSER_ENTRY_STYLES["runtime.js"]
     dev_key = entries["dev-reload.js"]
     studio_key = entries["studio.js"]
-    studio = manifest.get(studio_key)
-    if not isinstance(studio, dict) or not isinstance(
-        studio.get("dynamicImports"), list
-    ):
-        raise TypeError("Browser Studio entry has no dynamic import catalog")
     studio_source_imports = [
         item
-        for item in studio["dynamicImports"]
+        for item in entry_imports["studio.js"]
         if isinstance(item, str) and item.endswith(STUDIO_SOURCE_IMPORT_SUFFIX)
     ]
     if len(studio_source_imports) != 1 or studio_source_imports[0] not in manifest:

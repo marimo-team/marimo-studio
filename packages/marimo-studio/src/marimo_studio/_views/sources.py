@@ -707,12 +707,16 @@ def write_source(
             provider.provenance(inspection),
         )
     except (ConfigurationError, OSError, ValueError) as error:
-        revision = _conflict_revision(
-            studio,
-            project.name,
-            project.root,
-            spec,
-        )
+        with (
+            workspace_catalog_lock(studio.view_root),
+            view_mutation_lock(studio.view_root, project.name),
+        ):
+            revision = _conflict_revision(
+                studio,
+                project.name,
+                project.root,
+                spec,
+            )
         if revision is not None:
             raise SourceConflictError(spec.path.as_posix(), revision) from error
         raise SourceNotFoundError(

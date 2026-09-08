@@ -12,6 +12,7 @@ from threading import Barrier, Event, get_ident
 
 import pytest
 
+import marimo_studio._artifacts.inputs as artifact_inputs
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.sources as sources_module
 import marimo_studio._workspace.config as workspace_config
@@ -394,6 +395,65 @@ def test_source_compare_and_swap_allows_one_cross_process_writer(
         )
 
     assert sorted(future.result() for future in futures) == ["conflict", "written"]
+
+
+def test_source_conflict_waits_for_an_in_progress_replacement(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _studio(notebook_path)
+    current = read_source(studio, "dashboard", SOURCE_PATH)
+    path = studio.view("dashboard").root / SOURCE_PATH
+    pending = path.with_suffix(".pending")
+    capturing = Event()
+    replacing = Event()
+    waiting = Event()
+    owner = get_ident()
+    mutation_lock = mutation_lock_module._mutation_lock
+
+    def capture_during_replacement(*args, **kwargs):
+        capturing.set()
+        assert replacing.wait(timeout=2)
+        return project_revision(*args, **kwargs)
+
+    @contextmanager
+    def observe_lock(view_root: Path, filename: str) -> Iterator[None]:
+        if get_ident() != owner and replacing.is_set():
+            waiting.set()
+        with mutation_lock(view_root, filename):
+            yield
+
+    monkeypatch.setattr(artifact_inputs, "project_revision", capture_during_replacement)
+    monkeypatch.setattr(mutation_lock_module, "_mutation_lock", observe_lock)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        writing = executor.submit(
+            write_source,
+            studio,
+            "dashboard",
+            SOURCE_PATH,
+            _document("red"),
+            current.revision,
+        )
+        assert capturing.wait(timeout=2)
+        with (
+            mutation_lock_module.workspace_catalog_lock(studio.view_root),
+            mutation_lock_module.view_mutation_lock(studio.view_root, "dashboard"),
+        ):
+            # Windows compare-and-swap moves the old entry before installing
+            # its replacement.
+            path.rename(pending)
+            replacing.set()
+            try:
+                assert waiting.wait(timeout=2)
+            finally:
+                pending.rename(path)
+                path.write_text(_document("blue"), encoding="utf-8")
+        with pytest.raises(SourceConflictError) as conflict:
+            writing.result(timeout=2)
+
+    saved = read_source(studio, "dashboard", SOURCE_PATH)
+    assert saved.content == _document("blue")
+    assert conflict.value.revision == saved.revision
 
 
 def test_source_write_revalidates_catalog_identity_after_waiting_for_view_lock(

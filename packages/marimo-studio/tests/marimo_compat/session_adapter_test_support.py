@@ -9,6 +9,7 @@ from marimo._server.api.endpoints.ws.ws_session_connector import (
     ConnectionType,
     SessionConnector,
 )
+from marimo._session.events import SessionEventBus
 from marimo._session.model import ConnectionState, SessionMode
 from starlette.datastructures import QueryParams
 
@@ -31,7 +32,7 @@ class Session:
         self._connection_state = ConnectionState.CLOSED
         self.initialization_id = file_key
         self.app_file_manager = SimpleNamespace(path=Path(file_key))
-        self.room = SimpleNamespace(consumers={})
+        self.room = SimpleNamespace(consumers={}, main_consumer=None)
         self._kernel_manager = SimpleNamespace(
             app_metadata=SimpleNamespace(query_params=query or {})
         )
@@ -44,6 +45,7 @@ class Manager:
     mode = SessionMode.EDIT
 
     def __init__(self) -> None:
+        self._event_bus = SessionEventBus()
         self.ttl_seconds: int | None = None
         self.sessions: dict[str, Session] = {}
         self.fallback: object | None = None
@@ -51,7 +53,18 @@ class Manager:
         self.skew_protection_token = "token"
 
     def get_session(self, session_id: object) -> Session | None:
-        return self.sessions.get(str(session_id))
+        key = str(session_id)
+        session = self.sessions.get(key)
+        if session is not None:
+            return session
+        return next(
+            (
+                candidate
+                for candidate in self.sessions.values()
+                if key in candidate.room.consumers
+            ),
+            None,
+        )
 
     def get_session_by_file_key(self, _file_key: str) -> object | None:
         self.fallback_calls += 1

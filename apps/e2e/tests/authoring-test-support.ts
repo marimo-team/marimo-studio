@@ -87,7 +87,7 @@ export const studioEditorSessionId = async (page: Page): Promise<string> => {
 };
 
 export const executeCodeMode = async (
-  editor: FrameLocator,
+  editor: FrameLocator | Page,
   file: string,
   sessionId: string,
   code: string,

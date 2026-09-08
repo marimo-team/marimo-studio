@@ -381,11 +381,13 @@ async def _bind_editor_session(
         )
         if accepted is not None:
             lease_holder[0] = accepted
+            accepted.native_close_callback = close_binding
             sessions.retry_startup(context, session_id, native_claim)
 
     def close_binding() -> asyncio.Task[None] | None:
         return notebook_scope.clients.native_session_closed(lease_holder[0])
 
+    binding.native_close_callback = close_binding
     admission = NativeSessionAdmission(
         expected_claim=owner.claim,
         file_key=context.file_key,

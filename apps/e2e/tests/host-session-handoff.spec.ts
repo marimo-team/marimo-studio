@@ -15,7 +15,7 @@ import {
   waitForNotebookServer,
 } from "./notebook-server.ts";
 
-test("reuses an untitled native session after save and manual Studio entry", async ({
+test("preserves the native kernel through first save and Studio entry", async ({
   browser,
 }, testInfo) => {
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-host-session-"));
@@ -79,7 +79,7 @@ test("reuses an untitled native session after save and manual Studio entry", asy
     });
 
     const cell = page.locator("[data-cell-id]").first();
-    await cell.getByRole("textbox").fill("saved = True\nsaved");
+    await cell.getByRole("textbox").fill("saved = []\nsaved");
     await cell.hover();
     await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
     await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
@@ -90,20 +90,28 @@ test("reuses an untitled native session after save and manual Studio entry", asy
     await resumedNativeSession;
     await expect(page).toHaveURL(`${server.serverUrl}/?file=host-save.py`);
     await expect(page.locator("#marimo-studio-host")).toHaveCount(0);
-    await expect(page.locator(".cm-content").first()).toContainText("saved = True");
+    await expect(page.locator(".cm-content").first()).toContainText("saved = []");
+    await executeCodeMode(page, "host-save.py", sessionId, 'saved.append("kept")');
 
     await page.goto(`${server.serverUrl}/studio/?file=host-save.py`);
     await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
     await page.getByRole("button", { name: "Create dashboard" }).click();
     await expect(page).toHaveURL(`${server.serverUrl}/studio/dashboard/?file=host-save.py`);
     await expect(editorFrame(page).locator("[data-cell-id]").first()).toBeVisible();
-    expect(await studioEditorSessionId(page)).toBe(sessionId);
+    const connectedSession = await studioEditorSessionId(page);
+    const takeover = editorFrame(page).getByRole("button", { name: "Take over", exact: true });
+    if (await takeover.isVisible()) {
+      await takeover.click();
+      await expect(takeover).toHaveCount(0);
+    }
     await recoverWorkspaceEventStream(workspaceStream);
+    await waitForPreview(page);
     await executeCodeMode(
       editorFrame(page),
       "host-save.py",
-      sessionId,
+      connectedSession,
       `
+assert saved == ["kept"]
 import marimo_studio.agent as studio_agent
 
 shown = await studio_agent.current_workspace().view("dashboard").show()

@@ -1,4 +1,4 @@
-"""Protect run-mode session isolation."""
+"""Protect native session selection and presentation consumer ownership."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from marimo._server.api.endpoints.ws.ws_session_connector import (
     SessionConnector,
 )
 from marimo._server.api.endpoints.ws_endpoint import WebSocketHandler
+from marimo._session.model import ConnectionState
 from starlette.datastructures import QueryParams
 from starlette.websockets import WebSocketDisconnect
 
@@ -100,19 +101,25 @@ def _connect_preview(
     return result
 
 
-def test_each_studio_editor_creates_its_own_session() -> None:
+def test_studio_connection_joins_the_native_notebook_session() -> None:
     manager = _Manager()
-    manager.fallback = _Session()
-    created = (object(), ConnectionType.NEW)
+    session = _Session()
+    session._connection_state = ConnectionState.OPEN
+    manager.sessions["s_editor1"] = session
+    manager.fallback = session
+    connected: list[object] = []
     connector = SessionConnector(
         manager=cast(Any, manager),
-        handler=cast(Any, SimpleNamespace()),
+        handler=cast(
+            Any, SimpleNamespace(_connect_kiosk=lambda value: connected.append(value))
+        ),
         params=cast(
             Any,
             SimpleNamespace(
                 session_id="s_editor2",
                 file_key="notebook.py",
                 kiosk=False,
+                rtc_enabled=False,
             ),
         ),
         connection=cast(
@@ -127,10 +134,10 @@ def test_each_studio_editor_creates_its_own_session() -> None:
             ),
         ),
     )
-    cast(Any, connector)._create_new_session = lambda: created
     _adapter, handle = _open(manager)
     try:
-        assert connector.connect() is created
+        assert connector.connect() == (session, ConnectionType.KIOSK)
+        assert connected == [session]
     finally:
         handle.close()
 
@@ -318,6 +325,63 @@ def test_preview_consumers_attach_to_the_exact_editor_session() -> None:
         handle.close()
 
 
+@pytest.mark.parametrize("rtc_enabled", [False, True])
+def test_secondary_reconnect_preserves_the_native_editor(rtc_enabled: bool) -> None:
+    manager = _Manager()
+    session = _Session()
+    primary = SimpleNamespace(consumer_id="s_editor1")
+    session.room.main_consumer = primary
+    session.room.consumers["s_editor2"] = object()
+    manager.sessions["s_editor1"] = session
+    connected: list[tuple[object, ConnectionType]] = []
+    admission = NativeSessionAdmission(
+        expected_claim=session,
+        file_key="notebook.py",
+        mode="current",
+        notebook=str(Path("notebook.py").resolve()),
+        runtime_session_id="s_editor2",
+        replay_on_reconnect=True,
+    )
+    connector = SessionConnector(
+        manager=cast(Any, manager),
+        handler=cast(
+            Any,
+            SimpleNamespace(
+                _connect_kiosk=lambda value: connected.append(
+                    (value, ConnectionType.KIOSK)
+                ),
+                _connect_to_existing_session=lambda value: connected.append(
+                    (value, ConnectionType.RTC_EXISTING)
+                ),
+            ),
+        ),
+        params=cast(
+            Any,
+            SimpleNamespace(
+                session_id="s_editor2",
+                file_key="notebook.py",
+                kiosk=False,
+                rtc_enabled=rtc_enabled,
+            ),
+        ),
+        connection=cast(
+            Any,
+            SimpleNamespace(
+                query_params=QueryParams(),
+                scope={NATIVE_SESSION_ADMISSION_SCOPE_KEY: admission},
+            ),
+        ),
+    )
+    _adapter, handle = _open(manager)
+    try:
+        expected = ConnectionType.RTC_EXISTING if rtc_enabled else ConnectionType.KIOSK
+        assert connector.connect() == (session, expected)
+        assert connected == [(session, expected)]
+        assert session.room.main_consumer is primary
+    finally:
+        handle.close()
+
+
 def test_preview_reuses_the_editor_session_for_owned_queries() -> None:
     manager = _Manager()
     target = _Session(query={"region": "emea"})
@@ -348,7 +412,7 @@ def test_preview_reuses_the_editor_session_for_owned_queries() -> None:
         handle.close()
 
 
-def test_popout_creates_a_query_correct_session_when_public_query_changes() -> None:
+def test_popout_joins_the_registered_session_with_its_current_query_state() -> None:
     manager = _Manager()
     target = _Session(query={"region": "emea"})
     manager.sessions = {"s_target": target}
@@ -362,13 +426,13 @@ def test_popout_creates_a_query_correct_session_when_public_query_changes() -> N
             {"region": "apac"},
         )
 
-        assert session is not target
-        assert connection is ConnectionType.NEW
+        assert session is target
+        assert connection is ConnectionType.KIOSK
     finally:
         handle.close()
 
 
-def test_reloaded_popout_without_client_marker_keeps_query_correctness() -> None:
+def test_native_kiosk_joins_the_notebook_session_with_its_current_query_state() -> None:
     manager = _Manager()
     target = _Session(query={"region": "emea"})
     manager.sessions = {"s_target": target}
@@ -382,8 +446,8 @@ def test_reloaded_popout_without_client_marker_keeps_query_correctness() -> None
             client_owned=False,
         )
 
-        assert session is not target
-        assert connection is ConnectionType.NEW
+        assert session is target
+        assert connection is ConnectionType.KIOSK
     finally:
         handle.close()
 

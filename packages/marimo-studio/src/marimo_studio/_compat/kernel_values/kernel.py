@@ -256,8 +256,8 @@ class _KernelBridgeLifespan:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
         self._value_encoder: ValueEncoder | None = None
-        self._query_generation = (-1, -1)
-        self._query_operations: dict[str, tuple[str, tuple[int, int]]] = {}
+        self._query_generations: dict[str, tuple[int, int]] = {}
+        self._query_operations: dict[tuple[str, str], tuple[str, tuple[int, int]]] = {}
         self._cached_cells = _CachedCellCompatibility()
         self._entered_lifespan: _EnteredKernelLifespan | None = None
         self._observation_ledger: ObservationLedger | None = None
@@ -394,6 +394,7 @@ class _KernelBridgeLifespan:
         filename: Path | None = None,
     ) -> None:
         from marimo._messaging.notification import (
+            CompletedRunNotification,
             QueryParamsDeleteNotification,
             QueryParamsSetNotification,
         )
@@ -578,7 +579,7 @@ class _KernelBridgeLifespan:
         output_function.cell_id = cell_id_type("__marimo_studio_outputs__")
         context.function_registry.register(NAMESPACE, output_function)
 
-        def sync_query(args: SyncQueryArgs) -> dict[str, object]:
+        async def sync_query(args: SyncQueryArgs) -> dict[str, object]:
             query = {
                 key: value
                 for key, value in args.query.items()
@@ -601,7 +602,8 @@ class _KernelBridgeLifespan:
             ):
                 raise ValueError("The query operation identity is invalid.")
             generation = (args.binding_generation, args.query_generation)
-            previous = self._query_operations.get(args.operation_id)
+            operation = (args.session_id, args.operation_id)
+            previous = self._query_operations.get(operation)
             if previous is not None and previous != (fingerprint, generation):
                 raise ValueError(
                     "The query operation ID was already used for a different query."
@@ -613,9 +615,10 @@ class _KernelBridgeLifespan:
                 "query_generation": args.query_generation,
                 "deadline": args.deadline,
             }
-            if generation < self._query_generation:
+            latest = self._query_generations.get(args.session_id, (-1, -1))
+            if generation < latest:
                 return {**result, "status": "superseded"}
-            if generation == self._query_generation:
+            if generation == latest:
                 if previous is None:
                     raise ValueError("The query generation identity is invalid.")
                 broadcast_notification(
@@ -654,11 +657,15 @@ class _KernelBridgeLifespan:
                 for key, value in query.items():
                     if current.get(key) != value:
                         params.set(key, value)
-                self._query_generation = generation
-                self._query_operations[args.operation_id] = (fingerprint, generation)
+                self._query_generations[args.session_id] = generation
+                self._query_operations[operation] = (fingerprint, generation)
                 if len(self._query_operations) > _MAX_QUERY_OPERATIONS:
                     oldest = next(iter(self._query_operations))
                     self._query_operations.pop(oldest)
+                # Native function calls leave reactive state updates queued.
+                if context._kernel.state_updates:
+                    await context._kernel._run_cells(set())
+                    broadcast_notification(CompletedRunNotification(), context.stream)
                 return {**result, "status": "applied"}
             finally:
                 broadcast_notification(

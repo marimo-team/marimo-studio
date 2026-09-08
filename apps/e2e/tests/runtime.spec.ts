@@ -11,6 +11,7 @@ import {
   expect,
   expectPreviewInteractive,
   presentationFrame,
+  previewFrame,
   readWorkspaceFile,
   recoverRequestAbort,
   recoverWorkspaceEventStream,
@@ -28,14 +29,15 @@ const activateServerPreview = async (
   page: Page,
   diagnostics: BrowserDiagnostics,
 ): Promise<void> => {
-  await page.getByLabel("Browser preview runtime").click();
-  const controls = diagnostics.expectActiveRequestAbort({
+  // Control discovery can start while the runtime menu is open.
+  const controls = diagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "GET",
     path: /^\/_marimo-studio\/views\/dashboard\/controls$/,
     count: 1,
     required: false,
   });
+  await page.getByLabel("Browser preview runtime").click();
   await page.getByRole("button", { name: /Python/ }).click();
   await expectPreviewInteractive(page, "server");
   await recoverRequestAbort(controls);
@@ -523,6 +525,7 @@ test("refreshes a popout view and preserves its public query across reload", asy
     const refreshed = source.replace(
       "<h1>Studio browser fixture</h1>",
       `<h1>Popout live view</h1>
+      <a href="?region=apac">APAC</a>
       <p>Region: <strong id="popout-region" mo-value='query_params["region"]'></strong></p>`,
     );
     const retiredDevelopmentStream = browserDiagnostics.expectActiveRequestAbort({
@@ -544,6 +547,10 @@ test("refreshes a popout view and preserves its public query across reload", asy
     await expect(rendered.getByRole("heading", { name: "Popout live view" })).toBeVisible();
     await expect(rendered.locator('strong[mo-value="metric"]')).toHaveText("42");
     await waitForPresentationRuntime(rendered);
+    await previewFrame(page).getByRole("link", { name: "APAC", exact: true }).click();
+    await expect(page).toHaveURL(/region=apac/);
+    await expect(popout).toHaveURL(/region=apac/);
+    await expect(rendered.locator("#popout-region")).toHaveText("apac");
     await rendered.locator("html").evaluate(() => {
       const target = new URL(globalThis.location.href);
       target.searchParams.set("region", "apac");

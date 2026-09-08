@@ -7,7 +7,9 @@ import {
   previewFrame,
   PREVIEW_TIMEOUT,
   readWorkspaceFile,
+  recoverRequestAbort,
   studioEntryUrl,
+  studioOrigin,
   test,
   WASM_PREVIEW_TIMEOUT,
   waitForPreview,
@@ -167,7 +169,10 @@ const installRuntimeProgress = (page: Page, initiallyArmed = true) =>
     };
   }, initiallyArmed);
 
-test("keeps streamed progress with its runtime while switching previews", async ({ page }) => {
+test("keeps streamed progress with its runtime while switching previews", async ({
+  browserDiagnostics,
+  page,
+}) => {
   await installRuntimeProgress(page);
   await page.goto(studioEntryUrl);
   const server = previewFrame(page);
@@ -189,6 +194,13 @@ test("keeps streamed progress with its runtime while switching previews", async 
   await expect(progress).toHaveCount(0);
   await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await page.getByLabel("Browser preview runtime").click();
+  const controls = browserDiagnostics.expectRequestAbort({
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/_marimo-studio\/views\/dashboard\/controls$/,
+    count: 1,
+    required: false,
+  });
   await page.getByRole("button", { name: /Python Use this editor/ }).click();
   await expect(progress).toHaveAttribute("value", "3");
   await expect(page.getByText("3 of 4", { exact: true })).toBeVisible();
@@ -198,6 +210,7 @@ test("keeps streamed progress with its runtime while switching previews", async 
   await waitForPreview(page);
   await expect(progress).toHaveCount(0);
   await expectPreviewInteractive(page, "server");
+  await recoverRequestAbort(controls);
 });
 
 for (const width of [1280, 390]) {

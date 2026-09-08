@@ -53,21 +53,28 @@ test("forced runner shutdown drains every open native notebook session", async (
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-forced-interruption-"));
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
+  await cp(resolve(workspace, "notebook.py"), resolve(workspace, "peer.py"));
+  await cp(
+    resolve(workspace, "__marimo__/studio/notebook"),
+    resolve(workspace, "__marimo__/studio/peer"),
+    { recursive: true },
+  );
   await copyFixtureProviderPackage(workspace);
   const port = e2eNetwork.main.forcedInterruption.port;
   const server = startNotebookServer({
     authentication: ["--no-token"],
     command: "edit",
     port,
-    target: resolve(workspace, "notebook.py"),
+    target: workspace,
   });
   const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
   let stopped = false;
   try {
     await waitForNotebookServer(server, `${server.serverUrl}/?file=notebook.py`);
     const pages = await Promise.all(contexts.map((context) => context.newPage()));
-    for (const page of pages) {
-      await page.goto(`${server.serverUrl}/?file=notebook.py`, {
+    for (const [index, page] of pages.entries()) {
+      const filename = index === 0 ? "notebook.py" : "peer.py";
+      await page.goto(`${server.serverUrl}/?file=${filename}`, {
         timeout: 60_000,
         waitUntil: "domcontentloaded",
       });
@@ -84,7 +91,7 @@ test("forced runner shutdown drains every open native notebook session", async (
         if (!response.ok()) return 0;
         return inventorySchema.parse(await response.json()).files.length;
       })
-      .toBeGreaterThanOrEqual(2);
+      .toBe(2);
 
     await stopNotebookServer(server, { timeout: MULTI_SESSION_SHUTDOWN_TIMEOUT });
     await expectNotebookServerStopped(server, port);
