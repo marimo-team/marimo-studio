@@ -1,0 +1,122 @@
+packages/marimo-studio/src/marimo_studio/_compat/kernel_values/query.py
+  s_c63703e0fda00c::t_6c818b4a01f2be 35,73
+packages/marimo-studio/src/marimo_studio/_compat/server/existing_session.py
+  s_c63703e0fda00c::t_677146769ebb29 200-202
+  s_c63703e0fda00c::t_ce805e024cf5ed 372-375,460
+  s_c63703e0fda00c::t_ae6a0cdc5e3dce 225-226,293-294,318-320,322,327
+  s_c63703e0fda00c::t_c96871047eb2c8 199,203-213
+packages/marimo-studio/tests/marimo_compat/test_kernel_bridge.py
+  s_c63703e0fda00c::t_15f5065c2dbe4c 541-578,580-601
+  s_c63703e0fda00c::t_cc27c8c8ba937f 579
+packages/studio/src/features/preview/query-controller.ts
+  s_c63703e0fda00c::t_08d424527858a0 145-148,152-156
+  s_c63703e0fda00c::t_bdda3a31b1371d 176-179,186-188,437
+packages/marimo-studio/tests/marimo_compat/test_projection_calls.py
+  s_c63703e0fda00c::t_2ca6de712d2fe9 162,174,179,188,202-203,271
+packages/marimo-studio/tests/server/test_host_integration.py
+  s_c63703e0fda00c::t_3cc5a4ec6e82e6 187,196,198,221
+  s_c63703e0fda00c::t_e580d7f9ab53fe 186,189,193
+apps/e2e/tests/collaboration.spec.ts
+  s_c63703e0fda00c::t_08d424527858a0 204-208
+  s_c63703e0fda00c::t_eebb556eaa2488 168-174
+apps/e2e/tests/host-session-handoff.spec.ts
+  s_c63703e0fda00c::t_75fb7ceec91cff 108
+  s_c63703e0fda00c::t_13a8708870245e 18,82,93-94,101-106,112,114
+apps/e2e/tests/runtime-startup.spec.ts
+  s_c63703e0fda00c::t_a1bb878addf9e0 10,12
+  s_c63703e0fda00c::t_17cedb80506121 172-175,197-203,213
+packages/marimo-studio/src/marimo_studio/_compat/server/editor_session_lifetimes.py
+  s_c63703e0fda00c::t_4fbd8634fa5ba7 11,17,59,65,72,84,136-141,173,193,195,197,204,220-221,243,282-287,290-293,295-302
+  s_c63703e0fda00c::t_53ca0e36edfb63 18
+  s_c63703e0fda00c::t_671ec187ef9a27 158
+  s_c63703e0fda00c::t_2f5532f3c4d6ab 9,19,66,73,205,219,259
+  s_c63703e0fda00c::t_6c818b4a01f2be 60,186,189-190,208-216,223,225-226,241-242
+  s_c63703e0fda00c::t_4dd590d0313545 124-125
+  s_c63703e0fda00c::t_5506094ab38c0f 187-188,191-192,247
+packages/marimo-studio/src/marimo_studio/_compat/kernel_values/kernel.py
+  s_c63703e0fda00c::t_bbf0d0eca13e9e 665
+  s_c63703e0fda00c::t_cc27c8c8ba937f 260,397,582,605-606,661
+  s_c63703e0fda00c::t_6c818b4a01f2be 259,618-619,621,660
+apps/e2e/tests/hosted-mount.spec.ts
+  s_c63703e0fda00c::t_80d8575c2ce2f3 56
+apps/e2e/tests/multi-tab.spec.ts
+  s_c63703e0fda00c::t_65e974c04abdb7 7,106-112,114
+  s_c63703e0fda00c::t_120033ed064331 4,13,40-44,87-91,93-94,102-103
+  s_c63703e0fda00c::t_5c4d71210d905a 10,14,66,70
+  s_c63703e0fda00c::t_7e20fcc7577fb6 6,95-101,104
+  s_c63703e0fda00c::t_de27eb5105a860 92
+  s_c63703e0fda00c::t_13a8708870245e 17-20,33-39,45-52,75-77
+  s_c63703e0fda00c::t_3497f1313be530 1,3,5,9,12,15-16,22,29,115,120-121
+  s_c63703e0fda00c::t_2815587f65b13a 2,8,11,21,23-28,30-32,54-65,67-69,71-74,78-86,116-119
+  s_c63703e0fda00c::t_997be39804cd99 105,113
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_c63703e0fda00c::t_75fb7ceec91cff 10,157,194
+packages/studio/tests/query-controller.test.ts
+  s_c63703e0fda00c::t_bdda3a31b1371d 55-63,65-76,78-82
+  s_c63703e0fda00c::t_08d424527858a0 64,77,83-94
+packages/studio/src/app/host-session.ts
+  s_c63703e0fda00c::t_34eb35e7c0c796 19,25,39,43
+  s_c63703e0fda00c::t_0141bc0bd3fd9f 17,30
+apps/e2e/tests/forced-interruption.spec.ts
+  s_c63703e0fda00c::t_6f862256ed3d93 56-61,68,75-77,94
+packages/studio/tests/host-session.test.ts
+  s_c63703e0fda00c::t_695bd077399f51 7,20,23,28,32,34,38,41,44,47
+packages/marimo-studio/tests/marimo_compat/test_session_state.py
+  s_c63703e0fda00c::t_59248abaad4914 15-16,105,110-112,117,153,161-168
+  s_c63703e0fda00c::t_81b4a206c1bc2b 24,156,159-160,169-173,176,184-197
+  s_c63703e0fda00c::t_02561479e51749 99-100,102,113,133,138-143
+  s_c63703e0fda00c::t_1dfcaa81ee8c7a 114-116,118-121,126
+apps/e2e/tests/runtime.spec.ts
+  s_c63703e0fda00c::t_266f40e32e0f54 39
+  s_c63703e0fda00c::t_3b96665eeefdd6 14
+  s_c63703e0fda00c::t_cc6dd6b278ddd4 527,549
+  s_c63703e0fda00c::t_b0162aab779b75 550-552
+packages/marimo-studio/src/marimo_studio/_compat/server/session_state.py
+  s_c63703e0fda00c::t_59248abaad4914 23,342-344,348,355-359,362-371,374
+  s_c63703e0fda00c::t_02561479e51749 346,349-354
+  s_c63703e0fda00c::t_677146769ebb29 9,417-419,421-427
+  s_c63703e0fda00c::t_7c684f0dafdb70 621
+packages/marimo-studio/src/marimo_studio/_server/agent/session_bindings.py
+  s_c63703e0fda00c::t_53ca0e36edfb63 6,26,30-33,92,112,144,186,201,262
+packages/marimo-studio/src/marimo_studio/_server/editor_bridge.py
+  s_c63703e0fda00c::t_53ca0e36edfb63 384,390
+packages/marimo-studio/tests/server/test_kiosk_sessions.py
+  s_c63703e0fda00c::t_81b4a206c1bc2b 1,17,104,106-110,113-115,122,139-140,415,429-430,435,449-450
+  s_c63703e0fda00c::t_f032636fc9af96 328-384
+apps/e2e/tests/authoring-test-support.ts
+  s_c63703e0fda00c::t_13a8708870245e 90
+packages/marimo-studio/tests/marimo_compat/test_editor_session_ownership.py
+  s_c63703e0fda00c::t_15f5065c2dbe4c 143-163,168,170-173,175-182,184-190
+  s_c63703e0fda00c::t_6253a5d980cc95 183,564-577,579-632
+  s_c63703e0fda00c::t_ed391bdfafcf3d 578
+  s_c63703e0fda00c::t_4dd590d0313545 115,122,164-167,169,174,191-264,296,332,351,387
+packages/protocol/src/host-session.ts
+  s_c63703e0fda00c::t_34eb35e7c0c796 7
+packages/marimo-studio/tests/marimo_compat/test_editor_session_lifetime.py
+  s_c63703e0fda00c::t_2ca6de712d2fe9 69-72,154-155,157,162-163,165,190-199
+  s_c63703e0fda00c::t_2f5532f3c4d6ab 12,66
+packages/marimo-studio/tests/notebook/test_runtime_process_integration.py
+  s_c63703e0fda00c::t_f6a6ce79971ecf 34-36
+apps/e2e/tests/fixture.ts
+  s_c63703e0fda00c::t_2815587f65b13a 112
+packages/marimo-studio/tests/marimo_compat/session_adapter_test_support.py
+  s_c63703e0fda00c::t_2f5532f3c4d6ab 12,48
+  s_c63703e0fda00c::t_677146769ebb29 35
+  s_c63703e0fda00c::t_81b4a206c1bc2b 56-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8d79cc15d2babd81c61c14734535d04bc67773be",
+  "prompts": {},
+  "sessions": {
+    "s_c63703e0fda00c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07f5a-9e7d-7ff2-9e8c-87a2fa423214",
+        "model": "gpt-6-astra"
+      },
+      "human_author": null
+    }
+  }
+}
