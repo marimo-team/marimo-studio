@@ -42,11 +42,11 @@ it("selects a pending peer control request after publication refresh", async () 
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
   interactions.controlInput({ objectId: "prepared-scale", value: 1 }, true);
-  await vi.waitFor(() => expect(state.snapshot().pendingInputs).toEqual({ scale: 1 }));
+  await state.settle();
 
+  expect(state.snapshot().pendingInputs).toEqual({ scale: 1 });
   expect(state.snapshot().current?.state.inputs).toEqual({ scale: 3 });
   expect(restore).toHaveBeenCalledOnce();
-  expect(warn).not.toHaveBeenCalled();
 
   await state.replacePublication(publication(refreshed, { scale: 3 }));
 
@@ -54,5 +54,6 @@ it("selects a pending peer control request after publication refresh", async () 
   expect(state.snapshot().current?.state.inputs).toEqual({ scale: 1 });
   expect(state.snapshot().pendingInputs).toBeUndefined();
   await state.dispose();
+  expect(warn).not.toHaveBeenCalled();
   warn.mockRestore();
 });

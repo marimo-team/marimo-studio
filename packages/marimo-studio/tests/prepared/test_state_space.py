@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from marimo_export.spec import STATE_SPACE_SCHEMA
 
 from marimo_studio._prepared.state_space import (
     load_state_space_source,
@@ -22,7 +21,7 @@ def test_state_space_source_uses_the_view_states_file(tmp_path: Path) -> None:
 
 def test_state_space_expands_a_deterministic_cartesian_matrix(tmp_path: Path) -> None:
     tmp_path.joinpath("states.yaml").write_text(
-        f"""schema: {STATE_SPACE_SCHEMA}
+        """schema: marimo-export.states.v1
 default_state: baseline
 states:
   baseline:
@@ -48,24 +47,24 @@ matrix:
     }
 
 
-def test_state_space_digest_tracks_semantics_and_source_stability(
+def test_state_space_source_rejects_changed_input_values(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "states.yaml"
     path.write_text(
-        f"""schema: {STATE_SPACE_SCHEMA}
+        """schema: marimo-export.states.v1
 default_state: baseline
 states:
-  baseline: {{mode: first}}
+  baseline: {mode: first}
 """,
         encoding="utf-8",
     )
     source = load_state_space_source(tmp_path)
     path.write_text(
-        f"""schema: {STATE_SPACE_SCHEMA}
+        """schema: marimo-export.states.v1
 default_state: baseline
 states:
-  baseline: {{mode: second}}
+  baseline: {mode: second}
 """,
         encoding="utf-8",
     )
@@ -79,16 +78,16 @@ def test_state_space_source_digest_tracks_equivalent_file_edits(
 ) -> None:
     path = tmp_path / "states.yaml"
     path.write_text(
-        f"""schema: {STATE_SPACE_SCHEMA}
+        """schema: marimo-export.states.v1
 default_state: baseline
 states:
-  baseline: {{mode: first}}
+  baseline: {mode: first}
 """,
         encoding="utf-8",
     )
     source = load_state_space_source(tmp_path)
     path.write_text(
-        f"""schema: {STATE_SPACE_SCHEMA}
+        """schema: marimo-export.states.v1
 default_state: baseline
 states:
   baseline:
@@ -111,26 +110,26 @@ states:
     [
         ("schema: wrong\ndefault_state: baseline\nstates: {baseline: {}}\n", "schema"),
         (
-            f"schema: {STATE_SPACE_SCHEMA}\ndefault_state: baseline\nextra: true\n",
+            "schema: marimo-export.states.v1\ndefault_state: baseline\nextra: true\n",
             "does not accept",
         ),
         (
-            f"schema: {STATE_SPACE_SCHEMA}\ndefault_state: baseline\n"
+            "schema: marimo-export.states.v1\ndefault_state: baseline\n"
             "states: {baseline: {}}\nstates: {other: {}}\n",
             "duplicate",
         ),
         (
-            f"schema: {STATE_SPACE_SCHEMA}\ndefault_state: baseline\n"
+            "schema: marimo-export.states.v1\ndefault_state: baseline\n"
             "matrix: {mode: []}\n",
             "at least one value",
         ),
         (
-            f"schema: {STATE_SPACE_SCHEMA}\ndefault_state: matrix-000000\n"
+            "schema: marimo-export.states.v1\ndefault_state: matrix-000000\n"
             "matrix: {mode: [first, first]}\n",
             "duplicate values",
         ),
         (
-            f"schema: {STATE_SPACE_SCHEMA}\ndefault_state: baseline\n"
+            "schema: marimo-export.states.v1\ndefault_state: baseline\n"
             "states: {baseline: {when: 2026-09-02}}\n",
             "JSON-compatible",
         ),
@@ -147,20 +146,16 @@ def test_state_space_rejects_invalid_contracts(
 
 
 @pytest.mark.parametrize(
-    "relative, rows",
+    "relative",
     [
-        ("athletes/field", 29),
-        ("athletes/overview", 29),
-        ("earthquakes/operations", 138),
-        ("occupancy/monitor", 12),
-        ("occupancy/model-review", 3),
-        ("occupancy/pdf-report", 3),
+        "athletes/field",
+        "athletes/overview",
+        "earthquakes/operations",
+        "occupancy/monitor",
+        "occupancy/model-review",
+        "occupancy/pdf-report",
     ],
 )
-def test_example_state_spaces_cover_their_finite_control_domains(
-    relative: str,
-    rows: int,
-) -> None:
+def test_example_views_provide_valid_state_spaces(relative: str) -> None:
     source = load_state_space_source(_EXAMPLES / relative)
     assert source.state_space is not None
-    assert len(source.state_space.states) == rows

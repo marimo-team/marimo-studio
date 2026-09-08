@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from typing import Protocol, cast
 
 from marimo_export import ExportPlan, ExportRepository, ExportSpec, StateSpace
+from marimo_export.integration import KernelInputObservation
 from marimo_export.progress import ProgressEvent
 from marimo_export.wire import JsonValue, portable_json, state_fingerprint
 
 from marimo_studio._prepared.compiler import CompiledExportView, compile_export_view
 from marimo_studio._prepared.state_space import StateSpaceSource
 from marimo_studio._server.presentation.service import PresentationSnapshot
-from marimo_studio.errors import PublicationError
 
 
 class PreparedSession(Protocol):
@@ -25,7 +25,9 @@ class PreparedSession(Protocol):
         progress: Callable[[ProgressEvent], None] | None = None,
     ) -> ExportPlan: ...
 
-    def observe_inputs(self) -> object: ...
+    def observe_inputs(
+        self, *, plan: ExportPlan | None = None
+    ) -> KernelInputObservation: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,11 +53,7 @@ def resolve_prepared_view(
         state_space=state_space,
     )
     plan = session.plan(spec=compiled.spec, repository=repository, progress=progress)
-    observed = session.observe_inputs()
-    values = getattr(observed, "values", None)
-    if not isinstance(values, Mapping):
-        raise PublicationError("The live Marimo session returned invalid input values.")
-    current = _project_inputs(values, plan.inputs)
+    current = _portable_object(session.observe_inputs(plan=plan).values)
     repository.record_observation(plan, current)
     if state_space is not None:
         selected = current if _contains_state(plan, current) else None
@@ -70,24 +68,6 @@ def resolve_prepared_view(
         ),
         current,
     )
-
-
-def _project_inputs(
-    values: Mapping[object, object],
-    inputs: tuple[str, ...],
-) -> dict[str, JsonValue]:
-    missing = [name for name in inputs if name not in values]
-    if missing:
-        raise PublicationError(
-            f"The live Marimo session is missing export input {missing[0]!r}."
-        )
-    projected = portable_json(
-        {name: values[name] for name in inputs},
-        "Studio prepared inputs",
-    )
-    if not isinstance(projected, dict):
-        raise AssertionError("Studio prepared inputs are not an object")
-    return cast(dict[str, JsonValue], projected)
 
 
 def _contains_state(plan: ExportPlan, inputs: Mapping[str, object]) -> bool:

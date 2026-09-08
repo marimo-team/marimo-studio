@@ -10,6 +10,7 @@ import {
   labeledSlider,
   noDisplayStaticExportUrl,
   recoverRequestAbort,
+  recoverResponseTransition,
   recoverProjectionRefresh,
   recoverWorkspaceEventStream,
   retireWorkspacePage,
@@ -151,13 +152,24 @@ test("creates distinct provider projects concurrently and refreshes the active v
     "marimo-studio/react:default",
   );
   await page.goto("/?file=notebook.py");
-  await waitForPreview(page);
+  const dashboard = await waitForPreview(page);
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
+  const documentPath = await dashboard.locator("html").evaluate(() => location.pathname);
+  const documentRefresh = browserDiagnostics.expectResponseTransition(page, {
+    origin: studioOrigin,
+    method: "GET",
+    path: new RegExp(`^${documentPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+    failureStatus: 409,
+    failureError: "workspace-generation-conflict",
+    successStatus: 200,
+    count: candidates.length,
+  });
   await Promise.all(
     candidates.map(([view, starter]) =>
       studioCli.addWorkspaceView(workspaceNotebookPath, view, starter),
     ),
   );
+  documentRefresh.seal();
   await page.getByLabel("Switch view").click();
   for (const [name] of candidates) {
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible({
@@ -176,5 +188,6 @@ test("creates distinct provider projects concurrently and refreshes the active v
   );
   await expect(refreshedDashboard.locator('strong[mo-value="metric"]')).toContainText("63");
   await recoverProjectionRefresh(dashboardRefresh, page);
+  await recoverResponseTransition(documentRefresh);
   await retireWorkspacePage(page, browserDiagnostics);
 });

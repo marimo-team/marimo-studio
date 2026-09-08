@@ -1,10 +1,10 @@
 import {
   type PreparedPresentationHandle,
+  requiresPreparedModelRemount,
   reconcileProjectedOutput,
   type releaseProjectedOutputResources,
   toMarimoCellOutput,
 } from "@marimo-studio/marimo-frontend/prepared-presentation";
-import { PreparedWidgetGraphReplacementError } from "@marimo-team/marimo-export/loader/anywidget";
 import { createElement } from "react";
 
 import type { PreparedCellOutput, PreparedProjectionSnapshot } from "./records.ts";
@@ -207,7 +207,7 @@ const commitSnapshot = (
 const requiresPortalRemount = (
   failure: Error,
   models: PreparedModelReplacement | undefined,
-): boolean => models?.remount === true || failure instanceof PreparedWidgetGraphReplacementError;
+): boolean => models?.remount === true || requiresPreparedModelRemount(failure);
 
 export type PreparedSnapshotApplication =
   | {

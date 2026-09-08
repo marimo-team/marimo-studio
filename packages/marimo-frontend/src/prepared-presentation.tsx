@@ -11,7 +11,6 @@ import type {
   PreparedUiValuesHandle,
 } from "./prepared-controls.ts";
 import type {
-  PreparedModelGraphFactory,
   PreparedModelLifecycleHandle,
   PreparedModelLifecycleNotification,
   PreparedModelResources,
@@ -21,7 +20,8 @@ import type { MarimoCellOutputSnapshot } from "./projected-output.tsx";
 
 import { PreparedCellPresentation } from "./prepared-cell.tsx";
 import { createPreparedUiValues, installPreparedControlBridge } from "./prepared-controls.ts";
-import { createPreparedModelLifecycle, PreparedModelGraphCheckpoint } from "./prepared-models.ts";
+import { createPreparedModelLifecycle } from "./prepared-models.ts";
+export { requiresPreparedModelRemount } from "./prepared-models.ts";
 import {
   configureMarimoPresentation,
   configureMarimoTheme,
@@ -39,13 +39,11 @@ import "./upstream/style.ts";
 
 export type { PreparedModelLifecycleNotification };
 export type { PreparedModelResources };
-export type { PreparedModelGraphFactory };
 export type { ControlBinding, ControlBindings, ControlPathStep } from "./control-endpoint-core.ts";
 export type { PreparedControlInput, PreparedControlInputListener };
 export type { MarimoCellOutputSnapshot, PreparedCellPresentationSnapshot };
 export {
   PreparedCellPresentation,
-  PreparedModelGraphCheckpoint,
   ProjectedOutputArea,
   reconcileProjectedOutput,
   releaseProjectedOutputResources,
@@ -55,7 +53,6 @@ export type PreparedPresentationConfig = MarimoPresentationConfig;
 export type PreparedThemeSource = MarimoThemeSource;
 
 export interface MountPreparedPresentationOptions {
-  readonly createModelGraph: PreparedModelGraphFactory;
   readonly presentation: PreparedPresentationConfig;
   readonly onControlInput?: PreparedControlInputListener;
   readonly onPeerControlInput?: PreparedControlInputListener;
@@ -101,7 +98,7 @@ export const mountPreparedPresentation = (
     initializeMarimoPresentation();
     configureMarimoPresentation(presentation, "read", "read", options.theme.current());
     store.set(requestClientAtom, createStaticRequests());
-    models = createPreparedModelLifecycle(options.createModelGraph);
+    models = createPreparedModelLifecycle();
     uiValues = createPreparedUiValues();
     const preparedRoot = createRoot(options.root);
     root = preparedRoot;

@@ -25,12 +25,11 @@ class PreparedViewRequest:
     binding_id: str
 
     @property
-    def key(self) -> tuple[str, str, str, str]:
+    def key(self) -> tuple[str, str, str]:
         return (
             self.snapshot.view_name,
             self.binding_id,
             self.snapshot.revision,
-            self.state_space_source.digest,
         )
 
     @property
@@ -69,7 +68,7 @@ class PreparedView:
     def __init__(
         self,
         prepared: PreparedPublication[
-            tuple[str, str, str, str],
+            tuple[str, str, str],
             PreparedViewMetadata,
         ],
     ) -> None:

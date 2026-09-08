@@ -85,7 +85,7 @@ def verify_metadata(source, archive):
         by_name.setdefault(canonicalize_name(requirement.name), []).append(requirement)
     for name, specifier in {
         "agent-plugins": ">=0.2",
-        "marimo-export": "==0.0.4",
+        "marimo-export": "==0.0.6",
         "tree-sitter": "==0.25.2",
         "tree-sitter-javascript": "==0.25.0",
     }.items():

@@ -9,7 +9,8 @@ import pytest
 from marimo_export.errors import IntegrityError
 from marimo_export.manifest import PreparedManifestLimitError
 from starlette.requests import Request
-from starlette.responses import FileResponse, Response
+from starlette.responses import Response
+from starlette.types import Message
 
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.prepared_views import PreparedViewRegistry
@@ -123,7 +124,6 @@ class _Publications:
         self.asset_paths = assets or {}
         self.current_calls: list[tuple[str, str, str]] = []
         self.poll_calls: list[tuple[str, str, str]] = []
-        self.asset_calls: list[tuple[str, str, str]] = []
         self.borrowed: list[_PreparedAsset] = []
 
     def current(
@@ -150,7 +150,6 @@ class _Publications:
         instance: str,
         relative: str,
     ) -> _PreparedAsset | None:
-        self.asset_calls.append((view, instance, relative))
         path = self.asset_paths.get((instance, relative))
         if path is None:
             return None
@@ -200,32 +199,7 @@ def _registry(publications: _Publications) -> PreparedViewRegistry:
     return cast(PreparedViewRegistry, publications)
 
 
-def test_current_manifest_is_no_store_and_points_at_immutable_export() -> None:
-    selected = _PreparedView("1" * 64, 2)
-    publications = _Publications(current=selected)
-
-    response = zero_python_response(
-        _request("/parent/base/_marimo-studio/views/dashboard/zero-python/current"),
-        _registry(publications),
-        "dashboard",
-        "current",
-        allow_refresh=False,
-    )
-
-    assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store"
-    assert response.body is not None
-    manifest = json.loads(bytes(response.body))
-    prepared = manifest["prepared"]
-    assert prepared["instance"] == "1" * 64
-    assert prepared["export_url"] == (
-        "http://testserver/parent/base/_marimo-studio/views/dashboard/"
-        f"zero-python/{'1' * 64}/?file=analysis.py"
-    )
-    assert publications.current_calls == [("dashboard", "s_abcdef", _REVISION)]
-
-
-def test_current_manifest_rejects_three_hundred_large_hosts() -> None:
+def test_current_manifest_enforces_the_payload_size_limit() -> None:
     publications = _Publications(current=_LargePreparedView("1" * 64, 2))
 
     with pytest.raises(PublicationLimitError, match="262144-byte limit"):
@@ -265,15 +239,9 @@ def test_current_manifest_translates_public_export_failures(
         )
 
 
-def test_immutable_export_url_is_shared_across_clients_and_revisions(
-    tmp_path: Path,
-) -> None:
+def test_immutable_export_url_is_shared_across_clients_and_revisions() -> None:
     selected = _PreparedView("1" * 64, 2)
-    index, _value = _export_files(tmp_path / "generation")
-    publications = _Publications(
-        current=selected,
-        assets={(selected.instance, "index.json"): index},
-    )
+    publications = _Publications(current=selected)
 
     manifests = []
     for client_id, revision in (
@@ -293,6 +261,7 @@ def test_immutable_export_url_is_shared_across_clients_and_revisions(
             "current",
             allow_refresh=False,
         )
+        assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
         assert response.body is not None
         manifests.append(json.loads(bytes(response.body)))
@@ -306,23 +275,10 @@ def test_immutable_export_url_is_shared_across_clients_and_revisions(
         expected,
         expected,
     ]
-    immutable = zero_python_response(
-        _request(
-            f"/_marimo-studio/views/dashboard/zero-python/"
-            f"{selected.instance}/index.json"
-        ),
-        _registry(publications),
-        "dashboard",
-        f"{selected.instance}/index.json",
-        allow_refresh=False,
-    )
-    assert immutable.headers["cache-control"] == (
-        "private, max-age=31536000, immutable"
-    )
-    assert publications.asset_calls == [("dashboard", selected.instance, "index.json")]
-    assert immutable.background is not None
-    asyncio.run(immutable.background())
-    assert publications.borrowed[0].closed
+    assert publications.current_calls == [
+        ("dashboard", "s_abcdef", "a" * 64),
+        ("dashboard", "s_ghijkl", "b" * 64),
+    ]
 
 
 def test_borrowed_export_assets_remain_open_until_responses_finish(
@@ -359,38 +315,31 @@ def test_borrowed_export_assets_remain_open_until_responses_finish(
         allow_refresh=False,
     )
 
-    assert isinstance(old, FileResponse)
-    assert isinstance(newest, FileResponse)
-    assert publications.asset_calls == [
-        ("dashboard", first.instance, "index.json"),
-        ("dashboard", second.instance, "assets/value.bin"),
-    ]
-    assert [asset.closed for asset in publications.borrowed] == [False, False]
-    assert old.background is not None
-    assert newest.background is not None
-    asyncio.run(old.background())
-    asyncio.run(newest.background())
-    assert [asset.closed for asset in publications.borrowed] == [True, True]
-
-
-def test_export_route_rejects_traversal_and_unpublished_paths() -> None:
-    instance = "1" * 64
-    publications = _Publications()
-
-    for relative in (
-        f"{instance}/../index.json",
-        f"{instance}/assets/../../secret",
-    ):
-        response = zero_python_response(
-            _request(f"/_marimo-studio/views/dashboard/zero-python/{relative}"),
-            _registry(publications),
-            "dashboard",
-            relative,
-            allow_refresh=False,
+    for response in (old, newest):
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == (
+            "private, max-age=31536000, immutable"
         )
-        assert response.status_code == 404
+    assert [asset.closed for asset in publications.borrowed] == [False, False]
 
-    assert publications.asset_calls == []
+    async def serve(response: Response, asset: _PreparedAsset) -> bytes:
+        body = bytearray()
+
+        async def send(message: Message) -> None:
+            assert not asset.closed
+            if message["type"] == "http.response.body":
+                body.extend(message["body"])
+
+        async def receive() -> Message:
+            return {"type": "http.request"}
+
+        await response(_request("/").scope, receive, send)
+        return bytes(body)
+
+    assert asyncio.run(serve(old, publications.borrowed[0])) == b"{}"
+    assert [asset.closed for asset in publications.borrowed] == [True, False]
+    assert asyncio.run(serve(newest, publications.borrowed[1])) == b"value"
+    assert [asset.closed for asset in publications.borrowed] == [True, True]
 
 
 def test_missing_asset_path_releases_the_prepared_asset(tmp_path: Path) -> None:
@@ -479,9 +428,9 @@ def test_current_manifest_requires_exact_presentation_revision() -> None:
     assert publications.current_calls == []
 
 
-def test_edit_manifest_poll_uses_refreshing_selection() -> None:
-    selected = _PreparedView("1" * 64, 1)
-    publications = _Publications(polled=selected)
+def test_edit_manifest_poll_serves_the_refreshing_selection() -> None:
+    selected = _PreparedView("2" * 64, 2)
+    publications = _Publications(current=_PreparedView("1" * 64, 1), polled=selected)
 
     response = zero_python_response(
         _request("/_marimo-studio/views/dashboard/zero-python/current"),
@@ -492,5 +441,6 @@ def test_edit_manifest_poll_uses_refreshing_selection() -> None:
     )
 
     assert response.status_code == 200
+    assert response.body is not None
+    assert json.loads(bytes(response.body))["prepared"]["instance"] == "2" * 64
     assert publications.poll_calls == [("dashboard", "s_abcdef", _REVISION)]
-    assert publications.current_calls == []

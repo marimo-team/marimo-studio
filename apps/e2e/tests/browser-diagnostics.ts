@@ -111,6 +111,7 @@ export interface ResponseTransitionCapture {
 }
 
 export interface BrowserResponseTransitionExpectation {
+  count?: number;
   origin: string;
   method: string;
   path: RegExp;
@@ -540,6 +541,7 @@ const observePageDiagnostics = (
         expectation.failureStatus,
         expectation.failureError,
         expectation.successStatus,
+        expectation.count,
       );
       responseTransitions.add(window);
       activeRequests.forEach((request) => {

@@ -26,7 +26,7 @@ def test_compiler_uses_native_values_and_deduplicates_targets(
     compiled = compile_export_view(
         snapshot.resolved,
         snapshot.view_name,
-        snapshot.mounts,
+        (*snapshot.mounts, replace(snapshot.mounts[1], id="site-repeat")),
     )
 
     assert compiled.bindings.values == {"doubled": "value:doubled"}
@@ -38,21 +38,6 @@ def test_compiler_uses_native_values_and_deduplicates_targets(
         "output:doubled": {"source": {"kind": "output", "selector": "doubled"}},
         "value:doubled": {"source": {"kind": "native", "selector": "doubled"}},
     }
-
-
-def test_compiler_reuses_one_output_for_repeated_provider_sites(
-    notebook_path: Path,
-) -> None:
-    snapshot = _snapshot(notebook_path)
-    repeated = (*snapshot.mounts, replace(snapshot.mounts[1], id="site-repeat"))
-
-    compiled = compile_export_view(
-        snapshot.resolved,
-        snapshot.view_name,
-        repeated,
-    )
-
-    assert len(compiled.bindings.values) == 1
 
 
 def test_compiler_combines_a_public_state_space_with_inferred_outputs(
@@ -71,8 +56,11 @@ def test_compiler_combines_a_public_state_space_with_inferred_outputs(
         state_space=state_space,
     )
 
-    assert compiled.spec.default_state == state_space.default_state
-    assert compiled.spec.states == state_space.states
+    assert compiled.spec.default_state == "matrix-000000"
+    assert compiled.spec.states == {
+        "matrix-000000": {"scale": 1},
+        "matrix-000001": {"scale": 3},
+    }
 
 
 def test_compiler_rejects_a_dynamic_mount(notebook_path: Path) -> None:

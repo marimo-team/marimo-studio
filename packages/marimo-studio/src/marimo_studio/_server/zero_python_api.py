@@ -94,11 +94,7 @@ async def zero_python_response(
         )
 
     instance, separator, relative = route.partition("/")
-    if (
-        not separator
-        or _INSTANCE.fullmatch(instance) is None
-        or not _export_path(relative)
-    ):
+    if not separator or _INSTANCE.fullmatch(instance) is None or not relative:
         return Response(status_code=404)
     asset = await publications.publication_asset(
         view,
@@ -112,17 +108,6 @@ async def zero_python_response(
     except BaseException:
         asset.close()
         raise
-
-
-def _export_path(relative: str) -> bool:
-    if relative == "index.json":
-        return True
-    parts = relative.split("/")
-    return (
-        len(parts) > 1
-        and parts[0] == "assets"
-        and all(part not in {"", ".", ".."} for part in parts[1:])
-    )
 
 
 def _immutable_file(candidate: Path, release: Callable[[], None]) -> Response:

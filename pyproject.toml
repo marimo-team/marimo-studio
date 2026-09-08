@@ -103,9 +103,7 @@ root = "packages/marimo-studio/src"
 required-version = ">=0.12,<0.13"
 exclude-newer = "7 days"
 exclude-newer-package = { agent-plugins = false, marimo = false, marimo-export = false, marimo-studio = false }
-override-dependencies = ["marimo-export==0.0.5"]
 
 [tool.uv.sources]
 marimo-studio = { workspace = true }
 marimo-studio-e2e-provider = { workspace = true }
-marimo-export = {path = "/Users/petergy/Projects/opensource/marimo-team/marimo-export/packages/python", editable = true}

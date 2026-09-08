@@ -518,17 +518,12 @@ test("prepared UI values mount before controls and clear across a null generatio
   };
   await handle.replace(state(2));
   const host = document.querySelector<HTMLElement>("marimo-output")!;
-  const sliderValue = async (expected: string): Promise<void> => {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+  const sliderValue = (expected: string): Promise<void> =>
+    vi.waitFor(() => {
       const slider = host.querySelector("marimo-slider");
       const rendered = slider?.shadowRoot?.querySelector('[role="slider"]');
-      if (rendered?.getAttribute("aria-valuenow") === expected) {
-        return;
-      }
-      await settle();
-    }
-    assert.fail(`Prepared slider did not render value ${expected}`);
-  };
+      assert.equal(rendered?.getAttribute("aria-valuenow"), expected);
+    });
   await sliderValue("2");
 
   await handle.replace(state(3));
@@ -636,19 +631,16 @@ test("same-owner null cells preserve a surviving UI output across states", async
     ],
   });
   const host = document.querySelector<HTMLElement>('marimo-output[value="shared.output"]')!;
-  const sliderValue = async (expected: string): Promise<HTMLElement> => {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+  const sliderValue = (expected: string): Promise<HTMLElement> =>
+    vi.waitFor(() => {
       const slider = host.querySelector<HTMLElement>("marimo-slider");
-      if (
-        slider?.shadowRoot?.querySelector('[role="slider"]')?.getAttribute("aria-valuenow") ===
-        expected
-      ) {
-        return slider;
-      }
-      await settle();
-    }
-    throw new Error(`Shared-owner slider did not render value ${expected}`);
-  };
+      assert.ok(slider);
+      assert.equal(
+        slider.shadowRoot?.querySelector('[role="slider"]')?.getAttribute("aria-valuenow"),
+        expected,
+      );
+      return slider;
+    });
 
   await handle.replace(state(2));
   const slider = await sliderValue("2");

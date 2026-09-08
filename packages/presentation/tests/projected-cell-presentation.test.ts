@@ -15,7 +15,6 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import type { CellProjection } from "../src/runtime/cells/cell-projection.ts";
 
-import { createPreparedModelGraph } from "../src/prepared/index.ts";
 import { CellOutput as RuntimeCellOutput } from "../src/runtime/cells/CellOutput.tsx";
 import { ProjectedOutput } from "../src/runtime/outputs/ProjectedOutput.tsx";
 import { runtimeCellFixture } from "./runtime-cell-fixture.ts";
@@ -74,7 +73,6 @@ const mount = (consoleOutputs: CellConsoleOutput[], onSubmitStdin = vi.fn()) => 
   const root = document.createElement("div");
   document.body.append(root);
   const handle = mountPreparedPresentation({
-    createModelGraph: createPreparedModelGraph,
     presentation,
     root,
     theme,
@@ -155,7 +153,6 @@ test("projected cell functions follow the rendered cell generation", () => {
       onSubmitStdin: vi.fn(),
     });
   const handle = mountPreparedPresentation({
-    createModelGraph: createPreparedModelGraph,
     presentation,
     root,
     theme,
@@ -201,7 +198,6 @@ test("projected output functions distinguish live cell generations", () => {
   const root = document.createElement("div");
   document.body.append(root);
   const handle = mountPreparedPresentation({
-    createModelGraph: createPreparedModelGraph,
     presentation,
     root,
     theme,

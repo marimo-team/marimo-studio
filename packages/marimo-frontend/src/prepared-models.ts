@@ -21,6 +21,13 @@ import {
 } from "@marimo-team/frontend/unstable_internal/plugins/impl/anywidget/serialization";
 import { WIDGET_DEF_REGISTRY } from "@marimo-team/frontend/unstable_internal/plugins/impl/anywidget/widget-binding";
 
+import type {
+  PreparedModelGraphCheckpoint,
+  PreparedModelGraphPort as ModelGraphPort,
+} from "./prepared-model-graph.ts";
+
+import { PreparedModelGraph, PreparedModelGraphReplacementError } from "./prepared-model-graph.ts";
+
 export type PreparedModelLifecycleNotification = ModelLifecycle;
 
 export interface PreparedModelResources {
@@ -31,7 +38,7 @@ export interface PreparedModelResources {
 export interface PreparedModelReplacement {
   readonly mutated: boolean;
   readonly remount: boolean;
-  commit(): Promise<PreparedModelGraphSnapshot | undefined>;
+  commit(): Promise<void>;
   rollback(): Promise<void>;
 }
 
@@ -51,66 +58,29 @@ interface OrderedModelNotification {
   readonly notification: PreparedModelLifecycleNotification;
 }
 
-export interface PreparedModelRecord {
+interface PreparedModelRecord {
   readonly canonical: string;
   readonly id: WidgetModelId;
   readonly notifications: readonly OrderedModelNotification[];
   readonly active: boolean;
 }
 
-export interface PreparedModelLiveState {
+interface PreparedModelLiveState {
   readonly model: Model<ModelState>;
   readonly state: ModelState;
 }
 
-export interface PreparedModelGraphSnapshot {
-  readonly files: Readonly<Record<string, string>>;
-  readonly records: ReadonlyMap<string, PreparedModelRecord>;
-}
+type PreparedModelGraphPort = ModelGraphPort<PreparedModelRecord, PreparedModelLiveState>;
 
-export interface PreparedModelGraphPort {
-  id(record: PreparedModelRecord): string;
-  active(record: PreparedModelRecord): boolean;
-  same(left: PreparedModelRecord, right: PreparedModelRecord): boolean;
-  changesModule(previous: PreparedModelRecord, next: PreparedModelRecord): boolean;
-  capture(id: string): PreparedModelLiveState;
-  merge(record: PreparedModelRecord, state: PreparedModelLiveState): PreparedModelRecord;
-  replay(records: readonly PreparedModelRecord[], signal?: AbortSignal): Promise<void>;
-  restore(id: string, state: PreparedModelLiveState): void;
-  close(id: string): Promise<void>;
-  setFiles(files: Readonly<Record<string, string>>): void;
-  validate(record: PreparedModelRecord, signal?: AbortSignal): Promise<void>;
-  preflight(record: PreparedModelRecord, signal?: AbortSignal): Promise<void>;
-}
-
-export class PreparedModelGraphCheckpoint {
-  declare private readonly checkpointBrand: void;
-
-  constructor() {
-    Object.freeze(this);
-  }
-}
-
-export interface PreparedModelGraph {
-  checkpoint(): PreparedModelGraphCheckpoint;
-  replace(
-    target: PreparedModelGraphSnapshot | PreparedModelGraphCheckpoint,
-    signal?: AbortSignal,
-  ): Promise<PreparedModelReplacement>;
-  dispose(): Promise<void>;
-}
-
-export type PreparedModelGraphFactory = (
-  port: PreparedModelGraphPort,
-  initial: PreparedModelGraphSnapshot,
-) => PreparedModelGraph;
+export const requiresPreparedModelRemount = (cause: unknown): boolean =>
+  cause instanceof PreparedModelGraphReplacementError;
 
 interface MarimoStaticState {
   readonly files: Record<string, string>;
 }
 
 interface ModelCheckpointState {
-  readonly graph: PreparedModelGraphCheckpoint;
+  readonly graph: PreparedModelGraphCheckpoint<PreparedModelRecord>;
   readonly sourceResources: PreparedModelResources;
   readonly sourceRecords: ReadonlyMap<string, PreparedModelRecord>;
 }
@@ -324,9 +294,7 @@ const createGraphPort = (): PreparedModelGraphPort => ({
   preflight: preflightModule,
 });
 
-export const createPreparedModelLifecycle = (
-  createGraph: PreparedModelGraphFactory,
-): PreparedModelLifecycleHandle => {
+export const createPreparedModelLifecycle = (): PreparedModelLifecycleHandle => {
   if (activeOwner) {
     throw new Error("Prepared model lifecycle already has an owner in this page");
   }
@@ -350,9 +318,9 @@ export const createPreparedModelLifecycle = (
     }
   };
 
-  let graph: PreparedModelGraph;
+  let graph: PreparedModelGraph<PreparedModelRecord, PreparedModelLiveState>;
   try {
-    graph = createGraph(createGraphPort(), {
+    graph = new PreparedModelGraph(createGraphPort(), {
       files: initialFiles,
       records: new Map(),
     });
@@ -453,7 +421,6 @@ export const createPreparedModelLifecycle = (
           activeResources = checkpoint?.sourceResources ?? next;
           activeRecords = checkpoint?.sourceRecords ?? adopted.records;
         }
-        return adopted;
       },
       rollback: () => replacement.rollback(),
     });

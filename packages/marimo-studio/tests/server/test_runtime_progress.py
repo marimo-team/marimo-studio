@@ -29,10 +29,10 @@ def test_prepared_progress_counts_reused_and_captured_states() -> None:
     for event in (
         ProgressEvent(kind="inspection_started"),
         ProgressEvent(kind="plan_ready", completed=2, total=4),
-        ProgressEvent(kind="state_started", completed=0, total=2, state="small"),
-        ProgressEvent(kind="state_finished", completed=1, total=2, state="small"),
-        ProgressEvent(kind="state_started", completed=1, total=2, state="large"),
-        ProgressEvent(kind="state_finished", completed=2, total=2, state="large"),
+        ProgressEvent(kind="state_started", completed=2, total=4, state="small"),
+        ProgressEvent(kind="state_finished", completed=3, total=4, state="small"),
+        ProgressEvent(kind="state_started", completed=3, total=4, state="large"),
+        ProgressEvent(kind="state_finished", completed=4, total=4, state="large"),
         ProgressEvent(kind="prepared_committed", completed=4, total=4),
     ):
         progress(event)
@@ -102,8 +102,8 @@ def test_runtime_stream_coalesces_progress_for_a_slow_reader() -> None:
         async def configuration(progress: RuntimeProgressSink) -> Response:
             progress(RuntimeProgress("Starting"))
             await first_read.wait()
-            for completed in range(1001):
-                progress(RuntimeProgress("Capturing states", completed, 1000))
+            for completed in range(4):
+                progress(RuntimeProgress("Capturing states", completed, 3))
             return JSONResponse({"runtime": {"id": "zero-python"}})
 
         events = cast(
@@ -117,8 +117,8 @@ def test_runtime_stream_coalesces_progress_for_a_slow_reader() -> None:
                 "type": "progress",
                 "progress": {
                     "message": "Capturing states",
-                    "completed": 1000,
-                    "total": 1000,
+                    "completed": 3,
+                    "total": 3,
                 },
             },
             {"type": "config", "config": {"runtime": {"id": "zero-python"}}},

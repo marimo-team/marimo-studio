@@ -165,7 +165,7 @@ try {
       "-c",
       [
         "from importlib.metadata import distribution, version",
-        "assert version('marimo-export') == '0.0.4'",
+        "assert version('marimo-export') == '0.0.6'",
         "assert distribution('marimo-export').read_text('direct_url.json') is None",
       ].join("; "),
     ],
