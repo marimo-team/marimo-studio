@@ -134,7 +134,6 @@ class HostSessionTicket:
     """Bind one browser session to an exact notebook mount."""
 
     session_id: str
-    storage_key: str
     capability: str
 
     @classmethod
@@ -147,13 +146,6 @@ class HostSessionTicket:
         public_base_url: str | None = None,
     ) -> HostSessionTicket:
         base_url = context.base_url if public_base_url is None else public_base_url
-        identity = hashlib.sha256(
-            repr((base_url, context.file_key)).encode("utf-8")
-        ).hexdigest()
-        storage_key = (
-            f"marimo-studio:host-session:"
-            f"{server_instance_id(context.server_token)}:{identity}"
-        )
         audience = json.dumps(
             (
                 _PURPOSE,
@@ -169,7 +161,6 @@ class HostSessionTicket:
         ).encode()
         return cls(
             session_id,
-            storage_key,
             hmac.new(
                 context.server_token.encode(),
                 audience,
@@ -185,7 +176,6 @@ class HostSessionTicket:
             "schema": 1,
             "capability": self.capability,
             "handoff": HOST_SESSION_HANDOFF_QUERY_PARAM,
-            "key": self.storage_key,
             "resume": DOCUMENT_REPLAY_QUERY_PARAM,
             "session": self.session_id,
             "transition": transition,
@@ -271,8 +261,6 @@ class HostSessionTransfer:
             if self.binding is not None:
                 assert self.clients is not None
                 self.clients.commit_session_to_host(self.binding)
-            if self.studio_owned:
-                self.sessions.release_editor_identity(self.context, self.session_id)
         finally:
             self._settle()
 

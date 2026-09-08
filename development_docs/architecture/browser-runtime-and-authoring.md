@@ -387,26 +387,24 @@ provider catalog changes. It disposes clean buffers that leave the catalog.
 
 ## Native editor session
 
-The Studio host assigns one browser client ID and one native editor session,
+The Studio host assigns one browser client ID and one native consumer ID,
 then signs the pair for the notebook, base URL, edit mode, and server instance.
-`StudioClientRegistry` retains one live session per client and one client per
-session. Reconnecting the same pair is idempotent. A live client or session
-presented with another partner fails before native connection.
+`StudioClientRegistry` retains one live consumer per client and one client per
+consumer. Marimo resolves these consumers to the notebook's shared Python
+session. Its native connection policy selects the editor and interactors.
 
-An editor-root reload may omit `session_id`. The server resolves the session
-from the retained client binding and returns a no-store redirect to the same
-session. The registry gives an accepted pair a `SessionBindingLease`. Native
-connector admission checks that lease again before attaching to an existing
-session or creating a fresh one. Binding rejection and disconnect-grace
-reclamation invalidate the lease, so delayed connector work cannot claim stale
-authority.
+An editor-root reload may omit `session_id`. The server resolves the consumer
+from the retained client binding and returns a no-store redirect. The registry
+gives an accepted pair a `SessionBindingLease`. Native connector admission
+revalidates that lease before attachment. Reconnecting an interactor preserves
+the current editor. A rejected attachment releases its consumer, and a rejected
+new session releases its kernel.
 
 An explicit embedding host can replace the complete browser document between
-native `/` and `/studio/`. A tab-scoped preflight retains the native session in
-`sessionStorage`. Studio signs a first unclaimed handoff, validates an existing
-session against the notebook and public query, then suspends the Studio client
-binding while native Marimo reconnects. `NativeSessionAdmission` commits the
-transfer after reconnect or restores the same binding after rejection.
+native `/` and `/studio/`. Signed handoffs authorize a consumer transition.
+Fresh documents use fresh consumer IDs, and Marimo's file lookup retains the
+shared kernel. First-save notifications target the saving consumer. Native
+session-close events retire bindings even after a transport disconnect.
 
 ## View switching
 

@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import os
 import re
-from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from functools import partial
@@ -20,6 +20,7 @@ from marimo._messaging.notification import (
     QueryParamsSetNotification,
     ReloadNotification,
 )
+from marimo._messaging.serde import serialize_kernel_message
 from marimo._session.session import Session
 from marimo._session.types import KernelState
 
@@ -338,27 +339,39 @@ class PrivateSessionState:
         *,
         host_handoff: str | None = None,
     ) -> bool:
-        """Reload a newly named notebook through its Studio-owned document."""
+        """Reload the saving consumer after its notebook receives a filename."""
+        from marimo._types.ids import ConsumerId
+
         session = current_session(context, session_id)
-        if session is None or not str(session.initialization_id).startswith("__new__"):
+        if session is None:
             return False
-        session.notify(
-            QueryParamsSetNotification("session_id", session_id),
-            from_consumer_id=None,
+        consumer = session.room.get_consumer(ConsumerId(session_id))
+        file_key = getattr(getattr(consumer, "params", None), "file_key", None)
+        if (
+            consumer is None
+            or not isinstance(file_key, str)
+            or not file_key.startswith("__new__")
+        ):
+            return False
+        consumer.notify(
+            serialize_kernel_message(
+                QueryParamsSetNotification("session_id", session_id)
+            )
         )
         if host_handoff is not None:
-            session.notify(
-                QueryParamsSetNotification(
-                    HOST_SESSION_HANDOFF_QUERY_PARAM,
-                    host_handoff,
-                ),
-                from_consumer_id=None,
+            consumer.notify(
+                serialize_kernel_message(
+                    QueryParamsSetNotification(
+                        HOST_SESSION_HANDOFF_QUERY_PARAM, host_handoff
+                    )
+                )
             )
-        session.notify(
-            QueryParamsSetNotification(DOCUMENT_REPLAY_QUERY_PARAM, "1"),
-            from_consumer_id=None,
+        consumer.notify(
+            serialize_kernel_message(
+                QueryParamsSetNotification(DOCUMENT_REPLAY_QUERY_PARAM, "1")
+            )
         )
-        session.notify(ReloadNotification(), from_consumer_id=None)
+        consumer.notify(serialize_kernel_message(ReloadNotification()))
         return True
 
     def matches_creation_query(
@@ -401,13 +414,17 @@ class PrivateSessionState:
         context: ServerContext,
         session_id: str,
     ) -> EditorSessionIdentity | None:
-        """Read the trusted editor identity recorded at native-session creation."""
+        """Read the Studio identity of one attached native consumer."""
+        from marimo._types.ids import ConsumerId
+
         session = current_session(context, session_id)
-        manager = getattr(session, "_kernel_manager", None)
-        metadata = getattr(manager, "app_metadata", None)
-        if metadata is None:
-            metadata = getattr(manager, "_app_metadata", None)
-        query = getattr(metadata, "query_params", None)
+        if session is None:
+            return None
+        consumer = session.room.get_consumer(ConsumerId(session_id))
+        connection = getattr(consumer, "websocket", None) or getattr(
+            consumer, "request", None
+        )
+        query = getattr(connection, "query_params", None)
         if not isinstance(query, Mapping):
             return None
         client_id = _single_string(query.get(STUDIO_CLIENT_QUERY_PARAM))
@@ -415,31 +432,6 @@ class PrivateSessionState:
         if client_id is None or capability is None:
             return None
         return EditorSessionIdentity(client_id, capability)
-
-    def release_editor_identity(
-        self,
-        context: ServerContext,
-        session_id: str,
-    ) -> bool:
-        """Release the Studio client recorded on a native session."""
-        session = current_session(context, session_id)
-        manager = getattr(session, "_kernel_manager", None)
-        metadata = getattr(manager, "app_metadata", None)
-        if metadata is None:
-            metadata = getattr(manager, "_app_metadata", None)
-        query = getattr(metadata, "query_params", None)
-        if not isinstance(query, MutableMapping):
-            return False
-        present = any(
-            key in query
-            for key in {
-                EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
-                STUDIO_CLIENT_QUERY_PARAM,
-            }
-        )
-        query.pop(EDITOR_BINDING_CAPABILITY_QUERY_PARAM, None)
-        query.pop(STUDIO_CLIENT_QUERY_PARAM, None)
-        return present
 
     def retry_startup(
         self,
@@ -626,11 +618,19 @@ class PrivateSessionState:
         session = current_session(context, session_id)
         if self._closed or session is None or context.internal_url is None:
             raise RuntimeSyncError("The notebook control bindings are unavailable.")
+        # Export discovery lists kernel IDs, while Marimo also resolves consumer IDs.
+        manager = context_handle(context).session_manager
+        canonical_id = next(
+            (key for key, current in manager.sessions.items() if current is session),
+            None,
+        )
+        if canonical_id is None:
+            raise RuntimeSyncError("The notebook control bindings are unavailable.")
         server = context.internal_url
 
         def observe() -> dict[str, object]:
             with connect(server, server_token=context.server_token) as client:
-                observation = client.session(session_id).observe_inputs()
+                observation = client.session(str(canonical_id)).observe_inputs()
                 return {
                     object_id: binding.to_value()
                     for object_id, binding in observation.control_bindings.items()
@@ -640,7 +640,11 @@ class PrivateSessionState:
             bindings = await asyncio.to_thread(observe)
         except MarimoExportError as error:
             raise RuntimeSyncError(str(error)) from error
-        if self._closed or current_session(context, session_id) is not session:
+        if (
+            self._closed
+            or current_session(context, session_id) is not session
+            or manager.sessions.get(canonical_id) is not session
+        ):
             raise RuntimeSyncError(
                 "The notebook changed while reading control bindings."
             )

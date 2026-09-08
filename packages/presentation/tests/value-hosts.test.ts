@@ -11,6 +11,7 @@ import type { DecodedValue, DecodedValueReadResponse, MarimoValue } from "../src
 import type { ValueReader } from "../src/values/reader.ts";
 
 import { indexCells } from "../src/cells/index.ts";
+import { startQuerySync } from "../src/document/query-sync.ts";
 import {
   commitRuntimeConfig,
   loadRuntimeConfig,
@@ -393,6 +394,51 @@ test("adding one producer host does not reread existing producer groups", async 
 
   assert.equal(requested.filter((value) => value === "first").length, 1);
   assert.equal(requested.filter((value) => value === "second").length, 1);
+});
+
+test("refreshes projected values when query state changes with the same producer", async () => {
+  await installConfig(configWithValues(["report"]));
+  document.body.innerHTML = `
+    <span id="report" mo-value="report" data-marimo-studio-site="site:value:report"></span>
+    <div id="root"></div>
+  `;
+  const pushState = globalThis.history.pushState;
+  const replaceState = globalThis.history.replaceState;
+  const initialUrl = globalThis.location.href;
+  globalThis.history.replaceState({}, "", "/?region=emea");
+  startQuerySync();
+  startValueHosts();
+  root = createRoot(document.querySelector("#root")!);
+  let value = "emea";
+  const readValues: ValueReader = async () => ({
+    values: jsonValues({ report: value }),
+    errors: {},
+  });
+  try {
+    await act(async () => {
+      root?.render(
+        createElement(RuntimeValues, {
+          cells: indexCells([runtimeCellFixture({ id: "report-cell", lastRunStartTimestamp: 1 })]),
+          connectionState: "OPEN",
+          runtimeReady: true,
+          readValues,
+        }),
+      );
+    });
+    await vi.waitFor(() => assert.equal(document.querySelector("#report")?.textContent, "emea"));
+
+    await act(async () => {
+      value = "apac";
+      globalThis.history.replaceState({}, "", "/?region=apac");
+    });
+    await vi.waitFor(() => assert.equal(document.querySelector("#report")?.textContent, "apac"));
+  } finally {
+    act(() => root?.unmount());
+    root = undefined;
+    globalThis.history.pushState = pushState;
+    globalThis.history.replaceState = replaceState;
+    globalThis.history.replaceState({}, "", initialUrl);
+  }
 });
 
 test("runtime value cells own producer identity across host changes", async () => {

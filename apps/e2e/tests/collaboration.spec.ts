@@ -88,7 +88,7 @@ const readDashboardSource = async (page: Page): Promise<string> => {
   return response.text();
 };
 
-test("keeps two tabs isolated inside one notebook scope", async ({
+test("synchronizes one notebook while each tab selects its view", async ({
   browserDiagnostics,
   page,
   studioCli,
@@ -98,12 +98,26 @@ test("keeps two tabs isolated inside one notebook scope", async ({
     3,
   );
   const supersededRenewalConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
+  const notebook = await readWorkspaceFile(workspaceNotebookPath);
+  await writeWorkspaceFile(
+    workspaceNotebookPath,
+    notebook.replace(
+      'if __name__ == "__main__":',
+      `@app.cell
+def query_value(query_params):
+    query_value = query_params.get("tab-query", "initial")
+    return (query_value,)
+
+
+if __name__ == "__main__":`,
+    ),
+  );
   await studioCli.addWorkspaceView(workspaceNotebookPath, "report");
-  await page.goto(studioEntryUrl);
+  await page.goto(`${studioEntryUrl}&tab-query=initial`);
   const firstPreview = await waitForPreview(page);
   const second = await page.context().newPage();
   try {
-    await second.goto(studioEntryUrl);
+    await second.goto(`${studioEntryUrl}&tab-query=initial`);
     const secondPreview = await waitForPreview(second);
     const firstClient = await studioClientId(page);
     const secondClient = await studioClientId(second);
@@ -151,7 +165,13 @@ test("keeps two tabs isolated inside one notebook scope", async ({
     expect((await activate("dashboard", secondClient)).status()).toBe(200);
     await expect(second.getByLabel("Switch view")).toContainText("dashboard");
     const original = await readWorkspaceFile(dashboardHtmlPath);
-    const published = original.replace("Studio browser fixture", "Published to both tabs");
+    const published = original.replace("Studio browser fixture", "Published to both tabs").replace(
+      "</main>",
+      `<nav aria-label="Shared query">
+          <a href="?tab-query=first">Use first query</a>
+          <a href="?tab-query=second">Use second query</a>
+        </nav><p>Shared query: <strong id="shared-query" mo-value="query_value"></strong></p></main>`,
+    );
     await writeViewSource(page, "dashboard", "src/index.html", published);
     await expect(
       firstPreview.getByRole("heading", { name: "Published to both tabs" }),
@@ -161,20 +181,31 @@ test("keeps two tabs isolated inside one notebook scope", async ({
     ).toBeVisible();
 
     const secondMetric = secondPreview.locator('[mo-value="metric"]');
-    const peerMetric = await secondMetric.textContent();
     await labeledSlider(firstPreview.locator('marimo-cell[name="controls"]'), /^Scale/).press(
       "End",
     );
     await expect(firstPreview.locator('[mo-value="metric"]')).toHaveText("63");
-    await expect(secondMetric).toHaveText(peerMetric ?? "");
-    await page.evaluate(() => {
-      const url = new URL(globalThis.location.href);
-      url.searchParams.set("tab-query", "first");
-      globalThis.history.pushState({}, "", url);
-      globalThis.dispatchEvent(new PopStateEvent("popstate"));
-    });
-    expect(new URL(page.url()).searchParams.get("tab-query")).toBe("first");
-    expect(new URL(second.url()).searchParams.has("tab-query")).toBe(false);
+    await expect(secondMetric).toHaveText("63");
+    await labeledSlider(secondPreview.locator('marimo-cell[name="controls"]'), /^Scale/).press(
+      "Home",
+    );
+    await expect(firstPreview.locator('[mo-value="metric"]')).toHaveText("21");
+    await expect(secondMetric).toHaveText("21");
+    await firstPreview.getByRole("link", { name: "Use first query" }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("tab-query")).toBe("first");
+    await expect.poll(() => new URL(second.url()).searchParams.get("tab-query")).toBe("first");
+    await expect(firstPreview.locator("#shared-query")).toHaveText("first");
+    await expect(secondPreview.locator("#shared-query")).toHaveText("first");
+    await secondPreview.getByRole("link", { name: "Use second query" }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("tab-query")).toBe("second");
+    await expect.poll(() => new URL(second.url()).searchParams.get("tab-query")).toBe("second");
+    await expect(firstPreview.locator("#shared-query")).toHaveText("second");
+    await expect(secondPreview.locator("#shared-query")).toHaveText("second");
+    await firstPreview.getByRole("link", { name: "Use first query" }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("tab-query")).toBe("first");
+    await expect.poll(() => new URL(second.url()).searchParams.get("tab-query")).toBe("first");
+    await expect(firstPreview.locator("#shared-query")).toHaveText("first");
+    await expect(secondPreview.locator("#shared-query")).toHaveText("first");
     const firstPreviewSession = await firstFrame.getAttribute("data-session-id");
     const secondPreviewSession = await secondFrame.getAttribute("data-session-id");
     expect(firstPreviewSession).toMatch(/^s_[\da-z]{6}$/);

@@ -31,7 +31,9 @@ def _():
     child = __import__("subprocess").Popen(
         [__import__("sys").executable, "-c", "import time; time.sleep(60)"]
     )
-    __import__("pathlib").Path(r"{marker}").write_text(str(child.pid))
+    _marker = __import__("pathlib").Path(r"{marker}.tmp")
+    _marker.write_text(str(child.pid))
+    _marker.replace(r"{marker}")
     while True:
         __import__("time").sleep(0.01)
 

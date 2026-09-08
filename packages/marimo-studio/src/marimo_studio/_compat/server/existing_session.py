@@ -29,18 +29,15 @@ from marimo_studio._compat.server.editor_session_lifetimes import (
     _close_studio_session_lifetimes,
     _notify_closed_studio_session,
     _open_studio_session_lifetimes,
-    _schedule_studio_session_close,
     _track_manager_session_lifetimes,
     session_is_owned,
 )
 from marimo_studio._compat.server.gateway import context_handle
 from marimo_studio._compat.server.session_state import (
     current_session,
-    session_creation_query_matches,
     session_matches_notebook,
 )
 from marimo_studio._delivery.urls import (
-    DOCUMENT_LIFECYCLE_QUERY_PARAM,
     SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
 )
@@ -172,13 +169,6 @@ def _router(manager: Any, clock: Callable[[], float]) -> _SessionRouter:
         return router
 
 
-def _query_matches_session(connector: SessionConnector, session: Any) -> bool:
-    return session_creation_query_matches(
-        session,
-        connector.connection.query_params.multi_items(),
-    )
-
-
 def _session_connect_replacement(native_connect: Any) -> Any:
     from marimo._server.api.endpoints.ws.ws_session_connector import ConnectionType
     from marimo._server.codes import WebSocketCloseReason, WebSocketCodes
@@ -206,17 +196,21 @@ def _session_connect_replacement(native_connect: Any) -> Any:
             ):
                 session = connector.manager.get_session(connector.params.session_id)
                 assert session is not None and session is admission.expected_claim
-                session.disconnect_main_consumer()
-                connector.handler._reconnect_session(session, replay=True)
-                connected = (session, ConnectionType.RECONNECT)
-            elif (
-                client_id is not None
-                and not connector.params.kiosk
-                and connector.manager.get_session(connector.params.session_id) is None
-                and connector.manager.get_session_by_file_key(connector.params.file_key)
-                is not None
-            ):
-                connected = connector._create_new_session()
+                main = session.room.main_consumer
+                if connector.params.kiosk or (
+                    main is not None
+                    and str(main.consumer_id) != str(connector.params.session_id)
+                ):
+                    if connector.params.rtc_enabled and not connector.params.kiosk:
+                        connector.handler._connect_to_existing_session(session)
+                        connected = (session, ConnectionType.RTC_EXISTING)
+                    else:
+                        connector.handler._connect_kiosk(session)
+                        connected = (session, ConnectionType.KIOSK)
+                else:
+                    session.disconnect_main_consumer()
+                    connector.handler._reconnect_session(session, replay=True)
+                    connected = (session, ConnectionType.RECONNECT)
             else:
                 connected = native_connect(connector)
         except BaseException:
@@ -228,6 +222,8 @@ def _session_connect_replacement(native_connect: Any) -> Any:
             native_claim=connected[0],
             manager=connector.manager,
             session_id=connector.params.session_id,
+            created=connected[1] is ConnectionType.NEW,
+            consumer=connector.handler,
         ):
             raise _StudioSessionRejected(
                 WebSocketCodes.NORMAL_CLOSE,
@@ -294,6 +290,8 @@ def _settle_native_admission(
     native_claim: object | None = None,
     manager: object | None = None,
     session_id: object | None = None,
+    created: bool = False,
+    consumer: object | None = None,
 ) -> bool:
     if admission is None or admission.settled:
         return admission is None or not admission.rejected
@@ -317,14 +315,16 @@ def _settle_native_admission(
             admission.force_reject_binding = True
             session_manager = cast(Any, manager)
             try:
-                incumbent = session_is_owned(native_claim)
+                if consumer is not None:
+                    cast(Any, native_claim).disconnect_consumer(consumer)
+                close_created = created and not session_is_owned(native_claim)
                 if (
-                    not incumbent
+                    close_created
                     and session_manager.get_session(session_id) is native_claim
                 ):
                     session_manager.close_session(session_id)
                 if (
-                    not incumbent
+                    close_created
                     and session_manager.get_session(session_id) is native_claim
                 ):
                     raise RuntimeError("Marimo retained a rejected Studio session")
@@ -340,8 +340,6 @@ def _settle_native_admission(
 
 
 def _disconnect_replacement(native_disconnect: Any) -> Any:
-    from marimo._session.model import SessionMode
-
     @wraps(native_disconnect)
     def disconnect(
         handler: SessionHandler,
@@ -371,20 +369,11 @@ def _disconnect_replacement(native_disconnect: Any) -> Any:
                         session,
                     )
 
-        studio_ttl = (
-            session is not None
-            and handler.mode is SessionMode.EDIT
-            and handler.manager.ttl_seconds is None
+        native_disconnect(
+            handler,
+            error,
+            cleanup_and_notify if session is not None else cleanup,
         )
-        try:
-            native_disconnect(
-                handler,
-                error,
-                cleanup_and_notify if session is not None else cleanup,
-            )
-        finally:
-            if studio_ttl:
-                _schedule_studio_session_close(session)
 
     return disconnect
 
@@ -406,13 +395,6 @@ def _connect_kiosk_replacement(native_connect: Any) -> Any:
                 WebSocketCloseReason.KIOSK_NOT_ALLOWED,
             )
         if client_id is None:
-            session = connector.manager.get_session(connector.params.session_id)
-            if session is None:
-                session = connector.manager.get_session_by_file_key(
-                    connector.params.file_key
-                )
-            if session is not None and not _query_matches_session(connector, session):
-                return connector._create_new_session()
             return native_connect(connector)
         with _ROUTERS_LOCK:
             router = _ROUTERS.get(connector.manager)
@@ -422,10 +404,6 @@ def _connect_kiosk_replacement(native_connect: Any) -> Any:
                 WebSocketCodes.NORMAL_CLOSE,
                 WebSocketCloseReason.NO_SESSION,
             )
-        if query.get(
-            DOCUMENT_LIFECYCLE_QUERY_PARAM
-        ) is None and not _query_matches_session(connector, session):
-            return connector._create_new_session()
         connector.handler._connect_kiosk(session)
         return session, ConnectionType.KIOSK
 
@@ -479,7 +457,7 @@ _START_PATCH = ReversiblePatch(
     _start_replacement,
 )
 _DISCONNECT_PATCH = ReversiblePatch(
-    "studio-editor-session-ttl",
+    "studio-editor-session-lifetime",
     SessionHandler,
     "_on_disconnect",
     _disconnect_replacement,

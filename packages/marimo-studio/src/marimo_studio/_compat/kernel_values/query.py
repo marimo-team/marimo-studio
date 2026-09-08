@@ -32,8 +32,7 @@ async def sync_query_state(
 ) -> None:
     """Wait until the selected editor kernel applies one query update."""
     session = current_session(context, session_id)
-    consumer = session.room.main_consumer if session is not None else None
-    if session is None or consumer is None:
+    if session is None:
         raise QuerySyncUnavailable("The Marimo editor session is still connecting.")
     fingerprint = query_fingerprint(query)
 
@@ -71,7 +70,7 @@ async def sync_query_state(
                 session_id=session_id,
                 notebook=context.notebook,
             ),
-            consumer_id=str(consumer.consumer_id),
+            consumer_id=session_id,
             timeout=_QUERY_SYNC_TIMEOUT_SECONDS,
             parser=parse,
             operation="query",

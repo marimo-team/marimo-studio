@@ -52,6 +52,46 @@ it("applies an editor query through the rendered preview bridge", async () => {
   preview.remove();
 });
 
+it.each(["preview-first", "editor-first"] as const)(
+  "keeps an authored navigation alive with %s completion",
+  async (order) => {
+    const response = deferred();
+    const sync = vi.fn<SyncEditorQuery>().mockReturnValue(response.promise);
+    const controller = new PreviewQueryController("server", frame(), vi.fn(), sync, vi.fn());
+    const navigation = controller.synchronizeNavigation("region=apac");
+    const operation = sync.mock.calls[0]?.[1];
+    const signal = sync.mock.calls[0]?.[3];
+
+    if (order === "preview-first") {
+      controller.previewChanged("region=apac");
+    }
+    expect(signal?.aborted).toBe(false);
+    controller.editorChanged("region=apac", false, operation, true);
+    await expect(navigation).resolves.toBe(true);
+    controller.commitNavigation("region=apac");
+    if (order === "editor-first") {
+      controller.previewChanged("region=apac");
+    }
+    response.resolve("accepted");
+    await response.promise;
+
+    expect(signal?.aborted).toBe(false);
+    expect(sync).toHaveBeenCalledOnce();
+    controller.cancel();
+  },
+);
+
+it("treats a shared server preview query as committed kernel state", async () => {
+  const sync = vi.fn<SyncEditorQuery>();
+  const controller = new PreviewQueryController("server", frame(), vi.fn(), sync, vi.fn());
+
+  controller.previewChanged("region=apac");
+  await expect(controller.synchronizeNavigation("region=apac")).resolves.toBe(true);
+
+  expect(sync).not.toHaveBeenCalled();
+  controller.cancel();
+});
+
 it("reports WebAssembly query failure until the preview retry succeeds", async () => {
   vi.useFakeTimers();
   const preview = frame();

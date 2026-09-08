@@ -12,6 +12,8 @@ from marimo._messaging.notification import (
     QueryParamsSetNotification,
     ReloadNotification,
 )
+from marimo._messaging.serde import deserialize_kernel_message
+from starlette.datastructures import QueryParams
 
 import marimo_studio._compat.server.session_state as session_state_module
 from marimo_studio._compat.server.session_state import (
@@ -19,6 +21,7 @@ from marimo_studio._compat.server.session_state import (
     session_creation_query_matches,
     session_matches_notebook,
 )
+from marimo_studio._server.ports import EditorSessionIdentity
 from marimo_studio.errors._internal import RuntimeSyncError
 
 
@@ -93,29 +96,51 @@ def test_app_host_session_exposes_its_creation_query() -> None:
     assert not session_creation_query_matches(session, [("region", "apac")])
 
 
-def test_first_save_requests_session_resume_before_reload(
+@pytest.mark.parametrize("file_key", ["__new__s_123456", "saved.py"])
+def test_first_save_handoff_follows_the_saving_consumer_connection(
     monkeypatch: pytest.MonkeyPatch,
+    file_key: str,
 ) -> None:
     notifications: list[object] = []
+    peer_notifications: list[object] = []
 
     def notify(operation: object, from_consumer_id: object) -> None:
         assert from_consumer_id is None
         notifications.append(operation)
+        peer_notifications.append(operation)
+
+    consumer = SimpleNamespace(
+        params=SimpleNamespace(file_key=file_key),
+        notify=lambda message: notifications.append(
+            deserialize_kernel_message(message)
+        ),
+    )
+    consumers = {
+        "s_123456": consumer,
+        "s_peer01": SimpleNamespace(notify=peer_notifications.append),
+    }
 
     session = SimpleNamespace(
         initialization_id="__new__s_123456",
         notify=notify,
+        room=SimpleNamespace(get_consumer=consumers.get),
     )
     monkeypatch.setattr(
         session_state_module,
         "current_session",
         lambda _context, _session_id: session,
     )
-    assert PrivateSessionState().request_studio_reload(
+    reloaded = PrivateSessionState().request_studio_reload(
         cast(Any, object()),
         "s_123456",
         host_handoff="a" * 64,
     )
+    if file_key == "saved.py":
+        assert not reloaded
+        assert notifications == []
+        assert peer_notifications == []
+        return
+    assert reloaded
 
     first, second, third, fourth = notifications
     assert isinstance(first, QueryParamsSetNotification)
@@ -125,20 +150,30 @@ def test_first_save_requests_session_resume_before_reload(
     assert isinstance(third, QueryParamsSetNotification)
     assert (third.key, third.value) == ("marimo_studio_resume", "1")
     assert isinstance(fourth, ReloadNotification)
+    assert peer_notifications == []
 
 
-def test_native_host_releases_the_recorded_editor_identity(
+def test_editor_identity_follows_the_native_consumer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    query = {
-        "marimo_studio_client": ["browser-client"],
-        "marimo_studio_editor": ["editor-capability"],
-        "region": ["emea"],
+    consumers = {
+        key: SimpleNamespace(
+            request=SimpleNamespace(
+                query_params=QueryParams(
+                    {
+                        "marimo_studio_client": client,
+                        "marimo_studio_editor": capability,
+                    }
+                )
+            )
+        )
+        for key, client, capability in (
+            ("s_first1", "first-client", "first-capability"),
+            ("s_second", "second-client", "second-capability"),
+        )
     }
     session = SimpleNamespace(
-        _kernel_manager=SimpleNamespace(
-            app_metadata=SimpleNamespace(query_params=query),
-        )
+        room=SimpleNamespace(get_consumer=consumers.get),
     )
     monkeypatch.setattr(
         session_state_module,
@@ -146,13 +181,21 @@ def test_native_host_releases_the_recorded_editor_identity(
         lambda _context, _session_id: session,
     )
 
-    released = PrivateSessionState().release_editor_identity(
-        cast(Any, object()),
-        "s_123456",
+    state = PrivateSessionState()
+    context = cast(Any, object())
+    assert state.editor_identity(context, "s_first1") == EditorSessionIdentity(
+        "first-client", "first-capability"
     )
-
-    assert released is True
-    assert query == {"region": ["emea"]}
+    assert state.editor_identity(context, "s_second") == EditorSessionIdentity(
+        "second-client", "second-capability"
+    )
+    consumers["s_second"] = SimpleNamespace(
+        request=SimpleNamespace(query_params=QueryParams())
+    )
+    assert state.editor_identity(context, "s_second") is None
+    assert state.editor_identity(context, "s_first1") == EditorSessionIdentity(
+        "first-client", "first-capability"
+    )
 
 
 def test_live_cell_capture_materializes_off_its_event_loop_owner(
@@ -482,5 +525,72 @@ def test_session_close_cancellation_drains_startup_ownership() -> None:
             await closing
         assert not state._starting
         assert startup_task.done()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("replacement", [None, "consumer", "canonical"])
+def test_control_bindings_resolve_a_shared_consumers_canonical_session(
+    monkeypatch: pytest.MonkeyPatch,
+    replacement: str | None,
+) -> None:
+    from contextlib import contextmanager
+
+    from marimo_export import sessions as export_sessions
+    from marimo_export.index import ControlBinding
+
+    session = SimpleNamespace(room=SimpleNamespace(main_consumer=None))
+    manager = SimpleNamespace(sessions={"s_kernel": session})
+    consumers = {"s_view01": session}
+    context = SimpleNamespace(
+        internal_url="http://localhost:4321", server_token="token"
+    )
+    monkeypatch.setattr(
+        session_state_module,
+        "context_handle",
+        lambda _context: SimpleNamespace(session_manager=manager),
+    )
+    monkeypatch.setattr(
+        session_state_module,
+        "current_session",
+        lambda _context, session_id: consumers.get(session_id),
+    )
+
+    def observe_inputs() -> object:
+        if replacement == "consumer":
+            consumers["s_view01"] = SimpleNamespace()
+        elif replacement == "canonical":
+            manager.sessions["s_kernel"] = SimpleNamespace()
+        return SimpleNamespace(
+            control_bindings={
+                "scale-control": ControlBinding("scale", ()),
+            }
+        )
+
+    def exported_session(session_id: str) -> object:
+        assert session_id == "s_kernel"
+        return SimpleNamespace(observe_inputs=observe_inputs)
+
+    @contextmanager
+    def connect(server: str, *, server_token: str):
+        assert (server, server_token) == ("http://localhost:4321", "token")
+        yield SimpleNamespace(session=exported_session)
+
+    monkeypatch.setattr(export_sessions, "connect", connect)
+
+    async def exercise() -> None:
+        adapter = PrivateSessionState()
+        try:
+            if replacement is not None:
+                with pytest.raises(RuntimeSyncError, match="notebook changed"):
+                    await adapter.control_bindings(cast(Any, context), "s_view01")
+            else:
+                assert await adapter.control_bindings(
+                    cast(Any, context), "s_view01"
+                ) == {
+                    "scale-control": {"input": "scale", "path": []},
+                }
+        finally:
+            await adapter.close()
 
     asyncio.run(exercise())

@@ -1,12 +1,13 @@
 import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useSyncExternalStore } from "react";
 
 import type { RuntimeProjectionRequest as ProjectionRequest } from "../../projections/resolution";
 import type { ValueReader } from "../../values/reader";
 import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
+import { getDocumentQuery, subscribeDocumentQuery } from "../../document/query-sync";
 import { errorMessage } from "../../errors";
 import { getRuntimeConfig } from "../../runtime-config";
 import { markValueError, markValuePending, setValueRuntimeCell } from "../../values/hosts";
@@ -39,6 +40,7 @@ export const useRuntimeValue = ({
   runtimeReady: boolean;
   readValues: ValueReader;
 }): void => {
+  const query = useSyncExternalStore(subscribeDocumentQuery, getDocumentQuery, getDocumentQuery);
   const deliveryTimedOut = useDeliveryTimeout(runtimeReady && cell === undefined, cell?.id);
   const model = valueCellModel(cell, runtimeReady, deliveryTimedOut);
   const projectionIdentity = JSON.stringify(projections);
@@ -112,6 +114,7 @@ export const useRuntimeValue = ({
     projectionIdentity,
     projectionRevision,
     projectionsRef,
+    query,
     readValues,
     selectorIdentity,
     selectorsRef,

@@ -35,16 +35,14 @@ The setting is process configuration. Apply it before Marimo loads the Studio
 server extension. A direct `/studio/` request can create the first view, then
 opens Source, Preview, and the embedded native editor.
 
-Opening `/studio/` creates a Studio browser client and binds the native editor
-session retained by that browser tab. Enter Studio before calling `view.show()`
+Opening `/studio/` creates a Studio browser client bound to a native Marimo
+connection. Tabs editing the same notebook share its Python kernel through
+Marimo's editor and interactor roles. Enter Studio before calling `view.show()`
 from code mode. A remote agent can select a connected Studio browser client.
-Navigating the outer document between `/` and `/studio/` releases and restores
-the binding around the same native session when the server still retains it and
-the public notebook query matches. Studio allocates a new session after the old
-session closes or the public query changes. The handoff uses
-[`sessionStorage`](https://developer.mozilla.org/docs/Web/API/Window/sessionStorage),
-the browser's tab-scoped storage API. The embedding frame must permit
-same-origin storage.
+Navigating between `/` and `/studio/` creates a connection to the same kernel
+while Marimo retains the notebook session. See
+[Navigate and preserve state](../guide/navigation-and-sessions.md#open-multiple-tabs)
+for shared state and runtime boundaries.
 
 Authentication, public base paths, WebSockets, and framing remain server and
 reverse-proxy concerns. A host must forward the complete configured Marimo base

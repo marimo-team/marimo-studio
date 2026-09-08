@@ -142,7 +142,18 @@ export class PreviewQueryController {
   }
 
   previewChanged(query: string): void {
+    if (this.runtime === DEFAULT_RUNTIME_ID) {
+      this.committedEditorQuery = publicNotebookQuery(query);
+      this.editorError = undefined;
+    }
     if (!this.update(query)) {
+      return;
+    }
+    if (
+      this.runtime === DEFAULT_RUNTIME_ID &&
+      this.active?.commitOnAccept &&
+      this.active.query === this.query
+    ) {
       return;
     }
     this.supersedeNavigationTransaction();
@@ -162,13 +173,19 @@ export class PreviewQueryController {
       this.repairCommittedQueryWhenStable();
       return;
     }
+    const committedRequest =
+      this.awaitingCommitIntent === this.navigationIntent &&
+      this.active?.commitOnAccept === true &&
+      this.active.query === next;
     this.supersedeNavigationTransaction();
     this.generation += 1;
     this.settle(this.active, false);
     this.settle(this.pending, false);
     this.navigationOperations.forEach((pending) => this.settle(pending, false));
     this.navigationOperations.clear();
-    this.request?.abort();
+    if (!committedRequest) {
+      this.request?.abort();
+    }
     this.request = undefined;
     this.pending = undefined;
     this.active = undefined;
@@ -417,7 +434,7 @@ export class PreviewQueryController {
       this.pending = undefined;
       this.clearRetry();
     }
-    if (this.active?.commitOnAccept) {
+    if (this.active?.commitOnAccept && this.active.complete !== undefined) {
       this.settle(this.active, false);
       this.request?.abort();
     }

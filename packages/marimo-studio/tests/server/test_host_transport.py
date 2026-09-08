@@ -36,7 +36,6 @@ _SESSION_ID = "s_123456"
 class _Sessions:
     claim: object = field(default_factory=object)
     identity: EditorSessionIdentity | None = None
-    released: bool = False
 
     def owner(self, _context: ServerContext, _session_id: str) -> SessionOwner:
         return SessionOwner("current", self.claim)
@@ -47,15 +46,6 @@ class _Sessions:
         _session_id: str,
     ) -> EditorSessionIdentity | None:
         return self.identity
-
-    def release_editor_identity(
-        self,
-        _context: ServerContext,
-        _session_id: str,
-    ) -> bool:
-        self.released = True
-        self.identity = None
-        return True
 
     @staticmethod
     def is_session_id(value: object) -> bool:
@@ -266,7 +256,6 @@ def test_accepted_admission_commits_the_native_session_transfer(
 
         try:
             assert await harness.transport("/sse", downstream)
-            assert harness.sessions.released
             assert (
                 await harness.notebooks.get(notebook_path).clients.binding_for_session(
                     _SESSION_ID

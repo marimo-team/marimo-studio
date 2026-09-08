@@ -7,6 +7,15 @@ import { documentLifecycleEnvelope } from "./document-lifecycle-id.ts";
 import { postToStudioParent } from "./parent-bridge.ts";
 import { studioOwned } from "./studio-ownership.ts";
 
+const queryListeners = new Set<() => void>();
+
+export const getDocumentQuery = (): string => publicNotebookQuery(globalThis.location.search);
+
+export const subscribeDocumentQuery = (listener: () => void): (() => void) => {
+  queryListeners.add(listener);
+  return () => queryListeners.delete(listener);
+};
+
 export const bindRuntimeQueryHistory = (
   updateQuery: (query: string) => Promise<void>,
   reload: () => void = () => globalThis.location.reload(),
@@ -28,15 +37,16 @@ export const bindRuntimeQueryHistory = (
 
 export const startQuerySync = (): void => {
   const physicallyFramed = globalThis.parent !== globalThis.window;
-  if (!studioOwned() && !physicallyFramed) {
-    return;
-  }
   const notify = () => {
+    queryListeners.forEach((listener) => listener());
+    if (!studioOwned() && !physicallyFramed) {
+      return;
+    }
     const message: QueryChangeMessage = {
       type: "marimo-studio:query-change",
       runtime: hasRuntimeConfig() ? getRuntimeConfig().runtime.id : getMountConfig().runtime,
       ...documentLifecycleEnvelope(),
-      query: publicNotebookQuery(globalThis.location.search),
+      query: getDocumentQuery(),
     };
     postToStudioParent(message);
   };

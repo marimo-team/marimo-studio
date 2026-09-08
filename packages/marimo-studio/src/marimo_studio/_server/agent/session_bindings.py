@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Generic, Literal, Protocol, TypeVar
 
@@ -23,8 +23,13 @@ class SessionBindingLease:
     session_id: str
     binding_generation: int
     native_claim: object | None = None
+    native_close_callback: Callable[[], object] | None = None
     phase: BindingPhase = "active"
     rejection_task: asyncio.Task[None] | None = None
+
+    def retire(self) -> None:
+        self.phase = "retired"
+        self.native_close_callback = None
 
 
 @dataclass(frozen=True)
@@ -84,7 +89,7 @@ class SessionBindings(Generic[BindingClientT]):
     def close(self) -> None:
         for client in self._clients.values():
             if client.binding_lease is not None:
-                client.binding_lease.phase = "retired"
+                client.binding_lease.retire()
 
     def bind(
         self,
@@ -104,7 +109,7 @@ class SessionBindings(Generic[BindingClientT]):
         ):
             if not new_incarnation or current.native_claim is None:
                 return BindingUpdate(current)
-            current.phase = "retired"
+            current.retire()
             client.binding_generation = self._next_generation()
             client.binding_count += 1
             client.binding_lease = SessionBindingLease(
@@ -136,7 +141,7 @@ class SessionBindings(Generic[BindingClientT]):
         client = self._exact_client(lease)
         if client is None:
             return False
-        lease.phase = "retired"
+        lease.retire()
         self._session_clients.pop(lease.session_id)
         client.session_id = None
         client.binding_lease = None
@@ -178,7 +183,7 @@ class SessionBindings(Generic[BindingClientT]):
         if lease.native_claim is None:
             lease.native_claim = native_claim
             return BindingUpdate(lease, changed=True)
-        lease.phase = "retired"
+        lease.retire()
         client.binding_generation = self._next_generation()
         client.binding_count += 1
         client.binding_lease = SessionBindingLease(
@@ -193,7 +198,7 @@ class SessionBindings(Generic[BindingClientT]):
         client = self._exact_client(lease)
         if client is None:
             return False
-        lease.phase = "retired"
+        lease.retire()
         self._session_clients.pop(lease.session_id)
         client.session_id = None
         client.binding_lease = None
@@ -254,7 +259,7 @@ class SessionBindings(Generic[BindingClientT]):
         if client is None:
             return
         if client.binding_lease is not None:
-            client.binding_lease.phase = "retired"
+            client.binding_lease.retire()
             client.binding_lease = None
         if (
             client.session_id is not None

@@ -32,6 +32,9 @@ export const syncEditorQuery = async (
     receivedResponse = true;
     signal?.throwIfAborted();
     if (response.ok) {
+      await response.arrayBuffer();
+      signal?.throwIfAborted();
+      request.signal.throwIfAborted();
       return "accepted";
     }
     if (response.status === 408 || response.status === 429 || response.status >= 500) {

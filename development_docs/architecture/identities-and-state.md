@@ -47,7 +47,7 @@ latest build attempt, and provider provenance.
 | ---------------------------- | ------------------------------------- | ----------------------------------------------------------------- |
 | Browser client ID            | `StudioClientRegistry`                | One Studio browser identity across reconnects                     |
 | Notebook source generation   | `_notebook`                           | One notebook revision plus the captured filesystem identity       |
-| Native editor session ID     | Marimo session state                  | One live Python notebook session                                  |
+| Native editor session ID     | Marimo session state                  | One consumer connection to a shared Python notebook session       |
 | Binding generation           | `StudioClientRegistry`                | One accepted client and native-session pairing                    |
 | Active-view generation       | `StudioClientRegistry`                | One committed selected view for a client                          |
 | Workspace stream generation  | Browser and server event coordinators | One promoted event stream and its initial baseline                |

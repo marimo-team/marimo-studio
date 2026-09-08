@@ -183,14 +183,19 @@ def test_explicit_host_preserves_run_root_and_studio_authentication(
     assert login_query["next"] == ["/studio/"]
 
 
-def test_native_first_save_requests_session_migration(
+@pytest.mark.parametrize("renamed_before_save", [False, True])
+def test_native_save_hands_off_a_newly_named_notebook(
     notebook_path: Path,
+    renamed_before_save: bool,
 ) -> None:
     reloads: list[str] = []
     handoffs: list[str] = []
+    named = renamed_before_save
 
     async def downstream(scope: Scope, receive: Receive, send: Send) -> None:
+        nonlocal named
         del scope, receive
+        named = True
         await send({"type": "http.response.start", "status": 204, "headers": []})
         await send({"type": "http.response.body", "body": b""})
 
@@ -213,7 +218,7 @@ def test_native_first_save_requests_session_migration(
         return location_value
 
     async def session_location(_request: object, _session_id: str) -> object:
-        return location_value
+        return location_value if named else None
 
     handled = asyncio.run(
         delegate_editor_request(

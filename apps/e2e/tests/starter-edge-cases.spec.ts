@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import {
   captureProjectionRefresh,
   expect,
+  expectSupersededRenewalConfig,
   labeledSlider,
   noDisplayStaticExportUrl,
   recoverRequestAbort,
@@ -153,6 +154,7 @@ test("creates distinct provider projects concurrently and refreshes the active v
   );
   await page.goto("/?file=notebook.py");
   const dashboard = await waitForPreview(page);
+  const supersededConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   const documentPath = await dashboard.locator("html").evaluate(() => location.pathname);
   const documentRefresh = browserDiagnostics.expectResponseTransition(page, {
@@ -189,5 +191,6 @@ test("creates distinct provider projects concurrently and refreshes the active v
   await expect(refreshedDashboard.locator('strong[mo-value="metric"]')).toContainText("63");
   await recoverProjectionRefresh(dashboardRefresh, page);
   await recoverResponseTransition(documentRefresh);
+  supersededConfig.recovered();
   await retireWorkspacePage(page, browserDiagnostics);
 });

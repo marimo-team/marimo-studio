@@ -36,6 +36,47 @@ describe("editor query synchronization", () => {
     expect(result).toBe("accepted");
   });
 
+  it("waits for the accepted response to finish", async () => {
+    let finish!: () => void;
+    let reading!: () => void;
+    const bodyRead = new Promise<void>((resolve) => {
+      reading = resolve;
+    });
+    const response = new Response(
+      new ReadableStream(
+        {
+          start(controller) {
+            finish = () => controller.close();
+          },
+          pull() {
+            reading();
+          },
+        },
+        { highWaterMark: 0 },
+      ),
+      { status: 202 },
+    );
+    const fetch = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetch);
+    const completed = vi.fn();
+    const pending = syncEditorQuery(
+      "/query",
+      "token",
+      "browser-client-1234",
+      "region=emea",
+      "query-1",
+      7,
+    ).then(completed);
+    try {
+      await Promise.race([bodyRead, pending]);
+      expect(completed).not.toHaveBeenCalled();
+    } finally {
+      finish();
+      await pending;
+    }
+    expect(completed).toHaveBeenCalledWith("accepted");
+  });
+
   it("returns a retry outcome for an explicit transient response", async () => {
     vi.stubGlobal(
       "fetch",

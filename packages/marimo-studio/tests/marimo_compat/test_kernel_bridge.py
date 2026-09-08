@@ -538,6 +538,67 @@ default = "dashboard"
     assert cache_activations == []
 
 
+def test_shared_kernel_accepts_query_updates_from_each_consumer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._messaging import notification_utils
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+
+    notebook = tmp_path / "notebook.py"
+    current = _native_output_context()
+    current.filename = str(notebook)
+    current._kernel = SimpleNamespace(state_updates={})
+    values: dict[str, str | list[str]] = {}
+    current._query_params = SimpleNamespace(
+        get=values.get,
+        to_dict=lambda: dict(values),
+        set=values.__setitem__,
+        remove=lambda key: values.pop(key, None),
+    )
+    current.stream = object()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: current)
+    monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", type(current))
+    monkeypatch.setattr(notification_utils, "broadcast_notification", lambda *_: None)
+    monkeypatch.setattr(_KernelBridgeLifespan, "_activate", lambda *_: True)
+
+    async def exercise() -> None:
+        async with _KernelBridgeLifespan():
+            function = current.function_registry.namespaces["_marimo_studio"].functions[
+                "sync_query"
+            ]
+
+            async def update(
+                consumer: str, binding: int, generation: int, region: str
+            ) -> Any:
+                return await function(
+                    authorized_query_arguments(
+                        query={"region": region},
+                        fingerprint=query_fingerprint({"region": region}),
+                        operation_id=f"query_{generation}",
+                        binding_generation=binding,
+                        query_generation=generation,
+                        deadline=time.monotonic() + 60,
+                        session_id=consumer,
+                        notebook=notebook,
+                    )
+                )
+
+            assert (await update("s_first1", 1, 0, "emea"))["status"] == "applied"
+            assert (await update("s_second", 2, 0, "apac"))["status"] == "applied"
+            assert (await update("s_first1", 1, 2, "americas"))["status"] == "applied"
+            assert values == {"region": "americas"}
+            assert (await update("s_first1", 1, 1, "stale"))["status"] == "superseded"
+            assert values == {"region": "americas"}
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+
+
 def test_kernel_query_sync_labels_its_echo_and_preserves_private_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -595,7 +656,7 @@ default = "dashboard"
 
     current = _native_output_context()
     current.filename = str(notebook)
-    current._kernel = SimpleNamespace()
+    current._kernel = SimpleNamespace(state_updates={})
     current._query_params = QueryParams()
     current.stream = object()
     monkeypatch.setattr(runtime_context, "get_context", lambda: current)
@@ -634,7 +695,7 @@ default = "dashboard"
                     notebook=notebook,
                 )
 
-            applied = function(
+            applied = await function(
                 authorized(
                     {
                         "query": {
@@ -652,7 +713,7 @@ default = "dashboard"
                     }
                 )
             )
-            repeated = function(
+            repeated = await function(
                 authorized(
                     {
                         "query": {"region": "emea"},
@@ -665,7 +726,7 @@ default = "dashboard"
                 )
             )
             with pytest.raises(ValueError, match="different query"):
-                function(
+                await function(
                     authorized(
                         {
                             "query": {"region": "apac"},
@@ -677,7 +738,7 @@ default = "dashboard"
                         }
                     )
                 )
-            newer = function(
+            newer = await function(
                 authorized(
                     {
                         "query": {"region": "apac"},
@@ -689,7 +750,7 @@ default = "dashboard"
                     }
                 )
             )
-            superseded = function(
+            superseded = await function(
                 authorized(
                     {
                         "query": {"region": "stale"},
@@ -701,7 +762,7 @@ default = "dashboard"
                     }
                 )
             )
-            rebound = function(
+            rebound = await function(
                 authorized(
                     {
                         "query": {"region": "americas"},
@@ -713,7 +774,7 @@ default = "dashboard"
                     }
                 )
             )
-            expired = function(
+            expired = await function(
                 authorized(
                     {
                         "query": {"region": "expired"},
@@ -737,7 +798,7 @@ default = "dashboard"
             )
             unauthorized["authorization"] = ""
             with pytest.raises(ValueError, match="identity is invalid"):
-                function(unauthorized)
+                await function(unauthorized)
             tampered = authorized(
                 {
                     "query": {"region": "blocked"},
@@ -750,7 +811,7 @@ default = "dashboard"
             )
             tampered["query_generation"] = 3
             with pytest.raises(ValueError, match="identity is invalid"):
-                function(tampered)
+                await function(tampered)
             assert (
                 applied
                 == repeated

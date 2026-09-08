@@ -159,7 +159,7 @@ def test_kernel_value_result_parser_enforces_request_ownership_and_limits() -> N
         )
 
 
-def test_query_sync_waits_for_a_matching_kernel_acknowledgement(
+def test_kiosk_query_sync_waits_for_a_matching_kernel_acknowledgement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo._messaging.notification import (
@@ -171,12 +171,12 @@ def test_query_sync_waits_for_a_matching_kernel_acknowledgement(
     from marimo._types.ids import ConsumerId
 
     class Consumer:
-        consumer_id = ConsumerId("editor")
+        consumer_id = ConsumerId("s_123456")
 
     consumer = Consumer()
 
     class Room:
-        main_consumer = consumer
+        main_consumer = None
 
         @staticmethod
         def get_consumer(consumer_id: ConsumerId) -> object | None:
@@ -185,7 +185,7 @@ def test_query_sync_waits_for_a_matching_kernel_acknowledgement(
         @staticmethod
         def get_capabilities(current: object) -> ConsumerCapabilities:
             assert current is consumer
-            return ConsumerCapabilities.EDITOR
+            return ConsumerCapabilities.INTERACTOR
 
     class Session:
         room = Room()
@@ -199,7 +199,8 @@ def test_query_sync_waits_for_a_matching_kernel_acknowledgement(
             self.waiter = waiter
             yield
 
-        def put_control_request(self, request: Any, **_kwargs: object) -> None:
+        def put_control_request(self, request: Any, **kwargs: object) -> None:
+            assert kwargs["from_consumer_id"] == ConsumerId("s_123456")
             self.request = request
             assert self.waiter is not None
             fingerprint = query_fingerprint({"region": "emea"})
@@ -267,7 +268,7 @@ def test_timed_out_query_remains_owned_until_the_kernel_terminal(
     from marimo._types.ids import ConsumerId
 
     class Consumer:
-        consumer_id = ConsumerId("editor")
+        consumer_id = ConsumerId("s_123456")
 
         def on_detach(self) -> None:
             return None

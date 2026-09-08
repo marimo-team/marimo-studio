@@ -109,7 +109,7 @@ const sessionAdminBootstrapSchema = z.object({
   serverToken: z.string(),
   urls: z.object({ views: z.string() }),
 });
-const sessionInventorySchema = z.object({
+export const sessionInventorySchema = z.object({
   files: z.array(z.object({ sessionId: z.string() })),
 });
 const copyFixtureFile = async (relativePath: string) => {
