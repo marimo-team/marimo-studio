@@ -79,6 +79,31 @@ export const PaneMenu = ({ target, tree, onApply }: PaneMenuProps) => {
             </div>
           </div>
         ))}
+        {model.peers.map((surface) => (
+          <div key={surface} className="studio-pane-action-section">
+            <strong className="studio-menu-heading">
+              Move {SURFACE_LABELS[target]} beside {SURFACE_LABELS[surface]}
+            </strong>
+            <div className="studio-placement-grid">
+              {PLACEMENTS.map((placement) => (
+                <button
+                  key={placement.value}
+                  type="button"
+                  className="studio-menu-item studio-placement-action"
+                  aria-label={`Move ${SURFACE_LABELS[target]} ${placement.relation} ${SURFACE_LABELS[surface]}`}
+                  onClick={() => model.actions.move(surface, placement.value)}
+                >
+                  <span
+                    className="studio-placement-icon"
+                    data-placement={placement.value}
+                    aria-hidden="true"
+                  />
+                  <span>{placement.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
         {arrangeSection}
       </div>
     </details>

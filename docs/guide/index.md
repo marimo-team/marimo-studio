@@ -12,7 +12,7 @@ you need to do.
 ## Start here
 
 1. [Create your first view](getting-started.md) creates a view project and
-   opens Notebook, Source, and Preview together.
+   opens the notebook in Studio.
 2. [One notebook, many views](views.md) separates shared analysis from
    purpose-specific interfaces.
 3. [Place notebook results in a view](notebook-results.md) connects cells,

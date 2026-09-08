@@ -72,7 +72,7 @@ test("starts the notebook automatically and initializes WebAssembly on demand", 
 
   await expect(preview.locator('strong[mo-value="metric"]')).toHaveText("42");
   await expect(page.getByLabel("Python preview runtime")).toContainText("Live");
-  for (const surface of ["Notebook", "Source", "Preview"]) {
+  for (const surface of ["Notebook", "Preview"]) {
     await expect(page.getByRole("region", { name: surface })).toBeVisible();
   }
   const wasmFrame = page.locator('iframe[data-preview-runtime-frame="wasm"]');

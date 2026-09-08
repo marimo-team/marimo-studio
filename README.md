@@ -83,16 +83,19 @@ Studio opens the first-view screen. Name the view `dashboard`, choose **HTML
 document**, and create it. The generated view places displayable notebook cells
 inside a frontend document.
 
-Choose **Develop** to work with three connected surfaces:
+Studio connects three surfaces:
 
 - **Notebook** for Python and reactive computation
 - **Source** for the view project's HTML, styles, and browser code
 - **Preview** for the current artifact and notebook runtime
 
+**Develop** opens Notebook and Preview in an equal split. Click **Source** in the
+toolbar to add the view editor beneath Notebook.
+
 Saving Source rebuilds Preview. A failed build reports the source problem and
 keeps the current artifact available.
 
-![Notebook, view source, and Preview together in Develop](apps/docs/public/screenshots/studio-develop.png)
+![Notebook, view source, and Preview in a custom layout](apps/docs/public/screenshots/studio-develop.png)
 
 For terminal-first setup with an existing saved notebook, run:
 

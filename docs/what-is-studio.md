@@ -69,8 +69,9 @@ three projection forms.
 - **Source** edits the selected view project's source documents.
 - **Preview** renders the current artifact with live notebook results.
 
-The Develop layout shows all three. Saved layouts and compact navigation let
-you arrange them for a larger or narrower workspace.
+The Develop layout splits Notebook and Preview equally. The **Source** toolbar
+button adds the view editor when needed. Pane controls, saved layouts, and compact
+navigation let you arrange the surfaces for a larger or narrower workspace.
 
 [Create your first view](guide/getting-started.md) for a working path from a
 saved notebook. [Why Studio?](why-studio.md) explains the product decision

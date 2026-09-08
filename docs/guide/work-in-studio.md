@@ -20,21 +20,25 @@ Studio connects three surfaces to the saved notebook:
 
 ## Choose a mode
 
-| Mode         | Surfaces                      |
-| ------------ | ----------------------------- |
-| **Notebook** | Notebook                      |
-| **Develop**  | Notebook, Source, and Preview |
-| **Preview**  | Preview                       |
-| **Source**   | Source and Preview            |
+| Mode         | Surfaces             |
+| ------------ | -------------------- |
+| **Notebook** | Notebook             |
+| **Develop**  | Notebook and Preview |
+| **Preview**  | Preview              |
+| **Source**   | Source and Preview   |
 
-Use **Develop** for everyday authoring. Source stays beside Preview so a source
-edit and its visible result can be compared directly.
+Studio opens in **Develop**, with Notebook and Preview sharing the page equally.
+Click **Source** in the toolbar to open the view editor beneath Notebook. Preview
+keeps its full height. Click **Source** again to close the editor.
+
+Choose **Source** from **Workspace options** to focus on Source and Preview.
 
 ## Arrange the workspace
 
-Open **Workspace options** to arrange panes, equalize split sizes, restore the
-default workspace, or open the saved layout. While arranging, add a missing
-surface beside another pane, swap panes, close a pane, or drag a divider.
+Use **Arrange** in a pane header to place it above, below, or beside another
+pane, swap panes, add a missing surface, or close the pane. Drag a divider to
+resize. Open **Workspace options** to equalize split sizes, restore the default
+workspace, or open the saved layout.
 
 Studio saves the custom layout for each notebook and selected view in the
 current browser. **Open saved layout** returns to that arrangement.

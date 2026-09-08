@@ -255,8 +255,7 @@ test("publishes a framework edit and retains the last good view across a failed 
 
   const sourceTab = page.getByRole("tab", { name: "src/App.tsx" });
   if (!(await sourceTab.isVisible())) {
-    await page.getByLabel("Workspace options").click();
-    await page.getByRole("button", { name: "Source" }).click();
+    await page.getByRole("button", { name: "Toggle Source editor" }).click();
   }
   await sourceTab.click();
   const editor = page.getByLabel("src/App.tsx source");

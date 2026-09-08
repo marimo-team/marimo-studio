@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
+import { LayoutController } from "../src/features/workspace/controller.ts";
 import {
   computeLayout,
   developLayout,
@@ -16,7 +17,7 @@ import {
 } from "../src/features/workspace/model.ts";
 import { applyActiveMode, LayoutStorage } from "../src/features/workspace/storage.ts";
 
-test("Develop shows notebook, source, and preview", () => {
+test("Develop gives Notebook and Preview equal full-height panes", () => {
   const bounds = {
     left: 0,
     top: 0,
@@ -25,18 +26,16 @@ test("Develop shows notebook, source, and preview", () => {
   };
   const layout = computeLayout(developLayout(), bounds);
   const notebook = layout.panes.get("notebook")!;
-  const source = layout.panes.get("source")!;
+  assert.deepEqual([...layout.panes.keys()], ["notebook", "preview"]);
   const preview = layout.panes.get("preview")!;
 
   assert.equal(notebook.left, bounds.left);
   assert.equal(notebook.top, bounds.top);
   assert.equal(notebook.height, bounds.height);
-  assert.equal(source.left, preview.left);
-  assert.equal(source.width, preview.width);
-  assert.equal(source.height, preview.height);
-  assert.equal(source.top, bounds.top);
+  assert.equal(preview.top, bounds.top);
+  assert.equal(preview.height, bounds.height);
+  assert.equal(notebook.width, preview.width);
   assert.ok(preview.left > notebook.left + notebook.width);
-  assert.ok(preview.top > source.top + source.height);
 });
 
 test("task modes resolve to their surface layouts", () => {
@@ -45,7 +44,6 @@ test("task modes resolve to their surface layouts", () => {
 
   assert.deepEqual(visibleSurfaces(layoutForMode("develop", source, workspace)), [
     "notebook",
-    "source",
     "preview",
   ]);
   assert.deepEqual(visibleSurfaces(layoutForMode("notebook", source, workspace)), ["notebook"]);
@@ -56,7 +54,6 @@ test("task modes resolve to their surface layouts", () => {
   ]);
   assert.deepEqual(visibleSurfaces(layoutForMode("workspace", source, workspace)), [
     "notebook",
-    "source",
     "preview",
   ]);
 });
@@ -66,12 +63,12 @@ test("compact mode follows the minimum size of the visible layout", () => {
 
   assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 1200, height: 800 }), false);
   assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 604, height: 800 }), true);
-  assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 1200, height: 444 }), true);
+  assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 1200, height: 219 }), true);
 });
 
 test("nested ratios update and equalize independently", () => {
-  const tree = developLayout();
-  const changed = updateRatio(updateRatio(tree, "notebook-authoring", 0.6), "source-preview", 0.3);
+  const tree = splitSurface(developLayout(), "preview", "source", "above");
+  const changed = updateRatio(updateRatio(tree, "notebook-preview", 0.6), "custom-1", 0.3);
   const equalized = equalizeLayout(changed);
 
   assert.equal(changed.type, "split");
@@ -85,7 +82,6 @@ test("nested ratios update and equalize independently", () => {
 test("swapping panes exchanges their surfaces", () => {
   assert.deepEqual(visibleSurfaces(swapSurfaces(developLayout(), "notebook", "preview")), [
     "preview",
-    "source",
     "notebook",
   ]);
 });
@@ -220,7 +216,7 @@ test("workspace storage round-trips valid state and recovers invalid data", () =
 
 test("link navigation keeps the active mode and the target view split trees", () => {
   const source = updateRatio(sourceLayout(), "source-preview", 0.65);
-  const workspace = updateRatio(developLayout(), "notebook-authoring", 0.4);
+  const workspace = updateRatio(developLayout(), "notebook-preview", 0.4);
   const target = {
     mode: "notebook" as const,
     source,
@@ -238,4 +234,35 @@ test("link navigation keeps the active mode and the target view split trees", ()
     applyActiveMode(target, { mode: "notebook", compact: "source" }).compact,
     "notebook",
   );
+});
+
+test("Source toggles beneath Notebook while Preview keeps its height and split width", () => {
+  const controller = new LayoutController("source-toggle", "dashboard");
+  const bounds = { left: 0, top: 0, width: 1205, height: 805 };
+  controller.resize(updateRatio(controller.getSnapshot().tree, "notebook-preview", 0.6));
+  const initial = controller.getSnapshot().tree;
+  const preview = computeLayout(initial, bounds).panes.get("preview");
+  controller.toggleSource();
+  const opened = controller.getSnapshot();
+  const panes = computeLayout(opened.tree, bounds).panes;
+  assert.equal(opened.compact, "source");
+  assert.deepEqual(panes.get("preview"), preview);
+  assert.ok(panes.get("source")!.top > panes.get("notebook")!.top);
+  controller.toggleSource();
+  assert.deepEqual(controller.getSnapshot().tree, initial);
+  assert.equal(controller.getSnapshot().compact, "notebook");
+  controller.dispose();
+});
+
+test("Source can be opened from Preview and from a Source-only workspace", () => {
+  const controller = new LayoutController("source-focus", "dashboard");
+  controller.selectMode("preview");
+  controller.toggleSource();
+  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["source", "preview"]);
+  controller.toggleSource();
+  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["preview"]);
+  controller.applyPaneAction({ tree: { type: "pane", id: "pane-source", surface: "source" } });
+  controller.toggleSource();
+  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["notebook", "preview"]);
+  controller.dispose();
 });

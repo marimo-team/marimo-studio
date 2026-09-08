@@ -298,10 +298,11 @@ additional selectable mode in the workspace menu:
 - Preview
 - Source
 
-Develop shows Notebook, Source, and Preview. A newly created view uses the authoring
-layout with Notebook beside stacked Source and Preview. Source shows Source and
-Preview. The **Open saved layout** workspace action restores the persisted layout,
-which can place any surface beside another.
+Develop gives Notebook and Preview equal, full-height panes. The Source toolbar
+button toggles Source beneath Notebook, or beside Preview when Notebook is hidden.
+A newly created view and Source mode show Source beside Preview. Pane headers
+expose placement, swap, and close actions. The **Open saved layout** workspace
+action restores the persisted layout, which can place any surface beside another.
 
 `LayoutController` owns layout trees, pane placement, split ratios, compact
 state, per-view persistence, and arranging. The render layer reads controller
