@@ -45,6 +45,9 @@ const CanvasPdfViewer = (
       setStatus("loading");
       GlobalWorkerOptions.workerSrc = PDF_WORKER;
       const bytes = new Uint8Array(await instance.blob!.arrayBuffer());
+      if (!active) {
+        return;
+      }
       const loadingTask = getDocument({ data: bytes });
       destroyDocument = () => loadingTask.destroy();
       const pdf = await loadingTask.promise;
@@ -55,6 +58,9 @@ const CanvasPdfViewer = (
           return;
         }
         const page = await pdf.getPage(pageNumber);
+        if (!active) {
+          return;
+        }
         const viewport = page.getViewport({ scale: 1.5 });
         const sheet = document.createElement("article");
         const summary = document.createElement("p");
@@ -94,8 +100,8 @@ const CanvasPdfViewer = (
     };
 
     render().catch((error: unknown) => {
-      console.error(error);
       if (active) {
+        console.error(error);
         setStatus("error");
       }
     });
@@ -103,7 +109,7 @@ const CanvasPdfViewer = (
     return () => {
       active = false;
       renderTasks.forEach((task) => task.cancel());
-      void destroyDocument?.();
+      void destroyDocument?.().catch((error: unknown) => console.error(error));
     };
   }, [instance.blob, pageSummaries]);
 
