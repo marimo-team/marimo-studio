@@ -1,0 +1,23 @@
+packages/marimo-studio/tests/views/test_source_transactions.py
+  s_c63703e0fda00c::t_b8ff96f8f1176d 15,417,426
+  s_c63703e0fda00c::t_07e4958b5ebf9b 400-416,418-425,427-441,444-458
+  s_c63703e0fda00c::t_5e9ef0d13dcc02 442-443
+packages/marimo-studio/src/marimo_studio/_views/sources.py
+  s_c63703e0fda00c::t_0adb4e6a0ecafc 714-719
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "84a3e1e373aeadb92616bb92a8f49c0a28f0d628",
+  "prompts": {},
+  "sessions": {
+    "s_c63703e0fda00c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07f5a-9e7d-7ff2-9e8c-87a2fa423214",
+        "model": "gpt-6-astra"
+      },
+      "human_author": null
+    }
+  }
+}
