@@ -1,0 +1,22 @@
+packages/marimo-studio/tests/cli/test_browser_asset_graph.py
+  s_c63703e0fda00c::t_141457dfafe3ca 8-9,13-16,33,54-57,107,123
+  s_c63703e0fda00c::t_c5a0048e0aef6d 23
+packages/marimo-studio/src/marimo_studio/_release_checks/browser_assets.py
+  s_c63703e0fda00c::t_141457dfafe3ca 79-84,102,107,116,118-119,123,125-129,133,149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d5e71fe02d9fd90bf30baf2972d8c3b95197a3f8",
+  "prompts": {},
+  "sessions": {
+    "s_c63703e0fda00c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07f5a-9e7d-7ff2-9e8c-87a2fa423214",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
