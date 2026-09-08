@@ -5,7 +5,7 @@ description: Supported Python, Marimo, Deno, uv, browser, runtime, release, prov
 
 # Compatibility and support
 
-Marimo Studio 0.1.0 begins the first documented compatibility line. The
+Marimo Studio 0.1.1 begins the first documented compatibility line. The
 notebook-to-view workflow, projection elements, and last-successful build
 behavior are supported product contracts. Before 1.0, CLI, Python, provider,
 and saved configuration contracts may change between minor releases.
@@ -18,8 +18,8 @@ dependencies = ["marimo-studio"]
 
 ## Upgrade from 0.0.6
 
-Version 0.1.0 introduces explicit view manifests and a notebook-bound authoring
-API. Update saved view projects and automation before opening them with 0.1.0.
+Version 0.1.1 introduces explicit view manifests and a notebook-bound authoring
+API. Update saved view projects and automation before opening them with 0.1.1.
 
 Add this `view.toml` to each existing 0.0.6 view directory:
 
@@ -35,7 +35,7 @@ and the generated `.owners/` records with the view project.
 
 Update command and Python callers with these replacements:
 
-| 0.0.6 contract                                                                 | 0.1.0 replacement                                                                      |
+| 0.0.6 contract                                                                 | 0.1.1 replacement                                                                      |
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | `marimo-studio inspect TARGET --display`                                       | `marimo-studio notebook inspect --target TARGET --output-expressions`                  |
 | `marimo-studio bind TARGET --cell 12 --as summary`                             | `marimo-studio notebook bind summary --target TARGET --cell 12`                        |
@@ -66,7 +66,7 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 
 ## Supported environment
 
-| Component                        | 0.1.0 contract                                                                    |
+| Component                        | 0.1.1 contract                                                                    |
 | -------------------------------- | --------------------------------------------------------------------------------- |
 | Python                           | 3.10 through 3.14                                                                 |
 | Marimo                           | 0.24.0                                                                            |
