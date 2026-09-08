@@ -57,7 +57,7 @@ Creating the first view can add these settings to a standalone notebook:
 ```python
 # /// script
 # requires-python = ">=3.10,<3.15"
-# dependencies = ["marimo-studio==0.1.0"]
+# dependencies = ["marimo-studio"]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
@@ -111,7 +111,7 @@ A Python project can keep the same settings in `pyproject.toml`:
 [project]
 name = "analysis"
 version = "0.1.0"
-dependencies = ["marimo-studio==0.1.0"]
+dependencies = ["marimo-studio"]
 
 [tool.marimo-studio]
 notebook = "analysis.py"

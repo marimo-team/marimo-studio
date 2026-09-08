@@ -6,6 +6,7 @@ import shutil
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
+from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from threading import Barrier
 
@@ -70,7 +71,7 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     )
     assert document is not None
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
-    assert "marimo-studio==0.1.0" in document["dependencies"]
+    assert f"marimo-studio=={version('marimo-studio')}" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
     assert re.search(r"<h1[^>]*>\s*Dashboard\s*</h1>", document_source)
     assert set(document["tool"]["marimo-studio"]["cells"]) == {"cell-2"}
@@ -194,7 +195,9 @@ def test_repeated_and_dry_run_setup_report_no_file_changes(
     assert preview.updated == ()
     document = read_notebook_metadata(notebook_path)
     assert document is not None
-    assert list(document["dependencies"]) == ["marimo-studio==0.1.0"]
+    assert list(document["dependencies"]) == [
+        f"marimo-studio=={version('marimo-studio')}"
+    ]
 
 
 def test_concurrent_view_setup_serializes_the_same_view_name(

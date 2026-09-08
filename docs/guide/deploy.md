@@ -14,7 +14,7 @@ files, packages, databases, network, and credentials.
 Store the Marimo token in a file readable by the application user:
 
 ```console
-uv run --with marimo-studio==0.1.0 marimo run /srv/analysis/analysis.py \
+uv run --with marimo-studio marimo run /srv/analysis/analysis.py \
   --sandbox \
   --headless \
   --host 127.0.0.1 \

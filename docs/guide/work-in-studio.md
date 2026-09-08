@@ -6,10 +6,10 @@ description: Work with notebook code, view source, and the rendered result in on
 # Edit and preview in Studio
 
 Open the notebook with the launch requirements printed by `view create`. For a
-notebook that uses the default 0.1.0 starter:
+notebook that uses the default Vanilla starter:
 
 ```console
-uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 Studio connects three surfaces to the saved notebook:

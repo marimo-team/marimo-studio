@@ -10,11 +10,6 @@ const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta
 const repositoryRoot = resolve(packageRoot, "../..");
 const docsRoot = resolve(packageRoot, "../../docs");
 const markdownRenderer = createMarkdownRenderer(docsRoot);
-const releasePins = (source: string): string[] =>
-  Array.from(
-    source.matchAll(/marimo-studio(?:\[deno\])?==([0-9]+\.[0-9]+\.[0-9]+)/g),
-    (match) => match[1] ?? "",
-  );
 
 interface PageEnvironment {
   frontmatter?: {
@@ -88,50 +83,6 @@ describe("documentation source integrity", () => {
       }
       return missing;
     });
-    expect(failures).toEqual([]);
-  });
-
-  it("keeps required installation pins present and every public pin current", () => {
-    const manifest = readFileSync(
-      join(repositoryRoot, "packages", "marimo-studio", "pyproject.toml"),
-      "utf8",
-    );
-    const currentVersion = manifest.match(/^version = "([0-9]+\.[0-9]+\.[0-9]+)"$/m)?.[1];
-    expect(currentVersion).toBeDefined();
-
-    const surfaces = [
-      join(repositoryRoot, "README.md"),
-      join(repositoryRoot, "packages", "marimo-studio", "README.md"),
-      join(repositoryRoot, "skills", "marimo-studio", "SKILL.md"),
-      ...files,
-    ];
-    const required = [
-      join(repositoryRoot, "README.md"),
-      join(repositoryRoot, "packages", "marimo-studio", "README.md"),
-      join(repositoryRoot, "skills", "marimo-studio", "SKILL.md"),
-      join(docsRoot, "guide", "getting-started.md"),
-      join(docsRoot, "reference", "compatibility.md"),
-      join(docsRoot, "reference", "configuration.md"),
-    ];
-    const versions = new Map(
-      surfaces.map((file) => [file, releasePins(readFileSync(file, "utf8"))]),
-    );
-    expect(
-      required
-        .filter((file) => versions.get(file)?.length === 0)
-        .map((file) => relative(repositoryRoot, file)),
-    ).toEqual([]);
-
-    const failures: string[] = [];
-    for (const file of surfaces) {
-      for (const version of versions.get(file) ?? []) {
-        if (version !== currentVersion) {
-          failures.push(
-            `${relative(repositoryRoot, file)}: expected ${currentVersion}, found ${version}`,
-          );
-        }
-      }
-    }
     expect(failures).toEqual([]);
   });
 

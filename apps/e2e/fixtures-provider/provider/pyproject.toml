@@ -2,7 +2,7 @@
 name = "marimo-studio-e2e-provider"
 version = "1.0.0"
 requires-python = ">=3.10,<3.15"
-dependencies = ["marimo-studio==0.1.0"]
+dependencies = ["marimo-studio"]
 
 [project.entry-points."marimo_studio.view_provider"]
 report = "fixture_provider:provider"
