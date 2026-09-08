@@ -1,0 +1,11 @@
+packages/marimo-studio/src/marimo_studio/_release_checks/browser_assets.py
+  ai_agent 79-84,102,107,116,118-119,123,125-129,133,149
+packages/marimo-studio/tests/cli/test_browser_asset_graph.py
+  ai_agent 8-9,13-16,23,33,54-57,107,123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b59458ac72b33d2fb306242d3caa47bd7934b0a9",
+  "prompts": {}
+}
