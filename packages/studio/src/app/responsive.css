@@ -1,6 +1,16 @@
 @media (max-width: 840px) {
-  .studio-notebook {
-    max-width: 9rem;
+  .studio-notebook,
+  .studio-title-separator {
+    display: none;
+  }
+
+  .studio-view-menu,
+  .studio-view-menu > summary {
+    min-width: 0;
+  }
+
+  .studio-view-menu > .studio-menu-trigger {
+    max-width: 100%;
   }
 
   .studio-modes button {

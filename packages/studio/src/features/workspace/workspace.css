@@ -14,7 +14,7 @@
 
 .studio-pane {
   background: var(--studio-background);
-  container-type: inline-size;
+  container-type: size;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -94,16 +94,14 @@
 
 .studio-arrange-chrome {
   align-items: center;
-  background: color-mix(in srgb, var(--studio-background) 92%, transparent);
-  border: 1px solid var(--studio-border);
-  border-radius: 5px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
-  display: none;
-  gap: 0.3rem;
-  padding: 0.2rem 0.25rem 0.2rem 0.5rem;
-  position: absolute;
-  right: 0.45rem;
-  top: 0.45rem;
+  background: var(--studio-background);
+  border-bottom: 1px solid var(--studio-border);
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  min-height: 1.875rem;
+  padding-inline: 0.65rem 0.35rem;
+  position: relative;
   z-index: 30;
 }
 
@@ -147,6 +145,8 @@
   min-width: 14rem;
   right: 0;
   top: calc(100% + 0.25rem);
+  max-height: min(32rem, calc(100cqh - 2.25rem));
+  overflow-y: auto;
 }
 
 .studio-pane-action-section {

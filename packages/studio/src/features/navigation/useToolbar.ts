@@ -10,6 +10,7 @@ import type { StudioMode, Surface } from "../workspace/schema.ts";
 
 import { useStudioTheme } from "../../shared/theme.tsx";
 import { useControllerSnapshot } from "../../shared/useControllerSnapshot.ts";
+import { visibleSurfaces } from "../workspace/model.ts";
 import { previewIsVisible } from "./model.ts";
 
 export const useToolbar = ({
@@ -42,6 +43,7 @@ export const useToolbar = ({
     (mode: Exclude<StudioMode, "workspace">) => layout.selectMode(mode),
     [layout],
   );
+  const toggleSource = useCallback(() => layout.toggleSource(), [layout]);
   const selectCompact = useCallback((surface: Surface) => layout.selectCompact(surface), [layout]);
   const applyWorkspaceAction = useCallback(
     (action: Parameters<LayoutController["applyAction"]>[0]) => layout.applyAction(action),
@@ -57,13 +59,14 @@ export const useToolbar = ({
   );
 
   return {
-    actions: { applyWorkspaceAction, selectCompact, selectMode, switchRuntime },
+    actions: { applyWorkspaceAction, selectCompact, selectMode, switchRuntime, toggleSource },
     arranging: layoutSnapshot.arranging,
     brandMark: brand.marks[theme],
     compact,
     compactSurface: layoutSnapshot.compact,
     compactSurfaces,
     mode: layoutSnapshot.mode,
+    sourceVisible: visibleSurfaces(layoutSnapshot.tree).includes("source"),
     notebookName: bootstrap.notebook.name,
     previewState,
     previewVisible: previewIsVisible(compact, layoutSnapshot.compact, compactSurfaces),

@@ -186,7 +186,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   expect(persisted.ok()).toBe(true);
   expect(await persisted.text()).toBe(replacement);
   await page.getByLabel("Workspace options").click();
-  await page.getByRole("button", { name: "Source" }).click();
+  await page.getByRole("button", { name: "Source", exact: true }).click();
   await page.getByRole("tab", { name: "index.html" }).click();
   await expect(page.getByLabel("index.html source")).toContainText("Hosted mount lifecycle");
   await expect(

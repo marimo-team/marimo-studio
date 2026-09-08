@@ -184,6 +184,7 @@ test("opens the first view in edit mode from the installed wheel", async ({
       "aria-pressed",
       "true",
     );
+    await page.getByRole("button", { name: "Toggle Source editor" }).click();
     await expect(page.getByRole("tab", { name: "index.html" })).toHaveAttribute(
       "aria-selected",
       "true",

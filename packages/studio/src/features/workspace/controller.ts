@@ -3,7 +3,9 @@ import type { StudioMode } from "./schema.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
 import {
+  closeSurface,
   developLayout,
+  splitSurface,
   sourceLayout,
   equalizeLayout,
   layoutForMode,
@@ -58,7 +60,7 @@ export class LayoutController {
     if (landing === "authoring") {
       this.mode = "workspace";
       this.source = sourceLayout();
-      this.workspace = developLayout();
+      this.workspace = sourceLayout();
       this.compact = "source";
       this.arranging = false;
     } else if (landing === "develop") {
@@ -88,6 +90,28 @@ export class LayoutController {
     this.commit();
   }
 
+  toggleSource(): void {
+    const tree = this.tree;
+    const visible = visibleSurfaces(tree);
+    const showing = visible.includes("source");
+    if (showing && visible.length === 1) {
+      this.selectMode("develop");
+      return;
+    }
+    this.arranging = false;
+    this.applyPaneAction({
+      tree: showing
+        ? closeSurface(tree, "source")
+        : splitSurface(
+            tree,
+            visible.includes("notebook") ? "notebook" : "preview",
+            "source",
+            visible.includes("notebook") ? "below" : "left",
+          ),
+      compact: showing ? undefined : "source",
+    });
+  }
+
   selectCompact(surface: Surface): void {
     if (!visibleSurfaces(this.tree).includes(surface)) {
       return;
@@ -104,6 +128,7 @@ export class LayoutController {
         this.ensureCompactSurface();
         break;
       case "arrange":
+        this.workspace = this.tree;
         this.mode = "workspace";
         this.arranging = !this.arranging;
         this.ensureCompactSurface();

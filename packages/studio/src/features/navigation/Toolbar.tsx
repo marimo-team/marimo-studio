@@ -1,5 +1,7 @@
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
+import { CodeIcon } from "lucide-react";
+
 import type { StudioBrand } from "../../shared/theme.tsx";
 import type { PreviewDeck } from "../preview/deck.ts";
 import type { ViewController } from "../views/controller.ts";
@@ -43,6 +45,17 @@ export const Toolbar = (props: ToolbarProps) => {
       <ModeNavigation active={model.mode} variant="primary" onSelect={model.actions.selectMode} />
 
       <div className="studio-controls">
+        <button
+          type="button"
+          className="studio-control studio-source-toggle"
+          aria-label="Toggle Source editor"
+          aria-pressed={model.sourceVisible}
+          title={model.sourceVisible ? "Hide Source editor" : "Show Source editor"}
+          onClick={model.actions.toggleSource}
+        >
+          <CodeIcon className="studio-mode-icon" aria-hidden />
+          <span>Source</span>
+        </button>
         <RuntimeMenu
           current={model.runtime}
           disabled={model.runtimeDisabled}

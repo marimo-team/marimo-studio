@@ -72,15 +72,8 @@ export const previewLayout = (): LayoutNode => pane("preview");
 export const sourceLayout = (): LayoutNode =>
   split("source-preview", "x", pane("source"), pane("preview"));
 
-const threeSurfaceLayout = (): LayoutNode =>
-  split(
-    "notebook-authoring",
-    "x",
-    pane("notebook"),
-    split("source-preview", "y", pane("source"), pane("preview")),
-  );
-
-export const developLayout = (): LayoutNode => threeSurfaceLayout();
+export const developLayout = (): LayoutNode =>
+  split("notebook-preview", "x", pane("notebook"), pane("preview"));
 
 export const layoutForMode = (
   mode: StudioMode,

@@ -41,7 +41,7 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagn
   });
 
   await page.getByLabel("Workspace options").click();
-  await page.getByRole("button", { name: "Source" }).click();
+  await page.getByRole("button", { name: "Source", exact: true }).click();
   await expect(page.getByRole("tab", { name: "index.html" })).toBeVisible();
   const styleTab = page.getByRole("tab", { name: "styles/app.css" });
   const scriptTab = page.getByRole("tab", { name: "scripts/app.js" });

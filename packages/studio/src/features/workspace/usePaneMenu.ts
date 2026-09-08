@@ -9,6 +9,7 @@ import { SURFACES } from "./pane-actions.ts";
 interface PaneMenuActions {
   add: (surface: Surface, placement: Placement) => void;
   close: () => void;
+  move: (surface: Surface, placement: Placement) => void;
   swap: (surface: Surface) => void;
 }
 
@@ -36,6 +37,8 @@ export const usePaneMenu = (
     () => ({
       add: (surface, placement) =>
         apply({ tree: splitSurface(tree, target, surface, placement), compact: surface }),
+      move: (surface, placement) =>
+        apply({ tree: splitSurface(tree, surface, target, placement), compact: target }),
       close: () => apply({ tree: closeSurface(tree, target) }),
       swap: (surface) => apply({ tree: swapSurfaces(tree, target, surface) }),
     }),

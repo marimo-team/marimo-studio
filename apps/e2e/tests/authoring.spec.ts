@@ -91,6 +91,7 @@ test("reuses a warm view artifact with current notebook changes", async ({
   await page.getByRole("button", { name: "qa-view", exact: true }).click();
   await expect(preview.getByRole("heading", { name: "Qa View" })).toBeVisible();
   await expect(preview.locator("#qa-metric")).toHaveText("44");
+  await page.getByRole("button", { name: "Toggle Source editor" }).click();
   await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
 
   expect(await readWorkspaceFile(receiptPath)).toBe(warmedReceipt);
@@ -102,7 +103,7 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   await page.getByLabel("Workspace options").click();
-  await page.getByRole("button", { name: "Source" }).click();
+  await page.getByRole("button", { name: "Source", exact: true }).click();
   await page.getByRole("tab", { name: "src/index.html" }).click();
   const sourceStatus = page
     .getByRole("region", { name: "Source" })
@@ -153,6 +154,7 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
     count: 1,
     status: 204,
   });
+  await page.getByRole("button", { name: "Toggle Source editor" }).click();
   const htmlEditor = page.getByLabel("src/index.html source");
   await htmlEditor.focus();
   await htmlEditor.press(selectAllShortcut);
@@ -419,7 +421,7 @@ test("keeps Source tabs and the editor reachable at narrow widths", async ({ pag
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   await page.getByLabel("Workspace options").click();
-  await page.getByRole("button", { name: "Source" }).click();
+  await page.getByRole("button", { name: "Source", exact: true }).click();
   const tablist = page.getByRole("tablist", { name: "View source files" });
   const tabs = page.getByRole("tab");
   expect(await tabs.count()).toBeGreaterThan(3);

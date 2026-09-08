@@ -3,7 +3,7 @@
   background: color-mix(in srgb, var(--studio-background) 96%, transparent);
   border-block-end: 1px solid var(--studio-border);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
   min-width: 0;
   position: relative;
   z-index: 40;
@@ -298,4 +298,14 @@
   background: var(--studio-background);
   color: var(--studio-primary);
   font-weight: 600;
+}
+
+.studio-source-toggle {
+  gap: 0.35rem;
+  border-color: var(--studio-border);
+}
+
+.studio-source-toggle[aria-pressed="true"] {
+  background: var(--studio-subtle);
+  color: var(--studio-primary);
 }
