@@ -58,14 +58,16 @@ def _studio_cli_arguments(arguments: tuple[str, ...]) -> tuple[str, ...] | None:
     if arguments[:1] == ("marimo-studio",):
         return arguments[1:]
     if arguments[:1] == ("uvx",):
+        start = 3 if arguments[1:2] in (("--from",), ("--with",)) else 1
         try:
-            executable = arguments.index("marimo-studio", 1)
+            executable = arguments.index("marimo-studio", start)
         except ValueError:
             return None
         return arguments[executable + 1 :]
     if arguments[:2] == ("uv", "run"):
+        start = 4 if arguments[2:3] == ("--with",) else 2
         try:
-            executable = arguments.index("marimo-studio", 2)
+            executable = arguments.index("marimo-studio", start)
         except ValueError:
             return None
         return arguments[executable + 1 :]

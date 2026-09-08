@@ -191,11 +191,19 @@ if __name__ == "__main__":`,
     );
     await expect(firstPreview.locator('[mo-value="metric"]')).toHaveText("21");
     await expect(secondMetric).toHaveText("21");
+    const retriedQuery = browserDiagnostics.expectRequestAbort({
+      origin: studioOrigin,
+      method: "POST",
+      path: /^\/_marimo-studio\/query$/,
+      count: 1,
+      required: false,
+    });
     await firstPreview.getByRole("link", { name: "Use first query" }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get("tab-query")).toBe("first");
     await expect.poll(() => new URL(second.url()).searchParams.get("tab-query")).toBe("first");
     await expect(firstPreview.locator("#shared-query")).toHaveText("first");
     await expect(secondPreview.locator("#shared-query")).toHaveText("first");
+    await recoverRequestAbort(retriedQuery);
     await secondPreview.getByRole("link", { name: "Use second query" }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get("tab-query")).toBe("second");
     await expect.poll(() => new URL(second.url()).searchParams.get("tab-query")).toBe("second");

@@ -51,10 +51,10 @@ Each external dataset must be reachable from the visitor's browser.
 ## Run a live view locally
 
 Use the launch requirements printed by `view create`. A notebook whose view
-uses the default 0.1.0 provider runs with:
+uses the default Vanilla provider runs with:
 
 ```console
-uv run --with marimo-studio==0.1.0 marimo run analysis.py \
+uv run --with marimo-studio marimo run analysis.py \
   --sandbox \
   --headless \
   --host 127.0.0.1 \

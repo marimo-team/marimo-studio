@@ -13,7 +13,7 @@ saved projects.
 Open a notebook in an environment that contains Studio:
 
 ```console
-uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 `uvx` is [uv](https://docs.astral.sh/uv/)'s temporary command runner. It creates
@@ -26,7 +26,7 @@ notebook, view source, and rendered Preview together.
 For terminal-first setup with an existing saved notebook, run:
 
 ```console
-uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
+uvx marimo-studio view create dashboard --target analysis.py
 ```
 
 Saving Source builds a new immutable artifact. A failed build reports the source

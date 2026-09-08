@@ -25,7 +25,7 @@ each `view.toml` before operating an unfamiliar project.
 Open the notebook in an environment that contains both Marimo and Studio:
 
 ```console
-uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 Save an untitled notebook with **Save As**, then create the first view against
@@ -44,7 +44,7 @@ uvx marimo-studio starters
 React, Reveal.js, and Svelte creation require the Deno extra:
 
 ```console
-uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create dashboard \
+uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
   --target analysis.py \
   --starter marimo-studio/react:default
 ```

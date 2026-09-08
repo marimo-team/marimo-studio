@@ -50,13 +50,12 @@ uv version --package marimo-studio --bump patch
 ```
 
 Use `minor`, `major`, or an explicit final version when that matches the
-release. Set the same Studio pin in
-`apps/e2e/fixtures-provider/provider/pyproject.toml`, then commit both manifests
-and `uv.lock`. Commit `pnpm-lock.yaml` when JavaScript dependency inputs
+release. Commit the package manifest and `uv.lock` together.
+Commit `pnpm-lock.yaml` when JavaScript dependency inputs
 changed. Commit view-project lockfiles when a packaged starter changes its
 frontend dependencies.
 
-Update the versioned public communication surfaces as one change:
+Review the public communication surfaces as one change:
 
 - Root `README.md`
 - `packages/marimo-studio/README.md`
@@ -65,9 +64,10 @@ Update the versioned public communication surfaces as one change:
 - `skills/marimo-studio/SKILL.md`
 - `.github/release-notes/vX.Y.Z.md`
 
-Search the tracked public sources for the previous version before committing.
-Keep version claims, supported Marimo release, provider extras, and example
-commands aligned. [Documentation delivery](documentation.md#version-parity)
+Installation examples use `marimo-studio` or `marimo-studio[deno]` so they
+resolve the current release. Keep compatibility claims, the supported Marimo
+release, provider extras, and example commands aligned.
+[Documentation delivery](documentation.md#version-parity)
 owns the complete parity contract.
 
 Run the release gates from the repository root:
@@ -173,27 +173,16 @@ Treat a Marimo upgrade as an integration change before a version bump. Follow
 The release manifest, installed Marimo distribution, prepared frontend commit,
 and generated browser assets must identify the same release.
 
-## 0.1.0 release preflight
+## Publishing configuration
 
-Before tagging `v0.1.0`, verify the external repository and publishing settings
-once. These settings live outside Git and `scripts/release.sh`. Record the
-observed status and supporting GitHub or PyPI settings links in the release pull
-request. Keep credentials and private vulnerability details out of that record.
+Configure the PyPI Trusted Publisher for owner `marimo-team`, repository
+`marimo-studio`, workflow `publish.yml`, and GitHub environment `pypi`.
+GitHub Pages uses GitHub Actions to deploy the documentation at
+`https://marimo-team.github.io/marimo-studio/`.
 
-| Check                               | Required observation                                                                                                                     |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository visibility               | `marimo-team/marimo-studio` is public and `main` is the default branch                                                                   |
-| Issues                              | Issues are enabled and the public issue page opens                                                                                       |
-| GitHub Pages                        | Pages uses GitHub Actions, a successful `main` deployment exists, and the reported site URL is the intended documentation URL            |
-| Private vulnerability reporting     | The private report form opens from the repository Security view without submitting a report                                              |
-| Secret scanning and push protection | Availability and enabled state are recorded, with an explicit release decision for any unavailable control                               |
-| Branch protection or rules          | Effective settings for `main` are visible. Required checks match current workflows, and force-push and deletion policy is explicit       |
-| Trusted publishing                  | The PyPI publisher matches owner `marimo-team`, repository `marimo-studio`, workflow `publish.yml`, and GitHub environment `pypi`        |
-| Repository metadata                 | The description, homepage, and topics describe the current public product and documentation                                              |
-| Security reporting path             | `SECURITY.md` is visible on `main`, GitHub recognizes it as the security policy, and its private or fallback reporting path is reachable |
-
-Resolve every discrepancy before creating the tag, then continue with the exact
-release-commit preflight.
+Repository visibility and security settings are managed independently of package
+publication. The release preflight checks the version, tag, and successful
+workflows for the exact commit.
 
 ## Verify the exact release commit
 

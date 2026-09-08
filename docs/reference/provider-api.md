@@ -35,7 +35,7 @@ to the minor line that the provider has tested:
 [project]
 name = "acme-views"
 version = "0.1.0"
-dependencies = ["marimo-studio>=0.1,<0.2"]
+dependencies = ["marimo-studio"]
 
 [project.entry-points."marimo_studio.view_provider"]
 report = "acme_views:provider"

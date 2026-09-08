@@ -56,7 +56,7 @@ Create a typed React project with the pinned [Deno](https://docs.deno.com/)
 JavaScript and TypeScript toolchain:
 
 ```console
-uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create operations \
+uvx --from 'marimo-studio[deno]' marimo-studio view create operations \
   --target analysis.py \
   --starter marimo-studio/react:default
 ```
@@ -80,7 +80,7 @@ builds keep the lockfile frozen.
 Create a slide deck:
 
 ```console
-uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create briefing \
+uvx --from 'marimo-studio[deno]' marimo-studio view create briefing \
   --target analysis.py \
   --starter marimo-studio/react:reveal
 ```
@@ -94,7 +94,7 @@ controls and dependent results directly inside a slide.
 Create a typed Svelte project:
 
 ```console
-uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create explorer \
+uvx --from 'marimo-studio[deno]' marimo-studio view create explorer \
   --target analysis.py \
   --starter marimo-studio/svelte:default
 ```

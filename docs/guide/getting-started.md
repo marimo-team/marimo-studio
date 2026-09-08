@@ -20,7 +20,7 @@ stable location beside that file.
 Preview the filesystem and configuration changes:
 
 ```console
-uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard \
+uvx marimo-studio view create dashboard \
   --target analysis.py \
   --dry-run
 ```
@@ -28,7 +28,7 @@ uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard \
 Create the view after reviewing the plan:
 
 ```console
-uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard \
+uvx marimo-studio view create dashboard \
   --target analysis.py
 ```
 
@@ -54,10 +54,10 @@ launch command required by the selected starter.
 
 ## Open Studio
 
-For the default 0.1.0 starter, run:
+For the default Vanilla starter, run:
 
 ```console
-uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 Marimo's `--sandbox` flag resolves the notebook's declared Python dependencies
@@ -103,7 +103,7 @@ document.
 Start the notebook as an application:
 
 ```console
-uvx --with marimo-studio==0.1.0 marimo run analysis.py --sandbox
+uvx --with marimo-studio marimo run analysis.py --sandbox
 ```
 
 The default view opens at `/`. Another view named `report` opens at `/report/`.

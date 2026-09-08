@@ -14,7 +14,7 @@ examples, and site configuration into the
 | `apps/docs/.vitepress/config.mts`            | VitePress behavior, metadata, local search, theme, and base path              |
 | `apps/docs/examples.ts`                      | Documentation example families, technologies, labels, and exported paths      |
 | `apps/docs/scripts/build-examples.ts`        | Notebook and view export transaction                                          |
-| `apps/docs/scripts/source-integrity.test.ts` | Page metadata, release pins, route inventory, and heading fragments           |
+| `apps/docs/scripts/source-integrity.test.ts` | Page metadata, route inventory, and heading fragments                         |
 | `apps/docs/scripts/verify-build.ts`          | Built routes, assets, base paths, examples, and sibling links                 |
 | `apps/docs/public/`                          | Authored brand, icon, and screenshot assets plus generated examples           |
 | `development_docs/`                          | Contributor decisions, ownership, lifecycle, validation, and release workflow |
@@ -119,7 +119,7 @@ Source tests require:
 
 - Every Markdown page has a title and description.
 - Every Markdown page has one route.
-- Public release pins match the package version.
+- Installation examples resolve the current Studio release.
 - Heading fragments resolve.
 
 Final build verification requires:
@@ -149,12 +149,10 @@ Pull requests prove the documentation source and root-based site build. A
 
 ## Version parity
 
-A release version appears in several public source surfaces. Update and review
-them as one release unit:
+A release declares its version in `packages/marimo-studio/pyproject.toml` and
+`uv.lock`. Installation examples use `marimo-studio` or `marimo-studio[deno]`
+to resolve the current release. Review these communication surfaces together:
 
-- `packages/marimo-studio/pyproject.toml`
-- `uv.lock`
-- `apps/e2e/fixtures-provider/provider/pyproject.toml`
 - Root `README.md`
 - `packages/marimo-studio/README.md`
 - Public installation, compatibility, configuration, provider, and workflow
@@ -163,8 +161,8 @@ them as one release unit:
 - `.github/release-notes/vX.Y.Z.md`
 
 Keep compatibility claims aligned with `_compat/release.json`, Python package
-metadata, provider extras, and browser build metadata. Search for the prior
-version across the tracked public sources before release.
+metadata, provider extras, and browser build metadata. Release notes and
+migration guidance name the versions whose behavior they describe.
 
 ## Change checklist
 

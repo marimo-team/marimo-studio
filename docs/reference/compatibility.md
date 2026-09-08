@@ -10,11 +10,10 @@ notebook-to-view workflow, projection elements, and last-successful build
 behavior are supported product contracts. Before 1.0, CLI, Python, provider,
 and saved configuration contracts may change between minor releases.
 
-Pin Studio and third-party view providers in saved notebooks and deployed
-projects:
+Add Studio to the notebook or project dependencies:
 
 ```toml
-dependencies = ["marimo-studio==0.1.0"]
+dependencies = ["marimo-studio"]
 ```
 
 ## Upgrade from 0.0.6
@@ -36,20 +35,20 @@ and the generated `.owners/` records with the view project.
 
 Update command and Python callers with these replacements:
 
-| 0.0.6 contract                                                                 | 0.1.0 replacement                                                                |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `marimo-studio inspect TARGET --display`                                       | `marimo-studio notebook inspect --target TARGET --output-expressions`            |
-| `marimo-studio bind TARGET --cell 12 --as summary`                             | `marimo-studio notebook bind summary --target TARGET --cell 12`                  |
-| `marimo-studio view add TARGET --name report`                                  | `marimo-studio view create report --target TARGET`                               |
-| `marimo-studio view list TARGET`                                               | `marimo-studio status --target TARGET`                                           |
-| `marimo-studio view remove TARGET --name report`                               | `marimo-studio view remove report --target TARGET`                               |
-| `marimo-studio check TARGET --view report --runtime`                           | `marimo-studio validate report --target TARGET --level runtime`                  |
-| `marimo-studio analyze TARGET --view report --server URL`                      | `marimo-studio validate report --target TARGET --level browser --server URL`     |
-| `marimo-studio export TARGET --view report --output dist/report`               | `marimo-studio view export report --target TARGET --output dist/report`          |
-| `--format json --diagnostics jsonl`                                            | `--json`                                                                         |
-| Functions in `marimo_studio.agents`                                            | `marimo_studio.agent.current_workspace()` and its `Workspace` or `View` methods  |
-| Saved-workspace helpers in `marimo_studio.workspace`, `checks`, and `export`   | `marimo_studio.authoring.open_workspace()` and its `Workspace` or `View` methods |
-| `CellConfigSpec`, `CellRef`, `CellSpec`, and `SourceSpan` from `marimo_studio` | Import these provider-facing records from `marimo_studio.view_providers`         |
+| 0.0.6 contract                                                                 | 0.1.0 replacement                                                                      |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `marimo-studio inspect TARGET --display`                                       | `marimo-studio notebook inspect --target TARGET --output-expressions`                  |
+| `marimo-studio bind TARGET --cell 12 --as summary`                             | `marimo-studio notebook bind summary --target TARGET --cell 12`                        |
+| `marimo-studio view add TARGET --name report`                                  | `marimo-studio view create report --target TARGET`                                     |
+| `marimo-studio view list TARGET`                                               | `marimo-studio status --target TARGET`                                                 |
+| `marimo-studio view remove TARGET --name report`                               | `marimo-studio view remove report --target TARGET`                                     |
+| `marimo-studio check TARGET --view report --runtime`                           | `marimo-studio validate report --target TARGET --level runtime`                        |
+| `marimo-studio analyze TARGET --view report --server URL`                      | `marimo-studio validate report --target TARGET --level browser --server URL`           |
+| `marimo-studio export TARGET --view report --output dist/report`               | `marimo-studio view export report --target TARGET --output dist/report --runtime wasm` |
+| `--format json --diagnostics jsonl`                                            | `--json`                                                                               |
+| Functions in `marimo_studio.agents`                                            | `marimo_studio.agent.current_workspace()` and its `Workspace` or `View` methods        |
+| Saved-workspace helpers in `marimo_studio.workspace`, `checks`, and `export`   | `marimo_studio.authoring.open_workspace()` and its `Workspace` or `View` methods       |
+| `CellConfigSpec`, `CellRef`, `CellSpec`, and `SourceSpan` from `marimo_studio` | Import these provider-facing records from `marimo_studio.view_providers`               |
 
 Notebook-local `[tool.marimo-studio]` configuration and project
 `pyproject.toml` configuration are mutually exclusive for one notebook. Keep
@@ -121,9 +120,8 @@ query, replay, readiness, and observation messages at the parent boundary.
 ## Third-party view providers
 
 Studio 0.1 requires provider API version `1`. Set
-`ProviderInfo.api_version=PROVIDER_API_VERSION` and give a provider package a
-bounded Studio dependency such as `marimo-studio>=0.1,<0.2`. Test the provider
-before expanding that range to a newer Studio minor release.
+`ProviderInfo.api_version=PROVIDER_API_VERSION` and declare `marimo-studio`
+as a dependency. Test the provider against each Studio minor release it supports.
 
 The [View provider API](provider-api.md) defines process execution,
 permissions, cancellation, build inputs, output validation, and conformance

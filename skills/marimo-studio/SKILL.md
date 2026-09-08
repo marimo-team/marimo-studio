@@ -529,10 +529,10 @@ print(status.launch_requirements)
 ```
 
 Pass every exact requirement through the environment tool. A notebook whose
-only provider is the default 0.1.0 Vanilla provider runs with:
+only provider is the default Vanilla provider runs with:
 
 ```console
-uv run --with marimo-studio==0.1.0 marimo run notebook.py --sandbox
+uv run --with marimo-studio marimo run notebook.py --sandbox
 ```
 
 Preflight the intended static runtime before publishing:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,7 @@ def test_setup_normalizes_studio_constraints_and_preserves_notebook_body(
         str(value)
         for value in document["dependencies"]
         if "marimo-studio" in str(value)
-    ] == ["marimo-studio==0.1.0"]
+    ] == [f"marimo-studio=={version('marimo-studio')}"]
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
 
@@ -81,7 +82,9 @@ def test_view_deletion_keeps_dependencies_and_updates_the_default(
     studio = load_studio(notebook_path)
     before = read_notebook_metadata(notebook_path)
     assert before is not None
-    assert list(before["dependencies"]) == ["marimo-studio[deno]==0.1.0"]
+    assert list(before["dependencies"]) == [
+        f"marimo-studio[deno]=={version('marimo-studio')}"
+    ]
 
     delete_view(studio, "dashboard")
 

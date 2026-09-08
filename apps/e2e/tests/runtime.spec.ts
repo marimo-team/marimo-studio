@@ -435,8 +435,7 @@ test("preserves runtime state while modes and controls change", async ({
   expect(serverElement).not.toBeNull();
   expect(wasmElement).not.toBeNull();
 
-  await page.getByLabel("Browser preview runtime").click();
-  await page.getByRole("button", { name: /Python/ }).click();
+  await activateServerPreview(page, browserDiagnostics);
   for (const mode of ["Notebook", "Preview", "Develop", "Notebook", "Develop"]) {
     await page.getByRole("button", { name: mode, exact: true }).click();
   }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -153,7 +154,7 @@ def test_repeated_setup_and_vanilla_preserve_the_react_requirement(
     prepare_view(notebook_path, "report", starter="marimo-studio/vanilla:vanilla")
 
     dependencies = _dependencies(notebook_path)
-    assert dependencies == ("marimo-studio[deno]==0.1.0",)
+    assert dependencies == (f"marimo-studio[deno]=={version('marimo-studio')}",)
 
 
 def test_setup_keeps_requirements_for_every_installed_third_party_view(
