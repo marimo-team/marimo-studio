@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from functools import partial
 
@@ -10,9 +9,7 @@ from starlette.requests import Request
 from starlette.responses import (
     JSONResponse,
     Response,
-    StreamingResponse,
 )
-from starlette.types import Receive, Scope, Send
 
 import marimo_studio._delivery.assets as _assets
 from marimo_studio._delivery.urls import (
@@ -20,12 +17,9 @@ from marimo_studio._delivery.urls import (
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
     SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
+    SUPPORT_PATH,
     WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
     WORKSPACE_STREAM_QUERY_PARAM,
-)
-from marimo_studio._processes.ownership import (
-    propagate_cancellation,
-    settle_ownership,
 )
 from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._server.agent.api import (
@@ -56,7 +50,10 @@ from marimo_studio._server.ports import (
     ServerGateway,
     SessionState,
 )
-from marimo_studio._server.presentation.capability import PresentationCapability
+from marimo_studio._server.presentation.capability import (
+    PresentationCapability,
+    presentation_capability_url,
+)
 from marimo_studio._server.presentation.ports import KernelProjectionHost
 from marimo_studio._server.presentation.projection_routes import (
     outputs_response,
@@ -71,6 +68,7 @@ from marimo_studio._server.runtime.routes import (
     runtime_config_response,
 )
 from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._server.streaming import OwnedStreamingResponse
 from marimo_studio._server.studio.document import studio_bootstrap_payload
 from marimo_studio._server.studio.editor_capability import (
     editor_binding_capability_matches,
@@ -97,68 +95,6 @@ from marimo_studio._server.zero_python_api import zero_python_response
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
-
-
-class StreamingResponseCleanupError(RuntimeError):
-    """Report a body-owner failure observed during response teardown."""
-
-    def __init__(self, errors: tuple[Exception, ...]) -> None:
-        self.errors = errors
-        super().__init__(
-            "Streaming response cleanup failed: "
-            + ", ".join(str(error) for error in errors)
-        )
-
-
-class _OwnedStreamingResponse(StreamingResponse):
-    """Close an async body iterator whenever response delivery ends."""
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        stream = asyncio.create_task(self.stream_response(send))
-        disconnect = asyncio.create_task(self.listen_for_disconnect(receive))
-        observed: set[asyncio.Task[None]] = set()
-        try:
-            completed, _pending = await asyncio.wait(
-                (stream, disconnect),
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if stream in completed:
-                observed.add(stream)
-                await stream
-            if disconnect in completed:
-                observed.add(disconnect)
-                await disconnect
-        finally:
-            stream.cancel()
-            disconnect.cancel()
-            results, cancellation = await settle_ownership(
-                asyncio.gather(stream, disconnect, return_exceptions=True)
-            )
-            errors = tuple(
-                result
-                for task, result in zip(
-                    (stream, disconnect),
-                    results,
-                    strict=True,
-                )
-                if task not in observed and isinstance(result, Exception)
-            )
-            if errors:
-                error = StreamingResponseCleanupError(errors)
-                if cancellation is not None:
-                    raise error from cancellation
-                raise error
-            propagate_cancellation(cancellation)
-        if self.background is not None:
-            await self.background()
-
-    async def stream_response(self, send: Send) -> None:
-        try:
-            await super().stream_response(send)
-        finally:
-            close = getattr(self.body_iterator, "aclose", None)
-            if close is not None:
-                await close()
 
 
 def _manifest_source_view(support_path: str) -> str | None:
@@ -549,7 +485,17 @@ async def _view_response(
             notebook_scope.publications,
             view_name,
             route.removeprefix("zero-python/"),
+            clients=notebook_scope.clients,
             allow_refresh=context.mode == "edit" and has_edit_access(request.scope),
+            public_path=(
+                presentation_capability_url(
+                    context,
+                    presentation_capability.token,
+                    f"{SUPPORT_PATH}/views/{view_name}/{route}",
+                )
+                if presentation_capability is not None
+                else None
+            ),
         )
     if route == "runtimes" and request.method == "GET":
         return await runtime_availability_response(
@@ -582,7 +528,6 @@ async def _view_response(
                 notebook_scope.clients,
                 view_name,
                 sessions=session_state,
-                runtimes=runtimes,
             )
             if request.method == "GET"
             else Response(status_code=405)
@@ -699,7 +644,7 @@ def events_response(
             status_code=404,
             headers=NO_STORE,
         )
-    return _OwnedStreamingResponse(
+    return OwnedStreamingResponse(
         change_events(
             studio,
             view_name,

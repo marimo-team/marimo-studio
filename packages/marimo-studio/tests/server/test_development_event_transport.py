@@ -6,15 +6,15 @@ from typing import Any, cast
 import pytest
 
 from marimo_studio._server.development import routes as dev
-from marimo_studio._server.support import (
+from marimo_studio._server.streaming import (
+    OwnedStreamingResponse,
     StreamingResponseCleanupError,
-    _OwnedStreamingResponse,
 )
 
 from ..async_test_support import wait_for_event
 
 
-async def _disconnect_after_first_body(response: _OwnedStreamingResponse) -> None:
+async def _disconnect_after_first_body(response: OwnedStreamingResponse) -> None:
     body_sent = asyncio.Event()
 
     async def send(message: dict[str, object]) -> None:
@@ -114,7 +114,7 @@ def test_streaming_response_closes_its_event_owner_after_delivery_failure() -> N
             if message["type"] == "http.response.body":
                 raise OSError("client disconnected")
 
-        response = _OwnedStreamingResponse(events())
+        response = OwnedStreamingResponse(events())
         with pytest.raises(OSError, match="client disconnected"):
             await response.stream_response(cast(Any, send))
         return closed
@@ -134,7 +134,7 @@ def test_streaming_response_closes_its_owner_on_asgi_disconnect() -> None:
             finally:
                 closed = True
 
-        response = _OwnedStreamingResponse(events())
+        response = OwnedStreamingResponse(events())
         await _disconnect_after_first_body(response)
         return closed
 
@@ -150,7 +150,7 @@ def test_streaming_response_reports_owner_failure_on_asgi_disconnect() -> None:
             finally:
                 raise OSError("event owner close failed")
 
-        response = _OwnedStreamingResponse(events())
+        response = OwnedStreamingResponse(events())
         with pytest.raises(
             StreamingResponseCleanupError,
             match="event owner close failed",

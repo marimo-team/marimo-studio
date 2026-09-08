@@ -28,6 +28,7 @@ notebook configuration
 | `_delivery`                | Live and static runtime composition                        |
 | `_notebook`                | Saved notebook inspection and cell identity                |
 | `_projections`             | Notebook symbols, target resolution, values, and evidence  |
+| `_prepared`                | View bindings, export specifications, and manifests        |
 | `_filesystem`              | Secure path operations and bounded tree traversal          |
 | `_processes`               | Supervision, cancellation, and output bounds               |
 | `_authoring`               | Shared workspace and view application operations           |
@@ -52,6 +53,34 @@ notebook configuration
 
 The contributor guide and detailed architecture pages link to this table as
 the canonical ownership map.
+
+## Prepared runtime boundary
+
+[marimo-export](https://github.com/marimo-team/marimo-export) prepares and reads
+a finite relation of notebook states and outputs. Studio compiles each view's
+projection declarations into that relation, then presents the selected results.
+
+| Owner         | Contract                                                                           |
+| ------------- | ---------------------------------------------------------------------------------- |
+| Marimo        | Reactive execution, controls, serialization, and computation-cache validity        |
+| marimo-export | Finite inputs and outputs, preparation, integrity, leases, and loading             |
+| Studio        | View selection, admission and refresh policy, routes, runtime UX, and native hosts |
+
+Export capabilities use export-owned records such as `ExportPlan`,
+`PreparedExport`, and `ExportState`. Studio passes application decisions through
+admission and refresh callbacks. The export publication controller owns their
+work lifetimes and preserves the last-good export when a candidate is rejected.
+
+The browser has two commit boundaries. The export state controller chooses a
+complete exported state. Studio's native presentation transaction stages model
+replay, UI values, and visible hosts together. Native model checkpoints and
+remount decisions stay with `packages/marimo-frontend`, which shares one pinned
+Marimo frontend owner across execution environments.
+
+Keep export representation loading separate from presentation adaptation.
+Export verifies and loads a named set of outputs. Studio chooses the permitted
+codecs, attaches native Arrow provenance, and maps loaded values to its host
+selectors and revisions.
 
 ## Durable records
 

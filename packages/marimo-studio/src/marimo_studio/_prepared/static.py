@@ -32,7 +32,6 @@ class StaticPublication:
     view: str
     plan_digest: str
     state_space_source: StateSpaceSource
-    _repository: ExportRepository
 
     @property
     def instance(self) -> str:
@@ -55,12 +54,7 @@ class StaticPublication:
         )
 
     def close(self) -> None:
-        try:
-            self.prepared.close()
-        except BaseException as error:
-            attempt_cleanup(error, self._repository.close)
-            raise
-        self._repository.close()
+        self.prepared.close()
 
 
 class StaticPublicationSource(Protocol):
@@ -89,17 +83,14 @@ class _PreparedPublicationSource:
     ) -> StaticPublication:
         compiled: CompiledExportView | None = None
         prepared: PreparedExport | None = None
-        repository: ExportRepository | None = None
         project = snapshot.resolved.views[snapshot.view_name].view
         state_space_source = load_state_space_source(project.root)
         try:
             compiled = _compiled_export_view(snapshot, state_space_source)
             state_space_source.require_current()
-            repository = ExportRepository.open()
             prepared = prepare(
                 snapshot.resolved.workspace.notebook,
                 spec=compiled.spec,
-                repository=repository,
                 timeout=timeout,
                 progress=progress,
             )
@@ -117,16 +108,12 @@ class _PreparedPublicationSource:
                     }
                 ),
                 state_space_source=state_space_source,
-                _repository=repository,
             )
             prepared = None
-            repository = None
             return publication
         except BaseException as error:
             if prepared is not None:
                 attempt_cleanup(error, prepared.close)
-            if repository is not None:
-                attempt_cleanup(error, repository.close)
             if isinstance(error, MarimoExportError):
                 if compiled is not None:
                     raise _publication_error(error, compiled, snapshot) from error

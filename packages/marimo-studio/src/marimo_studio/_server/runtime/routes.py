@@ -30,6 +30,11 @@ from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._server.runtime.progress import RuntimeProgressSink
+from marimo_studio._server.runtime.stream import (
+    RUNTIME_STREAM_MEDIA_TYPE,
+    runtime_config_stream,
+)
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import RuntimeConfigTooLargeError
 from marimo_studio.errors._internal import RuntimeSyncError
@@ -175,40 +180,51 @@ async def runtime_config_response(
                 "Studio is waiting for notebook startup.",
                 code="runtime-startup-pending",
             )
-    try:
-        payload = await build_runtime_config(
-            snapshot,
-            context,
-            runtimes,
-            request.query_params.get("runtime"),
-            lookup_session_id,
-            lookup_session_id if client_id is not None else None,
-            presentation_session_id,
-            runtime_session_id,
-        )
-        encoded = await asyncio.to_thread(encode_runtime_config, payload)
-    except RuntimeSyncError as error:
-        return _session_pending(str(error))
-    except RuntimeConfigTooLargeError as error:
-        return error_response(error)
-    if client_id is not None:
-        assert preview_session_id is not None
-        runtime = payload.get("runtime")
-        if (
-            isinstance(runtime, dict)
-            and runtime.get("id") == "server"
-            and runtime_session_id is not None
-            and lookup_session_id is not None
-            and not attachment.attach(
+
+    async def configuration(progress: RuntimeProgressSink | None = None) -> Response:
+        try:
+            payload = await build_runtime_config(
+                snapshot,
                 context,
-                runtime_session_id,
+                runtimes,
+                request.query_params.get("runtime"),
                 lookup_session_id,
+                lookup_session_id if client_id is not None else None,
+                presentation_session_id,
+                runtime_session_id,
+                client_id=client_id,
+                progress=progress,
             )
-        ):
-            return _session_pending(
-                "Studio is waiting for an earlier preview connection to finish."
-            )
-    return Response(encoded, media_type="application/json", headers=NO_STORE)
+            encoded = await asyncio.to_thread(encode_runtime_config, payload)
+        except RuntimeSyncError as error:
+            return _session_pending(str(error))
+        except RuntimeConfigTooLargeError as error:
+            return error_response(error)
+        if client_id is not None:
+            assert preview_session_id is not None
+            runtime = payload.get("runtime")
+            if (
+                isinstance(runtime, dict)
+                and runtime.get("id") == "server"
+                and runtime_session_id is not None
+                and lookup_session_id is not None
+                and not attachment.attach(
+                    context,
+                    runtime_session_id,
+                    lookup_session_id,
+                )
+            ):
+                return _session_pending(
+                    "Studio is waiting for an earlier preview connection to finish."
+                )
+        return Response(encoded, media_type="application/json", headers=NO_STORE)
+
+    if any(
+        accepted.strip() == RUNTIME_STREAM_MEDIA_TYPE
+        for accepted in request.headers.get("accept", "").split(",")
+    ):
+        return runtime_config_stream(configuration)
+    return await configuration()
 
 
 def _invalid_studio_session() -> JSONResponse:

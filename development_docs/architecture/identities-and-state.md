@@ -53,7 +53,7 @@ latest build attempt, and provider provenance.
 | Workspace stream generation  | Browser and server event coordinators | One promoted event stream and its initial baseline                |
 | Presentation session ID      | Presentation routing                  | One isolated page audience                                        |
 | Runtime session ID           | Runtime and Marimo session adapters   | One Server runtime session used by a presentation                 |
-| Runtime instance             | Runtime catalog                       | One mounted Server or WebAssembly runtime incarnation             |
+| Runtime instance             | Runtime catalog                       | One mounted runtime incarnation                                   |
 | Document lifecycle ID        | Presentation document                 | One loaded presentation document                                  |
 | Request ID                   | Agent observation owner               | One activation, observation, or query operation                   |
 | Observation sequence         | Browser observer                      | Increasing evidence within one request                            |
@@ -88,6 +88,19 @@ Moving a connected host preserves its instance ID and resource owners. Changing
 its target preserves the DOM instance ID, releases resource ownership for the
 old target, and acquires ownership for the new target. Removing the host
 releases its final owners.
+
+## Prepared publication identities
+
+`PreparedViewRequest.key` contains view, editor binding, and presentation
+revision. That key selects the current publication. State-space source identity
+belongs to the candidate admission check, so a rejected replacement retains
+the preceding publication under the same key.
+
+Marimo-export assigns the immutable export instance and owns its generation
+lease. Studio's manifest adds view, document digest, plan digest, and projection
+bindings. Current-manifest requests resolve the browser client to its editor
+binding and require the presentation revision. Immutable asset requests name
+the export instance and a recorded relative path.
 
 ## Build state
 

@@ -70,6 +70,13 @@ export const useToolbar = ({
     runtime,
     runtimeDisabled: viewSnapshot.selecting !== undefined,
     runtimes: bootstrap.runtimes,
-    status: previewState.status,
+    status:
+      previewState.progress === null
+        ? previewState.status
+        : {
+            ...previewState.status,
+            message: previewState.progress.message,
+            state: "loading" as const,
+          },
   };
 };

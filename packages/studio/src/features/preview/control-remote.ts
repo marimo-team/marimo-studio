@@ -1,22 +1,24 @@
-import { parseRuntimeConfig } from "@marimo-studio/protocol/runtime-config";
+import { editorControlsSchema } from "@marimo-studio/protocol/frame-bridge";
+import { STUDIO_CLIENT_QUERY_PARAM } from "@marimo-studio/protocol/query";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import type { RuntimeCellMap } from "./control-sync.ts";
 
 export interface RuntimeControlSnapshot {
   revision: string;
-  runtime: string;
   controls: RuntimeCellMap;
 }
 
 export const fetchRuntimeControls = async (
   supportUrl: string,
-  runtime: string,
+  clientId: string,
   sessionId: string,
+  revision: string,
   signal?: AbortSignal,
 ): Promise<RuntimeControlSnapshot> => {
-  const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
-  url.searchParams.set("runtime", runtime);
+  const url = new URL(appendUrlPath(supportUrl, "controls", globalThis.location.href));
+  url.searchParams.set(STUDIO_CLIENT_QUERY_PARAM, clientId);
+  url.searchParams.set("revision", revision);
   const response = await fetch(url, {
     cache: "no-store",
     headers: { "Marimo-Session-Id": sessionId },
@@ -25,15 +27,5 @@ export const fetchRuntimeControls = async (
   if (!response.ok) {
     throw new Error(`Control configuration failed with ${response.status}`);
   }
-  const config = parseRuntimeConfig(await response.json());
-  if (config.runtime.id !== runtime) {
-    throw new Error(
-      `Control configuration selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,
-    );
-  }
-  return {
-    revision: config.revision,
-    runtime: config.runtime.id,
-    controls: { cells: config.runtimeBindings.cellRefs },
-  };
+  return editorControlsSchema.parse(await response.json());
 };

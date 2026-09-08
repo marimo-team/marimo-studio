@@ -179,7 +179,7 @@ def presentation_renewal_url(
     target: str = "/",
 ) -> str:
     """Return the document-only URL for one presentation session."""
-    return _capability_url(
+    return presentation_capability_url(
         context,
         presentation_renewal_capability(
             context,
@@ -200,7 +200,7 @@ def presentation_revision_url(
     runtime_session_id: str | None = None,
 ) -> str:
     """Return the revision-bound URL for one presentation runtime."""
-    return _capability_url(
+    return presentation_capability_url(
         context,
         presentation_revision_capability(
             context,
@@ -451,6 +451,6 @@ def _revision_token(
     return f"{unsigned}.{signature}"
 
 
-def _capability_url(context: ServerContext, token: str, target: str) -> str:
+def presentation_capability_url(context: ServerContext, token: str, target: str) -> str:
     suffix = target if target.startswith("/") else f"/{target}"
     return public_url(context.base_url, f"{PRESENTATION_PATH}/{token}{suffix}")

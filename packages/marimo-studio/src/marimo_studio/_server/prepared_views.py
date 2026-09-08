@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from threading import RLock
 from typing import Protocol
 
 from marimo_export import ExportRepository, PreparedExport
 from marimo_export.errors import CaptureLimitError, MarimoExportError
 from marimo_export.prepared import PreparedAsset
 from marimo_export.publication import (
+    PreparedPublication,
     PreparedPublicationCandidate,
     PreparedPublicationController,
 )
@@ -22,16 +22,18 @@ from marimo_export.wire import canonical_json_sha256
 from marimo_studio._prepared.cleanup import attempt_cleanup
 from marimo_studio._prepared.compiler import CompiledExportView
 from marimo_studio._prepared.resolve import resolve_prepared_view
+from marimo_studio._processes.ownership import propagate_cancellation, settle_ownership
+from marimo_studio._server.prepared_progress import PreparedProgress
 from marimo_studio._server.prepared_view_models import (
     PreparedView,
     PreparedViewMetadata,
     PreparedViewRequest,
 )
+from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgressSink
 from marimo_studio.errors import PublicationError, PublicationLimitError
 
 _ROUTE_GRACE_SECONDS = 60.0
-_PreparedViewKey = tuple[str, str, str, str]
-_PreparedRouteKey = tuple[str, str, str]
+_PreparedViewKey = tuple[str, str, str]
 
 
 class Connector(Protocol):
@@ -57,8 +59,6 @@ class PreparedViewRegistry:
     ) -> None:
         self.notebook = notebook.resolve()
         self._connector = connector
-        self._lock = RLock()
-        self._current_keys: dict[_PreparedRouteKey, _PreparedViewKey] = {}
         self._publications: PreparedPublicationController[
             _PreparedViewKey,
             PreparedViewMetadata,
@@ -73,20 +73,23 @@ class PreparedViewRegistry:
     def active(self) -> bool:
         return self._publications.active
 
-    async def prepare(self, request: PreparedViewRequest) -> PreparedView:
+    async def prepare(
+        self,
+        request: PreparedViewRequest,
+        *,
+        progress: RuntimeProgressSink | None = None,
+    ) -> PreparedView:
         prepared = await self._publications.prepare(
             request.key,
             lambda repository, cancelled: self._prepare(
                 request,
                 repository,
                 cancelled,
+                progress,
             ),
+            admit=_admit_publication,
         )
-        selected = PreparedView(prepared)
-        request.state_space_source.require_current()
-        with self._lock:
-            self._current_keys[request.key[:3]] = request.key
-        return selected
+        return PreparedView(prepared)
 
     def current(self, view: str, binding_id: str, revision: str) -> PreparedView | None:
         return self._selected((view, binding_id, revision), poll=False)
@@ -101,41 +104,23 @@ class PreparedViewRegistry:
 
     def _selected(
         self,
-        route: _PreparedRouteKey,
+        route: _PreparedViewKey,
         *,
         poll: bool,
     ) -> PreparedView | None:
-        with self._lock:
-            key = self._current_keys.get(route)
-        if key is None:
-            return None
         prepared = (
-            self._publications.poll(key) if poll else self._publications.current(key)
+            self._publications.poll(route, should_refresh=_observations_changed)
+            if poll
+            else self._publications.current(route)
         )
         if prepared is None:
             return None
-        selected = PreparedView(prepared)
-        try:
-            selected.request.state_space_source.require_current()
-        except PublicationError:
-            with self._lock:
-                if self._current_keys.get(route) == key:
-                    self._current_keys.pop(route, None)
-            return None
-        return selected
+        return PreparedView(prepared)
 
     def release_binding(self, binding_id: str, view: str | None = None) -> None:
         for key in self._publications.keys:
             if key[1] == binding_id and (view is None or key[0] == view):
                 self._publications.release(key)
-        with self._lock:
-            removed = tuple(
-                route
-                for route in self._current_keys
-                if route[1] == binding_id and (view is None or route[0] == view)
-            )
-            for route in removed:
-                self._current_keys.pop(route, None)
 
     async def publication_asset(
         self,
@@ -153,20 +138,27 @@ class PreparedViewRegistry:
         request: PreparedViewRequest,
         repository: ExportRepository,
         cancelled: Callable[[], bool],
+        progress: RuntimeProgressSink | None,
     ) -> PreparedPublicationCandidate[PreparedViewMetadata]:
         prepared: PreparedExport | None = None
         try:
+            if progress is not None:
+                progress(RuntimeProgress("Inspecting notebook states"))
             with self._connector(
                 request.server,
                 server_token=request.server_token,
             ) as client:
                 session = client.session(request.session_id)
                 request.state_space_source.require_current()
+                export_progress = (
+                    PreparedProgress(progress) if progress is not None else None
+                )
                 resolved = resolve_prepared_view(
                     request.snapshot,
                     request.state_space_source,
                     session,
                     repository,
+                    progress=export_progress,
                 )
                 if cancelled():
                     raise asyncio.CancelledError
@@ -174,6 +166,7 @@ class PreparedViewRegistry:
                     spec=resolved.compiled.spec,
                     repository=repository,
                     cancelled=cancelled,
+                    progress=export_progress,
                 )
                 request.state_space_source.require_current()
             metadata = _prepared_view_metadata(
@@ -191,6 +184,25 @@ class PreparedViewRegistry:
             if isinstance(error, MarimoExportError):
                 raise PublicationError(str(error)) from error
             raise
+
+
+async def _admit_publication(
+    candidate: PreparedPublicationCandidate[PreparedViewMetadata],
+) -> None:
+    _, cancellation = await settle_ownership(
+        asyncio.to_thread(candidate.metadata.request.state_space_source.require_current)
+    )
+    propagate_cancellation(cancellation)
+
+
+def _observations_changed(
+    repository: ExportRepository,
+    publication: PreparedPublication[_PreparedViewKey, PreparedViewMetadata],
+) -> bool:
+    return (
+        repository.observation_revision(publication.plan)
+        > publication.plan.observation_revision
+    )
 
 
 def _prepared_view_metadata(

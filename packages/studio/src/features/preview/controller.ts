@@ -4,6 +4,7 @@ import type {
   RuntimeStatusReport,
 } from "@marimo-studio/protocol/browser-observations";
 import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
+import type { RuntimeProgress } from "@marimo-studio/protocol/runtime-progress";
 
 import {
   parsePreviewMessage,
@@ -14,7 +15,10 @@ import {
   type ViewObservationMessage,
   type ViewPreviewMessage,
 } from "@marimo-studio/protocol/preview-messages";
-import { DOCUMENT_LIFECYCLE_QUERY_PARAM } from "@marimo-studio/protocol/query";
+import {
+  DOCUMENT_LIFECYCLE_QUERY_PARAM,
+  STUDIO_CLIENT_QUERY_PARAM,
+} from "@marimo-studio/protocol/query";
 
 import type { PreviewAdmissionMessage, PreviewIdentity } from "./admission.ts";
 import type { ControlFrameConnector, ControlSyncStatus } from "./control-sync.ts";
@@ -34,6 +38,8 @@ import { RuntimeDiagnostics } from "./runtime-diagnostics.ts";
 import { previewStatus, type PreviewStatus } from "./status.ts";
 
 export interface PreviewFrameState {
+  rendered: boolean;
+  progress: RuntimeProgress | null;
   url: string;
   lifecycleId: number;
   status: PreviewStatus;
@@ -129,6 +135,8 @@ export class PreviewController {
     this.runtimeDiagnostics = new RuntimeDiagnostics({ runtime, view: initialView });
     const runtimeStatus = this.runtimeDiagnostics.report();
     this.state = {
+      rendered: false,
+      progress: null,
       url: this.viewUrl(initialView, runtime, this.navigation),
       lifecycleId: this.activeLifecycleId,
       status: previewStatus(runtime, runtimeStatus.current),
@@ -139,6 +147,11 @@ export class PreviewController {
       editor,
       preview,
       supportUrl: () => this.supportUrl(this.view),
+      clientId: () =>
+        new URL(
+          this.viewUrl(this.view, this.runtime, this.navigation),
+          globalThis.location.href,
+        ).searchParams.get(STUDIO_CLIENT_QUERY_PARAM) ?? undefined,
       connect: connectControlFrame,
       fetchControls: fetchRuntimeControls,
       status: (status, revision, sessionId) =>
@@ -169,6 +182,7 @@ export class PreviewController {
       clearSession: () => delete this.preview.dataset.sessionId,
       failView: () => this.completeViewSwitch(false, this.activeLifecycleId),
       localizedInteractive: (identity) => {
+        this.state = { ...this.state, rendered: true };
         this.setPreviewSession(identity);
         this.completeViewSwitch(true, this.activeLifecycleId);
         if (this.activeOwner && this.activationsInProgress === 0) {
@@ -415,11 +429,23 @@ export class PreviewController {
   }
 
   presentationChanged(revision?: string): void {
+    this.retireProgress();
     this.admission.presentationChanged(revision ?? null, this.admissionOwner());
   }
 
   presentationBaseline(revision: string | null): void {
+    const baseline = this.admission.snapshot.presentation.baseline;
+    if (baseline.phase === "known" && baseline.revision !== revision) {
+      this.retireProgress();
+    }
     this.admission.presentationBaseline(revision, this.admissionOwner());
+  }
+
+  private retireProgress(): void {
+    if (this.state.progress !== null) {
+      this.state = { ...this.state, progress: null };
+      this.report(this.state);
+    }
   }
 
   private admissionOwner(): "active" | "inactive" {
@@ -439,6 +465,7 @@ export class PreviewController {
   }
 
   private commitReadyIdentity(identity: PreviewIdentity): void {
+    this.state = { ...this.state, rendered: true };
     this.setPreviewSession(identity);
     this.showReadyStatus();
     if (!this.activeOwner) {
@@ -533,6 +560,21 @@ export class PreviewController {
 
   private receive(message: PresentationToStudioMessage): void {
     switch (message.type) {
+      case "marimo-studio:view-progress": {
+        const baseline = this.admission.snapshot.presentation.baseline;
+        if (
+          message.view === this.view &&
+          (baseline.phase === "unknown" || message.revision === baseline.revision) &&
+          this.state.status.state === "loading"
+        ) {
+          this.state = {
+            ...this.state,
+            progress: message.progress ?? { message: this.state.status.message },
+          };
+          this.report(this.state);
+        }
+        return;
+      }
       case "marimo-studio:navigate-view":
         void this.navigate(message.view, { query: message.query, hash: message.hash });
         return;
@@ -701,6 +743,7 @@ export class PreviewController {
   }
 
   private reloadCurrentDocument(): void {
+    this.state = { ...this.state, rendered: false, progress: null };
     this.cancelRetry();
     this.controls.stop();
     this.controlDiagnostic = undefined;
@@ -820,6 +863,12 @@ export class PreviewController {
 
   private updateRuntimeStatus(runtimeStatus: RuntimeStatusReport, url = this.state.url): void {
     this.state = {
+      ...this.state,
+      progress:
+        runtimeStatus.current.phase === "connecting" ||
+        runtimeStatus.current.phase === "synchronizing"
+          ? this.state.progress
+          : null,
       url,
       lifecycleId: this.activeLifecycleId,
       runtimeStatus,

@@ -2,6 +2,7 @@ import {
   parseFrameBridgeMessage,
   type FrameBridgeMessage,
   type FrameControlUpdate,
+  type ControlMetadata,
 } from "@marimo-studio/protocol/frame-bridge";
 import { vi } from "vite-plus/test";
 
@@ -74,6 +75,7 @@ export const installFrameBridge = (
   source: TestFrameSource,
   identity: TestFrameIdentity,
   controls: readonly FrameControlUpdate[] = [],
+  controlMetadata: ControlMetadata = { cells: {} },
 ): void => {
   frame.dataset.previewFrame = "";
   frame.dataset.previewLifecycleId = String(identity.lifecycleId);
@@ -88,6 +90,7 @@ export const installFrameBridge = (
     type: "marimo-studio:frame-bridge-ready",
     generation: "generation-test",
     controls: [...controls],
+    controlMetadata,
     ...identity,
   });
 };

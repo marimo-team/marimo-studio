@@ -4,10 +4,12 @@ import { DOCUMENT_LIFECYCLE_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
 import { studioEditorSessionId } from "./authoring-test-support.ts";
 import {
+  type BrowserDiagnostics,
   dashboardHtmlPath,
   editorFrame,
   editorSlider,
   expect,
+  expectPreviewInteractive,
   presentationFrame,
   readWorkspaceFile,
   recoverRequestAbort,
@@ -22,14 +24,25 @@ import {
   writeDashboardSource,
 } from "./fixture.ts";
 
+const activateServerPreview = async (
+  page: Page,
+  diagnostics: BrowserDiagnostics,
+): Promise<void> => {
+  await page.getByLabel("Browser preview runtime").click();
+  const controls = diagnostics.expectActiveRequestAbort({
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/_marimo-studio\/views\/dashboard\/controls$/,
+    count: 1,
+    required: false,
+  });
+  await page.getByRole("button", { name: /Python/ }).click();
+  await expectPreviewInteractive(page, "server");
+  await recoverRequestAbort(controls);
+};
+
 test.describe.configure({ timeout: 150_000 });
 test.use({ services: ["studio", "static"] });
-
-const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") => {
-  const frame = page.locator(`iframe[data-preview-runtime-frame="${runtime}"]`);
-  await expect(frame).not.toHaveAttribute("inert");
-  await expect(frame).not.toHaveAttribute("aria-busy");
-};
 
 const waitForPresentationRuntime = async (root: ReturnType<typeof presentationFrame>) => {
   await expect
@@ -240,8 +253,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(wasmLongOutput).toContainText("Long selector ready");
   await wasmColumns.click();
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
-  await page.getByLabel("Browser preview runtime").click();
-  await page.getByRole("button", { name: /Python/ }).click();
+  await activateServerPreview(page, browserDiagnostics);
   await columns.click();
   await expect(columns).toHaveAttribute("aria-expanded", "true");
 
@@ -263,8 +275,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
     "projection-output-variable-not-found",
   );
   await expect(wasmSummary).toContainText("does not resolve in this notebook");
-  await page.getByLabel("Browser preview runtime").click();
-  await page.getByRole("button", { name: /Python/ }).click();
+  await activateServerPreview(page, browserDiagnostics);
   await expect(serverSummary).toHaveAttribute("data-state", "error");
   await expect(serverSummary).toHaveAttribute(
     "data-marimo-diagnostic-code",
@@ -286,8 +297,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(wasmSummary).toHaveAttribute("data-state", "ready");
   await expect(wasmSummary.locator("h3")).toHaveText("Current total: 42");
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
-  await page.getByLabel("Browser preview runtime").click();
-  await page.getByRole("button", { name: /Python/ }).click();
+  await activateServerPreview(page, browserDiagnostics);
   await expect(serverSummary).toHaveAttribute("data-state", "ready");
   await expect(serverSummary.locator("h3")).toHaveText("Current total: 42");
   await expect(columns).toHaveAttribute("aria-expanded", "true");
@@ -295,7 +305,10 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await recoverRequestAbort(refreshedOutputs);
 });
 
-test("preserves projected controls across refresh and owner removal", async ({ page }) => {
+test("preserves projected controls across refresh and owner removal", async ({
+  browserDiagnostics,
+  page,
+}) => {
   test.setTimeout(210_000);
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
@@ -317,9 +330,7 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   await expect(wasmFresh).toHaveAttribute("aria-valuenow", "2", { timeout: 45_000 });
   await expect(wasmMixed).toHaveCount(2);
   await expect(wasmSharedOwner).toHaveAttribute("data-state", "ready");
-  await page.getByLabel("Browser preview runtime").click();
-  await page.getByRole("button", { name: /Python/ }).click();
-  await expectPreviewInteractive(page, "server");
+  await activateServerPreview(page, browserDiagnostics);
 
   await serverMixed.nth(1).press("End");
   await expect(serverMixed.nth(1)).toHaveAttribute("aria-valuenow", "3");
@@ -345,9 +356,7 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   await expect(wasmMixed.nth(0)).toHaveAttribute("aria-valuenow", "3");
   await expect(wasmMixed.nth(1)).toHaveAttribute("aria-valuenow", "3");
 
-  await page.getByLabel("Browser preview runtime").click();
-  await page.getByRole("button", { name: /Python/ }).click();
-  await expectPreviewInteractive(page, "server");
+  await activateServerPreview(page, browserDiagnostics);
   await expect(serverFresh).toHaveAttribute("aria-valuenow", "3");
   await expect(serverMixed.nth(0)).toHaveAttribute("aria-valuenow", "3");
   await expect(serverMixed.nth(1)).toHaveAttribute("aria-valuenow", "3");

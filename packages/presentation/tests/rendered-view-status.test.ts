@@ -80,3 +80,24 @@ test("runtime errors publish the rendered session identity", () => {
     globalThis.location.origin,
   );
 });
+
+test("publishes a startup error before rendered-view observers are attached", () => {
+  const postMessage = vi
+    .spyOn(globalThis.parent, "postMessage")
+    .mockImplementation(() => undefined);
+  setRuntimeConnectionState("error", {
+    code: "publication-error",
+    message: "Notebook states could not be captured.",
+    hint: "Check the notebook outputs.",
+  });
+  expect(postMessage).toHaveBeenCalledTimes(1);
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "marimo-studio:view-error",
+      diagnostic: expect.objectContaining({ code: "publication-error", scope: "runtime" }),
+    }),
+    globalThis.location.origin,
+  );
+  const alert = document.querySelector('[role="alert"]');
+  expect(alert?.textContent).toBe("Notebook states could not be captured.");
+});

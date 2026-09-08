@@ -4,16 +4,11 @@ import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vite-plus/test";
 
 import type {
-  MountPreparedPresentationOptions,
-  PreparedModelGraphFactory,
   PreparedPresentationHandle,
   PreparedThemeSource,
 } from "../src/prepared-presentation.tsx";
 
-import {
-  mountPreparedPresentation,
-  PreparedModelGraphCheckpoint,
-} from "../src/prepared-presentation.tsx";
+import { mountPreparedPresentation as mount } from "../src/prepared-presentation.tsx";
 
 // SAFETY: The test observes globals owned by the prepared presentation facade.
 const browser = globalThis as typeof globalThis & {
@@ -39,25 +34,6 @@ const stableTheme: PreparedThemeSource = {
   current: () => "light",
   subscribe: () => () => {},
 };
-
-const createModelGraph: PreparedModelGraphFactory = (port, initial) => {
-  port.setFiles(initial.files);
-  const checkpoint = new PreparedModelGraphCheckpoint();
-  return {
-    checkpoint: () => checkpoint,
-    replace: async () => ({
-      mutated: false,
-      remount: false,
-      commit: async () => {},
-      rollback: async () => {},
-    }),
-    dispose: async () => {},
-  };
-};
-
-const mount = (
-  options: Omit<MountPreparedPresentationOptions, "createModelGraph">,
-): PreparedPresentationHandle => mountPreparedPresentation({ ...options, createModelGraph });
 
 const runtimeState = () => browser._marimo_private_RuntimeState;
 

@@ -1,9 +1,9 @@
 # Browser runtime and authoring
 
-The browser composes two documents. The native Marimo editor remains the
-notebook surface. A Studio presentation document renders one immutable view
-artifact with a selected runtime. The Studio workspace arranges Notebook,
-Source, and Preview surfaces around those documents.
+The browser composes the native Marimo editor, the Studio workspace, and
+presentation documents. The editor remains the notebook surface. Each
+presentation renders one immutable view artifact with a selected runtime. The
+workspace arranges Notebook, Source, and Preview around those documents.
 
 See the [canonical ownership map](../architecture.md#ownership) for package
 responsibilities and [Identities and state](identities-and-state.md) for
@@ -87,6 +87,37 @@ requests and evidence. The projection revision identifies the notebook,
 runtime, mounts, targets, bindings, policy, and diagnostics that own projected
 state. A stylesheet or non-projection markup edit advances the presentation
 revision while retaining live values, outputs, controls, and cell portals.
+
+### Runtime preparation progress
+
+Runtime configuration requests negotiate `application/x-ndjson` through the
+`Accept` header. The stream contains `progress` packets followed by one
+terminal `config` or `error` packet. JSON clients receive the ordinary
+configuration response. `RuntimeProgress` contains a message and optional
+`completed` and `total` counts. Runtime providers publish this record through
+an injected sink, so the transport supports each runtime independently.
+
+The request owns its preparation task. The server coalesces pending progress
+for slow readers and closes the sink when the stream ends. Disconnecting
+cancels and settles preparation before releasing the request. The browser
+validates complete packets and stream termination before committing the
+configuration. An incomplete or malformed stream fails the request.
+
+`RuntimeProgressStore` accepts updates from the current request owner.
+Presentation forwards them with runtime, view, and presentation revision to
+Preview. Configuration success changes the activity to **Opening preview**.
+Readiness still waits for the runtime and projected results.
+
+Prepared capture counts come from marimo-export and include reused states.
+`PreparedProgress` maps capture events to UI activity. When every state is
+captured, it clears the counts and reports finalization. Export verification,
+configuration delivery, and native rendering still have work to finish, so a
+completed capture count never stands for complete preview startup.
+
+The Preview status panel reserves space for the activity and count. Initial
+preparation occupies the Preview pane. Updates to a rendered preview use a
+compact overlay while its content remains mounted. Progress updates preserve
+the frame and remain separate from readiness and error diagnostics.
 
 ## Presentation revision transaction
 
@@ -227,6 +258,27 @@ Python runtime providers return one runtime projection with instance identity,
 runtime data, and semantic cell bindings. The browser commits runtime
 configuration before connecting projection hosts and mounting the selected
 runtime session.
+
+### Prepared
+
+The **Prepared** option selects runtime ID `zero-python`. It reads captured
+states and outputs through marimo-export and renders them through Studio's
+native presentation adapter. State changes select available exported results.
+The browser runs no Python for this runtime.
+
+`apps/browser/src/zero-python` composes export's `PreparedStateController` and
+`PreparedPublicationRefresh` with Studio manifest validation, control input,
+state API, and host rendering. Export owns requested-state supersession and
+rollback coordination. Studio's presentation transaction commits model replay,
+UI values, and visible projection hosts together. The native model graph stays
+inside `packages/marimo-frontend`.
+
+`loadOutputs()` owns a named set of representation loads and their shared
+cancellation. Studio selects codecs and adapts loaded values to authored
+selectors and native Arrow provenance. Read [Prepared replay
+ownership](../frontend.md#prepared-replay-ownership) for the frontend boundary
+and [Prepared preview publication](marimo-integration.md#prepared-preview-publication)
+for server preparation and refresh policy.
 
 ## Studio workspace model
 
@@ -415,9 +467,9 @@ Callbacks from stale generations cannot change workspace state.
 ## Preview deck
 
 `PreviewDeck` owns stable physical slots and resolves them by `(runtime, view)`.
-Server has three least-recently-used slots. WebAssembly has one. Returning to a
-warm key reuses its iframe, document, runtime instance, controller, navigation,
-and diagnostics. Eviction disposes the controller and resets the iframe.
+Server has three least-recently-used slots. Every other runtime, including
+WebAssembly and Prepared, has one. Returning to a warm key reuses its iframe,
+document, runtime instance, controller, navigation, and diagnostics. Eviction disposes the controller and resets the iframe.
 
 Each occupied slot owns one `PreviewController`. Its `PreviewAdmission` is the
 authoritative owner of receiver identity, candidate and ready identity,
@@ -530,11 +582,11 @@ Test browser behavior at three levels:
 
 1. Pure model, parser, and controller tests.
 2. Composed document, runtime, or workspace tests.
-3. Live Server and WebAssembly acceptance.
+3. Live Server, WebAssembly, and Prepared acceptance.
 
 Required cross-boundary cases include dynamic source catalogs, read-only
 documents, external conflicts, failed builds with a retained preview, artifact
 revision transitions, React and Svelte projection instances, runtime
 switching, view switching, session reconnect, query and control synchronization,
-closure-selected WebAssembly execution, static-export branch isolation, and
-desktop and narrow layout inspection.
+closure-selected WebAssembly execution, Prepared startup and state rollback,
+static-export branch isolation, and desktop and narrow layout inspection.

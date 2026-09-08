@@ -13,9 +13,15 @@ exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
 agent-plugins = false
+gistwidget = false
+jupyter-book-marimo = false
 marimo = false
 marimo-export = false
+marimo-jupyter-extension = false
+marimo-lens = false
 marimo-studio = false
+mkdocs-marimo = false
+moutils = false
 
 [manifest]
 members = [
@@ -1192,7 +1198,7 @@ recommended = [
 
 [[package]]
 name = "marimo-export"
-version = "0.0.4"
+version = "0.0.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-plugins" },
@@ -1207,9 +1213,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/25/38/fce44bf64e747aed66d38077ed450b164229195043c11b4d78487ffe3c58/marimo_export-0.0.4.tar.gz", hash = "sha256:bd05215ac012f28d02cbbce0ba0ca493db1aad7bba10d1cc3a0432807eba0141", size = 263638, upload-time = "2026-09-07T18:39:23.219Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/65/eba5e7bb377aaf41e07968bc65aefe9bc72dd5e6556aa036117c731c1dae/marimo_export-0.0.6.tar.gz", hash = "sha256:924d588e17a0bc5df4cf52d25619f6d1df37df2e3bcc160054e88ce64ac0ac0c", size = 264920, upload-time = "2026-09-08T03:19:23.314Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/8d/d971f30693471e2825bf92089bca7aacf0e838038d12692f2a45bb654953/marimo_export-0.0.4-py3-none-any.whl", hash = "sha256:7ae2b9015bc83020ffa7bfbc470adf6b1fd7018d86c32a93a732f05781ed0c01", size = 356978, upload-time = "2026-09-07T18:39:21.989Z" },
+    { url = "https://files.pythonhosted.org/packages/09/c1/c873eab9c884143d1d3664607601769c95ad51007c4c09724c3230609d84/marimo_export-0.0.6-py3-none-any.whl", hash = "sha256:e32abcf74a370e6f6503ff552ebedc13e83e15e2e06093ce1d2364c5c3bc0b24", size = 358254, upload-time = "2026-09-08T03:19:22.238Z" },
 ]
 
 [[package]]
@@ -1243,7 +1249,7 @@ requires-dist = [
     { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
     { name = "htpy", specifier = ">=26.5.1,<27" },
     { name = "marimo", specifier = "==0.24.0" },
-    { name = "marimo-export", specifier = "==0.0.4" },
+    { name = "marimo-export", specifier = "==0.0.6" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },

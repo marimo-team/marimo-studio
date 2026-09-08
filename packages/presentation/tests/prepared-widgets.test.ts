@@ -1,3 +1,4 @@
+import { requiresPreparedModelRemount } from "@marimo-studio/marimo-frontend/prepared-presentation";
 import assert from "node:assert/strict";
 import { afterEach, beforeAll, test, vi } from "vite-plus/test";
 
@@ -14,7 +15,6 @@ import {
   preparedRuntimeConfig as config,
   preparedTheme as theme,
   projectionUiId,
-  settlePreparedRender as settle,
 } from "./prepared-fixture.ts";
 
 interface PreparedWidgetLifecycleCounts {
@@ -316,18 +316,14 @@ test("prepared widget projections preserve browser state through restore and tra
   handles.push(handle);
   await handle.replace(widgetSnapshot("initial"));
 
-  const button = async (selector: string): Promise<HTMLButtonElement> => {
-    for (let attempt = 0; attempt < 40; attempt += 1) {
+  const button = (selector: string): Promise<HTMLButtonElement> =>
+    vi.waitFor(() => {
       const host = document.querySelector<HTMLElement>(`marimo-output[value="${selector}"]`);
       const widget = host?.querySelector("marimo-anywidget");
       const current = widget?.shadowRoot?.querySelector<HTMLButtonElement>("button");
-      if (current !== null && current !== undefined) {
-        return current;
-      }
-      await settle();
-    }
-    throw new Error(`Prepared widget ${selector} did not render`);
-  };
+      assert.ok(current, `Prepared widget ${selector} did not render`);
+      return current;
+    });
   const first = await button("widget.first");
   const second = await button("widget.second");
   assert.equal(first.textContent, "first: 7");
@@ -404,33 +400,26 @@ test("prepared checkpoints restore live widget state and UI drafts after differe
     theme,
   });
   handles.push(handle);
-  const button = async (): Promise<HTMLButtonElement> => {
-    for (let attempt = 0; attempt < 40; attempt += 1) {
+  const button = (): Promise<HTMLButtonElement> =>
+    vi.waitFor(() => {
       const host = document.querySelector<HTMLElement>('marimo-output[value="checkpoint.widget"]');
       const current = host
         ?.querySelector("marimo-anywidget")
         ?.shadowRoot?.querySelector<HTMLButtonElement>("button");
-      if (current !== null && current !== undefined) {
-        return current;
-      }
-      await settle();
-    }
-    throw new Error("Checkpoint widget did not render");
-  };
-  const sliderValue = async (expected: string): Promise<HTMLElement> => {
-    for (let attempt = 0; attempt < 40; attempt += 1) {
+      assert.ok(current, "Checkpoint widget did not render");
+      return current;
+    });
+  const sliderValue = (expected: string): Promise<HTMLElement> =>
+    vi.waitFor(() => {
       const host = document.querySelector<HTMLElement>('marimo-output[value="checkpoint.control"]');
       const slider = host?.querySelector<HTMLElement>("marimo-slider");
       const value = slider?.shadowRoot
         ?.querySelector('[role="slider"]')
         ?.getAttribute("aria-valuenow");
-      if (slider !== undefined && slider !== null && value === expected) {
-        return slider;
-      }
-      await settle();
-    }
-    throw new Error(`Checkpoint slider did not render value ${expected}`);
-  };
+      assert.ok(slider);
+      assert.equal(value, expected);
+      return slider;
+    });
 
   await handle.replace(checkpointSnapshot("old", "d", "e", 2));
   const oldButton = await button();
@@ -521,15 +510,8 @@ ${widgetModule}
   });
 
   const transition = handle.replace(blocked);
-  const moduleStarted = (): boolean => widgetBrowser.__preparedCheckpointModuleStarted === true;
   try {
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      if (moduleStarted()) {
-        break;
-      }
-      await settle();
-    }
-    assert.equal(moduleStarted(), true);
+    await vi.waitFor(() => assert.equal(widgetBrowser.__preparedCheckpointModuleStarted, true));
     assert.throws(
       () => handle.checkpoint(),
       /prepared AnyWidget graph replacement is already active/u,
@@ -646,17 +628,13 @@ export default {
       cells: [],
     };
   };
-  const button = async (): Promise<HTMLButtonElement> => {
-    for (let attempt = 0; attempt < 40; attempt += 1) {
+  const button = (): Promise<HTMLButtonElement> =>
+    vi.waitFor(() => {
       const widget = document.querySelector("marimo-anywidget");
       const current = widget?.shadowRoot?.querySelector<HTMLButtonElement>("button");
-      if (current !== null && current !== undefined) {
-        return current;
-      }
-      await settle();
-    }
-    throw new Error("Prepared replacement widget did not render");
-  };
+      assert.ok(current, "Prepared replacement widget did not render");
+      return current;
+    });
 
   await handle.replace(state("v1"));
   const first = await button();
@@ -668,9 +646,10 @@ export default {
   widgetBrowser.__abortPreparedReplacement = () => {
     aborted.abort(new DOMException("replacement aborted", "AbortError"));
   };
-  await assert.rejects(handle.replace(state("v2"), { signal: aborted.signal }), {
-    name: "PreparedWidgetGraphReplacementError",
-  });
+  await assert.rejects(
+    handle.replace(state("v2"), { signal: aborted.signal }),
+    requiresPreparedModelRemount,
+  );
   delete widgetBrowser.__abortPreparedReplacement;
   const restored = await button();
   assert.notEqual(restored, first);

@@ -10,7 +10,6 @@ import type {
 } from "@marimo-team/marimo-export";
 
 import { getMarimoDataSource } from "@marimo-studio/marimo-frontend/arrow-table";
-import { NotebookExportError } from "@marimo-team/marimo-export";
 import { tableFromArrays, tableToIPC } from "@uwdata/flechette";
 import { expect, it } from "vite-plus/test";
 
@@ -19,57 +18,6 @@ import {
   loadPreparedProjectionSnapshot,
 } from "../src/zero-python/projections.ts";
 import { notebookExportFixture, projectionNames } from "./zero-python-fixture.ts";
-
-it("aborts and settles sibling output loads after the first failure", async () => {
-  const primary = new Error("Corrupt prepared value.");
-  let siblingAborted = false;
-  let siblingSettled = false;
-  const notebookExport = notebookExportFixture({ inputs: [{ mode: "baseline" }] });
-  const base = notebookExport.defaultState;
-  const state = {
-    ...base,
-    output: (name: string): ExportOutput => {
-      if (name === projectionNames.value) {
-        return output(base, name, async () => {
-          throw primary;
-        });
-      }
-      return output(
-        base,
-        name,
-        async (options) =>
-          await new Promise<never>((_resolve, reject) => {
-            options?.signal?.addEventListener(
-              "abort",
-              () => {
-                siblingAborted = true;
-                setTimeout(() => {
-                  siblingSettled = true;
-                  reject(new NotebookExportError("abort", "Sibling load aborted"));
-                }, 0);
-              },
-              { once: true },
-            );
-          }),
-      );
-    },
-  } satisfies ExportState;
-
-  await expect(
-    loadPreparedProjectionSnapshot(
-      state,
-      {
-        values: { metric: projectionNames.value },
-        outputs: { chart: projectionNames.output },
-        cells: {},
-      },
-      createZeroPythonProjectionLoaders(),
-      new AbortController().signal,
-    ),
-  ).rejects.toBe(primary);
-  expect(siblingAborted).toBe(true);
-  expect(siblingSettled).toBe(true);
-});
 
 it("adds authored host bindings to canonical export snapshots", async () => {
   const notebookExport = notebookExportFixture({ inputs: [{ mode: "baseline" }] });

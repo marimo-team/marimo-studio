@@ -96,6 +96,27 @@ Request parsing owns these failures:
 - 503 for bounded capacity or a closing owner
 - 504 for runtime or agent timeout
 
+### Runtime configuration streams
+
+A negotiated runtime configuration stream sends progress followed by one
+terminal configuration or error packet. Once streaming starts, its terminal
+error record carries the failure even though the HTTP response has already
+started. Authentication, revision, and session checks performed before the
+stream starts retain their ordinary HTTP statuses.
+
+Runtime packets use `type`, with `progress`, `config`, or `error` as its value.
+This transport differs from the CLI's schema 1 `event` records. Its
+runtime-neutral progress shape contains a message and optional counts. The
+Prepared adapter translates marimo-export activity into that shape, while CLI
+exports retain complete upstream `ProgressEvent` records.
+
+Browser parsing rejects malformed packets, incomplete termination, and records
+after a terminal packet. A transient preparation error follows the runtime
+configuration retry policy. Progress does not add diagnostic-history entries
+or mark a runtime ready. Read [Runtime preparation
+progress](browser-runtime-and-authoring.md#runtime-preparation-progress) for
+transport ownership and UI behavior.
+
 ## Provider diagnostics
 
 `ProjectDiagnostic` carries code, `warning` or `error` severity, message, hint,

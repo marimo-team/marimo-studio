@@ -10,69 +10,23 @@ import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vite-plus/test";
 
 import type {
-  PreparedModelGraph,
-  PreparedModelGraphFactory,
-  PreparedModelGraphPort,
-  PreparedModelGraphSnapshot,
+  PreparedModelLifecycleHandle,
   PreparedModelLifecycleNotification,
 } from "../src/prepared-models.ts";
 
-import {
-  createPreparedModelLifecycle,
-  PreparedModelGraphCheckpoint,
-} from "../src/prepared-models.ts";
+import { createPreparedModelLifecycle } from "../src/prepared-models.ts";
 
 // SAFETY: The test observes the browser global owned by the prepared model facade.
 const browser = globalThis as typeof globalThis & {
   __MARIMO_STATIC__?: { readonly files: Readonly<Record<string, string>> };
 };
 
-interface GraphHarness {
-  readonly factory: PreparedModelGraphFactory;
-  readonly checkpoint: PreparedModelGraphCheckpoint;
-  readonly replace: ReturnType<typeof vi.fn<PreparedModelGraph["replace"]>>;
-  readonly dispose: ReturnType<typeof vi.fn<PreparedModelGraph["dispose"]>>;
-  port?: PreparedModelGraphPort;
-  initial?: PreparedModelGraphSnapshot;
-}
-
-let dispose: (() => Promise<void>) | undefined;
+let lifecycle: PreparedModelLifecycleHandle | undefined;
 
 const modelId = (value: string): WidgetModelId => {
   assert.ok(value.length > 0);
   // SAFETY: The assertion above matches Marimo's WidgetModelId predicate.
   return value as WidgetModelId;
-};
-
-const replacement = (adopted: PreparedModelGraphSnapshot | undefined) =>
-  Object.freeze({
-    mutated: true,
-    remount: false,
-    commit: async () => adopted,
-    rollback: async () => {},
-  });
-
-const graphHarness = (): GraphHarness => {
-  const checkpoint = new PreparedModelGraphCheckpoint();
-  const replace = vi.fn<PreparedModelGraph["replace"]>(async (target) =>
-    replacement(target instanceof PreparedModelGraphCheckpoint ? undefined : target),
-  );
-  const disposeGraph = vi.fn<PreparedModelGraph["dispose"]>(async () => {});
-  const harness: GraphHarness = {
-    checkpoint,
-    replace,
-    dispose: disposeGraph,
-    factory(port, initial) {
-      harness.port = port;
-      harness.initial = initial;
-      return {
-        checkpoint: () => checkpoint,
-        replace,
-        dispose: disposeGraph,
-      };
-    },
-  };
-  return harness;
 };
 
 const openNotification = (
@@ -90,85 +44,41 @@ const openNotification = (
   },
 });
 
-const graphTarget = (harness: GraphHarness, index: number): PreparedModelGraphSnapshot => {
-  const target = harness.replace.mock.calls[index]?.[0];
-  assert.ok(target);
-  // SAFETY: These calls pass resources, so the facade sends a graph snapshot rather than a token.
-  return target as PreparedModelGraphSnapshot;
-};
-
 afterEach(async () => {
-  await dispose?.();
-  dispose = undefined;
+  await lifecycle?.dispose();
+  lifecycle = undefined;
   vi.restoreAllMocks();
   delete browser.__MARIMO_STATIC__;
 });
 
-test("the facade delegates graph transactions through the injected capability", async () => {
-  const harness = graphHarness();
-  const lifecycle = createPreparedModelLifecycle(harness.factory);
-  dispose = lifecycle.dispose;
-  assert.deepEqual(harness.initial?.files, {});
-  assert.equal(harness.initial?.records.size, 0);
-
-  const resources = {
-    files: { "widget.js": "data:text/javascript,export default {}" },
-    modelNotifications: [openNotification(modelId("prepared-model"), { value: 7 })],
-  };
-  const staged = await lifecycle.replace(resources);
-  await staged.commit();
-
-  assert.equal(harness.replace.mock.calls.length, 1);
-  const target = graphTarget(harness, 0);
-  assert.deepEqual(target.files, resources.files);
-  const record = target.records.get("prepared-model");
-  assert.ok(record);
-  assert.equal(record.active, true);
-  assert.equal(record.notifications.length, 1);
-});
-
-test("the graph port replays, captures, restores, and closes native Marimo models", async () => {
-  const harness = graphHarness();
-  const lifecycle = createPreparedModelLifecycle(harness.factory);
-  dispose = lifecycle.dispose;
+test("native model checkpoints restore browser state and close retired models", async () => {
+  lifecycle = createPreparedModelLifecycle();
   const id = modelId("prepared-native-model");
-  await lifecycle.replace({
+  const staged = await lifecycle.replace({
     files: {},
     modelNotifications: [openNotification(id, { value: 7 })],
   });
-  const target = graphTarget(harness, 0);
-  const record = target.records.get(id);
-  assert.ok(record);
-  const port = harness.port;
-  assert.ok(port);
-
-  await port.validate(record);
-  await port.replay([record]);
+  await staged.commit();
   const model = WIDGET_REGISTRY.getModelSync(id);
   assert.ok(model);
   model.set("value", 8);
-  const captured = port.capture(id);
+  const checkpoint = lifecycle.snapshot();
   model.set("value", 9);
-  port.restore(id, captured);
-  assert.equal(model.get("value"), 8);
 
-  const merged = port.merge(record, captured);
-  assert.notEqual(merged.canonical, record.canonical);
-  await port.close(id);
+  await (await lifecycle.replace(checkpoint)).commit();
+
+  assert.equal(WIDGET_REGISTRY.getModelSync(id), model);
+  assert.equal(model.get("value"), 8);
+  await (await lifecycle.replace({ files: {}, modelNotifications: [] })).commit();
   assert.equal(WIDGET_REGISTRY.getModelSync(id), undefined);
 });
 
 test("native model replay preserves cross-model update and custom-message order", async () => {
-  const harness = graphHarness();
-  const lifecycle = createPreparedModelLifecycle(harness.factory);
-  dispose = lifecycle.dispose;
+  lifecycle = createPreparedModelLifecycle();
   const first = modelId("prepared-order-first");
   const second = modelId("prepared-order-second");
   const opened = [openNotification(first, { value: 0 }), openNotification(second, { value: 0 })];
-  await lifecycle.replace({ files: {}, modelNotifications: opened });
-  const port = harness.port;
-  assert.ok(port);
-  await port.replay([...graphTarget(harness, 0).records.values()]);
+  await (await lifecycle.replace({ files: {}, modelNotifications: opened })).commit();
   const firstModel = WIDGET_REGISTRY.getModelSync(first);
   const secondModel = WIDGET_REGISTRY.getModelSync(second);
   assert.ok(firstModel);
@@ -189,112 +99,92 @@ test("native model replay preserves cross-model update and custom-message order"
     },
     { model_id: second, message: { method: "custom", content: {}, buffers: [] } },
   ];
-  try {
-    await lifecycle.replace({ files: {}, modelNotifications: notifications });
-    const target = graphTarget(harness, 1);
-    await port.replay([...target.records.values()]);
 
-    assert.deepEqual(observed, [
-      ["first", 2],
-      ["second", 1],
-    ]);
-    assert.equal(WIDGET_REGISTRY.getModelSync(first), firstModel);
-    assert.equal(WIDGET_REGISTRY.getModelSync(second), secondModel);
-  } finally {
-    await port.close(first);
-    await port.close(second);
-  }
+  await (await lifecycle.replace({ files: {}, modelNotifications: notifications })).commit();
+
+  assert.deepEqual(observed, [
+    ["first", 2],
+    ["second", 1],
+  ]);
+  assert.equal(WIDGET_REGISTRY.getModelSync(first), firstModel);
+  assert.equal(WIDGET_REGISTRY.getModelSync(second), secondModel);
 });
 
-test("the graph port rejects malformed lifecycle and widget modules before replay", async () => {
-  const harness = graphHarness();
-  const lifecycle = createPreparedModelLifecycle(harness.factory);
-  dispose = lifecycle.dispose;
+test("native model replacement rejects malformed lifecycle and widget modules before replay", async () => {
+  lifecycle = createPreparedModelLifecycle();
   const id = modelId("prepared-invalid-model");
-  await lifecycle.replace({
-    files: {},
-    modelNotifications: [
-      {
-        model_id: id,
-        message: {
-          method: "update",
-          state: { value: 1 },
-          buffer_paths: [],
-          buffers: [],
-          esm_spec: null,
-        },
-      },
-    ],
-  });
-  let target = graphTarget(harness, 0);
-  let record = target.records.get(id);
-  assert.ok(record);
-  const port = harness.port;
-  assert.ok(port);
-  await assert.rejects(port.validate(record), /no complete open notification/u);
-
-  await lifecycle.replace({
-    files: {},
-    modelNotifications: [
-      openNotification(
-        id,
-        {},
+  await assert.rejects(
+    lifecycle.replace({
+      files: {},
+      modelNotifications: [
         {
-          url: "data:text/javascript,export const value = 1",
-          hash: "invalid-module",
+          model_id: id,
+          message: {
+            method: "update",
+            state: { value: 1 },
+            buffer_paths: [],
+            buffers: [],
+            esm_spec: null,
+          },
         },
-      ),
-    ],
-  });
-  target = graphTarget(harness, 1);
-  record = target.records.get(id);
-  assert.ok(record);
-  await assert.rejects(port.preflight(record), /missing a default export/u);
+      ],
+    }),
+    /no complete open notification/u,
+  );
+  await assert.rejects(
+    lifecycle.replace({
+      files: {},
+      modelNotifications: [
+        openNotification(
+          id,
+          {},
+          {
+            url: "data:text/javascript,export const value = 1",
+            hash: "invalid-module",
+          },
+        ),
+      ],
+    }),
+    /missing a default export/u,
+  );
+  assert.equal(WIDGET_REGISTRY.getModelSync(id), undefined);
 });
 
-test("model checkpoints stay opaque while resources remain presentation-owned", async () => {
-  const harness = graphHarness();
-  const lifecycle = createPreparedModelLifecycle(harness.factory);
-  dispose = lifecycle.dispose;
-  const checkpointResources = lifecycle.snapshot();
-
-  assert.deepEqual(checkpointResources, { files: {}, modelNotifications: [] });
-  await lifecycle.replace(checkpointResources);
-
-  assert.equal(harness.replace.mock.calls[0]?.[0], harness.checkpoint);
-});
-
-test("static files remain in the Marimo adapter and prior page state is restored", async () => {
+test("native model disposal restores prior page resources", async () => {
   browser.__MARIMO_STATIC__ = { files: { "existing.css": "data:text/css,body{}" } };
-  const harness = graphHarness();
-  const lifecycle = createPreparedModelLifecycle(harness.factory);
-  dispose = lifecycle.dispose;
-  const port = harness.port;
-  assert.ok(port);
+  lifecycle = createPreparedModelLifecycle();
+  await (
+    await lifecycle.replace({
+      files: { "next.css": "data:text/css,main{}" },
+      modelNotifications: [],
+    })
+  ).commit();
+  assert.deepEqual(browser.__MARIMO_STATIC__?.files, { "next.css": "data:text/css,main{}" });
 
-  port.setFiles({ "next.css": "data:text/css,main{}" });
-  assert.deepEqual(browser.__MARIMO_STATIC__?.files, {
-    "next.css": "data:text/css,main{}",
-  });
-  lifecycle.activate();
   await lifecycle.dispose();
-  dispose = undefined;
 
-  assert.deepEqual(browser.__MARIMO_STATIC__?.files, {
-    "existing.css": "data:text/css,body{}",
-  });
-  assert.equal(harness.dispose.mock.calls.length, 1);
+  assert.deepEqual(browser.__MARIMO_STATIC__?.files, { "existing.css": "data:text/css,body{}" });
 });
 
-test("graph disposal failures still release the page owner", async () => {
-  const harness = graphHarness();
-  harness.dispose.mockRejectedValueOnce(new Error("graph disposal failed"));
-  const lifecycle = createPreparedModelLifecycle(harness.factory);
+test("model disposal failures still release the page owner", async () => {
+  lifecycle = createPreparedModelLifecycle();
+  const id = modelId("prepared-disposal-failure");
+  await (
+    await lifecycle.replace({
+      files: {},
+      modelNotifications: [openNotification(id, { value: 7 })],
+    })
+  ).commit();
+  const close = vi
+    .spyOn(WIDGET_REGISTRY, "delete")
+    .mockRejectedValueOnce(new Error("model close failed"));
+  try {
+    await assert.rejects(lifecycle.dispose(), /model close failed/u);
+    lifecycle = undefined;
+  } finally {
+    close.mockRestore();
+    await WIDGET_REGISTRY.delete(id);
+  }
+  lifecycle = createPreparedModelLifecycle();
   lifecycle.activate();
-
-  await assert.rejects(lifecycle.dispose(), /graph disposal failed/u);
-
-  const retry = createPreparedModelLifecycle(graphHarness().factory);
-  dispose = retry.dispose;
-  retry.activate();
 });

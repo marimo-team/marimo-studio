@@ -113,6 +113,34 @@ distinct projection leaves produce new receipts once, then remain reusable as
 prepared states. `StaticExportResult.cache_activity` exposes the native authored
 and projection dispositions reported by marimo-export.
 
+### Prepared preview publication
+
+`PreparedViewRegistry` adapts a view to marimo-export's
+`PreparedPublicationController`. `_prepared/resolve.py` compiles the view's
+outputs, plans them, and calls `Session.observe_inputs(plan=plan)` for the
+complete current input record. Marimo-export owns input normalization and
+producer validation, including ordinary Python inputs and UI controls.
+
+Studio decides which states belong to the view. With `states.yaml`, it keeps
+the configured finite state space and selects the current inputs when they
+match a planned state. With no state file, it uses the current input record as
+`baseline` and adds recorded observations. Marimo-export executes each state
+in a child notebook graph inside the borrowed editor kernel. The child owns
+its controls, outputs, and cleanup while the editor retains its live state.
+
+The registry keys current publications by view, editor binding, and
+presentation revision. The state-space source digest belongs to candidate
+metadata. Its admission callback revalidates the source before export commits
+the candidate. A failed replacement retains the current publication, including
+when `states.yaml` is invalid. Current-manifest reads consume that admitted
+publication.
+
+Studio supplies the observation-revision predicate to
+`PreparedPublicationController.poll()`. The export controller runs the
+predicate off the event loop and owns refresh work, cancellation, candidate
+cleanup, and retained generations. Studio releases publications when their
+editor binding or notebook scope closes.
+
 Keep ports shaped around Studio operations. A port should return stable
 records and lifecycle handles, not private Marimo objects.
 
@@ -303,6 +331,7 @@ adapter release.
 - Embedded runtime
 - Cell presentation
 - Projected output
+- Prepared presentation
 - Session bootstrap
 - Control endpoint
 - Theme frame
@@ -403,6 +432,7 @@ Add tests at the narrowest owner and at the live seam:
 | Session attachment and replay | Lifecycle tests                 | Run-mode reconnect and preview reload                  |
 | Save transform                | Source policy tests             | Notebook edit and durable save                         |
 | Browser projector             | Execution catalog tests         | WebAssembly closure selection and dynamic retargeting  |
+| Prepared publication          | State and admission tests       | State changes retain editor and prior preview          |
 | Frontend facade               | Package tests                   | Browser build and runtime acceptance                   |
 | Release identity              | Fingerprint and metadata checks | Isolated wheel installation                            |
 

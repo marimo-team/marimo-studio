@@ -344,6 +344,8 @@ def test_external_observation_uses_the_selected_browser_session() -> None:
         binding_id: str | None,
         presentation_session_id: str | None,
         runtime_session_id: str | None,
+        *,
+        client_id: str | None = None,
     ) -> object:
         assert presentation_session_id == session_id
         assert runtime_session_id == session_id
@@ -497,7 +499,7 @@ def test_code_mode_observation_rejects_an_active_view_changed_during_snapshot() 
     )
     context: Any = SimpleNamespace()
 
-    async def project(*_args: object) -> object:
+    async def project(*_args: object, client_id: str | None = None) -> object:
         return SimpleNamespace(instance="runtime-instance")
 
     runtimes = cast(

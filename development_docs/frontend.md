@@ -158,7 +158,7 @@ Test a presentation change at three levels when applicable:
 
 1. Local reducer, parser, or adapter contract.
 2. Composed document transition or runtime integration.
-3. Live Server and WebAssembly behavior.
+3. Live Server, WebAssembly, and Prepared behavior.
 
 ## Change Source
 
@@ -265,6 +265,19 @@ Marimo rendering adapter. Live and Prepared rendering use the same pinned
 frontend source, React providers, Jotai store, UI registry, and custom-element
 definitions through `createMarimoViteIntegration()`.
 
+The native adapter constructs its prepared model graph inside
+`createPreparedModelLifecycle()`. The graph stages file tables, preserves live
+model state, replays ordered notifications, and owns checkpoint rollback.
+`PreparedModelReplacement` exposes commit, rollback, and the remount decision.
+Presentation asks `requiresPreparedModelRemount()` about a failed replacement
+and owns the corresponding host remount.
+
+Export's `loadOutputs()` loads a named set of representations with shared
+cancellation and settles their public load requests. Studio adapts those values
+to projection selectors, native Arrow provenance, and its permitted codecs.
+Model replay and visible host replacement remain one Studio presentation
+transaction after loading.
+
 Changing runtime identity requests a document reload through the presentation
 runtime update contract. Within a document, Marimo custom elements retain the
 classes registered first. Those classes close over their originating stores
@@ -343,13 +356,21 @@ requires several owners to reproduce.
 | Failed build          | Source reports the diagnostic while the last artifact stays mounted                      |
 | Dynamic source        | Mixed-language tabs, read-only locks, conflicts, and new files converge                  |
 | Dynamic projections   | React `map` and Svelte `each` instances resolve and release targets                      |
-| Runtime frames        | Server and WebAssembly remain mounted across workspace modes                             |
+| Runtime frames        | Server, WebAssembly, and Prepared remain mounted across workspace modes                  |
+| Prepared startup      | Real capture progress reaches Preview and gives way to native readiness                  |
+| Prepared state        | Failed replacement preserves committed values, models, and hosts                         |
 | Resource ownership    | A projected control or output survives until its final owner leaves                      |
 | Runtime isolation     | Anywidget state stays with its owning runtime                                            |
 | View transition       | Source flush, route and preview commit, then target Source hydration                     |
 | Session identity      | Preview reattaches after editor reconnect                                                |
 | Agent evidence        | Activation and observation match view, artifact, revision, runtime, session, and request |
 | Responsive workspace  | Source tabs and authored content remain operable at narrow width                         |
+
+Keep generic output-load cancellation and export-state selection cases in
+marimo-export. Studio tests protect view admission, projection adaptation,
+native model rollback, host identity, and editor isolation. Synchronize
+lifecycle tests through observable readiness or owned barriers. Assert rendered
+results and resource lifetimes through their consumer boundaries.
 
 Start with one focused package regression, then add the live case that proves
 the cross-boundary failure mode.

@@ -2,6 +2,7 @@ import { fetchRuntimeConfigForRevision } from "./remote.ts";
 import { commitRuntimeConfig, getMountConfig } from "./store.ts";
 
 export * from "./remote.ts";
+export * from "./error.ts";
 export * from "@marimo-studio/protocol/runtime-config";
 export {
   commitRuntimeConfig,

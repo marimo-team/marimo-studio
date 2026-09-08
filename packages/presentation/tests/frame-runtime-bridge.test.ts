@@ -16,6 +16,50 @@ afterEach(() => {
   globalThis.history.replaceState({}, "", "/");
 });
 
+test("advertises semantic bindings for registered controls in the active snapshot", () => {
+  globalThis.__MARIMO_MOUNT_CONFIG__ = {
+    supportUrl: "/_marimo-studio/views/dashboard",
+    version: "test",
+    revision: "presentation-revision",
+    runtime: "zero-python",
+    runtimeExplicit: true,
+    replay: false,
+    clientId: "browser-client-1234",
+    lifecycleId: 4,
+  };
+  commitRuntimeConfig(
+    runtimeConfig({ runtime: { id: "zero-python", instance: "prepared", data: {} } }),
+  );
+  setActiveDocumentLifecycleId(4);
+  const parent = { postMessage: vi.fn() };
+  vi.stubGlobal("parent", parent);
+  const apply = vi.fn<ControlEndpoint["apply"]>(async () => {});
+  const endpoint: ControlEndpoint = {
+    controlBindings: () => ({
+      "current-control": { input: "sport", path: [] },
+      "other-state-control": { input: "sport", path: [] },
+    }),
+    subscribeControlBindings: () => () => {},
+    subscribeTopology: () => () => {},
+    snapshot: () => [{ objectId: "current-control", value: ["aquatics"] }],
+    subscribe: () => () => {},
+    apply,
+    applyLocal: apply,
+    dispose: vi.fn(),
+  };
+  const stop = startFrameRuntimeBridge(null, {
+    connectControlEndpoint: () => endpoint,
+    updateRuntimeQuery: vi.fn(async () => {}),
+  });
+  const ready = parseFrameBridgeMessage(parent.postMessage.mock.calls[0]?.[0]);
+  expect(ready?.type).toBe("marimo-studio:frame-bridge-ready");
+  if (ready?.type !== "marimo-studio:frame-bridge-ready") throw new Error("Missing frame metadata");
+  expect(ready.controlMetadata?.bindings).toEqual({
+    "current-control": { input: "sport", path: [] },
+  });
+  stop();
+});
+
 test("uses distinct frame generations when randomUUID is unavailable", async () => {
   const getRandomValues = vi.fn((values: Uint32Array) => {
     values.fill(0);
@@ -341,6 +385,13 @@ test("acquires a control endpoint that becomes available after bridge startup", 
   if (ready?.type !== "marimo-studio:frame-bridge-ready") {
     throw new Error("The frame bridge did not publish its ready message");
   }
+  document.dispatchEvent(new Event("marimo-studio:runtime-ready"));
+  const available = parseFrameBridgeMessage(parent.postMessage.mock.calls.at(-1)?.[0]);
+  expect(available).toMatchObject({
+    type: "marimo-studio:frame-bridge-ready",
+    generation: ready.generation,
+    controlMetadata: { cells: expect.any(Object) },
+  });
   const event = new MessageEvent("message", {
     origin: globalThis.location.origin,
     data: {
@@ -371,4 +422,7 @@ test("acquires a control endpoint that becomes available after bridge startup", 
   expect(connect).toHaveBeenCalledTimes(2);
   stop();
   expect(dispose).toHaveBeenCalledOnce();
+  const announcements = parent.postMessage.mock.calls.length;
+  document.dispatchEvent(new Event("marimo-studio:runtime-ready"));
+  expect(parent.postMessage).toHaveBeenCalledTimes(announcements);
 });

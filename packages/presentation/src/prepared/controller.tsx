@@ -1,7 +1,6 @@
 import type {
   ControlBindings as MarimoControlBindings,
   PreparedControlInput as MarimoPreparedControlInput,
-  PreparedModelGraphFactory,
   PreparedPresentationConfig,
   PreparedThemeSource,
 } from "@marimo-studio/marimo-frontend/prepared-presentation";
@@ -9,10 +8,8 @@ import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
 import {
   mountPreparedPresentation,
-  PreparedModelGraphCheckpoint,
   releaseProjectedOutputResources,
 } from "@marimo-studio/marimo-frontend/prepared-presentation";
-import { PreparedWidgetGraph } from "@marimo-team/marimo-export/loader/anywidget";
 
 import type { PreparedProjectionSnapshot } from "./records.ts";
 import type { PreparedOutputOwners, PreparedResources } from "./resources.ts";
@@ -65,32 +62,6 @@ export interface PreparedProjectionCheckpoint {
   restore(): Promise<void>;
   dispose(): void;
 }
-
-export const createPreparedModelGraph: PreparedModelGraphFactory = (port, initial) => {
-  const graph = new PreparedWidgetGraph(port, initial);
-  const checkpoints = new WeakMap<
-    PreparedModelGraphCheckpoint,
-    ReturnType<typeof graph.checkpoint>
-  >();
-  return {
-    checkpoint() {
-      const checkpoint = new PreparedModelGraphCheckpoint();
-      checkpoints.set(checkpoint, graph.checkpoint());
-      return checkpoint;
-    },
-    replace(target, signal) {
-      if (!(target instanceof PreparedModelGraphCheckpoint)) {
-        return graph.replace(target, signal);
-      }
-      const checkpoint = checkpoints.get(target);
-      if (checkpoint === undefined) {
-        throw new Error("Prepared model checkpoint belongs to another graph");
-      }
-      return graph.replace(checkpoint, signal);
-    },
-    dispose: () => graph.dispose(),
-  };
-};
 
 const immutableControlBindings = (bindings: PreparedControlBindings): PreparedControlBindings => {
   const copy = structuredClone(bindings);
@@ -166,7 +137,6 @@ export const createPreparedProjectionMount =
   (options: MountPreparedProjectionsOptions): PreparedProjectionHandle => {
     const shell = dependencies.mountPresentation({
       ...options,
-      createModelGraph: createPreparedModelGraph,
       onControlInput:
         options.onControlInput === undefined
           ? undefined

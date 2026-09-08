@@ -13,10 +13,9 @@ from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.auth import forbidden_response, has_edit_access
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.ports import SessionState
-from marimo_studio._server.presentation.payload import build_runtime_config
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.records import ServerContext
-from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio.errors._internal import RuntimeSyncError
 
 
 async def control_config_response(
@@ -27,7 +26,6 @@ async def control_config_response(
     view_name: str,
     *,
     sessions: SessionState,
-    runtimes: RuntimeRegistry,
 ) -> Response:
     if context.mode != "edit" or not has_edit_access(request.scope):
         return forbidden_response()
@@ -49,22 +47,21 @@ async def control_config_response(
         or not sessions.exists(context, session_id)
     ):
         return _session_pending()
-    payload = await build_runtime_config(
-        snapshot,
-        context,
-        runtimes,
-        request.query_params.get("runtime"),
-        session_id,
-        client_id,
-        request.headers.get("Marimo-Studio-Preview-Session-Id"),
-        session_id,
-    )
-    runtime = payload["runtime"]
-    bindings = payload["runtimeBindings"]
-    runtime_id = runtime.get("id") if isinstance(runtime, dict) else None
-    controls = bindings if isinstance(bindings, dict) else {"cellRefs": {}}
+    try:
+        cells = await sessions.live_cells(
+            context, session_id, include_dependency_closures=False
+        )
+        bindings = await sessions.control_bindings(context, session_id)
+    except RuntimeSyncError:
+        return _session_pending()
+    if await clients.session_for_client(client_id) != session_id:
+        return _session_pending()
+    controls = {
+        "cells": snapshot.resolved.runtime_cell_refs(cells),
+        "bindings": bindings,
+    }
     encoded = json.dumps(
-        [snapshot.revision, runtime_id, controls],
+        [snapshot.revision, controls],
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -77,7 +74,6 @@ async def control_config_response(
         {
             "schema": 1,
             "revision": snapshot.revision,
-            "runtime": runtime_id,
             "controls": controls,
         },
         headers=headers,

@@ -18,7 +18,6 @@ import {
   dispatchPreviewMessage,
   dispatchPreviewRefreshHandshake,
   frame,
-  runtimeConfig,
 } from "./preview-test-support.ts";
 
 afterEach(() => {
@@ -241,8 +240,9 @@ it.each(["load-first", "message-first"] as const)(
 
 it("starts WASM control synchronization from an active rendered-view session", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>();
-  fetch.mockResolvedValueOnce(Response.json(runtimeConfig("server")));
-  fetch.mockResolvedValueOnce(Response.json(runtimeConfig("wasm")));
+  fetch.mockResolvedValueOnce(
+    Response.json({ schema: 1, revision: "revision-1", controls: { cells: {} } }),
+  );
   vi.stubGlobal("fetch", fetch);
   const editor = frame("loading");
   const preview = frame("complete");
@@ -260,7 +260,7 @@ it("starts WASM control synchronization from an active rendered-view session", a
     "wasm",
     editor,
     preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view, runtime) => `/${view}?runtime=${runtime}&marimo_studio_client=browser-client-1234`,
     (view) => `/support/${view}`,
     vi.fn(),
     vi.fn(async () => "accepted" as const),
@@ -280,7 +280,7 @@ it("starts WASM control synchronization from an active rendered-view session", a
   });
 
   await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce());
-  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch).toHaveBeenCalledOnce();
   expect(
     fetch.mock.calls.every(
       ([, init]) => new Headers(init?.headers).get("Marimo-Session-Id") === "s_editor1",
@@ -290,16 +290,15 @@ it("starts WASM control synchronization from an active rendered-view session", a
 });
 
 it("suspends hidden WASM ownership and reactivates the same document", async () => {
-  const config = (runtime: "server" | "wasm") => ({
-    ...runtimeConfig(runtime),
-    runtimeBindings: { cellRefs: { controls: `${runtime}-cell` } },
-  });
+  const config = {
+    schema: 1,
+    revision: "revision-1",
+    controls: { cells: { controls: "server-cell" } },
+  };
   const fetch = vi
     .fn<typeof globalThis.fetch>()
-    .mockResolvedValueOnce(Response.json(config("server")))
-    .mockResolvedValueOnce(Response.json(config("wasm")))
-    .mockResolvedValueOnce(Response.json(config("server")))
-    .mockResolvedValueOnce(Response.json(config("wasm")));
+    .mockResolvedValueOnce(Response.json(config))
+    .mockResolvedValueOnce(Response.json(config));
   vi.stubGlobal("fetch", fetch);
   const editor = frame("loading");
   const preview = frame("complete");
@@ -333,7 +332,7 @@ it("suspends hidden WASM ownership and reactivates the same document", async () 
     "wasm",
     editor,
     preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view, runtime) => `/${view}?runtime=${runtime}&marimo_studio_client=browser-client-1234`,
     (view) => `/support/${view}`,
     syncQuery,
     syncEditorQuery,
@@ -451,14 +450,9 @@ it("reports a live control failure and clears it after retry", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>();
   fetch.mockResolvedValueOnce(
     Response.json({
-      ...runtimeConfig("server"),
-      runtimeBindings: { cellRefs: { controls: "server-cell" } },
-    }),
-  );
-  fetch.mockResolvedValueOnce(
-    Response.json({
-      ...runtimeConfig("wasm"),
-      runtimeBindings: { cellRefs: { controls: "wasm-cell" } },
+      schema: 1,
+      revision: "revision-1",
+      controls: { cells: { controls: "server-cell" } },
     }),
   );
   vi.stubGlobal("fetch", fetch);
@@ -479,13 +473,19 @@ it("reports a live control failure and clears it after retry", async () => {
     }
   });
   const preview = frame("complete");
-  installFrameBridge(preview, previewWindow, {
-    lifecycleId: 1,
-    revision: "revision-1",
-    runtime: "wasm",
-    sessionId: null,
-    view: "dashboard",
-  });
+  installFrameBridge(
+    preview,
+    previewWindow,
+    {
+      lifecycleId: 1,
+      revision: "revision-1",
+      runtime: "wasm",
+      sessionId: null,
+      view: "dashboard",
+    },
+    [],
+    { cells: { controls: "wasm-cell" } },
+  );
   const connect = vi.fn<() => ControlEndpoint | undefined>().mockReturnValue(editorEndpoint);
   const report = vi.fn();
   const wasm = new PreviewController(
@@ -493,7 +493,7 @@ it("reports a live control failure and clears it after retry", async () => {
     "wasm",
     frame("loading"),
     preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view, runtime) => `/${view}?runtime=${runtime}&marimo_studio_client=browser-client-1234`,
     (view) => `/support/${view}`,
     vi.fn(),
     vi.fn(async () => "accepted" as const),
@@ -648,4 +648,160 @@ it("restores the committed query after an editor-session reload interrupts dispa
 
   expect(syncEditorQuery.mock.calls[1]?.[0]).toBe("?region=emea");
   server.dispose();
+});
+
+it("retains rendered content through a failed refresh until the document is reloaded", () => {
+  const report = vi.fn();
+  const server = controller(
+    "server",
+    frame("loading"),
+    frame("complete"),
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    report,
+  );
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-ready",
+    runtime: "server",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+  expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ rendered: true }));
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:receiver-unready",
+    runtime: "server",
+    lifecycleId: 1,
+    view: "dashboard",
+  });
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-error",
+    runtime: "server",
+    lifecycleId: 1,
+    view: "dashboard",
+    diagnostic: {
+      code: "refresh-failed",
+      severity: "error",
+      scope: "presentation",
+      view: "dashboard",
+      message: "The replacement could not be prepared.",
+      hint: "Check the view source.",
+    },
+  });
+  expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ rendered: true }));
+  server.reload();
+  expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ rendered: false }));
+  server.dispose();
+});
+
+it("accepts current runtime progress without changing readiness and rejects retired documents", () => {
+  const report = vi.fn();
+  const preview = controller(
+    "custom-runtime",
+    frame("loading"),
+    frame("complete"),
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    report,
+  );
+  const message = {
+    type: "marimo-studio:view-progress" as const,
+    runtime: "custom-runtime",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+    progress: { message: "Loading model", completed: 3, total: 8 },
+  };
+  dispatchPreviewMessage(null, message);
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      progress: { message: "Loading model", completed: 3, total: 8 },
+      runtimeStatus: expect.objectContaining({ current: { phase: "connecting", diagnostics: [] } }),
+    }),
+  );
+  report.mockClear();
+  dispatchPreviewMessage(null, { ...message, view: "another-view" });
+  dispatchPreviewMessage(null, { ...message, runtime: "another-runtime" });
+  expect(report).not.toHaveBeenCalled();
+  dispatchPreviewMessage(null, { ...message, progress: { message: "Checking model" } });
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      progress: { message: "Checking model" },
+    }),
+  );
+  dispatchPreviewMessage(null, { ...message, progress: null });
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({ progress: { message: "Connecting to custom-runtime" } }),
+  );
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-ready",
+    runtime: "custom-runtime",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({ progress: null, rendered: true }),
+  );
+  report.mockClear();
+  dispatchPreviewMessage(null, message);
+  expect(report).not.toHaveBeenCalled();
+  preview.reload();
+  report.mockClear();
+  dispatchPreviewMessage(null, message);
+  expect(report).not.toHaveBeenCalled();
+  preview.dispose();
+});
+
+it("retires measurements when the source revision changes or preparation fails", () => {
+  const report = vi.fn();
+  const preview = controller(
+    "custom-runtime",
+    frame("loading"),
+    frame("complete"),
+    (view) => `/${view}`,
+    report,
+  );
+  preview.presentationBaseline("revision-1");
+  const message = {
+    type: "marimo-studio:view-progress" as const,
+    runtime: "custom-runtime",
+    view: "dashboard",
+    lifecycleId: 1,
+    revision: "revision-1",
+    progress: { message: "Preparing", completed: 3, total: 8 },
+  };
+  dispatchPreviewMessage(null, message);
+  preview.presentationChanged("revision-2");
+  expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ progress: null }));
+  report.mockClear();
+  dispatchPreviewMessage(null, message);
+  expect(report).not.toHaveBeenCalled();
+  dispatchPreviewMessage(null, {
+    ...message,
+    revision: "revision-2",
+    progress: { message: "Inspecting replacement" },
+  });
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({ progress: { message: "Inspecting replacement" } }),
+  );
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-error",
+    runtime: "custom-runtime",
+    view: "dashboard",
+    lifecycleId: 1,
+    diagnostic: {
+      code: "preparation-failed",
+      message: "Preparation failed.",
+      hint: "Retry preview.",
+      severity: "error",
+      scope: "runtime",
+      view: "dashboard",
+    },
+  });
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      progress: null,
+      status: expect.objectContaining({ state: "error" }),
+    }),
+  );
+  preview.dispose();
 });

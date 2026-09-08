@@ -1,5 +1,4 @@
 import type {
-  PreparedJsonValue,
   PreparedProjectionSnapshot,
   PreparedValueSnapshot,
 } from "@marimo-studio/presentation/prepared-projections";
@@ -17,12 +16,11 @@ import {
   getMarimoDataSource,
 } from "@marimo-studio/marimo-frontend/arrow-table";
 import { parseJsonValue } from "@marimo-studio/presentation/json";
-import { defineOutputLoader, scalarLoader } from "@marimo-team/marimo-export";
+import { defineOutputLoader, loadOutputs, scalarLoader } from "@marimo-team/marimo-export";
 import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
 import { marimoCellLoader } from "@marimo-team/marimo-export/loader/marimo-cell";
 import { marimoOutputLoader } from "@marimo-team/marimo-export/loader/marimo-output";
-import { isPreparedAbort } from "@marimo-team/marimo-export/prepared";
 
 import type { StudioProjectionBindings } from "./metadata.ts";
 
@@ -59,37 +57,32 @@ const preparedArrowLoader = () => {
   });
 };
 
-const loadPreparedValue = async (
-  output: ExportOutput,
-  state: ExportState,
-  loaders: ZeroPythonProjectionLoaders,
-  signal: AbortSignal,
-): Promise<PreparedValueSnapshot["value"]> => {
-  const fingerprint = `sha256:${state.fingerprint}`;
-  if (output.codec === "marimo.json.v1") {
-    return {
-      codec: "json-v1" as const,
-      fingerprint,
-      value: studioJsonValue(await output.load(loaders.json, { signal })),
-    };
-  }
-  if (output.codec === "marimo.scalar.v1") {
-    const value = parseJsonValue(await output.load(loaders.scalar, { signal }));
-    return { codec: "json-v1" as const, fingerprint, value: studioJsonValue(value) };
-  }
-  if (output.codec === "apache.arrow.file.v1") {
-    const value = await output.load(loaders.arrow, { signal });
-    const sourceFingerprint = getMarimoDataSource(value)?.fingerprint ?? fingerprint;
-    return { codec: "arrow-ipc-v1" as const, fingerprint: sourceFingerprint, value };
-  }
+const valueLoader = (output: ExportOutput, loaders: ZeroPythonProjectionLoaders) => {
+  if (output.codec === "marimo.json.v1") return loaders.json;
+  if (output.codec === "marimo.scalar.v1") return loaders.scalar;
+  if (output.codec === "apache.arrow.file.v1") return loaders.arrow;
   throw new TypeError(
     `Prepared value ${JSON.stringify(output.name)} uses unsupported codec ${JSON.stringify(output.codec)}.`,
   );
 };
 
-const studioJsonValue = (value: JsonValue): PreparedJsonValue => {
-  // SAFETY: marimo-export portable JSON is stricter than Studio's JSON wire contract.
-  return structuredClone(value) as PreparedJsonValue;
+type ProjectionLoader = ZeroPythonProjectionLoaders[keyof ZeroPythonProjectionLoaders];
+type LoadedProjection = Awaited<ReturnType<ProjectionLoader["load"]>>;
+type PreparedArrow = Awaited<ReturnType<ZeroPythonProjectionLoaders["arrow"]["load"]>>;
+
+const preparedValue = (
+  output: ExportOutput,
+  state: ExportState,
+  loaded: LoadedProjection,
+): PreparedValueSnapshot["value"] => {
+  const fingerprint = `sha256:${state.fingerprint}`;
+  if (output.codec === "apache.arrow.file.v1") {
+    // SAFETY: valueLoader selects the Arrow loader for this output codec.
+    const value = loaded as PreparedArrow;
+    const sourceFingerprint = getMarimoDataSource(value)?.fingerprint ?? fingerprint;
+    return { codec: "arrow-ipc-v1", fingerprint: sourceFingerprint, value };
+  }
+  return { codec: "json-v1", fingerprint, value: parseJsonValue(loaded) };
 };
 
 export const loadPreparedProjectionSnapshot = async (
@@ -98,70 +91,31 @@ export const loadPreparedProjectionSnapshot = async (
   loaders: ZeroPythonProjectionLoaders,
   signal: AbortSignal,
 ): Promise<PreparedProjectionSnapshot> => {
-  const controller = new AbortController();
-  const abort = () => controller.abort(signal.reason);
-  signal.addEventListener("abort", abort, { once: true });
-  if (signal.aborted) {
-    abort();
-  }
-  const values = Object.entries(projections.values).map(async ([selector, outputName]) => {
-    const output = state.output(outputName);
-    return {
+  const values = Object.entries(projections.values).map(([selector, name]) => ({
+    selector,
+    name,
+    output: state.output(name),
+  }));
+  const selected: Record<string, ProjectionLoader> = Object.fromEntries([
+    ...values.map(({ name, output }) => [name, valueLoader(output, loaders)]),
+    ...Object.values(projections.outputs).map((name) => [name, loaders.output]),
+    ...Object.values(projections.cells).map((name) => [name, loaders.cell]),
+  ]);
+  const loaded = await loadOutputs(state, selected, { signal });
+  return {
+    values: values.map(({ selector, name, output }) => ({
       selector,
-      value: await loadPreparedValue(output, state, loaders, controller.signal),
-    };
-  });
-  const outputs = Object.entries(projections.outputs).map(async ([selector, outputName]) => {
-    const snapshot = await state
-      .output(outputName)
-      .load(loaders.output, { signal: controller.signal });
-    return {
+      value: preparedValue(output, state, loaded[name]!),
+    })),
+    outputs: Object.entries(projections.outputs).map(([selector, name]) => ({
       selector,
-      ...snapshot,
-    };
-  });
-  const cells = Object.entries(projections.cells).map(async ([alias, outputName]) => {
-    const snapshot = await state
-      .output(outputName)
-      .load(loaders.cell, { signal: controller.signal });
-    return {
+      // SAFETY: This output name was paired with the native output snapshot loader.
+      ...(loaded[name] as MarimoOutputSnapshot),
+    })),
+    cells: Object.entries(projections.cells).map(([alias, name]) => ({
       alias,
-      ...snapshot,
-    };
-  });
-  const loads = [...values, ...outputs, ...cells];
-  let primaryFailure: unknown;
-  const guarded = loads.map(async (load) => {
-    try {
-      return await load;
-    } catch (error) {
-      if (primaryFailure === undefined) {
-        primaryFailure = error;
-        controller.abort(error);
-      }
-      throw error;
-    }
-  });
-  try {
-    const settled = await Promise.allSettled(guarded);
-    const failures = settled.flatMap((result) =>
-      result.status === "rejected" && !isPreparedAbort(result.reason) ? [result.reason] : [],
-    );
-    if (primaryFailure !== undefined) {
-      const primary = primaryFailure;
-      const cleanup = failures.filter((failure) => failure !== primary);
-      if (cleanup.length > 0) {
-        throw new AggregateError([primary, ...cleanup], "Prepared projection loading failed.");
-      }
-      throw primary;
-    }
-    controller.signal.throwIfAborted();
-    return {
-      values: await Promise.all(values),
-      outputs: await Promise.all(outputs),
-      cells: await Promise.all(cells),
-    };
-  } finally {
-    signal.removeEventListener("abort", abort);
-  }
+      // SAFETY: This output name was paired with the complete-cell snapshot loader.
+      ...(loaded[name] as MarimoCellSnapshot),
+    })),
+  };
 };

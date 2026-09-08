@@ -82,14 +82,21 @@ project or packaged starter that consumes them.
 
 ### Update marimo-export
 
-Studio pins the Python `marimo-export` package and the
-`@marimo-team/marimo-export` npm package to one published version. The root uv
-configuration and pnpm workspace exempt those packages from the release-age
-delay so a coordinated release can be tested immediately.
+The Python dependency pin lives in `packages/marimo-studio/pyproject.toml`.
+The `@marimo-team/marimo-export` npm pin lives in the `pnpm-workspace.yaml`
+catalog. Coordinated releases select the same published version for both.
+The root uv configuration and pnpm workspace exempt those packages from the
+release-age delay so a coordinated release can be tested immediately.
 
-Update both version pins, then refresh `uv.lock` and `pnpm-lock.yaml` together.
-Review the registry URLs, hashes, and integrity values before running
+For a release update, update both pins and replace any checkout overrides, then
+refresh `uv.lock` and `pnpm-lock.yaml` together. Review the selected sources,
+hashes, and integrity values before running
 `make check`, `make package`, and `make e2e`.
+
+The lockfiles resolve the packages from PyPI and npm. `uv sync --locked` and
+`pnpm install --frozen-lockfile` install those registry artifacts. Verify the
+coordinated release before updating the pins so both runtimes consume the same
+published contracts.
 
 ## Work in one owning slice
 

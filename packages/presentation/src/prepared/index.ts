@@ -1,4 +1,4 @@
-export { createPreparedModelGraph, mountPreparedProjections } from "./controller.tsx";
+export { mountPreparedProjections } from "./controller.tsx";
 export { PreparedProjectionCapabilityError } from "./errors.ts";
 export { presentationThemeSource } from "./theme.ts";
 export type {

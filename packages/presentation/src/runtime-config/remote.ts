@@ -1,56 +1,20 @@
-import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import {
   type MountConfig,
   parseRuntimeConfig,
   type RuntimeConfig,
 } from "@marimo-studio/protocol/runtime-config";
+import { RUNTIME_CONFIG_STREAM_TYPE } from "@marimo-studio/protocol/runtime-config-stream";
 import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
-import { responseJson, responseJsonOrNull } from "../json.ts";
+import { responseJson } from "../json.ts";
 import { retry } from "../retry.ts";
+import { readResponseError, RuntimeConfigRequestError } from "./error.ts";
+import { runtimeProgress } from "./progress.ts";
 import { getMountConfig } from "./store.ts";
+import { readRuntimeConfigStream } from "./stream.ts";
 
 const PREVIEW_SESSION_HEADER = "Marimo-Studio-Preview-Session-Id";
-
-export interface ResponseError {
-  code: string;
-  message: string;
-  hint: string;
-  transient: boolean;
-}
-
-const responseText = async (response: Response, fallback: string) => {
-  if (response.headers.get("content-type")?.includes("text/html")) {
-    return fallback;
-  }
-  return (await response.text()).trim() || fallback;
-};
-
-export const readResponseError = async (
-  response: Response,
-  fallback: string,
-): Promise<ResponseError> => {
-  const detail = parseErrorResponse(await responseJsonOrNull(response.clone()));
-  return {
-    code: detail.error ?? "runtime-config-failed",
-    message: detail.message ?? (await responseText(response, fallback)),
-    hint: detail.hint ?? "",
-    transient: detail.transient ?? false,
-  };
-};
-
-export class RuntimeConfigRequestError extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-    readonly transient: boolean,
-    readonly hint = "",
-  ) {
-    super(message);
-    this.name = "RuntimeConfigRequestError";
-  }
-}
 
 export const runtimeConfigSessionId = ({
   connected,
@@ -99,40 +63,60 @@ export const fetchRuntimeConfig = async (
   if (sessionId) {
     headers.set("Marimo-Session-Id", sessionId);
   }
-  let response: Response;
+  const operation = runtimeProgress.begin(
+    runtime,
+    supportUrl,
+    revision ?? getMountConfig().revision,
+  );
+  let configured = false;
   try {
-    response = await fetch(url, {
-      cache: "no-store",
-      headers,
-      signal,
-    });
-  } catch (error) {
-    if (signal?.aborted) {
-      throw error;
+    headers.set("Accept", RUNTIME_CONFIG_STREAM_TYPE);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        cache: "no-store",
+        headers,
+        signal,
+      });
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
+      throw new RuntimeConfigRequestError(
+        error instanceof Error ? error.message : "Runtime config request failed.",
+        "runtime-config-unavailable",
+        true,
+        "Wait for the Studio server to become available.",
+      );
     }
-    throw new RuntimeConfigRequestError(
-      error instanceof Error ? error.message : "Runtime config request failed.",
-      "runtime-config-unavailable",
-      true,
-      "Wait for the Studio server to become available.",
-    );
+    if (!response.ok) {
+      const detail = await readResponseError(
+        response,
+        `Runtime config failed with ${response.status}`,
+      );
+      throw new RuntimeConfigRequestError(
+        detail.message,
+        detail.code,
+        detail.transient,
+        detail.hint,
+      );
+    }
+    const config =
+      response.headers.get("content-type")?.split(";", 1)[0]?.trim() === RUNTIME_CONFIG_STREAM_TYPE
+        ? await readRuntimeConfigStream(response, operation.report, signal)
+        : parseRuntimeConfig(await responseJson(response));
+    if (config.runtime.id !== runtime) {
+      throw new RuntimeConfigRequestError(
+        `The server selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,
+        "runtime-selection-mismatch",
+        false,
+      );
+    }
+    configured = true;
+    return config;
+  } finally {
+    operation.close(configured);
   }
-  if (!response.ok) {
-    const detail = await readResponseError(
-      response,
-      `Runtime config failed with ${response.status}`,
-    );
-    throw new RuntimeConfigRequestError(detail.message, detail.code, detail.transient, detail.hint);
-  }
-  const config = parseRuntimeConfig(await responseJson(response));
-  if (config.runtime.id !== runtime) {
-    throw new RuntimeConfigRequestError(
-      `The server selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,
-      "runtime-selection-mismatch",
-      false,
-    );
-  }
-  return config;
 };
 
 const RETRY_DELAYS = [100, 250, 500, 1_000] as const;

@@ -2,6 +2,7 @@ import type { ControlEndpoint } from "@marimo-studio/marimo-frontend/control-end
 
 import { connectCurrentControlEndpoint } from "@marimo-studio/marimo-frontend/control-endpoint";
 import {
+  controlMetadataSchema,
   frameControlUpdateSchema,
   parseFrameBridgeMessage,
   type FrameBridgeMessage,
@@ -10,6 +11,7 @@ import {
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 
 import { errorMessage } from "../errors.ts";
+import { readiness } from "../readiness.ts";
 import { getRuntimeConfig, subscribeRuntimeConfig } from "../runtime-config/index.ts";
 import { updateConfiguredRuntimeQuery } from "../runtime/coordinator.ts";
 import { nextBrowserOperationId } from "./browser-operation-id.ts";
@@ -113,6 +115,7 @@ export const startFrameRuntimeBridge = (
   let disposed = false;
   let endpoint: ControlEndpoint | undefined;
   let stopControls = () => {};
+  let stopBindings = () => {};
   const post = (message: FrameBridgeMessage) => {
     if (!disposed) {
       postToStudioParent(message);
@@ -134,11 +137,12 @@ export const startFrameRuntimeBridge = (
         post({
           type: "marimo-studio:frame-control-update",
           generation,
-          update: accepted,
+          update: { ...accepted, origin: update.origin },
           ...currentIdentity(sessionId),
         });
       }
     });
+    stopBindings = endpoint.subscribeControlBindings(postReady);
     return endpoint;
   };
   const applyControls = async (
@@ -213,17 +217,37 @@ export const startFrameRuntimeBridge = (
     }
   };
   const postReady = () => {
-    const controls = (connectEndpoint()?.snapshot() ?? [])
+    const currentEndpoint = connectEndpoint();
+    const bindings = currentEndpoint?.controlBindings();
+    const controls = (currentEndpoint?.snapshot() ?? [])
       .map(acceptedUpdate)
       .filter((update): update is FrameControlUpdate => update !== undefined);
-    post({
+    const ready: Extract<FrameBridgeMessage, { type: "marimo-studio:frame-bridge-ready" }> = {
       type: "marimo-studio:frame-bridge-ready",
       generation,
       controls,
       ...currentIdentity(sessionId),
-    });
+    };
+    if (currentEndpoint) {
+      const metadata = { cells: getRuntimeConfig().runtimeBindings.cellRefs };
+      const activeBindings =
+        bindings === undefined
+          ? undefined
+          : Object.fromEntries(
+              controls.flatMap(({ objectId }) =>
+                Object.hasOwn(bindings, objectId) ? [[objectId, bindings[objectId]]] : [],
+              ),
+            );
+      ready.controlMetadata = controlMetadataSchema.parse(
+        activeBindings === undefined ? metadata : { ...metadata, bindings: activeBindings },
+      );
+    } else if (readiness.snapshot().connection === "ready") {
+      ready.controlMetadata = null;
+    }
+    post(ready);
   };
   const stopConfig = subscribeRuntimeConfig(postReady);
+  document.addEventListener("marimo-studio:runtime-ready", postReady);
 
   const receive = (event: MessageEvent<unknown>) => {
     if (!isStudioParentMessage(event)) {
@@ -255,7 +279,9 @@ export const startFrameRuntimeBridge = (
     disposed = true;
     globalThis.removeEventListener("message", receive);
     stopConfig();
+    document.removeEventListener("marimo-studio:runtime-ready", postReady);
     stopControls();
+    stopBindings();
     endpoint?.dispose();
   };
 };

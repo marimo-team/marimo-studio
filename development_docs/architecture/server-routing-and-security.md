@@ -129,6 +129,20 @@ assets, configuration, projection reads, development events, selected native
 reads, and the native kernel operations required by projected controls. Native
 POST bodies are bounded before delegation.
 
+### Prepared publications
+
+Prepared support routes live under
+`/_marimo-studio/views/<view>/zero-python/`. `current` resolves the browser
+client to its editor binding and selects the publication for the requested
+presentation revision. Edit-authorized reads can request a background refresh.
+The current manifest remains available if that refresh fails.
+
+Immutable asset URLs contain an export instance and a relative path. Studio
+validates route identity and presentation authority. Marimo-export validates
+asset membership and retains the generation through the response lifetime.
+Studio preserves routing query parameters when deriving asset URLs from a
+signed manifest URL.
+
 ## Browser isolation
 
 The trusted wrapper loads provider-authored content in an iframe whose sandbox

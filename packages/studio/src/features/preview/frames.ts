@@ -33,6 +33,8 @@ const startingFrameState = (
 ): PreviewFrameState => {
   const runtimeStatus = new RuntimeDiagnostics({ runtime, view }).report();
   return {
+    rendered: false,
+    progress: null,
     url,
     lifecycleId,
     runtimeStatus,

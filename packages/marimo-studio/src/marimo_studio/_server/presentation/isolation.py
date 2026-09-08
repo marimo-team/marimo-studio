@@ -87,6 +87,7 @@ _BRIDGE = r"""(() => {
     "marimo-studio:receiver-waiting",
     "marimo-studio:view-ready",
     "marimo-studio:view-sync-pending",
+    "marimo-studio:view-progress",
     "marimo-studio:view-diagnostics",
     "marimo-studio:view-error",
     "marimo-studio:view-observation",

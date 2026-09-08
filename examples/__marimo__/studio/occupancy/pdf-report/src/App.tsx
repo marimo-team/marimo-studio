@@ -55,29 +55,33 @@ const ReportWorkbench = ({
   const [instance] = usePDF({ document });
   const ready = document !== undefined && instance.blob !== null &&
     instance.url !== null && !instance.loading && instance.error === null;
-  const pageSummaries = report
-    ? [
-      `${report.room} executive summary for ${report.period.scope_label}. ${
-        (report.period.occupancy_rate * 100).toFixed(1)
-      }% occupied across ${
-        report.period.observations.toLocaleString("en")
-      } readings.`,
-      report.period.occupied > 0
-        ? "Environmental profile comparing occupied and vacant carbon dioxide, light, temperature, and humidity readings."
-        : "Environmental profile for a scope with no occupied observations. Vacant sensor readings provide the reference profile.",
-      report.period.occupied > 0
-        ? `Model evidence at the default threshold ${
-          report.model.threshold.toFixed(2)
-        }, with ${(report.model.accuracy * 100).toFixed(1)}% accuracy and ${
-          (report.model.recall * 100).toFixed(1)
-        }% recall.`
-        : `Model evidence at the default threshold ${
-          report.model.threshold.toFixed(2)
-        }, with ${
-          (report.model.accuracy * 100).toFixed(1)
-        }% accuracy. Recall is unavailable for this scope.`,
-    ]
-    : [];
+  const pageSummaries = useMemo(
+    () =>
+      report
+        ? [
+          `${report.room} executive summary for ${report.period.scope_label}. ${
+            (report.period.occupancy_rate * 100).toFixed(1)
+          }% occupied across ${
+            report.period.observations.toLocaleString("en")
+          } readings.`,
+          report.period.occupied > 0
+            ? "Environmental profile comparing occupied and vacant carbon dioxide, light, temperature, and humidity readings."
+            : "Environmental profile for a scope with no occupied observations. Vacant sensor readings provide the reference profile.",
+          report.period.occupied > 0
+            ? `Model evidence at the default threshold ${
+              report.model.threshold.toFixed(2)
+            }, with ${(report.model.accuracy * 100).toFixed(1)}% accuracy and ${
+              (report.model.recall * 100).toFixed(1)
+            }% recall.`
+            : `Model evidence at the default threshold ${
+              report.model.threshold.toFixed(2)
+            }, with ${
+              (report.model.accuracy * 100).toFixed(1)
+            }% accuracy. Recall is unavailable for this scope.`,
+        ]
+        : [],
+    [report],
+  );
 
   return (
     <main className="report-workbench" aria-busy={!ready}>
