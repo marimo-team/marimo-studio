@@ -1,0 +1,24 @@
+apps/e2e/tests/multi-tab.spec.ts
+  s_c63703e0fda00c::t_4d506b5d295a47 95
+apps/e2e/tests/runtime-startup.spec.ts
+  s_c63703e0fda00c::t_4d506b5d295a47 197
+apps/e2e/tests/runtime.spec.ts
+  s_c63703e0fda00c::t_97bdc1409d5136 32
+  s_c63703e0fda00c::t_4d506b5d295a47 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "729c88c000d00eff755fdd4c8e7addfec30443f7",
+  "prompts": {},
+  "sessions": {
+    "s_c63703e0fda00c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07f5a-9e7d-7ff2-9e8c-87a2fa423214",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
