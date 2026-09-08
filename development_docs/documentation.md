@@ -34,9 +34,9 @@ Write one page for one reader task or one reference contract:
 5. Link to deeper reference instead of repeating the architecture.
 
 Use the product nouns from source: notebook, view, view project, Source,
-artifact, presentation, Python runtime, Browser runtime, projection, provider,
-and starter. Qualify revision, generation, document, runtime, and session by
-their owner.
+artifact, presentation, Python runtime, Browser runtime, Prepared runtime,
+projection, provider, and starter. Qualify revision, generation, document,
+runtime, and session by their owner.
 
 The root and package READMEs are compact gateways. They state the capability,
 installation, first working commands, compatibility boundary, and canonical
@@ -60,10 +60,10 @@ site. Each family names one notebook and every view exported from it.
 5. Checks links to sibling views against the family allowlist.
 6. Replaces `apps/docs/public/examples` as one directory transaction.
 
-The published example tree contains one static notebook and one Browser runtime
-export per named view. Generated example files are build evidence. Change the
-notebook, view source, provider lockfile, or example catalog, then rebuild them
-through the documentation command.
+The published example tree contains one static notebook and one Prepared
+runtime export per named view. Generated example files are build evidence.
+Change the notebook, view source, provider lockfile, or example catalog, then
+rebuild them through the documentation command.
 
 ## Build and serve
 
@@ -94,7 +94,7 @@ changed pages, navigation, search, code blocks, tables, examples, and local
 links at desktop and narrow widths.
 
 Run `make docs-examples` when iterating on exported example inputs. Run
-`make build` first when presentation or Browser runtime assets changed.
+`make build` first when presentation or runtime assets changed.
 
 Rebuild one part of an existing complete example publication with explicit
 selectors:

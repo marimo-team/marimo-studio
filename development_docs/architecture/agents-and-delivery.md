@@ -127,10 +127,17 @@ shutdown. Shutdown closes the notebook's native sessions and Studio scopes
 before releasing the adapter bundle.
 
 The Server runtime keeps Python access. The WebAssembly runtime executes a
-compatible notebook in a browser worker. Both consume the same artifact
-document and symbolic target grammar.
+compatible notebook in a browser worker. Edit-mode Prepared preview captures
+finite states from the editor session and serves their results. These runtimes
+consume the same artifact document and symbolic target grammar. Prepared live
+publication and refresh ownership are described in [Marimo
+integration](marimo-integration.md#prepared-preview-publication).
 
 ## Static export
+
+`View.export()` and `view export` default to Prepared (`zero-python`). Select
+`wasm` to run compatible Python in a browser worker. Prepared delivery packages
+captured states, their representations, and Studio's native browser renderer.
 
 Export:
 
