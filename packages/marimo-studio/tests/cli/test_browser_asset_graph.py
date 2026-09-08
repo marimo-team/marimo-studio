@@ -5,17 +5,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from marimo_studio._release_checks.browser_assets import browser_asset_graphs
 
 
-def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> None:
+@pytest.mark.parametrize("transitive_dynamic_imports", [False, True])
+def test_first_load_budget_follows_transitive_static_imports(
+    tmp_path: Path, transitive_dynamic_imports: bool
+) -> None:
     assets = tmp_path / "browser"
     (assets / "chunks").mkdir(parents=True)
     session = "../../packages/marimo-frontend/src/upstream/session.ts"
     server = "../../packages/presentation/src/runtime/server.ts"
     wasm = "../../packages/presentation/src/runtime/wasm.ts"
     source_editor = "../../packages/studio/src/features/source-editor/SourceEditor.tsx"
-    manifest = {
+    manifest: dict[str, dict[str, object]] = {
         "runtime": {
             "file": "runtime.js",
             "isEntry": True,
@@ -25,6 +30,7 @@ def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> 
         "studio": {
             "file": "studio.js",
             "isEntry": True,
+            "imports": ["leaf"],
             "assets": ["assets/brand.svg"],
             "dynamicImports": [source_editor],
         },
@@ -45,6 +51,10 @@ def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> 
         source_editor: {"file": "chunks/source-editor.js"},
         "lazy": {"file": "chunks/lazy.js"},
     }
+    if transitive_dynamic_imports:
+        manifest["runtime"]["dynamicImports"] = ["lazy"]
+        manifest["studio"]["dynamicImports"] = []
+        manifest["leaf"]["dynamicImports"] = [session, server, wasm, source_editor]
     (assets / "entry-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     for relative in (
         "runtime.js",
@@ -94,7 +104,7 @@ def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> 
             "chunks/shared.js",
             "chunks/leaf.js",
         },
-        "studio.js": {"studio.js", "studio.css", "assets/brand.svg"},
+        "studio.js": {"studio.js", "studio.css", "assets/brand.svg", "chunks/leaf.js"},
     }
     assert startups["server"] == {
         "runtime.js",
@@ -110,6 +120,7 @@ def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> 
         "studio.js",
         "studio.css",
         "assets/brand.svg",
+        "chunks/leaf.js",
         "chunks/source-editor.js",
     }
     assert startups["wasm"] == {
