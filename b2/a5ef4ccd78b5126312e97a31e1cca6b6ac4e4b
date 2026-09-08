@@ -1,0 +1,90 @@
+scripts/verify-installed-package.py
+  s_7c213792d9b0c7::t_2ef749aeee8b28 329,331
+packages/marimo-frontend/src/prepared-model-graph.ts
+  s_7c213792d9b0c7::t_0577cd55bf1056 1-26,29-520
+packages/marimo-frontend/tests/prepared-model-graph.test.ts
+  s_7c213792d9b0c7::t_0577cd55bf1056 3-152,154-172,177-422
+  s_7c213792d9b0c7::t_486dfb40005854 153,173-176
+apps/browser/tests/zero-python-interactions.test.ts
+  s_7c213792d9b0c7::t_492332ad1630e7 45,47,57
+packages/marimo-frontend/tests/prepared-models.test.ts
+  s_7c213792d9b0c7::t_0dbd4269b99e62 13,17,24,48-49,54-55,57,61,65,68-72,77,81,103-110,113-114,116-119,121-128,130-141,145-150,153,155-162,166,169-188
+scripts/verify-dist.sh
+  s_7c213792d9b0c7::t_2ef749aeee8b28 88
+packages/marimo-studio/pyproject.toml
+  s_7c213792d9b0c7::t_b6ab0dd6788b6f 15
+apps/e2e/tests/browser-diagnostics.ts
+  s_7c213792d9b0c7::t_28177439caa0ef 114,544
+packages/marimo-studio/tests/test_zero_python_api.py
+  s_7c213792d9b0c7::t_1bd924cfbe4a9f 13,328,333
+  s_7c213792d9b0c7::t_f79f63f4f2ea08 12,202,242,244,264,278-281,318-322,325-326,329-331,334,336-342
+pnpm-workspace.yaml
+  s_7c213792d9b0c7::t_b6ab0dd6788b6f 14
+packages/presentation/tests/prepared-widgets.test.ts
+  s_7c213792d9b0c7::t_3d8a29df6f2d33 319-320,324-326,403-404,409-413,419-422,514,631-632,635-637
+  s_7c213792d9b0c7::t_e244805c5074f3 1,649-652
+apps/e2e/scripts/serve-installed-package.mjs
+  s_7c213792d9b0c7::t_2ef749aeee8b28 168
+packages/marimo-studio/src/marimo_studio/_server/prepared_views.py
+  s_7c213792d9b0c7::t_f1256ede5e2c34 192-193,195
+  s_7c213792d9b0c7::t_4fc5a7a742eaca 14,36,90,92,107,112-114,118,189-191,194,196-201,203-204
+  s_7c213792d9b0c7::t_ee192e3954a5b5 25
+packages/presentation/tests/prepared-projections.test.ts
+  s_7c213792d9b0c7::t_da43b9e95b1445 521-522,525-526,634-635,637-643
+packages/marimo-frontend/tests/prepared-presentation.test.ts
+  s_7c213792d9b0c7::t_7eb00cebe0a4ea 11
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_7c213792d9b0c7::t_2ef749aeee8b28 15
+packages/marimo-studio/tests/prepared/test_state_space.py
+  s_7c213792d9b0c7::t_885a3359e11945 113
+  s_7c213792d9b0c7::t_f79f63f4f2ea08 50,58,67,84,149,151-156,159
+packages/marimo-studio/tests/server/test_runtime_progress.py
+  s_7c213792d9b0c7::t_5702bd3e3b70b3 105-106,120-121
+packages/marimo-studio/src/marimo_studio/_server/prepared_view_models.py
+  s_7c213792d9b0c7::t_4fc5a7a742eaca 28,71
+packages/marimo-frontend/src/prepared-presentation.tsx
+  s_7c213792d9b0c7::t_c0355618c44f6a 24
+  s_7c213792d9b0c7::t_0577cd55bf1056 23,101
+packages/marimo-frontend/src/prepared-models.ts
+  s_7c213792d9b0c7::t_0577cd55bf1056 24-27,30,73,83,297,321,323
+  s_7c213792d9b0c7::t_4beebee76ba21a 29
+  s_7c213792d9b0c7::t_c0355618c44f6a 41,61,68,75-76
+packages/marimo-studio/tests/prepared/test_live_publication.py
+  s_7c213792d9b0c7::t_f1256ede5e2c34 62,64,66,69-76,84,123
+  s_7c213792d9b0c7::t_a5e750d3d9fac3 25-26,48-50,56-58,61,96,104-115,117
+  s_7c213792d9b0c7::t_cf86e00e31377f 1-7,9-12,18-24,27-47,51-55,59-60,63,65,67-68,101-102,122,124
+packages/marimo-studio/tests/prepared/test_publication_admission.py
+  s_7c213792d9b0c7::t_e46531e030cb86 4-5,7,14,17,24,27,35-50,85,90,97-120,127
+  s_7c213792d9b0c7::t_7502b60bf6a40a 9,89,121-124
+  s_7c213792d9b0c7::t_a5e750d3d9fac3 1-3,6,8,10-13,15-16,18-23,25-26,28-34,51-84,86-88,91-96,125-126,128-129
+packages/presentation/src/prepared/transaction.tsx
+  s_7c213792d9b0c7::t_c0355618c44f6a 3,210
+apps/browser/src/zero-python/projections.ts
+  s_7c213792d9b0c7::t_43589b0b10ced9 19,60-73,76-77,80-81,83,85,94-106,108-110,112-115,117-120
+apps/e2e/tests/runtime.spec.ts
+  s_7c213792d9b0c7::t_28177439caa0ef 1-2,7,27-43,256,278,300,333,359
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_7c213792d9b0c7::t_e837d9fc91f0d2 13,158-166,172,191
+packages/presentation/src/prepared/index.ts
+  s_7c213792d9b0c7::t_0577cd55bf1056 1
+packages/marimo-studio/src/marimo_studio/_prepared/resolve.py
+  s_7c213792d9b0c7::t_abc8adc0131fce 10,28-30,56
+packages/marimo-studio/tests/prepared/test_compiler.py
+  s_7c213792d9b0c7::t_f79f63f4f2ea08 29,59-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b2a5ef4ccd78b5126312e97a31e1cca6b6ac4e4b",
+  "prompts": {},
+  "sessions": {
+    "s_7c213792d9b0c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07daf-470a-7392-a650-f138964604c9",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
