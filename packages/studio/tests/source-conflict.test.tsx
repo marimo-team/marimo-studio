@@ -15,6 +15,15 @@ it.each([
     diskLabel: "Saved version",
   },
   {
+    kind: "unavailable" as const,
+    name: "theme.css",
+    local: "local style",
+    remote: "saved style",
+    revision: "r1",
+    message: "theme.css is unavailable. Restore access to the file to save your edits.",
+    diskLabel: "Last saved version",
+  },
+  {
     kind: "orphan" as const,
     name: "src/App.tsx",
     local: "local app",
@@ -40,6 +49,9 @@ it.each([
   );
 
   expect(screen.getByRole("alert")).toHaveTextContent(scenario.message);
+  expect(
+    screen.queryByRole("button", { name: "Overwrite saved version with my edits" }),
+  ).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Compare" }));
   expect(screen.getByText(scenario.local)).toBeVisible();
   expect(screen.getByText(scenario.remote)).toBeVisible();

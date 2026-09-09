@@ -6,6 +6,7 @@ import { expect, it, vi } from "vite-plus/test";
 import type { RemoteSource, SourceRemote } from "../src/features/source-editor/remote.ts";
 
 import { SourceController } from "../src/features/source-editor/controller.ts";
+import { SourceUnavailable } from "../src/features/source-editor/remote.ts";
 import { unbuiltView, viewOwner } from "./fixtures.ts";
 
 const deferred = <T>() => {
@@ -61,7 +62,7 @@ class MemorySourceRemote implements SourceRemote {
     this.reads.push(`${view}:${path}`);
     const source = this.files.get(`${view}:${path}`);
     if (!source) {
-      return Promise.reject(new Error(`Missing source ${path}`));
+      return Promise.reject(new SourceUnavailable(`Missing source ${path}`));
     }
     return Promise.resolve({ ...source });
   }
@@ -185,6 +186,104 @@ it("loads provider documents in order and enforces read-only access", async () =
   expect(remote.writes).toEqual([]);
   expect(source.hasPendingChanges).toBe(false);
 
+  source.dispose();
+});
+
+it("recovers an unavailable source draft through full refresh and discard", async () => {
+  const remote = new MemorySourceRemote();
+  remote.setProject("react", [document("theme.css", "css")]);
+  const source = controller(remote);
+  await source.start();
+  source.edit("theme.css", "local draft");
+  remote.files.delete("react:theme.css");
+
+  source.reconcile();
+
+  await vi.waitFor(() =>
+    expect(source.getSnapshot().documents[0]?.state.conflict).toMatchObject({
+      kind: "unavailable",
+      local: "local draft",
+      remote: { content: "source:react:theme.css", revision: "revision:react:theme.css" },
+    }),
+  );
+  source.reconcile();
+  await vi.waitFor(() => expect(source.getSnapshot().inspection.phase).toBe("ready"));
+  source.edit("theme.css", "latest draft");
+  source.overwriteSavedVersion();
+
+  expect(source.getSnapshot().documents[0]?.state.conflict).toMatchObject({
+    kind: "unavailable",
+    local: "latest draft",
+  });
+  expect(await source.prepareViewChange()).toBe(false);
+  expect(remote.writes).toEqual([]);
+
+  source.useSavedVersion();
+
+  expect(source.getSnapshot().documents[0]).toMatchObject({
+    content: "",
+    state: { phase: "error", conflict: undefined },
+  });
+  expect(source.hasPendingChanges).toBe(false);
+  expect(await source.prepareViewChange()).toBe(true);
+  expect(remote.writes).toEqual([]);
+  source.edit("theme.css", "draft after discard");
+  expect(source.getSnapshot().documents[0]?.state.conflict?.kind).toBe("unavailable");
+  expect(await source.flush()).toBe(false);
+  expect(remote.writes).toEqual([]);
+  source.useSavedVersion();
+  source.dispose();
+});
+
+it.each([
+  { label: "new", content: "restored style", revision: "restored" },
+  {
+    label: "original",
+    content: "source:react:theme.css",
+    revision: "revision:react:theme.css",
+  },
+])("resolves a restored source against its $label saved revision", async (restored) => {
+  const remote = new MemorySourceRemote();
+  const write = vi.spyOn(remote, "write");
+  remote.setProject("react", [document("theme.css", "css")]);
+  const source = controller(remote);
+  await source.start();
+  source.edit("theme.css", "retained draft");
+  remote.files.delete("react:theme.css");
+  source.externalChanges([{ path: "theme.css", revision: null }]);
+  await vi.waitFor(() =>
+    expect(source.getSnapshot().documents[0]?.state.conflict?.kind).toBe("unavailable"),
+  );
+
+  remote.files.set("react:theme.css", {
+    content: restored.content,
+    revision: restored.revision,
+  });
+  source.reconcile();
+
+  await vi.waitFor(() =>
+    expect(source.getSnapshot().documents[0]?.state.conflict).toEqual({
+      kind: "revision",
+      local: "retained draft",
+      remote: { content: restored.content, revision: restored.revision },
+    }),
+  );
+  expect(write).not.toHaveBeenCalled();
+  source.overwriteSavedVersion();
+  expect(await source.flush()).toBe(true);
+  expect(write).toHaveBeenCalledWith(
+    "react",
+    "theme.css",
+    "retained draft",
+    restored.revision,
+    viewOwner.catalog_generation,
+    viewOwner.view_generation,
+  );
+  expect(source.hasPendingChanges).toBe(false);
+  expect(source.getSnapshot().documents[0]?.state).toMatchObject({
+    phase: "saved",
+    conflict: undefined,
+  });
   source.dispose();
 });
 
@@ -803,6 +902,9 @@ it.each([
   await source.start();
   source.edit("src/App.tsx", "local draft");
   remote.setProject("react", nextDocuments, provider);
+  if (changes.some(({ revision }) => revision === null)) {
+    remote.files.delete("react:src/App.tsx");
+  }
 
   source.externalChanges(changes);
 

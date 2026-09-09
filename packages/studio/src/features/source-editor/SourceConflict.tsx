@@ -18,6 +18,7 @@ export const SourceConflict = ({
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const discardOnly = conflict.kind !== "revision";
   const message = {
+    unavailable: `${name} is unavailable. Restore access to the file to save your edits.`,
     orphan: `${name} is no longer part of this view.`,
     "read-only": `${name} became read-only while you were editing.`,
     revision: `${name} changed on disk while you were editing.`,
@@ -58,7 +59,11 @@ export const SourceConflict = ({
             <pre>{conflict.local}</pre>
           </section>
           <section>
-            <strong>{conflict.kind === "orphan" ? "Last saved version" : "Saved version"}</strong>
+            <strong>
+              {conflict.kind === "orphan" || conflict.kind === "unavailable"
+                ? "Last saved version"
+                : "Saved version"}
+            </strong>
             <pre>{conflict.remote.content}</pre>
           </section>
         </div>
