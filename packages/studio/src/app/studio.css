@@ -1,4 +1,5 @@
-:root {
+:root,
+.studio {
   color-scheme: light dark;
   font-family: "PT Sans", ui-sans-serif, system-ui, sans-serif;
   --studio-background: light-dark(hsl(0deg 0% 100%), hsl(150deg 7.7% 10.2%));
