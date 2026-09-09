@@ -111,17 +111,19 @@ def test_zero_python_runtime_uses_notebook_scoped_publication_owner(
     )
 
 
+@pytest.mark.parametrize("access_token", ["", "prepared-access-token"])
 def test_prepared_manifest_follows_the_browser_editor_binding(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    access_token: str,
 ) -> None:
     studio = configured(notebook_path)
     update_notebook_config(
         studio.notebook,
         lambda config: config.update({"runtimes": ["server", "zero-python"]}),
     )
-    app = marimo_app(studio.notebook)
+    app = marimo_app(studio.notebook, token=access_token)
     edit_mode(app)
     browser_client = "browser-client-1234"
     editor_session: str | None = "s_abcdef"
@@ -144,6 +146,9 @@ def test_prepared_manifest_follows_the_browser_editor_binding(
     ) -> Any:
         assert request.binding_id == editor_session
         assert request.session_id == editor_session
+        assert request.access_token == (access_token or None)
+        if access_token:
+            assert access_token not in repr(request)
         instance = ("1" if editor_session == "s_abcdef" else "2") * 64
 
         def manifest(export_url: str) -> dict[str, object]:
@@ -198,7 +203,9 @@ def test_prepared_manifest_follows_the_browser_editor_binding(
     )
     params = {"runtime": "zero-python", "marimo_studio_client": browser_client}
     headers = {"Marimo-Studio-Preview-Session-Id": "s_123456"}
-    with TestClient(app) as client:
+    with TestClient(
+        app, headers={"Authorization": f"Bearer {access_token}"} if access_token else {}
+    ) as client:
         configured_response = client.get(
             "/_marimo-studio/views/dashboard/config", params=params, headers=headers
         )

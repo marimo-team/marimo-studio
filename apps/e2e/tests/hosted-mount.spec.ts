@@ -1,6 +1,9 @@
+import { runtimeConfigSchema } from "@marimo-studio/protocol/runtime-config";
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
 import { readFile } from "node:fs/promises";
+import { z } from "zod";
 
+import { studioClientId, studioEditorSessionId } from "./authoring-test-support.ts";
 import {
   editorSlider,
   expect,
@@ -9,6 +12,7 @@ import {
   labeledSlider,
   previewFrame,
   recoverRequestAbort,
+  recoverWorkspaceEventStream,
   studioServerToken,
   test,
   waitForPreview,
@@ -18,6 +22,50 @@ const baseUrl = `${hostedOrigin}/hosted`;
 const accessToken = "studio-e2e-token";
 
 test.use({ services: ["hosted"] });
+
+test("captures a fresh HTML view through an authenticated hosted mount", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    `${baseUrl}/_marimo-studio/dev/events`,
+    1,
+  );
+  await page.goto(`${baseUrl}/studio/?access_token=${accessToken}`);
+  await page
+    .getByLabel("Start with", { exact: true })
+    .selectOption("marimo-studio/vanilla:default");
+  await page.getByRole("button", { name: "Create dashboard" }).click();
+  await waitForPreview(page);
+
+  const clientId = await studioClientId(page);
+  const response = await page.request.get(`${baseUrl}/_marimo-studio/views/dashboard/config`, {
+    params: { runtime: "zero-python", marimo_studio_client: clientId },
+    headers: { "Marimo-Studio-Preview-Session-Id": "s_export" },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const config = runtimeConfigSchema.parse(await response.json());
+  expect(config.runtime.id).toBe("zero-python");
+  const manifest = await page.request.get(
+    new URL(z.string().parse(config.runtime.data.manifestUrl), baseUrl).href,
+  );
+  expect(manifest.ok(), await manifest.text()).toBe(true);
+  expect(await manifest.json()).toMatchObject({
+    schema: "marimo-studio.prepared.v1",
+    view: "dashboard",
+  });
+
+  const controls = await page.request.get(`${baseUrl}/_marimo-studio/views/dashboard/controls`, {
+    params: { revision: config.revision, marimo_studio_client: clientId },
+    headers: { "Marimo-Session-Id": await studioEditorSessionId(page) },
+  });
+  expect(controls.ok(), await controls.text()).toBe(true);
+  expect(Object.values((await controls.json()).controls.bindings)).toContainEqual({
+    input: "scale",
+    path: [],
+  });
+  await recoverWorkspaceEventStream(replacedWorkspaceStream);
+});
 
 test("initializes and runs Studio through an authenticated hosted mount", async ({
   browserDiagnostics,

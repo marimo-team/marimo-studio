@@ -41,6 +41,7 @@ class Connector(Protocol):
         self,
         server: str,
         *,
+        access_token: str | None = None,
         server_token: str | None = None,
         timeout: float = 30.0,
     ) -> Client: ...
@@ -146,6 +147,7 @@ class PreparedViewRegistry:
                 progress(RuntimeProgress("Inspecting notebook states"))
             with self._connector(
                 request.server,
+                access_token=request.access_token,
                 server_token=request.server_token,
             ) as client:
                 session = client.session(request.session_id)

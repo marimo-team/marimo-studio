@@ -7,6 +7,7 @@
 # [tool.marimo-studio]
 # default = "dashboard"
 # preserve_session = false
+# runtimes = ["server", "zero-python"]
 #
 # [tool.marimo-studio.cells]
 #

@@ -68,21 +68,13 @@ if __name__ == "__main__":
         ):
             session = client.session(managed.session_id)
 
-            def connector(
-                server: str, *, server_token: str | None = None, timeout: float = 30
-            ) -> Client:
-                return Client(
-                    server, access_token=managed.access_token, timeout=timeout
-                )
-
-            registry = PreparedViewRegistry(
-                notebook, repository=repository, connector=connector
-            )
+            registry = PreparedViewRegistry(notebook, repository=repository)
             request = PreparedViewRequest(
                 snapshot=snapshot,
                 state_space_source=source,
                 server=managed.base_url,
                 server_token="test",
+                access_token=managed.access_token,
                 session_id=session.id,
                 binding_id=session.id,
             )

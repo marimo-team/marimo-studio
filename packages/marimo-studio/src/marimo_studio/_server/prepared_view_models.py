@@ -23,6 +23,7 @@ class PreparedViewRequest:
     server_token: str = field(repr=False)
     session_id: str
     binding_id: str
+    access_token: str | None = field(default=None, repr=False)
 
     @property
     def key(self) -> tuple[str, str, str]:
