@@ -303,7 +303,8 @@ export class ProjectionReadRequestWindow {
       successor.kind !== aborted.kind ||
       aborted.wire === undefined ||
       successor.wire === undefined ||
-      successor.wire.revision === aborted.wire.revision
+      (successor.wire.revision === aborted.wire.revision &&
+        (aborted.kind !== "values" || this.successorPolicy !== "exact"))
     ) {
       return false;
     }
