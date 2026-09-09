@@ -1,0 +1,43 @@
+packages/marimo-studio/src/marimo_studio/_compat/server/session_state.py
+  s_c80f4055fb6e2b::t_9a65798c95d62d 632-636
+packages/marimo-studio/tests/prepared/test_live_publication.py
+  s_c80f4055fb6e2b::t_86969cdbd41d83 71,77
+packages/marimo-studio/src/marimo_studio/_server/prepared_view_models.py
+  s_c80f4055fb6e2b::t_86969cdbd41d83 26
+packages/marimo-studio/src/marimo_studio/_server/prepared_views.py
+  s_c80f4055fb6e2b::t_9a65798c95d62d 44,150
+packages/marimo-studio/src/marimo_studio/_server/publication_runtime.py
+  s_c80f4055fb6e2b::t_9a65798c95d62d 70
+apps/e2e/fixtures-hosted/notebook.py
+  s_c80f4055fb6e2b::t_f3927c0081572e 10
+packages/marimo-studio/tests/server/test_zero_python_runtime.py
+  s_c80f4055fb6e2b::t_d9b575c7fd890a 114,119,126,149-151,206-208
+packages/marimo-studio/src/marimo_studio/_server/records.py
+  s_c80f4055fb6e2b::t_86969cdbd41d83 38
+packages/marimo-studio/tests/marimo_compat/test_session_state.py
+  s_c80f4055fb6e2b::t_9a65798c95d62d 546-548,577-582
+apps/e2e/tests/hosted-mount.spec.ts
+  s_c80f4055fb6e2b::t_78d5fad6f9d1b5 15,67
+  s_c80f4055fb6e2b::t_60a5dfaf7f945f 27-33
+  s_c80f4055fb6e2b::t_48938d8c8b72bd 1,4,6,26,41-48,52-66
+  s_c80f4055fb6e2b::t_c06abe8e833ffb 34-40,68-69
+  s_c80f4055fb6e2b::t_072d71e5fcb800 49-51
+packages/marimo-studio/src/marimo_studio/_compat/server/gateway.py
+  s_c80f4055fb6e2b::t_9a65798c95d62d 206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b258366f016fb25c945d0a47ffcf09a671c2c828",
+  "prompts": {},
+  "sessions": {
+    "s_c80f4055fb6e2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0865e-3882-70f2-859b-f1b3a42ebc06",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
