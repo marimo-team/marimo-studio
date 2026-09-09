@@ -423,7 +423,7 @@ export const startPresentation = (registry: RuntimeRegistry): void => {
           view: supportView(supportUrl),
           revision,
           progress: configured
-            ? { message: runtime === "wasm" ? "Starting browser notebook" : "Opening preview" }
+            ? { message: runtime === "wasm" ? "Starting the Browser runtime" : "Opening preview" }
             : progress,
         });
       }),

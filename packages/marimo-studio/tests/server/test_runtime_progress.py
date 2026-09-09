@@ -208,7 +208,7 @@ def test_runtime_config_negotiates_streaming(notebook_path: Path) -> None:
     messages = [json.loads(line) for line in response.text.splitlines()]
     assert messages[0] == {
         "type": "progress",
-        "progress": {"message": "Connecting to Python"},
+        "progress": {"message": "Connecting to the Python runtime"},
     }
     assert messages[-1]["type"] == "config"
     assert messages[-1]["config"]["runtime"]["id"] == "server"

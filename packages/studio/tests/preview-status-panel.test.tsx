@@ -11,7 +11,7 @@ const starting = (): PreviewFrameState => ({
   progress: null,
   url: "https://studio.test/views/report",
   lifecycleId: 1,
-  status: { state: "loading", message: "Connecting to Python", diagnostics: [] },
+  status: { state: "loading", message: "Connecting to the Python runtime", diagnostics: [] },
   runtimeStatus: new RuntimeDiagnostics({ runtime: "server", view: "report" }).report(),
 });
 
@@ -20,7 +20,9 @@ describe("preview preparation", () => {
     const state = starting();
     const onRetry = vi.fn();
     const { rerender } = render(<PreviewStatusPanel state={state} onRetry={onRetry} />);
-    expect(screen.getByRole("progressbar", { name: "Connecting to Python" })).toBeVisible();
+    expect(
+      screen.getByRole("progressbar", { name: "Connecting to the Python runtime" }),
+    ).toBeVisible();
 
     rerender(
       <PreviewStatusPanel

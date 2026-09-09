@@ -37,7 +37,7 @@ def _recovery_hint(error: MarimoExportError) -> str:
         return "Check the view projections and configured notebook states, then retry."
     return (
         "Inspect the reported notebook output and state. "
-        "Fix the input or select Python or Browser in Studio."
+        "Fix the input or select the Python runtime or Browser runtime in Studio."
     )
 
 
@@ -132,14 +132,15 @@ def publication_error(
             ]
             return PublicationError(
                 (
-                    "Prepared cannot display this notebook output because it calls "
-                    "Python functions."
+                    "The Prepared runtime cannot display this notebook output "
+                    "because it calls Python functions."
                 ),
                 code="zero-python-projection-functions",
                 details=diagnostic,
                 hint=(
-                    "Select Python or Browser in Studio, or export with WebAssembly. "
-                    "To use Prepared, project serializable data "
+                    "Select the Python runtime or Browser runtime in Studio, "
+                    "or export with WebAssembly. "
+                    "To use the Prepared runtime, project serializable data "
                     "or a portable notebook output."
                 ),
             )
@@ -154,14 +155,15 @@ def publication_error(
     if isinstance(functions, list) and functions:
         return PublicationError(
             (
-                f"Prepared cannot display {kind} projection {target!r} because "
-                "its notebook output calls Python functions."
+                f"The Prepared runtime cannot display {kind} projection {target!r} "
+                "because its notebook output calls Python functions."
             ),
             code="zero-python-projection-functions",
             details=diagnostic,
             hint=(
-                "Select Python or Browser in Studio, or export with WebAssembly. "
-                "To use Prepared, project serializable data "
+                "Select the Python runtime or Browser runtime in Studio, "
+                "or export with WebAssembly. "
+                "To use the Prepared runtime, project serializable data "
                 "or a portable notebook output."
             ),
         )

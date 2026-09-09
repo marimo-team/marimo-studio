@@ -66,7 +66,7 @@ export interface StudioPreparedContext {
 export const parseZeroPythonRuntimeData = (input: UnparsedRuntimeData): ZeroPythonRuntimeData => {
   const parsed = runtimeDataSchema.safeParse(input);
   if (!parsed.success) {
-    throw new ZeroPythonRuntimeError("manifest_invalid", "Zero-Python runtime data is invalid.", {
+    throw new ZeroPythonRuntimeError("manifest_invalid", "Prepared runtime data is invalid.", {
       cause: parsed.error,
     });
   }

@@ -93,8 +93,8 @@ export class StudioPreparedInteractions {
       if (!this.isDisposed()) {
         console.warn(
           peer
-            ? "Zero-Python peer control state could not be applied"
-            : "Zero-Python control state is not prepared yet",
+            ? "Prepared runtime peer control state could not be applied"
+            : "Prepared runtime control state is not prepared yet",
           error,
         );
       }

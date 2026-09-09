@@ -9,14 +9,21 @@ export interface PreviewStatus {
   state: "loading" | "ready" | "warning" | "error";
 }
 
-const STARTING_MESSAGES = new Map([
-  ["server", "Connecting to Python"],
-  ["wasm", "Starting browser notebook"],
-  ["zero-python", "Starting Prepared preview"],
+const RUNTIME_NAMES = new Map([
+  ["server", "Python runtime"],
+  ["wasm", "Browser runtime"],
+  ["zero-python", "Prepared runtime"],
 ]);
 
-export const previewStartingMessage = (runtime: string): string =>
-  STARTING_MESSAGES.get(runtime) ?? `Connecting to ${runtime}`;
+export const previewRuntimeName = (runtime: string): string =>
+  RUNTIME_NAMES.get(runtime) ?? `Runtime "${runtime}"`;
+
+export const previewStartingMessage = (runtime: string): string => {
+  const name = RUNTIME_NAMES.get(runtime);
+  return name
+    ? `${runtime === "server" ? "Connecting to" : "Starting"} the ${name}`
+    : `Connecting to runtime "${runtime}"`;
+};
 
 const degradedMessage = (diagnostics: readonly BrowserDiagnostic[]): string => {
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error").length;

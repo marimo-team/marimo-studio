@@ -44,13 +44,17 @@ test("keeps the startup document while runtime configuration is pending", async 
     await pending;
     const frame = page.locator('iframe[data-preview-runtime-frame="server"]');
     const documentUrl = await frame.getAttribute("src");
-    await expect(page.getByRole("progressbar", { name: "Connecting to Python" })).toBeVisible();
+    await expect(
+      page.getByRole("progressbar", { name: "Connecting to the Python runtime" }),
+    ).toBeVisible();
     await page.clock.runFor(11_000);
     await expect(frame).toHaveAttribute("src", documentUrl!);
     release();
     await waitForPreview(page);
     await expectPreviewInteractive(page, "server");
-    await expect(page.getByRole("progressbar", { name: "Connecting to Python" })).toHaveCount(0);
+    await expect(
+      page.getByRole("progressbar", { name: "Connecting to the Python runtime" }),
+    ).toHaveCount(0);
   } finally {
     release();
   }
@@ -87,7 +91,7 @@ test("shows a startup failure and retries configuration on request", async ({
     });
   });
   await page.goto(studioEntryUrl);
-  const failure = page.getByRole("alert").filter({ hasText: "Preview could not start" });
+  const failure = page.getByRole("alert").filter({ hasText: "Python runtime could not start" });
   await expect(failure).toContainText("Notebook states could not be captured.");
   await expect(failure).toContainText("Check the notebook outputs, then retry.");
   await failure.getByText("Technical details").click();

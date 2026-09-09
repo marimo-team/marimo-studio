@@ -62,7 +62,7 @@ export class ZeroPythonRuntimeController {
       } catch (cleanupError) {
         throw new AggregateError(
           [error, cleanupError],
-          "Zero-Python runtime startup and cleanup failed.",
+          "Prepared runtime startup and cleanup failed.",
         );
       }
       throw error;

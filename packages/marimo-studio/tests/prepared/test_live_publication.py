@@ -108,7 +108,7 @@ def test_live_preparation_reports_source_candidates_when_planning_rejects_callba
         assert len(candidate["sources"]) == 1
         assert candidate["sources"][0]["path"] == "index.html"
         assert candidate["sources"][0]["line"] > 0
-    assert "Python or Browser" in failure.public_hint
+    assert "Python runtime or Browser runtime" in failure.public_hint
     assert "serializable data" in failure.public_hint
 
 

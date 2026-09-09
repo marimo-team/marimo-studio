@@ -729,7 +729,7 @@ it("accepts current runtime progress without changing readiness and rejects reti
   );
   dispatchPreviewMessage(null, { ...message, progress: null });
   expect(report).toHaveBeenLastCalledWith(
-    expect.objectContaining({ progress: { message: "Connecting to custom-runtime" } }),
+    expect.objectContaining({ progress: { message: 'Connecting to runtime "custom-runtime"' } }),
   );
   dispatchPreviewMessage(null, {
     type: "marimo-studio:view-ready",
