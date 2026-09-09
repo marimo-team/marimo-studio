@@ -1,0 +1,36 @@
+packages/studio/src/features/source-editor/source-editor.css
+  s_f87c5165483b87::t_89cba42768bd45 204-207
+docs/reference/compatibility.md
+  s_f87c5165483b87::t_8a01e68b509cc0 77-82
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/build.py
+  s_f87c5165483b87::t_63231d099d5983 11,423
+  s_f87c5165483b87::t_34a1e4f122d299 434-437
+  s_f87c5165483b87::t_f15e16f61a7762 8,421-422,424-433,438-450,547,549-550
+packages/marimo-studio/src/marimo_studio/_server/presentation/service.py
+  s_f87c5165483b87::t_fe0db70847866a 31,56,401-424
+packages/marimo-studio/tests/providers/test_deno_react.py
+  s_f87c5165483b87::t_7929a3ba701d35 389-392
+packages/marimo-studio/tests/providers/test_react_diagnostics.py
+  s_f87c5165483b87::t_63231d099d5983 3,8-10,42-45,48,56-64,67,77
+  s_f87c5165483b87::t_90ae6cae0a2b44 1-2,4-7,11-41,46-47,49-55,65-66,68-76,78-79
+packages/marimo-studio/tests/server/test_presentation.py
+  s_f87c5165483b87::t_f44cd09bb80e94 32,224
+  s_f87c5165483b87::t_29b7be5b880d62 221-223,225-226,228-245
+  s_f87c5165483b87::t_fe0db70847866a 227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "56ba17b6132af8d001eb4667bcc3c0ddc141e6db",
+  "prompts": {},
+  "sessions": {
+    "s_f87c5165483b87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08266-dea1-7122-b642-2b415adb8648",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
