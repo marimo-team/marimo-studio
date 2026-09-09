@@ -67,6 +67,7 @@ class PublicationRuntimeProjector:
                     ),
                     server=context.internal_url,
                     server_token=context.server_token,
+                    access_token=context.access_token,
                     session_id=session_id,
                     binding_id=binding_id,
                 ),

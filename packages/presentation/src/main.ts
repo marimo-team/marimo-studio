@@ -33,6 +33,7 @@ import {
 import { errorMessage } from "./errors";
 import { startPresentationObservers, stopPresentationObservers } from "./observers";
 import { projectionHosts } from "./projections/host-runtime";
+import { beginPresentationRefresh, setPresentationRefreshState } from "./readiness.ts";
 import { setRuntimeConnectionState } from "./rendered-view-observer";
 import {
   commitRuntimeConfig,
@@ -82,8 +83,9 @@ const showRuntimeError = (cause: unknown) => {
     message: errorMessage(cause),
     hint:
       cause instanceof RuntimeConfigRequestError
-        ? cause.hint
+        ? cause.hint || "Check the error details and server logs, then retry the preview."
         : "Reload the view after the runtime is available.",
+    details: cause instanceof RuntimeConfigRequestError ? cause.details : undefined,
   });
   console.error("marimo-studio runtime error", cause);
 };
@@ -347,22 +349,31 @@ const bootstrap = async (registry: RuntimeRegistry, signal = documentLifetime.si
     throw new Error("Missing #marimo-runtime-root");
   }
   onFinalPageHide(disposeConfiguredRuntime);
-  const session = await mountConfiguredRuntime(registry, config, runtimeRoot);
-  if (session.update(getRuntimeConfig()) === "reload") {
-    globalThis.location.reload();
-    return;
-  }
-  const stopStaticQueryHistory = livePresentation
-    ? () => {}
-    : bindRuntimeQueryHistory((query) => session.updateQuery(query));
-  onFinalPageHide(stopStaticQueryHistory);
-  browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "mounted";
-  const stopFrameBridge = startFrameRuntimeBridge(session.sessionId ?? null);
-  onFinalPageHide(stopFrameBridge);
-  const sessionId = session.sessionId;
-  if (sessionId) {
-    presentationRevisions.rememberSession(sessionId);
-    onFinalPageHide(() => presentationRevisions.rememberSession(sessionId));
+  // A runtime can report ready during mount, before its frame bridge exists.
+  const runtimeClaim = beginPresentationRefresh("runtime");
+  let mounted = false;
+  try {
+    const session = await mountConfiguredRuntime(registry, config, runtimeRoot);
+    signal.throwIfAborted();
+    if (session.update(getRuntimeConfig()) === "reload") {
+      globalThis.location.reload();
+      return;
+    }
+    const stopStaticQueryHistory = livePresentation
+      ? () => {}
+      : bindRuntimeQueryHistory((query) => session.updateQuery(query));
+    onFinalPageHide(stopStaticQueryHistory);
+    const stopFrameBridge = startFrameRuntimeBridge(session.sessionId ?? null);
+    onFinalPageHide(stopFrameBridge);
+    const sessionId = session.sessionId;
+    if (sessionId) {
+      presentationRevisions.rememberSession(sessionId);
+      onFinalPageHide(() => presentationRevisions.rememberSession(sessionId));
+    }
+    browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "mounted";
+    mounted = true;
+  } finally {
+    setPresentationRefreshState(runtimeClaim, mounted ? "ready" : "error");
   }
 };
 
@@ -380,6 +391,7 @@ const start = (registry: RuntimeRegistry) => {
         code: cause.code,
         message: cause.message,
         hint: cause.hint || "Wait for the notebook session to settle.",
+        details: cause.details,
       });
       if (cause.code === "presentation-revision-mismatch") {
         setTimeout(() => {
@@ -411,7 +423,7 @@ export const startPresentation = (registry: RuntimeRegistry): void => {
           view: supportView(supportUrl),
           revision,
           progress: configured
-            ? { message: runtime === "wasm" ? "Starting browser notebook" : "Opening preview" }
+            ? { message: runtime === "wasm" ? "Starting the Browser runtime" : "Opening preview" }
             : progress,
         });
       }),

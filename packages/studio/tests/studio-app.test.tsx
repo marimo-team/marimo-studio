@@ -101,7 +101,7 @@ describe("Studio shell", () => {
       />,
     );
 
-    const status = screen.getByRole("status");
+    const status = screen.getByRole("status", { name: "Preview runtime status" });
     expect(status).toHaveTextContent("Live with 1 warning");
     expect(status).toHaveTextContent("The projected value is stale.");
     expect(status).toHaveTextContent("summary.total");

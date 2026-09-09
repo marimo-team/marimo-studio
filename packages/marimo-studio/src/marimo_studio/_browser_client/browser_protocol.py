@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from itertools import pairwise
 from typing import Any, Literal, cast
@@ -469,7 +470,7 @@ def _parse_diagnostic(value: object, expected_view: str) -> BrowserDiagnostic:
     if not isinstance(value, dict):
         raise ProtocolError("A Studio browser diagnostic is invalid.")
     required = {"code", "severity", "message", "hint", "view", "scope"}
-    optional = {"projection", "target", "source"}
+    optional = {"projection", "target", "source", "details"}
     if not required.issubset(value) or not set(value).issubset(required | optional):
         raise ProtocolError("A Studio browser diagnostic is invalid.")
     code = value.get("code")
@@ -481,6 +482,7 @@ def _parse_diagnostic(value: object, expected_view: str) -> BrowserDiagnostic:
     target = value.get("target")
     projection = value.get("projection")
     source = value.get("source")
+    details = value.get("details")
     if (
         not _nonempty(code)
         or severity not in {"warning", "error"}
@@ -491,8 +493,19 @@ def _parse_diagnostic(value: object, expected_view: str) -> BrowserDiagnostic:
         or (projection is not None and projection not in {"cell", "value", "output"})
         or (target is not None and not isinstance(target, str))
         or not _valid_source(source)
+        or ("details" in value and not isinstance(details, dict))
     ):
         raise ProtocolError("A Studio browser diagnostic is invalid.")
+    try:
+        copied_details = json.loads(json.dumps(details, allow_nan=False))
+        if copied_details != details:
+            raise ValueError(
+                "Diagnostic details require JSON objects, arrays, and scalars"
+            )
+    except (TypeError, ValueError, RecursionError) as error:
+        raise ProtocolError(
+            "Studio browser diagnostic details must be JSON data."
+        ) from error
     return BrowserDiagnostic(
         code=cast(str, code),
         severity=cast(Literal["warning", "error"], severity),
@@ -503,6 +516,7 @@ def _parse_diagnostic(value: object, expected_view: str) -> BrowserDiagnostic:
         projection=cast(Literal["cell", "value", "output"] | None, projection),
         target=target,
         source=cast(dict[str, object] | None, source),
+        details=copied_details,
     )
 
 

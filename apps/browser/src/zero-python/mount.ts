@@ -48,7 +48,7 @@ export const mountZeroPythonRuntime = async (
     },
     updateQuery: (query) => controller.updateQuery(query, lifetime.signal),
     async dispose() {
-      lifetime.abort(new DOMException("Zero-Python runtime disposed", "AbortError"));
+      lifetime.abort(new DOMException("Prepared runtime disposed", "AbortError"));
       await controller.dispose();
     },
   };

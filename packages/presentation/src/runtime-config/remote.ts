@@ -99,6 +99,7 @@ export const fetchRuntimeConfig = async (
         detail.code,
         detail.transient,
         detail.hint,
+        detail.details,
       );
     }
     const config =
@@ -210,6 +211,7 @@ export const fetchCurrentRuntimeConfig = async (
           detail.code,
           detail.transient,
           detail.hint,
+          detail.details,
         );
       }
       const revision = document.headers.get("Marimo-Studio-Revision");

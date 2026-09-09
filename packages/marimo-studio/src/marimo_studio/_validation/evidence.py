@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -50,6 +51,7 @@ class BrowserDiagnostic:
     projection: Literal["cell", "value", "output"] | None = None
     target: str | None = None
     source: dict[str, object] | None = None
+    details: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         value: dict[str, object] = {
@@ -66,6 +68,8 @@ class BrowserDiagnostic:
             value["projection"] = self.projection
         if self.source is not None:
             value["source"] = self.source
+        if self.details is not None:
+            value["details"] = deepcopy(self.details)
         return value
 
 

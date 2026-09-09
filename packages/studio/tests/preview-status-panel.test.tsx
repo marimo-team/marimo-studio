@@ -11,7 +11,7 @@ const starting = (): PreviewFrameState => ({
   progress: null,
   url: "https://studio.test/views/report",
   lifecycleId: 1,
-  status: { state: "loading", message: "Connecting to Python", diagnostics: [] },
+  status: { state: "loading", message: "Connecting to the Python runtime", diagnostics: [] },
   runtimeStatus: new RuntimeDiagnostics({ runtime: "server", view: "report" }).report(),
 });
 
@@ -20,7 +20,9 @@ describe("preview preparation", () => {
     const state = starting();
     const onRetry = vi.fn();
     const { rerender } = render(<PreviewStatusPanel state={state} onRetry={onRetry} />);
-    expect(screen.getByRole("progressbar", { name: "Connecting to Python" })).toBeVisible();
+    expect(
+      screen.getByRole("progressbar", { name: "Connecting to the Python runtime" }),
+    ).toBeVisible();
 
     rerender(
       <PreviewStatusPanel
@@ -101,5 +103,37 @@ describe("preview preparation", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent("Connection closed");
     expect(screen.getByRole("button", { name: "Retry preview" })).toBeVisible();
+  });
+
+  test("copies the same structured diagnostic shown to readers", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const diagnostic = {
+      code: "provider-input-invalid",
+      view: "report",
+      scope: "runtime",
+      severity: "error" as const,
+      message: "The provider could not read its input.",
+      hint: "Correct the input path, then retry.",
+      details: { provider: "example", input: { path: "data/records.csv" } },
+    };
+    try {
+      render(
+        <PreviewStatusPanel
+          state={{
+            ...starting(),
+            status: { state: "error", message: "Needs repair", diagnostics: [diagnostic] },
+          }}
+          onRetry={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByText("Technical details"));
+      expect(screen.getByLabelText("Diagnostic details")).toHaveTextContent("data/records.csv");
+      fireEvent.click(screen.getByRole("button", { name: "Copy diagnostic" }));
+      await screen.findByText("Copied");
+      expect(JSON.parse(writeText.mock.calls[0]?.[0])).toEqual(diagnostic);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

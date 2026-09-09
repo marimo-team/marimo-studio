@@ -629,7 +629,11 @@ class PrivateSessionState:
         server = context.internal_url
 
         def observe() -> dict[str, object]:
-            with connect(server, server_token=context.server_token) as client:
+            with connect(
+                server,
+                access_token=context.access_token,
+                server_token=context.server_token,
+            ) as client:
                 observation = client.session(str(canonical_id)).observe_inputs()
                 return {
                     object_id: binding.to_value()

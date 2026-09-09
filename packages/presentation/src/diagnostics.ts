@@ -1,4 +1,4 @@
-import type { ProjectionDiagnostic } from "@marimo-studio/protocol/runtime-config";
+import type { JsonValue, ProjectionDiagnostic } from "@marimo-studio/protocol/runtime-config";
 
 export interface PresentationDiagnostic {
   code: string;
@@ -7,6 +7,7 @@ export interface PresentationDiagnostic {
   hint: string;
   view: string;
   scope: "presentation";
+  details?: Record<string, JsonValue>;
 }
 
 export interface HostDiagnostic {
@@ -26,6 +27,7 @@ export interface RuntimeDiagnostic {
   hint: string;
   view: string;
   scope: "runtime";
+  details?: Record<string, JsonValue>;
 }
 
 export interface MountDeclarationDiagnostic {

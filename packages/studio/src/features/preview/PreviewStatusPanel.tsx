@@ -1,5 +1,8 @@
 import type { PreviewFrameState } from "./controller.ts";
 
+import { Diagnostic } from "../../shared/ui/Diagnostic.tsx";
+import { previewRuntimeName } from "./status.ts";
+
 export const PreviewStatusPanel = ({
   state,
   onRetry,
@@ -17,7 +20,10 @@ export const PreviewStatusPanel = ({
   const failed = state.progress === null && state.status.state === "error";
   const message = state.progress?.message ?? state.status.message;
   const heading = state.rendered ? "Updating preview" : "Preparing preview";
-  const failureHeading = state.rendered ? "Preview could not update" : "Preview could not start";
+  const runtimeName = previewRuntimeName(state.runtimeStatus.runtime);
+  const failureHeading = state.rendered
+    ? `${runtimeName} could not update the preview`
+    : `${runtimeName} could not start`;
   return (
     <div className="studio-preview-status-panel" data-rendered={state.rendered}>
       <div role={failed ? "alert" : "status"}>
@@ -35,9 +41,10 @@ export const PreviewStatusPanel = ({
           <strong>{failed ? failureHeading : heading}</strong>
         </div>
         {state.status.diagnostics.map((diagnostic, index) => (
-          <p key={index}>
-            {diagnostic.message} {diagnostic.hint}
-          </p>
+          <Diagnostic
+            key={`${diagnostic.code}:${diagnostic.target ?? ""}:${index}`}
+            diagnostic={diagnostic}
+          />
         ))}
         {failed && state.status.diagnostics.length === 0 ? <p>{message}</p> : null}
         {failed ? (

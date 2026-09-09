@@ -85,6 +85,9 @@ export const toBrowserDiagnostic = (diagnostic: StudioDiagnostic): BrowserDiagno
   if ("projection" in diagnostic) {
     browserDiagnostic.projection = diagnostic.projection;
   }
+  if ("details" in diagnostic && diagnostic.details !== undefined) {
+    browserDiagnostic.details = structuredClone(diagnostic.details);
+  }
   if ("target" in diagnostic) {
     browserDiagnostic.target = diagnostic.target;
   }

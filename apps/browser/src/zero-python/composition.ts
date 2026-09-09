@@ -85,7 +85,7 @@ export const createStudioPreparedComposition = (options: {
     snapshot: () => state.snapshot(),
     updateInputs: (patch) => {
       if (interactions === undefined) {
-        throw new Error("Prepared interactions are not mounted.");
+        throw new Error("Prepared runtime interactions are not mounted.");
       }
       return interactions.updateInputs(patch);
     },
@@ -120,7 +120,10 @@ const refreshOptions = (
     },
     onError: (error: PreparedRefreshFailure) => {
       if (!options.isDisposed()) {
-        console.warn("Zero-Python publication refresh failed; retaining current state", error);
+        console.warn(
+          "Prepared runtime publication refresh failed. Retaining current state.",
+          error,
+        );
       }
     },
   };

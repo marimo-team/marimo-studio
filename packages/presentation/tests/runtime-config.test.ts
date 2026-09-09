@@ -265,6 +265,7 @@ test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
       new Response(
         JSON.stringify({
           error: "notebook-source-error",
+          source: { path: "notebook.py", line: 12, column: 4 },
           message: "Marimo cannot inspect the notebook while a cell contains invalid code.",
           hint: "Fix the highlighted cell in Marimo, then save it again.",
         }),
@@ -285,6 +286,9 @@ test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
       /Marimo cannot inspect the notebook while a cell contains invalid code/,
     );
     assert.deepEqual(error.code, "notebook-source-error");
+    assert.deepEqual(JSON.parse(JSON.stringify(error.details)), {
+      source: { path: "notebook.py", line: 12, column: 4 },
+    });
     assert.deepEqual(error.hint, "Fix the highlighted cell in Marimo, then save it again.");
   } finally {
     globalThis.fetch = originalFetch;

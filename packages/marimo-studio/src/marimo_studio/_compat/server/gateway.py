@@ -203,6 +203,7 @@ def _server_context(location: ServerLocation) -> ServerContext:
         user_config=config_manager.get_user_config(),
         config_overrides=config_manager.get_config_overrides(),
         server_token=str(handle.session_manager.skew_protection_token),
+        access_token=str(handle.session_manager.auth_token) or None,
         handle=ServerHandle(
             _ContextHandle(
                 server=getattr(handle.state, "server", None),

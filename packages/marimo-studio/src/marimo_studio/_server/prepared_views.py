@@ -8,19 +8,19 @@ from pathlib import Path
 from typing import Protocol
 
 from marimo_export import ExportRepository, PreparedExport
-from marimo_export.errors import CaptureLimitError, MarimoExportError
+from marimo_export.errors import MarimoExportError
 from marimo_export.prepared import PreparedAsset
 from marimo_export.publication import (
     PreparedPublication,
     PreparedPublicationCandidate,
     PreparedPublicationController,
 )
-from marimo_export.repository import RepositoryLimitError
 from marimo_export.sessions import Client, connect
 from marimo_export.wire import canonical_json_sha256
 
 from marimo_studio._prepared.cleanup import attempt_cleanup
 from marimo_studio._prepared.compiler import CompiledExportView
+from marimo_studio._prepared.errors import publication_error
 from marimo_studio._prepared.resolve import resolve_prepared_view
 from marimo_studio._processes.ownership import propagate_cancellation, settle_ownership
 from marimo_studio._server.prepared_progress import PreparedProgress
@@ -30,7 +30,6 @@ from marimo_studio._server.prepared_view_models import (
     PreparedViewRequest,
 )
 from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgressSink
-from marimo_studio.errors import PublicationError, PublicationLimitError
 
 _ROUTE_GRACE_SECONDS = 60.0
 _PreparedViewKey = tuple[str, str, str]
@@ -41,6 +40,7 @@ class Connector(Protocol):
         self,
         server: str,
         *,
+        access_token: str | None = None,
         server_token: str | None = None,
         timeout: float = 30.0,
     ) -> Client: ...
@@ -141,11 +141,13 @@ class PreparedViewRegistry:
         progress: RuntimeProgressSink | None,
     ) -> PreparedPublicationCandidate[PreparedViewMetadata]:
         prepared: PreparedExport | None = None
+        compiled: CompiledExportView | None = None
         try:
             if progress is not None:
                 progress(RuntimeProgress("Inspecting notebook states"))
             with self._connector(
                 request.server,
+                access_token=request.access_token,
                 server_token=request.server_token,
             ) as client:
                 session = client.session(request.session_id)
@@ -160,6 +162,7 @@ class PreparedViewRegistry:
                     repository,
                     progress=export_progress,
                 )
+                compiled = resolved.compiled
                 if cancelled():
                     raise asyncio.CancelledError
                 prepared = session.capture(
@@ -179,10 +182,8 @@ class PreparedViewRegistry:
         except BaseException as error:
             if prepared is not None:
                 attempt_cleanup(error, prepared.close)
-            if isinstance(error, (CaptureLimitError, RepositoryLimitError)):
-                raise PublicationLimitError(str(error)) from error
             if isinstance(error, MarimoExportError):
-                raise PublicationError(str(error)) from error
+                raise publication_error(error, compiled, request.snapshot) from error
             raise
 
 

@@ -26,6 +26,7 @@ const classifyFailure = (cause: unknown, _operation: RevisionOperation) => ({
         ? cause.hint
         : "Fix the view source, then try the navigation again.",
     view: renderedViewIdentity().view,
+    details: cause instanceof RuntimeConfigRequestError ? cause.details : undefined,
   },
 });
 

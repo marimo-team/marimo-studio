@@ -142,7 +142,7 @@ class ServerRuntime:
     ) -> RuntimeProjection:
         self._require_open()
         if progress is not None:
-            progress(RuntimeProgress("Connecting to Python"))
+            progress(RuntimeProgress("Connecting to the Python runtime"))
         bindings, _cells = await self._runtime_bindings(
             snapshot,
             context,
@@ -249,7 +249,7 @@ class ServerRuntime:
             for reference, runtime_id in bindings.items()
         ):
             raise RuntimeSyncError(
-                "Run the changed notebook cells to update the Python preview."
+                "Run the changed notebook cells to update the Python runtime preview."
             )
         return bindings, cells
 
@@ -323,7 +323,7 @@ class WasmRuntime:
     ) -> RuntimeProjection:
         del context, binding_id
         if progress is not None:
-            progress(RuntimeProgress("Preparing browser notebook"))
+            progress(RuntimeProgress("Preparing the Browser runtime"))
         notebook = snapshot.resolved.workspace.notebook
         owner_id = (
             presentation_session_id
@@ -394,7 +394,7 @@ class ZeroPythonRuntime:
 
     def _require_open(self) -> None:
         if self._closed:
-            raise RuntimeSyncError("Zero-Python runtime projection is shutting down.")
+            raise RuntimeSyncError("Prepared runtime projection is shutting down.")
 
     async def project(
         self,
@@ -412,7 +412,9 @@ class ZeroPythonRuntime:
         self._require_open()
         publications = self._notebooks.get(context.notebook).publications
         if publications is None:
-            raise RuntimeSyncError("Zero-Python publication ownership is unavailable.")
+            raise RuntimeSyncError(
+                "Prepared runtime publication ownership is unavailable."
+            )
         prepared = await PublicationRuntimeProjector(publications).project(
             snapshot,
             context,

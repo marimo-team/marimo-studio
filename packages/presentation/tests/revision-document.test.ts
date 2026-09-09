@@ -1,3 +1,5 @@
+import type { SessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
+
 import { act, createElement, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vite-plus/test";
@@ -12,6 +14,9 @@ import {
   notifyProjectionResolutionStale,
   projectionBindingIsStale,
 } from "../src/projections/staleness.ts";
+import { toBrowserDiagnostics } from "../src/readiness-diagnostics.ts";
+import { readiness } from "../src/readiness.ts";
+import { renderedViewDiagnostics } from "../src/rendered-view-state.ts";
 import {
   commitRuntimeConfig,
   getRuntimeConfig,
@@ -730,4 +735,53 @@ test("a post-swap callback failure keeps the committed document transaction", as
   expect(processed).toBe(document.querySelector("#app-shell"));
   expect(document.querySelector("#app-shell")?.textContent).toBe("New shell");
   expect(getRuntimeConfig().revision).toBe("revision-new");
+});
+
+test("failed document refresh preserves error context in browser diagnostics", async () => {
+  const { createPresentationRevisions } = await import("../src/document/revision-runtime.ts");
+  const { BrowserSessionReplay } = await import("../src/document/session-preservation.ts");
+  document.body.innerHTML = '<main id="app-shell">Current report</main>';
+  const retained = document.querySelector("#app-shell");
+  commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
+  readiness.start();
+  const details = { context: { input: "data/records.csv", state: "baseline" } };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json(
+        {
+          error: "provider-input-invalid",
+          message: "The provider could not read its input.",
+          hint: "Correct the input path, then retry.",
+          ...details,
+        },
+        { status: 409 },
+      ),
+    ),
+  );
+  // SAFETY: The fixture supplies a valid Marimo session ID to the branded API.
+  const revisions = createPresentationRevisions(
+    "s_abc123" as SessionId,
+    "s_preview",
+    new BrowserSessionReplay(),
+  );
+  try {
+    await expect(revisions.transition("/next/", "/support/new")).rejects.toMatchObject({
+      code: "provider-input-invalid",
+      details,
+    });
+
+    expect(toBrowserDiagnostics(renderedViewDiagnostics())).toContainEqual({
+      code: "provider-input-invalid",
+      severity: "error",
+      message: "The provider could not read its input.",
+      hint: "Correct the input path, then retry.",
+      view: "dashboard",
+      scope: "presentation",
+      details,
+    });
+    expect(document.querySelector("#app-shell")).toBe(retained);
+  } finally {
+    revisions.dispose();
+  }
 });

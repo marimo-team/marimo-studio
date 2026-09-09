@@ -543,7 +543,9 @@ def test_control_bindings_resolve_a_shared_consumers_canonical_session(
     manager = SimpleNamespace(sessions={"s_kernel": session})
     consumers = {"s_view01": session}
     context = SimpleNamespace(
-        internal_url="http://localhost:4321", server_token="token"
+        internal_url="http://localhost:4321",
+        server_token="token",
+        access_token="access-token",
     )
     monkeypatch.setattr(
         session_state_module,
@@ -572,8 +574,12 @@ def test_control_bindings_resolve_a_shared_consumers_canonical_session(
         return SimpleNamespace(observe_inputs=observe_inputs)
 
     @contextmanager
-    def connect(server: str, *, server_token: str):
-        assert (server, server_token) == ("http://localhost:4321", "token")
+    def connect(server: str, *, access_token: str, server_token: str):
+        assert (server, access_token, server_token) == (
+            "http://localhost:4321",
+            "access-token",
+            "token",
+        )
         yield SimpleNamespace(session=exported_session)
 
     monkeypatch.setattr(export_sessions, "connect", connect)

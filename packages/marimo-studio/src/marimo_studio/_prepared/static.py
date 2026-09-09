@@ -14,6 +14,7 @@ from marimo_export.wire import canonical_json_sha256
 
 from marimo_studio._prepared.cleanup import attempt_cleanup
 from marimo_studio._prepared.compiler import CompiledExportView, compile_export_view
+from marimo_studio._prepared.errors import publication_error
 from marimo_studio._prepared.manifest import prepared_view_manifest
 from marimo_studio._prepared.state_space import (
     StateSpaceSource,
@@ -115,16 +116,7 @@ class _PreparedPublicationSource:
             if prepared is not None:
                 attempt_cleanup(error, prepared.close)
             if isinstance(error, MarimoExportError):
-                if compiled is not None:
-                    raise _publication_error(error, compiled, snapshot) from error
-                raise PublicationError(
-                    f"Could not inspect the Zero-Python publication: {error}",
-                    details={
-                        "runtime": "zero-python",
-                        "marimo_export": error.wire(),
-                    },
-                    hint="Fix the reported notebook export input and rerun preflight.",
-                ) from error
+                raise publication_error(error, compiled, snapshot) from error
             if isinstance(error, PublicationError):
                 raise
             if isinstance(error, OSError):
@@ -151,120 +143,6 @@ def _projections(compiled: CompiledExportView) -> dict[str, dict[str, str]]:
         "outputs": dict(compiled.bindings.outputs),
         "values": dict(compiled.bindings.values),
     }
-
-
-def _projection_identity(
-    compiled: CompiledExportView,
-    output: object,
-) -> tuple[str, str] | None:
-    if not isinstance(output, str):
-        return None
-    for kind, bindings in (
-        ("cell", compiled.bindings.cells),
-        ("output", compiled.bindings.outputs),
-        ("value", compiled.bindings.values),
-    ):
-        for target, name in bindings.items():
-            if name == output:
-                return kind, target
-    return None
-
-
-def _projection_identities(
-    compiled: CompiledExportView,
-) -> tuple[tuple[str, str], ...]:
-    return tuple(
-        (kind, target)
-        for kind, bindings in (
-            ("cell", compiled.bindings.cells),
-            ("output", compiled.bindings.outputs),
-            ("value", compiled.bindings.values),
-        )
-        for target in bindings
-    )
-
-
-def _projection_details(
-    snapshot: PresentationSnapshot,
-    identity: tuple[str, str],
-) -> dict[str, object]:
-    kind, target = identity
-    return {
-        "projection": kind,
-        "target": target,
-        "sources": [
-            site.source.to_dict()
-            for site in snapshot.mounts
-            if site.kind == kind
-            and site.allowed_targets is not None
-            and target in site.allowed_targets
-        ],
-    }
-
-
-def _publication_error(
-    error: MarimoExportError,
-    compiled: CompiledExportView,
-    snapshot: PresentationSnapshot,
-) -> PublicationError:
-    wire = error.wire()
-    details = error.details
-    identity = _projection_identity(compiled, details.get("output"))
-    identities = _projection_identities(compiled)
-    if identity is None and len(identities) == 1:
-        identity = identities[0]
-    diagnostic: dict[str, object] = {
-        "runtime": "zero-python",
-        "marimo_export": wire,
-    }
-    functions = details.get("functions")
-    if identity is None:
-        if isinstance(functions, list) and functions:
-            diagnostic["projections"] = [
-                _projection_details(snapshot, candidate) for candidate in identities
-            ]
-            return PublicationError(
-                (
-                    "Zero-Python cannot replay a projected UI because it exposes "
-                    "Python functions."
-                ),
-                code="zero-python-projection-functions",
-                details=diagnostic,
-                hint=(
-                    "Project serializable data for a browser-native view, use a "
-                    "portable Marimo output, or select the WebAssembly runtime."
-                ),
-            )
-        return PublicationError(
-            f"Could not prepare the Zero-Python publication: {error}",
-            code=error.code,
-            details=diagnostic,
-            hint="Fix the reported notebook state or choose another static runtime.",
-        )
-    kind, target = identity
-    diagnostic.update(_projection_details(snapshot, identity))
-    if isinstance(functions, list) and functions:
-        return PublicationError(
-            (
-                f"Zero-Python cannot replay {kind} projection {target!r} because "
-                "its rendered UI exposes Python functions."
-            ),
-            code="zero-python-projection-functions",
-            details=diagnostic,
-            hint=(
-                "Project serializable data for a browser-native view, use a portable "
-                "Marimo output, or select the WebAssembly runtime."
-            ),
-        )
-    return PublicationError(
-        f"Zero-Python could not prepare {kind} projection {target!r}: {error}",
-        code="zero-python-projection-failed",
-        details=diagnostic,
-        hint=(
-            "Inspect the projected notebook result and prepared state, or select "
-            "the WebAssembly runtime."
-        ),
-    )
 
 
 def publication_source() -> StaticPublicationSource:

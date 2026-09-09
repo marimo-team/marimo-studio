@@ -20,6 +20,6 @@ export const disposeStudioPreparedRuntime = async (options: {
   }
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) {
-    throw new AggregateError(failures, "Zero-Python runtime cleanup failed.");
+    throw new AggregateError(failures, "Prepared runtime cleanup failed.");
   }
 };

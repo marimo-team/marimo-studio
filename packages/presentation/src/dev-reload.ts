@@ -126,6 +126,7 @@ const refreshDiagnostic = (
     message: errorMessage(cause),
     hint: refreshFailureHint(cause, transient),
     view: supportView(operation.target.supportUrl) ?? "",
+    details: cause instanceof RuntimeConfigRequestError ? cause.details : undefined,
   };
 };
 
