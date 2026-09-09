@@ -410,7 +410,9 @@ export const startPresentation = (registry: RuntimeRegistry): void => {
           ...documentLifecycleEnvelope(),
           view: supportView(supportUrl),
           revision,
-          progress: configured ? { message: "Opening preview" } : progress,
+          progress: configured
+            ? { message: runtime === "wasm" ? "Starting browser notebook" : "Opening preview" }
+            : progress,
         });
       }),
     );
