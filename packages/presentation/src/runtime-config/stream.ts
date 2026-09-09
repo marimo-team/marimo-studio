@@ -1,6 +1,7 @@
 import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import type { RuntimeProgress } from "@marimo-studio/protocol/runtime-progress";
 
+import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import {
   RUNTIME_CONFIG_STREAM_MAX_LINE_BYTES,
   runtimeConfigPacketSchema,
@@ -61,11 +62,13 @@ export const readRuntimeConfigStream = async (
           throw streamError("Runtime configuration stream ended before completion.");
         }
         if (terminal.type === "config") return terminal.config;
+        const { type: _type, error, message, transient, hint, ...details } = terminal;
         throw new RuntimeConfigRequestError(
-          terminal.message,
-          terminal.error,
-          terminal.transient ?? false,
-          terminal.hint ?? "",
+          message,
+          error,
+          transient ?? false,
+          hint ?? "",
+          parseErrorResponse(details),
         );
       }
       for (const byte of value) {

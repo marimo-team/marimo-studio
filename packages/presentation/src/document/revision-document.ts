@@ -127,6 +127,7 @@ export class DocumentRevisionAdapter {
           detail.code,
           detail.transient,
           detail.hint,
+          detail.details,
         );
       }
       const revision = response.headers.get("Marimo-Studio-Revision");
@@ -353,6 +354,7 @@ export class DocumentRevisionAdapter {
         detail.code,
         detail.transient,
         detail.hint,
+        detail.details,
       );
     }
     requireMatchingPresentationRevision(response.headers.get("Marimo-Studio-Revision"), config);

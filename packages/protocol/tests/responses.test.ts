@@ -265,7 +265,7 @@ test("projection requests retain valid surrogate pairs", () => {
   assert.deepEqual(projectionRequestSchema.parse(request), request);
 });
 
-test("error responses keep recognized diagnostic fields", () => {
+test("error responses retain diagnostic context from each error type", () => {
   assert.deepEqual(
     parseErrorResponse({
       error: "source-conflict",
@@ -274,7 +274,7 @@ test("error responses keep recognized diagnostic fields", () => {
       transient: true,
       revision: "r2",
       external_recovery: "/workspace/.source-recovery",
-      ignored: 42,
+      attempts: 2,
     }),
     {
       error: "source-conflict",
@@ -283,6 +283,7 @@ test("error responses keep recognized diagnostic fields", () => {
       transient: true,
       revision: "r2",
       external_recovery: "/workspace/.source-recovery",
+      attempts: 2,
     },
   );
   const partial = parseErrorResponse({ message: 42, revision: "r3" });

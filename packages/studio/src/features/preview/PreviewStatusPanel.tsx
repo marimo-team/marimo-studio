@@ -1,5 +1,7 @@
 import type { PreviewFrameState } from "./controller.ts";
 
+import { Diagnostic } from "../../shared/ui/Diagnostic.tsx";
+
 export const PreviewStatusPanel = ({
   state,
   onRetry,
@@ -35,9 +37,10 @@ export const PreviewStatusPanel = ({
           <strong>{failed ? failureHeading : heading}</strong>
         </div>
         {state.status.diagnostics.map((diagnostic, index) => (
-          <p key={index}>
-            {diagnostic.message} {diagnostic.hint}
-          </p>
+          <Diagnostic
+            key={`${diagnostic.code}:${diagnostic.target ?? ""}:${index}`}
+            diagnostic={diagnostic}
+          />
         ))}
         {failed && state.status.diagnostics.length === 0 ? <p>{message}</p> : null}
         {failed ? (

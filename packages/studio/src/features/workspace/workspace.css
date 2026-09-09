@@ -47,7 +47,7 @@
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  place-items: safe center;
   overflow: auto;
   padding: 1.5rem;
   background: var(--studio-background);
@@ -55,13 +55,14 @@
 }
 
 .studio-preview-status-panel > div {
-  max-width: 24rem;
+  max-width: 32rem;
   width: 100%;
 }
 
 .studio-preview-status-panel[data-rendered="true"] {
   inset: auto 1rem 1rem auto;
   width: min(24rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
   border: 1px solid var(--studio-border);
   border-radius: 4px;
 }

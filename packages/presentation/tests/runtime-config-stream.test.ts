@@ -78,6 +78,8 @@ test("preserves streamed error details after successful HTTP headers", async () 
           message: "Waiting for the current notebook.",
           hint: "Keep this preview open.",
           transient: true,
+          context: { state: "baseline", attempts: 2 },
+          revision: 42,
         }) + "\n",
         { headers },
       ),
@@ -88,6 +90,7 @@ test("preserves streamed error details after successful HTTP headers", async () 
     message: "Waiting for the current notebook.",
     hint: "Keep this preview open.",
     transient: true,
+    details: { context: { state: "baseline", attempts: 2 } },
   });
 });
 

@@ -1,0 +1,46 @@
+.studio-diagnostic {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-diagnostic p {
+  margin: 0.75rem 0;
+  line-height: 1.5;
+}
+
+.studio-diagnostic .studio-diagnostic-message {
+  color: var(--studio-foreground);
+}
+
+.studio-diagnostic-hint strong {
+  display: block;
+  color: var(--studio-foreground);
+  font-weight: 500;
+}
+
+.studio-diagnostic-details {
+  color: var(--studio-muted);
+  margin-block: 0.75rem;
+}
+
+.studio-diagnostic-details summary {
+  cursor: pointer;
+}
+
+.studio-diagnostic-details pre {
+  background: var(--studio-subtle);
+  border: 1px solid var(--studio-border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.studio-diagnostic-copy-status {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}

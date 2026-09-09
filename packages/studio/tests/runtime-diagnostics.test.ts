@@ -49,6 +49,7 @@ it("owns diagnostic evidence returned to callers", () => {
   const input: BrowserDiagnostic = {
     ...warning,
     source: { path: "dashboard.html", line: 4, column: 2 },
+    details: { inputs: { scale: 2 } },
   };
   const diagnostics = new RuntimeDiagnostics({
     runtime: "server",
@@ -58,6 +59,7 @@ it("owns diagnostic evidence returned to callers", () => {
   diagnostics.record({ phase: "degraded", diagnostics: [input] });
 
   input.message = "mutated input";
+  if (input.details) input.details.inputs = { scale: 99 };
   if (input.source === undefined) {
     throw new Error("Test diagnostic source is unavailable");
   }
@@ -69,16 +71,19 @@ it("owns diagnostic evidence returned to callers", () => {
     throw new Error("Test diagnostic evidence is unavailable");
   }
   exposedCurrent.message = "mutated report";
+  if (exposedCurrent.details) exposedCurrent.details.inputs = { scale: 100 };
   exposedTransition.source = { path: "other.html", line: 1, column: 1 };
 
   const retained = diagnostics.report();
   expect(retained.current.diagnostics[0]).toMatchObject({
     message: "The projected value is stale.",
     source: { path: "dashboard.html", line: 4, column: 2 },
+    details: { inputs: { scale: 2 } },
   });
   expect(retained.transitions.at(-1)?.diagnostics[0]).toMatchObject({
     message: "The projected value is stale.",
     source: { path: "dashboard.html", line: 4, column: 2 },
+    details: { inputs: { scale: 2 } },
   });
 });
 

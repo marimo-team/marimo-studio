@@ -5,7 +5,8 @@ import {
   observedProjectionInstanceSchema,
   projectionInstanceIsReady,
 } from "./projections";
-import { runtimeIdSchema } from "./runtime-config";
+import { ownRecordSchema } from "./records.ts";
+import { jsonValueSchema, runtimeIdSchema } from "./runtime-config";
 import { viewNameSchema } from "./views.ts";
 
 export const browserDiagnosticSchema = z
@@ -16,6 +17,7 @@ export const browserDiagnosticSchema = z
     hint: z.string(),
     view: viewNameSchema,
     scope: z.string().min(1),
+    details: ownRecordSchema(z.string(), jsonValueSchema).optional(),
     projection: z.enum(["cell", "value", "output"]).optional(),
     target: z.string().optional(),
     source: z

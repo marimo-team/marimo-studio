@@ -33,6 +33,9 @@ const cloneDiagnostic = (diagnostic: BrowserDiagnostic): BrowserDiagnostic => {
   if (diagnostic.source !== undefined) {
     cloned.source = { ...diagnostic.source };
   }
+  if (diagnostic.details !== undefined) {
+    cloned.details = structuredClone(diagnostic.details);
+  }
   return cloned;
 };
 

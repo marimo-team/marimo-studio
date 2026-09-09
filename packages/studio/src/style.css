@@ -1,5 +1,6 @@
 @import "./app/studio.css";
 @import "./shared/ui/controls.css";
+@import "./shared/ui/diagnostic.css";
 @import "./features/navigation/navigation.css";
 @import "./features/views/views.css";
 @import "./features/workspace/workspace.css";

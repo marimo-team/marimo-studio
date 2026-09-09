@@ -117,6 +117,18 @@ or mark a runtime ready. Read [Runtime preparation
 progress](browser-runtime-and-authoring.md#runtime-preparation-progress) for
 transport ownership and UI behavior.
 
+Runtime failures retain their code, message, hint, and additional JSON context
+through both HTTP errors and terminal stream packets. Browser diagnostics carry
+that context in `details`, including upstream error codes and authored source
+locations when available. Agent observations retain the same details in current
+status and transition history.
+
+The preview panel and runtime menu show the explanation and recovery hint, with
+expandable technical details and a copy action. A failed update retains the
+current presentation. Prepared failures use the same export-error translation
+as static exports, so an incompatible output identifies its projection or source
+candidates and suggests a runtime or output change.
+
 ## Provider diagnostics
 
 `ProjectDiagnostic` carries code, `warning` or `error` severity, message, hint,

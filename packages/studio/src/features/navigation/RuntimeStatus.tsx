@@ -1,5 +1,7 @@
 import type { PreviewStatus } from "../preview/status.ts";
 
+import { Diagnostic } from "../../shared/ui/Diagnostic.tsx";
+
 export const RuntimeStatus = ({ status }: { status: PreviewStatus }) => (
   <div
     className="studio-runtime-status"
@@ -24,14 +26,7 @@ export const RuntimeStatus = ({ status }: { status: PreviewStatus }) => (
               index,
             ].join(":")}
           >
-            <span>{diagnostic.message}</span>
-            {diagnostic.target ? <code>{diagnostic.target}</code> : null}
-            {diagnostic.source ? (
-              <code>
-                {diagnostic.source.path}:{diagnostic.source.line}:{diagnostic.source.column}
-              </code>
-            ) : null}
-            {diagnostic.hint ? <small>{diagnostic.hint}</small> : null}
+            <Diagnostic diagnostic={diagnostic} />
           </li>
         ))}
       </ul>

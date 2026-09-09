@@ -167,7 +167,7 @@ const notifyRenderedViewChanged = (): void => {
 
 export const setRuntimeConnectionState = (
   state: RuntimeConnectionState,
-  diagnostic?: Pick<RuntimeDiagnostic, "code" | "hint" | "message">,
+  diagnostic?: Pick<RuntimeDiagnostic, "code" | "hint" | "message" | "details">,
 ): void => {
   const previous = readiness.snapshot().connection;
   readiness.setRuntime(

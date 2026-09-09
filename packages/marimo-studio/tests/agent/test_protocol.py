@@ -457,6 +457,71 @@ def test_browser_observation_fixture_matches_the_python_decoder() -> None:
             )
 
 
+def test_browser_diagnostic_details_survive_agent_observation_serialization() -> None:
+    fixture_path = (
+        Path(__file__).parents[3] / "protocol" / "fixtures" / "browser-observation.json"
+    )
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+    details = {
+        "state": {"name": "baseline", "inputs": {"scale": 2}},
+        "attempts": [{"retryable": True, "elapsed": 0.5, "result": None}],
+    }
+    for diagnostics in (
+        payload["diagnostics"],
+        payload["runtimeStatus"]["current"]["diagnostics"],
+        payload["runtimeStatus"]["transitions"][-1]["diagnostics"],
+    ):
+        diagnostics[0]["details"] = deepcopy(details)
+
+    observation = decode_browser_observation(payload, "dashboard")
+    for diagnostics in (
+        payload["diagnostics"],
+        payload["runtimeStatus"]["current"]["diagnostics"],
+        payload["runtimeStatus"]["transitions"][-1]["diagnostics"],
+    ):
+        diagnostics[0]["details"]["state"]["inputs"]["scale"] = 99
+    serialized = cast(dict[str, Any], observation.to_dict())
+    for diagnostic in (
+        serialized["diagnostics"][0],
+        serialized["runtime_status"]["current"]["diagnostics"][0],
+        serialized["runtime_status"]["transitions"][-1]["diagnostics"][0],
+    ):
+        assert diagnostic["details"] == details
+        diagnostic["details"]["state"]["inputs"]["scale"] = 99
+
+    copied = cast(dict[str, Any], observation.to_dict())
+    assert copied["diagnostics"][0]["details"] == details
+    assert copied["runtime_status"]["current"]["diagnostics"][0]["details"] == details
+    assert (
+        copied["runtime_status"]["transitions"][-1]["diagnostics"][0]["details"]
+        == details
+    )
+
+
+@pytest.mark.parametrize(
+    "details",
+    [
+        None,
+        [],
+        "invalid",
+        {"value": object()},
+        {"value": float("nan")},
+        {"value": {1}},
+        {"value": (1, 2)},
+        {"value": {1: "label"}},
+    ],
+)
+def test_browser_decoder_rejects_malformed_diagnostic_details(details: object) -> None:
+    fixture_path = (
+        Path(__file__).parents[3] / "protocol" / "fixtures" / "browser-observation.json"
+    )
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+    payload["diagnostics"][0]["details"] = details
+
+    with pytest.raises(ProtocolError, match="diagnostic"):
+        decode_browser_observation(payload, "dashboard")
+
+
 def test_browser_decoder_rejects_ready_state_with_failed_mounts() -> None:
     fixture_root = Path(__file__).parents[3] / "protocol" / "fixtures"
     payload = json.loads(

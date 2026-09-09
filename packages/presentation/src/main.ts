@@ -83,8 +83,9 @@ const showRuntimeError = (cause: unknown) => {
     message: errorMessage(cause),
     hint:
       cause instanceof RuntimeConfigRequestError
-        ? cause.hint
+        ? cause.hint || "Check the error details and server logs, then retry the preview."
         : "Reload the view after the runtime is available.",
+    details: cause instanceof RuntimeConfigRequestError ? cause.details : undefined,
   });
   console.error("marimo-studio runtime error", cause);
 };
@@ -390,6 +391,7 @@ const start = (registry: RuntimeRegistry) => {
         code: cause.code,
         message: cause.message,
         hint: cause.hint || "Wait for the notebook session to settle.",
+        details: cause.details,
       });
       if (cause.code === "presentation-revision-mismatch") {
         setTimeout(() => {
