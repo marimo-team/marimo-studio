@@ -1,0 +1,19 @@
+packages/studio/src/features/source-editor/SourceEditor.tsx
+  s_f87c5165483b87::t_61eedb49b8e3db 8,301-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e593276f1b79286e09f10aa846cf0e774ac264ea",
+  "prompts": {},
+  "sessions": {
+    "s_f87c5165483b87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08266-dea1-7122-b642-2b415adb8648",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
