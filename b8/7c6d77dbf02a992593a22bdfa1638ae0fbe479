@@ -1,0 +1,55 @@
+packages/marimo-studio/tests/prepared/test_live_publication.py
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 111
+apps/browser/src/zero-python/interactions.ts
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 96-97
+packages/marimo-studio/src/marimo_studio/_prepared/errors.py
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 40,141-143,164,166
+  s_c80f4055fb6e2b::t_f4559756488d3d 135-136,158-159
+  s_c80f4055fb6e2b::t_422002fdb8c2c7 165
+packages/studio/src/features/preview/PreviewStatusPanel.tsx
+  s_c80f4055fb6e2b::t_a1e4fa1afbcf20 4,23-26
+apps/browser/src/zero-python/mount.ts
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 51
+apps/browser/src/zero-python/controller.ts
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 65
+apps/browser/src/zero-python/lifecycle.ts
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 23
+packages/marimo-studio/src/marimo_studio/_server/runtime/catalog.py
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 145,252,326,397,415-417
+packages/studio/tests/preview-controller.test.ts
+  s_c80f4055fb6e2b::t_1f1565afdaa747 732
+apps/e2e/tests/runtime-startup.spec.ts
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 94
+  s_c80f4055fb6e2b::t_36e63c2000f449 47-49,55-57
+apps/browser/src/zero-python/composition.ts
+  s_c80f4055fb6e2b::t_36e63c2000f449 123-126
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 88
+packages/presentation/src/main.ts
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 426
+packages/marimo-studio/tests/server/test_runtime_progress.py
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 211
+packages/studio/src/features/preview/status.ts
+  s_c80f4055fb6e2b::t_a1e4fa1afbcf20 12-15,18,20
+  s_c80f4055fb6e2b::t_1f1565afdaa747 19,21-26
+packages/studio/tests/preview-status-panel.test.tsx
+  s_c80f4055fb6e2b::t_36e63c2000f449 23-25
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 14
+apps/browser/src/zero-python/metadata-records.ts
+  s_c80f4055fb6e2b::t_c8d4dc4ddb8c4a 69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b87c6d77dbf02a992593a22bdfa1638ae0fbe479",
+  "prompts": {},
+  "sessions": {
+    "s_c80f4055fb6e2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0865e-3882-70f2-859b-f1b3a42ebc06",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
