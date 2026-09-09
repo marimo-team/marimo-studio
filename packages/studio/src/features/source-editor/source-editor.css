@@ -201,6 +201,10 @@
   flex-wrap: wrap;
   font-size: 0.72rem;
   gap: 0.35rem 0.65rem;
+  max-block-size: min(30%, 10rem);
+  min-block-size: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
   padding: 0.4rem 0.55rem;
 }
 

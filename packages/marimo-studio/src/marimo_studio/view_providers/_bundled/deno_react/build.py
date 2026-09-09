@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html import unescape
 from html.parser import HTMLParser
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import unquote, urlsplit
 from urllib.request import url2pathname
 
@@ -418,6 +418,36 @@ def _normalize_entry_name(output: Path) -> None:
     document_path.write_text(document, encoding="utf-8")
 
 
+def _check_diagnostic(
+    output: str,
+    work: Path,
+    documents: tuple[PurePosixPath, ...],
+) -> ProjectDiagnostic:
+    uri_prefix = work.as_uri().rstrip("/") + "/"
+    flags = re.IGNORECASE if isinstance(work, PureWindowsPath) else 0
+    output = re.sub(
+        re.escape(uri_prefix) + r"([^\r\n]*)",
+        lambda match: unquote(match[1]),
+        output,
+        flags=flags,
+    )
+    for prefix in {
+        work.as_posix() + "/",
+        str(work) + ("\\" if isinstance(work, PureWindowsPath) else "/"),
+    }:
+        output = re.sub(re.escape(prefix), "", output, flags=flags)
+    source = None
+    for match in re.finditer(r"(?m)^\s+at (.+):([1-9]\d*):([1-9]\d*)\s*$", output):
+        path = PurePosixPath(match[1].replace("\\", "/"))
+        if path in documents:
+            source = SourceLocation(path, int(match[2]), int(match[3]))
+            break
+    return replace(
+        failure(_LABEL, "react-check-failed", "type-check source", output),
+        source=source,
+    )
+
+
 def _build_react(
     request: BuildRequest,
     spec: ProviderProjectSpec,
@@ -514,11 +544,10 @@ def _build_react(
         return BuildResult(
             None,
             (
-                failure(
-                    _LABEL,
-                    "react-check-failed",
-                    "type-check source",
+                _check_diagnostic(
                     checked.stderr,
+                    work,
+                    tuple(item.path for item in request.inspection.editor_documents),
                 ),
             ),
         )

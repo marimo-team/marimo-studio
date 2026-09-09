@@ -29,7 +29,7 @@ from marimo_studio.errors import ViewProjectError
 from marimo_studio.errors._internal import RuntimeSyncError
 from marimo_studio.view_providers import BuildProfile
 
-from ..app_helpers import configured
+from ..app_helpers import configured, created_one_view
 from ..async_test_support import wait_for_event
 
 
@@ -211,6 +211,35 @@ def test_last_good_cache_observes_a_publication_completed_in_the_same_generation
             assert retained.revision == initial.revision
             assert repaired.revision != retained.revision
             assert "Published repair" in repaired.document
+        finally:
+            presentation.close()
+            await coordinator.close()
+
+    asyncio.run(exercise())
+
+
+def test_first_preview_reports_provider_failure_and_recovers_after_repair(
+    notebook_path: Path,
+) -> None:
+    studio = created_one_view(notebook_path)
+    manifest = studio.view("dashboard").manifest
+    original = manifest.read_text(encoding="utf-8")
+    manifest.write_text(original + "\n[options]\nunknown = true\n", encoding="utf-8")
+    coordinator = DevelopmentCoordinator(project_watcher=_watcher_factory)
+    presentation = NotebookPresentation(studio.notebook, development=coordinator)
+
+    async def exercise() -> None:
+        try:
+            with pytest.raises(ViewProjectError, match="undeclared option") as failure:
+                await presentation.display_snapshot_async("dashboard")
+            assert failure.value.source == manifest
+            assert not failure.value.transient
+
+            manifest.write_text(original, encoding="utf-8")
+            await coordinator.refresh("dashboard")
+            recovered = await presentation.display_snapshot_async("dashboard")
+            assert recovered.view_name == "dashboard"
+            assert "marimo-cell" in recovered.document
         finally:
             presentation.close()
             await coordinator.close()

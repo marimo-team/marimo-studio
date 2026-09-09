@@ -381,11 +381,18 @@ def test_react_inspection_rejects_undeclared_entrypoint_option(
 
     inspection = _inspect(provider_registry().get(project.provider), project)
 
-    assert [
-        item.message
+    diagnostic = next(
+        item
         for item in inspection.diagnostics
         if item.code == "provider-options-invalid"
-    ] == ["marimo-studio/react received undeclared option 'entrypoint'"]
+    )
+    assert (
+        diagnostic.message
+        == "marimo-studio/react received undeclared option 'entrypoint'"
+    )
+    assert diagnostic.source is not None
+    assert diagnostic.source.path == PurePosixPath("view.toml")
+    assert "view.toml" in diagnostic.hint
     assert all(
         document.path.as_posix() != "view.toml"
         for document in inspection.editor_documents

@@ -23,6 +23,7 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderCancellation,
     ProviderCommandResult,
+    SourceLocation,
     ViewProject,
 )
 from marimo_studio.view_providers._bundled import _deno
@@ -91,6 +92,8 @@ class ProviderProjectSpec:
                 code="provider-options-invalid",
                 severity="error",
                 message=f"{self.provider_id} received undeclared option {name!r}",
+                hint="Edit view.toml to use supported provider options.",
+                source=SourceLocation(PurePosixPath("view.toml"), 1, 1),
             )
             for name in sorted(set(project.options) - set(self.option_paths))
         ]
@@ -106,6 +109,8 @@ class ProviderProjectSpec:
                         code="provider-options-invalid",
                         severity="error",
                         message=str(error),
+                        hint="Edit view.toml to use supported provider options.",
+                        source=SourceLocation(PurePosixPath("view.toml"), 1, 1),
                     )
                 )
         entrypoint = configured_paths.get("entrypoint")
