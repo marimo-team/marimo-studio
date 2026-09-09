@@ -64,6 +64,11 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
     input: "scale",
     path: [],
   });
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Prepared/ }).click();
+  const prepared = await waitForPreview(page, "zero-python");
+  await expect(prepared.getByRole("heading", { name: "Hosted total: 42" })).toBeVisible();
+  await expect(page.getByLabel("Prepared preview runtime")).toContainText("Live");
   await recoverWorkspaceEventStream(replacedWorkspaceStream);
 });
 

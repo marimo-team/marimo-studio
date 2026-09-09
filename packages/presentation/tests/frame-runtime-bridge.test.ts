@@ -7,13 +7,59 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { setActiveDocumentLifecycleId } from "../src/document/document-lifecycle-id.ts";
 import { startFrameRuntimeBridge } from "../src/document/frame-runtime-bridge.ts";
+import { startPresentationObservers, stopPresentationObservers } from "../src/observers.ts";
+import { beginPresentationRefresh, setPresentationRefreshState } from "../src/readiness.ts";
+import { setRuntimeConnectionState } from "../src/rendered-view-observer.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
 afterEach(() => {
+  stopPresentationObservers();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   globalThis.history.replaceState({}, "", "/");
+});
+
+test("publishes the frame bridge before admitting a prepared runtime that is ready during mount", () => {
+  globalThis.__MARIMO_MOUNT_CONFIG__ = {
+    supportUrl: "/_marimo-studio/views/dashboard",
+    version: "test",
+    revision: "presentation-revision",
+    runtime: "zero-python",
+    runtimeExplicit: true,
+    replay: false,
+    clientId: "browser-client-1234",
+    lifecycleId: 4,
+  };
+  commitRuntimeConfig(
+    runtimeConfig({ runtime: { id: "zero-python", instance: "prepared", data: {} } }),
+  );
+  setActiveDocumentLifecycleId(4);
+  const parent = { postMessage: vi.fn() };
+  vi.stubGlobal("parent", parent);
+  startPresentationObservers(async () => {});
+  const claim = beginPresentationRefresh("runtime");
+  setRuntimeConnectionState("ready");
+  expect(parent.postMessage.mock.calls.map(([message]) => message.type)).not.toContain(
+    "marimo-studio:view-ready",
+  );
+
+  const stop = startFrameRuntimeBridge(null, {
+    connectControlEndpoint: () => undefined,
+    updateRuntimeQuery: async () => {},
+  });
+  try {
+    setPresentationRefreshState(claim, "ready");
+    expect(
+      parent.postMessage.mock.calls
+        .map(([message]) => message.type)
+        .filter((type) =>
+          ["marimo-studio:frame-bridge-ready", "marimo-studio:view-ready"].includes(type),
+        ),
+    ).toEqual(["marimo-studio:frame-bridge-ready", "marimo-studio:view-ready"]);
+  } finally {
+    stop();
+  }
 });
 
 test("advertises semantic bindings for registered controls in the active snapshot", () => {

@@ -65,17 +65,20 @@ test("page readiness accounts for pending and retained hosts", () => {
   assert.deepEqual(pageReadinessState("ready", ["ready"], "error"), "error");
 });
 
-test("document and style refresh owners settle independently", () => {
+test("runtime startup, document, and style refresh owners settle independently", () => {
   const controller = new ReadinessController();
   controller.start();
   controller.setRuntime("ready");
   controller.setHosts(["ready"]);
   const documentClaim = controller.beginPresentation("document");
   const styleClaim = controller.beginPresentation("styles");
+  const runtimeClaim = controller.beginPresentation("runtime");
 
   controller.setPresentation(documentClaim, "ready");
   assert.equal(controller.snapshot().page, "loading");
   controller.setPresentation(styleClaim, "ready");
+  assert.equal(controller.snapshot().page, "loading");
+  controller.setPresentation(runtimeClaim, "ready");
   assert.equal(controller.snapshot().page, "ready");
 
   const stale = controller.beginPresentation("document");
@@ -84,6 +87,28 @@ test("document and style refresh owners settle independently", () => {
   assert.equal(controller.snapshot().page, "loading");
   controller.setPresentation(current, "ready");
   assert.equal(controller.snapshot().page, "ready");
+});
+
+test("failed runtime startup settles readiness and retains the runtime diagnostic", async () => {
+  const controller = new ReadinessController();
+  controller.start();
+  const claim = controller.beginPresentation("runtime");
+  controller.setRuntime("ready");
+  const settled = controller.ready();
+  controller.setPresentation(claim, "error");
+  const diagnostic = {
+    scope: "runtime" as const,
+    severity: "error" as const,
+    code: "runtime-bootstrap-failed",
+    message: "The notebook server disconnected.",
+    hint: "Start the notebook server and retry the preview.",
+    view: "dashboard",
+  };
+  controller.setRuntime("error", diagnostic);
+
+  await settled;
+  assert.equal(controller.snapshot().page, "error");
+  assert.deepEqual(controller.snapshot().runtimeDiagnostic, diagnostic);
 });
 
 test("browser evidence reports deterministic diagnostic truncation", () => {
