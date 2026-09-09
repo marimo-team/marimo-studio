@@ -12,9 +12,11 @@ from packaging.utils import canonicalize_name
 DISTRIBUTION_LICENSE_FILE = "LICENSE"
 EXACT_RUNTIME_REQUIREMENTS = {
     "agent-plugins": ">=0.2",
-    "marimo-export": "==0.0.7",
-    "tree-sitter": "==0.25.2",
-    "tree-sitter-javascript": "==0.25.0",
+    "htpy": ">=26.5.1",
+    "marimo-export": ">=0.0.7",
+    "tree-sitter": ">=0.25.2",
+    "tree-sitter-javascript": ">=0.25.0",
+    "watchdog": ">=6.0.0",
 }
 
 
