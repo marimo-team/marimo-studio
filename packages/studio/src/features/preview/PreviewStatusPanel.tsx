@@ -9,22 +9,37 @@ export const PreviewStatusPanel = ({
 }) => {
   if (
     state.progress === null &&
-    (state.rendered || (state.status.state !== "loading" && state.status.state !== "error"))
+    state.status.state !== "error" &&
+    (state.rendered || state.status.state !== "loading")
   ) {
     return null;
   }
   const failed = state.progress === null && state.status.state === "error";
   const message = state.progress?.message ?? state.status.message;
   const heading = state.rendered ? "Updating preview" : "Preparing preview";
+  const failureHeading = state.rendered ? "Preview could not update" : "Preview could not start";
   return (
     <div className="studio-preview-status-panel" data-rendered={state.rendered}>
       <div role={failed ? "alert" : "status"}>
-        <strong>{failed ? "Preview could not start" : heading}</strong>
+        <div className="studio-preview-status-heading">
+          {failed ? null : (
+            <span
+              role="progressbar"
+              aria-label={message}
+              aria-valuenow={state.progress?.completed}
+              aria-valuemax={state.progress?.total}
+            >
+              <span className="studio-view-loading-indicator" aria-hidden="true" />
+            </span>
+          )}
+          <strong>{failed ? failureHeading : heading}</strong>
+        </div>
         {state.status.diagnostics.map((diagnostic, index) => (
           <p key={index}>
             {diagnostic.message} {diagnostic.hint}
           </p>
         ))}
+        {failed && state.status.diagnostics.length === 0 ? <p>{message}</p> : null}
         {failed ? (
           <button type="button" className="studio-control" onClick={onRetry}>
             Retry preview
@@ -39,11 +54,6 @@ export const PreviewStatusPanel = ({
                 ? `${state.progress.completed} of ${state.progress.total}`
                 : "\u00a0"}
             </p>
-            <progress
-              aria-label={message}
-              value={state.progress?.completed}
-              max={state.progress?.total}
-            />
           </>
         )}
       </div>

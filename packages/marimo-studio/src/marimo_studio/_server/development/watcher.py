@@ -10,7 +10,18 @@ from pathlib import Path
 from threading import Event, Lock
 from typing import Any
 
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import (
+    DirCreatedEvent,
+    DirDeletedEvent,
+    DirModifiedEvent,
+    DirMovedEvent,
+    FileClosedEvent,
+    FileCreatedEvent,
+    FileDeletedEvent,
+    FileModifiedEvent,
+    FileMovedEvent,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
 
 from marimo_studio._processes.ownership import (
@@ -176,6 +187,19 @@ class _WatchdogRegistry:
                     handler,
                     str(path),
                     recursive=recursive,
+                    # FSEvents keys watches across observers by path, recursion,
+                    # and filter. Keep Studio distinct from Marimo's file watcher.
+                    event_filter=[
+                        FileCreatedEvent,
+                        FileDeletedEvent,
+                        FileModifiedEvent,
+                        FileMovedEvent,
+                        FileClosedEvent,
+                        DirCreatedEvent,
+                        DirDeletedEvent,
+                        DirModifiedEvent,
+                        DirMovedEvent,
+                    ],
                 )
                 self._entries[key] = _WatchdogEntry(watch, handler)
                 return path, recursive, handler

@@ -467,6 +467,12 @@ const updateMotionPreference = () => {
 };
 reducedMotion.addEventListener("change", updateMotionPreference);
 
+// Shower sees shadow hosts as event targets. Keep projected control keys
+// inside their output after native handlers run, preserving default actions.
+for (const host of document.querySelectorAll("marimo-cell, marimo-output")) {
+  host.addEventListener("keydown", (event) => event.stopPropagation());
+}
+
 const shower = new Shower({ containerSelector: "#app-shell" });
 const updateControls = () => {
   const index = Math.max(0, shower.activeSlideIndex);

@@ -14,7 +14,7 @@ export interface RemoteSource {
 }
 
 export interface SourceConflict {
-  kind: "revision" | "read-only" | "orphan";
+  kind: "revision" | "read-only" | "orphan" | "unavailable";
   local: string;
   remote: RemoteSource;
   externalRecovery?: string;
@@ -41,6 +41,8 @@ export class RevisionConflict extends Error {
     super("Source revision changed");
   }
 }
+
+export class SourceUnavailable extends Error {}
 
 const responseJson = async (response: Response) => jsonValueSchema.parse(await response.json());
 
@@ -78,9 +80,11 @@ export const createSourceRemote = (
     async read(view, path) {
       const response = await fetch(sourceUrl(view, path), { cache: "no-store" });
       if (!response.ok) {
-        throw new Error(
-          await responseErrorMessage(response, `Could not read ${path} (${response.status})`),
+        const message = await responseErrorMessage(
+          response,
+          `Could not read ${path} (${response.status})`,
         );
+        throw response.status === 404 ? new SourceUnavailable(message) : new Error(message);
       }
       const revision = response.headers.get("ETag")?.replace(/^W\//, "").replace(/^"|"$/g, "");
       if (!revision) {
@@ -123,9 +127,11 @@ export const createSourceRemote = (
         throw new RevisionConflict(conflict.revision ?? "", conflict.external_recovery);
       }
       if (!response.ok) {
-        throw new Error(
-          await responseErrorMessage(response, `Could not save ${path} (${response.status})`),
+        const message = await responseErrorMessage(
+          response,
+          `Could not save ${path} (${response.status})`,
         );
+        throw response.status === 404 ? new SourceUnavailable(message) : new Error(message);
       }
       const next = response.headers.get("ETag")?.replace(/^W\//, "").replace(/^"|"$/g, "");
       if (!next) {

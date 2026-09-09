@@ -9,6 +9,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Literal
+from urllib.parse import parse_qsl, urlsplit
 
 from starlette.requests import HTTPConnection, Request
 from starlette.responses import JSONResponse, RedirectResponse
@@ -283,7 +284,7 @@ async def delegate_editor_request(
                     host_handoff=HostSessionTicket.issue(
                         context,
                         session_id,
-                        request.query_params.multi_items(),
+                        _save_page_query(request),
                         public_base_url=(
                             context.base_url
                             if request_base_url is None
@@ -407,6 +408,22 @@ async def _bind_editor_session(
 def _query_value(connection: HTTPConnection, key: str) -> str | None:
     values = connection.query_params.getlist(key)
     return values[0] if len(values) == 1 else None
+
+
+def _save_page_query(request: Request) -> list[tuple[str, str]]:
+    query = request.query_params.multi_items()
+    referrer = request.headers.get("referer")
+    if referrer is None:
+        return query
+    try:
+        page = urlsplit(referrer)
+    except ValueError:
+        return query
+    if page.scheme != request.url.scheme or page.netloc != request.url.netloc:
+        return query
+    # Native save requests omit the page query. The referrer follows query
+    # changes made after the notebook session opened.
+    return parse_qsl(page.query, keep_blank_values=True)
 
 
 def _replace_relative_path(scope: Scope, current: str, target: str) -> Scope:

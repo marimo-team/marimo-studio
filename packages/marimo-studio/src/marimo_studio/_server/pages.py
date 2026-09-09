@@ -74,7 +74,7 @@ from marimo_studio._server.studio import (
 from marimo_studio._server.studio.session_handoff import (
     host_session_handoff_capability_matches,
 )
-from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.models import DEFAULT_VIEW_NAME, StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
 
 
@@ -394,6 +394,23 @@ def unconfigured_response(
         return Response(status_code=405)
     client_id = secrets.token_urlsafe(18)
     native_session_id = _editor_session_id(request, context, sessions, session_ids)
+    first_save = request.query_params.get(DOCUMENT_REPLAY_QUERY_PARAM) == "1" and (
+        host_session_handoff_capability_matches(
+            request.query_params.get(HOST_SESSION_HANDOFF_QUERY_PARAM),
+            context,
+            native_session_id,
+            request.query_params.multi_items(),
+        )
+    )
+    if first_save:
+        return RedirectResponse(
+            with_query(
+                studio_url(context.base_url, DEFAULT_VIEW_NAME),
+                request.query_params.multi_items(),
+            ),
+            status_code=307,
+            headers=edit_document_headers(security_policy),
+        )
     return HTMLResponse(
         studio_document(
             context,
@@ -425,9 +442,10 @@ def _editor_session_id(
             query,
         ):
             return requested
-        if sessions.ownership(
-            context, requested
-        ) == "unclaimed" and host_session_handoff_capability_matches(
+        if sessions.ownership(context, requested) in {
+            "current",
+            "unclaimed",
+        } and host_session_handoff_capability_matches(
             request.query_params.get(HOST_SESSION_HANDOFF_QUERY_PARAM),
             context,
             requested,

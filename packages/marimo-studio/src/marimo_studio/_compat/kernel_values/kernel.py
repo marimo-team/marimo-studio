@@ -251,6 +251,14 @@ def _claim_probe_selector_lease(
         return _PROBE_SELECTOR_LEASES.pop(token)
 
 
+def _kernel_filename(context: Any) -> Path | None:
+    filename = (
+        getattr(getattr(context._kernel, "app_metadata", None), "filename", None)
+        or context.filename
+    )
+    return Path(filename).resolve() if filename is not None else None
+
+
 class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
@@ -266,12 +274,13 @@ class _KernelBridgeLifespan:
     def _activate(
         self,
         context: Any,
-        filename: Path,
+        filename: Path | None,
         inspection: _ProbeSelectorLease | None,
     ) -> bool:
         if self._output_renderer is not None:
             return True
-        if is_owned_session():
+        filename = _kernel_filename(context) or filename
+        if is_owned_session() or filename is None:
             return False
         try:
             configured = discover_studio_definition(filename) is not None
@@ -344,19 +353,12 @@ class _KernelBridgeLifespan:
         if not isinstance(context, KernelRuntimeContext):
             return
         self._entered_lifespan = _guard_entered_lifespan(context, self._resume)
-        raw_filename = context.filename or getattr(
-            getattr(context._kernel, "app_metadata", None),
-            "filename",
-            None,
-        )
-        if raw_filename is None:
-            return
         try:
             self._enter(
                 context,
                 Function,
                 CellId_t,
-                filename=Path(raw_filename).resolve(),
+                filename=_kernel_filename(context),
             )
         except BaseException as error:
             if self._entered_lifespan is not None:
@@ -366,24 +368,6 @@ class _KernelBridgeLifespan:
             except BaseException as cleanup_error:
                 raise error from cleanup_error
             raise
-
-    def _enter_after_filename(
-        self,
-        context: Any,
-        function_type: Any,
-        cell_id_type: Any,
-    ) -> bool:
-        if context.filename is None:
-            return False
-        try:
-            self._enter(context, function_type, cell_id_type)
-        except BaseException as error:
-            try:
-                self._close()
-            except BaseException as cleanup_error:
-                raise error from cleanup_error
-            raise
-        return True
 
     def _enter(
         self,
@@ -400,15 +384,19 @@ class _KernelBridgeLifespan:
         )
         from marimo._messaging.notification_utils import broadcast_notification
 
-        filename = filename or Path(context.filename).resolve()
-        inspection = _claim_probe_selector_lease(context, filename)
+        filename = filename or _kernel_filename(context)
+        inspection = (
+            _claim_probe_selector_lease(context, filename)
+            if filename is not None
+            else None
+        )
         if self._registry is not None:
             self._activate(context, filename, inspection)
             return
         self._activate(context, filename, inspection)
 
-        # Keep the functions registered while the renderer waits for a Studio
-        # definition created during the session.
+        # Save As updates kernel metadata without re-entering its lifespan.
+        # Register the bridge now and activate it against the saved filename.
         def read(args: ReadValuesArgs) -> dict[str, object]:
             try:
                 authorized, active_authorized = verify_value_ownership_arguments(
@@ -587,7 +575,8 @@ class _KernelBridgeLifespan:
             }
             fingerprint = query_fingerprint(query)
             if (
-                not verify_query_authorization(args, filename)
+                (current_filename := _kernel_filename(context) or filename) is None
+                or not verify_query_authorization(args, current_filename)
                 or not valid_query_operation_id(args.operation_id)
                 or args.fingerprint != fingerprint
                 or isinstance(args.binding_generation, bool)

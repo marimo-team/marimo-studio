@@ -8,6 +8,7 @@ import {
   type RemoteSource,
   RevisionConflict,
   type SourceRemote,
+  SourceUnavailable,
 } from "../src/features/source-editor/remote.ts";
 import {
   type SourceObserver,
@@ -527,33 +528,39 @@ test("matching disk content clears an existing conflict", async () => {
   assert.equal(result.states.at(-1)?.phase, "saved");
 });
 
-test("active saves absorb filesystem events and flush later edits in revision order", async () => {
-  const remote = new DeferredRemote();
-  const result = observed();
-  const source = new SyncedSource(editable("src/App.tsx"), remote, result.observer, 60_000);
-  await source.load("dashboard");
-  source.edit("first edit");
+for (const response of ["successful", "lost"]) {
+  test(`saves flush later edits after a ${response} write response and filesystem update`, async () => {
+    const remote = new DeferredRemote();
+    const result = observed();
+    const source = new SyncedSource(editable("src/App.tsx"), remote, result.observer, 60_000);
+    await source.load("dashboard");
+    source.edit("first edit");
 
-  const autosave = source.save();
-  source.edit("latest edit");
-  const flush = source.save();
-  remote.source = { content: "first edit", revision: "r2" };
+    const autosave = source.save();
+    source.edit("latest edit");
+    const flush = source.save();
+    remote.source = { content: "first edit", revision: "r2" };
 
-  assert.deepEqual(remote.writes.length, 1);
-  assert.deepEqual(remote.writes[0].content, "first edit");
-  await source.externalChange("r2");
-  remote.writes[0].resolve("r2");
-  await Promise.resolve();
-  assert.deepEqual(remote.writes.length, 2);
-  assert.deepEqual(remote.writes[1].content, "latest edit");
-  assert.deepEqual(remote.writes[1].revision, "r2");
-  remote.writes[1].resolve("r3");
+    assert.deepEqual(remote.writes.length, 1);
+    assert.deepEqual(remote.writes[0].content, "first edit");
+    await source.externalChange("r2");
+    if (response === "successful") {
+      remote.writes[0].resolve("r2");
+    } else {
+      remote.writes[0].reject(new Error("Save response was lost."));
+    }
+    await Promise.resolve();
+    assert.deepEqual(remote.writes.length, 2);
+    assert.deepEqual(remote.writes[1].content, "latest edit");
+    assert.deepEqual(remote.writes[1].revision, "r2");
+    remote.writes[1].resolve("r3");
 
-  assert.deepEqual(await autosave, true);
-  assert.deepEqual(await flush, true);
-  assert.deepEqual(source.hasConflict, false);
-  assert.deepEqual(source.hasPendingChanges, false);
-});
+    assert.deepEqual(await autosave, true);
+    assert.deepEqual(await flush, true);
+    assert.deepEqual(source.hasConflict, false);
+    assert.deepEqual(source.hasPendingChanges, false);
+  });
+}
 
 test("a late write response preserves a newer external conflict", async () => {
   const remote = new DeferredRemote();
@@ -589,11 +596,117 @@ test("a late write response preserves an external deletion", async () => {
 
   assert.equal(await saving, false);
   assert.equal(source.hasPendingChanges, true);
-  assert.deepEqual(result.states.at(-1)?.phase, "error");
-  assert.deepEqual(
-    result.states.at(-1)?.message,
-    "src/App.tsx was deleted on disk. Restore it before saving in Studio.",
-  );
+  assert.deepEqual(result.states.at(-1)?.conflict, {
+    kind: "unavailable",
+    local: "local edit",
+    remote: { content: "initial", revision: "r1" },
+  });
+});
+
+test("discarding a deleted draft settles its interrupted save", async () => {
+  const remote = new DeferredRemote();
+  const result = observed();
+  const source = new SyncedSource(editable("theme.css"), remote, result.observer, 60_000);
+  await source.load("dashboard");
+  source.edit("local style");
+  const saving = source.save();
+  await source.externalChange(null);
+
+  source.useSavedVersion();
+  remote.writes[0].reject(new Error("source unavailable"));
+
+  assert.equal(await saving, true);
+  assert.equal(source.hasPendingChanges, false);
+  assert.equal(result.documents.at(-1), "");
+  assert.equal(result.states.at(-1)?.phase, "error");
+  assert.equal(await source.save(), true);
+});
+
+test("an unavailable save response preserves a discardable draft", async () => {
+  const remote = new DeferredRemote();
+  const result = observed();
+  const source = new SyncedSource(editable("theme.css"), remote, result.observer, 60_000);
+  await source.load("dashboard");
+  source.edit("local style");
+  const saving = source.save();
+
+  remote.writes[0].reject(new SourceUnavailable("theme.css is unavailable."));
+
+  assert.equal(await saving, false);
+  assert.deepEqual(result.states.at(-1)?.conflict, {
+    kind: "unavailable",
+    local: "local style",
+    remote: { content: "initial", revision: "r1" },
+  });
+  assert.equal(await source.overwriteSavedVersion(), false);
+  source.useSavedVersion();
+  assert.equal(await source.save(), true);
+});
+
+test("a stale unavailable save response preserves the restored source conflict", async () => {
+  const remote = new DeferredRemote();
+  const result = observed();
+  const source = new SyncedSource(editable("theme.css"), remote, result.observer, 60_000);
+  await source.load("dashboard");
+  source.edit("local style");
+  const saving = source.save();
+  await source.externalChange(null);
+  remote.source = { content: "restored style", revision: "r3" };
+  await source.externalChange("r3");
+
+  remote.writes[0].reject(new SourceUnavailable("theme.css is unavailable."));
+
+  assert.equal(await saving, false);
+  assert.deepEqual(result.states.at(-1)?.conflict, {
+    kind: "revision",
+    local: "local style",
+    remote: { content: "restored style", revision: "r3" },
+  });
+  assert.equal(result.states.at(-1)?.phase, "conflict");
+});
+
+test("a stale unavailable save response preserves a restored source after discard", async () => {
+  const remote = new DeferredRemote();
+  const result = observed();
+  const source = new SyncedSource(editable("theme.css"), remote, result.observer, 60_000);
+  await source.load("dashboard");
+  source.edit("local style");
+  const saving = source.save();
+  await source.externalChange(null);
+  source.useSavedVersion();
+  remote.source = { content: "restored style", revision: "r3" };
+  await source.externalChange("r3");
+
+  remote.writes[0].reject(new SourceUnavailable("theme.css is unavailable."));
+
+  assert.equal(await saving, true);
+  assert.equal(result.documents.at(-1), "restored style");
+  assert.equal(result.states.at(-1)?.phase, "external");
+  assert.equal(result.states.at(-1)?.conflict, undefined);
+  assert.equal(source.hasPendingChanges, false);
+});
+
+test("a restored source conflict follows a disk reversion to its saved revision", async () => {
+  const remote = new MemoryRemote();
+  const result = observed();
+  const source = new SyncedSource(editable("theme.css"), remote, result.observer, 60_000);
+  await source.load("dashboard");
+  source.edit("local style");
+  await source.externalChange(null);
+  remote.source = { content: "restored style", revision: "r2" };
+  await source.externalChange("r2");
+
+  remote.source = { content: "initial", revision: "r1" };
+  await source.externalChange("r1");
+
+  assert.deepEqual(result.states.at(-1)?.conflict, {
+    kind: "revision",
+    local: "local style",
+    remote: { content: "initial", revision: "r1" },
+  });
+  source.useSavedVersion();
+  assert.equal(result.documents.at(-1), remote.source.content);
+  assert.equal(source.hasPendingChanges, false);
 });
 
 test("a conflict keeps the latest editor text", async () => {

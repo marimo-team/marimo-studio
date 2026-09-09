@@ -36,7 +36,11 @@ def _snapshot(
     source: str = "value = 1\n",
 ) -> PresentationSnapshot:
     reference = CellRef("0" * 64, "1" * 64)
-    cell = SimpleNamespace(runtime_id="runtime-cell", ref=reference)
+    cell = SimpleNamespace(
+        runtime_id="runtime-cell",
+        ref=reference,
+        code_sha256=hashlib.sha256(source.encode()).hexdigest(),
+    )
     workspace = SimpleNamespace(
         notebook=tmp_path / "notebook.py",
         default_runtime=runtime,
@@ -450,3 +454,52 @@ def test_runtime_registry_close_rejects_an_inflight_server_capture(
             await project()
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("source", "executed"),
+    [("", None), ("", CellRef("2" * 64, "3" * 64)), ("value = 1\n", None)],
+)
+def test_server_runtime_waits_for_saved_cell_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+    executed: CellRef | None,
+) -> None:
+    reference = CellRef("0" * 64, "1" * 64)
+
+    class Sessions:
+        async def live_cells(self, *_args: object, **_kwargs: object):
+            return LiveCellSnapshot(
+                owner="session:first",
+                generation="1" * 64,
+                ids={reference: "runtime-cell"},
+                names={},
+                dependency_closures={},
+                current_refs={"runtime-cell": executed} if executed is not None else {},
+            )
+
+    monkeypatch.setattr(
+        catalog_module, "presentation_revision_url", lambda *_args, **_kwargs: "/"
+    )
+    monkeypatch.setattr(
+        catalog_module, "presentation_revision_capability", lambda *_args: "capability"
+    )
+    runtime = ServerRuntime(cast(SessionState, Sessions()))
+
+    async def project() -> RuntimeProjection:
+        return await runtime.project(
+            _snapshot(tmp_path, source=source),
+            _context(tmp_path),
+            "s_123456",
+            "binding",
+            "presentation",
+            "runtime",
+        )
+
+    if source or executed is not None:
+        with pytest.raises(RuntimeSyncError, match="Run the changed notebook cells"):
+            asyncio.run(project())
+    else:
+        result = asyncio.run(project())
+        assert result.cell_refs == {str(reference): "runtime-cell"}

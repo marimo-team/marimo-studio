@@ -9,6 +9,7 @@ import {
   studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
+  captureProjectionRefresh,
   collaborativeDashboardHtmlPath,
   collaborativeStudioEntryUrl,
   dashboardHtmlPath,
@@ -17,6 +18,7 @@ import {
   labeledSlider,
   observeBrowserContext,
   readWorkspaceFile,
+  recoverProjectionRefresh,
   recoverRequestAbort,
   studioEntryUrl,
   studioOrigin,
@@ -164,6 +166,9 @@ if __name__ == "__main__":`,
 
     expect((await activate("dashboard", secondClient)).status()).toBe(200);
     await expect(second.getByLabel("Switch view")).toContainText("dashboard");
+    await expect(
+      secondPreview.getByRole("heading", { name: "Studio browser fixture" }),
+    ).toBeVisible();
     const original = await readWorkspaceFile(dashboardHtmlPath);
     const published = original.replace("Studio browser fixture", "Published to both tabs").replace(
       "</main>",
@@ -172,6 +177,8 @@ if __name__ == "__main__":`,
           <a href="?tab-query=second">Use second query</a>
         </nav><p>Shared query: <strong id="shared-query" mo-value="query_value"></strong></p></main>`,
     );
+    const firstSharedRefresh = await captureProjectionRefresh(page, browserDiagnostics);
+    const secondSharedRefresh = await captureProjectionRefresh(second, browserDiagnostics);
     await writeViewSource(page, "dashboard", "src/index.html", published);
     await expect(
       firstPreview.getByRole("heading", { name: "Published to both tabs" }),
@@ -214,6 +221,8 @@ if __name__ == "__main__":`,
     await expect.poll(() => new URL(second.url()).searchParams.get("tab-query")).toBe("first");
     await expect(firstPreview.locator("#shared-query")).toHaveText("first");
     await expect(secondPreview.locator("#shared-query")).toHaveText("first");
+    await recoverProjectionRefresh(firstSharedRefresh, page);
+    await recoverProjectionRefresh(secondSharedRefresh, second);
     const firstPreviewSession = await firstFrame.getAttribute("data-session-id");
     const secondPreviewSession = await secondFrame.getAttribute("data-session-id");
     expect(firstPreviewSession).toMatch(/^s_[\da-z]{6}$/);

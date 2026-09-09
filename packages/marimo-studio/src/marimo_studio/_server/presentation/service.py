@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 
 from marimo_studio._artifacts.paths import artifact_root
 from marimo_studio._artifacts.records import ViewArtifact
+from marimo_studio._artifacts.repository import read_build_state
 from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._projections.resolved import ResolvedStudio
@@ -52,6 +53,7 @@ from marimo_studio._workspace.models import (
 from marimo_studio.errors import (
     ConfigurationError,
     MarimoStudioError,
+    ViewProjectError,
     WorkspaceGenerationConflictError,
 )
 from marimo_studio.errors._internal import ArtifactIntegrityError, RuntimeSyncError
@@ -390,16 +392,36 @@ class NotebookPresentation:
                 published=True,
                 profile=profile,
             )
-            if snapshot is None:
-                raise RuntimeSyncError(
-                    "The view sources are still changing. Studio will retry shortly."
-                )
             current = await development.project_catalog(studio, selected)
             if (
                 current.generation != catalog.generation
                 or current.input_id != catalog.input_id
             ):
                 continue
+            if snapshot is None:
+                build = await asyncio.to_thread(
+                    read_build_state, current.project, profile
+                )
+                diagnostic = next(
+                    (item for item in build.diagnostics if item.severity == "error"),
+                    None,
+                )
+                if build.phase == "failed" and diagnostic is not None:
+                    source = diagnostic.source
+                    raise ViewProjectError(
+                        diagnostic.message,
+                        source=(
+                            current.project.root / source.path
+                            if source is not None
+                            else current.project.manifest
+                        ),
+                        line=source.line if source is not None else None,
+                        column=source.column if source is not None else None,
+                        hint=diagnostic.hint or None,
+                    )
+                raise RuntimeSyncError(
+                    "The view sources are still changing. Studio will retry shortly."
+                )
             accepted_stamps = await asyncio.to_thread(
                 self._presentation_stamps,
                 current.project,

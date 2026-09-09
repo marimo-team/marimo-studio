@@ -73,11 +73,11 @@ def test_untitled_kernel_activates_after_rename(
         context._kernel._lifespan = aggregate
         await aggregate.__aenter__()
         await context._kernel._lifespan.__aenter__()
-        assert context.function_registry.registered == []
-        context._kernel.app_metadata.filename = str(notebook)
-        await context._kernel._lifespan.__aenter__()
         registered = [*context.function_registry.registered]
         assert registered
+        context._kernel.app_metadata.filename = str(notebook)
+        await context._kernel._lifespan.__aenter__()
+        assert context.function_registry.registered == registered
         await context._kernel._lifespan.__aenter__()
         assert context.function_registry.registered == registered
         await context._kernel._lifespan.__aexit__(None, None, None)
@@ -315,9 +315,11 @@ default = "dashboard"
     assert context.function_registry.deleted == ["_marimo_studio"]
 
 
+@pytest.mark.parametrize("initially_untitled", [False, True])
 def test_kernel_lifespan_activates_after_the_first_view_is_created(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    initially_untitled: bool,
 ) -> None:
     from marimo._runtime import context as runtime_context
     from marimo._runtime.context import kernel_context as kernel_context_module
@@ -327,6 +329,9 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
 
     class Kernel:
         def __init__(self) -> None:
+            self.app_metadata = SimpleNamespace(
+                filename=None if initially_untitled else str(notebook)
+            )
             self.globals = {"summary": {"papers": 3_877}}
             self.graph = SimpleNamespace(
                 cells={
@@ -352,7 +357,7 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
         return lambda: cache_releases.append(True)
 
     current = _native_output_context()
-    current.filename = str(notebook)
+    current.filename = None if initially_untitled else str(notebook)
     current._kernel = Kernel()
     monkeypatch.setattr(runtime_context, "get_context", lambda: current)
     monkeypatch.setattr(
@@ -411,6 +416,7 @@ default = "dashboard"
                 encoding="utf-8",
             )
 
+            current._kernel.app_metadata.filename = str(notebook)
             after = cast(
                 dict[str, Any],
                 read(

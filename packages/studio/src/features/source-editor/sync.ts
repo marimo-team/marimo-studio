@@ -6,6 +6,7 @@ import {
   RevisionConflict,
   type SourceConflict,
   type SourceRemote,
+  SourceUnavailable,
 } from "./remote.ts";
 
 export type SourcePhase = "loading" | "saved" | "saving" | "external" | "conflict" | "error";
@@ -125,7 +126,7 @@ export class SyncedSource {
       this.emit("conflict");
     } catch (error) {
       if (generation === this.generation && accessGeneration === this.accessGeneration) {
-        this.emit("error", errorMessage(error));
+        this.loadError(error);
       }
     }
   }
@@ -167,7 +168,13 @@ export class SyncedSource {
       return true;
     } catch (error) {
       if (generation === this.generation && accessGeneration === this.accessGeneration) {
-        this.emit("error", errorMessage(error));
+        if (this.diskSource) {
+          this.conflict = { kind: "orphan", local: this.content, remote: this.diskSource };
+          this.dirty = true;
+          this.emit("conflict");
+          return true;
+        }
+        this.loadError(error);
       }
       return false;
     }
@@ -207,6 +214,10 @@ export class SyncedSource {
   }
 
   loadError(cause: unknown): void {
+    if (cause instanceof SourceUnavailable && this.diskSource) {
+      this.markUnavailable(errorMessage(cause));
+      return;
+    }
     this.emit("error", errorMessage(cause));
   }
 
@@ -244,7 +255,7 @@ export class SyncedSource {
       return true;
     } catch (error) {
       if (generation === this.generation) {
-        this.emit("error", errorMessage(error));
+        this.loadError(error);
       }
       return false;
     }
@@ -259,9 +270,19 @@ export class SyncedSource {
     }
     this.content = content;
     this.dirty = true;
+    this.cancelSave();
+    if (this.conflict?.kind === "unavailable") {
+      this.conflict = { ...this.conflict, local: content };
+      this.emit("conflict");
+      return;
+    }
+    if (!this.revision && this.diskSource) {
+      this.conflict = { kind: "unavailable", local: content, remote: this.diskSource };
+      this.emit("conflict");
+      return;
+    }
     this.conflict = undefined;
     this.emit("saving");
-    this.cancelSave();
     this.timer = setTimeout(() => void this.save(), this.saveDelay);
   }
 
@@ -290,18 +311,10 @@ export class SyncedSource {
       return;
     }
     if (revision === null) {
-      this.cancelSave();
-      this.revision = "";
-      this.sourceVersion += 1;
-      this.conflict = undefined;
-      if (!this.dirty) {
-        this.content = "";
-        this.observer.document(this.path, "");
-      }
-      this.emit("error", `${this.path} was deleted on disk. Restore it before saving in Studio.`);
+      this.markUnavailable(`${this.path} was deleted on disk. Restore it before saving in Studio.`);
       return;
     }
-    if (revision === this.revision) {
+    if (!this.conflict && revision === this.revision) {
       return;
     }
     await this.reconcile();
@@ -320,9 +333,12 @@ export class SyncedSource {
         generation !== this.generation ||
         sourceVersion !== this.sourceVersion ||
         readGeneration !== this.readGeneration ||
-        remote.revision === this.revision
+        (!this.conflict && remote.revision === this.revision)
       ) {
         return;
+      }
+      if (this.conflict?.kind === "unavailable" && this.diskSource) {
+        this.revision = this.diskSource.revision;
       }
       if (this.dirty) {
         if (this.access === "read") {
@@ -336,7 +352,7 @@ export class SyncedSource {
           this.emit("saved");
           return;
         }
-        if (remote.content === this.writingContent) {
+        if (this.conflict?.kind !== "unavailable" && remote.content === this.writingContent) {
           this.revision = remote.revision;
           this.sourceVersion += 1;
           this.emit("saving");
@@ -355,13 +371,19 @@ export class SyncedSource {
         sourceVersion === this.sourceVersion &&
         readGeneration === this.readGeneration
       ) {
-        this.emit("error", errorMessage(error));
+        this.loadError(error);
       }
     }
   }
 
   useSavedVersion(): void {
     if (this.disposed || !this.conflict) {
+      return;
+    }
+    if (this.conflict.kind === "unavailable") {
+      this.dirty = false;
+      this.conflict = undefined;
+      this.markUnavailable(`${this.path} is unavailable. Restore access before saving in Studio.`);
       return;
     }
     this.apply(this.conflict.remote);
@@ -379,6 +401,9 @@ export class SyncedSource {
       return false;
     }
     const conflict = this.conflict;
+    if (conflict?.kind === "unavailable") {
+      return false;
+    }
     if (!conflict) {
       return this.dirty ? await this.save() : true;
     }
@@ -450,10 +475,16 @@ export class SyncedSource {
         if (generation !== this.generation) {
           return false;
         }
+        if (this.conflict !== undefined) {
+          return !this.hasPendingChanges;
+        }
+        if (sourceVersion !== this.sourceVersion) {
+          continue;
+        }
         if (error instanceof RevisionConflict) {
           return await this.loadConflict(generation, error.externalRecovery);
         }
-        this.emit("error", errorMessage(error));
+        this.loadError(error);
         return false;
       } finally {
         if (this.writingContent === content) {
@@ -495,7 +526,7 @@ export class SyncedSource {
         sourceVersion === this.sourceVersion &&
         readGeneration === this.readGeneration
       ) {
-        this.emit("error", errorMessage(error));
+        this.loadError(error);
       }
       return false;
     }
@@ -512,6 +543,24 @@ export class SyncedSource {
     this.conflict = undefined;
     this.dirty = false;
     this.observer.document(this.path, source.content);
+  }
+
+  private markUnavailable(message: string): void {
+    this.cancelSave();
+    this.revision = "";
+    this.sourceVersion += 1;
+    const saved = this.conflict?.remote ?? this.diskSource;
+    if (this.dirty && saved) {
+      this.conflict = { kind: "unavailable", local: this.content, remote: saved };
+      this.emit("conflict", message);
+      return;
+    }
+    this.conflict = undefined;
+    if (!this.dirty) {
+      this.content = "";
+      this.observer.document(this.path, "");
+    }
+    this.emit("error", message);
   }
 
   private emit(phase: SourcePhase, message?: string): void {

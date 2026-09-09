@@ -155,16 +155,31 @@ test("opens Studio from the first save with the native session", async ({
       new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
       response.ok(),
   );
-  await page.goto("/?file=__new__s_first1&region=eu");
+  await page.goto("/?file=__new__s_first1&region=before");
   const instantiateResponse = await instantiated;
   const sessionId = instantiateResponse.request().headers()["marimo-session-id"];
   expect(sessionId).toBeTruthy();
 
   const cell = page.locator("[data-cell-id]").first();
-  await cell.getByRole("textbox").fill("saved = True\nsaved");
+  await cell
+    .getByRole("textbox")
+    .fill('import marimo as mo\nmo.query_params().set("region", "eu")\nsaved = True\nsaved');
   await cell.hover();
-  await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
+  const run = cell.locator('button[data-testid="run-button"]:not(:disabled)');
+  await expect(run).toBeVisible();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/api/kernel/run") &&
+        response.ok(),
+    ),
+    run.click(),
+  ]);
   await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
+  await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("eu");
+  await page.getByRole("button", { name: "Python", exact: true }).click();
+  await expect(page.locator("[data-cell-id]")).toHaveCount(2);
   await page.getByTestId("save-button").click();
   const filename = page.getByPlaceholder("filename");
   await filename.fill("first-save.py");
@@ -174,29 +189,47 @@ test("opens Studio from the first save with the native session", async ({
   filenameFallback.recovered();
   unusedPreload.recovered();
   dialogDescription.recovered();
-  await expect(page).toHaveURL(/\/\?file=first-save\.py&region=eu$/);
-  await expect(editorFrame(page).locator(".cm-content").first()).toContainText("saved = True");
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
+  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
 
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     1,
   );
-  await executeCodeMode(
-    editorFrame(page),
-    "first-save.py",
-    sessionId,
-    `
-import marimo_studio.agent as studio_agent
-
-workspace = studio_agent.current_workspace()
-view = await workspace.create_view("dashboard")
-await view.show()
-`,
-  );
+  await page.getByRole("button", { name: "Create dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
   expect(await studioEditorSessionId(page)).toBe(sessionId);
+  await expect(editorFrame(page).locator(".cm-content").first()).toContainText("saved = True");
   await waitForPreview(page);
   replacedWorkspaceStream.recovered();
+});
+
+test("keeps first-view creation available after reloading its route", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  await page.goto("/studio/dashboard/?file=plain.py");
+  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
+  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    1,
+  );
+  const frameElement = await page.locator("iframe#marimo-studio-editor").elementHandle();
+  if (!frameElement) {
+    throw new Error("The initializing editor element is unavailable.");
+  }
+  const retiringFrame = await frameElement.contentFrame().finally(() => frameElement.dispose());
+  if (!retiringFrame) {
+    throw new Error("The initializing editor frame is unavailable.");
+  }
+  const retirement = browserDiagnostics.expectFrameRetirement(retiringFrame);
+
+  await page.reload();
+
+  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create dashboard", exact: true })).toBeEnabled();
+  await recoverWorkspaceEventStream(replacedWorkspaceStream);
+  retirement.recovered();
 });
 
 test("loads a native module graph from a directory view", async ({ browserDiagnostics, page }) => {

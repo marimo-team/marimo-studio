@@ -2,7 +2,7 @@ import { expect, it, vi } from "vite-plus/test";
 
 import type { RevisionConflict } from "../src/features/source-editor/remote.ts";
 
-import { createSourceRemote } from "../src/features/source-editor/remote.ts";
+import { createSourceRemote, SourceUnavailable } from "../src/features/source-editor/remote.ts";
 import { unbuiltView } from "./fixtures.ts";
 
 it("reads nested provider paths through encoded source URLs", async () => {
@@ -131,3 +131,32 @@ it("preserves external recovery metadata from a conditional source write", async
     }),
   );
 });
+
+it.each(["read", "write"] as const)(
+  "identifies an unavailable source during %s",
+  async (operation) => {
+    vi.stubGlobal("fetch", async () =>
+      Response.json(
+        { error: "source-not-found", message: "theme.css is unavailable." },
+        { status: 404 },
+      ),
+    );
+    const remote = createSourceRemote(
+      (view) => `http://localhost/_marimo-studio/views/${view}`,
+      "token",
+    );
+    const request =
+      operation === "read"
+        ? remote.read("dashboard", "theme.css")
+        : remote.write(
+            "dashboard",
+            "theme.css",
+            "local style",
+            "r1",
+            "a".repeat(64),
+            "b".repeat(64),
+          );
+
+    await expect(request).rejects.toThrow(SourceUnavailable);
+  },
+);

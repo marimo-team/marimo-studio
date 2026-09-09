@@ -79,8 +79,8 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox
 an isolated Python environment for this invocation.
 
 Add a cell such as `mo.md("## Revenue is on target")`, then save the notebook.
-Studio opens the first-view screen. Name the view `dashboard`, choose **HTML
-document**, and create it. The generated view places displayable notebook cells
+Studio opens the first-view screen. Choose **HTML document** and click **Create
+dashboard**. The generated view places displayable notebook cells
 inside a frontend document.
 
 Studio connects three surfaces:

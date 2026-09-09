@@ -178,7 +178,14 @@ def test_native_watcher_shares_one_exact_path_between_project_owners(
         def start(self) -> None:
             self.started = True
 
-        def schedule(self, _handler: object, _path: str, *, recursive: bool) -> object:
+        def schedule(
+            self,
+            _handler: object,
+            _path: str,
+            *,
+            recursive: bool,
+            event_filter: object = None,
+        ) -> object:
             assert recursive is False
             self.schedules += 1
             return self.watch
@@ -256,6 +263,7 @@ def test_emitter_stop_failure_retains_registration_for_retry_and_reacquisition(
             _path: str,
             *,
             recursive: bool,
+            event_filter: object = None,
         ) -> object:
             assert not recursive
             self.handler = _handler
@@ -383,6 +391,7 @@ def test_partial_registration_rollback_preserves_an_unrelated_live_owner(
             _path: str,
             *,
             recursive: bool,
+            event_filter: object = None,
         ) -> object:
             assert not recursive
             self.schedules += 1
@@ -482,7 +491,14 @@ def test_recursive_registration_failure_keeps_the_shallow_watch(
         def start(self) -> None:
             return
 
-        def schedule(self, _handler: object, _path: str, *, recursive: bool) -> object:
+        def schedule(
+            self,
+            _handler: object,
+            _path: str,
+            *,
+            recursive: bool,
+            event_filter: object = None,
+        ) -> object:
             if recursive:
                 raise OSError("recursive schedule failed")
             return self.shallow_watch
@@ -536,7 +552,14 @@ def test_first_registration_failure_closes_the_shared_observer(
         def start(self) -> None:
             self.started = True
 
-        def schedule(self, _handler: object, _path: str, *, recursive: bool) -> object:
+        def schedule(
+            self,
+            _handler: object,
+            _path: str,
+            *,
+            recursive: bool,
+            event_filter: object = None,
+        ) -> object:
             assert recursive
             raise OSError("first schedule failed")
 
@@ -599,6 +622,7 @@ def test_start_failure_retains_timed_out_observer_for_next_acquisition(
             _path: str,
             *,
             recursive: bool,
+            event_filter: object = None,
         ) -> object:
             assert not recursive
             return self.watch
@@ -691,6 +715,7 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
             _path: str,
             *,
             recursive: bool,
+            event_filter: object = None,
         ) -> object:
             assert not recursive
             return self.watch
@@ -1065,5 +1090,53 @@ def test_slow_native_shutdown_does_not_block_the_event_loop(
         finally:
             release.set()
             await asyncio.gather(closing, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.native_process
+def test_project_watcher_coexists_with_an_independent_notebook_watcher(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "notebook.py"
+    source.write_text("initial", encoding="utf-8")
+
+    async def exercise() -> None:
+        loop = asyncio.get_running_loop()
+        native_changed = asyncio.Event()
+        studio_changed = asyncio.Event()
+        studio_ready = asyncio.Event()
+
+        class Handler(file_watcher.FileSystemEventHandler):
+            def on_any_event(self, event: Any) -> None:
+                if event.event_type not in {"created", "modified", "moved"}:
+                    return
+                if source.read_text(encoding="utf-8") == "updated":
+                    loop.call_soon_threadsafe(native_changed.set)
+
+        native = file_watcher.Observer()
+        native.schedule(Handler(), str(tmp_path), recursive=False)
+        native.start()
+        studio = file_watcher.PrivateProjectWatcher()
+
+        async def changed(_path: Path) -> None:
+            if source.read_text(encoding="utf-8") == "updated":
+                studio_changed.set()
+            else:
+                studio_ready.set()
+
+        try:
+            await studio.replace(ProjectWatchPlan((source,), ()), changed)
+            await wait_for_event(studio_ready)
+            source.write_text("updated", encoding="utf-8")
+            await asyncio.wait_for(
+                asyncio.gather(native_changed.wait(), studio_changed.wait()),
+                timeout=5,
+            )
+        finally:
+            await studio.close()
+            native.stop()
+            await asyncio.to_thread(native.join, 2)
+            assert not native.is_alive()
 
     asyncio.run(exercise())

@@ -74,6 +74,12 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 | [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment |
 | Browser acceptance               | Current Chromium on Linux and Windows                                             |
 
+Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),
+which lets Python create staging files beyond the default 260-character path
+limit. Enable `LongPathsEnabled=1` with administrator privileges before starting
+Studio. Restart existing Studio and terminal processes after changing the
+setting.
+
 Server execution can use the packages, files, databases, and credentials
 available to its Python environment. Browser execution requires
 [Pyodide](https://pyodide.org/)-compatible packages and data sources the visitor

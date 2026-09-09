@@ -183,8 +183,8 @@ test("keeps streamed progress with its runtime while switching previews", async 
     .locator("html")
     .evaluate(() => document.dispatchEvent(new Event("test:runtime-start")));
   const progress = page.getByRole("progressbar", { name: "Loading model" });
-  await expect(progress).toHaveAttribute("value", "1");
-  await expect(progress).toHaveAttribute("max", "4");
+  await expect(progress).toHaveAttribute("aria-valuenow", "1");
+  await expect(progress).toHaveAttribute("aria-valuemax", "4");
   await expect(page.getByText("1 of 4", { exact: true })).toBeVisible();
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
@@ -202,7 +202,7 @@ test("keeps streamed progress with its runtime while switching previews", async 
     required: false,
   });
   await page.getByRole("button", { name: /Python Use this editor/ }).click();
-  await expect(progress).toHaveAttribute("value", "3");
+  await expect(progress).toHaveAttribute("aria-valuenow", "3");
   await expect(page.getByText("3 of 4", { exact: true })).toBeVisible();
   await server
     .locator("html")
@@ -233,13 +233,13 @@ for (const width of [1280, 390]) {
     await preview
       .locator("html")
       .evaluate(() => document.dispatchEvent(new Event("test:runtime-start")));
-    await expect(meter).toHaveAttribute("value", "1");
+    await expect(meter).toHaveAttribute("aria-valuenow", "1");
     expect(await meter.boundingBox()).toEqual(placement);
     await preview
       .locator("html")
       .evaluate(() => document.dispatchEvent(new Event("test:runtime-inspection")));
     await expect(panel).toContainText("Checking model");
-    await expect(meter).not.toHaveAttribute("value");
+    await expect(meter).not.toHaveAttribute("aria-valuenow");
     expect(await meter.boundingBox()).toEqual(placement);
     await preview
       .locator("html")

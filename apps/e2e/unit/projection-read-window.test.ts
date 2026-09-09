@@ -127,6 +127,26 @@ test("recovers when the newer success arrives before the captured abort", () => 
   expect(window.diagnostics()).toEqual([]);
 });
 
+test("view publication recovers an exact value read at the same wire revision", () => {
+  const owner = { id: 1 };
+  const window = new ProjectionReadRequestWindow(owner, "projection-a");
+  const old = valueProjectionRequestAt(["metric"], "revision-a");
+  const current = valueProjectionRequestAt(["metric"], "revision-a");
+  window.recordStart(old, owner, 1);
+  window.recordAbort(old);
+  window.seal();
+  const unrelated = valueProjectionRequestAt(["other"], "revision-a");
+  window.recordStart(unrelated, owner, 2);
+  window.recordResponse(unrelated, owner, 2, 200);
+  expect(window.readyToRecover("projection-b")).toBe(false);
+  window.recordStart(current, owner, 3);
+  window.recordResponse(current, owner, 3, 200);
+
+  expect(window.readyToRecover("projection-a")).toBe(false);
+  expect(window.recover("projection-b")).toBe(true);
+  expect(window.diagnostics()).toEqual([]);
+});
+
 test("an empty values read carries no recovery obligation", () => {
   const owner = { id: 1 };
   const window = new ProjectionReadRequestWindow(owner, "projection-a");

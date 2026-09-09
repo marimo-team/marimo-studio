@@ -29,6 +29,7 @@ const sourceTabDescription = (
   if (conflict) {
     descriptions.push(
       {
+        unavailable: "Conflict: source unavailable with unsaved edits",
         orphan: "Conflict: removed from this view with unsaved edits",
         "read-only": "Conflict: became read-only while you were editing",
         revision: "Conflict: changed on disk while you were editing",

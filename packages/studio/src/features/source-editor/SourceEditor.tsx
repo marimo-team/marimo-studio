@@ -5,6 +5,7 @@ import {
   EditorState,
   Transaction,
   type Extension,
+  type StateEffect,
 } from "@codemirror/state";
 import { EditorView, getDefaultExtensions, type ViewUpdate } from "@uiw/react-codemirror";
 import {
@@ -297,14 +298,20 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
       currentDocument.current = key;
       view.setState(restored?.state ?? sourceEditorState(value, extensions));
     }
-    view.dispatch({
-      effects: [
-        compartments.access.reconfigure(accessExtensions),
-        compartments.attributes.reconfigure(attributeExtension),
-        compartments.language.reconfigure(languageExtension),
-        compartments.theme.reconfigure(themeExtensions),
-      ],
-    });
+    const effects: StateEffect<unknown>[] = [];
+    for (const [compartment, extension] of [
+      [compartments.access, accessExtensions],
+      [compartments.attributes, attributeExtension],
+      [compartments.language, languageExtension],
+      [compartments.theme, themeExtensions],
+    ] as const) {
+      if (compartment.get(view.state) !== extension) {
+        effects.push(compartment.reconfigure(extension));
+      }
+    }
+    if (effects.length > 0) {
+      view.dispatch({ effects });
+    }
     const previous = states.current.get(key);
     const authoritativeReplacement =
       previous !== undefined &&
