@@ -19,6 +19,21 @@
   }
 }
 
+@media (max-width: 1000px) {
+  .studio-controls > :is(.studio-runtime-menu, a.studio-toolbar-action) {
+    display: none;
+  }
+
+  .studio-overflow-preview:not([hidden]) {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .studio-workspace-popover:has(.studio-overflow-preview:not([hidden])) {
+    min-width: 17rem;
+  }
+}
+
 @media (max-width: 680px) {
   .studio {
     grid-template-rows: calc(var(--studio-toolbar-height) * 2) minmax(0, 1fr);
@@ -69,19 +84,6 @@
 
   .studio-runtime-trigger {
     min-width: auto;
-  }
-
-  .studio-controls > :is(.studio-runtime-menu, a.studio-toolbar-action) {
-    display: none;
-  }
-
-  .studio-overflow-preview:not([hidden]) {
-    display: grid;
-    gap: 0.15rem;
-  }
-
-  .studio-workspace-popover:has(.studio-overflow-preview:not([hidden])) {
-    min-width: 17rem;
   }
 
   .studio:is([data-mode="develop"], [data-mode="source"], [data-mode="workspace"]):has(
