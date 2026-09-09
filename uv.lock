@@ -1198,7 +1198,7 @@ recommended = [
 
 [[package]]
 name = "marimo-export"
-version = "0.0.6"
+version = "0.0.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-plugins" },
@@ -1213,9 +1213,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/65/eba5e7bb377aaf41e07968bc65aefe9bc72dd5e6556aa036117c731c1dae/marimo_export-0.0.6.tar.gz", hash = "sha256:924d588e17a0bc5df4cf52d25619f6d1df37df2e3bcc160054e88ce64ac0ac0c", size = 264920, upload-time = "2026-09-08T03:19:23.314Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bd/42/6a890414b95525573c5f68e8fa5041034d86d1db17cf9a53e32d5d35a774/marimo_export-0.0.7.tar.gz", hash = "sha256:dbee42e6234e5edab7acd519287d787cc6a410259d383a886e21172dc9aae66b", size = 265015, upload-time = "2026-09-09T10:30:10.682Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/09/c1/c873eab9c884143d1d3664607601769c95ad51007c4c09724c3230609d84/marimo_export-0.0.6-py3-none-any.whl", hash = "sha256:e32abcf74a370e6f6503ff552ebedc13e83e15e2e06093ce1d2364c5c3bc0b24", size = 358254, upload-time = "2026-09-08T03:19:22.238Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/d0/b4ea1d2d11c37c16d2b3a517f9c5adcf507923d70278fbc50cab95e8cfcc/marimo_export-0.0.7-py3-none-any.whl", hash = "sha256:c17ccdcefb42c6cd652401c47c0c4a2a4c344f15669a15f5adee999458d90f3a", size = 358341, upload-time = "2026-09-09T10:30:09.32Z" },
 ]
 
 [[package]]
@@ -1249,7 +1249,7 @@ requires-dist = [
     { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
     { name = "htpy", specifier = ">=26.5.1,<27" },
     { name = "marimo", specifier = "==0.24.0" },
-    { name = "marimo-export", specifier = "==0.0.6" },
+    { name = "marimo-export", specifier = "==0.0.7" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },
