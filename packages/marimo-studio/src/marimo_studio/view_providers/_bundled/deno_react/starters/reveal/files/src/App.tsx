@@ -6,11 +6,18 @@ import "reveal.js/reveal.css";
 const NOTEBOOK_LABEL = __NOTEBOOK_NAME_JSON__;
 const NOTEBOOK_TITLE = __NOTEBOOK_TITLE_JSON__;
 
+const keyboardCondition = (event: KeyboardEvent) =>
+  !event.composedPath().some(
+    (target) =>
+      target instanceof Element && target.matches("marimo-cell, marimo-output"),
+  );
+
 export const App = () => (
   <Deck
     className="studio-deck"
     config={{
       controls: true,
+      keyboardCondition,
       progress: true,
       scrollActivationWidth: 0,
       transition: "slide",

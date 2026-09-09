@@ -30,12 +30,18 @@ test("the React Reveal starter runs as a narrow static WebAssembly deck", async 
 
     await root.getByRole("button", { name: "next slide" }).click();
     await expect(root.getByRole("heading", { name: "Controls" })).toBeVisible();
-    await expect(
-      labeledSlider(root.locator('marimo-cell[name="controls"]'), /^Scale/),
-    ).toBeVisible();
+    const scale = labeledSlider(root.locator('marimo-cell[name="controls"]'), /^Scale/);
+    await expect(scale).toBeVisible();
+    await scale.press("Home");
+    await expect(scale).toHaveAttribute("aria-valuenow", "1");
+    await expect(root.getByRole("heading", { name: "Controls" })).toBeVisible();
     await root.getByRole("button", { name: "next slide" }).click();
     await expect(root.getByRole("heading", { name: "Metric" })).toBeVisible();
-    await expect(root.locator('marimo-cell[name="metric"]')).toHaveText("42");
+    await expect(root.locator('marimo-cell[name="metric"]')).toHaveText("21");
+    await page.keyboard.press("ArrowLeft");
+    await expect(root.getByRole("heading", { name: "Controls" })).toBeVisible();
+    await page.keyboard.press("ArrowRight");
+    await expect(root.getByRole("heading", { name: "Metric" })).toBeVisible();
     expect(
       await root.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
