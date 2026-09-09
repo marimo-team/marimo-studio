@@ -1,0 +1,21 @@
+packages/studio/src/features/navigation/navigation.css
+  s_34f8fed3d4d8a9::t_546424e9aa9714 311-385
+packages/studio/src/app/responsive.css
+  s_34f8fed3d4d8a9::t_db0b319f0cecca 22-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4649f22bd2b55b3b7e8a632314fbcad614303e88",
+  "prompts": {},
+  "sessions": {
+    "s_34f8fed3d4d8a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0877c-5acd-7d51-893d-10474cc46656",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
