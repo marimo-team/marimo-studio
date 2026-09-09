@@ -1,0 +1,19 @@
+pnpm-workspace.yaml
+  s_1fa0e2ecf2ae40::t_23139a2003b358 70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6a8ef5d88bc8d92259f2292491bb43245b696e43",
+  "prompts": {},
+  "sessions": {
+    "s_1fa0e2ecf2ae40": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0861b-24e3-7bc3-bc7e-65397f070630",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
