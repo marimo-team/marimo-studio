@@ -1,0 +1,27 @@
+packages/presentation/src/readiness.ts
+  s_c80f4055fb6e2b::t_5d9203c4835f8e 5
+packages/presentation/src/main.ts
+  s_c80f4055fb6e2b::t_5d9203c4835f8e 36,351-374
+packages/presentation/tests/readiness.test.ts
+  s_c80f4055fb6e2b::t_d0ddecbc372b1b 68,75,80-81,92-111
+packages/presentation/tests/frame-runtime-bridge.test.ts
+  s_c80f4055fb6e2b::t_d0ddecbc372b1b 10-12,17,23-62
+apps/e2e/tests/hosted-mount.spec.ts
+  s_c80f4055fb6e2b::t_22e8603aa9f628 67-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0bd4e986f7ee126b9192425ef3fc60a023e15ba1",
+  "prompts": {},
+  "sessions": {
+    "s_c80f4055fb6e2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0865e-3882-70f2-859b-f1b3a42ebc06",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
