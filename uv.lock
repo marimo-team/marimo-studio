@@ -1247,16 +1247,16 @@ requires-dist = [
     { name = "agent-plugins", specifier = ">=0.2" },
     { name = "click", specifier = ">=8.2" },
     { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
-    { name = "htpy", specifier = ">=26.5.1,<27" },
+    { name = "htpy", specifier = ">=26.5.1" },
     { name = "marimo", specifier = "==0.24.0" },
-    { name = "marimo-export", specifier = "==0.0.7" },
+    { name = "marimo-export", specifier = ">=0.0.7" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },
     { name = "tomlkit", specifier = ">=0.14" },
-    { name = "tree-sitter", specifier = "==0.25.2" },
-    { name = "tree-sitter-javascript", specifier = "==0.25.0" },
-    { name = "watchdog", specifier = "==6.0.0" },
+    { name = "tree-sitter", specifier = ">=0.25.2" },
+    { name = "tree-sitter-javascript", specifier = ">=0.25.0" },
+    { name = "watchdog", specifier = ">=6.0.0" },
 ]
 provides-extras = ["deno"]
 

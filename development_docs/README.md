@@ -82,20 +82,20 @@ project or packaged starter that consumes them.
 
 ### Update marimo-export
 
-The Python dependency pin lives in `packages/marimo-studio/pyproject.toml`.
+The Python dependency lower bound lives in `packages/marimo-studio/pyproject.toml`.
 The `@marimo-team/marimo-export` npm pin lives in the `pnpm-workspace.yaml`
 catalog. Coordinated releases select the same published version for both.
 The root uv configuration and pnpm workspace exempt those packages from the
 release-age delay so a coordinated release can be tested immediately.
 
-For a release update, update both pins and replace any checkout overrides, then
+For a release update, update the Python lower bound and npm pin, then
 refresh `uv.lock` and `pnpm-lock.yaml` together. Review the selected sources,
 hashes, and integrity values before running
 `make check`, `make package`, and `make e2e`.
 
 The lockfiles resolve the packages from PyPI and npm. `uv sync --locked` and
 `pnpm install --frozen-lockfile` install those registry artifacts. Verify the
-coordinated release before updating the pins so both runtimes consume the same
+coordinated release before updating the requirements so both runtimes consume the same
 published contracts.
 
 ## Work in one owning slice
