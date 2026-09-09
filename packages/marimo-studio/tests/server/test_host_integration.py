@@ -4,18 +4,20 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
 from starlette.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
+from marimo_studio import _composition
 from marimo_studio._entrypoints import EDIT_ROOT_ENV, route_policy_from_environment
 from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.security import Origin, SecurityPolicy
 from marimo_studio._server.studio.session_handoff import (
+    HostSessionTicket,
     host_session_handoff_capability_matches,
 )
 from marimo_studio._workspace import load_studio
@@ -134,6 +136,85 @@ def test_studio_route_initializes_an_unconfigured_notebook(
     assert tuple(load_studio(notebook_path).views) == ("dashboard",)
 
 
+@pytest.mark.parametrize(
+    ("owner", "ticket", "preserved"),
+    [
+        ("current", "valid", True),
+        ("unclaimed", "valid", True),
+        ("current", "invalid", False),
+        ("current", "missing", False),
+        ("foreign", "valid", False),
+    ],
+)
+def test_first_save_route_binds_a_changed_query_to_its_signed_session(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    owner: str,
+    ticket: str,
+    preserved: bool,
+) -> None:
+    session_state_type = type(_composition.create_server_adapters().session_state)
+    app = _marimo_app(notebook_path, programmatic=True)
+    _edit_mode(app)
+    session_id = "s_saved1"
+    with TestClient(app) as client:
+        host = _studio_host(client.get("/").text)
+        editor_query = parse_qs(urlsplit(host["urls"]["editor"]).query)
+        context = cast(
+            Any,
+            SimpleNamespace(
+                base_url="",
+                file_key=editor_query["file"][0],
+                mode="edit",
+                notebook=notebook_path,
+                server_token=host["serverToken"],
+            ),
+        )
+        monkeypatch.setattr(
+            session_state_type,
+            "exists",
+            lambda _self, _context, requested: (
+                requested == session_id and owner == "current"
+            ),
+        )
+        monkeypatch.setattr(
+            session_state_type,
+            "matches_creation_query",
+            lambda _self, _context, _requested, query: (
+                dict(query).get("region") == "eu"
+            ),
+        )
+        monkeypatch.setattr(
+            session_state_type,
+            "ownership",
+            lambda _self, _context, requested: (
+                owner if requested == session_id else "unclaimed"
+            ),
+        )
+        query = [
+            ("region", "apac"),
+            ("session_id", session_id),
+            ("marimo_studio_resume", "1"),
+        ]
+        if ticket != "missing":
+            capability = HostSessionTicket.issue(context, session_id, query).capability
+            if ticket == "invalid":
+                capability = ("0" if capability[0] != "0" else "1") + capability[1:]
+            query.append(("marimo_studio_handoff", capability))
+        response = client.get(f"/?{urlencode(query)}")
+
+    assert response.status_code == 200
+    resumed = _studio_host(response.text)
+    resumed_query = parse_qs(urlsplit(resumed["urls"]["editor"]).query)
+    assert resumed_query["region"] == ["apac"]
+    if preserved:
+        assert resumed["state"] == "needs-view"
+        assert resumed_query["session_id"] == [session_id]
+    else:
+        assert resumed["state"] == "unconfigured"
+        assert resumed_query["session_id"] != [session_id]
+
+
 def test_unconfigured_creation_rechecks_state_under_the_catalog_lock(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -184,9 +265,23 @@ def test_explicit_host_preserves_run_root_and_studio_authentication(
 
 
 @pytest.mark.parametrize("renamed_before_save", [False, True])
+@pytest.mark.parametrize(
+    ("referrer", "page_query"),
+    [
+        (None, []),
+        (
+            "http://testserver/?file=saved.py&region=eu&tag=one&tag=two&empty=",
+            [("region", "eu"), ("tag", "one"), ("tag", "two"), ("empty", "")],
+        ),
+        ("https://other.example/?region=eu", []),
+        ("http://[invalid/?region=eu", []),
+    ],
+)
 def test_native_save_hands_off_a_newly_named_notebook(
     notebook_path: Path,
     renamed_before_save: bool,
+    referrer: str | None,
+    page_query: list[tuple[str, str]],
 ) -> None:
     reloads: list[str] = []
     handoffs: list[str] = []
@@ -234,7 +329,10 @@ def test_native_save_hands_off_a_newly_named_notebook(
                     "raw_path": b"/api/kernel/save",
                     "root_path": "",
                     "query_string": b"",
-                    "headers": [(b"marimo-session-id", b"s_123456")],
+                    "headers": [
+                        (b"marimo-session-id", b"s_123456"),
+                        *([(b"referer", referrer.encode())] if referrer else []),
+                    ],
                     "server": ("testserver", 80),
                     "client": ("testclient", 1),
                 },
@@ -275,5 +373,5 @@ def test_native_save_hands_off_a_newly_named_notebook(
         handoffs[0],
         cast(Any, SimpleNamespace(**{**context_value.__dict__, "base_url": ""})),
         "s_123456",
-        (),
+        page_query,
     )

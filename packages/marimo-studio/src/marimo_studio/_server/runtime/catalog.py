@@ -237,12 +237,19 @@ class ServerRuntime:
             if cells is not None
             else bindings
         )
+        # Marimo can append an empty cell without issuing an execution request.
+        empty_references = {
+            str(cell.ref)
+            for cell in snapshot.resolved.notebook.cells
+            if cell.code_sha256 == hashlib.sha256(b"").hexdigest()
+        }
         if cells is not None and any(
-            current_matches.get(reference) != runtime_id
+            (reference not in empty_references or runtime_id in cells.current_refs)
+            and current_matches.get(reference) != runtime_id
             for reference, runtime_id in bindings.items()
         ):
             raise RuntimeSyncError(
-                "Studio is waiting for the notebook kernel to apply the saved source."
+                "Run the changed notebook cells to update the Python preview."
             )
         return bindings, cells
 
