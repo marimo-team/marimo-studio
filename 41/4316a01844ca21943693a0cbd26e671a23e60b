@@ -1,0 +1,63 @@
+examples/__marimo__/studio/athletes/field/style.css
+  s_11aef66465b0e9::t_d9ea0343013c33 71-72,152-153,190,200,202-203,253-254,264,294,337,350-351,412,553,560,608
+  s_11aef66465b0e9::t_33be599a3f831d 5-7,33,197,201,245,457,460-461,463,466,506-515,517-521,543,604
+examples/__marimo__/studio/occupancy/monitor/src/index.html
+  ai_agent 9
+examples/__marimo__/studio/earthquakes/operations/AGENTS.md
+  ai_agent 98-105
+examples/__marimo__/studio/athletes/explorer/src/lib/athlete-explorer.ts
+  s_11aef66465b0e9::t_c101ba5aa7cee5 199-202,232-233,261-262,291,367-374,376,378-382,394
+  s_11aef66465b0e9::t_7593eb15c26d29 366,375,377
+examples/__marimo__/studio/occupancy/pdf-report/src/style.css
+  s_11aef66465b0e9::t_d9ea0343013c33 44,81-82,116-117,152,191,205,245-246,260-261
+examples/__marimo__/studio/earthquakes/briefing/src/style.css
+  s_11aef66465b0e9::t_d9ea0343013c33 3-4,39,74,169-171,176-178,199,1354,1372,1382,1399,1404,1409
+examples/__marimo__/studio/athletes/explorer/src/style.css
+  s_11aef66465b0e9::t_d9ea0343013c33 3,8-9,56,92-93,99-100,117,119-122,155,164,187,194,230,240,242,245,372,429,457,508
+examples/__marimo__/studio/occupancy/monitor/DESIGN.md
+  s_11aef66465b0e9::t_5b034ac19749f4 20-23
+  s_11aef66465b0e9::t_81e921f4e6b0d4 11
+examples/__marimo__/studio/occupancy/model-review/AGENTS.md
+  ai_agent 89-96
+examples/__marimo__/studio/occupancy/monitor/AGENTS.md
+  ai_agent 12-14,111-118
+examples/__marimo__/studio/earthquakes/briefing/AGENTS.md
+  ai_agent 80-87
+examples/__marimo__/studio/occupancy/monitor/src/App.svelte
+  ai_agent 122-129,150,158-160,178,181-182,191-192,195,198,228,340,414-436
+examples/__marimo__/studio/occupancy/monitor/src/style.css
+  s_11aef66465b0e9::t_d9ea0343013c33 67,69,79,81,83-84,97-99,101-102,106-109,113-115,120,204,215-219,228,244,264,286,301,322,339-341,368-371,375,411-414,416-417,439-441,444-445,451
+  s_11aef66465b0e9::t_52dd71edbc444e 151-153
+  s_11aef66465b0e9::t_81e921f4e6b0d4 14,134
+examples/__marimo__/studio/occupancy/model-review/src/style.css
+  s_11aef66465b0e9::t_d9ea0343013c33 5-6,9-10,56-57,129,145,147-148,178,192,408,451,531-532
+examples/__marimo__/studio/earthquakes/story/AGENTS.md
+  ai_agent 85-92
+examples/__marimo__/studio/earthquakes/operations/src/style.css
+  s_11aef66465b0e9::t_d9ea0343013c33 8,12,15,73,75,93,95,147,166,168,196,202,226,237,342,439-440,716,727,810
+  s_11aef66465b0e9::t_96f721c0c76234 866-872
+examples/__marimo__/studio/athletes/explorer/AGENTS.md
+  ai_agent 110-117
+examples/__marimo__/studio/athletes/field/AGENTS.md
+  ai_agent 43-50
+examples/__marimo__/studio/earthquakes/story/index.html
+  s_11aef66465b0e9::t_d9ea0343013c33 20,23-24,27-28,54,65,85-86,91,97,99,110-112,119,125,133-134,151,172-174,320,344
+examples/__marimo__/studio/occupancy/pdf-report/AGENTS.md
+  ai_agent 129-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "414316a01844ca21943693a0cbd26e671a23e60b",
+  "prompts": {},
+  "sessions": {
+    "s_11aef66465b0e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08bee-2bd4-7403-bae8-4f56ad41b12b",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
