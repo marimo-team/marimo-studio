@@ -59,9 +59,13 @@ def test_marimo_code_mode_loads_the_studio_workspace_api() -> None:
     ]
     assert entry_points[0].load() is studio_agent
     assert set(studio_agent.__all__) == {
+        "PublicationHold",
         "ValidationIssue",
         "ValidationReport",
         "View",
+        "ViewInspection",
+        "ViewSourceChanges",
+        "ViewSourceFile",
         "ShowResult",
         "Workspace",
         "agent_plugin",

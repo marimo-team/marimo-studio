@@ -8,39 +8,80 @@ description: >-
 
 # Author Marimo Studio views
 
-The notebook computes. The view presents. Studio connects them.
+## Start with the installed workflow
 
-Keep data access, transformations, controls, and reusable results in notebook
-cells. Keep view structure, wording, styles, and browser interaction in view
-source.
+At the start of every Studio task, run `help(marimo_studio.agent)` in the
+notebook's Python environment, including when another copy of this skill is
+already available:
 
-Each named frontend project is a view.
+```python
+import marimo_studio.agent
 
-## Work with the current Studio tab
+help(marimo_studio.agent)
+skill = marimo_studio.agent.agent_skill()
+print(skill.body)
+print(skill.tree())
+```
 
-Open the current notebook workspace once in each code-mode execution:
+The help exposes the current installed API and its packaged skill as a
+traversable Python object. Follow that version-matched skill body and traverse
+its bundled resources as needed. Repeat discovery when the notebook environment
+or installed Studio version changes. Once this installed body is loaded,
+continue with the workflow.
+
+## Activate the first view immediately
+
+When the user requests their first view and Studio has no configured views or
+active preview, make visible activation the first milestone. Create a view
+named for the request, build its starter, and call `show()` in the immediately
+following code-mode execution. The user should see Studio open with their new
+view while the rest of the work develops.
+
+Do substantial data exploration, analysis expansion, custom layout, and styling
+after that first visible result. Refine in small visible steps through edit,
+build, show, and verification. Keep each authoring call bounded to a coherent
+source change.
+
+Inspect configured views before creating one:
 
 ```python
 import marimo_studio.agent as studio_agent
 
 workspace = studio_agent.current_workspace()
-view = workspace.view("dashboard")
+status = await workspace.status()
+if any(item.name == "dashboard" for item in status.views):
+    view = workspace.view("dashboard")
+else:
+    view = await workspace.create_view("dashboard")
+await view.build()
 ```
 
-Use `workspace.status()` to inspect configured views before creating one. Use
-`workspace.view(name)` for an existing view. Create a view only when the
-requested name is absent:
+Use the user's requested name and frontend starter when specified. Otherwise,
+the default starter produces an editable HTML document populated with enabled
+cells that may display output, including literal Markdown, and project-specific
+agent instructions. Inspect installed starters when selecting a requested
+frontend.
+
+Run `show()` in the next execution so the Studio tab can finish the transition:
 
 ```python
-status = await workspace.status()
-if not any(item.name == "dashboard" for item in status.views):
-    view = await workspace.create_view("dashboard")
+import marimo_studio.agent as studio_agent
+
+await studio_agent.current_workspace().view("dashboard").show()
 ```
 
-The default creation path produces one editable HTML document populated with
-enabled cells that may display output, including literal Markdown, and
-starter-specific agent instructions. Inspect installed starting points only
-when the user asks for a particular frontend.
+Reimport `marimo_studio.agent` and reacquire the workspace and view in each
+code-mode execution. Scratch imports and handles from a preceding execution
+may be gone. If build or activation fails, repair the reported problem and
+retry that milestone before expanding the view.
+
+## Keep notebook and view ownership clear
+
+The notebook computes. The view presents. Studio connects them.
+
+Keep data access, transformations, controls, and reusable results in notebook
+cells. Keep view structure, wording, styles, and browser interaction in view
+source. Each named frontend project is a view.
 
 ## Inspect before editing
 
@@ -190,8 +231,12 @@ selected_orders
 
 ## Author Studio view files
 
-Edit only project-relative files whose access is `edit`. Use view files for
-structure, wording, styles, and browser interaction.
+Edit source with Studio's guarded writes or the environment's filesystem
+tools. Use `inspection.root` as the project root. Studio writes require a
+catalog document with `access="edit"`. Provider inspection owns source discovery
+and build inputs for either editing path. Keep generated `.artifacts/` files
+under Studio's ownership. Use view files for structure, wording, styles, and
+browser interaction.
 
 `studio-view` sets a maximum width and page padding. Mount a component that
 defines its own page layout in a plain `<div id="app-shell"></div>`.
@@ -289,15 +334,14 @@ write flags. Locate the exact project root before creating another
 provider-supported file:
 
 ```python
-status = await workspace.status()
-project = next(item for item in status.views if item.name == "dashboard")
-print(project.path)
+inspection = await view.inspect()
+print(inspection.root)
 ```
 
 Create the path with a create-if-absent filesystem operation. Studio's
-revision-aware document contract begins after `view.inspect()` returns the new
-file. For a React view, a clean factoring pass might create
-`project.path / "src/lib/format-value.ts"`, import it from `src/App.tsx`, and
+guarded document writes become available after `view.inspect()` returns the
+new file. For a React view, a clean factoring pass might create
+`inspection.root / "src/lib/format-value.ts"`, import it from `src/App.tsx`, and
 then inspect the project again:
 
 ```python
@@ -310,8 +354,9 @@ created = next(
 assert created.access == "edit"
 ```
 
-Continue only after inspection returns the new path. Use `view.read()` and
-revision-aware `view.write()` for later edits, then build and validate the view.
+Confirm that inspection includes the new file in the intended source or build
+inputs. Continue editing through filesystem tools or `view.read()` and guarded
+`view.write()`, then build and validate the view.
 
 Edit `view.toml` only when an option supported by the selected provider
 genuinely changes. For example, after moving a Vanilla view's HTML entry
@@ -353,6 +398,40 @@ await view.write(
 
 `SourceConflictError` means a person or another agent saved first. Read the file
 again, incorporate both changes, and save against the current revision.
+
+### Coordinate filesystem edits and recover
+
+`view.inspect()` reads current disk content. Build and validation also inspect
+current source. After external edits, inspect again and read the diagnostics,
+`files_complete`, `project_revision`, `published_project_revision`, and
+`latest_build`. `build` is the retained successful artifact. Use browser
+validation to verify the presentation in a particular tab.
+
+Compare complete inventories with `after.changes_since(before)` for added,
+modified, and deleted source and build-input paths. Incomplete provider or
+manifest discovery requires repair and a fresh inspection before comparison.
+`view.toml` remains readable and writable through its manifest path.
+
+For edits that pass through valid intermediate states, hold publication before
+writing:
+
+```python
+hold = await view.hold_publication(owner="source-refactor", ttl=300)
+print(hold.token, hold.expires_at)
+```
+
+Retain the token across calls, edit files normally, inspect, then call
+`view.release_publication(token)` and build. The hold applies across processes
+and expires after the requested seconds, up to 3600. Release or expiry lets the
+live editor resume publication. A hold delays replacement artifacts while
+source editing remains available. It does not make multi-file writes atomic.
+
+Retain the `ViewDocument` from `view.read()` when an edit needs a source
+checkpoint. To restore, read and review current content, then write checkpoint
+content with `expected_revision=current.revision`. Preserve both versions when
+a save conflicts. Keep durable checkpoint copies outside project build inputs.
+A retained artifact keeps Preview available while failed source is repaired.
+Recover an external overwrite from a retained source copy or version control.
 
 ### Place notebook results in the view
 

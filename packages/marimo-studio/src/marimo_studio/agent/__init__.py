@@ -16,6 +16,10 @@ from marimo_studio._authoring.current_api import (
 from marimo_studio._browser_client.records import ShowResult as ShowResult
 from marimo_studio._validation.evidence import ValidationIssue as ValidationIssue
 from marimo_studio._validation.records import ValidationReport as ValidationReport
+from marimo_studio._views.publication_hold import PublicationHold as PublicationHold
+from marimo_studio._views.records import ViewInspection as ViewInspection
+from marimo_studio._views.records import ViewSourceChanges as ViewSourceChanges
+from marimo_studio._views.records import ViewSourceFile as ViewSourceFile
 
 _DISTRIBUTION_NAME = "marimo-studio"
 _SKILL_NAME = "marimo-studio"
@@ -62,10 +66,14 @@ Then bind authoring to the current code-mode notebook and Studio tab:
 
 
 __all__ = [
+    "PublicationHold",
     "ShowResult",
     "ValidationIssue",
     "ValidationReport",
     "View",
+    "ViewInspection",
+    "ViewSourceChanges",
+    "ViewSourceFile",
     "Workspace",
     "agent_plugin",
     "agent_skill",

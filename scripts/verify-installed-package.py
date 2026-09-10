@@ -113,10 +113,12 @@ assert set(marimo_studio.__all__) == {
     "inspect_notebook",
 }
 assert set(marimo_studio.agent.__all__) == {
+    "PublicationHold", "ViewInspection", "ViewSourceChanges", "ViewSourceFile",
     "ValidationIssue", "ValidationReport", "View", "ShowResult", "Workspace",
     "agent_plugin", "agent_skill", "current_workspace",
 }
 assert set(marimo_studio.authoring.__all__) == {
+    "PublicationHold", "ViewSourceChanges", "ViewSourceFile",
     "BindingResult", "InspectionResult", "OutputRenderResult", "ProviderDiagnostic",
     "ProviderReport", "ProjectionPortability", "RenderedOutput", "RuntimeCell",
     "RuntimeOutput", "RuntimeProbe", "Starter", "StaticExportEvent",

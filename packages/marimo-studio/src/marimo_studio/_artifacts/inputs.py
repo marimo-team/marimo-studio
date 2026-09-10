@@ -20,7 +20,7 @@ import json
 import os
 import stat
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import BinaryIO, cast
@@ -41,6 +41,7 @@ from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
     JsonValue,
+    ProjectInput,
     ProjectInspection,
     ViewProject,
 )
@@ -78,6 +79,62 @@ class ProjectInputState:
 class ProjectRevisionSnapshot:
     revision: str
     state: ProjectInputState
+
+
+@dataclass(frozen=True)
+class ProjectSourceSnapshot:
+    revision: str | None
+    files: Mapping[PurePosixPath, str | None]
+    inspection: ProjectInspection
+    state: ProjectInputState
+
+
+def project_source_snapshot(
+    project: ViewProject,
+    inspection: ProjectInspection,
+    provenance: ProviderProvenance | None,
+) -> ProjectSourceSnapshot:
+    """Capture bounded build inputs and authored documents, including missing files."""
+    scope = replace(
+        inspection,
+        input_scope=tuple(
+            dict.fromkeys(
+                (
+                    *inspection.input_scope,
+                    ProjectInput(_manifest_path(project), "file"),
+                    *(
+                        ProjectInput(item.path, "file")
+                        for item in inspection.editor_documents
+                    ),
+                )
+            )
+        ),
+    )
+    before = project_input_state(project, scope, allow_missing_manifest=True)
+    build_paths = project_input_paths(project, inspection)
+    budget = FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project sources")
+    budget.require_count(len(before.paths) + len(before.absent))
+    digests = {
+        path: _capture_entry(project.root, _input_entry(project, path), budget)
+        for path in before.paths
+    }
+    after = project_input_state(project, scope, allow_missing_manifest=True)
+    if before != after:
+        raise ConfigurationError(
+            f"View project {project.name!r} changed while its sources were inspected"
+        )
+    files: dict[PurePosixPath, str | None] = {
+        path: f"sha256:{digest.hex()}" for path, digest in digests.items()
+    }
+    files.update((path, None) for path in after.absent)
+    revision = (
+        _revision_from_digests(
+            project, provenance, {path: digests[path] for path in build_paths}
+        )
+        if provenance is not None
+        else None
+    )
+    return ProjectSourceSnapshot(revision, MappingProxyType(files), scope, after)
 
 
 def _input_entry(project: ViewProject, value: PurePosixPath) -> _InputEntry:
@@ -242,12 +299,22 @@ def _input_state_with_owner(
     inspection: ProjectInspection,
     files: SecureDirectory,
     observed: ProjectInputState | None = None,
+    allow_missing_manifest: bool = False,
 ) -> ProjectInputState:
     files.ensure_attached()
     if observed is None:
         input_paths, directory_paths, absent = _input_catalog(project, inspection)
+        manifest = _manifest_path(project)
         paths = tuple(
-            sorted({*input_paths, _manifest_path(project)}, key=PurePosixPath.as_posix)
+            sorted(
+                set(input_paths)
+                | (
+                    set()
+                    if allow_missing_manifest and manifest in absent
+                    else {manifest}
+                ),
+                key=PurePosixPath.as_posix,
+            )
         )
     else:
         paths = observed.paths
@@ -305,12 +372,17 @@ def project_input_state(
     *,
     files: SecureDirectory | None = None,
     observed: ProjectInputState | None = None,
+    allow_missing_manifest: bool = False,
 ) -> ProjectInputState:
     """Capture bounded input metadata without reading file contents."""
     if files is not None:
-        return _input_state_with_owner(project, inspection, files, observed)
+        return _input_state_with_owner(
+            project, inspection, files, observed, allow_missing_manifest
+        )
     with secure_directory(project.root) as owner:
-        return _input_state_with_owner(project, inspection, owner, observed)
+        return _input_state_with_owner(
+            project, inspection, owner, observed, allow_missing_manifest
+        )
 
 
 def project_revision_snapshot(

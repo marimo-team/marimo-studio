@@ -133,10 +133,15 @@ run requirements for reviewed providers.
 marimo-studio view inspect VIEW [--target PATH] [--json]
 ```
 
-Returns editable and read-only source documents, current diagnostics,
-development build freshness, and the retained successful development artifact
-used by Preview. [Identities and state](identities.md#build-freshness) defines
-the freshness values.
+Inspects current filesystem content and returns the project `root`, ownership,
+source documents, file revisions, diagnostics, and development publication
+state. `files_complete` reports whether source and build-input discovery
+completed. `project_revision` identifies current inputs, while
+`published_project_revision` identifies the retained artifact's inputs.
+`latest_build` reports the latest attempt separately from the retained
+successful `build`. Browser validation confirms a tab's rendered presentation.
+[Identities and state](identities.md#build-freshness) defines the freshness
+values.
 
 ## `marimo-studio view read`
 
@@ -205,6 +210,36 @@ inputs.
 A failed build keeps the last successful artifact for the selected profile
 available. A successful build publishes the candidate only after output
 validation and a final source and ownership check.
+
+## `marimo-studio view hold`
+
+```text
+marimo-studio view hold VIEW --owner NAME [--ttl SECONDS] [--target PATH] [--json]
+```
+
+`hold` delays replacement publication while source is edited through any
+filesystem tool or Studio. The hold applies across processes to that view
+incarnation. Existing published artifacts remain available. `--owner` names the
+editor. `--ttl` defaults to 300 seconds and accepts values greater than zero
+and at most 3600 seconds.
+
+Keep the returned token for `release`. An active hold rejects another
+acquisition and reports its owner and expiry. Hold JSON contains `schema`,
+`view`, `token`, `owner`, `generation`, `expires_at` in Unix seconds, and `status`.
+
+## `marimo-studio view release`
+
+```text
+marimo-studio view release VIEW --token TOKEN [--target PATH] [--json]
+```
+
+Release requires the matching token and is repeatable. Release JSON contains
+`schema`, `view`, and `hold`, which is the released receipt or `null`.
+
+Release or expiry permits the live editor to reconcile current source and
+resume publication. Source edits remain on disk. For offline edits, run
+`view inspect` and `view build` after releasing. See
+[Manage view source](../guide/manage-source.md#coordinate-a-multi-file-change).
 
 ## `marimo-studio view show`
 

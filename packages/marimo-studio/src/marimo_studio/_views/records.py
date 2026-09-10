@@ -11,6 +11,7 @@ from marimo_studio._artifacts.records import (
     ViewArtifact,
     ViewBuildState,
 )
+from marimo_studio._views.publication_hold import PublicationHold
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.view_providers import (
     BuildProfile,
@@ -224,11 +225,52 @@ class ViewInspection:
     """Return source documents and current build state for one view."""
 
     view: str
-    provider: str
+    provider: str | None
     documents: tuple[SourceDocument, ...]
     diagnostics: tuple[StudioDiagnostic, ...]
     freshness: ViewFreshness
     build: ViewBuild | None
+    root: Path
+    generation: str
+    catalog_generation: str
+    project_revision: str | None
+    published_project_revision: str | None
+    latest_build: ViewBuildState
+    files: tuple[ViewSourceFile, ...]
+    files_complete: bool
+    publication_hold: PublicationHold | None = None
+
+    def changes_since(self, previous: ViewInspection) -> ViewSourceChanges:
+        """Compare complete source inventories belonging to the same view owner."""
+        if (self.root, self.view, self.generation) != (
+            previous.root,
+            previous.view,
+            previous.generation,
+        ):
+            raise ValueError("Source inventories belong to different view owners")
+        if not self.files_complete or not previous.files_complete:
+            raise ValueError(
+                "Inspect both complete source inventories before comparing"
+            )
+        before = {
+            item.path: item.revision
+            for item in previous.files
+            if item.revision is not None
+        }
+        after = {
+            item.path: item.revision for item in self.files if item.revision is not None
+        }
+        return ViewSourceChanges(
+            added=tuple(sorted(after.keys() - before.keys())),
+            modified=tuple(
+                sorted(
+                    path
+                    for path in before.keys() & after.keys()
+                    if before[path] != after[path]
+                )
+            ),
+            deleted=tuple(sorted(before.keys() - after.keys())),
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -239,4 +281,42 @@ class ViewInspection:
             "diagnostics": [item.to_dict() for item in self.diagnostics],
             "freshness": self.freshness,
             "build": self.build.to_dict() if self.build is not None else None,
+            "root": str(self.root),
+            "generation": self.generation,
+            "catalog_generation": self.catalog_generation,
+            "project_revision": self.project_revision,
+            "published_project_revision": self.published_project_revision,
+            "latest_build": self.latest_build.to_dict(),
+            "files": [item.to_dict() for item in self.files],
+            "files_complete": self.files_complete,
+            "publication_hold": self.publication_hold.to_dict()
+            if self.publication_hold
+            else None,
+        }
+
+
+@dataclass(frozen=True)
+class ViewSourceFile:
+    """Identify observed file bytes, with a null revision for a missing source."""
+
+    path: PurePosixPath
+    revision: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {"path": self.path.as_posix(), "revision": self.revision}
+
+
+@dataclass(frozen=True)
+class ViewSourceChanges:
+    """Describe files added, modified, or deleted between source inspections."""
+
+    added: tuple[PurePosixPath, ...]
+    modified: tuple[PurePosixPath, ...]
+    deleted: tuple[PurePosixPath, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "added": [path.as_posix() for path in self.added],
+            "modified": [path.as_posix() for path in self.modified],
+            "deleted": [path.as_posix() for path in self.deleted],
         }

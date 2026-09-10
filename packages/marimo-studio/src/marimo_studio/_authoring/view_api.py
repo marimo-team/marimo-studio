@@ -12,9 +12,11 @@ from marimo_studio._authoring.validation import validate as validate_workspace
 from marimo_studio._authoring.view import (
     build_view,
     export_view,
+    hold_publication,
     inspect_view,
     preflight_view,
     read_document,
+    release_publication,
     remove_view,
     write_document,
 )
@@ -28,6 +30,10 @@ from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.publication_hold import (
+    DEFAULT_PUBLICATION_HOLD_SECONDS,
+    PublicationHold,
+)
 from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
 from marimo_studio._workspace.ownership import ObservedViewOwner, PresentViewOwner
 from marimo_studio.errors import WorkspaceGenerationConflictError
@@ -119,6 +125,38 @@ class View:
             self.name,
             profile=profile,
             expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+
+    async def hold_publication(
+        self,
+        *,
+        owner: str,
+        ttl: float = DEFAULT_PUBLICATION_HOLD_SECONDS,
+    ) -> PublicationHold:
+        """Hold replacement publication until release or expiry, in seconds.
+
+        Source editing remains available through the filesystem and Studio.
+        Keep the returned token for ``release_publication`` across executions.
+        """
+        if not isinstance(self._owner, PresentViewOwner):
+            raise WorkspaceGenerationConflictError()
+        return await hold_publication(
+            self.workspace.notebook,
+            self.name,
+            owner=owner,
+            ttl=ttl,
+            expected_generation=self.generation,
+        )
+
+    async def release_publication(self, token: str) -> PublicationHold | None:
+        """Release the matching hold. Source edits remain on disk."""
+        if not isinstance(self._owner, PresentViewOwner):
+            raise WorkspaceGenerationConflictError()
+        return await release_publication(
+            self.workspace.notebook,
+            self.name,
+            token,
             expected_generation=self.generation,
         )
 

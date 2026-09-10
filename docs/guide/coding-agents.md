@@ -1,6 +1,6 @@
 ---
 title: Author with a coding agent
-description: Inspect notebook and view source, make a revision-safe edit, show the result, and validate the rendered view.
+description: Edit notebook and view source through Studio or filesystem tools, show the result, and validate the rendered view.
 ---
 
 # Author with a coding agent
@@ -29,7 +29,12 @@ workspace = studio_agent.current_workspace()
 view = workspace.view("dashboard")
 ```
 
-The remaining snippets use these handles within the same execution.
+The remaining snippets use these handles within the same execution. Reimport
+`marimo_studio.agent` and reacquire the handles in every new execution.
+
+For a new view, project an existing notebook result, build, and show it before
+expanding the analysis or layout. Continue with small visible changes through
+the same loop.
 
 ## Inspect before editing
 
@@ -60,8 +65,19 @@ for document in inspection.documents:
     print(document.path, document.language, document.access)
 ```
 
-Edit project-relative documents whose access is `edit`. Read `AGENTS.md` and
-`DESIGN.md` when present before changing the project.
+Read `AGENTS.md` and `DESIGN.md` when present before changing the project.
+Use Studio's guarded writes for catalog documents with `access="edit"`, or edit
+source directly under `inspection.root` with filesystem tools. Reinspect after
+either editing path. `files` records the observed source and build-input files,
+and `changes_since(previous)` compares two complete inventories for the same
+view owner.
+
+For a multi-file edit, use `view.hold_publication(owner="source-refactor")` and
+retain its token across executions. Release with
+`view.release_publication(token)` when the source is ready, then build. The
+hold expires after 300 seconds by default. It delays replacement publication
+while files remain editable. See [Manage view source](manage-source.md) for
+filesystem editing, hold duration, and checkpoint recovery.
 
 ## Write against the current revision
 
@@ -90,7 +106,9 @@ print(build.revision)
 ```
 
 Studio validates the complete candidate before publishing it. A failed build
-keeps the last successful artifact in Preview.
+keeps the last successful artifact in Preview. Inspect `latest_build` and its
+diagnostics for the failed attempt. `build` identifies the retained artifact,
+and `published_project_revision` identifies its source inputs.
 
 Run `show()` in the next code-mode execution so the Studio tab can complete
 the transition:

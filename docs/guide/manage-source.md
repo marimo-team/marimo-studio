@@ -77,17 +77,102 @@ content. Read it before retrying an interrupted or uncertain replacement.
 
 ## Edit outside Studio
 
-Use the provider's native project tools for changes that Source does not own,
-such as adding a React module, updating a Svelte dependency, or creating a
-public asset. Reinspect the project after changing its file graph:
+Edit view source with your editor, patch tool, shell, or Studio. Use the project
+root returned by `view inspect --json`. Provider inspection determines which
+files appear in Source and which files affect builds, regardless of how they
+were edited. Keep generated `.artifacts/` content under Studio's ownership.
+
+Inspect and build after editing:
 
 ```console
 marimo-studio view inspect dashboard --target analysis.py
 marimo-studio view build dashboard --target analysis.py
 ```
 
-The next Studio refresh receives the new catalog and artifact state. Keep
-generated `.artifacts/` content under Studio's ownership.
+Each inspection reads current disk content. Builds and validation also inspect
+current source, so explicit commands can pick up changes even when a filesystem
+notification was missed. The live editor watches for source changes and repairs.
+A missing input or invalid source retains the last successful artifact while
+Studio reports the affected path and repair action.
+
+Inspection separates `project_revision`, the observed build inputs, from
+`published_project_revision`, the inputs behind the retained artifact.
+`latest_build` reports the latest attempt, including a failure, while `build`
+identifies the retained successful artifact. Use browser validation to confirm
+what a particular Studio tab has rendered.
+
+### Coordinate a multi-file change
+
+Hold publication while an edit passes through incomplete states:
+
+```sh
+marimo-studio view hold dashboard --target analysis.py \
+  --owner source-refactor --ttl 300 --json > hold.json
+```
+
+Edit the files normally, inspect the result, then release the hold and build:
+
+```sh
+marimo-studio view inspect dashboard --target analysis.py
+marimo-studio view release dashboard --target analysis.py \
+  --token "$(jq -r .token hold.json)"
+marimo-studio view build dashboard --target analysis.py
+```
+
+[jq](https://jqlang.org/manual/) extracts the release token from the JSON record.
+Keep that record outside the view project's build inputs. A hold applies across
+processes and keeps the existing publication available while source editing
+continues. It expires after 300 seconds by default, with a maximum of 3600
+seconds. Release or expiry lets the live editor reconcile current source and
+resume publication. Source edits remain on disk.
+
+Choose a hold duration that covers the edit. Automatic change detection can
+observe a valid intermediate state during a multi-file save. A hold delays
+publication, but it does not make filesystem writes atomic or protect one
+external writer from another.
+
+### Compare and recover source
+
+Keep an inspection before editing and compare a fresh inspection afterward:
+
+```python
+from marimo_studio.authoring import open_workspace
+
+view = open_workspace("analysis.py").view("dashboard")
+before = await view.inspect()
+# Edit source files, then run the remaining statements in the same execution.
+after = await view.inspect()
+if before.files_complete and after.files_complete:
+    print(after.changes_since(before).to_dict())
+```
+
+The comparison reports added, modified, and deleted files within the provider's
+source and build-input inventory. Incomplete discovery is reported through
+`files_complete=False` and diagnostics. Repair the manifest or provider issue
+before comparing inventories.
+
+To keep a document checkpoint, retain the `ViewDocument` returned by
+`view.read()`. Before restoring its content, read the current document and
+review both versions:
+
+```python
+checkpoint = await view.read("index.html")
+# Retain checkpoint while editing, then review the current document.
+current = await view.read("index.html")
+print(current.content)
+await view.write(
+    "index.html",
+    checkpoint.content,
+    expected_revision=current.revision,
+)
+```
+
+The restore uses the current revision as its write precondition. Another save
+raises `SourceConflictError`, preserving that newer content. Persist checkpoint
+content outside the view project when recovery must survive the editing
+process. Recovering an external overwrite requires a retained copy or version
+control. Retaining a successful artifact keeps Preview available but does not
+restore authored source.
 
 Use [Choose a frontend](frontend-options.md) for provider-specific project
 shapes and [Troubleshoot Studio](troubleshooting.md) for source, manifest, or

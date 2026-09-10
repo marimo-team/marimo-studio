@@ -172,6 +172,8 @@ await view.inspect() -> ViewInspection
 await view.read(path) -> ViewDocument
 await view.write(path, content, *, expected_revision) -> ViewDocument
 await view.build(*, profile="development") -> ViewBuild
+await view.hold_publication(*, owner: str, ttl: float = 300.0) -> PublicationHold
+await view.release_publication(token: str) -> PublicationHold | None
 await view.validate(
     *,
     level: Literal["static", "runtime"] = "static",
@@ -193,6 +195,11 @@ await view.preflight(
 ) -> StaticPreflightReport
 await view.remove() -> ViewRemovalResult
 ```
+
+`inspect()` reads current filesystem state. Source can be edited through
+filesystem tools or `write()`. Provider inspection continues to own document
+access and build-input discovery. See [Manage view source](../guide/manage-source.md)
+for multi-file edits and recovery.
 
 `write()` checks the expected source revision under the same lock used by the
 Studio editor. A stale revision raises `SourceConflictError` and preserves the
@@ -223,6 +230,36 @@ exception raised by the callback cancels static destination publication.
 production build. The profiles maintain independent publications. A failed
 build leaves the last successful artifact for that profile available.
 
+### `View.hold_publication` and `View.release_publication`
+
+```text
+await view.hold_publication(*, owner: str, ttl: float = 300.0) -> PublicationHold
+await view.release_publication(token: str) -> PublicationHold | None
+```
+
+`hold_publication()` delays replacement publication across processes while
+source editing remains available. Existing published artifacts can be reused.
+`owner` identifies the editor and must contain 1 to 256 characters, including
+at least one non-whitespace character. `ttl` is a finite number of seconds
+greater than zero and at most 3600. Invalid arguments raise `ValueError`.
+An active hold raises `ConfigurationError` with its owner and expiry.
+
+Retain the returned token. `release_publication()` releases the matching hold
+and returns its receipt. Repeating the release returns the same receipt.
+It returns `None` when the view has no hold record. A mismatched token raises
+`ConfigurationError`. Both methods enforce the handle's view generation.
+They remain available when the manifest needs repair.
+
+Release or expiry permits the live editor to reconcile and publish current
+source. For an offline workflow, call `build()` after release. Source changes
+remain on disk after release, expiry, or editing-process exit.
+
+### `PublicationHold`
+
+Contains `token`, `owner`, view `generation`, `expires_at` as Unix seconds, and
+`released`. The computed `status` is `active`, `expired`, or `released`.
+`to_dict()` includes `status` with the token, owner, generation, and expiry.
+
 ### `ViewBuild`
 
 ```text
@@ -244,10 +281,45 @@ and current revision.
 
 ### `ViewInspection`
 
-Contains `view`, `provider`, authorized Source `documents`, source-located
-`diagnostics`, development build `freshness`, and the retained successful
-development `build`. See [Identities and
+Contains current filesystem and development publication evidence:
+
+| Field                                              | Meaning                                                                                         |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `view`, `root`, `generation`, `catalog_generation` | View name, project root, and observed ownership.                                                |
+| `provider`, `documents`, `diagnostics`             | Provider, authorized Source catalog, and source-located repair diagnostics.                     |
+| `project_revision`                                 | Revision of observed build inputs, or `None` when unavailable. Interpret with `files_complete`. |
+| `published_project_revision`                       | Source revision behind the retained development artifact, or `None` when unbuilt.               |
+| `freshness`, `build`                               | Development freshness and retained successful artifact.                                         |
+| `latest_build`                                     | Latest development attempt, including its `phase` and diagnostics.                              |
+| `files`, `files_complete`                          | Observed source and build-input inventory and whether discovery completed.                      |
+| `publication_hold`                                 | Current, expired, or released hold receipt, or `None`.                                          |
+
+Provider or manifest failure returns diagnostics and an incomplete inventory.
+Repair `view.toml` through its manifest path, then inspect again. Artifact
+metadata describes disk publication. Browser validation provides evidence for
+one rendered Studio presentation. See [Identities and
 state](identities.md#build-freshness) for freshness values.
+
+```text
+inspection.changes_since(previous: ViewInspection) -> ViewSourceChanges
+```
+
+Compares file revisions from two complete inventories. Raises `ValueError`
+when either inventory is incomplete or the root, view, or generation differs.
+
+When `view.toml` needs repair, `provider` is `None`, the inventory is incomplete,
+and publication fields describe stored build receipts. Repair the manifest and
+inspect again to verify the provider and artifact.
+
+### `ViewSourceFile`
+
+`ViewSourceFile` contains a project-relative `path` and content `revision`.
+A `None` revision records an expected file that is missing.
+
+### `ViewSourceChanges`
+
+`ViewSourceChanges` contains `added`, `modified`, and `deleted` path tuples.
+Its `to_dict()` serializes each tuple as a list of forward-slash paths.
 
 ### `StudioDiagnostic`
 
@@ -473,6 +545,24 @@ ShowResult(
 Confirms that the intended Studio tab accepted the view selection.
 `generation` is the tab's monotonically increasing activation generation. It
 is distinct from the 64-character view generation used for mutation ownership.
+
+### `PublicationHold`
+
+The live API returns the same [publication hold](#publicationhold) record as
+saved-workspace authoring.
+
+### `ViewInspection`
+
+The live API returns the same [source inspection](#viewinspection) record as
+saved-workspace authoring. Its source evidence describes saved files.
+
+### `ViewSourceFile`
+
+The live API uses the common [file revision](#viewsourcefile) record.
+
+### `ViewSourceChanges`
+
+The live API uses the common [source comparison](#viewsourcechanges) record.
 
 ### `ValidationReport`
 

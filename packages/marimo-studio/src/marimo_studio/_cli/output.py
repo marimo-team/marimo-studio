@@ -6,6 +6,7 @@ import json
 import os
 import shlex
 import subprocess
+from datetime import datetime, timezone
 from typing import Any
 
 from marimo_studio._browser_client.records import ShowResult
@@ -95,8 +96,14 @@ def render_view_next_command(result: ViewSetupResult) -> None:
 def render_view_inspection(result: ViewInspection) -> None:
     """Write view authoring state in human text."""
     echo(result.view)
-    echo(f"  {light_blue('provider')} {result.provider}")
+    echo(f"  {light_blue('provider')} {result.provider or 'unavailable'}")
+    echo(f"  {light_blue('root')} {result.root}")
+    echo(f"  {light_blue('source')} {result.project_revision or 'incomplete'}")
     echo(f"  build {result.freshness}")
+    hold = result.publication_hold
+    if hold is not None:
+        expires = datetime.fromtimestamp(hold.expires_at, timezone.utc).isoformat()
+        echo(f"  publication {hold.status} · {hold.owner} · expires {expires}")
     echo(f"  {light_blue('documents')}")
     for document in result.documents:
         echo(
@@ -122,6 +129,12 @@ def render_view_inspection(result: ViewInspection) -> None:
             f"  {light_blue('published')} {result.build.profile} "
             f"{result.build.revision}"
         )
+        echo(f"    source {result.published_project_revision}")
+    echo(f"  {light_blue('latest attempt')} {result.latest_build.phase}")
+    for diagnostic in result.latest_build.diagnostics:
+        echo(f"    {diagnostic.severity} {diagnostic.code}: {diagnostic.message}")
+        if diagnostic.hint:
+            echo(f"      {light_blue('repair')} {diagnostic.hint}")
 
 
 def render_status(result: StudioOverview) -> None:

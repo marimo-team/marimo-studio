@@ -55,6 +55,7 @@ from marimo_studio._processes.provider_runner import (
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._views.publication_hold import read_publication_hold
 from marimo_studio._views.records import ViewBuild
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.mutation_lock import view_build_lock, view_mutation_lock
@@ -331,6 +332,18 @@ def _require_build_generation(
         raise ViewGenerationConflictError(project.name, current_generation)
 
 
+def _publication_hold_diagnostic(project: ViewProject) -> ProjectDiagnostic | None:
+    hold = read_publication_hold(project.root)
+    if hold is None or hold.status != "active":
+        return None
+    return ProjectDiagnostic(
+        code="publication-held",
+        severity="error",
+        message=f"Publication is held by {hold.owner!r} until {hold.expires_at}.",
+        hint="Release the publication hold with its token, then build the view again.",
+    )
+
+
 def _load_build_owner(
     project: ViewProject,
     profile: BuildProfile,
@@ -509,6 +522,9 @@ def _publish_locked(
                 if cached is not None:
                     return cached
 
+            held = _publication_hold_diagnostic(project)
+            if held is not None:
+                record_build_failure(project, profile, (held,), started, revision)
             record_build_started(
                 project,
                 profile,
@@ -598,6 +614,9 @@ def _publish_locked(
                 started,
                 expected_generation,
             ) as confirm_current:
+                held = _publication_hold_diagnostic(project)
+                if held is not None:
+                    raise ArtifactCommitRejected(held)
                 published = publish_artifact_candidate(
                     project,
                     profile,
