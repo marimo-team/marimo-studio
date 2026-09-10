@@ -9,9 +9,9 @@ this starter.
 Build a calm room-operations monitor for facilities staff. Use Svelte and Apache
 ECharts for the selected sensor series. Mount the native
 `analysis_scope_control` and `metric_control` cells, then consume
-`selected_sensor_series`, `occupancy_summary`, and `daily_room_profile`. Follow the
-Botanical Instrument Panel in `DESIGN.md`: warm parchment, forest ink, lime
-status punctuation, flat surfaces, and reduced-motion support.
+`selected_sensor_series`, `occupancy_summary`, and `daily_room_profile`. Follow
+the visual direction in `DESIGN.md`: neutral surfaces, slate text, blue sensor
+readings, muted amber anomaly markers, and plain status text.
 
 ## Use the supplied Studio integration
 
@@ -108,3 +108,11 @@ remain frozen.
 
 Studio's Svelte build runs `svelte-check` before Vite. Treat that build as the
 acceptance boundary for actions, runes, imports, and packaged assets.
+
+## Visual direction
+
+Keep the presentation calm and focused on the data. Use the current view CSS as
+the visual baseline: restrained headings, readable labels, neutral surfaces,
+fine borders, and color for selection or analytical meaning. Preserve the view's
+distinct audience and interaction model. Check phone, tablet, desktop, and short
+landscape layouts, including populated controls and long values.

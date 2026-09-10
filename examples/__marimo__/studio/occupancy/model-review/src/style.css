@@ -2,12 +2,12 @@
   color-scheme: light;
   font-family: "DM Sans", "Helvetica Neue", Arial, sans-serif;
   --paper: #ffffff;
-  --canvas: #dbdad7;
-  --sand: #e6e4e0;
+  --canvas: #f7f8f7;
+  --sand: #f3f5f3;
   --ink: #121212;
   --muted: #616161;
-  --rule: #cac7c1;
-  --rule-light: #e2dfda;
+  --rule: #dce2de;
+  --rule-light: #e5e9e6;
   --moss: #4b7654;
   --moss-dark: #31543a;
   --moss-soft: #e7f0e7;
@@ -53,7 +53,8 @@ a {
   width: min(100% - 2rem, 74rem);
   margin: 1.5rem auto;
   padding: clamp(1.5rem, 4vw, 3.5rem);
-  border-top: 0.35rem solid var(--ink);
+  border: 1px solid var(--rule-light);
+  border-radius: 12px;
   background: var(--paper);
 }
 
@@ -125,7 +126,7 @@ a {
   margin: 0;
   color: var(--muted);
   font-family: var(--mono-font);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -141,10 +142,10 @@ h1 {
   max-width: 17ch;
   margin-bottom: 0;
   font-family: var(--display-font);
-  font-size: clamp(2.4rem, 5.5vw, 5rem);
+  font-size: clamp(2.1rem, 4vw, 3.5rem);
   font-weight: 500;
-  letter-spacing: -0.05em;
-  line-height: 0.98;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
 }
 
 h2 {
@@ -174,7 +175,7 @@ h2 {
 
 .control-strip {
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) minmax(40rem, 2fr);
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 2fr);
   gap: 2rem;
   align-items: center;
   margin: 1.5rem 0;
@@ -188,7 +189,7 @@ h2 {
   margin: 0.45rem 0 0;
   color: var(--muted);
   font-family: var(--mono-font);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
 }
 
@@ -404,7 +405,7 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   border-top: 1px solid var(--rule);
   color: var(--muted);
   font-family: var(--mono-font);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
 }
 
 .source-note a {
@@ -447,7 +448,7 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
 
 .error-table thead th {
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -479,11 +480,6 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   .control-strip,
   .control-strip-controls {
     grid-template-columns: 1fr;
-  }
-
-  #marimo-studio-cell-analysis_scope_control marimo-dropdown::part(control) {
-    width: calc(100% - 6.5rem);
-    min-width: 0;
   }
 }
 
@@ -532,21 +528,8 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   }
 
   .metric span {
-    font-size: 0.58rem;
-    letter-spacing: 0.035em;
-    white-space: nowrap;
-  }
-
-  marimo-dropdown::part(label) {
-    font-size: 0.85rem;
-    white-space: nowrap;
-  }
-
-  marimo-dropdown::part(control) {
-    width: 10.5rem !important;
-    min-width: 10.5rem !important;
-    max-width: 10.5rem;
-    min-height: 2.75rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
   }
 }
 

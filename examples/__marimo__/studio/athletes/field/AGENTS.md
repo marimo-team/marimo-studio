@@ -40,3 +40,11 @@ Run Studio inspection and production build after source changes. Export the view
 through the WASM runtime and check both a desktop viewport and a narrow mobile
 viewport in a browser. Exercise arrow-key navigation, the visible controls,
 sport selection, slide overview, fullscreen, hover details, and reduced motion.
+
+## Visual direction
+
+Keep the presentation calm and focused on the data. Use the current view CSS
+as the visual baseline: restrained headings, readable labels, neutral surfaces,
+fine borders, and color for selection or analytical meaning. Preserve the
+view's distinct audience and interaction model. Check phone, tablet, desktop,
+and short landscape layouts, including populated controls and long values.

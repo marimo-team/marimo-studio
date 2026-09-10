@@ -41,7 +41,7 @@ a {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
-  min-height: 34rem;
+  min-height: 0;
 }
 
 .workbench-header {
@@ -78,8 +78,8 @@ a {
   color: var(--fog);
   font-family: "Hanken Grotesk", sans-serif;
   font-weight: 500;
-  font-size: 0.61rem;
-  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -113,8 +113,8 @@ a {
   color: var(--fog);
   font-family: "Hanken Grotesk", sans-serif;
   font-weight: 500;
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -149,7 +149,7 @@ a {
   align-items: center;
   padding: 0.46rem 0.85rem;
   border: 1px solid var(--ink);
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--ink);
   color: var(--paper);
   font-size: 0.75rem;
@@ -188,7 +188,7 @@ a {
   display: grid;
   width: 100%;
   height: 100%;
-  min-height: 28rem;
+  min-height: 0;
   gap: 1.25rem;
   align-content: start;
   justify-items: center;
@@ -202,7 +202,7 @@ a {
 }
 
 .pdf-canvas-page {
-  width: min(100%, 50rem);
+  width: min(100%, 48rem);
   border: 1px solid var(--rule);
   background: var(--paper);
   scroll-snap-align: start;
@@ -242,8 +242,8 @@ a {
   color: var(--slate);
   font-family: "Hanken Grotesk", sans-serif;
   font-weight: 500;
-  font-size: 0.67rem;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -257,8 +257,8 @@ a {
   color: var(--slate);
   font-family: "Hanken Grotesk", sans-serif;
   font-weight: 500;
-  font-size: 0.67rem;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -382,7 +382,6 @@ a {
 
   .workbench-title h1 {
     font-size: 1.05rem;
-    white-space: nowrap;
   }
 
   .download-report {

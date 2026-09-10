@@ -1,12 +1,12 @@
 :root {
   color-scheme: light;
-  --canvas: #f9f8f5;
+  --canvas: #fafaf9;
   --surface: #ffffff;
   --ink: #21211f;
   --muted: #64635e;
   --line: #e0e0de;
-  --line-strong: #9c9b96;
-  --signal: #fc5200;
+  --line-strong: #c6ccc8;
+  --signal: #ae471d;
   --link: #0060d0;
   --plot-secondary: #39434d;
   --text-font: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
@@ -53,7 +53,7 @@ a:focus-visible {
 }
 
 .page {
-  width: min(82rem, calc(100% - 2rem));
+  width: min(80rem, calc(100% - 3rem));
   margin: 0 auto;
   padding-bottom: 3rem;
 }
@@ -89,15 +89,15 @@ nav a[aria-current="page"] {
   grid-template-columns: minmax(0, 1.3fr) minmax(18rem, 0.7fr);
   gap: clamp(2rem, 7vw, 5rem);
   align-items: end;
-  padding: clamp(3rem, 8vw, 6.5rem) 0 2.5rem;
-  border-bottom: 2px solid var(--ink);
+  padding: clamp(2.5rem, 5vw, 4.5rem) 0 2.5rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .eyebrow {
   margin: 0 0 0.65rem;
   color: var(--signal);
-  font-size: 0.68rem;
-  font-weight: 750;
+  font-size: 0.75rem;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -114,12 +114,12 @@ h2 {
 }
 
 h1 {
-  max-width: 10ch;
+  max-width: 14ch;
   margin: 0;
-  font-size: clamp(3.4rem, 8vw, 7rem);
-  font-weight: 750;
-  letter-spacing: -0.065em;
-  line-height: 0.88;
+  font-size: clamp(2.5rem, 5vw, 4.25rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
 }
 
 .lede {
@@ -152,7 +152,7 @@ h1 {
 .score span {
   display: block;
   color: var(--muted);
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -161,7 +161,7 @@ h1 {
 .score strong {
   display: block;
   margin-top: 0.55rem;
-  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-size: clamp(2rem, 3.5vw, 3rem);
   font-weight: 700;
   letter-spacing: -0.055em;
   line-height: 1;
@@ -184,14 +184,14 @@ h1 {
   top: 1rem;
   padding: 1.4rem;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
 .filter-panel h2,
 .panel h2 {
   margin: 0;
-  font-size: clamp(1.65rem, 3vw, 2.25rem);
+  font-size: clamp(1.3rem, 2vw, 1.65rem);
   font-weight: 700;
   letter-spacing: -0.035em;
 }
@@ -227,7 +227,7 @@ h1 {
   min-height: 2.75rem;
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
 }
@@ -237,12 +237,12 @@ h1 {
   min-height: 2.75rem;
   margin-top: 1.25rem;
   border: 1px solid var(--signal);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--signal);
-  color: var(--ink);
+  color: var(--surface);
   cursor: pointer;
   font-size: 0.78rem;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .reset-button:hover:not(:disabled) {
@@ -369,7 +369,7 @@ h1 {
   min-width: 0;
   padding: clamp(1rem, 2.5vw, 1.6rem);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -426,7 +426,7 @@ h1 {
 .mosaic-table > .input {
   max-width: 100%;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--surface);
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -454,7 +454,7 @@ h1 {
   background: var(--ink);
   color: var(--surface);
   cursor: pointer;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -505,7 +505,7 @@ code {
 
 @media (max-width: 46rem) {
   .page {
-    width: min(100% - 1rem, 82rem);
+    width: min(100% - 2rem, 80rem);
   }
 
   .scoreboard,

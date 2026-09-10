@@ -196,6 +196,10 @@ export const createAthleteExplorer = async ({
   hosts.controls.replaceChildren(...controls);
   labelMenuControls(hosts.controls);
 
+  const scatterWidth = vg.Param.value(Math.max(1, hosts.scatter.clientWidth));
+  const ageWidth = vg.Param.value(Math.max(1, hosts.age.clientWidth));
+  const sportsWidth = vg.Param.value(Math.max(1, hosts.sports.clientWidth));
+
   hosts.scatter.replaceChildren(
     describePlot(
       vg.plot(
@@ -225,7 +229,8 @@ export const createAthleteExplorer = async ({
         vg.yLabel("Height (m)"),
         vg.xGrid(true),
         vg.yGrid(true),
-        vg.width(760),
+        vg.width(scatterWidth),
+        vg.style({ fontSize: "12px" }),
         vg.height(430),
         vg.margins({ top: 20, right: 20, bottom: 45, left: 54 }),
       ),
@@ -253,7 +258,8 @@ export const createAthleteExplorer = async ({
         vg.xLabel("Age (years)"),
         vg.yLabel("Athletes"),
         vg.yGrid(true),
-        vg.width(430),
+        vg.width(ageWidth),
+        vg.style({ fontSize: "12px" }),
         vg.height(260),
         vg.margins({ top: 12, right: 16, bottom: 44, left: 48 }),
       ),
@@ -282,7 +288,8 @@ export const createAthleteExplorer = async ({
         vg.xLabel("Athletes"),
         vg.yLabel(null),
         vg.xGrid(true),
-        vg.width(430),
+        vg.width(sportsWidth),
+        vg.style({ fontSize: "12px" }),
         vg.height(520),
         vg.margins({ top: 12, right: 16, bottom: 44, left: 130 }),
       ),
@@ -356,6 +363,23 @@ export const createAthleteExplorer = async ({
   });
 
   let destroyed = false;
+  const plotWidths = new Map<Element, typeof scatterWidth>([
+    [hosts.scatter, scatterWidth],
+    [hosts.age, ageWidth],
+    [hosts.sports, sportsWidth],
+  ]);
+  const resize = new ResizeObserver((entries) => {
+    if (destroyed) return;
+    for (const entry of entries) {
+      const width = Math.floor(entry.contentRect.width);
+      const parameter = plotWidths.get(entry.target);
+      if (width > 0 && parameter) {
+        parameter.update(width);
+      }
+    }
+  });
+  plotWidths.forEach((_, host) => resize.observe(host));
+
   return {
     reset: () => {
       category.reset();
@@ -367,6 +391,7 @@ export const createAthleteExplorer = async ({
     destroy: () => {
       if (destroyed) return;
       destroyed = true;
+      resize.disconnect();
       stopKeyboardTableSort();
       mosaic.clear();
       Object.values(hosts).forEach((host) => host.replaceChildren());

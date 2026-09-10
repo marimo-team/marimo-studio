@@ -86,3 +86,11 @@ Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
 
 Studio's React build runs type checking before bundling. Treat that build as the
 acceptance boundary for declarations, imports, and packaged assets.
+
+## Visual direction
+
+Keep the presentation calm and focused on the data. Use the current view CSS
+as the visual baseline: restrained headings, readable labels, neutral surfaces,
+fine borders, and color for selection or analytical meaning. Preserve the
+view's distinct audience and interaction model. Check phone, tablet, desktop,
+and short landscape layouts, including populated controls and long values.

@@ -107,3 +107,11 @@ remain frozen.
 
 Studio's Svelte build runs `svelte-check` before Vite. Treat that build as the
 acceptance boundary for actions, runes, imports, and packaged assets.
+
+## Visual direction
+
+Keep the presentation calm and focused on the data. Use the current view CSS
+as the visual baseline: restrained headings, readable labels, neutral surfaces,
+fine borders, and color for selection or analytical meaning. Preserve the
+view's distinct audience and interaction model. Check phone, tablet, desktop,
+and short landscape layouts, including populated controls and long values.
