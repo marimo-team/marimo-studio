@@ -19,6 +19,10 @@ from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._server.development.ports import ProjectWatchPlan
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._views.publication_hold import (
+    publication_hold_path,
+    read_publication_hold,
+)
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import StudioWorkspace
@@ -55,6 +59,7 @@ class SourceChangeProducer:
         self._inspection_error: Exception | None = None
         self._manifest_stamp: _FileStamp = "missing"
         self._state_space_stamp: _FileStamp = "missing"
+        self._publication_hold_stamp: tuple[str, str] | None = None
         self._scope_files: tuple[Path, ...] = ()
         self._roots: tuple[Path, ...] = ()
         self._excluded_roots: tuple[Path, ...] = ()
@@ -86,6 +91,7 @@ class SourceChangeProducer:
         if self._project is not None:
             files.add(self._project.manifest)
             files.add(state_space_path(self._project.root))
+            files.add(publication_hold_path(self._project.root))
         return ProjectWatchPlan(
             files=tuple(sorted((path.absolute() for path in files), key=str)),
             roots=tuple(sorted((path.absolute() for path in self._roots), key=str)),
@@ -105,6 +111,7 @@ class SourceChangeProducer:
             and _optional_stamp(project.manifest) == self._manifest_stamp
             and _optional_stamp(state_space_path(project.root))
             == self._state_space_stamp
+            and _publication_hold_stamp(project) == self._publication_hold_stamp
             and bool(self._catalog_stamps)
             and all(
                 _stat_stamp(path) == stamp
@@ -184,6 +191,13 @@ class SourceChangeProducer:
         )
         state_space_change = state_space_stamp != self._state_space_stamp
         self._state_space_stamp = state_space_stamp
+        publication_hold_stamp = (
+            _publication_hold_stamp(self._project)
+            if self._project is not None
+            else None
+        )
+        publication_hold_change = publication_hold_stamp != self._publication_hold_stamp
+        self._publication_hold_stamp = publication_hold_stamp
         if changed:
             project = self._project
             files = tuple(
@@ -196,7 +210,7 @@ class SourceChangeProducer:
 
         if notebook_change:
             return SourceChange(kind="project", files=())
-        if state_space_change:
+        if state_space_change or publication_hold_change:
             return SourceChange(kind="project", files=())
         return None
 
@@ -244,9 +258,11 @@ class SourceChangeProducer:
         if project is None:
             self._manifest_stamp = "missing"
             self._state_space_stamp = "missing"
+            self._publication_hold_stamp = None
             return
         self._manifest_stamp = _optional_stamp(project.manifest)
         self._state_space_stamp = _optional_stamp(state_space_path(project.root))
+        self._publication_hold_stamp = _publication_hold_stamp(project)
         self._reinspect_project()
 
     def _reinspect_project(
@@ -322,6 +338,11 @@ class SourceChangeProducer:
             (*scope_files, *roots),
             self._tree,
         )
+
+
+def _publication_hold_stamp(project: ViewProject) -> tuple[str, str] | None:
+    hold = read_publication_hold(project.root)
+    return (hold.token, hold.status) if hold is not None else None
 
 
 def _project_identity(project: ViewProject | None) -> object:

@@ -18,6 +18,11 @@ from marimo_studio._server.development.source_changes import (
     SourceChangeProducer,
 )
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._views.publication_hold import (
+    acquire_publication_hold,
+    publication_hold_path,
+    release_publication_hold,
+)
 from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import InspectionRequest, ProjectInput
@@ -84,6 +89,37 @@ def test_catalog_reuses_unchanged_inspection_and_detects_direct_edits(
     assert cast(str, change.files[0]["revision"]).startswith("sha256:")
     assert producer.catalog_current()
     assert provider.inspections == 2
+
+
+def test_publication_hold_release_and_expiry_trigger_reconciliation(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo_studio._views.publication_hold as hold_module
+
+    studio = created_one_view(notebook_path)
+    project = studio.views["dashboard"]
+    now = 1_000.0
+    monkeypatch.setattr(hold_module, "time", SimpleNamespace(time=lambda: now))
+    producer = SourceChangeProducer(studio, project.name)
+    project_revision = producer.catalog()[2]
+    assert publication_hold_path(project.root) in producer.watch_plan.files
+
+    hold = acquire_publication_hold(project.root, owner="agent", ttl=10)
+    assert not producer.catalog_current()
+    assert producer.poll() == SourceChange("project", ())
+    assert producer.catalog_current()
+    release_publication_hold(project.root, hold.token)
+    assert not producer.catalog_current()
+    assert producer.poll() == SourceChange("project", ())
+
+    acquire_publication_hold(project.root, owner="agent", ttl=10)
+    assert producer.poll() == SourceChange("project", ())
+    now = 1_010.0
+    assert not producer.catalog_current()
+    assert producer.poll() == SourceChange("project", ())
+    assert producer.catalog_current()
+    assert producer.catalog()[2] == project_revision
 
 
 def test_catalog_watches_editor_documents_outside_build_inputs(

@@ -26,9 +26,28 @@ report = await view.validate(level="browser")
 `_authoring` owns their operations. `_browser_client` owns page selection,
 observation, protocol decoding, and bounded HTTP transport.
 
-Agents inspect the provider document catalog, then read and conditionally write
-each editable document through `View.read()` and `View.write()`. The expected
-source revision prevents a late save from replacing newer work.
+Agents edit source through native filesystem tools or conditionally replace
+catalog documents through `View.read()` and `View.write()`. The expected source
+revision protects guarded writes from replacing a newer save. Both paths feed
+provider inspection, immutable build snapshots, and final publication checks.
+
+`View.inspect()` captures the project root and owner, observed file revisions,
+current project revision, published project revision, and latest build attempt.
+The retained successful artifact remains distinct from a failed attempt.
+`changes_since()` compares complete inventories belonging to the same view
+owner. Discovery failures expose diagnostics and incomplete inventories so an
+agent can repair the manifest or provider input and inspect again.
+
+`View.hold_publication()` records an owner, token, view generation, and finite
+expiry outside the editable project. Publication checks the hold across
+processes under the view mutation lock. Source editing continues. Release or
+expiry permits current source to reconcile through the normal build pipeline.
+A hold coordinates publication through multi-file edits. It provides neither
+filesystem write atomicity nor exclusion between external writers.
+
+Checkpoint recovery uses retained `ViewDocument` content. A restore reads the
+current source and writes against its current revision after review. Artifact
+retention and source restoration have separate owners and effects.
 
 ## CLI parity
 
@@ -38,7 +57,7 @@ The CLI uses the same application services:
 status
 notebook inspect/bind
 starters
-view create/inspect/read/write/build/show/preflight/export/remove
+view create/inspect/read/write/hold/release/build/show/preflight/export/remove
 validate --level static|runtime|browser
 doctor
 ```

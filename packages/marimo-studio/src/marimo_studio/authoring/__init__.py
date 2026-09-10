@@ -39,6 +39,7 @@ from marimo_studio._projections.runtime_records import (
 from marimo_studio._validation.evidence import ValidationIssue as ValidationIssue
 from marimo_studio._validation.records import ValidationReport as ValidationReport
 from marimo_studio._views.api import ViewRemovalResult as ViewRemovalResult
+from marimo_studio._views.publication_hold import PublicationHold as PublicationHold
 from marimo_studio._views.records import Starter as Starter
 from marimo_studio._views.records import StudioDiagnostic as StudioDiagnostic
 from marimo_studio._views.records import StudioOverview as StudioOverview
@@ -46,6 +47,8 @@ from marimo_studio._views.records import ViewBuild as ViewBuild
 from marimo_studio._views.records import ViewDocument as ViewDocument
 from marimo_studio._views.records import ViewInspection as ViewInspection
 from marimo_studio._views.records import ViewOverview as ViewOverview
+from marimo_studio._views.records import ViewSourceChanges as ViewSourceChanges
+from marimo_studio._views.records import ViewSourceFile as ViewSourceFile
 from marimo_studio._workspace.models import BindingResult as BindingResult
 
 __all__ = [
@@ -55,6 +58,7 @@ __all__ = [
     "ProjectionPortability",
     "ProviderDiagnostic",
     "ProviderReport",
+    "PublicationHold",
     "RenderedOutput",
     "RuntimeCell",
     "RuntimeOutput",
@@ -79,6 +83,8 @@ __all__ = [
     "ViewInspection",
     "ViewOverview",
     "ViewRemovalResult",
+    "ViewSourceChanges",
+    "ViewSourceFile",
     "Workspace",
     "doctor",
     "open_workspace",

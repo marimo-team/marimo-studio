@@ -41,6 +41,26 @@ export class StudioCli {
     return this.#run(["view", "build", name, "--target", target, "--profile", "development"]);
   }
 
+  async holdWorkspacePublication(name: string) {
+    const { stdout } = await this.#run([
+      "view",
+      "hold",
+      name,
+      "--target",
+      notebookPath,
+      "--owner",
+      "browser-acceptance",
+      "--ttl",
+      "300",
+      "--json",
+    ]);
+    return z.object({ token: z.string().min(1) }).parse(JSON.parse(stdout)).token;
+  }
+
+  releaseWorkspacePublication(name: string, token: string) {
+    return this.#run(["view", "release", name, "--target", notebookPath, "--token", token]);
+  }
+
   exportWorkspaceView(name: string, target: string, output: string) {
     return this.#run(["view", "export", name, "--target", target, "--output", output]);
   }

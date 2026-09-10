@@ -24,6 +24,12 @@ from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.api import remove_view as remove_view_operation
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.inspect import inspect_view as inspect_view_project
+from marimo_studio._views.publication_hold import (
+    DEFAULT_PUBLICATION_HOLD_SECONDS,
+    PublicationHold,
+    acquire_publication_hold,
+    release_publication_hold,
+)
 from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
 from marimo_studio._views.sources import (
     OwnedViewDocument,
@@ -36,8 +42,9 @@ from marimo_studio._views.sources import (
     write_view_manifest,
 )
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.config import load_studio_definition
+from marimo_studio._workspace.config import load_studio_definition, validate_view_name
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
 from marimo_studio._workspace.ownership import ObservedViewOwner
 from marimo_studio._workspace.project_manifest import VIEW_MANIFEST_PATH
 from marimo_studio.errors import (
@@ -154,7 +161,44 @@ async def inspect_view(
     expected_generation: str | None = None,
 ) -> ViewInspection:
     """Inspect source documents, diagnostics, and build state."""
-    studio = await asyncio.to_thread(load_studio, notebook)
+    from marimo_studio._views.inspect import inspect_view_manifest
+    from marimo_studio._workspace.project_manifest import load_view_project
+    from marimo_studio.errors import ConfigurationError, MarimoStudioError
+    from marimo_studio.view_providers._host import provider_registry
+
+    try:
+        studio = await asyncio.to_thread(load_studio, notebook)
+    except ConfigurationError as workspace_error:
+
+        def repair_inspection(
+            load_error: ConfigurationError = workspace_error,
+        ) -> ViewInspection:
+            definition = load_studio_definition(notebook)
+            try:
+                project = load_view_project(definition.view_root / view)
+                provider_registry().validate_project(project)
+            except MarimoStudioError as error:
+                admit_source_owner(
+                    notebook,
+                    view,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
+                )
+                result = inspect_view_manifest(definition, view, error)
+                if (
+                    expected_generation is not None
+                    and result.generation != expected_generation
+                ):
+                    raise ViewGenerationConflictError(view, result.generation) from None
+                if (
+                    expected_catalog_generation is not None
+                    and result.catalog_generation != expected_catalog_generation
+                ):
+                    raise WorkspaceGenerationConflictError() from None
+                return result
+            raise load_error from None
+
+        return await asyncio.to_thread(repair_inspection)
     _require_view_owner(
         studio,
         view,
@@ -206,6 +250,56 @@ async def build_view(
         profile=profile,
         expected_generation=expected_generation,
     )
+
+
+async def hold_publication(
+    notebook: Path,
+    view: str,
+    *,
+    owner: str,
+    ttl: float = DEFAULT_PUBLICATION_HOLD_SECONDS,
+    expected_generation: str | None = None,
+) -> PublicationHold:
+    """Retain the current publication during a bounded source-editing interval."""
+
+    def operation() -> PublicationHold:
+        validate_view_name(view)
+        root = load_studio_definition(notebook).view_root
+        with workspace_catalog_lock(root):
+            if load_studio_definition(notebook).view_root != root:
+                raise WorkspaceGenerationConflictError()
+            return acquire_publication_hold(
+                root / view,
+                owner=owner,
+                ttl=ttl,
+                expected_generation=expected_generation,
+            )
+
+    return await run_provider_operation(operation)
+
+
+async def release_publication(
+    notebook: Path,
+    view: str,
+    token: str,
+    *,
+    expected_generation: str | None = None,
+) -> PublicationHold | None:
+    """Release a matching hold so current source can publish again."""
+
+    def operation() -> PublicationHold | None:
+        validate_view_name(view)
+        root = load_studio_definition(notebook).view_root
+        with workspace_catalog_lock(root):
+            if load_studio_definition(notebook).view_root != root:
+                raise WorkspaceGenerationConflictError()
+            return release_publication_hold(
+                root / view,
+                token,
+                expected_generation=expected_generation,
+            )
+
+    return await run_provider_operation(operation)
 
 
 async def show_view(
