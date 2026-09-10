@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
-  --bone: #f2efe7;
-  --paper: #fbfaf6;
+  --bone: #f3f5f3;
+  --paper: #fdfdfb;
   --ink: #142024;
   --ink-soft: #344247;
   --muted: #687477;
@@ -36,7 +36,7 @@ html,
 body {
   margin: 0;
   overflow: hidden;
-  background: #e8e7e1;
+  background: #f0f2f0;
 }
 
 body {
@@ -71,7 +71,7 @@ textarea {
 .deck-shell {
   position: relative;
   overflow: hidden;
-  background: #e8e7e1;
+  background: #f0f2f0;
 }
 
 .reveal {
@@ -166,16 +166,16 @@ textarea {
 
 .briefing-slide h1 {
   max-width: 9ch;
-  font-size: 78px;
-  line-height: 0.91;
-  letter-spacing: -0.055em;
+  font-size: 70px;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
 }
 
 .briefing-slide h2 {
   max-width: 18ch;
-  font-size: 48px;
-  line-height: 0.98;
-  letter-spacing: -0.042em;
+  font-size: 44px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
 }
 
 .briefing-slide h3 {
@@ -196,7 +196,7 @@ textarea {
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.105em;
+  letter-spacing: 0.06em;
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -1351,7 +1351,7 @@ textarea {
     padding-right: max(0.75rem, env(safe-area-inset-right));
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: max(0.75rem, env(safe-area-inset-left));
-    background: #e8e7e1;
+    background: #f0f2f0;
     overscroll-behavior-y: contain;
     scroll-padding-top: calc(3rem + env(safe-area-inset-top));
     scroll-snap-type: y proximity;
@@ -1369,7 +1369,7 @@ textarea {
     justify-content: space-between;
     padding: env(safe-area-inset-top) 0.5rem 0;
     border-bottom: 1px solid var(--line-dark);
-    background: rgb(232 231 225 / 94%);
+    background: rgb(240 242 240 / 97%);
     color: var(--ink-soft);
     font-family: var(--mono);
     font-size: 0.68rem;
@@ -1379,7 +1379,7 @@ textarea {
 
   .reader-header span {
     color: var(--muted);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     text-align: right;
   }
 
@@ -1396,17 +1396,17 @@ textarea {
     height: auto;
     min-height: calc(100svh - 4.5rem - env(safe-area-inset-top));
     gap: 1rem;
-    padding: 1.5rem 1.25rem 2rem;
+    padding: 1.5rem 1rem 2rem;
     overflow: visible;
   }
 
   .briefing-reader .briefing-slide h1 {
-    font-size: clamp(2.8rem, 13vw, 4rem);
+    font-size: clamp(2.5rem, 10vw, 3.5rem);
   }
 
   .briefing-reader .briefing-slide h2 {
     max-width: 15ch;
-    font-size: clamp(2.1rem, 9.5vw, 3.2rem);
+    font-size: clamp(2rem, 8vw, 2.75rem);
   }
 
   .briefing-reader .briefing-slide h3 {
@@ -1419,15 +1419,7 @@ textarea {
     font-size: 1rem;
   }
 
-  .briefing-reader :is(
-      .cover,
-      .slide-header-split,
-      .catalog-layout,
-      .magnitude-layout,
-      .frequency-layout,
-      .selection-layout,
-      .impact-layout
-    ) {
+  .briefing-reader :is(.cover, .slide-header-split, .catalog-layout, .magnitude-layout, .frequency-layout, .selection-layout, .impact-layout) {
     grid-template-columns: minmax(0, 1fr);
   }
 

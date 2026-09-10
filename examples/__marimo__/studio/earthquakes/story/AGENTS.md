@@ -82,3 +82,11 @@ prefer versioned imports when the same source must rebuild consistently.
 
 Studio publishes this file directly after validating its HTML and projection
 hosts. Treat the built document as the acceptance boundary for the page.
+
+## Visual direction
+
+Keep the presentation calm and focused on the data. Use the current view CSS
+as the visual baseline: restrained headings, readable labels, neutral surfaces,
+fine borders, and color for selection or analytical meaning. Preserve the
+view's distinct audience and interaction model. Check phone, tablet, desktop,
+and short landscape layouts, including populated controls and long values.

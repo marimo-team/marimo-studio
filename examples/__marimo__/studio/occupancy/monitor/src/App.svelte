@@ -119,6 +119,14 @@ const toMilliseconds = (value: SensorRow["date"]): number => {
 const renderChart = () => {
   if (chart === undefined || series === undefined) return;
   chart.resize();
+  const style = getComputedStyle(chartElement);
+  const colors = {
+    signal: style.getPropertyValue("--signal").trim(),
+    baseline: style.getPropertyValue("--baseline").trim(),
+    anomaly: style.getPropertyValue("--anomaly").trim(),
+    muted: style.getPropertyValue("--muted").trim(),
+    line: style.getPropertyValue("--line-light").trim(),
+  };
 
   const rows = series.toArray();
   const metric = summary?.metric ?? rows.at(-1)?.metric ?? "Signal";
@@ -139,7 +147,7 @@ const renderChart = () => {
         : 240,
       useUTC: true,
       aria: { enabled: true },
-      color: ["#1c3a13", "#8a9385", "#546b43"],
+      color: [colors.signal, colors.baseline, colors.anomaly],
       grid: { left: 18, right: 18, top: 48, bottom: 28, containLabel: true },
       legend: {
         top: 4,
@@ -147,9 +155,9 @@ const renderChart = () => {
         itemWidth: 18,
         itemHeight: 3,
         textStyle: {
-          color: "#687164",
-          fontFamily: "IBM Plex Mono",
-          fontSize: 11,
+          color: colors.muted,
+          fontFamily: "DM Sans",
+          fontSize: 12,
         },
       },
       tooltip: {
@@ -167,11 +175,11 @@ const renderChart = () => {
       xAxis: {
         type: "time",
         boundaryGap: false,
-        axisLine: { lineStyle: { color: "#c4c7c4" } },
+        axisLine: { lineStyle: { color: colors.line } },
         axisTick: { show: false },
         axisLabel: {
-          color: "#687164",
-          fontFamily: "IBM Plex Mono",
+          color: colors.muted,
+          fontFamily: "DM Sans",
           hideOverlap: true,
         },
         splitLine: { show: false },
@@ -180,14 +188,14 @@ const renderChart = () => {
         type: "value",
         name: unit,
         nameTextStyle: {
-          color: "#687164",
-          fontFamily: "IBM Plex Mono",
+          color: colors.muted,
+          fontFamily: "DM Sans",
           align: "right",
         },
-        axisLabel: { color: "#687164", fontFamily: "IBM Plex Mono" },
+        axisLabel: { color: colors.muted, fontFamily: "DM Sans" },
         axisLine: { show: false },
         axisTick: { show: false },
-        splitLine: { lineStyle: { color: "#dedfda" } },
+        splitLine: { lineStyle: { color: colors.line } },
         scale: true,
       },
       series: [
@@ -217,7 +225,7 @@ const renderChart = () => {
           data: anomalies,
           symbolSize: 7,
           itemStyle: {
-            color: "#546b43",
+            color: colors.anomaly,
             borderColor: "#ffffff",
             borderWidth: 1,
           },
@@ -322,7 +330,6 @@ onMount(() => {
       aria-live="polite"
       role="status"
     >
-      <span class="status-dot"></span>
       <span>{summary?.scope_label ?? "Historical telemetry"}</span>
       {#if summary}
         <strong>{formatInteger.format(summary.observations)} readings</strong>
@@ -330,11 +337,7 @@ onMount(() => {
     </div>
   </header>
 
-  <section class="control-bar" aria-labelledby="signal-heading">
-    <div>
-      <p class="section-label" id="signal-heading">Analysis controls</p>
-      <p>Choose an observation scope and room signal.</p>
-    </div>
+  <section class="control-bar" aria-label="Monitor filters">
     <div class="control-bar-controls">
       <marimo-cell name="analysis_scope_control"></marimo-cell>
       <marimo-cell name="metric_control"></marimo-cell>
@@ -382,37 +385,9 @@ onMount(() => {
     </article>
   </section>
 
-  <section class="daily-profile" aria-labelledby="daily-heading">
-    <div class="daily-heading">
-      <div>
-        <p class="section-label">Room use profile</p>
-        <h2 id="daily-heading">Daily occupancy</h2>
-      </div>
-      <p>Share of recorded minutes marked occupied</p>
-    </div>
-    <div class="daily-strip">
-      {#each dailyRows as day (day.day)}
-        <article>
-          <div>
-            <span>{formatDay.format(new Date(`${day.day}T00:00:00`))}</span>
-            <strong>{(day.occupancy_rate * 100).toFixed(0)}%</strong>
-          </div>
-          <span class="daily-track" aria-hidden="true">
-            <i style={`width: ${day.occupancy_rate * 100}%`}></i>
-          </span>
-          <small>{formatNumber.format(day.mean_co2)} ppm mean CO₂</small>
-        </article>
-      {/each}
-    </div>
-    {#if dailyError}
-      <p class="summary-error" role="alert">Daily room use is unavailable.</p>
-    {/if}
-  </section>
-
   <section class="chart-panel" aria-labelledby="trend-heading">
     <div class="chart-heading">
       <div>
-        <p class="section-label">Sensor history</p>
         <h2 id="trend-heading">Reading and rolling baseline</h2>
       </div>
       <p>
@@ -433,6 +408,32 @@ onMount(() => {
         <span class="monitor-loader" aria-hidden="true"><i></i><i></i><i></i></span>
         Loading sensor history…
       </p>
+    {/if}
+  </section>
+
+  <section class="daily-profile" aria-labelledby="daily-heading">
+    <div class="daily-heading">
+      <div>
+        <h2 id="daily-heading">Daily occupancy</h2>
+      </div>
+      <p>Share of recorded minutes marked occupied</p>
+    </div>
+    <div class="daily-strip">
+      {#each dailyRows as day (day.day)}
+        <article>
+          <div>
+            <span>{formatDay.format(new Date(`${day.day}T00:00:00`))}</span>
+            <strong>{(day.occupancy_rate * 100).toFixed(0)}%</strong>
+          </div>
+          <span class="daily-track" aria-hidden="true">
+            <i style={`width: ${day.occupancy_rate * 100}%`}></i>
+          </span>
+          <small>{formatNumber.format(day.mean_co2)} ppm mean CO₂</small>
+        </article>
+      {/each}
+    </div>
+    {#if dailyError}
+      <p class="summary-error" role="alert">Daily room use is unavailable.</p>
     {/if}
   </section>
 

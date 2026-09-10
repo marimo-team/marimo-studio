@@ -77,3 +77,11 @@ internal geometry at each size. Repair any boundary crossing or scroll
 overflow. Inspect every slide after fonts and notebook cells finish loading,
 then confirm the selected count, map marks, frequency marker, and magnitude
 ratios update from the same browser session.
+
+## Visual direction
+
+Keep the presentation calm and focused on the data. Use the current view CSS
+as the visual baseline: restrained headings, readable labels, neutral surfaces,
+fine borders, and color for selection or analytical meaning. Preserve the
+view's distinct audience and interaction model. Check phone, tablet, desktop,
+and short landscape layouts, including populated controls and long values.

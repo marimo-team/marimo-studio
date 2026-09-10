@@ -2,7 +2,9 @@
 
 :root {
   color-scheme: dark;
-  --canvas: #060606;
+  --canvas: #090d10;
+  --topbar-height: 4.5rem;
+  --controls-height: 4.5rem;
   --surface: #141414;
   --text: #f4f1ea;
   --muted: #9a9ca3;
@@ -28,7 +30,7 @@ body {
   overflow-x: hidden;
   background: var(--canvas);
   color: var(--text);
-  font-family: var(--display);
+  font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
 button,
@@ -66,8 +68,8 @@ a:focus-visible {
 .controls,
 .athlete-credit {
   font-family: var(--mono);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -147,16 +149,8 @@ a:focus-visible {
   content: "● ";
 }
 
-:where([mo-value]):is(
-    :not([data-state]),
-    [data-state="connecting"],
-    [data-state="loading"]
-  ):empty::before,
-:where(marimo-cell):is(
-    :not(:defined),
-    [data-state="connecting"],
-    [data-state="loading"]
-  ):empty::before {
+:where([mo-value]):is(:not([data-state]), [data-state="connecting"], [data-state="loading"]):empty::before,
+:where(marimo-cell):is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
   --marimo-cell-skeleton-color: rgb(68 144 255 / 24%);
   --marimo-value-skeleton-color: rgb(68 144 255 / 34%);
   animation: athlete-field-pulse 1.3s ease-in-out infinite;
@@ -193,19 +187,20 @@ a:focus-visible {
   margin: 0 0 1.1rem;
   color: var(--blue);
   font-family: var(--mono);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .slide h2 {
+  font-family: var(--display);
   max-width: 8.5ch;
   margin: 0;
-  font-size: clamp(4.2rem, 9vw, 8.4rem);
-  font-weight: 300;
-  letter-spacing: -0.045em;
-  line-height: 0.84;
+  font-size: clamp(3rem, 6.5vw, 6.5rem);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1;
   text-wrap: balance;
 }
 
@@ -247,7 +242,7 @@ a:focus-visible {
   color: var(--text);
   font-family: var(--display);
   font-size: 2rem;
-  font-weight: 300;
+  font-weight: 400;
   letter-spacing: -0.02em;
   line-height: 1;
 }
@@ -255,8 +250,8 @@ a:focus-visible {
 .facts li > span {
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -266,7 +261,7 @@ a:focus-visible {
   margin-top: 1.2rem;
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--line);
-  border-radius: 2px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--text);
   pointer-events: auto;
@@ -296,7 +291,7 @@ a:focus-visible {
   margin-top: 1.2rem;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 0.58rem;
+  font-size: 0.7rem;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -339,7 +334,7 @@ a:focus-visible {
 .athlete-credit span {
   margin-top: 0.35rem;
   color: var(--muted);
-  font-size: 0.58rem;
+  font-size: 0.7rem;
   line-height: 1.45;
 }
 
@@ -352,8 +347,8 @@ a:focus-visible {
   gap: 1rem;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 0.55rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
   opacity: 0;
   text-transform: uppercase;
   transition: opacity 180ms ease;
@@ -414,7 +409,7 @@ body[data-mode="profile"] .profile-axes {
   min-height: 2.75rem;
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--line);
-  border-radius: 2px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   cursor: pointer;
@@ -459,14 +454,16 @@ body[data-mode="profile"] .profile-axes {
 .shower.full .slide {
   position: fixed;
   z-index: 2;
-  inset: 0;
+  inset: var(--topbar-height) 0 var(--controls-height);
   display: grid;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 0;
-  padding: 7rem clamp(1rem, 3vw, 2.5rem) 6rem;
+  padding: 2rem clamp(1rem, 3vw, 2.5rem);
   border: 0;
   background: transparent;
-  align-items: end;
+  align-items: safe end;
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
@@ -506,7 +503,22 @@ body[data-mode="profile"] .profile-axes {
   display: none;
 }
 
+@media (max-width: 64rem) {
+  .key-guide {
+    display: none;
+  }
+
+  .controls {
+    grid-template-columns: 1fr auto;
+  }
+}
+
 @media (max-width: 760px) {
+  :root {
+    --topbar-height: calc(6.5rem + env(safe-area-inset-top));
+    --controls-height: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+
   .topbar {
     min-height: calc(6.1rem + env(safe-area-inset-top));
     grid-template-columns: 1fr auto;
@@ -528,7 +540,7 @@ body[data-mode="profile"] .profile-axes {
   }
 
   .shower.full .slide {
-    padding: 7rem 1rem 5.5rem;
+    padding: 1.5rem 1rem;
   }
 
   .shower.full .slide-copy {
@@ -538,14 +550,14 @@ body[data-mode="profile"] .profile-axes {
 
   .slide h2 {
     max-width: 9ch;
-    font-size: clamp(3.5rem, 17vw, 5.8rem);
+    font-size: clamp(2.8rem, 12vw, 4rem);
   }
 
   .lede {
     max-width: 27rem;
     margin-top: 0.9rem;
     font-size: 1rem;
-    line-height: 1.32;
+    line-height: 1.5;
   }
 
   .facts {
@@ -589,12 +601,11 @@ body[data-mode="profile"] .profile-axes {
 
 @media (max-height: 700px) {
   .shower.full .slide {
-    padding-top: 5.5rem;
-    padding-bottom: 4.8rem;
+    padding-block: 1rem;
   }
 
   .slide h2 {
-    font-size: clamp(3rem, 11vh, 6rem);
+    font-size: clamp(2.25rem, 8vh, 4.5rem);
   }
 
   .lede {
