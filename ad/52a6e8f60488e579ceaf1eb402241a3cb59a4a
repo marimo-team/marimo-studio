@@ -1,0 +1,19 @@
+apps/e2e/tests/hosted-mount.spec.ts
+  s_248017edbe36ba::t_f695f8f44a7e39 68-75,80,94,104-109,196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ad52a6e8f60488e579ceaf1eb402241a3cb59a4a",
+  "prompts": {},
+  "sessions": {
+    "s_248017edbe36ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08d26-bafe-7b62-8490-4a1d887cfdd0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
