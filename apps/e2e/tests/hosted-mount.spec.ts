@@ -65,10 +65,19 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
     path: [],
   });
   await page.getByLabel("Python preview runtime").click();
+  const retiredManifest = browserDiagnostics.expectRequestAbort({
+    origin: hostedOrigin,
+    method: "GET",
+    path: /^\/hosted\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/zero-python\/current$/,
+    count: 1,
+    required: false,
+    status: 200,
+  });
   await page.getByRole("button", { name: /Prepared/ }).click();
   const prepared = await waitForPreview(page, "zero-python");
   await expect(prepared.getByRole("heading", { name: "Hosted total: 42" })).toBeVisible();
   await expect(page.getByLabel("Prepared preview runtime")).toContainText("Live");
+  await recoverRequestAbort(retiredManifest);
   await recoverWorkspaceEventStream(replacedWorkspaceStream);
 });
 
@@ -82,7 +91,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   );
   const interruptedDocumentTransaction = browserDiagnostics.expectRequestFailure({
     origin: hostedOrigin,
-    path: /^\/hosted\/_marimo-studio\/editor\/api\/document\/transaction$/,
+    path: /^\/hosted\/(?:_marimo-studio\/editor\/)?api\/document\/transaction$/,
     method: "POST",
     errorText: "net::ERR_ABORTED",
     required: false,
@@ -90,6 +99,12 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   const interruptedDocumentTransactionLog = browserDiagnostics.expectConsole({
     type: "error",
     text: /^Failed to handle request: sendDocumentTransaction TypeError: Failed to fetch/,
+    required: false,
+  });
+  const unusedNativeImages = browserDiagnostics.expectConsole({
+    type: "warning",
+    text: /^The resource http:\/\/127\.0\.0\.1:\d+\/hosted\/assets\/(?:gradient|noise)-[^/\s]+\.png was preloaded using link preload but not used/,
+    count: 2,
     required: false,
   });
   await expect
@@ -178,6 +193,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   });
 
   await waitForPreview(page);
+  unusedNativeImages.recovered();
   await page.goto(`${baseUrl}/`);
   await expect(page.locator("[data-cell-id]").first()).toBeVisible();
   await page.goto(`${baseUrl}/studio/dashboard/`);
