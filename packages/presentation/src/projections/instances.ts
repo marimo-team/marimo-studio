@@ -41,11 +41,33 @@ const RUNTIME_METADATA = [
   "data-runtime-cell-id",
 ] as const;
 
+// Keep consumer-authored labels while releasing metadata owned by this projection.
+const projectionLabels = new WeakMap<HTMLElement, Map<string, string>>();
+const publishProjectionLabel = (host: HTMLElement, label?: string, detail?: string): void => {
+  const previous = projectionLabels.get(host);
+  const published = new Map<string, string>();
+  for (const [attribute, value] of [
+    ["data-marimo-lens-label", label],
+    ["data-marimo-lens-detail", detail],
+  ] as const) {
+    const current = host.getAttribute(attribute);
+    if (current !== null && current !== previous?.get(attribute)) continue;
+    if (value === undefined) host.removeAttribute(attribute);
+    else {
+      if (current !== value) host.setAttribute(attribute, value);
+      published.set(attribute, value);
+    }
+  }
+  if (published.size) projectionLabels.set(host, published);
+  else projectionLabels.delete(host);
+};
+
 const clearAttributes = (host: HTMLElement, attributes: readonly string[]): void => {
   attributes.forEach((attribute) => host.removeAttribute(attribute));
 };
 
 export const resetProjectionHostMetadata = (host: HTMLElement): void => {
+  publishProjectionLabel(host);
   clearAttributes(host, RUNTIME_METADATA);
 };
 
@@ -81,11 +103,21 @@ export const applyProjectionMetadata = (
   const request = resolution.ok ? resolution.value.request : resolution.error;
   host.dataset.marimoStudioInstance = request.instanceId;
   if (!resolution.ok) {
+    publishProjectionLabel(host);
     return;
   }
   if (resolution.value.bindingsStale) {
     notifyProjectionResolutionStale(projectionRevision);
   }
+  const kind = resolution.value.request.kind;
+  const producer = resolution.value.producerLabel ?? resolution.value.runtimeCellId;
+  publishProjectionLabel(
+    host,
+    resolution.value.request.target,
+    kind === "cell"
+      ? "Cell"
+      : `${kind === "value" ? "Value" : "Output"}${producer ? ` · ${producer}` : ""}`,
+  );
   host.dataset.marimoProducerRef = resolution.value.producer;
   host.dataset.marimoProjectionKind = resolution.value.request.kind;
   host.dataset.marimoProjectionTarget = resolution.value.request.target;

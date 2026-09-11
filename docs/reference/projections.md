@@ -188,3 +188,87 @@ the exact contract for one mounted result.
 
 Use [`STUDIO_RESULT_SELECTOR`](python-api.md#studio-result-selector) to locate
 connected cell, output, and value hosts in browser automation.
+
+## Trace custom JavaScript rendering
+
+For point-and-note feedback with producer context, follow
+[Set up Marimo Lens](../guide/coding-agents.md#point-to-a-result-with-marimo-lens).
+
+Prefer `mo-value`, `marimo-output`, and `marimo-cell` when they can render the
+result directly. For a custom chart or component, retain its connection to the
+notebook through the existing projection hosts:
+
+```html
+<span id="rows-data" hidden mo-value="rows"></span>
+<span id="summary-data" hidden mo-value="summary.total"></span>
+<section data-marimo-sources="rows-data summary-data">
+  <!-- JavaScript renders the chart here. -->
+</section>
+```
+
+`data-marimo-sources` lists unique projection host IDs, separated by spaces, in
+the same document. It declares the region's complete notebook input set. Lens
+reads the hosts' resolved symbolic selectors and producing cells; authors do not
+copy runtime metadata. References can also point to `marimo-output` or
+`marimo-cell` hosts. Missing, duplicate, or unbound references make the region
+unavailable. References cannot chain through other annotated regions.
+
+Alternatively, put existing hidden `mo-value` hosts directly inside their
+consuming region. `STUDIO_RESULT_SELECTOR` includes those parents and explicitly
+annotated regions, as well as direct projections. Pass it to
+`Lens(dom_selector=STUDIO_RESULT_SELECTOR)` to select these results. A custom
+Lens CSS selector can choose other containing regions.
+
+Keep references current when JS dependencies change, including transformed
+inputs and portals. Use `aria-busy="true"` while asynchronous rendering is
+incomplete and clear it on completion. Lens retains value selectors and producer
+context; this does not infer arbitrary JS dataflow or pin historical kernel
+values to captured pixels.
+
+### Select individual results
+
+Give each metric its own inputs instead of assigning only the entire row or page:
+
+```html
+<article class="metric">
+  <span hidden mo-value="summary.events"></span>
+  <span>Events</span>
+  <strong><!-- JavaScript may format the value here. --></strong>
+</article>
+```
+
+The hidden host makes the metric selectable with its exact symbolic field path.
+Use a visible `mo-value` directly when native formatting is sufficient. Hidden
+projection hosts stay hidden even under ordinary application layout styles.
+For dynamic rows or thresholds, update the projection selector with the same
+state used to render the result. For non-JSON values, reference a hidden
+`marimo-output` host through `data-marimo-sources`.
+
+Dynamic selectors require the Python or Browser runtime. Prepared exports need
+a finite authored target set; use `view export --runtime wasm` when row or
+threshold selection generates paths at runtime.
+
+Browser calculations must reference their real kernel inputs. They can be
+separate targets even when they share a dataframe. Canvas charts and PDF pages
+are single surfaces unless their renderer supplies finer DOM targets.
+
+### Labels while selecting a target
+
+While Lens is selecting a target, it outlines the element and attaches a compact
+label to its edge. Studio supplies the resolved cell or variable name and its
+producer automatically. Custom regions inherit the labels of their source hosts.
+Override the display text when a region needs a more useful name:
+
+```html
+<section
+  data-marimo-sources="rows-data summary-data"
+  data-marimo-lens-label="Revenue forecast"
+  data-marimo-lens-detail="Monthly revenue · selected region"
+>
+  <!-- Custom rendering -->
+</section>
+```
+
+Lens owns this plain-text label contract and presentation. The labels do not
+replace source links or change the selection's notebook identity. Authored labels
+on native projection hosts also take precedence over Studio's defaults.

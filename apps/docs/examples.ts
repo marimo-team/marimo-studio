@@ -88,6 +88,7 @@ export const documentationExampleSource = {
 export interface DocumentationExampleView {
   key: string;
   kind: DocumentationExampleKind;
+  runtime?: "zero-python" | "wasm";
   label: string;
   technologies: readonly DocumentationTechnology[];
 }
@@ -148,12 +149,14 @@ export const documentationExampleFamilies = [
       },
       {
         key: "operations",
+        runtime: "wasm",
         kind: "app",
         label: "Operations",
         technologies: [documentationTechnologies.react, documentationTechnologies.mapLibre],
       },
       {
         key: "briefing",
+        runtime: "wasm",
         kind: "slides",
         label: "Interactive lesson",
         technologies: [
@@ -173,12 +176,14 @@ export const documentationExampleFamilies = [
     views: [
       {
         key: "monitor",
+        runtime: "wasm",
         kind: "app",
         label: "Monitor",
         technologies: [documentationTechnologies.svelte, documentationTechnologies.echarts],
       },
       {
         key: "model-review",
+        runtime: "wasm",
         kind: "report",
         label: "Model review",
         technologies: [documentationTechnologies.react, documentationTechnologies.recharts],

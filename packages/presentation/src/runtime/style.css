@@ -41,6 +41,10 @@
   color: color-mix(in srgb, #8a5b00 78%, CanvasText);
 }
 
+:is([mo-value], marimo-cell, marimo-output)[hidden][data-marimo-studio-site] {
+  display: none !important;
+}
+
 :where([mo-value]) {
   color: inherit;
   font: inherit;

@@ -34,6 +34,7 @@ export interface ResolvedProjection {
   readonly request: RuntimeProjectionRequest;
   readonly site: MountDeclaration;
   readonly producer: string;
+  readonly producerLabel?: string;
   readonly variable: string | null;
   readonly selectorPath: readonly SelectorPathStep[];
   readonly dependencyClosure: readonly string[];
@@ -327,6 +328,7 @@ export const resolveProjection = (
       request,
       site,
       producer: producerRef,
+      producerLabel: producer.value.producerLabel,
       variable,
       selectorPath,
       dependencyClosure,

@@ -36,6 +36,7 @@ const renderer = new THREE.WebGLRenderer({
   canvas,
   alpha: false,
   antialias: true,
+  preserveDrawingBuffer: true,
   powerPreference: "high-performance",
 });
 renderer.setClearColor(0x060606, 1);

@@ -13,6 +13,14 @@ if (root === null) {
 
 // Dynamic import lets Deno emit the worker entry and its dependency graph.
 const { workerUrl } = await import("./map-worker.ts");
-setWorkerUrl(workerUrl);
+const workerBootstrap = URL.createObjectURL(
+  new Blob([`import ${JSON.stringify(workerUrl)};`], {
+    type: "text/javascript",
+  }),
+);
+setWorkerUrl(workerBootstrap);
+window.addEventListener("pagehide", (event) => {
+  if (!event.persisted) URL.revokeObjectURL(workerBootstrap);
+});
 
 createRoot(root).render(<App />);

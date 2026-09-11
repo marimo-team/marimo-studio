@@ -20,6 +20,8 @@ test("authored shell updates preserve mounted projection content", () => {
   const rendered = document.createElement("strong");
   rendered.textContent = "Current total: 42";
   host.append(rendered);
+  host.dataset.marimoLensLabel = "Summary";
+  host.dataset.marimoLensDetail = "Previous quarter";
   const next = shell(`
     <main id="app-shell">
       <h1>After</h1>
@@ -28,6 +30,7 @@ test("authored shell updates preserve mounted projection content", () => {
         id="summary"
         value="summary"
         class="featured"
+        data-marimo-lens-label="Revenue"
         data-hx-preserve
       ></marimo-output>
     </main>
@@ -42,6 +45,8 @@ test("authored shell updates preserve mounted projection content", () => {
   expect(current.querySelector("marimo-output")).toBe(host);
   expect(host.className).toBe("featured");
   expect(host.firstChild).toBe(rendered);
+  expect(host.dataset.marimoLensLabel).toBe("Revenue");
+  expect(host.dataset.marimoLensDetail).toBeUndefined();
 });
 
 test("projection host movement requires a document reload", () => {

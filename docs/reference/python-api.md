@@ -625,26 +625,25 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
 
 ### `STUDIO_RESULT_SELECTOR`
 
-CSS selector for complete cells, rendered outputs, and values that Studio has
-connected to their notebook producers. Browser tools can use it to target
-rendered notebook results.
+CSS selector for connected cell, output, and value hosts, parents containing
+hidden value hosts, and custom regions annotated with `data-marimo-sources`.
+See [custom JavaScript rendering](projections.md#trace-custom-javascript-rendering)
+for the authoring contract.
 
 Pass the selector to [Marimo Lens](https://marimo-team.github.io/marimo-lens/)
-when Lens should collect feedback from Studio projections. Compose explicitly
-authored page regions into the same selector:
+to collect feedback from native projections and custom rendered regions:
 
 ```python
 from marimo_lens import Lens
 from marimo_studio import STUDIO_RESULT_SELECTOR
 
-studio_lens = Lens(
-    dom_selector=f"{STUDIO_RESULT_SELECTOR}, [data-lens-target]",
-)
+studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
 ```
 
 Render `studio_lens` through `<marimo-output value="studio_lens">` in the view.
-Lens reads each projection's current producer identity from Studio's runtime
-metadata.
+Lens reads resolved producer and value-selector metadata from the linked hosts.
+For page regions without notebook inputs, extend `dom_selector` with another
+focused CSS selector.
 
 ### `ASGIApp`
 

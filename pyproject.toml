@@ -22,7 +22,7 @@ dev = [
   "tomli==2.3.1",
   "ty>=0.0.64",
 ]
-e2e = ["anywidget", "marimo-studio-e2e-provider"]
+e2e = ["anywidget", "marimo-lens==0.0.10", "marimo-studio-e2e-provider"]
 marimo-studio-build = ["agent-plugins>=0.2", "uv-build==0.12.2"]
 release = ["twine==6.2.0"]
 
@@ -102,7 +102,7 @@ root = "packages/marimo-studio/src"
 [tool.uv]
 required-version = ">=0.12,<0.13"
 exclude-newer = "7 days"
-exclude-newer-package = { agent-plugins = false, marimo = false, marimo-export = false, marimo-studio = false }
+exclude-newer-package = { agent-plugins = false, marimo = false, marimo-export = false, marimo-lens = false, marimo-studio = false }
 
 [tool.uv.sources]
 marimo-studio = { workspace = true }

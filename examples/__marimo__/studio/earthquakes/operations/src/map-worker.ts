@@ -1,5 +1,3 @@
-export const workerUrl = import.meta.url;
+import "maplibre-gl/dist/maplibre-gl-worker.mjs";
 
-if (typeof document === "undefined") {
-  await import("maplibre-gl/dist/maplibre-gl-worker.mjs");
-}
+export const workerUrl = import.meta.url;

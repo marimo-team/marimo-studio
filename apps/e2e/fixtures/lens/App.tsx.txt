@@ -1,0 +1,52 @@
+/// <reference path="./marimo-studio.d.ts" />
+
+// @deno-types="npm:@types/react@19.2.10"
+import { useState } from "react";
+
+import { useMarimoValue } from "./lib/use-marimo-value.ts";
+
+export const App = () => {
+  const [field, setField] = useState("revenue");
+  const selector = `metrics.${field}`;
+  const metric = useMarimoValue<number>(selector);
+
+  return (
+    <>
+      <main style={{ padding: 24 }}>
+        <h1>Lens framework values</h1>
+        <marimo-cell name="controls" />
+        <button
+          type="button"
+          onClick={() => setField(field === "revenue" ? "cost" : "revenue")}
+        >
+          Change metric
+        </button>
+        <span
+          id="metric-source"
+          ref={metric.hostRef}
+          hidden
+          mo-value={selector}
+          data-marimo-allow="*"
+        />
+        <section data-marimo-sources="metric-source cost-source" aria-label="Metric row">
+          <article
+            id="metric"
+            data-marimo-sources="metric-source"
+            data-marimo-lens-label="Current metric"
+          >
+            <h2>{field}</h2>
+            <p>{metric.value === undefined ? "Loading" : `$${metric.value}`}</p>
+          </article>
+          <article id="cost">
+            <span id="cost-source" hidden mo-value="metrics.cost" />
+            <h2>Cost</h2>
+            <strong mo-value="metrics.cost" />
+          </article>
+        </section>
+      </main>
+      <marimo-output value="lens" />
+      <marimo-cell name="feedback_controls" />
+      <marimo-cell name="feedback_report" />
+    </>
+  );
+};

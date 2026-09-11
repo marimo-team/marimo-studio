@@ -1,0 +1,91 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["marimo-studio", "marimo-lens==0.0.10"]
+#
+# [tool.marimo-studio]
+# default = "lens"
+# runtime = "server"
+# runtimes = ["server"]
+# preserve_session = false
+# ///
+
+import marimo
+
+__generated_with = "0.24.0"
+app = marimo.App()
+
+
+@app.cell
+def imports():
+    import html
+    import json
+
+    import marimo as mo
+    from marimo_lens import Lens
+    from marimo_studio import STUDIO_RESULT_SELECTOR
+
+    return Lens, STUDIO_RESULT_SELECTOR, html, json, mo
+
+
+@app.cell
+def controls(mo):
+    scale = mo.ui.slider(1, 3, value=1, label="Scale")
+    scale
+    return (scale,)
+
+
+@app.cell
+def results(mo, scale):
+    metrics = {"revenue": 42 * scale.value, "cost": 12 * scale.value}
+    rich = mo.md(f"### Revenue report: {metrics['revenue']}")
+    return metrics, rich
+
+
+@app.cell
+def native_summary(metrics, mo):
+    mo.md(f"""
+    ### Notebook total: {metrics['revenue']}
+    """)
+    return
+
+
+@app.cell
+def feedback(Lens, STUDIO_RESULT_SELECTOR):
+    lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
+    return (lens,)
+
+
+@app.cell
+def feedback_controls(mo):
+    reports = {"count": 0}
+    action = mo.ui.dropdown(
+        ["Inspect", "Resolve"], value="Inspect", label="Lens action"
+    )
+    submit = mo.ui.run_button(label="Run Lens action")
+    mo.hstack([action, submit])
+    return action, reports, submit
+
+
+@app.cell
+def feedback_report(action, html, json, lens, mo, reports, submit):
+    mo.stop(not submit.value)
+    if action.value == "Resolve":
+        _current = lens.context()
+        lens.resolve(
+            [item["id"] for item in _current.references["selections"]],
+            expected_revision=_current.revision,
+            summary="Reviewed notebook sources",
+        )
+    _context = lens.context()
+    reports["count"] += 1
+    _report = {
+        "read": reports["count"],
+        "references": _context.references,
+        "images": {key: image[:8].hex() for key, image in _context.images.items()},
+    }
+    mo.Html('<pre id="lens-context">' + html.escape(json.dumps(_report)) + "</pre>")
+    return
+
+
+if __name__ == "__main__":
+    app.run()

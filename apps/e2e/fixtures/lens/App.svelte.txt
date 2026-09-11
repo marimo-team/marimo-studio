@@ -1,0 +1,33 @@
+<script lang="ts">
+import { observeMarimoValue } from "./lib/marimo-value.ts";
+
+let field = $state("revenue");
+let value = $state<number>();
+const selector = $derived(`metrics.${field}`);
+</script>
+
+<main style="padding:24px">
+  <h1>Lens framework values</h1>
+  <marimo-cell name="controls"></marimo-cell>
+  <button type="button"
+    onclick={() => field = field === "revenue" ? "cost" : "revenue"}>
+    Change metric
+  </button>
+  <span id="metric-source" hidden mo-value={selector} data-marimo-allow="*"
+    use:observeMarimoValue={{ selector, onValue: (next: number) => value = next }}></span>
+  <section data-marimo-sources="metric-source cost-source" aria-label="Metric row">
+    <article id="metric" data-marimo-sources="metric-source"
+      data-marimo-lens-label="Current metric">
+      <h2>{field}</h2>
+      <p>{value === undefined ? "Loading" : `$${value}`}</p>
+    </article>
+    <article id="cost">
+      <span id="cost-source" hidden mo-value="metrics.cost"></span>
+      <h2>Cost</h2>
+      <strong mo-value="metrics.cost"></strong>
+    </article>
+  </section>
+</main>
+<marimo-output value="lens"></marimo-output>
+<marimo-cell name="feedback_controls"></marimo-cell>
+<marimo-cell name="feedback_report"></marimo-cell>

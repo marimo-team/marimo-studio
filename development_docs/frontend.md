@@ -74,6 +74,14 @@ responsive layout:
 make e2e
 ```
 
+The `e2e` Python dependency group includes the released Marimo Lens package for
+native projection and React/Svelte feedback acceptance. Run that boundary after
+building browser assets with:
+
+```console
+pnpm --filter @marimo-studio/e2e e2e lens-integration.spec.ts
+```
+
 Use `make e2e-ui` to inspect the
 [Playwright](https://playwright.dev/) browser-automation flow interactively.
 

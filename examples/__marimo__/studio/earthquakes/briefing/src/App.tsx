@@ -44,7 +44,9 @@ const portraitReaderSnapshot = () =>
   globalThis.matchMedia(portraitReaderQuery).matches;
 const serverPortraitReaderSnapshot = () => false;
 
-const LessonSlides = ({ model }: { model: ReturnType<typeof createBriefingModel> }) => (
+const LessonSlides = (
+  { model }: { model: ReturnType<typeof createBriefingModel> },
+) => (
   <>
     <CoverSlide model={model} />
     <MagnitudeSlide model={model} />
@@ -78,11 +80,17 @@ export const App = () => {
         aria-hidden="true"
         className="value-host"
         hidden
+        id="analysis-data"
         mo-value="seismic_analysis"
         ref={analysisProjection.hostRef}
       />
 
-      <main className="deck-shell" aria-busy={loading}>
+      <span id="briefing-events" hidden mo-value="seismic_analysis.events" />
+      <main
+        data-marimo-sources="analysis-data"
+        className="deck-shell"
+        aria-busy={loading}
+      >
         {loading
           ? (
             <div className="briefing-loader" role="status">

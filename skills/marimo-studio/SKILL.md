@@ -29,6 +29,34 @@ its bundled resources as needed. Repeat discovery when the notebook environment
 or installed Studio version changes. Once this installed body is loaded,
 continue with the workflow.
 
+## Preserve notebook traceability
+
+Prefer `mo-value` for values, `marimo-output` for rich values, and `marimo-cell`
+for native cell output. Keep analytical computation in the notebook. When custom
+JavaScript rendering is necessary, every result must declare its kernel inputs:
+
+- Place hidden `mo-value` hosts directly inside the result, or use
+  `data-marimo-sources="rows-data summary-data"` to reference projection hosts by
+  unique, stable HTML IDs in the same document. Include every input, including
+  shared inputs used through JS transforms. References must point directly to
+  mounted `mo-value`, `marimo-output`, or `marimo-cell` hosts. Missing or duplicate
+  IDs make the result unavailable to Lens. Never fabricate runtime metadata.
+- Annotate individual metrics, rows, charts, and report pages. Prefer narrow
+  selectors such as `summary.events`. Bind dynamic selectors and source IDs to
+  the state that renders the result. Use `data-marimo-allow="*"` for selectors
+  the provider cannot bound at build time. Unbounded selectors require Python
+  or Browser runtime (`--runtime wasm` for export). Prepared exports need finite
+  authored targets.
+- Link browser-only aggregates to their actual kernel inputs and label the
+  browser calculation. Canvas and PDF picking is limited to the chart or page
+  unless the renderer supplies finer DOM targets.
+- Set `aria-busy="true"` during asynchronous rendering and clear it on completion.
+  Verify selection and producer context after data updates. These links declare
+  dependencies, not automatic JS dataflow or historical values.
+- Studio supplies native projection labels. Give custom regions a
+  `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
+  supplements the source links that connect results to the analytical graph.
+
 ## Activate the first view immediately
 
 When the user requests their first view and Studio has no configured views or
@@ -509,40 +537,41 @@ notebook already defines the intended value.
 
 [Marimo Lens](https://marimo-team.github.io/marimo-lens/) lets a person mark a
 rendered result or authored page region and give that exact surface to a
-code-mode agent. Install `marimo-lens` in the notebook environment, then define
-one Lens value with Studio's projection-host selector:
+code-mode agent. Install `marimo-lens>=0.0.10` in the notebook environment, then define
+one Lens value with Studio's result selector:
 
 ```python
 from marimo_lens import Lens
 from marimo_studio import STUDIO_RESULT_SELECTOR
 
-studio_lens = Lens(
-    dom_selector=f"{STUDIO_RESULT_SELECTOR}, [data-lens-target]",
-)
+studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
 None
 ```
 
 The final `None` keeps the Lens dock on the projected Studio surface. Rendering
 `studio_lens` as the notebook cell output also mounts a notebook dock.
 
-Project the value once in each view that should collect feedback. Mark bounded
-authored regions whose copy, layout, or styling can receive feedback:
+Project the value once in each view that should collect feedback. Link custom
+rendered regions to their existing notebook input hosts:
 
 ```html
 <marimo-output value="studio_lens"></marimo-output>
 
-<header data-lens-target>
-  <h1>Quarterly revenue</h1>
-</header>
+<span id="revenue-data" hidden mo-value="quarterly_revenue"></span>
+<section data-marimo-sources="revenue-data">
+  <!-- Render the custom revenue chart here. -->
+</section>
 ```
 
 `STUDIO_RESULT_SELECTOR` covers connected `marimo-cell`, `marimo-output`, and
-`mo-value` hosts. The additional selector covers authored view source. Keep the
-selector focused on meaningful page regions.
+`mo-value` hosts, parents containing hidden value hosts, and regions annotated
+with `data-marimo-sources`. For layout or copy without notebook inputs, extend
+`dom_selector` with a focused CSS selector such as `[data-lens-target]`.
 
 Use the packaged Marimo Lens skill for the feedback lifecycle. Pass the
 captured `SelectionReference` to Lens activity and reveal calls. Use its
-`cells` as notebook provenance. For a DOM target, use `documentPath`,
+`cells` as notebook provenance and `target["sources"]` for exact value selectors.
+For a DOM target, use `documentPath`,
 `domSelector`, and the active Studio view to locate the owning source document,
 then build, show, and validate that view before resolving the selection.
 

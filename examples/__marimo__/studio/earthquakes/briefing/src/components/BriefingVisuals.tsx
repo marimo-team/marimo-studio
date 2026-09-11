@@ -49,7 +49,11 @@ export const EventAtlas = ({
   );
 
   return (
-    <figure className={`event-atlas event-atlas-${variant}`}>
+    <figure
+      className={`event-atlas event-atlas-${variant}`}
+      data-marimo-sources="briefing-events"
+      data-marimo-lens-label="Event atlas"
+    >
       <svg
         aria-label={variant === "selection"
           ? `Global epicenter map with ${selected.length} selected events from ${events.length} source records`
@@ -142,7 +146,8 @@ export const EventAtlas = ({
       </svg>
       <figcaption>
         <span>
-          <i className="atlas-key atlas-key-small" /> M{minimumMagnitude.toFixed(1)}
+          <i className="atlas-key atlas-key-small" />{" "}
+          M{minimumMagnitude.toFixed(1)}
         </span>
         <span>
           <i className="atlas-key atlas-key-large" /> M7.0
@@ -195,6 +200,8 @@ export const FrequencyMagnitudePlot = ({
 
   return (
     <figure className="frequency-figure">
+      <span hidden mo-value="seismic_analysis.frequency.curve" />
+      <span hidden mo-value="seismic_analysis.frequency.model" />
       <svg
         aria-label="Cumulative earthquake counts decrease with increasing magnitude on a logarithmic count scale"
         role="img"
@@ -339,7 +346,11 @@ export const ImpactScatter = ({ events }: { events: EarthquakeEvent[] }) => {
   );
 
   return (
-    <figure className="impact-figure">
+    <figure
+      className="impact-figure"
+      data-marimo-sources="briefing-events"
+      data-marimo-lens-label="Magnitude and felt reports"
+    >
       <svg
         aria-label="Earthquake magnitude compared with felt reports for every event in the weekly catalog"
         role="img"
