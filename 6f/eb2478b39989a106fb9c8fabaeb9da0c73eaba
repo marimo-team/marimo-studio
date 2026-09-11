@@ -1,0 +1,22 @@
+.github/release-notes/v0.1.3.md
+  s_248017edbe36ba::t_20a2d5424f5f55 30
+  s_248017edbe36ba::t_4719e454d076eb 1-29,31-42
+packages/marimo-studio/pyproject.toml
+  s_248017edbe36ba::t_4719e454d076eb 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6feb2478b39989a106fb9c8fabaeb9da0c73eaba",
+  "prompts": {},
+  "sessions": {
+    "s_248017edbe36ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08d26-bafe-7b62-8490-4a1d887cfdd0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
