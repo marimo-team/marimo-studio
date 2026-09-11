@@ -13,15 +13,10 @@ exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
 agent-plugins = false
-gistwidget = false
-jupyter-book-marimo = false
 marimo = false
 marimo-export = false
-marimo-jupyter-extension = false
 marimo-lens = false
 marimo-studio = false
-mkdocs-marimo = false
-moutils = false
 
 [manifest]
 members = [
@@ -48,6 +43,7 @@ dev = [
 ]
 e2e = [
     { name = "anywidget" },
+    { name = "marimo-lens", specifier = "==0.0.10" },
     { name = "marimo-studio-e2e-provider", editable = "apps/e2e/fixtures-provider/provider" },
 ]
 marimo-studio-build = [
@@ -1216,6 +1212,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bd/42/6a890414b95525573c5f68e8fa5041034d86d1db17cf9a53e32d5d35a774/marimo_export-0.0.7.tar.gz", hash = "sha256:dbee42e6234e5edab7acd519287d787cc6a410259d383a886e21172dc9aae66b", size = 265015, upload-time = "2026-09-09T10:30:10.682Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1c/d0/b4ea1d2d11c37c16d2b3a517f9c5adcf507923d70278fbc50cab95e8cfcc/marimo_export-0.0.7-py3-none-any.whl", hash = "sha256:c17ccdcefb42c6cd652401c47c0c4a2a4c344f15669a15f5adee999458d90f3a", size = 358341, upload-time = "2026-09-09T10:30:09.32Z" },
+]
+
+[[package]]
+name = "marimo-lens"
+version = "0.0.10"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "agent-plugins" },
+    { name = "anywidget" },
+    { name = "marimo" },
+    { name = "pydantic" },
+    { name = "traitlets" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7d/2b/b43eefd4aed26442a86e5ad9329a53b17d6bee8bbacbe63f30927d88cb5a/marimo_lens-0.0.10.tar.gz", hash = "sha256:3b33ebb43f7dc3cf4cf318490a4e4ebe768f53b7ae140c649bcaddd450430893", size = 182993, upload-time = "2026-09-11T20:05:58.954Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/2e/51e165400e26efd342fb1943750abfa11f583edc73e9c16afdd5954ec855/marimo_lens-0.0.10-py3-none-any.whl", hash = "sha256:f3f78e90e15b32033364983d21ea9e4ed9f708ac445ce7689a1f088860513241", size = 196119, upload-time = "2026-09-11T20:05:57.716Z" },
 ]
 
 [[package]]

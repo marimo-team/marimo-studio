@@ -55,10 +55,12 @@ export const CoverSlide = ({ model }: { model: BriefingModel }) => (
       <div className="cover-atlas">
         <EventAtlas
           events={model.events}
-          minimumMagnitude={model.analysis?.weekly.catalog_minimum_magnitude ?? 0}
+          minimumMagnitude={model.analysis?.weekly.catalog_minimum_magnitude ??
+            0}
         />
         <dl className="cover-readout" aria-label="Weekly catalog summary">
           <div>
+            <span hidden mo-value="seismic_analysis.weekly.source_events" />
             <dt>Source records</dt>
             <dd>
               {model.analysis
@@ -67,12 +69,14 @@ export const CoverSlide = ({ model }: { model: BriefingModel }) => (
             </dd>
           </div>
           <div>
+            <span hidden mo-value="seismic_analysis.weekly.maximum_magnitude" />
             <dt>Largest event</dt>
             <dd>
               M{model.analysis?.weekly.maximum_magnitude.toFixed(1) ?? "…"}
             </dd>
           </div>
           <div>
+            <span hidden mo-value="seismic_analysis.weekly.days" />
             <dt>Time span</dt>
             <dd>{model.analysis?.weekly.days ?? "…"} days</dd>
           </div>
@@ -110,6 +114,7 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
         <div className="catalog-layout">
           <div className="catalog-sequence">
             <article className="catalog-step">
+              <span hidden mo-value="seismic_analysis.weekly.source_events" />
               <span>Published feed</span>
               <strong>
                 {weekly ? integer.format(weekly.source_events) : "…"}
@@ -117,12 +122,17 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
               <p>records in the fixed USGS weekly snapshot</p>
             </article>
             <article className="catalog-step fragment" data-fragment-index="0">
+              <span
+                hidden
+                mo-value="seismic_analysis.weekly.qualified_events"
+              />
               <span>Numerical rule</span>
               <strong>
                 {weekly ? integer.format(weekly.qualified_events) : "…"}
               </strong>
               <p>
-                records satisfy the computed M{weekly?.catalog_minimum_magnitude.toFixed(1) ??
+                records satisfy the computed
+                M{weekly?.catalog_minimum_magnitude.toFixed(1) ??
                   "…"}+ threshold
               </p>
             </article>
@@ -130,14 +140,22 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
               className="catalog-step catalog-step-accent fragment"
               data-fragment-index="1"
             >
+              <span hidden mo-value="seismic_analysis.weekly.period_start" />
+              <span hidden mo-value="seismic_analysis.weekly.period_end" />
               <span>Interpretation</span>
               <strong>{formatPeriod(weekly)}</strong>
               <p>one bounded observation window for linked comparisons</p>
             </article>
             <p className="catalog-footnote fragment" data-fragment-index="1">
               {belowThreshold === 1 && belowThresholdEvent
-                ? `One stored value is M${belowThresholdEvent.magnitude.toFixed(2)}, which rounds to the feed’s published M${weekly?.catalog_minimum_magnitude.toFixed(1)} threshold.`
-                : `${belowThreshold} source records sit below the numerical M${weekly?.catalog_minimum_magnitude.toFixed(1) ?? "…"} cut.`}
+                ? `One stored value is M${
+                  belowThresholdEvent.magnitude.toFixed(2)
+                }, which rounds to the feed’s published M${
+                  weekly?.catalog_minimum_magnitude.toFixed(1)
+                } threshold.`
+                : `${belowThreshold} source records sit below the numerical M${
+                  weekly?.catalog_minimum_magnitude.toFixed(1) ?? "…"
+                } cut.`}
             </p>
           </div>
 
@@ -190,6 +208,16 @@ export const TempoSlide = ({ model }: { model: BriefingModel }) => {
 
         <div className="tempo-findings">
           <Metric
+            sources={model.peakActivity
+              ? [
+                `seismic_analysis.activity[${
+                  model.activity.indexOf(model.peakActivity)
+                }].events`,
+                `seismic_analysis.activity[${
+                  model.activity.indexOf(model.peakActivity)
+                }].day`,
+              ]
+              : []}
             detail="highest daily count"
             label={model.peakActivity ? formatDay(model.peakActivity.day) : "…"}
             value={model.peakActivity
@@ -197,6 +225,16 @@ export const TempoSlide = ({ model }: { model: BriefingModel }) => {
               : "…"}
           />
           <Metric
+            sources={magnitudePeak
+              ? [
+                `seismic_analysis.activity[${
+                  model.activity.indexOf(magnitudePeak)
+                }].maximum_magnitude`,
+                `seismic_analysis.activity[${
+                  model.activity.indexOf(magnitudePeak)
+                }].day`,
+              ]
+              : []}
             detail="largest daily maximum"
             label={magnitudePeak ? formatDay(magnitudePeak.day) : "…"}
             value={`M${model.maximumDailyMagnitude.toFixed(1)}`}
@@ -215,6 +253,9 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
   const comparisons = magnitude?.comparisons ?? [];
   const [reference, setReference] = useState(magnitude?.default_reference ?? 4);
   const scaling = magnitudeScalingAt(comparisons, reference);
+  const scalingSource = scaling
+    ? `seismic_analysis.magnitude.comparisons[${comparisons.indexOf(scaling)}]`
+    : undefined;
   const minimum = comparisons[0]?.reference_magnitude ?? 2.5;
   const maximum = comparisons.at(-1)?.reference_magnitude ?? 7;
   const step = model.analysis?.weekly.magnitude_step ?? 0.1;
@@ -243,6 +284,13 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
             </div>
             <div className="lesson-range">
               <output htmlFor="comparison-magnitude">
+                {scalingSource && (
+                  <span
+                    hidden
+                    mo-value={`${scalingSource}.reference_magnitude`}
+                    data-marimo-allow="*"
+                  />
+                )}
                 M{scaling?.reference_magnitude.toFixed(1) ?? "…"}
               </output>
               <input
@@ -276,10 +324,24 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
 
           <div className="ratio-proof" aria-live="polite">
             <div className="ratio-equation">
+              {scalingSource && (
+                <span
+                  hidden
+                  mo-value={`${scalingSource}.difference`}
+                  data-marimo-allow="*"
+                />
+              )}
               <span>Magnitude difference</span>
               <strong>ΔM = {scaling?.difference.toFixed(1) ?? "…"}</strong>
             </div>
             <div className="ratio-result ratio-result-amplitude">
+              {scalingSource && (
+                <span
+                  hidden
+                  mo-value={`${scalingSource}.amplitude_ratio`}
+                  data-marimo-allow="*"
+                />
+              )}
               <span>Recorded amplitude</span>
               <strong>
                 {scaling ? formatRatio(scaling.amplitude_ratio) : "…"}×
@@ -289,6 +351,13 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
               </small>
             </div>
             <div className="ratio-result ratio-result-energy">
+              {scalingSource && (
+                <span
+                  hidden
+                  mo-value={`${scalingSource}.energy_ratio`}
+                  data-marimo-allow="*"
+                />
+              )}
               <span>Released energy, approximate</span>
               <strong>
                 {scaling ? formatRatio(scaling.energy_ratio) : "…"}×
@@ -312,6 +381,9 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
     frequency?.default_magnitude ?? 4.5,
   );
   const selected = frequencyPointAt(curve, magnitude);
+  const frequencySource = selected
+    ? `seismic_analysis.frequency.curve[${curve.indexOf(selected)}]`
+    : undefined;
   const minimum = fit?.fit_minimum ?? 3;
   const maximum = fit?.fit_maximum ?? 6;
   const step = model.analysis?.weekly.magnitude_step ?? 0.1;
@@ -348,6 +420,13 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
               </div>
               <div className="lesson-range lesson-range-compact">
                 <output htmlFor="frequency-threshold">
+                  {frequencySource && (
+                    <span
+                      hidden
+                      mo-value={`${frequencySource}.magnitude`}
+                      data-marimo-allow="*"
+                    />
+                  )}
                   M{selected?.magnitude.toFixed(1) ?? "…"}
                 </output>
                 <input
@@ -372,12 +451,26 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
                 </span>
                 <dl>
                   <div>
+                    {frequencySource && (
+                      <span
+                        hidden
+                        mo-value={`${frequencySource}.events`}
+                        data-marimo-allow="*"
+                      />
+                    )}
                     <dt>Observed</dt>
                     <dd>
                       {selected ? integer.format(selected.events) : "…"}
                     </dd>
                   </div>
                   <div>
+                    {frequencySource && (
+                      <span
+                        hidden
+                        mo-value={`${frequencySource}.fitted_events`}
+                        data-marimo-allow="*"
+                      />
+                    )}
                     <dt>Fit estimate</dt>
                     <dd>
                       {selected
@@ -390,14 +483,30 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
             </div>
             <dl className="fit-readout">
               <div>
+                <span
+                  hidden
+                  mo-value="seismic_analysis.frequency.model.b_value"
+                />
                 <dt>Estimated b</dt>
                 <dd>{fit?.b_value.toFixed(2) ?? "…"}</dd>
               </div>
               <div>
+                <span
+                  hidden
+                  mo-value="seismic_analysis.frequency.model.r_squared"
+                />
                 <dt>Fit R²</dt>
                 <dd>{fit?.r_squared.toFixed(2) ?? "…"}</dd>
               </div>
               <div>
+                <span
+                  hidden
+                  mo-value="seismic_analysis.frequency.model.fit_minimum"
+                />
+                <span
+                  hidden
+                  mo-value="seismic_analysis.frequency.model.fit_maximum"
+                />
                 <dt>Fit range</dt>
                 <dd>
                   M{fit?.fit_minimum.toFixed(1) ??
@@ -485,7 +594,13 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
                 </option>)}
               </select>
             </label>
-            <div className="selection-summary" aria-live="polite">
+            <div
+              className="selection-summary"
+              data-marimo-sources="briefing-events"
+              data-marimo-lens-label="Selected event count"
+              data-marimo-lens-detail="Browser filter · seismic_analysis.events"
+              aria-live="polite"
+            >
               <span>Current analytical set</span>
               <strong>{summary ? integer.format(summary.events) : "…"}</strong>
               <p>
@@ -500,15 +615,27 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
               </small>
             </div>
             <dl className="selection-facts">
-              <div>
+              <div
+                data-marimo-sources="briefing-events"
+                data-marimo-lens-label="Largest selected"
+                data-marimo-lens-detail="Browser filter · seismic_analysis.events"
+              >
                 <dt>Largest selected</dt>
                 <dd>M{summary?.maximum_magnitude.toFixed(1) ?? "…"}</dd>
               </div>
-              <div>
+              <div
+                data-marimo-sources="briefing-events"
+                data-marimo-lens-label="Felt reports"
+                data-marimo-lens-detail="Browser filter · seismic_analysis.events"
+              >
                 <dt>Felt reports</dt>
                 <dd>{summary ? integer.format(summary.felt_reports) : "…"}</dd>
               </div>
-              <div>
+              <div
+                data-marimo-sources="briefing-events"
+                data-marimo-lens-label="Tsunami flags"
+                data-marimo-lens-detail="Browser filter · seismic_analysis.events"
+              >
                 <dt>Tsunami flags</dt>
                 <dd>{summary?.tsunami_flags ?? "…"}</dd>
               </div>
@@ -555,6 +682,9 @@ export const ImpactSlide = ({ model }: { model: BriefingModel }) => {
           <ImpactScatter events={model.events} />
           <aside className="event-casebook">
             <article>
+              {model.primaryEvent && (
+                <span hidden mo-value="seismic_analysis.strongest[0]" />
+              )}
               <span>Largest event</span>
               <strong>
                 M{model.primaryEvent?.magnitude.toFixed(1) ?? "…"}
@@ -569,6 +699,15 @@ export const ImpactSlide = ({ model }: { model: BriefingModel }) => {
               </p>
             </article>
             <article>
+              {mostFelt && (
+                <span
+                  hidden
+                  mo-value={`seismic_analysis.events[${
+                    model.events.indexOf(mostFelt)
+                  }]`}
+                  data-marimo-allow="*"
+                />
+              )}
               <span>Most reported</span>
               <strong>{integer.format(mostFelt?.felt ?? 0)}</strong>
               <h3>{mostFelt?.place ?? "Loading event"}</h3>

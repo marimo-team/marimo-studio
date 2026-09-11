@@ -34,7 +34,11 @@ export const EventMap = ({
   const hoveredEvent = eventIndex.get(hoveredId ?? "") ?? null;
 
   return (
-    <section className="map-panel" aria-labelledby="map-title">
+    <section
+      className="map-panel"
+      data-marimo-sources="events-data summary-data"
+      aria-labelledby="map-title"
+    >
       <header className="map-heading">
         <div>
           <p className="eyebrow">Spatial situation</p>
@@ -77,6 +81,7 @@ export const EventMap = ({
       >
         <MapView
           mapLib={maplibregl}
+          canvasContextAttributes={{ preserveDrawingBuffer: true }}
           initialViewState={{ longitude: 0, latitude: 18, zoom: 1.15 }}
           mapStyle={BASEMAP_STYLE}
           attributionControl={false}

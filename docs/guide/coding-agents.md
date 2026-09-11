@@ -18,6 +18,53 @@ Use this loop:
 inspect -> edit -> build -> show -> verify
 ```
 
+## Point to a result with Marimo Lens
+
+[Marimo Lens](https://marimo-team.github.io/marimo-lens/) is an optional companion
+for selecting a rendered result, adding a note, and giving a coding agent its
+producing notebook context and image. For feedback in a Server view, install
+version 0.0.10 or newer in the notebook's Python environment:
+
+```sh
+uv pip install "marimo-lens>=0.0.10"
+```
+
+For sandboxed notebooks, also declare `marimo-lens>=0.0.10` in the script's
+dependencies. Restart a running notebook after installing or upgrading Lens.
+
+Define one Lens value in a notebook cell:
+
+```python
+from marimo_lens import Lens
+from marimo_studio import STUDIO_RESULT_SELECTOR
+
+studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
+None
+```
+
+Project it into the view:
+
+```html
+<marimo-output value="studio_lens"></marimo-output>
+```
+
+The final `None` keeps the notebook cell's output empty so the dock appears on
+the projected view. Select mode shows the cell or value source beside the
+pointed result. An agent can inspect the selection through Lens in the same
+live kernel, edit through Studio, verify the result, and resolve the note.
+
+Native cell, rich-output, and value projections carry their sources
+automatically. For React, Svelte, or other custom JavaScript rendering, link each
+meaningful result to its actual projection inputs as described in
+[Trace custom JavaScript rendering](../reference/projections.md#trace-custom-javascript-rendering).
+The Lens package supplies the selection workflow. Studio supplies the projection
+metadata.
+
+Use the public [Lens documentation](https://marimo-team.github.io/marimo-lens/)
+for its agent API and feedback workflow. The
+[source repository](https://github.com/marimo-team/marimo-lens) currently requires
+organization access.
+
 ## Open the current workspace
 
 Create the handles once in each code-mode execution:

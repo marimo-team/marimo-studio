@@ -12,6 +12,7 @@
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap"
       rel="stylesheet"
+      crossorigin="anonymous"
     />
     <title>Earthquake Watch · one week in motion</title>
     <style>
@@ -327,6 +328,10 @@
         min-height: 0;
         padding: 1rem;
       }
+      #plot {
+        min-height: 0;
+        height: 100%;
+      }
       .steps {
         position: relative;
         margin-top: calc(0px - var(--mobile-visual-height));
@@ -398,13 +403,15 @@
       </header>
       <section class="story" aria-label="Earthquake story">
         <figure
+          data-marimo-sources="events-data"
+          aria-busy="true"
           class="visual"
           aria-labelledby="visual-title"
           data-state="loading"
         >
           <figcaption class="visual-header">
             <strong id="visual-title">Weekly event map</strong
-            ><span id="event-count">Loading weekly events</span>
+            ><span id="event-count" data-marimo-sources="events-data" data-marimo-lens-label="Visible events" data-marimo-lens-detail="Browser selection · events">Loading weekly events</span>
           </figcaption>
           <div id="plot">
             <span class="atlas-loader" aria-hidden="true">
@@ -412,9 +419,9 @@
             </span>
           </div>
           <div class="visual-footer">
-            <div id="status" role="status">Loading weekly events.</div>
+            <div id="status" data-marimo-sources="events-data" data-marimo-lens-label="Current event summary" role="status">Loading weekly events.</div>
             <a
-              id="source-link"
+              id="source-link" data-marimo-sources="events-data" data-marimo-lens-label="Strongest event"
               href="#"
               target="_blank"
               rel="noopener noreferrer"
@@ -707,7 +714,11 @@
 
       const scheduleRender = () => {
         if (renderFrame !== undefined) cancelAnimationFrame(renderFrame);
-        renderFrame = requestAnimationFrame(render);
+        visual.setAttribute("aria-busy", "true");
+        renderFrame = requestAnimationFrame(() => {
+          render();
+          visual.setAttribute("aria-busy", "false");
+        });
       };
 
       const observeMarimoValue = (host, { onValue, onError = () => {} }) => {

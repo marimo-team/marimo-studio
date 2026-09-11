@@ -16,11 +16,13 @@ const dynamicConfig = () =>
         overview: {
           status: "ready",
           producer: "cell:v1:overview",
+          producerLabel: "overview",
           dependencyClosure: ["cell:v1:overview"],
         },
         details: {
           status: "ready",
           producer: "cell:v1:details",
+          producerLabel: "details",
           dependencyClosure: ["cell:v1:overview", "cell:v1:details"],
         },
       },
@@ -28,6 +30,7 @@ const dynamicConfig = () =>
         metric: {
           status: "ready",
           producer: "cell:v1:overview",
+          producerLabel: "overview",
           dependencyClosure: ["cell:v1:overview"],
         },
       },
@@ -214,4 +217,31 @@ test("a local stale closure requests refreshed runtime bindings", () => {
   expect(refreshes).toBe(1);
   clearProjectionBindingStale(revision);
   unbind();
+});
+
+test("publishes current Lens labels without overwriting consumer-authored text", () => {
+  commitRuntimeConfig(dynamicConfig());
+  document.body.innerHTML = `
+    <marimo-cell id="cell" data-marimo-studio-site="site:dynamic-cell" name="overview"></marimo-cell>
+    <span id="value" data-marimo-studio-site="site:dynamic-value" mo-value="metric"></span>
+  `;
+  const cell = document.getElementById("cell")!;
+  const value = document.getElementById("value")!;
+  renderedProjectionInstances();
+  expect(cell.getAttribute("data-marimo-lens-label")).toBe("overview");
+  expect(value.getAttribute("data-marimo-lens-label")).toBe("metric");
+  expect(value.getAttribute("data-marimo-lens-detail")).toBe("Value · overview");
+
+  cell.setAttribute("name", "details");
+  value.setAttribute("data-marimo-lens-label", "Revenue");
+  renderedProjectionInstances();
+  expect(cell.getAttribute("data-marimo-lens-label")).toBe("details");
+  expect(value.getAttribute("data-marimo-lens-label")).toBe("Revenue");
+
+  cell.setAttribute("name", "missing");
+  value.setAttribute("mo-value", "missing");
+  renderedProjectionInstances();
+  expect(cell.hasAttribute("data-marimo-lens-label")).toBe(false);
+  expect(value.hasAttribute("data-marimo-lens-detail")).toBe(false);
+  expect(value.getAttribute("data-marimo-lens-label")).toBe("Revenue");
 });

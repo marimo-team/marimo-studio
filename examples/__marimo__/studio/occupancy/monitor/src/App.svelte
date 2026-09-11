@@ -60,6 +60,7 @@ use([
 let chartElement: HTMLDivElement;
 let chart: ECharts | undefined;
 let chartFrame: number | undefined;
+let chartBusy = $state(true);
 let series = $state.raw<MarimoTable<SensorRow> | undefined>();
 let summary = $state<OccupancySummary | undefined>();
 let daily = $state.raw<MarimoTable<DailyRoomRow> | undefined>();
@@ -237,6 +238,7 @@ const renderChart = () => {
 };
 
 const scheduleChart = () => {
+  chartBusy = true;
   if (chartFrame !== undefined) cancelAnimationFrame(chartFrame);
   chartFrame = requestAnimationFrame(() => {
     chartFrame = undefined;
@@ -246,6 +248,7 @@ const scheduleChart = () => {
 
 onMount(() => {
   chart = init(chartElement, undefined, { renderer: "canvas" });
+  chart.on("finished", () => { chartBusy = false; });
   const resize = new ResizeObserver(() => chart?.resize());
   resize.observe(chartElement);
   renderChart();
@@ -262,6 +265,7 @@ onMount(() => {
 <span
   aria-hidden="true"
   hidden
+  id="series-data"
   mo-value="selected_sensor_series"
   use:observeMarimoValue={{
     selector: "selected_sensor_series",
@@ -283,6 +287,7 @@ onMount(() => {
 <span
   aria-hidden="true"
   hidden
+  id="summary-data"
   mo-value="occupancy_summary"
   use:observeMarimoValue={{
     selector: "occupancy_summary",
@@ -300,6 +305,7 @@ onMount(() => {
 <span
   aria-hidden="true"
   hidden
+  id="daily-data"
   mo-value="daily_room_profile"
   use:observeMarimoValue={{
     selector: "daily_room_profile",
@@ -313,7 +319,7 @@ onMount(() => {
   }}
 ></span>
 
-<main class="monitor-shell" class:is-loading={loading} aria-busy={loading}>
+<main data-marimo-sources="series-data summary-data daily-data" class="monitor-shell" class:is-loading={loading} aria-busy={loading}>
   <header class="monitor-header">
     <div>
       <p class="eyebrow">Facilities · {summary?.room ?? "Room"}</p>
@@ -332,7 +338,7 @@ onMount(() => {
     >
       <span>{summary?.scope_label ?? "Historical telemetry"}</span>
       {#if summary}
-        <strong>{formatInteger.format(summary.observations)} readings</strong>
+        <strong><span hidden mo-value="occupancy_summary.observations"></span>{formatInteger.format(summary.observations)} readings</strong>
       {/if}
     </div>
   </header>
@@ -344,17 +350,23 @@ onMount(() => {
     </div>
   </section>
 
-  <section class="metrics" aria-label="Occupancy monitor summary">
+  <section data-marimo-sources="series-data summary-data" class="metrics" aria-label="Occupancy monitor summary">
     <article>
+      <span hidden mo-value="occupancy_summary.metric"></span>
       <span>Selected signal</span>
       <strong>{summary?.metric ?? latest?.metric ?? "Loading"}</strong>
       <small>
         {unitFor(summary?.metric ?? latest?.metric ?? "") || "Physical measure"}
       </small>
     </article>
-    <article>
+    <article data-marimo-sources="series-data" data-marimo-lens-label="Latest reading" data-marimo-lens-detail="Last row of selected_sensor_series">
       <span>Latest reading</span>
-      <strong>{latest ? formatNumber.format(latest.value) : "…"}</strong>
+      <strong>
+        {#if series && series.numRows > 0}
+          <span hidden mo-value={`selected_sensor_series["value"][${series.numRows - 1}]`} data-marimo-allow="*"></span>
+        {/if}
+        {latest ? formatNumber.format(latest.value) : "…"}
+      </strong>
       <small>
         {latest
           ? `${unitFor(latest.metric)} · ${formatTime.format(new Date(toMilliseconds(latest.date)))}`
@@ -362,17 +374,21 @@ onMount(() => {
       </small>
     </article>
     <article>
+      <span id="occupancy-rate-data" hidden mo-value="occupancy_summary.occupancy_rate"></span>
       <span>Occupied observations</span>
-      <strong>
+      <strong data-marimo-sources="occupancy-rate-data">
         {summary ? `${(summary.occupancy_rate * 100).toFixed(1)}%` : "…"}
       </strong>
       <small>
+        <span hidden mo-value="occupancy_summary.occupied"></span>
+        <span hidden mo-value="occupancy_summary.estimated_occupied_hours"></span>
         {summary
           ? `${formatInteger.format(summary.occupied)} recorded · ${formatNumber.format(summary.estimated_occupied_hours)} h estimated`
           : "Calculating rate"}
       </small>
     </article>
     <article class:attention={summary !== undefined && summary.anomalies > 0}>
+      <span hidden mo-value="occupancy_summary.anomalies"></span>
       <span>Anomaly candidates</span>
       <strong>{summary ? formatInteger.format(summary.anomalies) : "…"}</strong>
       <small>
@@ -385,12 +401,13 @@ onMount(() => {
     </article>
   </section>
 
-  <section class="chart-panel" aria-labelledby="trend-heading">
+  <section data-marimo-sources="series-data summary-data" class="chart-panel" aria-busy={chartBusy} aria-labelledby="trend-heading">
     <div class="chart-heading">
       <div>
         <h2 id="trend-heading">Reading and rolling baseline</h2>
       </div>
       <p>
+        <span hidden mo-value="occupancy_summary.monitor.baseline_window"></span>
         Baseline window:
         {summary ? `${summary.monitor.baseline_window} observations` : "…"}
       </p>
@@ -411,7 +428,7 @@ onMount(() => {
     {/if}
   </section>
 
-  <section class="daily-profile" aria-labelledby="daily-heading">
+  <section data-marimo-sources="daily-data" class="daily-profile" aria-labelledby="daily-heading">
     <div class="daily-heading">
       <div>
         <h2 id="daily-heading">Daily occupancy</h2>
@@ -420,7 +437,7 @@ onMount(() => {
     </div>
     <div class="daily-strip">
       {#each dailyRows as day (day.day)}
-        <article>
+        <article data-marimo-sources="daily-data" data-marimo-lens-label={day.day}>
           <div>
             <span>{formatDay.format(new Date(`${day.day}T00:00:00`))}</span>
             <strong>{(day.occupancy_rate * 100).toFixed(0)}%</strong>
@@ -452,6 +469,7 @@ onMount(() => {
     </span>
     {#if summary}
       <span>
+        <span hidden mo-value="occupancy_summary.monitor"></span>
         Anomalies exceed the rolling
         {formatPercentile(summary.monitor.anomaly_quantile)}-percentile
         deviation limit over {summary.monitor.anomaly_window} observations.

@@ -55,8 +55,8 @@ def slow_metric`,
     source
       .replace(
         '<marimo-output id="rich-summary-output"',
-        '<span id="projected-table" hidden mo-value="dataframe_value"></span>\n' +
-          '      <output id="projected-table-summary"></output>\n' +
+        '<span id="projected-table" hidden style="display:block" mo-value="dataframe_value"></span>\n' +
+          '      <output id="projected-table-summary" data-marimo-sources="projected-table"></output>\n' +
           '      <span id="empty-table" hidden mo-value="empty_dataframe"></span>\n' +
           '      <output id="empty-table-summary"></output>\n' +
           '      <marimo-output id="rich-summary-output"',
@@ -112,6 +112,11 @@ const expectProjectedDataframe = async (
     `2 rows × 6 columns | emea: ${expectedRevenue} | missing: true | ` +
       "active: true | segment: retail | payload: 2 bytes",
   );
+  const source = preview.locator("#projected-table");
+  await expect(source).toBeHidden();
+  await expect(source).toHaveAttribute("data-runtime-cell-id", /.+/);
+  await expect(source).toHaveAttribute("data-marimo-lens-label", "dataframe_value");
+  await expect(source).toHaveAttribute("data-marimo-lens-detail", "Value · dataframe_value");
 };
 
 const expectEmptyDataframe = async (preview: ReturnType<typeof presentationFrame>) => {

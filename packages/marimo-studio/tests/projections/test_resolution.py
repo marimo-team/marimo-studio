@@ -12,6 +12,7 @@ from marimo_studio._projections.resolution import (
     ProjectionRequest,
     ProjectionResolutionError,
     projection_policy,
+    projection_targets,
     resolve_projection,
 )
 from marimo_studio._projections.symbol_graph import build_notebook_symbol_graph
@@ -277,3 +278,21 @@ def test_projection_selectors_reject_escaped_unpaired_surrogates(
         resolve_projection(graph, (site,), _request(site, target))
 
     assert captured.value.code == "projection-unpaired-surrogate"
+
+
+def test_value_targets_identify_the_producer_without_mounting_its_cell(
+    notebook_path: Path,
+) -> None:
+    notebook = inspect_notebook(notebook_path)
+    producer = notebook.cells[1]
+    graph = build_notebook_symbol_graph(notebook, {"summary": producer})
+    targets = projection_targets(graph, (_site("value", "value", ("doubled",)),))
+    assert targets["cells"] == {}
+    assert targets["variables"] == {
+        "doubled": {
+            "status": "ready",
+            "producer": str(producer.ref),
+            "producerLabel": producer.name or "summary",
+            "dependencyClosure": [str(cell.ref) for cell in notebook.cells],
+        }
+    }

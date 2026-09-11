@@ -84,7 +84,11 @@ const ReportWorkbench = ({
   );
 
   return (
-    <main className="report-workbench" aria-busy={!ready}>
+    <main
+      data-marimo-sources="analysis-data"
+      className="report-workbench"
+      aria-busy={!ready}
+    >
       <header className="workbench-header">
         <div className="workbench-title">
           <p>{report?.room ?? "Room"}</p>
@@ -122,6 +126,7 @@ const ReportWorkbench = ({
       <section className="scope-strip" aria-label="Observation scope">
         <marimo-cell name="analysis_scope_control" />
         <p className="scope-readout" aria-live="polite">
+          <span hidden mo-value="occupancy_analysis.summary.observations" />
           <span>Included in PDF</span>
           <strong>
             {report
@@ -199,8 +204,31 @@ export const App = () => {
         ref={analysis.hostRef}
         aria-hidden="true"
         hidden
+        id="analysis-data"
         mo-value="occupancy_analysis"
       />
+      <span id="report-summary" hidden mo-value="occupancy_analysis.summary" />
+      <span
+        id="report-hourly"
+        hidden
+        mo-value="occupancy_analysis.hourly_room_profile"
+      />
+      <span
+        id="report-daily"
+        hidden
+        mo-value="occupancy_analysis.daily_room_profile"
+      />
+      <span
+        id="report-sensors"
+        hidden
+        mo-value="occupancy_analysis.sensor_profiles"
+      />
+      <span
+        id="report-profile"
+        hidden
+        mo-value="occupancy_analysis.profile_summary"
+      />
+      <span id="report-model" hidden mo-value="occupancy_analysis.model" />
       <ReportWorkbench
         key={reportRevision}
         report={report}

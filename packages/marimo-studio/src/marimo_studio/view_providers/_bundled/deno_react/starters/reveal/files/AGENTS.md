@@ -94,3 +94,32 @@ Build through Marimo Studio, then inspect the rendered deck in a browser. Check
 keyboard and control navigation, slide scaling, fragments, notebook results,
 speaker-facing content, and narrow viewport behavior. The Studio build verifies
 types and packages the deck before publishing it.
+
+## Preserve notebook traceability
+
+Prefer `mo-value` for values, `marimo-output` for rich values, and `marimo-cell`
+for native cell output. Keep analytical computation in the notebook. When custom
+JavaScript rendering is necessary, every result must declare its kernel inputs:
+
+- Place hidden `mo-value` hosts directly inside the result, or use
+  `data-marimo-sources="rows-data summary-data"` to reference projection hosts
+  by unique, stable HTML IDs in the same document. Include every input,
+  including shared inputs used through JS transforms. References must point
+  directly to mounted `mo-value`, `marimo-output`, or `marimo-cell` hosts.
+  Missing or duplicate IDs make the result unavailable to Lens. Never fabricate
+  runtime metadata.
+- Annotate individual metrics, rows, charts, and report pages. Prefer narrow
+  selectors such as `summary.events`. Bind dynamic selectors and source IDs to
+  the state that renders the result. Use `data-marimo-allow="*"` for selectors
+  the provider cannot bound at build time. Unbounded selectors require Python or
+  Browser runtime (`--runtime wasm` for export). Prepared exports need finite
+  authored targets.
+- Link browser-only aggregates to their actual kernel inputs and label the
+  browser calculation. Canvas and PDF picking is limited to the chart or page
+  unless the renderer supplies finer DOM targets.
+- Set `aria-busy="true"` during asynchronous rendering and clear it on
+  completion. Verify selection and producer context after data updates. These
+  links declare dependencies, not automatic JS dataflow or historical values.
+- Studio supplies native projection labels. Give custom regions a
+  `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
+  supplements the source links that connect results to the analytical graph.

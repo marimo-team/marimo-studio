@@ -11,8 +11,17 @@ import {
 } from "./components/ThresholdCurve.tsx";
 import { useMarimoValue } from "./lib/use-marimo-value.ts";
 
-const Metric = ({ label, value }: { label: string; value?: string }) => (
+const Metric = (
+  { label, value, sources }: {
+    label: string;
+    value?: string;
+    sources: readonly string[];
+  },
+) => (
   <article className="metric">
+    {sources.map((source) => (
+      <span key={source} hidden mo-value={source} data-marimo-allow="*" />
+    ))}
     <span>{label}</span>
     <strong>{value ?? "…"}</strong>
   </article>
@@ -52,12 +61,15 @@ const closestThreshold = (
   metrics: readonly EvidenceMetric[],
   requested: number,
 ): EvidenceMetric | undefined =>
-  metrics.reduce<EvidenceMetric | undefined>((closest, metric) =>
-    closest === undefined ||
-      Math.abs(metric.threshold - requested) <
-        Math.abs(closest.threshold - requested)
-      ? metric
-      : closest, undefined);
+  metrics.reduce<EvidenceMetric | undefined>(
+    (closest, metric) =>
+      closest === undefined ||
+        Math.abs(metric.threshold - requested) <
+          Math.abs(closest.threshold - requested)
+        ? metric
+        : closest,
+    undefined,
+  );
 
 const ThresholdControl = ({
   maximum,
@@ -91,7 +103,12 @@ const ThresholdControl = ({
   </div>
 );
 
-const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
+const ConfusionCounts = (
+  { summary, source }: {
+    summary?: ThresholdMetric;
+    source: string | undefined;
+  },
+) => (
   <article
     className="panel confusion-panel"
     aria-labelledby="confusion-heading"
@@ -115,10 +132,24 @@ const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
         <tr>
           <th>Occupied</th>
           <td>
+            {source && (
+              <span
+                hidden
+                mo-value={`${source}.true_positive`}
+                data-marimo-allow="*"
+              />
+            )}
             <span>True positive</span>
             <strong>{summary?.true_positive ?? "…"}</strong>
           </td>
           <td className="error-count">
+            {source && (
+              <span
+                hidden
+                mo-value={`${source}.false_negative`}
+                data-marimo-allow="*"
+              />
+            )}
             <span>False negative</span>
             <strong>{summary?.false_negative ?? "…"}</strong>
           </td>
@@ -126,10 +157,24 @@ const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
         <tr>
           <th>Empty</th>
           <td className="error-count">
+            {source && (
+              <span
+                hidden
+                mo-value={`${source}.false_positive`}
+                data-marimo-allow="*"
+              />
+            )}
             <span>False positive</span>
             <strong>{summary?.false_positive ?? "…"}</strong>
           </td>
           <td>
+            {source && (
+              <span
+                hidden
+                mo-value={`${source}.true_negative`}
+                data-marimo-allow="*"
+              />
+            )}
             <span>True negative</span>
             <strong>{summary?.true_negative ?? "…"}</strong>
           </td>
@@ -145,10 +190,14 @@ export const App = () => {
   const scope = analysis.value?.summary;
   const modelData = analysis.value?.model;
   const curve = modelData?.evidence ?? [];
-  const requestedThreshold = thresholdOverride ?? modelData?.default_threshold ??
+  const requestedThreshold = thresholdOverride ??
+    modelData?.default_threshold ??
     curve[0]?.threshold ?? 0;
   const model = closestThreshold(curve, requestedThreshold);
   const threshold = model?.threshold ?? requestedThreshold;
+  const modelSource = model
+    ? `occupancy_analysis.model.evidence[${curve.indexOf(model)}]`
+    : undefined;
   const errorRows = model?.errors ?? [];
   const unavailable = analysis.error;
   const loading = !unavailable && analysis.value === undefined;
@@ -159,10 +208,15 @@ export const App = () => {
         ref={analysis.hostRef}
         aria-hidden="true"
         hidden
+        id="analysis-data"
         mo-value="occupancy_analysis"
       />
 
-      <main className="review" aria-busy={loading}>
+      <main
+        data-marimo-sources="analysis-data"
+        className="review"
+        aria-busy={loading}
+      >
         {loading
           ? (
             <div className="review-loader" role="status">
@@ -182,12 +236,14 @@ export const App = () => {
             <h1>Threshold behavior and training errors</h1>
           </div>
           <p className="method-note">
-            Each scope uses its own light and CO₂ normalization. The score weights
-            normalized light at {modelData
-              ? `${(modelData.light_weight * 100).toFixed(0)}%`
-              : "…"} and normalized CO₂ at {modelData
-                ? `${(modelData.co2_weight * 100).toFixed(0)}%`
-                : "…"}.
+            <span hidden mo-value="occupancy_analysis.model.light_weight" />
+            <span hidden mo-value="occupancy_analysis.model.co2_weight" />
+            Each scope uses its own light and CO₂ normalization. The score
+            weights normalized light at{" "}
+            {modelData ? `${(modelData.light_weight * 100).toFixed(0)}%` : "…"}
+            {" "}
+            and normalized CO₂ at{" "}
+            {modelData ? `${(modelData.co2_weight * 100).toFixed(0)}%` : "…"}.
           </p>
         </header>
 
@@ -204,6 +260,7 @@ export const App = () => {
             <p className="section-index">01 / Operating point</p>
             <h2 id="threshold-heading">Choose scope and threshold</h2>
             <p className="scope-note" aria-live="polite">
+              <span hidden mo-value="occupancy_analysis.summary" />
               {scope
                 ? `${scope.scope_label} · ${
                   scope.observations.toLocaleString("en")
@@ -225,18 +282,24 @@ export const App = () => {
 
         <section className="metric-grid" aria-label="Current threshold metrics">
           <Metric
+            sources={modelSource ? [`${modelSource}.threshold`] : []}
             label="Threshold"
             value={model?.threshold.toFixed(2)}
           />
           <Metric
+            sources={modelSource ? [`${modelSource}.accuracy`] : []}
             label="In-sample accuracy"
             value={model && formatRate(model.accuracy)}
           />
           <Metric
+            sources={modelSource ? [`${modelSource}.precision`] : []}
             label="In-sample precision"
             value={model && formatRate(model.precision)}
           />
           <Metric
+            sources={modelSource
+              ? [`${modelSource}.recall`, "occupancy_analysis.summary.occupied"]
+              : []}
             label="In-sample recall"
             value={model && scope
               ? scope.occupied > 0 ? formatRate(model.recall) : "n/a"
@@ -249,6 +312,7 @@ export const App = () => {
             className="panel curve-panel"
             aria-labelledby="curve-heading"
           >
+            <span hidden mo-value="occupancy_analysis.model.evidence" />
             <div className="panel-heading">
               <div>
                 <p className="section-index">02 / Threshold sweep</p>
@@ -263,10 +327,11 @@ export const App = () => {
             />
           </article>
 
-          <ConfusionCounts summary={model} />
+          <ConfusionCounts summary={model} source={modelSource} />
         </section>
 
         <ErrorEvidence
+          source={modelSource && `${modelSource}.errors`}
           rows={errorRows}
           total={model
             ? model.false_positive + model.false_negative

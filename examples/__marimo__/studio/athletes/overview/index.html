@@ -755,7 +755,7 @@
             ><span mo-value="games_summary.athletes"></span> athletes.
             <span mo-value="games_summary.sports"></span> sports.</strong
           >
-          <p id="leading-sports-copy">Loading participation leaders.</p>
+          <p id="leading-sports-copy" data-marimo-sources="leading-sports-data">Loading participation leaders.</p>
         </div>
       </header>
 
@@ -805,6 +805,7 @@
           <div
             class="roster-table"
             id="roster-table"
+            data-marimo-sources="roster-data"
             data-state="loading"
             aria-busy="true"
           ></div>
@@ -825,6 +826,7 @@
           <div
             class="sports-chart"
             id="sports-chart"
+            data-marimo-sources="top-sports-data"
             data-state="loading"
             aria-busy="true"
           >
@@ -923,7 +925,15 @@
       const body = chartNode("tbody");
       rows.forEach((row) => {
         const tableRow = chartNode("tr");
-        columns.forEach(([key]) => tableRow.append(chartNode("td", "", row[key] ?? "")));
+        tableRow.setAttribute("data-marimo-sources", "roster-data");
+        tableRow.setAttribute("data-marimo-lens-label", String(row.name));
+        columns.forEach(([key, label]) => {
+          const cell = chartNode("td", "", row[key] ?? "");
+          cell.setAttribute("data-marimo-sources", "roster-data");
+          cell.setAttribute("data-marimo-lens-label", `${row.name} · ${label}`);
+          cell.setAttribute("data-marimo-lens-detail", "selected_roster");
+          tableRow.append(cell);
+        });
         body.append(tableRow);
       });
       table.append(head, body);
@@ -965,6 +975,8 @@
       );
       sports.forEach((sport, index) => {
         const item = chartNode("li");
+        item.setAttribute("data-marimo-sources", "top-sports-data");
+        item.setAttribute("data-marimo-lens-label", sport.sport);
         item.setAttribute(
           "aria-label",
           `${sport.sport}: ${countFormat.format(sport.athletes)} athletes, ${
@@ -993,6 +1005,9 @@
           "",
           countFormat.format(sport.athletes),
         );
+        athleteValue.setAttribute("data-marimo-sources", "top-sports-data");
+        athleteValue.setAttribute("data-marimo-lens-label", `${sport.sport} · Athletes`);
+        athleteValue.setAttribute("data-marimo-lens-detail", "top_sports");
         athleteValue.append(athleteCount, " athletes");
         const medalValue = chartNode("span");
         const medalCount = chartNode(
@@ -1000,6 +1015,9 @@
           "",
           countFormat.format(sport.medalists),
         );
+        medalValue.setAttribute("data-marimo-sources", "top-sports-data");
+        medalValue.setAttribute("data-marimo-lens-label", `${sport.sport} · Medalists`);
+        medalValue.setAttribute("data-marimo-lens-detail", "top_sports");
         medalValue.append(medalCount, " medalists");
         values.append(athleteValue, medalValue);
         item.append(rank, name, bars, values);

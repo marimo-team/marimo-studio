@@ -303,6 +303,11 @@ def _target_record(
     return {
         "status": "ready",
         "producer": str(producer),
+        "producerLabel": (
+            graph.cells[producer].name
+            or next(iter(graph.cells[producer].aliases), None)
+            or f"Cell {graph.cells[producer].index + 1}"
+        ),
         "dependencyClosure": [
             str(reference) for reference in graph.dependency_closure(producer)
         ],

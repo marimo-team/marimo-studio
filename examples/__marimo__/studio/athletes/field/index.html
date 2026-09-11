@@ -8,10 +8,11 @@
     />
     <meta name="theme-color" content="#060606" />
     <title>Rio 2016 athlete field</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" crossorigin="anonymous" />
+    <link rel="stylesheet" href="style.css" crossorigin="anonymous" />
   </head>
   <body id="app-shell" class="shower" data-mode="roster">
-    <canvas id="field-canvas" aria-hidden="true"></canvas>
+    <canvas id="field-canvas" data-marimo-sources="athlete-data sport-selection" aria-hidden="true"></canvas>
 
     <header class="topbar">
       <a class="artifact-title" href="#opening">Rio 2016 / The Field</a>
@@ -152,9 +153,9 @@
       <span><b>Z</b> age</span>
     </div>
 
-    <aside class="athlete-credit" id="athlete-credit" hidden>
-      <strong id="athlete-name"></strong>
-      <span id="athlete-meta"></span>
+    <aside class="athlete-credit" id="athlete-credit" data-marimo-sources="athlete-data" hidden>
+      <strong id="athlete-name" data-marimo-sources="athlete-data" data-marimo-lens-label="Athlete name"></strong>
+      <span id="athlete-meta" data-marimo-sources="athlete-data" data-marimo-lens-label="Athlete profile"></span>
     </aside>
 
     <footer class="controls" aria-label="Presentation controls">

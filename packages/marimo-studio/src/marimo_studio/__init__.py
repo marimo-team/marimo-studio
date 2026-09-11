@@ -21,7 +21,8 @@ from marimo_studio._delivery.records import ASGIApp
 from marimo_studio._notebook.records import NotebookSpec
 
 STUDIO_RESULT_SELECTOR = (
-    ":is(marimo-cell, marimo-output, [mo-value])[data-runtime-cell-id]"
+    ":is(marimo-cell, marimo-output, [mo-value])[data-runtime-cell-id], "
+    ":has(> [mo-value][hidden][data-runtime-cell-id]), [data-marimo-sources]"
 )
 
 

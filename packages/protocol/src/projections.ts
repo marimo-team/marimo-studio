@@ -74,6 +74,7 @@ export const projectionTargetSchema = z.discriminatedUnion("status", [
     .object({
       status: z.literal("ready"),
       producer: cellRefSchema,
+      producerLabel: z.string().min(1).optional(),
       dependencyClosure: z.array(cellRefSchema).nonempty(),
     })
     .strict(),

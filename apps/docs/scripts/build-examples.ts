@@ -107,6 +107,7 @@ const exportView = async (
   notebook: string,
   slug: string,
   view: string,
+  runtime: "zero-python" | "wasm" = "zero-python",
 ): Promise<void> => {
   const output = join(stagingRoot, slug, view);
   await rm(output, { force: true, recursive: true });
@@ -122,8 +123,9 @@ const exportView = async (
     notebook,
     "--output",
     output,
-    "--prepare-timeout",
-    "900",
+    "--runtime",
+    runtime,
+    ...(runtime === "zero-python" ? ["--prepare-timeout", "900"] : []),
     "--json",
   ]);
   // SAFETY: The same-worktree CLI owns schema 1. The checks below bind its
@@ -133,7 +135,7 @@ const exportView = async (
 
   if (
     result.schema !== 1 ||
-    result.runtime !== "zero-python" ||
+    result.runtime !== runtime ||
     result.preflight?.ok !== true ||
     !Array.isArray(result.warnings) ||
     result.view !== view ||
@@ -242,7 +244,7 @@ const main = async (): Promise<void> => {
         await exportNotebook(stagingRoot, family.notebook, family.slug);
       }
       for (const view of selected.views) {
-        await exportView(stagingRoot, family.notebook, family.slug, view.key);
+        await exportView(stagingRoot, family.notebook, family.slug, view.key, view.runtime);
       }
     }
 

@@ -71,6 +71,18 @@ const CanvasPdfViewer = (
         }
 
         sheet.className = "pdf-canvas-page";
+        sheet.setAttribute(
+          "data-marimo-sources",
+          [
+            "report-summary report-hourly report-daily",
+            "report-sensors report-profile",
+            "report-model report-summary",
+          ][pageNumber - 1] ?? "analysis-data",
+        );
+        sheet.setAttribute(
+          "data-marimo-lens-label",
+          PAGE_LABELS[pageNumber - 1] ?? "Report page",
+        );
         summary.className = "sr-only";
         summary.id = `pdf-page-${pageNumber}-summary`;
         summary.textContent = pageSummaries[pageNumber - 1] ??

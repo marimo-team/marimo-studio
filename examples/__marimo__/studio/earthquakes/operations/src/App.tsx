@@ -67,16 +67,22 @@ export const App = () => {
         ref={eventsHostRef}
         aria-hidden="true"
         hidden
+        id="events-data"
         mo-value="filtered_events"
       />
       <span
         ref={summaryHostRef}
         aria-hidden="true"
         hidden
+        id="summary-data"
         mo-value="event_summary"
       />
 
-      <main className="operations-shell" aria-busy={isLoading}>
+      <main
+        data-marimo-sources="events-data summary-data"
+        className="operations-shell"
+        aria-busy={isLoading}
+      >
         <header className="operations-header">
           <div>
             <p className="eyebrow">
@@ -106,11 +112,20 @@ export const App = () => {
         </p>
 
         <section
+          data-marimo-sources="summary-data"
           className="metric-strip"
           aria-label="Current situation metrics"
         >
           {METRICS.map(({ key, label }) => (
             <article key={key}>
+              <span
+                hidden
+                mo-value={`event_summary.${key}`}
+                data-marimo-allow="*"
+              />
+              {key === "maximum_magnitude" && (
+                <span hidden mo-value="event_summary.events" />
+              )}
               <span>{label}</span>
               <strong>
                 {key === "maximum_magnitude"
@@ -154,7 +169,11 @@ export const App = () => {
             selectedEvent={selectedEvent}
             onSelect={setSelectedId}
           />
-          <EventDetails event={selectedEvent} loading={isLoading} />
+          <EventDetails
+            event={selectedEvent}
+            index={events.findIndex((event) => event.id === selectedEvent?.id)}
+            loading={isLoading}
+          />
         </div>
 
         <footer className="operations-footer">

@@ -11,7 +11,7 @@ afterEach(() => {
 test("a shell swap updates an authored cell without replacing its output", () => {
   document.body.innerHTML = `
     <main id="app-shell">
-      <marimo-cell name="summary">
+      <marimo-cell name="summary" data-marimo-lens-label="Summary">
         <div data-marimo-cell-output><button>Live control</button></div>
       </marimo-cell>
     </main>
@@ -25,7 +25,8 @@ test("a shell swap updates an authored cell without replacing its output", () =>
   const nextDocument = new DOMParser().parseFromString(
     `
       <main id="app-shell">
-        <marimo-cell name="summary"></marimo-cell>
+        <marimo-cell name="summary" data-marimo-lens-label="Revenue"
+          data-marimo-lens-detail="Current quarter"></marimo-cell>
       </main>
     `,
     "text/html",
@@ -47,4 +48,6 @@ test("a shell swap updates an authored cell without replacing its output", () =>
   assert.equal(updatedHost.querySelector("[data-marimo-cell-output]"), liveOutput);
   assert.equal(updatedHost.style.getPropertyValue("--_marimo-cell-measured-height"), "120px");
   assert.equal(updatedHost.dataset.state, "ready");
+  assert.equal(updatedHost.dataset.marimoLensLabel, "Revenue");
+  assert.equal(updatedHost.dataset.marimoLensDetail, "Current quarter");
 });
