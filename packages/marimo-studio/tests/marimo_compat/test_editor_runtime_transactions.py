@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import marimo
 import pytest
 
 from marimo_studio._compat.server.editor_runtime import (
@@ -14,16 +15,20 @@ pytestmark = pytest.mark.requires_node
 
 
 def _cells_module() -> bytes:
+    assets = Path(marimo.__file__).parent / "_static" / "assets"
+    cells = next(assets.glob("cells-*.js")).read_bytes()
+    start = cells.index(b"var $H=[],eU=[]")
+    end = cells.index(b"function hU(", start)
     source = (
-        b"const FP=value=>value;"
-        b"const Sg=operation=>{operation.cancel=()=>{};return operation};"
-        b"const Sr=()=>globalThis.__documentClient;"
-        b"const CT=0,zr=0,__tla=Promise.resolve();"
-        b"var marimoStudioFlushDocumentChanges;"
-        b"var _m=[],$P=Sg(()=>{let e=FP(_m);_m=[],e.length!==0&&"
-        b"Sr().sendDocumentTransaction({changes:e})},400);"
-        b"const queueChange=change=>_m.push(change);"
-        b"export {queueChange,zr,__tla,CT as zt};"
+        b"const QH=value=>value;"
+        b"const $s=operation=>{operation.cancel=()=>{};return operation};"
+        b"const rd=()=>globalThis.__documentClient;"
+        b"class af{constructor(){this.promise=new Promise(resolve=>{"
+        b"this.resolve=resolve})}}"
+        b"const RB=0,zo=0;"
+        + cells[start:end]
+        + b"const queueChange=change=>$H.push(change);"
+        b"export {queueChange,mU as withDocumentSave,zo,RB as zt};"
     )
     return _serialize_document_transactions(source)
 
@@ -38,7 +43,7 @@ def _run_node(script: str) -> None:
     )
 
 
-def test_emitted_queue_keeps_retry_identity_and_new_edits_separate(
+def test_native_save_resync_keeps_retry_identity_and_new_edits_separate(
     tmp_path: Path,
 ) -> None:
     cells = tmp_path / "cells-test.js"
@@ -77,7 +82,6 @@ globalThis.__documentClient = {{
   async sendDocumentTransaction(request) {{
     calls.push(structuredClone(request));
     if (calls.length === 1) {{
-      module.queueChange({{ id: "new" }});
       throw new Error("response lost");
     }}
     return calls.length === 2;
@@ -86,6 +90,10 @@ globalThis.__documentClient = {{
 module = await import(pathToFileURL({str(cells)!r}).href);
 module.queueChange({{ id: "retry" }});
 await assert.rejects(module.studioFlushDocumentChanges(), /response lost/);
+await module.withDocumentSave(async () => {{
+  module.queueChange({{ id: "new" }});
+  await module.studioFlushBeforeDocumentSave();
+}});
 await module.studioFlushDocumentChanges();
 assert.deepEqual(calls.map((call) => call.changes), [
   [{{ id: "retry" }}],
@@ -114,16 +122,17 @@ def test_rewritten_network_module_requires_exact_changed_header(
     cells = tmp_path / "cells-test.js"
     cells.write_bytes(_cells_module())
     source = (
-        b'import {zr as zj,__tla as Mj}from"./cells-test.js";'
-        b"const st=async()=>{};const ve=async value=>value;"
-        b"function createNetwork(post){let t=()=>({POST:post}),e=()=>({}),"
-        b"r=()=>({header:e()});return{sendComponentValues:()=>{},"
-        b'sendSave:n=>t().POST("/api/kernel/save",{body:n,parseAs:"text",params:r()}).then(ve),'
-        b"sendDocumentTransaction:async n=>(await st(),t().POST("
-        b'"/api/document/transaction",'
-        b"{body:n,params:r()}).then(ve)),"
-        b'sendRun:async n=>(await st(),t().POST("/api/kernel/run",{body:n,params:r()})'
-        b".then(ve))}};export {createNetwork};"
+        b'import {zo as $e}from"./cells-test.js";'
+        b"const sn=async()=>{};const lp=async value=>value;"
+        b"function createNetwork(post){let e=()=>({POST:post}),t=()=>({}),"
+        b"n=()=>({header:t()});return{sendComponentValues:()=>{},"
+        b"sendSave:t=>e().POST(`/api/kernel/save`,{body:t,parseAs:`text`,params:n()})"
+        b".then(lp),"
+        b"sendDocumentTransaction:async t=>(await sn(),e().POST("
+        b"`/api/document/transaction`,"
+        b"{body:t,params:n()}).then(lp)),"
+        b"sendRun:async t=>(await sn(),e().POST(`/api/kernel/run`,{body:t,params:n()})"
+        b".then(lp))}};export {createNetwork};"
     )
 
     index = tmp_path / "index-test.js"

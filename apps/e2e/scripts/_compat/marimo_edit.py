@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from importlib.metadata import version
 
-EXPECTED_MARIMO_VERSION = "0.24.0"
+EXPECTED_MARIMO_VERSION = "0.24.2"
 EXPECTED_DEFAULT_LSP_PORT = 2718
 
 

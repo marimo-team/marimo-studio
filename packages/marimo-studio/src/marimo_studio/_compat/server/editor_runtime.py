@@ -22,11 +22,11 @@ _CONFIG_ASSET = re.compile(r"^/assets/config-[A-Za-z0-9_-]+\.js$")
 _CELLS_ASSET = re.compile(r"^/assets/cells-[A-Za-z0-9_-]+\.js$")
 _INDEX_ASSET = re.compile(r"^/assets/index-[A-Za-z0-9_-]+\.js$")
 _PANELS_ASSET = re.compile(r"^/assets/panels-[A-Za-z0-9_-]+\.js$")
-_COPILOT_EXTENSION = b"Ru.of(Rm())"
-_GATED_COPILOT_EXTENSION = b't.copilot==="github"?Ru.of(Rm()):[]'
-_COPILOT_LSP_URL = b"this.formatWsURL(`/lsp/${t}`)"
+_COPILOT_EXTENSION = b"ad.of(Bt())"
+_GATED_COPILOT_EXTENSION = b"e.copilot===`github`?ad.of(Bt()):[]"
+_COPILOT_LSP_URL = b"this.formatWsURL(`/lsp/${e}`)"
 _STUDIO_COPILOT_LSP_URL = (
-    b"new URL(this.formatWsURL(`/lsp/${t}`).toString().replace("
+    b"new URL(this.formatWsURL(`/lsp/${e}`).toString().replace("
     b'"/_marimo-studio/editor/lsp/","/lsp/"))'
 )
 _IMMEDIATE_LSP_RECONNECT = b"queueMicrotask(()=>this.reconnect())"
@@ -34,62 +34,69 @@ _BOUNDED_LSP_RECONNECT = (
     b"this.options.onConnectionFailure?this.options.onConnectionFailure(t):"
     b"setTimeout(()=>{this.isClosed||this.reconnect()},this.options.retryDelayMs)"
 )
-_DOCUMENT_CHANGE_QUEUE = (
-    b"var _m=[],$P=Sg(()=>{let e=FP(_m);_m=[],e.length!==0&&"
-    b"Sr().sendDocumentTransaction({changes:e})},400);"
+# Keep Marimo's save barrier and transaction queue around Studio admission.
+_DOCUMENT_CHANGE_QUEUE = b"var $H=[],eU=[]"
+_NATIVE_DOCUMENT_TRANSACTION = b"await rd().sendDocumentTransaction({changes:t})"
+_ORDERED_DOCUMENT_TRANSACTION = (
+    b"await marimoStudioSendDocumentTransaction({changes:t})"
 )
 _DOCUMENT_RUNTIME = (
     files("marimo_studio._compat.server").joinpath("editor_document.js").read_bytes()
 )
 _ORDERED_DOCUMENT_CHANGE_QUEUE = b"""
-var _m=[];
+var marimoStudioPendingTransactions=[];
 var marimoStudioDocumentTransactions=createStudioDocumentTransactions({
-  takeChanges:()=>{const changes=FP(_m);_m=[];return changes},
-  sendTransaction:request=>Sr().sendDocumentTransaction(request),
-  cancelScheduled:()=>$P.cancel(),
+  takeChanges:()=>marimoStudioPendingTransactions.shift()??[],
+  sendTransaction:request=>rd().sendDocumentTransaction(request),
 });
+function marimoStudioSendDocumentTransaction(request){
+  marimoStudioPendingTransactions.push(request.changes);
+  return marimoStudioDocumentTransactions.flush();
+}
 marimoStudioAwaitDocumentMutation=marimoStudioDocumentTransactions.awaitMutation;
 marimoStudioDocumentMutationGeneration=marimoStudioDocumentTransactions.generation;
 marimoStudioReportDocumentSave=marimoStudioDocumentTransactions.reportSave;
-marimoStudioFlushDocumentChanges=marimoStudioDocumentTransactions.flush;
-var $P=Sg(()=>{marimoStudioFlushDocumentChanges().catch(()=>{})},400);
+marimoStudioFlushDocumentChanges=lU;
+marimoStudioFlushBeforeDocumentSave=marimoStudioDocumentTransactions.flush;
+var $H=[],eU=[]
 """
-_CELLS_EXPORT = b",CT as zt};"
+_CELLS_EXPORT = b",RB as zt};"
 _ORDERED_CELLS_EXPORT = (
-    b",CT as zt,createStudioDocumentRequests as studioCreateDocumentRequests,"
+    b",RB as zt,createStudioDocumentRequests as studioCreateDocumentRequests,"
     b"marimoStudioAwaitDocumentMutation as studioAwaitDocumentMutation,"
     b"marimoStudioDocumentMutationGeneration as studioDocumentMutationGeneration,"
     b"marimoStudioFlushDocumentChanges as studioFlushDocumentChanges,"
+    b"marimoStudioFlushBeforeDocumentSave as studioFlushBeforeDocumentSave,"
     b"marimoStudioReportDocumentSave as studioReportDocumentSave};"
 )
-_INDEX_CELLS_IMPORT = b'zr as zj,__tla as Mj}from"./cells-'
+_INDEX_CELLS_IMPORT = b'zo as $e}from"./cells-'
 _ORDERED_INDEX_CELLS_IMPORT = (
-    b"zr as zj,studioCreateDocumentRequests,studioAwaitDocumentMutation,"
-    b"studioFlushDocumentChanges,"
-    b"studioDocumentMutationGeneration,studioReportDocumentSave,"
-    b'__tla as Mj}from"./cells-'
+    b"zo as $e,studioCreateDocumentRequests,studioAwaitDocumentMutation,"
+    b"studioFlushDocumentChanges,studioFlushBeforeDocumentSave,"
+    b'studioDocumentMutationGeneration,studioReportDocumentSave}from"./cells-'
 )
 _NETWORK_SEND_SAVE = (
-    b'sendSave:n=>t().POST("/api/kernel/save",{body:n,parseAs:"text",params:r()})'
-    b".then(ve)"
+    b"sendSave:t=>e().POST(`/api/kernel/save`,{body:t,parseAs:`text`,params:n()})"
+    b".then(lp)"
 )
 _NETWORK_SEND_DOCUMENT_TRANSACTION = (
-    b"sendDocumentTransaction:async n=>(await st(),t().POST("
-    b'"/api/document/transaction",'
-    b"{body:n,params:r()}).then(ve))"
+    b"sendDocumentTransaction:async t=>(await sn(),e().POST("
+    b"`/api/document/transaction`,"
+    b"{body:t,params:n()}).then(lp))"
 )
-_NETWORK_REQUEST_FACTORY = b"r=()=>({header:e()});return{sendComponentValues:"
+_NETWORK_REQUEST_FACTORY = b"n=()=>({header:t()});return{sendComponentValues:"
 _DOCUMENT_NETWORK_BOOTSTRAP = b"""
 const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   flush:()=>studioFlushDocumentChanges(),
+  flushBeforeSave:()=>studioFlushBeforeDocumentSave(),
   awaitMutation:()=>studioAwaitDocumentMutation(),
   generation:()=>studioDocumentMutationGeneration(),
   reportSave:(generation,succeeded)=>studioReportDocumentSave(generation,succeeded),
 }, {
-  post:(...args)=>t().POST(...args),
-  waitForConnection:()=>st(),
-  params:()=>r(),
-  handleResponse:result=>ve(result),
+  post:(...args)=>e().POST(...args),
+  waitForConnection:()=>sn(),
+  params:()=>n(),
+  handleResponse:result=>lp(result),
 });
 """
 _ORDERED_NETWORK_SEND_DOCUMENT_TRANSACTION = (
@@ -100,23 +107,24 @@ _ORDERED_NETWORK_SEND_SAVE = (
     b"sendSave:request=>marimoStudioDocumentRequests.sendSave(request)"
 )
 _NETWORK_SEND_RUN = (
-    b'sendRun:async n=>(await st(),t().POST("/api/kernel/run",{body:n,params:r()})'
-    b".then(ve))"
+    b"sendRun:async t=>(await sn(),e().POST(`/api/kernel/run`,{body:t,params:n()})"
+    b".then(lp))"
 )
 _ORDERED_NETWORK_SEND_RUN = (
     b"sendRun:request=>marimoStudioDocumentRequests.sendRun(request)"
 )
 _QUERY_PARAM_HANDLERS = (
-    b"const aA={append:t=>{let A=new URL(window.location.href);"
-    b'A.searchParams.append(t.key,t.value),window.history.pushState({},"",'
-    b"`${A.pathname}${A.search}`)},set:t=>{let A=new URL(window.location.href);"
-    b"Array.isArray(t.value)?(A.searchParams.delete(t.key),t.value.forEach(e=>"
-    b"A.searchParams.append(t.key,e))):A.searchParams.set(t.key,t.value),"
-    b'window.history.pushState({},"",`${A.pathname}${A.search}`)},delete:t=>{'
-    b"let A=new URL(window.location.href);t.value==null?A.searchParams.delete("
-    b"t.key):A.searchParams.delete(t.key,t.value),window.history.pushState({},"
-    b'"",`${A.pathname}${A.search}`)},clear:()=>{let t=new URL(window.location.href);'
-    b't.search="",window.history.pushState({},"",`${t.pathname}${t.search}`)}};'
+    b"var jn={append:e=>{let t=new URL(window.location.href);t.searchParams."
+    b"append(e.key,e.value),window.history.pushState({},``,`${t.pathname}${t"
+    b".search}`)},set:e=>{let t=new URL(window.location.href);Array.isArray("
+    b"e.value)?(t.searchParams.delete(e.key),e.value.forEach(n=>t.searchPara"
+    b"ms.append(e.key,n))):t.searchParams.set(e.key,e.value),window.history."
+    b"pushState({},``,`${t.pathname}${t.search}`)},delete:e=>{let t=new URL("
+    b"window.location.href);e.value==null?t.searchParams.delete(e.key):t.sea"
+    b"rchParams.delete(e.key,e.value),window.history.pushState({},``,`${t.pa"
+    b"thname}${t.search}`)},clear:()=>{let e=new URL(window.location.href);e"
+    b".search=``,window.history.pushState({},``,`${e.pathname}${e.search}`)}"
+    b"};"
 )
 _RETAINED_QUERY_KEYS_JSON = json.dumps(
     sorted(PRIVATE_QUERY_KEYS),
@@ -134,7 +142,7 @@ _PROTECTED_QUERY_PARAM_HANDLERS = (
     + b"),marimoStudioRetainedQueryKeys=new Set("
     + _RETAINED_QUERY_KEYS_JSON
     + b'),marimoStudioPushQuery=t=>window.history.pushState({},"",'
-    b"`${t.pathname}${t.search}${t.hash}`),aA={append:t=>{if("
+    b"`${t.pathname}${t.search}${t.hash}`),jn={append:t=>{if("
     b"marimoStudioImmutableQueryKeys.has(t.key))return;let A=new URL("
     b"window.location.href);"
     b"A.searchParams.append(t.key,t.value),marimoStudioPushQuery(A)},set:t=>{if("
@@ -400,13 +408,18 @@ def _serialize_document_transactions(document: bytes) -> bytes:
         (
             b"var marimoStudioAwaitDocumentMutation,"
             b"marimoStudioDocumentMutationGeneration,"
-            b"marimoStudioFlushDocumentChanges,marimoStudioReportDocumentSave;"
-            + _DOCUMENT_RUNTIME
-            + document
+            b"marimoStudioFlushDocumentChanges,marimoStudioFlushBeforeDocumentSave,"
+            b"marimoStudioReportDocumentSave;" + _DOCUMENT_RUNTIME + document
         ),
         _DOCUMENT_CHANGE_QUEUE,
         _ORDERED_DOCUMENT_CHANGE_QUEUE,
         "document transaction queue",
+    )
+    rewritten = _replace_pinned_asset(
+        rewritten,
+        _NATIVE_DOCUMENT_TRANSACTION,
+        _ORDERED_DOCUMENT_TRANSACTION,
+        "native document transaction dispatch",
     )
     return _replace_pinned_asset(
         rewritten,
@@ -426,7 +439,7 @@ def _await_document_transactions_before_network_run(document: bytes) -> bytes:
     rewritten = _replace_pinned_asset(
         rewritten,
         _NETWORK_REQUEST_FACTORY,
-        b"r=()=>({header:e()});"
+        b"n=()=>({header:t()});"
         + _DOCUMENT_NETWORK_BOOTSTRAP
         + b"return{sendComponentValues:",
         "editor network request factory",

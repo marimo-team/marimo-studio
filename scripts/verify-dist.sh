@@ -86,7 +86,7 @@ def verify_metadata(source, archive):
     for name, specifier in {
         "agent-plugins": ">=0.2",
         "htpy": ">=26.5.1",
-        "marimo-export": ">=0.0.7",
+        "marimo-export": ">=0.0.8",
         "tree-sitter": ">=0.25.2",
         "tree-sitter-javascript": ">=0.25.0",
         "watchdog": ">=6.0.0",

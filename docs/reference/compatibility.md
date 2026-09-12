@@ -69,7 +69,7 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 | Component                        | 0.1.1 contract                                                                    |
 | -------------------------------- | --------------------------------------------------------------------------------- |
 | Python                           | 3.10 through 3.14                                                                 |
-| Marimo                           | 0.24.0                                                                            |
+| Marimo                           | 0.24.2                                                                            |
 | [Deno](https://docs.deno.com/)   | 2.9.5 from the `deno` extra for React, Reveal.js, and Svelte authoring            |
 | [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment |
 | Browser acceptance               | Current Chromium on Linux and Windows                                             |
