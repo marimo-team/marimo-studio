@@ -1,0 +1,44 @@
+apps/e2e/scripts/serve-installed-package.mjs
+  s_dfb37ece42edcc::t_e3ee209a6074ec 168
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_dfb37ece42edcc::t_e3ee209a6074ec 16
+scripts/verify-dist.sh
+  s_dfb37ece42edcc::t_e3ee209a6074ec 89
+packages/marimo-studio/pyproject.toml
+  s_dfb37ece42edcc::t_e3ee209a6074ec 15
+packages/marimo-studio/src/marimo_studio/_compat/server/editor_document.js
+  s_dfb37ece42edcc::t_efc3fce89c3738 189
+  s_dfb37ece42edcc::t_ab60b78e21fce7 1
+docs/reference/compatibility.md
+  s_dfb37ece42edcc::t_bbdd25e5aa1b9c 72
+packages/marimo-studio/src/marimo_studio/_compat/release.json
+  s_dfb37ece42edcc::t_7e76da7965d816 4
+scripts/verify-installed-package.py
+  s_dfb37ece42edcc::t_e3ee209a6074ec 332,334
+packages/marimo-studio/tests/server/test_editor_runtime_assets.py
+  s_dfb37ece42edcc::t_122d27d3c44e6b 378-380
+packages/marimo-frontend/patches/marimo-frontend.patch
+  s_dfb37ece42edcc::t_e1f3e15cc337a1 2,9-10,290,293,320,333,344,353,471,480-483,559
+pnpm-workspace.yaml
+  s_dfb37ece42edcc::t_e3ee209a6074ec 14
+packages/marimo-studio/src/marimo_studio/_compat/server/editor_runtime.py
+  s_dfb37ece42edcc::t_efc3fce89c3738 25-27,29,37-41,47,49-50,52-55,59-61,63,65,69,72,74-76,79-80,83-85,87,91,96-99,110-111,145,411-412,418-423,442
+packages/marimo-frontend/patches/marimo-frontend.json
+  s_dfb37ece42edcc::t_7e76da7965d816 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5dc4dbb3868ae5b0ae82b9a17e5152bb6e5ce730",
+  "prompts": {},
+  "sessions": {
+    "s_dfb37ece42edcc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09471-abea-7831-9643-a6a4a68a0a9d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
