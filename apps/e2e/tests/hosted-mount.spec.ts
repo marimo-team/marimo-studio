@@ -194,8 +194,17 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
 
   await waitForPreview(page);
   unusedNativeImages.recovered();
+  const previewElement = await page
+    .locator('iframe[data-preview-runtime-frame="server"]')
+    .elementHandle();
+  const retiringFrame = await previewElement
+    ?.contentFrame()
+    .finally(() => previewElement.dispose());
+  if (!retiringFrame) throw new Error("The hosted preview frame is unavailable.");
+  const retirement = browserDiagnostics.expectFrameRetirement(retiringFrame);
   await page.goto(`${baseUrl}/`);
   await expect(page.locator("[data-cell-id]").first()).toBeVisible();
+  retirement.recovered();
   await page.goto(`${baseUrl}/studio/dashboard/`);
   await expect(editorSlider(page, /^Hosted scale/)).toHaveAttribute("aria-valuenow", "3");
   const preview = await waitForPreview(page);
