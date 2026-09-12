@@ -262,10 +262,11 @@ const studioAwaitDocumentMutation = () => barrier;
 const studioDocumentMutationGeneration = () => generation;
 const studioReportDocumentSave = (captured, succeeded) =>
   reports.push([captured, succeeded]);
-const st = async () => {{}};
-const r = () => ({{}});
-const ve = (value) => value;
-const t = () => ({{
+const studioFlushBeforeDocumentSave = studioFlushDocumentChanges;
+const sn = async () => {{}};
+const n = () => ({{}});
+const lp = (value) => value;
+const e = () => ({{
   POST(url, options) {{
     requests.push([url, options.body, generation]);
     return new Promise((resolve, reject) =>
@@ -309,6 +310,86 @@ assert.equal(requests.some((entry) => entry[1] === "recovery"), false);
         check=True,
         capture_output=True,
         text=True,
+    )
+
+
+@pytest.mark.requires_node
+@pytest.mark.parametrize("save_succeeds", [True, False])
+def test_native_document_queue_holds_edits_until_save_settles(
+    save_succeeds: bool,
+) -> None:
+    assets = Path(marimo.__file__).parent / "_static" / "assets"
+    cells = next(assets.glob("cells-*.js")).read_bytes()
+    adapted = _serialize_document_transactions(cells).decode()
+    start = adapted.index("var marimoStudioPendingTransactions=[];")
+    end = adapted.index("function hU(", start)
+    native_queue = adapted[start:end]
+    script = f"""
+import assert from "node:assert/strict";
+{_DOCUMENT_RUNTIME.decode()}
+var marimoStudioAwaitDocumentMutation, marimoStudioDocumentMutationGeneration;
+var marimoStudioReportDocumentSave, marimoStudioFlushDocumentChanges;
+var marimoStudioFlushBeforeDocumentSave;
+const QH = (changes) => changes;
+const $s = (callback) => Object.assign(callback, {{ cancel() {{}} }});
+class af {{
+  constructor() {{
+    this.promise = new Promise((resolve) => {{ this.resolve = resolve; }});
+  }}
+}}
+const events = [];
+const saveStarted = new af();
+const saveRelease = new af();
+const rd = () => ({{
+  async sendDocumentTransaction(request) {{
+    assert.match(request.studioOperationId, /^[a-z0-9-]{{16,128}}$/);
+    events.push(request.changes[0].code);
+    return true;
+  }},
+}});
+{native_queue}
+const requests = createStudioDocumentRequests({{
+  flush: () => marimoStudioFlushDocumentChanges(),
+  flushBeforeSave: () => marimoStudioFlushBeforeDocumentSave(),
+  generation: () => marimoStudioDocumentMutationGeneration(),
+  reportSave: () => {{}},
+}}, {{
+  async post(url) {{
+    assert.equal(url, "/api/kernel/save");
+    events.push("save started");
+    saveStarted.resolve();
+    await saveRelease.promise;
+    events.push("save finished");
+    if (!{json.dumps(save_succeeds)}) throw new Error("save failed");
+  }},
+  params: () => ({{}}),
+  handleResponse: (value) => value,
+}});
+$H.push({{type: "set-code", cellId: "cell", code: "before save"}});
+const saving = mU(() => requests.sendSave({{}}));
+await saveStarted.promise;
+assert.deepEqual(events, ["before save", "save started"]);
+$H.push({{type: "set-code", cellId: "cell", code: "during save"}});
+const flushing = lU();
+await Promise.resolve();
+assert.deepEqual(events, ["before save", "save started"]);
+saveRelease.resolve();
+const outcome = await Promise.allSettled([saving, flushing]);
+assert.equal(
+  outcome[0].status, {json.dumps("fulfilled" if save_succeeds else "rejected")},
+);
+assert.equal(outcome[1].status, "fulfilled");
+assert.deepEqual(events, [
+  "before save", "save started", "save finished", "during save",
+]);
+"""
+    subprocess.run(
+        ["node", "--input-type=module"],
+        input=script,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
 
 
@@ -389,7 +470,7 @@ const initial = """
 const apply = (operation, data) => {
   window.location.href = initial;
   historyEntries.length = 0;
-  aA[operation](data);
+  jn[operation](data);
   return { href: window.location.href, writes: historyEntries.length };
 };
 const results = {
@@ -501,7 +582,7 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
     tmp_path: Path,
 ) -> None:
     asset = tmp_path / "cell-editor-test.js"
-    asset.write_bytes(b"const extensions = [Ru.of(Rm())];")
+    asset.write_bytes(b"const extensions = [ad.of(Bt())];")
     observed_scope: dict[str, object] = {}
     messages: list[Message] = []
 
@@ -558,7 +639,7 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
         for message in messages
         if message["type"] == "http.response.body"
     )
-    assert body == b'const extensions = [t.copilot==="github"?Ru.of(Rm()):[]];'
+    assert body == b"const extensions = [e.copilot===`github`?ad.of(Bt()):[]];"
 
 
 def test_editor_root_rewrite_requires_a_complete_identity_response() -> None:
@@ -702,18 +783,18 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
     cells = next(
         path
         for path in assets.glob("cells-*.js")
-        if b"sendDocumentTransaction({changes:e})" in path.read_bytes()
+        if b"sendDocumentTransaction({changes:t})" in path.read_bytes()
     )
     index = next(
         path
         for path in assets.glob("index-*.js")
-        if b'sendRun:async n=>(await st(),t().POST("/api/kernel/run"'
+        if b"sendRun:async t=>(await sn(),e().POST(`/api/kernel/run`"
         in path.read_bytes()
     )
     panels = next(
         path
         for path in assets.glob("panels-*.js")
-        if b"const aA={append:" in path.read_bytes()
+        if b"var jn={append:" in path.read_bytes()
     )
     urls = [
         f"/_marimo-studio/editor/assets/{path.name}"
@@ -749,7 +830,7 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
         assert response.headers["cache-control"] == "no-store"
         for header in ("accept-ranges", "content-range", "etag", "last-modified"):
             assert header not in response.headers
-    assert before[0].content.count(b't.copilot==="github"?Ru.of(Rm()):[]') == 1
+    assert before[0].content.count(b"e.copilot===`github`?ad.of(Bt()):[]") == 1
     assert before[1].content.count(b'"/_marimo-studio/editor/lsp/","/lsp/"') == 1
     assert _DOCUMENT_RUNTIME in before[2].content
     assert b"this.options.onConnectionFailure" in before[2].content

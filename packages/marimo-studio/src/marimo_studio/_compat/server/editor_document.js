@@ -1,8 +1,4 @@
-export function createStudioDocumentTransactions({
-  takeChanges,
-  sendTransaction,
-  cancelScheduled,
-}) {
+export function createStudioDocumentTransactions({ takeChanges, sendTransaction }) {
   let generation = 0;
   let admittedGeneration = 0;
   let operationSequence = 0;
@@ -161,7 +157,6 @@ export function createStudioDocumentTransactions({
   }
 
   function flush() {
-    cancelScheduled();
     if (draining) return draining;
     const pending = drain();
     draining = pending;
@@ -191,7 +186,7 @@ export function createStudioDocumentRequests(document, network) {
       throw new Error("Studio document transaction evidence is unavailable");
     },
     async sendSave(request) {
-      await document.flush();
+      await document.flushBeforeSave();
       const generation = document.generation();
       try {
         const result = await network

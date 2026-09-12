@@ -1,5 +1,5 @@
 {
-  "version": "0.24.0",
-  "commit": "854f7f2910b4bb4b6aebe650efc1f83ad40d9bef",
-  "frontendPatchSha256": "b11522a385d2b341364abd9d86e64b29f6a9557c6d32588903c187154b658525"
+  "version": "0.24.2",
+  "commit": "1c2a1be4528ea0560b04bdf0de412701d09238cc",
+  "frontendPatchSha256": "982562869a75f0b9554811ed3fea7519fa54b2e7200cb286119c5d5f99f6953a"
 }

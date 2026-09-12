@@ -6,7 +6,7 @@ import { appDirectory, repositoryDirectory } from "../scripts/paths.mjs";
 
 const launcher = resolve(appDirectory, "scripts/_compat/marimo_edit.py");
 
-const configurePort = (offset: number, installedVersion = "0.24.0") =>
+const configurePort = (offset: number, installedVersion = "0.24.2") =>
   spawnSync(
     "uv",
     [
@@ -40,7 +40,7 @@ test("rejects a different pinned Marimo version", () => {
   const result = configurePort(0, "0.25.0");
 
   expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain("expected version 0.24.0, found 0.25.0");
+  expect(result.stderr).toContain("expected version 0.24.2, found 0.25.0");
 });
 
 test("rejects an E2E offset beyond the LSP port range", () => {

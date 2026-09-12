@@ -1,13 +1,13 @@
 diff --git a/frontend/src/components/ui/native-select.tsx b/frontend/src/components/ui/native-select.tsx
-index 31236f3be..551d49f88 100644
+index 53766a497..0d8f52044 100644
 --- a/frontend/src/components/ui/native-select.tsx
 +++ b/frontend/src/components/ui/native-select.tsx
 @@ -6,7 +6,7 @@ import { cn } from "@/utils/cn";
  import { Events } from "@/utils/events";
  
  export const selectStyles = cva(
--  "flex h-6 w-fit mb-1 items-center justify-between rounded-sm bg-background px-2 text-sm font-prose ring-offset-background placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
-+  "flex min-h-11 w-fit mb-1 items-center justify-between rounded-sm bg-background px-2 text-sm font-prose ring-offset-background placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
+-  "flex h-6 w-fit mb-1 items-center justify-between rounded-sm bg-background px-2 text-sm font-prose ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer forced-color-adjust-none forced-colors:bg-[ButtonFace] forced-colors:text-[ButtonText] forced-colors:disabled:text-[GrayText]",
++  "flex min-h-11 w-fit mb-1 items-center justify-between rounded-sm bg-background px-2 text-sm font-prose ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer forced-color-adjust-none forced-colors:bg-[ButtonFace] forced-colors:text-[ButtonText] forced-colors:disabled:text-[GrayText]",
    {
      variants: {
        variant: {
@@ -287,10 +287,10 @@ index d0b3fb840..f8e17b2bd 100644
  
      it("filters options based on search input and handles selection", async () => {
 diff --git a/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx b/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
-index c67866976..905037b03 100644
+index f86736c96..53ffc1619 100644
 --- a/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
 +++ b/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
-@@ -11,17 +11,25 @@ import { SliderPlugin } from "../SliderPlugin";
+@@ -19,17 +19,25 @@ import { SliderPlugin } from "../SliderPlugin";
  
  vi.mock("@/components/ui/slider", () => ({
    Slider: ({
@@ -317,7 +317,7 @@ index c67866976..905037b03 100644
        <button
          aria-label="Slider change"
          disabled={disabled}
-@@ -52,18 +60,22 @@ describe("SliderPlugin", () => {
+@@ -60,18 +68,22 @@ describe("SliderPlugin", () => {
  
    const createProps = ({
      debounce,
@@ -330,7 +330,7 @@ index c67866976..905037b03 100644
 +    host?: HTMLElement;
      includeInput: boolean;
 +    label?: string | null;
-     setValue: ReturnType<typeof vi.fn>;
+     setValue: Mock<Setter<number>>;
    }): IPluginProps<
      number,
      z.infer<typeof SliderPlugin.prototype.validator>
@@ -341,7 +341,7 @@ index c67866976..905037b03 100644
        value: 5,
        setValue,
        data: {
-@@ -71,7 +83,7 @@ describe("SliderPlugin", () => {
+@@ -79,7 +91,7 @@ describe("SliderPlugin", () => {
          start: 0,
          stop: 10,
          step: 1,
@@ -350,7 +350,7 @@ index c67866976..905037b03 100644
          debounce,
          orientation: "horizontal" as const,
          showValue: false,
-@@ -126,6 +138,87 @@ describe("SliderPlugin", () => {
+@@ -134,6 +146,87 @@ describe("SliderPlugin", () => {
      });
    };
  
@@ -468,7 +468,7 @@ index 4f4ab9cf7..abbd99528 100644
  
    describe("save_changes", () => {
 diff --git a/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts b/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts
-index 8007998d2..d5c8f4cfe 100644
+index f9047d7ea..2fce1d863 100644
 --- a/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts
 +++ b/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts
 @@ -98,7 +98,7 @@ describe("WidgetRegistry models", () => {
@@ -477,10 +477,10 @@ index 8007998d2..d5c8f4cfe 100644
      registry.setModel(testId, model);
 -    registry.delete(testId);
 +    await registry.delete(testId);
-     await expect(registry.getModel(testId)).rejects.toThrow();
-   });
- 
-@@ -344,10 +344,74 @@ describe("WidgetRegistry.getWidget", () => {
+     await expect(registry.getModel(testId)).rejects.toThrow(
+       `Model not found for key: ${testId}`,
+     );
+@@ -348,10 +348,74 @@ describe("WidgetRegistry.getWidget", () => {
      // Let the import resolve and initialize start.
      await new Promise((r) => setTimeout(r, 0));
  
@@ -556,7 +556,7 @@ index 8007998d2..d5c8f4cfe 100644
    it("destroys the generation on a close message", async () => {
      const initCleanup = vi.fn();
      const widgetDef = {
-@@ -672,7 +736,7 @@ describe("WidgetRegistry runtime styles", () => {
+@@ -676,7 +740,7 @@ describe("WidgetRegistry runtime styles", () => {
        controller.abort();
        expect(root.querySelector("style")).toBeNull();
      } finally {
