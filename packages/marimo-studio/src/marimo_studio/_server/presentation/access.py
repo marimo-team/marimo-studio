@@ -140,9 +140,26 @@ class PresentationCapabilityHandler:
         retained_runtime_asset = (
             scope["type"] == "http"
             and method in {"GET", "HEAD"}
-            and route.target.startswith(f"{SUPPORT_PATH}/assets/")
+            and (
+                route.target.startswith(f"{SUPPORT_PATH}/assets/")
+                or (
+                    context is not None
+                    and context.mode == "edit"
+                    and route.target.startswith("/@file/")
+                )
+            )
         )
-        if valid and route.capability.kind == "revision" and not retained_runtime_asset:
+        session_model = (
+            context is not None
+            and context.mode == "edit"
+            and route.target == "/api/kernel/set_model_value"
+        )
+        if (
+            valid
+            and route.capability.kind == "revision"
+            and not retained_runtime_asset
+            and not session_model
+        ):
             current = await self._current_revision_matches(route, location, context)
             if not current and route.target in {
                 f"{SUPPORT_PATH}/views/{route.view}/values",

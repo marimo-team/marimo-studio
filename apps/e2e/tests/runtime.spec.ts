@@ -554,6 +554,7 @@ test("refreshes a popout view and preserves its public query across reload", asy
     await expect(rendered.locator('strong[mo-value="metric"]')).toHaveText("42");
     await waitForPresentationRuntime(rendered);
     await recoverRequestAbort(refreshedDocument);
+    await recoverRequestAbort(refreshedProjectionReads);
     await previewFrame(page).getByRole("link", { name: "APAC", exact: true }).click();
     await expect(page).toHaveURL(/region=apac/);
     await expect(popout).toHaveURL(/region=apac/);
@@ -590,7 +591,6 @@ test("refreshes a popout view and preserves its public query across reload", asy
     ).toBe("apac");
     await expect(rendered.locator("#popout-region")).toHaveText("apac");
     await expect(rendered.locator('strong[mo-value="metric"]')).toHaveText("42");
-    await recoverRequestAbort(refreshedProjectionReads);
     await recoverRequestAbort(preReloadDocument);
     await recoverRequestAbort(retiredDevelopmentStream);
   } finally {

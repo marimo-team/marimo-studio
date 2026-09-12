@@ -14,12 +14,14 @@ export const useOutputLifecycle = ({
   readOutputs,
   projectionRevision,
   runtimeReady,
+  refreshKey,
 }: {
   activeProjections: ProjectionRequest[];
   connectionState: RuntimeConnectionState;
   readOutputs: OutputReader;
   projectionRevision: string;
   runtimeReady: boolean;
+  refreshKey?: string;
 }): OutputReader => {
   const reconciler = useMemo(() => new OutputOwnerReconciler(readOutputs), [readOutputs]);
   const ownedReader = useMemo<OutputReader>(
@@ -35,12 +37,23 @@ export const useOutputLifecycle = ({
       reconciler.pause();
       return;
     }
-    reconciler.update(projectionRevision, {
-      revision: getRuntimeConfig().revision,
-      projections: [],
-      activeProjections,
-    });
-  }, [activeProjections, connectionState, projectionRevision, reconciler, runtimeReady]);
+    reconciler.update(
+      projectionRevision,
+      {
+        revision: getRuntimeConfig().revision,
+        projections: [],
+        activeProjections,
+      },
+      refreshKey,
+    );
+  }, [
+    activeProjections,
+    connectionState,
+    projectionRevision,
+    reconciler,
+    runtimeReady,
+    refreshKey,
+  ]);
 
   return batchedReader;
 };

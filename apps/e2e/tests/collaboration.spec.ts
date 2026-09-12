@@ -258,6 +258,9 @@ if __name__ == "__main__":`,
       .toBe(200);
     await expect(page.getByLabel("Switch view")).toContainText("report");
     await expect(firstPreview.getByRole("heading", { name: "Report" })).toBeVisible();
+    await expect(
+      firstPreview.getByRole("button", { name: "Select a target", exact: true }),
+    ).toBeVisible();
     await waitForPreview(page);
     replacedEventStreams.recovered();
     await recoverRequestAbort(supersededDashboardConfig);

@@ -297,6 +297,26 @@ Projected output ownership is explicit. A selector stays active while its
 final presentation owner remains mounted. Value reads can share one kernel
 request across several hosts.
 
+### Development preview overlays
+
+`KernelOutputRenderer` accepts an optional `overlays` callback that selects
+named display objects from the notebook namespace. The callback manages objects
+it creates; the renderer owns their formatted native resources. The existing output
+response carries these overlays alongside requested projections. Stable
+objects retain their native output resources; completed notebook runs refresh
+the selection through the existing output reader.
+
+In edit mode, the private Lens adapter reuses an open notebook Lens, including
+anonymous outputs created by Marimo's auto-mount hook. Otherwise, when Lens is
+installed, it owns one instance with `STUDIO_RESULT_SELECTOR`. Borrowed
+instances keep their configured selector and notebook ownership.
+
+The native renderer mounts overlays outside the artifact shell, suppressing
+widgets already projected in the view. Widget model IDs and native virtual
+files retain their authenticated kernel scope across development view
+replacements. Other native requests keep their revision checks. Run mode,
+WebAssembly, and static delivery do not create overlays.
+
 ## WebAssembly runtime projection
 
 `BrowserRuntimeProjector` builds `BrowserRuntimeProjection` from the saved

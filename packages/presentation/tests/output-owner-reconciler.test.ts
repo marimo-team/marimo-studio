@@ -547,3 +547,32 @@ test("waits for a new read after reconnect", async () => {
 
   assert.equal(cleanupCalls, 0);
 });
+
+for (const foreground of [false, true]) {
+  test(`refreshes an unchanged output inventory after an in-flight ${foreground ? "foreground" : "background"} read`, async () => {
+    const initial = deferredResponse();
+    const active = projectionRequest("report", "output");
+    const reader = vi
+      .fn<OutputReader>()
+      .mockReturnValueOnce(initial.promise)
+      .mockResolvedValue(emptyResponse);
+    const reconciler = new OutputOwnerReconciler(reader);
+    const pending = foreground
+      ? reconciler.read(projectionRevisionA, renderRequest(active))
+      : undefined;
+    reconciler.update(projectionRevisionA, request([active]), "run-1");
+    await vi.waitFor(() => assert.equal(reader.mock.calls.length, 1));
+    reconciler.update(projectionRevisionA, request([active]), "run-2");
+    initial.resolve();
+    await pending;
+    await vi.waitFor(() => assert.equal(reader.mock.calls.length, 2));
+    reconciler.update(projectionRevisionA, request([active]), "run-2");
+    await Promise.resolve();
+    assert.equal(reader.mock.calls.length, 2);
+    assert.deepEqual(reader.mock.calls[1]?.[0].projections, []);
+    reconciler.pause();
+    reconciler.update(projectionRevisionA, request([active]), "run-2");
+    await vi.waitFor(() => assert.equal(reader.mock.calls.length, 3));
+    reconciler.dispose();
+  });
+}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 MAX_RUNTIME_VALUE_BYTES = 1_000_000
@@ -54,6 +54,7 @@ class RenderedOutput:
 class OutputRenderResult:
     outputs: dict[str, RenderedOutput]
     errors: dict[str, ValueReadError]
+    overlays: dict[str, RenderedOutput] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -63,6 +64,15 @@ class OutputRenderResult:
             "errors": {
                 selector: error.to_dict() for selector, error in self.errors.items()
             },
+            **(
+                {
+                    "overlays": {
+                        name: output.to_dict() for name, output in self.overlays.items()
+                    }
+                }
+                if self.overlays
+                else {}
+            ),
         }
 
 
@@ -170,13 +180,19 @@ def _parse_value_error(value: object) -> ValueReadError:
 
 
 def _parse_output_result(value: object) -> OutputRenderResult:
-    payload = _exact_record(value, {"outputs", "errors"})
+    payload = _record(value)
+    if set(payload) not in ({"outputs", "errors"}, {"outputs", "errors", "overlays"}):
+        raise ValueError
     outputs = _record(payload["outputs"])
     errors = _record(payload["errors"])
     return OutputRenderResult(
         outputs={
             selector: _parse_rendered_output(output)
             for selector, output in outputs.items()
+        },
+        overlays={
+            name: _parse_rendered_output(output)
+            for name, output in _record(payload.get("overlays", {})).items()
         },
         errors={
             selector: _parse_value_error(error) for selector, error in errors.items()

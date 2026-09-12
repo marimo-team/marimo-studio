@@ -1,4 +1,6 @@
-import { useMemo, useSyncExternalStore } from "react";
+import type { RenderedOutput } from "@marimo-studio/protocol/output-read";
+
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import type { CellIndex } from "../../cells/index";
 import type { OutputReader } from "../../outputs/reader";
@@ -11,6 +13,7 @@ import { createProjectionInventory } from "../../projections/resolution";
 import { useRuntimeProjectionConfig } from "../use-runtime-config";
 import { DuplicateOutputPortal } from "./DuplicateOutputPortal";
 import { OutputPortal } from "./OutputPortal";
+import { OverlayOutputs } from "./OverlayOutputs";
 import { useOutputLifecycle } from "./use-output-lifecycle";
 
 const hostIds = new WeakMap<HTMLElement, number>();
@@ -44,6 +47,33 @@ export const RuntimeOutputs = ({
   runtimeReady: boolean;
 }) => {
   const projectionConfig = useRuntimeProjectionConfig();
+  const [overlays, setOverlays] = useState<RenderedOutput[]>([]);
+  const observeOutputs = useCallback<OutputReader>(
+    async (request, signal) => {
+      const response = await readOutputs(request, signal);
+      if (!signal?.aborted)
+        setOverlays((previous) => {
+          const current = new Map(previous.map((output) => [output.ownerCellId, output]));
+          const next = Object.values(response.overlays ?? {}).map((output) => {
+            const cached = current.get(output.ownerCellId);
+            return cached?.timestamp === output.timestamp ? cached : output;
+          });
+          return next.length === previous.length &&
+            next.every((output, index) => output === previous[index])
+            ? previous
+            : next;
+        });
+      return response;
+    },
+    [readOutputs],
+  );
+  const runtimeCells = [...cells.byId.values()];
+  const refreshKey =
+    projectionConfig.mode === "edit" &&
+    projectionConfig.runtime.id === "server" &&
+    runtimeCells.every((cell) => cell.status !== "running" && cell.status !== "queued")
+      ? JSON.stringify(runtimeCells.map((cell) => [cell.id, cell.lastRunStartTimestamp]))
+      : undefined;
   const hosts = useSyncExternalStore(subscribeOutputHosts, getOutputHosts, getOutputHosts);
   const { resolvedHosts, primaryHosts, activeProjections } = useMemo(() => {
     const inventory = createProjectionInventory(projectionConfig, document);
@@ -80,12 +110,13 @@ export const RuntimeOutputs = ({
   const ownedOutputReader = useOutputLifecycle({
     activeProjections,
     connectionState,
-    readOutputs,
+    readOutputs: observeOutputs,
     projectionRevision: projectionConfig.projectionRevision,
     runtimeReady,
+    refreshKey,
   });
 
-  return resolvedHosts.map(({ binding, host }) => {
+  const projections = resolvedHosts.map(({ binding, host }) => {
     const { resolution } = binding;
     if (resolution.ok && primaryHosts.get(resolution.value.request.target) !== host) {
       return <DuplicateOutputPortal binding={binding} key={hostId(host)} host={host} />;
@@ -114,4 +145,10 @@ export const RuntimeOutputs = ({
       />
     );
   });
+  return (
+    <>
+      {projections}
+      <OverlayOutputs outputs={overlays} />
+    </>
+  );
 };

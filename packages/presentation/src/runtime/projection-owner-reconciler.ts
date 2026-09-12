@@ -41,10 +41,12 @@ const activeTargets = (request: ProjectionOwnershipRequest): string =>
 
 export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipRequest, Response> {
   private appliedActiveTargets: string | undefined;
+  private appliedRefreshKey: string | undefined;
   private blocked = false;
   private convergenceQueued = false;
   private desired: Request | undefined;
   private desiredGeneration = 0;
+  private refreshKey: string | undefined;
   private epoch = 0;
   private readonly knownTargets = new Set<string>();
   private ownershipDirty = false;
@@ -77,8 +79,11 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
     return waitForCaller(operation, signal);
   }
 
-  update(projectionRevision: string, request: Request): void {
+  update(projectionRevision: string, request: Request, refreshKey?: string): void {
     this.enterProjectionRevision(projectionRevision);
+    if (refreshKey !== undefined && refreshKey !== this.refreshKey) {
+      this.refreshKey = refreshKey;
+    }
     this.desired = request;
     this.desiredGeneration += 1;
     this.blocked = false;
@@ -94,9 +99,11 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
     this.sourceAbort.abort();
     this.sourceAbort = new AbortController();
     this.appliedActiveTargets = undefined;
+    this.appliedRefreshKey = undefined;
     this.blocked = false;
     this.desired = undefined;
     this.desiredGeneration = 0;
+    this.refreshKey = undefined;
     this.knownTargets.clear();
     this.ownershipDirty = false;
     this.projectionRevision = undefined;
@@ -112,6 +119,7 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
 
   private enqueue(request: Request, epoch: number, callerSignal?: AbortSignal): Promise<Response> {
     const signal = this.sourceAbort.signal;
+    let refreshKey = this.refreshKey;
     const operation = this.tail.then(() => {
       if (callerSignal?.aborted) {
         throw callerAbortError();
@@ -127,6 +135,7 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
           ? AbortSignal.any([signal, callerSignal])
           : signal;
       sourceSignal.throwIfAborted();
+      refreshKey = this.refreshKey;
       return this.source(request, sourceSignal);
     });
     this.tail = operation.then(
@@ -134,6 +143,7 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
         if (epoch === this.epoch) {
           this.appliedActiveTargets = activeTargets(request);
           this.blocked = false;
+          this.appliedRefreshKey = refreshKey;
           this.ownershipDirty = false;
           this.scheduleConvergence();
         }
@@ -150,6 +160,7 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
       this.retryTimer !== undefined ||
       this.desired === undefined ||
       (!this.ownershipDirty &&
+        this.appliedRefreshKey === this.refreshKey &&
         (this.appliedActiveTargets === undefined ||
           this.appliedActiveTargets === activeTargets(this.desired)))
     ) {
@@ -170,6 +181,7 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
       if (
         desired === undefined ||
         (!this.ownershipDirty &&
+          this.appliedRefreshKey === this.refreshKey &&
           (this.appliedActiveTargets === undefined ||
             this.appliedActiveTargets === activeTargets(desired)))
       ) {
@@ -179,9 +191,13 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
       // selector returns the projection-list member of this same request type.
       const request = {
         ...desired,
-        projections: this.convergenceProjections(desired, this.knownTargets),
+        projections:
+          this.ownershipDirty || this.appliedActiveTargets !== activeTargets(desired)
+            ? this.convergenceProjections(desired, this.knownTargets)
+            : [],
       } as Request;
       const generation = this.desiredGeneration;
+      const refreshKey = this.refreshKey;
       const signal = this.sourceAbort.signal;
       this.ownershipDirty = true;
       try {
@@ -202,6 +218,7 @@ export class ProjectionOwnerReconciler<Request extends ProjectionOwnershipReques
       }
       if (epoch === this.epoch) {
         this.appliedActiveTargets = activeTargets(request);
+        this.appliedRefreshKey = refreshKey;
         this.ownershipDirty = false;
       }
     }

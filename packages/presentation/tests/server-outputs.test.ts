@@ -164,3 +164,36 @@ test("discards canceled queued output work before dispatch", async () => {
   });
   expect(requests[1]?.url).toContain("/_marimo-studio/views/executive/outputs");
 });
+
+test.each(["dispatch", "body"])(
+  "keeps an interrupted server output %s retryable",
+  async (phase) => {
+    commitRuntimeConfig(config);
+    const cancelled = new DOMException("The user aborted a request.", "AbortError");
+    const fetchOutput = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ outputs: {}, errors: {} }));
+    if (phase === "dispatch") fetchOutput.mockRejectedValueOnce(cancelled);
+    else
+      fetchOutput.mockResolvedValueOnce(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(cancelled);
+            },
+          }),
+        ),
+      );
+    globalThis.fetch = fetchOutput;
+    const reconcile = vi.fn<OutputResponseReconciler>((response) => response);
+    const reader = createServerOutputReader(reconcile);
+    const request = { revision: config.revision, projections: [], activeProjections: [] };
+    await expect(reader(request)).rejects.toMatchObject({
+      code: "output-read-interrupted",
+      transient: true,
+    });
+    expect(reconcile).not.toHaveBeenCalled();
+    await expect(reader(request)).resolves.toEqual({ outputs: {}, errors: {} });
+    expect(reconcile).toHaveBeenCalledOnce();
+  },
+);

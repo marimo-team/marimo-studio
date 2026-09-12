@@ -516,7 +516,7 @@ test("retargets a preserved output portal through an authored shell morph", asyn
   `;
   const host = document.querySelector<MarimoOutputElement>("marimo-output")!;
   const runtimeRoot = createRoot(document.querySelector("#runtime-root")!);
-  const readOutputs = vi.fn<OutputReader>();
+  const readOutputs = vi.fn<OutputReader>().mockResolvedValue({ outputs: {}, errors: {} });
   await act(async () => {
     runtimeRoot.render(
       createElement(RuntimeOutputs, {

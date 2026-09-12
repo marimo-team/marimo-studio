@@ -471,3 +471,68 @@ def test_claim_inserted_after_authorize_remains_a_fresh_connector_expectation(
 
     assert runtime_session_id in claimed
     assert cancelled == [runtime_session_id]
+
+
+@pytest.mark.parametrize("edit", [True, False])
+def test_native_widget_resources_retain_edit_session_authority_across_revisions(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    edit: bool,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    if edit:
+        _edit_mode(app)
+    forwarded: list[object] = []
+
+    async def native(_app: Any, scope: Any, receive: Any, send: Any) -> None:
+        forwarded.append(
+            await Request(scope, receive).json()
+            if scope["method"] == "POST"
+            else scope["path"]
+        )
+        await Response(status_code=204)(scope, receive, send)
+
+    monkeypatch.setattr(presentation_access, "_send_capability_app", native)
+    with TestClient(app) as client:
+        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        document = studio.views["dashboard"].root / "index.html"
+        document.write_text(
+            document.read_text(encoding="utf-8") + "\n<p>New revision</p>",
+            encoding="utf-8",
+        )
+        current = client.get("/_marimo-studio/views/dashboard/config").json()
+        assert config["revision"] != current["revision"]
+        headers = {"Marimo-Session-Id": config["presentationSessionId"]}
+        asset = client.get(config["runtime"]["data"]["url"] + "@file/tool.js")
+        assert asset.status_code == (204 if edit else 403)
+        model = {
+            "modelId": "tool-model",
+            "message": {"method": "custom", "content": {}},
+            "buffers": [],
+        }
+        model_url = config["runtime"]["data"]["url"] + "api/kernel/set_model_value"
+        assert client.post(model_url, headers=headers, json=model).status_code == (
+            204 if edit else 403
+        )
+        assert (
+            client.post(
+                model_url, headers={"Marimo-Session-Id": "s_other1"}, json=model
+            ).status_code
+            == 403
+        )
+        control_url = (
+            config["runtime"]["data"]["url"] + "api/kernel/set_ui_element_value"
+        )
+        assert client.post(control_url, headers=headers, json={}).status_code == 403
+        function_url = config["runtime"]["data"]["url"] + "api/kernel/function_call"
+        assert client.post(function_url, headers=headers, json={}).status_code == 403
+        token = config["runtime"]["data"]["capabilityToken"]
+        forged = token[:-1] + ("0" if token[-1] != "0" else "1")
+        assert (
+            client.post(
+                model_url.replace(token, forged), headers=headers, json=model
+            ).status_code
+            == 403
+        )
+    assert forwarded == (["/@file/tool.js", model] if edit else [])

@@ -483,21 +483,9 @@ def _parse_result(
     )
 
 
-def _parse_output_result(value: object) -> OutputRenderResult:
-    if not isinstance(value, dict):
-        raise ProjectionUnavailable(
-            "invalid-output-response",
-            "The kernel returned an invalid output response.",
-            transient=False,
-        )
-    raw_outputs = value.get("outputs")
-    raw_errors = value.get("errors")
-    if not isinstance(raw_outputs, dict) or not isinstance(raw_errors, dict):
-        raise ProjectionUnavailable(
-            "invalid-output-response",
-            "The kernel returned an invalid output response.",
-            transient=False,
-        )
+def _parse_rendered_outputs(
+    raw_outputs: dict[object, object],
+) -> dict[str, RenderedOutput]:
     outputs: dict[str, RenderedOutput] = {}
     for selector, output in raw_outputs.items():
         owner_cell_id = output.get("ownerCellId") if isinstance(output, dict) else None
@@ -536,6 +524,29 @@ def _parse_output_result(value: object) -> OutputRenderResult:
             timestamp=float(timestamp),
             reset_ui_object_ids=tuple(reset_ids),
         )
+    return outputs
+
+
+def _parse_output_result(value: object) -> OutputRenderResult:
+    if not isinstance(value, dict):
+        raise ProjectionUnavailable(
+            "invalid-output-response",
+            "The kernel returned an invalid output response.",
+            transient=False,
+        )
+    raw_outputs = value.get("outputs")
+    raw_errors = value.get("errors")
+    raw_overlays = value.get("overlays", {})
+    if (
+        not isinstance(raw_outputs, dict)
+        or not isinstance(raw_errors, dict)
+        or not isinstance(raw_overlays, dict)
+    ):
+        raise ProjectionUnavailable(
+            "invalid-output-response",
+            "The kernel returned an invalid output response.",
+            transient=False,
+        )
     errors: dict[str, ValueReadError] = {}
     for selector, error in raw_errors.items():
         code = error.get("code") if isinstance(error, dict) else None
@@ -551,7 +562,11 @@ def _parse_output_result(value: object) -> OutputRenderResult:
                 transient=False,
             )
         errors[selector] = ValueReadError(code, message)
-    return OutputRenderResult(outputs=outputs, errors=errors)
+    return OutputRenderResult(
+        outputs=_parse_rendered_outputs(raw_outputs),
+        errors=errors,
+        overlays=_parse_rendered_outputs(raw_overlays),
+    )
 
 
 async def _invoke_session_function(

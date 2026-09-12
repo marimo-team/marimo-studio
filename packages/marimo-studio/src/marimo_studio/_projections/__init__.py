@@ -11,3 +11,8 @@ requests are checked against the current notebook and the targets permitted by
 the published view. Invalid static declarations produce source diagnostics,
 and invalid dynamic requests return bounded browser errors.
 """
+
+STUDIO_RESULT_SELECTOR = (
+    ":is(marimo-cell, marimo-output, [mo-value])[data-runtime-cell-id], "
+    ":has(> [mo-value][hidden][data-runtime-cell-id]), [data-marimo-sources]"
+)

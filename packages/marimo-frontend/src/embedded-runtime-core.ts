@@ -280,10 +280,11 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
     let stopExposingSession = () => {};
     let renderer: EmbeddedRuntimeRenderer | undefined;
     const disposers = new Set<() => void>([
+      // Widget cleanup must observe a closed request owner.
+      () => transport?.release(),
       () => renderer?.dispose(),
       () => stopExposingSession(),
       () => stopTheme(),
-      () => transport?.release(),
     ]);
 
     try {

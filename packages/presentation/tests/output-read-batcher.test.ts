@@ -24,6 +24,7 @@ const rendered = (data: string) => ({
 
 test("an aggregate overflow falls back to individually bounded output reads", async () => {
   const data = "x".repeat(600_000);
+  const overlays = { inspector: rendered("inspector") };
   const source = vi.fn<OutputReader>(async (read): Promise<OutputReadResponse> => {
     if (read.projections.length > 1) {
       return {
@@ -37,7 +38,7 @@ test("an aggregate overflow falls back to individually bounded output reads", as
       };
     }
     const target = read.projections[0]!.target;
-    return { outputs: { [target]: rendered(data) }, errors: {} };
+    return { outputs: { [target]: rendered(data) }, errors: {}, overlays };
   });
   const batched = createBatchedOutputReader(source);
   const active = request(["report", "figure"]).activeProjections;
@@ -50,6 +51,7 @@ test("an aggregate overflow falls back to individually bounded output reads", as
   expect(reportResponse.outputs.report?.data).toHaveLength(600_000);
   expect(reportResponse.outputs.figure?.data).toHaveLength(600_000);
   expect(figureResponse).toEqual(reportResponse);
+  expect(reportResponse.overlays).toEqual(overlays);
 });
 
 test("disjoint active snapshots remain separate bounded reads", async () => {

@@ -8,6 +8,8 @@ import type {
   Worker,
 } from "@playwright/test";
 
+import { expect } from "@playwright/test";
+
 import {
   BrowserResponseExpectations,
   type BrowserResponseExpectation,
@@ -17,7 +19,6 @@ import { ExactPageRetirementWitness } from "./page-retirement.ts";
 import { drainPendingTasks } from "./pending-tasks.ts";
 import {
   ProjectionReadRequestWindow,
-  projectionReadRequestKind,
   type ProjectionReadSuccessorPolicy,
 } from "./projection-read-window.ts";
 import { ExactRequestAbortWindow } from "./request-abort-window.ts";
@@ -27,10 +28,16 @@ import {
   IdempotentReadRecovery,
   WorkspaceEventStreamReplacementWindow,
   abortedResponseCompleted,
+  isIdempotentReadRequest,
   requestAbortsRetiredByDocument,
   type BrowserRequestOwner,
 } from "./request-identity.ts";
 import { ResponseTransitionWindow } from "./response-transition.ts";
+
+const retiredOutputSnapshot = (request: Request): boolean =>
+  request.method() === "POST" &&
+  isIdempotentReadRequest(request) &&
+  (request.frame().isDetached() || request.frame().page().isClosed());
 
 export type { BrowserResponseExpectation } from "./browser-response-expectations.ts";
 
@@ -258,9 +265,7 @@ const observePageDiagnostics = (
     futureRequestAborts.forEach((window) => window.recordStart(request));
     projectionReadWindows.forEach((window) => window.recordStart(request, owner, start));
     workspaceEventStreamReplacements.forEach((window) => window.recordStart(request, owner));
-    if (projectionReadRequestKind(request) === undefined) {
-      requestRecovery.recordStart(request, owner);
-    }
+    requestRecovery.recordStart(request, owner);
   };
   const onPageError = (error: Error) => messages.push(`pageerror: ${error.message}`);
   const terminalizeSpecializedRequest = (request: Request) => {
@@ -770,6 +775,20 @@ export const observeBrowserContext = (context: BrowserContext): BrowserDiagnosti
     close: async () => {
       context.off("page", observe);
       const observedPages = [...pages.values()];
+      // Keep observing retries before reporting any unresolved snapshot aborts below.
+      await expect
+        .poll(() =>
+          observedPages.some((observed) =>
+            [...observed.pendingRequestAborts].some(
+              ({ request }) =>
+                request.method() === "POST" &&
+                isIdempotentReadRequest(request) &&
+                !retiredOutputSnapshot(request),
+            ),
+          ),
+        )
+        .toBe(false)
+        .catch(() => undefined);
       for (const observed of observedPages) {
         observed.dispose();
       }
@@ -777,6 +796,7 @@ export const observeBrowserContext = (context: BrowserContext): BrowserDiagnosti
       await drainPendingTasks(pendingResponses);
       for (const observed of observedPages) {
         observed.pendingRequestAborts.forEach((request) => {
+          if (retiredOutputSnapshot(request.request)) return;
           messages.push(`request failed: ${request.url} (net::ERR_ABORTED)`);
         });
         observed.pendingRequestAborts.clear();

@@ -38,6 +38,21 @@ export interface ProjectedOutputUpdate {
   resetUiObjectIds: readonly string[];
 }
 
+/** Whether an authored output already displays a UI element in this output. */
+export const isOutputMounted = (data: string, root: ParentNode): boolean => {
+  const template = document.createElement("template");
+  template.innerHTML = data;
+  return Array.from(template.content.querySelectorAll("marimo-ui-element[object-id]")).some(
+    (element) => {
+      const id = element.getAttribute("object-id");
+      return (
+        id !== null &&
+        root.querySelector(`marimo-ui-element[object-id="${CSS.escape(id)}"]`) !== null
+      );
+    },
+  );
+};
+
 const outputMimetypes = {
   "application/json": true,
   "application/vnd.jupyter.widget-view+json": true,
