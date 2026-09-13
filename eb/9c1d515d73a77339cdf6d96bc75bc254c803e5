@@ -1,0 +1,23 @@
+pyproject.toml
+  s_a8769186e330af::t_a7bdd354cdb31a 25
+packages/marimo-studio/pyproject.toml
+  s_a8769186e330af::t_a7bdd354cdb31a 27
+uv.lock
+  ai_agent 46,1258-1260,1270,1279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "eb9c1d515d73a77339cdf6d96bc75bc254c803e5",
+  "prompts": {},
+  "sessions": {
+    "s_a8769186e330af": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09495-3cc2-79d2-b1fe-1495e04ab0a8",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
