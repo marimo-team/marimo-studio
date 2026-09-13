@@ -6,6 +6,7 @@ import type { ProjectionHostBinding } from "../../projections/resolution";
 
 import { setOutputHostState } from "../../outputs/host";
 import { applyProjectionMetadata, resetProjectionHostMetadata } from "../../projections/instances";
+import { setProjectionRuntimeCell } from "../../projections/instances.ts";
 
 export const DuplicateOutputPortal = ({
   binding,
@@ -20,7 +21,7 @@ export const DuplicateOutputPortal = ({
     const hint = "Keep one host for each projected output.";
     host.dataset.marimoSelector = host.valueSelector;
     delete host.dataset.marimoVariable;
-    delete host.dataset.runtimeCellId;
+    setProjectionRuntimeCell(host, undefined);
     delete host.dataset.outputMime;
     host.dataset.marimoDiagnosticCode = "duplicate-output-host";
     host.dataset.marimoDiagnosticMessage = message;

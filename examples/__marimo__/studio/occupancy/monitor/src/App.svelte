@@ -319,7 +319,7 @@ onMount(() => {
   }}
 ></span>
 
-<main data-marimo-sources="series-data summary-data daily-data" class="monitor-shell" class:is-loading={loading} aria-busy={loading}>
+<main data-marimo-lens-inputs="series-data summary-data daily-data" class="monitor-shell" class:is-loading={loading} aria-busy={loading}>
   <header class="monitor-header">
     <div>
       <p class="eyebrow">Facilities · {summary?.room ?? "Room"}</p>
@@ -350,7 +350,7 @@ onMount(() => {
     </div>
   </section>
 
-  <section data-marimo-sources="series-data summary-data" class="metrics" aria-label="Occupancy monitor summary">
+  <section data-marimo-lens-inputs="series-data summary-data" class="metrics" aria-label="Occupancy monitor summary">
     <article>
       <span hidden mo-value="occupancy_summary.metric"></span>
       <span>Selected signal</span>
@@ -359,7 +359,7 @@ onMount(() => {
         {unitFor(summary?.metric ?? latest?.metric ?? "") || "Physical measure"}
       </small>
     </article>
-    <article data-marimo-sources="series-data" data-marimo-lens-label="Latest reading" data-marimo-lens-detail="Last row of selected_sensor_series">
+    <article data-marimo-lens-inputs="series-data" data-marimo-lens-label="Latest reading" data-marimo-lens-detail="Last row of selected_sensor_series">
       <span>Latest reading</span>
       <strong>
         {#if series && series.numRows > 0}
@@ -376,7 +376,7 @@ onMount(() => {
     <article>
       <span id="occupancy-rate-data" hidden mo-value="occupancy_summary.occupancy_rate"></span>
       <span>Occupied observations</span>
-      <strong data-marimo-sources="occupancy-rate-data">
+      <strong data-marimo-lens-inputs="occupancy-rate-data">
         {summary ? `${(summary.occupancy_rate * 100).toFixed(1)}%` : "…"}
       </strong>
       <small>
@@ -401,7 +401,7 @@ onMount(() => {
     </article>
   </section>
 
-  <section data-marimo-sources="series-data summary-data" class="chart-panel" aria-busy={chartBusy} aria-labelledby="trend-heading">
+  <section data-marimo-lens-inputs="series-data summary-data" class="chart-panel" aria-busy={chartBusy} aria-labelledby="trend-heading">
     <div class="chart-heading">
       <div>
         <h2 id="trend-heading">Reading and rolling baseline</h2>
@@ -428,7 +428,7 @@ onMount(() => {
     {/if}
   </section>
 
-  <section data-marimo-sources="daily-data" class="daily-profile" aria-labelledby="daily-heading">
+  <section data-marimo-lens-inputs="daily-data" class="daily-profile" aria-labelledby="daily-heading">
     <div class="daily-heading">
       <div>
         <h2 id="daily-heading">Daily occupancy</h2>
@@ -437,7 +437,7 @@ onMount(() => {
     </div>
     <div class="daily-strip">
       {#each dailyRows as day (day.day)}
-        <article data-marimo-sources="daily-data" data-marimo-lens-label={day.day}>
+        <article data-marimo-lens-inputs="daily-data" data-marimo-lens-label={day.day}>
           <div>
             <span>{formatDay.format(new Date(`${day.day}T00:00:00`))}</span>
             <strong>{(day.occupancy_rate * 100).toFixed(0)}%</strong>

@@ -72,7 +72,7 @@ export const ErrorEvidence = ({
           {rows.slice(0, visibleErrors).map((row, index) => (
             <tr
               key={String(row.date)}
-              data-marimo-sources={`error-row-${index}`}
+              data-marimo-lens-inputs={`error-row-${index}`}
               data-marimo-lens-label={formatTime(row.date)}
             >
               <td>

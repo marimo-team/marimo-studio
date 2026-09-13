@@ -103,8 +103,8 @@ for native cell output. Keep analytical computation in the notebook. When custom
 JavaScript rendering is necessary, every result must declare its kernel inputs:
 
 - Place hidden `mo-value` hosts directly inside the result, or use
-  `data-marimo-sources="rows-data summary-data"` to reference projection hosts
-  by unique, stable HTML IDs in the same document. Include every input,
+  `data-marimo-lens-inputs="rows-data summary-data"` to reference projection
+  hosts by unique, stable HTML IDs in the same document. Include every input,
   including shared inputs used through JS transforms. References must point
   directly to mounted `mo-value`, `marimo-output`, or `marimo-cell` hosts.
   Missing or duplicate IDs make the result unavailable to Lens. Never fabricate

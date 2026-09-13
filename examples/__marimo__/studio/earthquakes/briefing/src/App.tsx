@@ -87,7 +87,7 @@ export const App = () => {
 
       <span id="briefing-events" hidden mo-value="seismic_analysis.events" />
       <main
-        data-marimo-sources="analysis-data"
+        data-marimo-lens-inputs="analysis-data"
         className="deck-shell"
         aria-busy={loading}
       >

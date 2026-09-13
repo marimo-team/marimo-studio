@@ -51,7 +51,7 @@ export const EventAtlas = ({
   return (
     <figure
       className={`event-atlas event-atlas-${variant}`}
-      data-marimo-sources="briefing-events"
+      data-marimo-lens-inputs="briefing-events"
       data-marimo-lens-label="Event atlas"
     >
       <svg
@@ -348,7 +348,7 @@ export const ImpactScatter = ({ events }: { events: EarthquakeEvent[] }) => {
   return (
     <figure
       className="impact-figure"
-      data-marimo-sources="briefing-events"
+      data-marimo-lens-inputs="briefing-events"
       data-marimo-lens-label="Magnitude and felt reports"
     >
       <svg

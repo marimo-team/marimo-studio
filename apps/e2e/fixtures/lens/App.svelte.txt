@@ -15,9 +15,9 @@ const selector = $derived(`metrics.${field}`);
   </button>
   <span id="metric-source" hidden mo-value={selector} data-marimo-allow="*"
     use:observeMarimoValue={{ selector, onValue: (next: number) => value = next }}></span>
-  <section data-marimo-sources="metric-source cost-source" aria-label="Metric row">
-    <article id="metric" data-marimo-sources="metric-source"
-      data-marimo-lens-label="Current metric">
+  <section data-marimo-lens-inputs="metric-source cost-source" aria-label="Metric row">
+    <article id="metric" data-marimo-lens-inputs="metric-source"
+      data-marimo-lens-label="Current metric" data-marimo-lens-context data-marimo-lens-render-source={JSON.stringify({ path: "src/App.svelte", symbol: "metricCard" })}>
       <h2>{field}</h2>
       <p>{value === undefined ? "Loading" : `$${value}`}</p>
     </article>

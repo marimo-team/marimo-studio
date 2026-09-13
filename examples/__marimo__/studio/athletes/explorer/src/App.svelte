@@ -120,7 +120,7 @@ $effect(() => {
 });
 </script>
 
-<div data-marimo-sources="athlete-data" class="page" data-load-state={loadState} aria-busy={loadState === "waiting" || loadState === "loading"}>
+<div data-marimo-lens-inputs="athlete-data" class="page" data-load-state={loadState} aria-busy={loadState === "waiting" || loadState === "loading"}>
   <nav aria-label="Athlete views">
     <a href="../overview/index.html">Overview</a>
     <a href="../explorer/index.html" aria-current="page">Explorer</a>
@@ -140,19 +140,19 @@ $effect(() => {
 
   <section class="scoreboard" aria-label="Filtered roster summary"
     aria-live="polite">
-    <article class="score" data-marimo-sources="athlete-data" data-marimo-lens-label="Athletes" data-marimo-lens-detail="Browser aggregation · athlete_facts">
+    <article class="score" data-marimo-lens-context data-marimo-lens-render-source={JSON.stringify({ path: "src/App.svelte", symbol: "scoreboard" })} data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Athletes" data-marimo-lens-detail="Browser aggregation · athlete_facts">
       <span>Athletes</span>
       <strong>{formatCount(summary?.athletes)}</strong>
     </article>
-    <article class="score" data-marimo-sources="athlete-data" data-marimo-lens-label="Delegations" data-marimo-lens-detail="Browser aggregation · athlete_facts">
+    <article class="score" data-marimo-lens-context data-marimo-lens-render-source={JSON.stringify({ path: "src/App.svelte", symbol: "scoreboard" })} data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Delegations" data-marimo-lens-detail="Browser aggregation · athlete_facts">
       <span>Delegations</span>
       <strong>{formatCount(summary?.delegations)}</strong>
     </article>
-    <article class="score" data-marimo-sources="athlete-data" data-marimo-lens-label="Medalists" data-marimo-lens-detail="Browser aggregation · athlete_facts">
+    <article class="score" data-marimo-lens-context data-marimo-lens-render-source={JSON.stringify({ path: "src/App.svelte", symbol: "scoreboard" })} data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Medalists" data-marimo-lens-detail="Browser aggregation · athlete_facts">
       <span>Medalists</span>
       <strong>{formatCount(summary?.medalists)}</strong>
     </article>
-    <article class="score score-signal" data-marimo-sources="athlete-data" data-marimo-lens-label="Medal awards" data-marimo-lens-detail="Browser aggregation · athlete_facts">
+    <article class="score score-signal" data-marimo-lens-context data-marimo-lens-render-source={JSON.stringify({ path: "src/App.svelte", symbol: "scoreboard" })} data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Medal awards" data-marimo-lens-detail="Browser aggregation · athlete_facts">
       <span>Medal awards</span>
       <strong>{formatCount(summary?.medalAwards)}</strong>
     </article>
@@ -191,7 +191,7 @@ $effect(() => {
         <p class="status status-error" role="alert">{errorMessage}</p>
       {/if}
 
-      <article class="panel profile-panel" data-marimo-sources="athlete-data" data-marimo-lens-label="Height and weight" aria-labelledby="profile-title">
+      <article class="panel profile-panel" data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Height and weight" aria-labelledby="profile-title">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Body profile</p>
@@ -203,7 +203,7 @@ $effect(() => {
       </article>
 
       <div class="supporting-grid">
-        <article class="panel" data-marimo-sources="athlete-data" data-marimo-lens-label="Age distribution" aria-labelledby="age-title">
+        <article class="panel" data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Age distribution" aria-labelledby="age-title">
           <div class="panel-heading compact">
             <div>
               <p class="eyebrow">Distribution</p>
@@ -214,7 +214,7 @@ $effect(() => {
           <div class="mosaic-host" bind:this={ageHost}></div>
         </article>
 
-        <article class="panel" data-marimo-sources="athlete-data" data-marimo-lens-label="Athletes by sport" aria-labelledby="sports-title">
+        <article class="panel" data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Athletes by sport" aria-labelledby="sports-title">
           <div class="panel-heading compact">
             <div>
               <p class="eyebrow">Participation</p>
@@ -226,7 +226,7 @@ $effect(() => {
         </article>
       </div>
 
-      <article class="panel table-panel" data-marimo-sources="athlete-data" data-marimo-lens-label="Matching athletes" aria-labelledby="roster-title">
+      <article class="panel table-panel" data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Matching athletes" aria-labelledby="roster-title">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Roster detail</p>

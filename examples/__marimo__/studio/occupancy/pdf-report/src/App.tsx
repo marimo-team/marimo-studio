@@ -85,7 +85,7 @@ const ReportWorkbench = ({
 
   return (
     <main
-      data-marimo-sources="analysis-data"
+      data-marimo-lens-inputs="analysis-data"
       className="report-workbench"
       aria-busy={!ready}
     >

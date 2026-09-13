@@ -72,7 +72,7 @@ const CanvasPdfViewer = (
 
         sheet.className = "pdf-canvas-page";
         sheet.setAttribute(
-          "data-marimo-sources",
+          "data-marimo-lens-inputs",
           [
             "report-summary report-hourly report-daily",
             "report-sensors report-profile",

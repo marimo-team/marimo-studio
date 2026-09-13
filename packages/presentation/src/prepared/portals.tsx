@@ -17,6 +17,7 @@ import type {
 
 import { getCellHosts, setCellHostState, subscribeCellHosts } from "../cells/host.ts";
 import { getOutputHosts, setOutputHostState, subscribeOutputHosts } from "../outputs/host.ts";
+import { setProjectionRuntimeCell } from "../projections/instances.ts";
 
 const hostIds = new WeakMap<HTMLElement, number>();
 let nextHostId = 0;
@@ -66,7 +67,7 @@ const PreparedOutputPortal = ({
     }
     clearDiagnostics(host);
     host.dataset.marimoSelector = selector;
-    host.dataset.runtimeCellId = snapshot.ownerCellId;
+    setProjectionRuntimeCell(host, snapshot.ownerCellId);
     const outputMime = snapshot.output?.mimetype;
     if (outputMime === undefined) {
       delete host.dataset.outputMime;
@@ -126,7 +127,7 @@ const PreparedCellPortal = ({
     }
     clearDiagnostics(host);
     host.dataset.marimoSelector = alias;
-    host.dataset.runtimeCellId = snapshot.cell.id;
+    setProjectionRuntimeCell(host, snapshot.cell.id);
     const outputMime = snapshot.output?.mimetype;
     if (outputMime === undefined) {
       delete host.dataset.outputMime;

@@ -79,7 +79,7 @@ export const App = () => {
       />
 
       <main
-        data-marimo-sources="events-data summary-data"
+        data-marimo-lens-inputs="events-data summary-data"
         className="operations-shell"
         aria-busy={isLoading}
       >
@@ -112,7 +112,7 @@ export const App = () => {
         </p>
 
         <section
-          data-marimo-sources="summary-data"
+          data-marimo-lens-inputs="summary-data"
           className="metric-strip"
           aria-label="Current situation metrics"
         >

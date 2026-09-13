@@ -36,6 +36,9 @@ const RUNTIME_ATTRIBUTES = new Set([
   "data-output-mime",
   "data-output-mimes",
   "data-runtime-cell-id",
+  "data-marimo-lens-cell-id",
+  "data-marimo-lens-selector",
+  "data-marimo-lens-render-source",
   "data-state",
 ]);
 const hosts = new Set<MarimoCellElement>();

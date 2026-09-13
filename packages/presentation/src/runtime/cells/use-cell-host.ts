@@ -6,7 +6,11 @@ import type { RuntimeCell } from "../runtime-cell";
 import type { CellProjection } from "./cell-projection";
 
 import { setCellHostState } from "../../cells/host";
-import { applyProjectionMetadata, resetProjectionHostMetadata } from "../../projections/instances";
+import {
+  applyProjectionMetadata,
+  resetProjectionHostMetadata,
+  setProjectionRuntimeCell,
+} from "../../projections/instances.ts";
 
 const setDatasetValue = (dataset: DOMStringMap, name: string, value: string | undefined): void => {
   if (value === undefined || value === "") {
@@ -24,7 +28,7 @@ export const useCellHost = (
 ): void => {
   useLayoutEffect(() => {
     applyProjectionMetadata(host, binding.resolution, binding.projectionRevision);
-    setDatasetValue(host.dataset, "runtimeCellId", cell?.id);
+    setProjectionRuntimeCell(host, cell?.id);
     setDatasetValue(host.dataset, "outputMime", projection.outputMime);
     setDatasetValue(host.dataset, "outputMimes", projection.outputMimes);
     setDatasetValue(host.dataset, "marimoDiagnosticCode", projection.diagnostic?.code);

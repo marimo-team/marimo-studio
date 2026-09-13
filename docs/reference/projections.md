@@ -201,12 +201,12 @@ notebook through the existing projection hosts:
 ```html
 <span id="rows-data" hidden mo-value="rows"></span>
 <span id="summary-data" hidden mo-value="summary.total"></span>
-<section data-marimo-sources="rows-data summary-data">
+<section data-marimo-lens-inputs="rows-data summary-data">
   <!-- JavaScript renders the chart here. -->
 </section>
 ```
 
-`data-marimo-sources` lists unique projection host IDs, separated by spaces, in
+`data-marimo-lens-inputs` lists unique projection host IDs, separated by spaces, in
 the same document. It declares the region's complete notebook input set. Lens
 reads the hosts' resolved symbolic selectors and producing cells; authors do not
 copy runtime metadata. References can also point to `marimo-output` or
@@ -242,7 +242,7 @@ Use a visible `mo-value` directly when native formatting is sufficient. Hidden
 projection hosts stay hidden even under ordinary application layout styles.
 For dynamic rows or thresholds, update the projection selector with the same
 state used to render the result. For non-JSON values, reference a hidden
-`marimo-output` host through `data-marimo-sources`.
+`marimo-output` host through `data-marimo-lens-inputs`.
 
 Dynamic selectors require the Python or Browser runtime. Prepared exports need
 a finite authored target set; use `view export --runtime wasm` when row or
@@ -261,7 +261,7 @@ Override the display text when a region needs a more useful name:
 
 ```html
 <section
-  data-marimo-sources="rows-data summary-data"
+  data-marimo-lens-inputs="rows-data summary-data"
   data-marimo-lens-label="Revenue forecast"
   data-marimo-lens-detail="Monthly revenue · selected region"
 >

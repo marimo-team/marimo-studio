@@ -6,7 +6,11 @@ import type { ValueCellModel } from "../values/value-cell-model";
 import type { OutputDiagnostic, OutputProjection } from "./use-output-projection";
 
 import { setOutputHostState } from "../../outputs/host";
-import { applyProjectionMetadata, resetProjectionHostMetadata } from "../../projections/instances";
+import {
+  applyProjectionMetadata,
+  resetProjectionHostMetadata,
+  setProjectionRuntimeCell,
+} from "../../projections/instances.ts";
 
 const setDataset = (host: HTMLElement, name: string, value: string | undefined) => {
   if (value) {
@@ -50,7 +54,7 @@ export const useOutputHost = ({
     applyProjectionMetadata(host, binding.resolution, binding.projectionRevision);
     setDataset(host, "marimoSelector", selector);
     setDataset(host, "marimoVariable", projectionVariable);
-    setDataset(host, "runtimeCellId", runtimeCellId);
+    setProjectionRuntimeCell(host, runtimeCellId);
     setDataset(host, "outputMime", mimetype);
     setDataset(host, "marimoDiagnosticCode", failureCode);
     setDataset(host, "marimoDiagnosticMessage", failureMessage);

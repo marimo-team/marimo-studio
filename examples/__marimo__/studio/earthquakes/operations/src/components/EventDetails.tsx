@@ -19,7 +19,7 @@ export const PriorityEvents = ({
   onSelect,
 }: PriorityEventsProps) => (
   <section
-    data-marimo-sources="events-data summary-data"
+    data-marimo-lens-inputs="events-data summary-data"
     className="panel-section priority-section"
     aria-labelledby="priority-title"
   >
@@ -44,7 +44,7 @@ export const PriorityEvents = ({
           {events.map((event) => (
             <li key={event.id}>
               <button
-                data-marimo-sources="events-data"
+                data-marimo-lens-inputs="events-data"
                 data-marimo-lens-label={event.place}
                 type="button"
                 aria-pressed={event.id === selectedId}
@@ -70,7 +70,7 @@ interface EventDetailsProps {
 
 export const EventDetails = ({ event, index, loading }: EventDetailsProps) => (
   <aside
-    data-marimo-sources="events-data"
+    data-marimo-lens-inputs="events-data"
     className="detail-panel"
     aria-labelledby="detail-title"
     aria-live="polite"
@@ -99,7 +99,7 @@ export const EventDetails = ({ event, index, loading }: EventDetailsProps) => (
         <>
           <p className="event-place">{event.place}</p>
           <dl className="event-facts">
-            <div data-marimo-sources="event-time-data">
+            <div data-marimo-lens-inputs="event-time-data">
               <marimo-output
                 id="event-time-data"
                 hidden

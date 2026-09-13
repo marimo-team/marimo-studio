@@ -596,7 +596,7 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
             </label>
             <div
               className="selection-summary"
-              data-marimo-sources="briefing-events"
+              data-marimo-lens-inputs="briefing-events"
               data-marimo-lens-label="Selected event count"
               data-marimo-lens-detail="Browser filter · seismic_analysis.events"
               aria-live="polite"
@@ -616,7 +616,7 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
             </div>
             <dl className="selection-facts">
               <div
-                data-marimo-sources="briefing-events"
+                data-marimo-lens-inputs="briefing-events"
                 data-marimo-lens-label="Largest selected"
                 data-marimo-lens-detail="Browser filter · seismic_analysis.events"
               >
@@ -624,7 +624,7 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
                 <dd>M{summary?.maximum_magnitude.toFixed(1) ?? "…"}</dd>
               </div>
               <div
-                data-marimo-sources="briefing-events"
+                data-marimo-lens-inputs="briefing-events"
                 data-marimo-lens-label="Felt reports"
                 data-marimo-lens-detail="Browser filter · seismic_analysis.events"
               >
@@ -632,7 +632,7 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
                 <dd>{summary ? integer.format(summary.felt_reports) : "…"}</dd>
               </div>
               <div
-                data-marimo-sources="briefing-events"
+                data-marimo-lens-inputs="briefing-events"
                 data-marimo-lens-label="Tsunami flags"
                 data-marimo-lens-detail="Browser filter · seismic_analysis.events"
               >

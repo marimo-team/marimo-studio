@@ -56,7 +56,7 @@ def slow_metric`,
       .replace(
         '<marimo-output id="rich-summary-output"',
         '<span id="projected-table" hidden style="display:block" mo-value="dataframe_value"></span>\n' +
-          '      <output id="projected-table-summary" data-marimo-sources="projected-table"></output>\n' +
+          '      <output id="projected-table-summary" data-marimo-lens-inputs="projected-table"></output>\n' +
           '      <span id="empty-table" hidden mo-value="empty_dataframe"></span>\n' +
           '      <output id="empty-table-summary"></output>\n' +
           '      <marimo-output id="rich-summary-output"',
