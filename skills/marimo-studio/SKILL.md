@@ -36,7 +36,7 @@ for native cell output. Keep analytical computation in the notebook. When custom
 JavaScript rendering is necessary, every result must declare its kernel inputs:
 
 - Place hidden `mo-value` hosts directly inside the result, or use
-  `data-marimo-sources="rows-data summary-data"` to reference projection hosts by
+  `data-marimo-lens-inputs="rows-data summary-data"` to reference projection hosts by
   unique, stable HTML IDs in the same document. Include every input, including
   shared inputs used through JS transforms. References must point directly to
   mounted `mo-value`, `marimo-output`, or `marimo-cell` hosts. Missing or duplicate
@@ -537,7 +537,7 @@ notebook already defines the intended value.
 
 [Marimo Lens](https://marimo-team.github.io/marimo-lens/) lets a person mark a
 rendered result or authored page region and give that exact surface to a
-code-mode agent. Install `marimo-lens>=0.0.10` in the notebook environment, then define
+code-mode agent. Install `marimo-lens>=0.1.0` in the notebook environment, then define
 one Lens value with Studio's result selector:
 
 ```python
@@ -558,14 +558,14 @@ rendered regions to their existing notebook input hosts:
 <marimo-output value="studio_lens"></marimo-output>
 
 <span id="revenue-data" hidden mo-value="quarterly_revenue"></span>
-<section data-marimo-sources="revenue-data">
+<section data-marimo-lens-inputs="revenue-data">
   <!-- Render the custom revenue chart here. -->
 </section>
 ```
 
 `STUDIO_RESULT_SELECTOR` covers connected `marimo-cell`, `marimo-output`, and
 `mo-value` hosts, parents containing hidden value hosts, and regions annotated
-with `data-marimo-sources`. For layout or copy without notebook inputs, extend
+with `data-marimo-lens-inputs`. For layout or copy without notebook inputs, extend
 `dom_selector` with a focused CSS selector such as `[data-lens-target]`.
 
 Use the packaged Marimo Lens skill for the feedback lifecycle. Pass the

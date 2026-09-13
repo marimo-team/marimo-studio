@@ -403,7 +403,7 @@
       </header>
       <section class="story" aria-label="Earthquake story">
         <figure
-          data-marimo-sources="events-data"
+          data-marimo-lens-inputs="events-data"
           aria-busy="true"
           class="visual"
           aria-labelledby="visual-title"
@@ -411,7 +411,7 @@
         >
           <figcaption class="visual-header">
             <strong id="visual-title">Weekly event map</strong
-            ><span id="event-count" data-marimo-sources="events-data" data-marimo-lens-label="Visible events" data-marimo-lens-detail="Browser selection · events">Loading weekly events</span>
+            ><span id="event-count" data-marimo-lens-inputs="events-data" data-marimo-lens-label="Visible events" data-marimo-lens-detail="Browser selection · events">Loading weekly events</span>
           </figcaption>
           <div id="plot">
             <span class="atlas-loader" aria-hidden="true">
@@ -419,9 +419,9 @@
             </span>
           </div>
           <div class="visual-footer">
-            <div id="status" data-marimo-sources="events-data" data-marimo-lens-label="Current event summary" role="status">Loading weekly events.</div>
+            <div id="status" data-marimo-lens-inputs="events-data" data-marimo-lens-label="Current event summary" role="status">Loading weekly events.</div>
             <a
-              id="source-link" data-marimo-sources="events-data" data-marimo-lens-label="Strongest event"
+              id="source-link" data-marimo-lens-inputs="events-data" data-marimo-lens-label="Strongest event"
               href="#"
               target="_blank"
               rel="noopener noreferrer"

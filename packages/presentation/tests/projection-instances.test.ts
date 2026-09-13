@@ -1,6 +1,9 @@
 import { afterEach, expect, test } from "vite-plus/test";
 
-import { renderedProjectionInstances } from "../src/projections/instances.ts";
+import {
+  renderedProjectionInstances,
+  resetProjectionHostMetadata,
+} from "../src/projections/instances.ts";
 import { resolveProjection } from "../src/projections/resolution.ts";
 import {
   bindProjectionBindingStale,
@@ -61,7 +64,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test("browser evidence reports compact mount facts", () => {
+test("reports mount identity and labels through target changes", () => {
   commitRuntimeConfig(dynamicConfig());
   document.body.innerHTML = `
     <marimo-cell id="first" data-marimo-studio-site="site:dynamic-cell" name="overview"></marimo-cell>
@@ -84,6 +87,7 @@ test("browser evidence reports compact mount facts", () => {
       phase: "connecting",
     }),
   ]);
+  expect(first.dataset.marimoLensLabel).toBe("overview");
   const instanceId = initial[0]?.instanceId;
   first.setAttribute("name", "details");
   expect(renderedProjectionInstances()[0]).toMatchObject({
@@ -92,6 +96,87 @@ test("browser evidence reports compact mount facts", () => {
     runtimeCellId: "runtime-details",
   });
   expect(first.dataset.marimoProducerRef).toBe("cell:v1:details");
+  expect(first.dataset.marimoLensLabel).toBe("details");
+  first.setAttribute("name", "missing");
+  renderedProjectionInstances();
+  expect(first.hasAttribute("data-marimo-lens-label")).toBe(false);
+});
+
+test("publishes client-independent Lens sources and preserves authored descriptions", () => {
+  commitRuntimeConfig(dynamicConfig());
+  document.body.innerHTML = `
+    <strong id="metric" data-marimo-studio-site="site:dynamic-value" mo-value="metric" data-marimo-lens-label="Revenue"></strong>
+  `;
+  const host = document.getElementById("metric")!;
+  renderedProjectionInstances();
+  expect(host.dataset.marimoLensCellId).toBe("runtime-overview");
+  expect(host.dataset.marimoLensSelector).toBe("metric");
+  expect(host.dataset.marimoLensLabel).toBe("Revenue");
+  expect(host.dataset.marimoLensDetail).toBe("Value · overview");
+  expect(JSON.parse(host.dataset.marimoLensRenderSource!)).toEqual({
+    path: "src/App.tsx",
+    line: 20,
+    column: 7,
+  });
+  host.removeAttribute("data-marimo-lens-label");
+  renderedProjectionInstances();
+  expect(host.dataset.marimoLensLabel).toBe("metric");
+
+  host.dataset.marimoLensLabel = "Revenue";
+  const authoredSource = { path: "src/cards.ts", symbol: "revenue" };
+  host.dataset.marimoLensRenderSource = JSON.stringify(authoredSource);
+  renderedProjectionInstances();
+  resetProjectionHostMetadata(host);
+  expect(host.hasAttribute("data-marimo-lens-cell-id")).toBe(false);
+  expect(host.hasAttribute("data-marimo-lens-selector")).toBe(false);
+  expect(host.dataset.marimoLensLabel).toBe("Revenue");
+  expect(JSON.parse(host.dataset.marimoLensRenderSource!)).toEqual(authoredSource);
+
+  renderedProjectionInstances();
+  expect(host.dataset.marimoLensDetail).toBe("Value · overview");
+  host.setAttribute("mo-value", "missing");
+  renderedProjectionInstances();
+  expect(host.hasAttribute("data-marimo-lens-detail")).toBe(false);
+  expect(host.dataset.marimoLensLabel).toBe("Revenue");
+  expect(JSON.parse(host.dataset.marimoLensRenderSource!)).toEqual(authoredSource);
+});
+
+test("keeps renderer cell metadata with its producer during rebinding", () => {
+  const config = dynamicConfig();
+  commitRuntimeConfig(config);
+  document.body.innerHTML = `<strong id="metric" data-marimo-studio-site="site:dynamic-value" mo-value="metric"></strong>`;
+  const host = document.getElementById("metric")!;
+  renderedProjectionInstances();
+  expect(host.dataset.marimoLensCellId).toBe("runtime-overview");
+  const unbound = { ...config, runtimeBindings: { cellRefs: {} } };
+  commitRuntimeConfig(unbound);
+  renderedProjectionInstances();
+  expect(host.dataset.marimoLensCellId).toBe("runtime-overview");
+  const rebound = {
+    ...unbound,
+    projectionTargets: {
+      ...config.projectionTargets,
+      variables: {
+        metric: {
+          status: "ready" as const,
+          producer: "cell:v1:details",
+          producerLabel: "details",
+          dependencyClosure: ["cell:v1:details"],
+        },
+      },
+    },
+  };
+  commitRuntimeConfig(rebound);
+  renderedProjectionInstances();
+  expect(host.hasAttribute("data-marimo-lens-cell-id")).toBe(false);
+  expect(host.hasAttribute("data-runtime-cell-id")).toBe(false);
+  commitRuntimeConfig({
+    ...rebound,
+    runtimeBindings: { cellRefs: { "cell:v1:details": "runtime-details" } },
+  });
+  renderedProjectionInstances();
+  expect(host.dataset.marimoLensCellId).toBe("runtime-details");
+  expect(host.dataset.marimoLensSelector).toBe("metric");
 });
 
 test("runtime policy failures remain visible on mounted hosts", () => {
@@ -217,31 +302,4 @@ test("a local stale closure requests refreshed runtime bindings", () => {
   expect(refreshes).toBe(1);
   clearProjectionBindingStale(revision);
   unbind();
-});
-
-test("publishes current Lens labels without overwriting consumer-authored text", () => {
-  commitRuntimeConfig(dynamicConfig());
-  document.body.innerHTML = `
-    <marimo-cell id="cell" data-marimo-studio-site="site:dynamic-cell" name="overview"></marimo-cell>
-    <span id="value" data-marimo-studio-site="site:dynamic-value" mo-value="metric"></span>
-  `;
-  const cell = document.getElementById("cell")!;
-  const value = document.getElementById("value")!;
-  renderedProjectionInstances();
-  expect(cell.getAttribute("data-marimo-lens-label")).toBe("overview");
-  expect(value.getAttribute("data-marimo-lens-label")).toBe("metric");
-  expect(value.getAttribute("data-marimo-lens-detail")).toBe("Value · overview");
-
-  cell.setAttribute("name", "details");
-  value.setAttribute("data-marimo-lens-label", "Revenue");
-  renderedProjectionInstances();
-  expect(cell.getAttribute("data-marimo-lens-label")).toBe("details");
-  expect(value.getAttribute("data-marimo-lens-label")).toBe("Revenue");
-
-  cell.setAttribute("name", "missing");
-  value.setAttribute("mo-value", "missing");
-  renderedProjectionInstances();
-  expect(cell.hasAttribute("data-marimo-lens-label")).toBe(false);
-  expect(value.hasAttribute("data-marimo-lens-detail")).toBe(false);
-  expect(value.getAttribute("data-marimo-lens-label")).toBe("Revenue");
 });

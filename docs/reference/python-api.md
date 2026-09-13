@@ -626,7 +626,7 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
 ### `STUDIO_RESULT_SELECTOR`
 
 CSS selector for connected cell, output, and value hosts, parents containing
-hidden value hosts, and custom regions annotated with `data-marimo-sources`.
+hidden value hosts, and custom regions annotated with `data-marimo-lens-inputs`.
 See [custom JavaScript rendering](projections.md#trace-custom-javascript-rendering)
 for the authoring contract.
 

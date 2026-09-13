@@ -755,24 +755,24 @@
             ><span mo-value="games_summary.athletes"></span> athletes.
             <span mo-value="games_summary.sports"></span> sports.</strong
           >
-          <p id="leading-sports-copy" data-marimo-sources="leading-sports-data">Loading participation leaders.</p>
+          <p id="leading-sports-copy" data-marimo-lens-inputs="leading-sports-data">Loading participation leaders.</p>
         </div>
       </header>
 
       <section class="metrics" aria-label="Selected athlete measures">
-        <article class="metric">
+        <article class="metric" data-marimo-lens-context>
           <span>Athletes</span>
           <strong mo-value="athlete_summary.athletes"></strong>
         </article>
-        <article class="metric">
+        <article class="metric" data-marimo-lens-context>
           <span>Nationalities</span>
           <strong mo-value="athlete_summary.nationalities"></strong>
         </article>
-        <article class="metric">
+        <article class="metric" data-marimo-lens-context>
           <span>Sports</span>
           <strong mo-value="athlete_summary.sports"></strong>
         </article>
-        <article class="metric">
+        <article class="metric" data-marimo-lens-context>
           <span>Medalists</span>
           <strong mo-value="athlete_summary.medalists"></strong>
         </article>
@@ -805,7 +805,7 @@
           <div
             class="roster-table"
             id="roster-table"
-            data-marimo-sources="roster-data"
+            data-marimo-lens-inputs="roster-data"
             data-state="loading"
             aria-busy="true"
           ></div>
@@ -826,7 +826,7 @@
           <div
             class="sports-chart"
             id="sports-chart"
-            data-marimo-sources="top-sports-data"
+            data-marimo-lens-inputs="top-sports-data"
             data-state="loading"
             aria-busy="true"
           >
@@ -844,7 +844,7 @@
         </article>
       </section>
 
-      <footer>
+      <footer data-marimo-lens-context>
         <strong
           ><span mo-value="games_summary.athletes"></span> ways to
           compete</strong
@@ -925,11 +925,11 @@
       const body = chartNode("tbody");
       rows.forEach((row) => {
         const tableRow = chartNode("tr");
-        tableRow.setAttribute("data-marimo-sources", "roster-data");
+        tableRow.setAttribute("data-marimo-lens-inputs", "roster-data");
         tableRow.setAttribute("data-marimo-lens-label", String(row.name));
         columns.forEach(([key, label]) => {
           const cell = chartNode("td", "", row[key] ?? "");
-          cell.setAttribute("data-marimo-sources", "roster-data");
+          cell.setAttribute("data-marimo-lens-inputs", "roster-data");
           cell.setAttribute("data-marimo-lens-label", `${row.name} · ${label}`);
           cell.setAttribute("data-marimo-lens-detail", "selected_roster");
           tableRow.append(cell);
@@ -975,7 +975,7 @@
       );
       sports.forEach((sport, index) => {
         const item = chartNode("li");
-        item.setAttribute("data-marimo-sources", "top-sports-data");
+        item.setAttribute("data-marimo-lens-inputs", "top-sports-data");
         item.setAttribute("data-marimo-lens-label", sport.sport);
         item.setAttribute(
           "aria-label",
@@ -1005,7 +1005,7 @@
           "",
           countFormat.format(sport.athletes),
         );
-        athleteValue.setAttribute("data-marimo-sources", "top-sports-data");
+        athleteValue.setAttribute("data-marimo-lens-inputs", "top-sports-data");
         athleteValue.setAttribute("data-marimo-lens-label", `${sport.sport} · Athletes`);
         athleteValue.setAttribute("data-marimo-lens-detail", "top_sports");
         athleteValue.append(athleteCount, " athletes");
@@ -1015,7 +1015,7 @@
           "",
           countFormat.format(sport.medalists),
         );
-        medalValue.setAttribute("data-marimo-sources", "top-sports-data");
+        medalValue.setAttribute("data-marimo-lens-inputs", "top-sports-data");
         medalValue.setAttribute("data-marimo-lens-label", `${sport.sport} · Medalists`);
         medalValue.setAttribute("data-marimo-lens-detail", "top_sports");
         medalValue.append(medalCount, " medalists");

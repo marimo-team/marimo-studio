@@ -87,6 +87,7 @@ def verify_metadata(source, archive):
         "agent-plugins": ">=0.2",
         "htpy": ">=26.5.1",
         "marimo-export": ">=0.0.8",
+        "marimo-lens": ">=0.1.0",
         "tree-sitter": ">=0.25.2",
         "tree-sitter-javascript": ">=0.25.0",
         "watchdog": ">=6.0.0",
@@ -94,6 +95,14 @@ def verify_metadata(source, archive):
         selected = by_name.get(canonicalize_name(name), [])
         if len(selected) != 1 or str(selected[0].specifier) != specifier:
             raise AssertionError(f"Distribution has the wrong {name} requirement: {archive}")
+
+    lens_marker = by_name["marimo-lens"][0].marker
+    if (
+        lens_marker is None
+        or not lens_marker.evaluate({"extra": "lens"})
+        or lens_marker.evaluate({"extra": ""})
+    ):
+        raise AssertionError(f"Distribution must expose Lens through its optional extra: {archive}")
 
 
 for path in archives:

@@ -138,8 +138,10 @@ try {
       "--no-cache",
       "--exclude-newer-package",
       "marimo-export=false",
-      wheel,
-      "anywidget==0.9.21",
+      "--exclude-newer-package",
+      "marimo-lens=false",
+      `${wheel}[lens]`,
+      "anywidget>=0.11.0",
     ],
     { cwd: temporaryRoot, stdio: "inherit" },
   );
@@ -159,12 +161,18 @@ try {
   delete environment.UV_PROJECT_ENVIRONMENT;
   delete environment.VIRTUAL_ENV;
   await preparation.run(
-    "verify published marimo-export installation",
+    "verify published dependencies",
     python,
     [
       "-c",
       [
         "from importlib.metadata import distribution, version",
+        "from pathlib import Path",
+        "from packaging.version import Version",
+        "import marimo_lens, sys",
+        "assert Version(version('marimo-lens')) >= Version('0.1.0')",
+        "assert distribution('marimo-lens').read_text('direct_url.json') is None",
+        "assert Path(marimo_lens.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())",
         "assert version('marimo-export') == '0.0.8'",
         "assert distribution('marimo-export').read_text('direct_url.json') is None",
       ].join("; "),

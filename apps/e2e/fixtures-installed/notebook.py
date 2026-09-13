@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["anywidget==0.9.21"]
+# dependencies = ["anywidget>=0.11.0"]
 # ///
 
 import marimo

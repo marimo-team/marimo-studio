@@ -28,11 +28,11 @@ export const App = () => {
           mo-value={selector}
           data-marimo-allow="*"
         />
-        <section data-marimo-sources="metric-source cost-source" aria-label="Metric row">
+        <section data-marimo-lens-inputs="metric-source cost-source" aria-label="Metric row">
           <article
             id="metric"
-            data-marimo-sources="metric-source"
-            data-marimo-lens-label="Current metric"
+            data-marimo-lens-inputs="metric-source"
+            data-marimo-lens-label="Current metric" data-marimo-lens-context data-marimo-lens-render-source={JSON.stringify({ path: "src/App.tsx", symbol: "metricCard" })}
           >
             <h2>{field}</h2>
             <p>{metric.value === undefined ? "Loading" : `$${metric.value}`}</p>

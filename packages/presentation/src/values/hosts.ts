@@ -8,7 +8,11 @@ import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
 import { PROJECTION_SITE_ATTRIBUTE } from "../projections/identity.ts";
-import { applyProjectionMetadata, resetProjectionHostMetadata } from "../projections/instances.ts";
+import {
+  setProjectionRuntimeCell,
+  applyProjectionMetadata,
+  resetProjectionHostMetadata,
+} from "../projections/instances.ts";
 import {
   createProjectionInventory,
   type ProjectionInventory,
@@ -453,7 +457,7 @@ const connectHost = (
     hostProjections.delete(host);
     delete host.dataset.marimoSelector;
     delete host.dataset.marimoVariable;
-    delete host.dataset.runtimeCellId;
+    setProjectionRuntimeCell(host, undefined);
     const diagnostic = diagnosticFor(selector, request.siteId);
     clearProjectedValue(host);
     failHost(
@@ -474,11 +478,7 @@ const connectHost = (
   host.dataset.marimoSelector = selector;
   host.dataset.marimoVariable = projection.variable ?? "";
   const runtimeCellId = projection.runtimeCellId ?? runtimeCellIds.get(selector);
-  if (runtimeCellId) {
-    host.dataset.runtimeCellId = runtimeCellId;
-  } else {
-    delete host.dataset.runtimeCellId;
-  }
+  setProjectionRuntimeCell(host, runtimeCellId);
   const cached = cachedValues.get(selector);
   const state = states.connected(selector, cached !== undefined);
   if (state.phase === "error" && state.error) {
@@ -645,11 +645,7 @@ export const setValueRuntimeCell = (
   });
   hosts.forEach((host) => {
     if (!selectors.includes(selectorFor(host))) return;
-    if (cellId) {
-      host.dataset.runtimeCellId = cellId;
-    } else {
-      delete host.dataset.runtimeCellId;
-    }
+    setProjectionRuntimeCell(host, cellId);
   });
 };
 

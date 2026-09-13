@@ -36,7 +36,7 @@ export const EventMap = ({
   return (
     <section
       className="map-panel"
-      data-marimo-sources="events-data summary-data"
+      data-marimo-lens-inputs="events-data summary-data"
       aria-labelledby="map-title"
     >
       <header className="map-heading">

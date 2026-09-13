@@ -213,7 +213,7 @@ export const App = () => {
       />
 
       <main
-        data-marimo-sources="analysis-data"
+        data-marimo-lens-inputs="analysis-data"
         className="review"
         aria-busy={loading}
       >

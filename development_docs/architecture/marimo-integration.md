@@ -459,3 +459,23 @@ Add tests at the narrowest owner and at the live seam:
 Run `make build` and `make e2e` after changing Marimo integration. Run
 `make package` when the release manifest, browser assets, entry points, or
 distribution contents change.
+
+## Lens client metadata
+
+Studio translates resolved projections into Lens's declarative DOM contract.
+`data-marimo-lens-cell-id` identifies the runtime producer, and
+`data-marimo-lens-selector` retains the symbolic value selector. Runtime cell
+updates publish both native rendering metadata and the Lens source in one path.
+Reset releases these source attributes with the projection host.
+
+Descriptions use `data-marimo-lens-label`, `data-marimo-lens-detail`, and
+`data-marimo-lens-render-source`. The default rendering reference comes from the
+projection's authored source location. Authored descriptions take precedence and
+remain owned by the author through projection updates and teardown.
+
+Custom rendered regions use `data-marimo-lens-inputs` to reference existing
+source hosts. `data-marimo-lens-context` marks a preferred image container. Lens
+captures descriptions at selection creation and keeps them through History and
+reopen. Notebook sources, rendering references, and capture containers have
+separate roles: Python supplies analytical provenance, client paths describe
+rendering code, and context containers guide images.

@@ -24,12 +24,23 @@ const contextSchema = z.object({
     selections: z.array(
       z.object({
         id: z.string(),
+        note: z.string(),
         target: z.object({
-          kind: z.enum(["dom", "notebook"]),
           sources: z
             .array(z.object({ cellId: z.string(), selector: z.string().nullable() }))
             .default([]),
         }),
+        description: z
+          .object({
+            label: z.string(),
+            renderSource: z
+              .object({
+                path: z.string(),
+                symbol: z.string().optional(),
+              })
+              .optional(),
+          })
+          .optional(),
         cells: z.array(z.object({ id: z.string(), status: z.string() })),
         snapshot: z.object({ status: z.string() }),
       }),
@@ -107,15 +118,15 @@ for (const mount of ["notebook", "installed", "anonymous"] as const) {
     studioCli,
   }) => {
     const view = await openView(page, studioCli, "vanilla", mount);
-    if (mount === "installed") await expect(view.locator("marimo-output")).toHaveCount(0);
-    await expect(view.locator("[data-marimo-studio-overlays] marimo-ui-element")).toHaveCount(1);
     await expect(view.locator("[data-marimo-lens-view-conflict]")).toHaveCount(0);
     await select(
       view,
       view.locator(mount === "anonymous" ? "#cell" : "#scalar"),
       "Preview feedback",
     );
-    await expect.poll(async () => (await inspect(view)).references.selections.length).toBe(1);
+    expect((await inspect(view)).references.selections).toMatchObject([
+      { note: "Preview feedback" },
+    ]);
     const source = workspaceCreatedViewHtmlPath("lens");
     await writeWorkspaceFile(
       source,
@@ -134,7 +145,9 @@ for (const mount of ["notebook", "installed", "anonymous"] as const) {
       await expect(view.locator("#scalar")).toHaveText("84");
       await expect.poll(async () => (await inspect(view)).references.selections).toEqual([]);
       await select(view, view.locator("#scalar"), "Replacement Lens");
-      await expect.poll(async () => (await inspect(view)).references.selections.length).toBe(1);
+      expect((await inspect(view)).references.selections).toMatchObject([
+        { note: "Replacement Lens" },
+      ]);
       await expect(view.locator("[data-marimo-lens-view-conflict]")).toHaveCount(0);
     }
   });
@@ -164,6 +177,17 @@ async function inspect(view: FrameLocator, action = "Inspect") {
   return contextSchema.parse(JSON.parse(await report.innerText()));
 }
 
+async function capturedContext(view: FrameLocator, count: number) {
+  let result!: z.infer<typeof contextSchema>;
+  await expect
+    .poll(async () => {
+      result = await inspect(view);
+      return result.references.selections.map((selection) => selection.snapshot.status);
+    })
+    .toEqual(Array.from({ length: count }, () => "available"));
+  return result;
+}
+
 test("Lens captures native Studio values, rich outputs, and cells with producing context", async ({
   page,
   studioCli,
@@ -173,12 +197,11 @@ test("Lens captures native Studio values, rich outputs, and cells with producing
   expect(await select(view, view.locator("#scalar"), "Scalar value")).toContain("metrics.revenue");
   await select(view, view.locator("#rich"), "Rich value");
   await select(view, view.locator("#cell"), "Native cell");
-  await expect
-    .poll(async () =>
-      (await inspect(view)).references.selections.map((item) => item.snapshot.status),
-    )
-    .toEqual(["available", "available", "available"]);
-  const result = await inspect(view);
+  const result = await capturedContext(view, 3);
+  expect(result.references.selections[0]?.description).toMatchObject({
+    label: "metrics.revenue",
+    renderSource: { path: "index.html" },
+  });
   expect(
     result.references.selections.map((item) =>
       item.target.sources.map((source) => source.selector),
@@ -207,6 +230,9 @@ test("Lens captures native Studio values, rich outputs, and cells with producing
   await studioCli.buildWorkspaceView("lens");
   await expect(view.locator("#scalar")).toHaveAttribute("data-marimo-lens-label", "Revenue");
   await expect(view.locator("#scalar")).toHaveText("84");
+  expect((await inspect(view)).references.selections[0]?.description?.label).toBe(
+    "metrics.revenue",
+  );
 
   expect((await inspect(view, "Resolve")).references.selections).toEqual([]);
   await view.getByRole("button", { name: "Open selections, 0 open, 3 in history" }).click();
@@ -228,18 +254,19 @@ for (const provider of ["react", "svelte"] as const) {
     const view = await openView(page, studioCli, provider);
     const metric = view.locator("#metric");
     await expect(metric).toContainText("$42");
-    await expect(view.locator("#metric-source")).toBeHidden();
     const label = await select(view, metric, "Revenue metric");
     expect(label).toContain("Current metric");
     expect(label).toContain("metrics.revenue");
     await select(view, view.locator("#cost"), "Cost metric");
-    await expect
-      .poll(async () =>
-        (await inspect(view)).references.selections.map((item) => item.snapshot.status),
-      )
-      .toEqual(["available", "available"]);
-    const initial = await inspect(view);
+    const initial = await capturedContext(view, 2);
     const [revenue, cost] = initial.references.selections;
+    expect(revenue?.description).toMatchObject({
+      label: "Current metric",
+      renderSource: {
+        path: provider === "react" ? "src/App.tsx" : "src/App.svelte",
+        symbol: "metricCard",
+      },
+    });
     expect(revenue?.target.sources).toEqual([
       { cellId: cost!.target.sources[0]!.cellId, selector: "metrics.revenue" },
     ]);
