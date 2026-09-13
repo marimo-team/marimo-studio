@@ -1,0 +1,19 @@
+packages/presentation/src/projections/instances.ts
+  s_788cbfea5514cf::t_4549c5b3ce1c0c 42-43,72-85,93,125,127,131-132,139-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bf6c692c1e687ac2aafca86fc1dd7889301834e3",
+  "prompts": {},
+  "sessions": {
+    "s_788cbfea5514cf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09a83-eb6a-78c1-9dae-2469939251a0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
