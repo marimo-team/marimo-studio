@@ -19,10 +19,8 @@ from pathlib import Path
 
 from marimo_studio._delivery.records import ASGIApp
 from marimo_studio._notebook.records import NotebookSpec
-
-STUDIO_RESULT_SELECTOR = (
-    ":is(marimo-cell, marimo-output, [mo-value])[data-runtime-cell-id], "
-    ":has(> [mo-value][hidden][data-runtime-cell-id]), [data-marimo-sources]"
+from marimo_studio._projections import (
+    STUDIO_RESULT_SELECTOR as STUDIO_RESULT_SELECTOR,
 )
 
 

@@ -27,6 +27,7 @@ from marimo_studio._compat.kernel_values.authorization import (
 from marimo_studio._compat.kernel_values.dependencies import (
     current_dependency_closure,
 )
+from marimo_studio._compat.kernel_values.lens import LensOverlay
 from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
@@ -263,6 +264,7 @@ class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
+        self._lens: LensOverlay | None = None
         self._value_encoder: ValueEncoder | None = None
         self._query_generations: dict[str, tuple[int, int]] = {}
         self._query_operations: dict[tuple[str, str], tuple[str, tuple[int, int]]] = {}
@@ -288,12 +290,17 @@ class _KernelBridgeLifespan:
             configured = False
         if inspection is None and not configured:
             return False
-        output_renderer = KernelOutputRenderer(context)
+        from marimo._session.model import SessionMode
+
+        if (
+            inspection is None
+            and getattr(context, "session_mode", None) == SessionMode.EDIT
+        ):
+            self._lens = LensOverlay(context)
+        output_renderer = KernelOutputRenderer(context, overlays=self._lens)
         observation_ledger: ObservationLedger | None = None
         observation_ledger_release: Callable[[], None] | None = None
         try:
-            from marimo._session.model import SessionMode
-
             records_observations = (
                 configured
                 and inspection is None
@@ -554,10 +561,7 @@ class _KernelBridgeLifespan:
                     consumer_id=args.consumer_id,
                     max_output_bytes=limit,
                 )
-            return OutputRenderResult(
-                result.outputs,
-                result.errors,
-            ).to_dict()
+            return result.to_dict()
 
         output_function = function_type(
             OUTPUT_FUNCTION_NAME,
@@ -691,6 +695,13 @@ class _KernelBridgeLifespan:
 
     def _close(self) -> None:
         failure: BaseException | None = None
+        if self._lens is not None:
+            try:
+                self._lens.close()
+            except BaseException as error:
+                failure = error
+            else:
+                self._lens = None
         if self._value_encoder is not None:
             try:
                 self._value_encoder.close()

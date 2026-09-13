@@ -478,3 +478,51 @@ test("workspace stream replacement rejects a missing generation", () => {
   ).toBe(true);
   expect(replacement.recover()).toBe(false);
 });
+
+test("output snapshots recover across revisions only for the same frame and inventory", () => {
+  const url =
+    "http://localhost/_marimo-studio/presentation/old/_marimo-studio/views/report/outputs";
+  const body = { revision: "current", projections: [], activeProjections: [] };
+  const options = { method: "POST", url, postData: JSON.stringify(body) };
+  const snapshot = request(options);
+  expect(isIdempotentReadRequest(snapshot)).toBe(true);
+  expect(abortedResponseCompleted(snapshot, 200)).toBe(false);
+  expect(abortedResponseCompleted(snapshot, 200, true)).toBe(true);
+  expect(abortedResponseCompleted(snapshot, 500, true)).toBe(false);
+  expect(isIdempotentReadRequest(request({ ...options, postData: "{" }))).toBe(false);
+  expect(isIdempotentReadRequest(request({ ...options, postData: "{}" }))).toBe(false);
+  expect(
+    isIdempotentReadRequest(
+      request({ ...options, url: "http://localhost/api/kernel/function_call" }),
+    ),
+  ).toBe(false);
+  const recovery = new IdempotentReadRecovery();
+  const owner = { id: 1 };
+  const start = recovery.recordStart(snapshot, owner);
+  expect(recovery.recordAbort(snapshot)).toBe(false);
+  const other = request({ ...options, url: url.replace("report", "other") });
+  recovery.recordStart(other, owner);
+  expect(recovery.recordSuccess(other)).toBeUndefined();
+  const projections = [{ target: "report", siteId: "report-site", instanceId: "one" }];
+  const changed = request({
+    ...options,
+    postData: JSON.stringify({ ...body, activeProjections: projections }),
+  });
+  recovery.recordStart(changed, owner);
+  expect(recovery.recordSuccess(changed)).toBeUndefined();
+  expect(
+    isIdempotentReadRequest(
+      request({
+        ...options,
+        postData: JSON.stringify({ ...body, projections, activeProjections: projections }),
+      }),
+    ),
+  ).toBe(false);
+  const retry = request({
+    ...options,
+    url: url.replace("/old/", "/new/"),
+    postData: JSON.stringify({ ...body, revision: "next" }),
+  });
+  recovery.recordStart(retry, owner);
+  expect(recovery.recordSuccess(retry)).toBe(start);
+});

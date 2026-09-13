@@ -43,7 +43,7 @@ dev = [
 ]
 e2e = [
     { name = "anywidget" },
-    { name = "marimo-lens", specifier = "==0.0.10" },
+    { name = "marimo-studio", extras = ["lens"], editable = "packages/marimo-studio" },
     { name = "marimo-studio-e2e-provider", editable = "apps/e2e/fixtures-provider/provider" },
 ]
 marimo-studio-build = [
@@ -1255,6 +1255,9 @@ dependencies = [
 deno = [
     { name = "deno" },
 ]
+lens = [
+    { name = "marimo-lens" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1264,6 +1267,7 @@ requires-dist = [
     { name = "htpy", specifier = ">=26.5.1" },
     { name = "marimo", specifier = "==0.24.2" },
     { name = "marimo-export", specifier = ">=0.0.8" },
+    { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.0.10" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },
@@ -1272,7 +1276,7 @@ requires-dist = [
     { name = "tree-sitter-javascript", specifier = ">=0.25.0" },
     { name = "watchdog", specifier = ">=6.0.0" },
 ]
-provides-extras = ["deno"]
+provides-extras = ["deno", "lens"]
 
 [[package]]
 name = "marimo-studio-e2e-provider"

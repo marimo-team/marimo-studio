@@ -5,8 +5,9 @@ from __future__ import annotations
 import gc
 import hashlib
 import json
+import logging
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
@@ -43,11 +44,23 @@ def _encoded_size(value: object) -> int:
     return len(payload.encode("utf-8"))
 
 
-class KernelOutputRenderer:
-    """Own native Marimo output resources for active presentation selectors."""
+_OVERLAY_CONSUMER = "__marimo_studio_overlays__"
+LOGGER = logging.getLogger(__name__)
 
-    def __init__(self, context: Any) -> None:
+
+class KernelOutputRenderer:
+    """Own native Marimo output resources for projections and page overlays."""
+
+    def __init__(
+        self,
+        context: Any,
+        *,
+        overlays: Callable[[Mapping[str, object]], Mapping[str, object]] | None = None,
+    ) -> None:
         self._context = context
+        self._overlays = overlays
+        self._overlay_values: dict[str, object] = {}
+        self._overlay_outputs: dict[str, RenderedOutput] = {}
         self._active: dict[str, set[str]] = {}
         self._releasing: set[tuple[str, str]] = set()
         self._release_references: dict[tuple[str, str], dict[str, Any]] = {}
@@ -71,16 +84,8 @@ class KernelOutputRenderer:
             raise RuntimeError("The output renderer has already closed.")
         selectors = tuple(dict.fromkeys(selectors))
         active = set(active_selectors).intersection(allowed)
-        current = self._active.get(consumer_id, set())
-        releases = current.difference(active).union(current.intersection(selectors))
-        self._release_many(
-            ((consumer_id, selector) for selector in releases),
-            retry_retained=True,
-        )
-
-        outputs: dict[str, RenderedOutput] = {}
+        values: dict[str, object] = {}
         errors: dict[str, ValueReadError] = {}
-        failed: set[tuple[str, str]] = set()
         for selector in selectors:
             if selector not in allowed:
                 errors[selector] = ValueReadError(
@@ -114,6 +119,40 @@ class KernelOutputRenderer:
                 )
                 continue
 
+            values[selector] = value
+        return self._render_values(
+            values,
+            errors,
+            active,
+            consumer_id=consumer_id,
+            max_output_bytes=max_output_bytes,
+            overlays=self._render_overlays(
+                namespace, max_output_bytes=max_output_bytes
+            ),
+        )
+
+    def _render_values(
+        self,
+        values: Mapping[str, object],
+        errors: dict[str, ValueReadError],
+        active: set[str],
+        *,
+        consumer_id: str,
+        max_output_bytes: int,
+        overlays: dict[str, RenderedOutput] | None = None,
+    ) -> OutputRenderResult:
+        current = self._active.get(consumer_id, set())
+        releases = current.difference(active).union(
+            current.intersection((*values, *errors))
+        )
+        self._release_many(
+            ((consumer_id, selector) for selector in releases),
+            retry_retained=True,
+        )
+
+        outputs: dict[str, RenderedOutput] = {}
+        failed: set[tuple[str, str]] = set()
+        for selector, value in values.items():
             output, error = self._format(consumer_id, selector, value)
             if error is not None:
                 failed.add((consumer_id, selector))
@@ -141,13 +180,16 @@ class KernelOutputRenderer:
         if failed:
             self._release_many(failed)
         self._flush_notifications()
-        result = OutputRenderResult(outputs=outputs, errors=errors)
+        result = OutputRenderResult(
+            outputs=outputs, errors=errors, overlays=overlays or {}
+        )
         if _encoded_size(result.to_dict()) <= max_output_bytes:
             return result
         self._release_many((consumer_id, selector) for selector in outputs)
         self._flush_notifications()
         return OutputRenderResult(
             outputs={},
+            overlays=overlays or {},
             errors={
                 "*": ValueReadError(
                     "response-too-large",
@@ -156,9 +198,63 @@ class KernelOutputRenderer:
             },
         )
 
+    def _render_overlays(
+        self,
+        namespace: Mapping[str, object],
+        *,
+        max_output_bytes: int,
+    ) -> dict[str, RenderedOutput]:
+        """Render callback-selected page outputs, retaining stable widget objects."""
+        if self._closed:
+            raise RuntimeError("The output renderer has already closed.")
+        if self._overlays is None:
+            return {}
+        try:
+            values = dict(self._overlays(namespace))
+            changed = {
+                name: value
+                for name, value in values.items()
+                if name not in self._overlay_values
+                or self._overlay_values[name] is not value
+            }
+            result = self._render_values(
+                changed,
+                {},
+                set(values),
+                consumer_id=_OVERLAY_CONSUMER,
+                max_output_bytes=max_output_bytes,
+            )
+        except Exception:
+            LOGGER.exception("Could not render output overlays")
+            return self._overlay_outputs
+        self._overlay_outputs = {
+            name: output
+            for name, output in self._overlay_outputs.items()
+            if name in values and name not in changed
+        }
+        self._overlay_outputs.update(result.outputs)
+        self._overlay_values = {
+            name: value
+            for name, value in values.items()
+            if name in self._overlay_outputs
+        }
+        for error in result.errors.values():
+            LOGGER.warning("Could not render output overlay: %s", error.message)
+        if (
+            _encoded_size(
+                OutputRenderResult({}, {}, overlays=self._overlay_outputs).to_dict()
+            )
+            > max_output_bytes
+        ):
+            LOGGER.warning("Output overlays exceed the output byte limit")
+            return {}
+        return self._overlay_outputs
+
     def close(self) -> None:
         if self._closed:
             return
+        self._overlay_values.clear()
+        self._overlay_outputs.clear()
         active = (
             (consumer_id, selector)
             for consumer_id, selectors in tuple(self._active.items())

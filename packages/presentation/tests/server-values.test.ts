@@ -205,35 +205,50 @@ test("value reads retry an Arrow resource that is not yet published", async () =
   }
 });
 
-test("value reads retry a transient request network failure", async () => {
-  await installConfig();
-  const originalFetch = globalThis.fetch;
-  let requests = 0;
-  globalThis.fetch = () => {
-    requests += 1;
-    return requests === 1
-      ? Promise.reject(new TypeError("connection reset"))
-      : Promise.resolve(
-          Response.json({
-            values: { networkRetry: jsonValue("ready") },
-            errors: {},
-          }),
+test.each(["network", "dispatch", "body", "caller"])(
+  "value reads recover from %s interruptions without retrying caller cancellation",
+  async (phase) => {
+    await installConfig();
+    const originalFetch = globalThis.fetch;
+    const controller = new AbortController();
+    const interrupted = new DOMException("The user aborted a request.", "AbortError");
+    let requests = 0;
+    globalThis.fetch = () => {
+      requests += 1;
+      if (requests === 1) {
+        if (phase === "network") return Promise.reject(new TypeError("connection reset"));
+        if (phase === "caller") controller.abort(interrupted);
+        if (phase !== "body") return Promise.reject(interrupted);
+        return Promise.resolve(
+          new Response(new ReadableStream({ start: (stream) => stream.error(interrupted) })),
         );
-  };
-  const projection = projectionRequest("networkRetry", "value");
-  try {
-    const result = await readServerValuesWithRetry({
-      revision: "presentation-revision",
-      projections: [projection],
-      activeProjections: [projection],
-    });
-
-    assert.deepEqual(result.values.networkRetry, jsonValue("ready"));
-    assert.equal(requests, 2);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
+      }
+      return Promise.resolve(
+        Response.json({ values: { networkRetry: jsonValue("ready") }, errors: {} }),
+      );
+    };
+    const projection = projectionRequest("networkRetry", "value");
+    try {
+      const result = readServerValuesWithRetry(
+        {
+          revision: "presentation-revision",
+          projections: [projection],
+          activeProjections: [projection],
+        },
+        controller.signal,
+      );
+      if (phase === "caller") {
+        await assert.rejects(result, { name: interrupted.name, message: interrupted.message });
+        assert.equal(requests, 1);
+      } else {
+        assert.deepEqual((await result).values.networkRetry, jsonValue("ready"));
+        assert.equal(requests, 2);
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+);
 
 test("terminal value failures do not retry", async () => {
   await installConfig();

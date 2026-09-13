@@ -134,18 +134,25 @@ export const waitForOutputCaller = <T>(operation: Promise<T>, signal?: AbortSign
 export const createServerOutputReader = (reconcile: OutputResponseReconciler): OutputReader => {
   let queue: Promise<void> = Promise.resolve();
   return (request, signal) => {
-    const operation = queue.then(() => {
+    const operation = queue.then(async () => {
       if (signal?.aborted) {
         throw outputCallerAbortError();
       }
-      return projectionReadGate.run(signal, (activeSignal) => {
-        const target = serverOutputTarget();
-        return readServerOutputsAtTargetWithRetry(
-          target,
-          { ...request, revision: target.revision },
-          activeSignal,
-        );
-      });
+      try {
+        return await projectionReadGate.run(signal, (activeSignal) => {
+          const target = serverOutputTarget();
+          return readServerOutputsAtTargetWithRetry(
+            target,
+            { ...request, revision: target.revision },
+            activeSignal,
+          );
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError" && !signal?.aborted) {
+          throw new OutputRequestError(error.message, "output-read-interrupted", true);
+        }
+        throw error;
+      }
     });
     queue = operation.then(
       () => undefined,

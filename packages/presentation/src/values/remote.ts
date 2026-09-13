@@ -120,7 +120,16 @@ export const readServerValuesWithRetry = async (
   signal?: AbortSignal,
 ): Promise<DecodedValueReadResponse> =>
   retry({
-    operation: () => readServerValues(request, signal),
+    operation: async () => {
+      try {
+        return await readServerValues(request, signal);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError" && !signal?.aborted) {
+          throw new ValueRequestError(error.message, "value-read-interrupted", true);
+        }
+        throw error;
+      }
+    },
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof ValueRequestError && error.transient,
     signal,

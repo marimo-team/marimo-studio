@@ -1,3 +1,7 @@
+import {
+  type OutputReadRequest,
+  outputReadRequestSchema,
+} from "@marimo-studio/protocol/output-read";
 import { WORKSPACE_STREAM_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
 export interface BrowserRequestIdentity {
@@ -138,19 +142,34 @@ interface ReadRecoveryIdentity {
 
 const IDEMPOTENT_READ_METHODS = new Set(["GET", "HEAD"]);
 
+const outputSnapshot = (request: BrowserRequestIdentity): OutputReadRequest | undefined => {
+  if (
+    request.method() !== "POST" ||
+    !/\/_marimo-studio\/views\/[^/]+\/outputs$/.test(new URL(request.url()).pathname)
+  )
+    return undefined;
+  try {
+    const parsed = outputReadRequestSchema.safeParse(JSON.parse(request.postData() ?? "null"));
+    return parsed.success && parsed.data.projections.length === 0 ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export const isIdempotentReadRequest = (request: BrowserRequestIdentity): boolean =>
-  IDEMPOTENT_READ_METHODS.has(request.method());
+  IDEMPOTENT_READ_METHODS.has(request.method()) || outputSnapshot(request) !== undefined;
 
 const idempotentReadRecoveryIdentity = (request: BrowserRequestIdentity): ReadRecoveryIdentity => {
-  if (request.method() !== "GET" || request.resourceType() !== "document") {
+  const snapshot = outputSnapshot(request);
+  if (!snapshot && (request.method() !== "GET" || request.resourceType() !== "document")) {
     return {
       identity: browserRequestIdentity(request),
       retainPendingAborts: false,
     };
   }
   const url = new URL(request.url());
-  const presentation = /^(.*\/_marimo-studio\/presentation\/)[^/]+(\/[^/]+\/$)/.exec(url.pathname);
-  if (presentation === null && !url.searchParams.has("marimo_studio_renewal")) {
+  const presentation = /^(.*\/_marimo-studio\/presentation\/)[^/]+(\/.+)$/.exec(url.pathname);
+  if (!snapshot && presentation === null && !url.searchParams.has("marimo_studio_renewal")) {
     return {
       identity: browserRequestIdentity(request),
       retainPendingAborts: false,
@@ -169,7 +188,9 @@ const idempotentReadRecoveryIdentity = (request: BrowserRequestIdentity): ReadRe
       request.resourceType(),
       url.searchParams.get("file") ?? "",
       url.searchParams.get("runtime") ?? "",
-      request.postData() ?? "",
+      snapshot
+        ? JSON.stringify([url.search, snapshot.activeProjections])
+        : (request.postData() ?? ""),
     ].join("\u0000"),
     retainPendingAborts: true,
   };
@@ -186,7 +207,9 @@ export const abortedResponseCompleted = (
     ? status < 400
     : [204, 205, 304].includes(status) ||
       (requestFinished &&
-        ((request.resourceType() === "document" && status >= 200 && status < 300) ||
+        (((request.resourceType() === "document" || outputSnapshot(request) !== undefined) &&
+          status >= 200 &&
+          status < 300) ||
           (request.resourceType() === "fetch" &&
             status === 202 &&
             /\/_marimo-studio\/presentation\/[^/]+\/[^/]+\/$/.test(

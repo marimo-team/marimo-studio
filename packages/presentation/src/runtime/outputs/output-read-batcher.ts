@@ -39,7 +39,7 @@ const localizeLeafOverflow = (
     return response;
   }
   return {
-    outputs: response.outputs,
+    ...response,
     errors: Object.fromEntries([
       ...Object.entries(response.errors).filter(([selector]) => selector !== "*"),
       [target, overflow],
@@ -51,6 +51,7 @@ const mergeResponses = (
   left: OutputReadResponse,
   right: OutputReadResponse,
 ): OutputReadResponse => ({
+  ...right,
   outputs: Object.fromEntries([...Object.entries(left.outputs), ...Object.entries(right.outputs)]),
   errors: Object.fromEntries([...Object.entries(left.errors), ...Object.entries(right.errors)]),
 });

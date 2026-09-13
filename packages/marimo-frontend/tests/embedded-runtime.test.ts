@@ -407,6 +407,12 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
   expect(host.presentationCalls).toHaveLength(2);
   expect(host.themeCalls).toEqual([{ config: presentation("light"), theme: "light" }]);
 
+  if (!host.renderer) throw new Error("The runtime renderer is unavailable.");
+  const disposeRenderer = host.renderer.dispose.bind(host.renderer);
+  vi.spyOn(host.renderer, "dispose").mockImplementation(() => {
+    expect(host.transport.serverRequestReleases).toBe(2);
+    disposeRenderer();
+  });
   await act(async () => handle.dispose());
   handle.dispose();
   expect(target.childElementCount).toBe(0);

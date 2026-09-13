@@ -425,6 +425,7 @@ test("keeps relative navigation public across direct view reloads", async ({
   await page.getByLabel("New view").fill("qa-view");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/qa-view\/\?/);
+  await waitForPreview(page);
   const qaHtmlPath = resolve(
     workspaceNotebookPath,
     "../__marimo__/studio/notebook/qa-view/index.html",
@@ -439,6 +440,7 @@ test("keeps relative navigation public across direct view reloads", async ({
       `<main id="app-shell"$1><strong id="query-region" mo-value='query_params["region"]'></strong>`,
     ),
   );
+  await expect(previewFrame(page).locator("#query-region")).toHaveText("eu");
   const direct = await page.context().newPage();
   const directDocument = () =>
     direct.locator("iframe#marimo-studio-presentation").getAttribute("src");

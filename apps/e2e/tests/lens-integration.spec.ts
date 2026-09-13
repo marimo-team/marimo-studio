@@ -25,8 +25,10 @@ const contextSchema = z.object({
       z.object({
         id: z.string(),
         target: z.object({
-          kind: z.literal("dom"),
-          sources: z.array(z.object({ cellId: z.string(), selector: z.string().nullable() })),
+          kind: z.enum(["dom", "notebook"]),
+          sources: z
+            .array(z.object({ cellId: z.string(), selector: z.string().nullable() }))
+            .default([]),
         }),
         cells: z.array(z.object({ id: z.string(), status: z.string() })),
         snapshot: z.object({ status: z.string() }),
@@ -36,28 +38,106 @@ const contextSchema = z.object({
   images: z.record(z.string(), z.string()),
 });
 
-async function openView(page: Page, cli: StudioCli, provider: "vanilla" | "react" | "svelte") {
+async function openView(
+  page: Page,
+  cli: StudioCli,
+  provider: "vanilla" | "react" | "svelte",
+  mount: "projected" | "notebook" | "installed" | "anonymous" = "projected",
+) {
   const fixtures = resolve(fixtureDirectory, "lens");
   await rm(resolve(workspaceDirectory, "__marimo__/studio/notebook"), {
     recursive: true,
     force: true,
   });
-  await writeWorkspaceFile(
-    workspaceNotebookPath,
-    await readFile(resolve(fixtures, "notebook.py.txt"), "utf8"),
-  );
+  let notebook = await readFile(resolve(fixtures, "notebook.py.txt"), "utf8");
+  if (mount === "notebook") {
+    notebook = notebook.replace(
+      "def feedback(Lens, STUDIO_RESULT_SELECTOR):",
+      "def feedback(Lens, STUDIO_RESULT_SELECTOR, scale):\n    scale.value",
+    );
+  }
+  if (mount === "installed" || mount === "anonymous") {
+    notebook = notebook
+      .replace(
+        "def feedback(Lens, STUDIO_RESULT_SELECTOR):\n    lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)\n    return (lens,)",
+        mount === "anonymous"
+          ? "def feedback(Lens, mo):\n    mo.output.append(Lens())\n    return"
+          : "def feedback():\n    return",
+      )
+      .replace("html, json, lens, mo", "html, json, mo")
+      .replace(
+        "    mo.stop(not submit.value)",
+        "    mo.stop(not submit.value)\n    import marimo_lens.agent as _agent\n    _lens = _agent.connect()",
+      )
+      .replaceAll("lens.context()", "_lens.context()")
+      .replaceAll("lens.resolve(", "_lens.resolve(");
+    if (mount === "installed") {
+      notebook = notebook
+        .replace("    from marimo_lens import Lens\n", "")
+        .replace("    from marimo_studio import STUDIO_RESULT_SELECTOR\n", "")
+        .replace("return Lens, STUDIO_RESULT_SELECTOR, html, json, mo", "return html, json, mo");
+    }
+  }
+  await writeWorkspaceFile(workspaceNotebookPath, notebook);
   await cli.addWorkspaceView(workspaceNotebookPath, "lens", `marimo-studio/${provider}:default`);
   const source = { vanilla: "index.html", react: "App.tsx", svelte: "App.svelte" }[provider];
   const destination = provider === "vanilla" ? source : `src/${source}`;
+  let document = await readFile(
+    resolve(fixtures, provider === "vanilla" ? source : `${source}.txt`),
+    "utf8",
+  );
+  if (mount !== "projected")
+    document = document.replace('<marimo-output value="lens"></marimo-output>', "");
+  if (mount === "installed")
+    document = document.replace('<marimo-output id="rich" value="rich"></marimo-output>', "");
   await writeWorkspaceFile(
     resolve(workspaceDirectory, "__marimo__/studio/notebook/lens", destination),
-    await readFile(resolve(fixtures, provider === "vanilla" ? source : `${source}.txt`), "utf8"),
+    document,
   );
   await cli.buildWorkspaceView("lens");
   await page.goto("/studio/lens/?file=notebook.py");
   const view = await waitForViewPreview(page, "lens", "server", 120_000);
   await expect(view.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
   return view;
+}
+
+for (const mount of ["notebook", "installed", "anonymous"] as const) {
+  test(`Development preview mounts ${mount} Lens and preserves feedback through rebuild`, async ({
+    page,
+    studioCli,
+  }) => {
+    const view = await openView(page, studioCli, "vanilla", mount);
+    if (mount === "installed") await expect(view.locator("marimo-output")).toHaveCount(0);
+    await expect(view.locator("[data-marimo-studio-overlays] marimo-ui-element")).toHaveCount(1);
+    await expect(view.locator("[data-marimo-lens-view-conflict]")).toHaveCount(0);
+    await select(
+      view,
+      view.locator(mount === "anonymous" ? "#cell" : "#scalar"),
+      "Preview feedback",
+    );
+    await expect.poll(async () => (await inspect(view)).references.selections.length).toBe(1);
+    const source = workspaceCreatedViewHtmlPath("lens");
+    await writeWorkspaceFile(
+      source,
+      (await readFile(source, "utf8")).replace("Lens projections</h1>", "Rebuilt preview</h1>"),
+    );
+    await studioCli.buildWorkspaceView("lens");
+    await expect(view.getByRole("heading", { name: "Rebuilt preview" })).toBeVisible();
+    await expect(view.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
+    await expect(
+      view.getByRole("button", { name: "Open selections, 1 open, 0 in history" }),
+    ).toBeVisible();
+    if (mount === "notebook") {
+      const scale = labeledSlider(view.locator('marimo-cell[name="controls"]'), /^Scale/);
+      await scale.focus();
+      await scale.press("ArrowRight");
+      await expect(view.locator("#scalar")).toHaveText("84");
+      await expect.poll(async () => (await inspect(view)).references.selections).toEqual([]);
+      await select(view, view.locator("#scalar"), "Replacement Lens");
+      await expect.poll(async () => (await inspect(view)).references.selections.length).toBe(1);
+      await expect(view.locator("[data-marimo-lens-view-conflict]")).toHaveCount(0);
+    }
+  });
 }
 
 async function select(view: FrameLocator, target: Locator, note: string) {

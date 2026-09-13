@@ -52,6 +52,7 @@ export const renderedOutputSchema = z
 export const outputReadResponseSchema = z.object({
   outputs: ownRecordSchema(z.string(), renderedOutputSchema),
   errors: ownRecordSchema(z.string(), valueReadErrorSchema),
+  overlays: ownRecordSchema(z.string(), renderedOutputSchema).optional(),
 });
 
 export type OutputReadRequest = z.infer<typeof outputReadRequestSchema>;

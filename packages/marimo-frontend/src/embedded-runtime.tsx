@@ -307,7 +307,12 @@ const transportHost: EmbeddedTransportHost = {
   activateServerRequests() {
     const previous = store.get(requestClientAtom);
     const network = createNetworkRequests();
-    const modelValues = bindModelValueSenderToPage(network.sendModelValue);
+    const modelValues = bindModelValueSenderToPage<Parameters<typeof network.sendModelValue>[0]>(
+      async (request) =>
+        store.get(connectionAtom).state === WebSocketState.OPEN
+          ? network.sendModelValue(request)
+          : null,
+    );
     const functionClient = currentProjectedOutputFunctionGate().activateClient();
     const requests = createErrorToastingRequests({
       ...network,
@@ -329,7 +334,11 @@ const transportHost: EmbeddedTransportHost = {
       functionClient.dispose();
       modelValues.dispose();
       if (store.get(requestClientAtom) === requests) {
-        store.set(requestClientAtom, previous);
+        // Late widget cleanup must keep the closed request owner.
+        store.set(
+          requestClientAtom,
+          previous ? { ...previous, sendModelValue: modelValues.send } : requests,
+        );
       }
     };
   },
