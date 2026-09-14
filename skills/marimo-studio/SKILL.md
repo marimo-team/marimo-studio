@@ -31,6 +31,11 @@ continue with the workflow.
 
 ## Preserve notebook traceability
 
+Apply these conventions while authoring every view, even when Lens is not
+installed, so adding Lens exposes named targets and their source context.
+Keep metadata on authored regions and projection hosts, outside native Marimo
+output subtrees.
+
 Prefer `mo-value` for values, `marimo-output` for rich values, and `marimo-cell`
 for native cell output. Keep analytical computation in the notebook. When custom
 JavaScript rendering is necessary, every result must declare its kernel inputs:
@@ -56,6 +61,10 @@ JavaScript rendering is necessary, every result must declare its kernel inputs:
 - Studio supplies native projection labels. Give custom regions a
   `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
   supplements the source links that connect results to the analytical graph.
+- Give custom regions a `data-marimo-lens-render-source` JSON reference with
+  their actual project-relative source `path` and optional `symbol`. Keep it
+  current as source moves. Use `data-marimo-lens-context` on a chart, card, or
+  section when it defines the intended image context for selections.
 
 ## Activate the first view immediately
 
@@ -537,8 +546,17 @@ notebook already defines the intended value.
 
 [Marimo Lens](https://marimo-team.github.io/marimo-lens/) lets a person mark a
 rendered result or authored page region and give that exact surface to a
-code-mode agent. Install `marimo-lens>=0.1.0` in the notebook environment, then define
-one Lens value with Studio's result selector:
+code-mode agent. When enabling Lens, addressing selections, or needing metadata
+details beyond the traceability conventions, import `marimo_lens.agent` and run
+`help(marimo_lens.agent)` in the notebook environment. Follow its packaged skill
+and browse the [target metadata reference](https://marimo-team.github.io/marimo-lens/concepts/targets)
+as needed. Reuse that discovery for the same environment and Lens version,
+combining it with an already-needed inspection call when possible. Routine view
+authoring follows the conventions directly, without Lens setup prompts or
+additional discovery calls.
+
+To enable feedback, install `marimo-studio[lens]` (or `marimo-lens>=0.1.0`) in
+the notebook environment, then define one Lens value with Studio's result selector:
 
 ```python
 from marimo_lens import Lens
@@ -558,7 +576,12 @@ rendered regions to their existing notebook input hosts:
 <marimo-output value="studio_lens"></marimo-output>
 
 <span id="revenue-data" hidden mo-value="quarterly_revenue"></span>
-<section data-marimo-lens-inputs="revenue-data">
+<section
+  data-marimo-lens-inputs="revenue-data"
+  data-marimo-lens-label="Quarterly revenue"
+  data-marimo-lens-render-source='{"path":"index.html"}'
+  data-marimo-lens-context
+>
   <!-- Render the custom revenue chart here. -->
 </section>
 ```
