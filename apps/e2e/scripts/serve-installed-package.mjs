@@ -277,6 +277,35 @@ try {
     server,
     captureProcessOutput(server, { stdout: process.stdout, stderr: process.stderr }),
   );
+  const freshServer = track({
+    child: spawn(
+      marimo,
+      [
+        "new",
+        "--no-sandbox",
+        "--headless",
+        "--no-token",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(installedPackageNetwork.fresh.port),
+      ],
+      {
+        cwd: workspaceDirectory,
+        detached: process.platform !== "win32",
+        env: environment,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    ),
+    port: installedPackageNetwork.fresh.port,
+    serverUrl: installedPackageNetwork.fresh.origin,
+    shutdown: "studio",
+    timeout: 10_000,
+  });
+  outputs.set(
+    freshServer,
+    captureProcessOutput(freshServer, { stdout: process.stdout, stderr: process.stderr }),
+  );
   runServer = track({
     child: spawn(
       marimo,
@@ -336,6 +365,10 @@ try {
     captureProcessOutput(exported, { stdout: process.stdout, stderr: process.stderr }),
   );
   await Promise.all([
+    waitForServer(freshServer, installedPackageNetwork.fresh.origin, {
+      output: outputs.get(freshServer),
+      timeout: 120_000,
+    }),
     waitForServer(server, `${installedPackageNetwork.origin}/_marimo-studio/status`, {
       output: outputs.get(server),
       timeout: 120_000,

@@ -4,6 +4,7 @@ import { DOCUMENT_LIFECYCLE_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
 import { studioEditorSessionId } from "./authoring-test-support.ts";
 import {
+  selectWorkspaceMode,
   type BrowserDiagnostics,
   dashboardHtmlPath,
   editorFrame,
@@ -37,7 +38,7 @@ const activateServerPreview = async (
     count: 1,
     required: false,
   });
-  await page.getByLabel("Browser preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Python/ }).click();
   await expectPreviewInteractive(page, "server");
   await recoverRequestAbort(controls);
@@ -71,14 +72,14 @@ test("starts the notebook automatically and initializes WebAssembly on demand", 
   const preview = await waitForPreview(page);
 
   await expect(preview.locator('strong[mo-value="metric"]')).toHaveText("42");
-  await expect(page.getByLabel("Python preview runtime")).toContainText("Live");
+  await expect(page.getByRole("status", { name: "View status" })).toContainText("Live");
   for (const surface of ["Notebook", "Preview"]) {
     await expect(page.getByRole("region", { name: surface })).toBeVisible();
   }
   const wasmFrame = page.locator('iframe[data-preview-runtime-frame="wasm"]');
 
   await expect(wasmFrame).toHaveAttribute("src", "about:blank");
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await expectPreviewInteractive(page, "wasm");
@@ -205,10 +206,10 @@ test("explains a degraded runtime diagnostic in the runtime menu", async ({ page
     );
   }, DOCUMENT_LIFECYCLE_QUERY_PARAM);
 
-  const trigger = page.getByLabel("Python preview runtime");
+  const trigger = page.getByRole("status", { name: "View status" });
   await expect(trigger).toContainText("Live with 1 warning");
-  await trigger.click();
-  const status = trigger.locator("..").getByRole("status", { name: "Preview runtime status" });
+  await page.getByLabel(/preview runtime$/).click();
+  const status = page.getByRole("status", { name: "Preview runtime status" });
   await expect(status).toBeVisible();
   await expect(status).toContainText("Live with 1 warning");
   await expect(status).toContainText("The projected value is stale.");
@@ -238,7 +239,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   });
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   const serverSummary = server.locator("#rich-summary-output");
@@ -264,7 +265,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await writeDashboardSource(page, layoutEdit);
   await expect(server.getByRole("heading", { name: "Edited layout" })).toBeVisible();
   await expect(columns).toHaveAttribute("aria-expanded", "true");
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   await expect(wasm.getByRole("heading", { name: "Edited layout" })).toBeVisible();
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
@@ -285,7 +286,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   );
   await expect(serverSummary).toContainText("does not resolve in this notebook");
 
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   await waitForPreview(page, "wasm");
   const unavailableRevision = await wasm
@@ -322,7 +323,7 @@ test("preserves projected controls across refresh and owner removal", async ({
   await expect(serverMixed).toHaveCount(2);
   await expect(serverSharedOwner).toHaveAttribute("data-state", "ready");
 
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await expectPreviewInteractive(page, "wasm");
@@ -344,7 +345,7 @@ test("preserves projected controls across refresh and owner removal", async ({
   await expect(serverMixed.nth(0)).toHaveAttribute("aria-valuenow", "1");
   await expect(serverMixed.nth(1)).toHaveAttribute("aria-valuenow", "3");
 
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   await expectPreviewInteractive(page, "wasm");
   await expect(wasmFresh).toHaveAttribute("aria-valuenow", "1");
@@ -372,7 +373,7 @@ test("preserves projected controls across refresh and owner removal", async ({
 
   for (const [index, preview] of [server, wasm].entries()) {
     if (index > 0) {
-      await page.getByLabel("Python preview runtime").click();
+      await page.getByLabel(/preview runtime$/).click();
       await page.getByRole("button", { name: /Browser/ }).click();
     }
     await expectPreviewInteractive(page, index === 0 ? "server" : "wasm");
@@ -415,7 +416,7 @@ test("preserves runtime state while modes and controls change", async ({
   await serverWidget.click();
   await expect(serverWidget).toHaveText(`Widget count: ${serverWidgetCount + 1}`);
 
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   const wasmWidget = wasm.getByRole("button", { name: /Widget count:/ });
@@ -437,7 +438,7 @@ test("preserves runtime state while modes and controls change", async ({
 
   await activateServerPreview(page, browserDiagnostics);
   for (const mode of ["Notebook", "Preview", "Develop", "Notebook", "Develop"]) {
-    await page.getByRole("button", { name: mode, exact: true }).click();
+    await selectWorkspaceMode(page, mode);
   }
 
   const currentEditor = await page.locator('iframe[title="Marimo editor"]').elementHandle();
@@ -474,7 +475,8 @@ test("keeps native output ownership isolated between server preview consumers", 
   await page.goto(studioEntryUrl);
   const embedded = await waitForPreview(page);
   const popoutOpened = page.context().waitForEvent("page");
-  await page.getByLabel("Open preview in a new tab").click();
+  await page.getByLabel("Workspace options").click();
+  await page.getByRole("link", { name: "Open preview in new tab", exact: true }).click();
   const popout = await popoutOpened;
   await popout.waitForLoadState("domcontentloaded");
   expect(await popout.evaluate(() => globalThis.opener)).toBeNull();
@@ -513,7 +515,8 @@ test("refreshes a popout view and preserves its public query across reload", asy
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const popoutOpened = page.context().waitForEvent("page");
-  await page.getByLabel("Open preview in a new tab").click();
+  await page.getByLabel("Workspace options").click();
+  await page.getByRole("link", { name: "Open preview in new tab", exact: true }).click();
   const popout = await popoutOpened;
   await popout.waitForLoadState("domcontentloaded");
   const rendered = presentationFrame(popout);

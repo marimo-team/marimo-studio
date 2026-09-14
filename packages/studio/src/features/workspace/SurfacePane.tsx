@@ -33,7 +33,7 @@ export const SurfacePane = ({
       inert={hidden}
       style={paneStyle(rectangle)}
     >
-      <div className="studio-arrange-chrome">
+      <div className="studio-arrange-chrome" hidden={!arranging}>
         <strong>{label}</strong>
         <PaneMenu target={surface} tree={tree} onApply={onArrange} />
       </div>

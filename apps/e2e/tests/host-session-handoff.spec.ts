@@ -84,6 +84,7 @@ test("preserves the native kernel through first save and Studio entry", async ({
     await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
     await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
     await page.getByTestId("save-button").click();
+    await page.getByPlaceholder("filename").click();
     await page.getByPlaceholder("filename").fill("host-save.py");
     await page.getByText("Save as: host-save.py", { exact: true }).click();
 
@@ -94,8 +95,9 @@ test("preserves the native kernel through first save and Studio entry", async ({
     await executeCodeMode(page, "host-save.py", sessionId, 'saved.append("kept")');
 
     await page.goto(`${server.serverUrl}/studio/?file=host-save.py`);
-    await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
-    await page.getByRole("button", { name: "Create dashboard" }).click();
+    await expect(page.getByText("Add view", { exact: true })).toBeVisible();
+    await page.getByText("Add view", { exact: true }).click();
+    await page.getByRole("button", { name: "Create view" }).click();
     await expect(page).toHaveURL(`${server.serverUrl}/studio/dashboard/?file=host-save.py`);
     await expect(editorFrame(page).locator("[data-cell-id]").first()).toBeVisible();
     const connectedSession = await studioEditorSessionId(page);

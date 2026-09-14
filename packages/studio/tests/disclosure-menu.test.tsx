@@ -34,12 +34,7 @@ const renderMenus = () => {
         mode="develop"
         previewUrl="/dashboard/"
         previewVisible={false}
-        runtime={studioBootstrap.runtimes[0]!}
-        runtimeDisabled={false}
-        runtimes={studioBootstrap.runtimes}
-        status={status}
         onModeSelect={vi.fn()}
-        onRuntimeSelect={vi.fn()}
         onWorkspaceAction={onWorkspaceAction}
       />
       <button type="button">Outside</button>

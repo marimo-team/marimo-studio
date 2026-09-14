@@ -55,7 +55,7 @@ const StarterOption = ({
   );
 };
 
-interface CreateViewFormProps {
+export interface CreateViewFormProps {
   busy: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
   message?: ViewMessage;

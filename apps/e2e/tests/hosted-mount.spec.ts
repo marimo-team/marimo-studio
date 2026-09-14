@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { studioClientId, studioEditorSessionId } from "./authoring-test-support.ts";
 import {
+  selectWorkspaceMode,
   editorSlider,
   expect,
   hostedOrigin,
@@ -32,10 +33,9 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
     1,
   );
   await page.goto(`${baseUrl}/studio/?access_token=${accessToken}`);
-  await page
-    .getByLabel("Start with", { exact: true })
-    .selectOption("marimo-studio/vanilla:default");
-  await page.getByRole("button", { name: "Create dashboard" }).click();
+  await page.getByText("Add view", { exact: true }).click();
+  await page.getByRole("radio", { name: /^HTML document/ }).check();
+  await page.getByRole("button", { name: "Create view" }).click();
   await waitForPreview(page);
 
   const clientId = await studioClientId(page);
@@ -64,7 +64,7 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
     input: "scale",
     path: [],
   });
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   const retiredManifest = browserDiagnostics.expectRequestAbort({
     origin: hostedOrigin,
     method: "GET",
@@ -76,7 +76,7 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
   await page.getByRole("button", { name: /Prepared/ }).click();
   const prepared = await waitForPreview(page, "zero-python");
   await expect(prepared.getByRole("heading", { name: "Hosted total: 42" })).toBeVisible();
-  await expect(page.getByLabel("Prepared preview runtime")).toContainText("Live");
+  await expect(page.getByRole("status", { name: "View status" })).toContainText("Live");
   await recoverRequestAbort(retiredManifest);
   await recoverWorkspaceEventStream(replacedWorkspaceStream);
 });
@@ -128,37 +128,18 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
 
   await page.goto(`${baseUrl}/studio/`);
   await expect(page).toHaveURL(`${baseUrl}/studio/`);
-  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
-  await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute("inert", "");
-  await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute(
-    "aria-hidden",
-    "true",
-  );
+  await expect(page.getByText("Add view", { exact: true })).toBeVisible();
+  await page.getByText("Add view", { exact: true }).click();
+  await expect(page.locator('iframe[title="Marimo editor"]')).not.toHaveAttribute("inert");
   for (const viewport of [
     { width: 1280, height: 720 },
     { width: 375, height: 812 },
   ]) {
     await page.setViewportSize(viewport);
-    const initialization = page.locator("[data-studio-initialization]");
-    await expect(initialization).toBeFocused();
-    const surface = await initialization.evaluate((element) => {
-      const bounds = element.getBoundingClientRect();
-      const background = getComputedStyle(element).backgroundColor;
-      return {
-        backgroundOpaque: background !== "transparent" && background !== "rgba(0, 0, 0, 0)",
-        coversViewport:
-          bounds.left <= 0 &&
-          bounds.top <= 0 &&
-          bounds.right >= globalThis.innerWidth &&
-          bounds.bottom >= globalThis.innerHeight,
-        fitsWidth: element.scrollWidth <= element.clientWidth,
-      };
-    });
-    expect(surface).toEqual({
-      backgroundOpaque: true,
-      coversViewport: true,
-      fitsWidth: true,
-    });
+    await expect(page.getByRole("textbox", { name: "New view" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
   }
   await page.setViewportSize({ width: 1280, height: 720 });
 
@@ -173,10 +154,8 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     views: [],
   });
 
-  await page
-    .getByLabel("Start with", { exact: true })
-    .selectOption("marimo-studio/vanilla:default");
-  await page.getByRole("button", { name: "Create dashboard" }).click();
+  await page.getByRole("radio", { name: /^HTML document/ }).check();
+  await page.getByRole("button", { name: "Create view" }).click();
   await expect(page).toHaveURL(`${baseUrl}/studio/dashboard/`);
   await expect(editorSlider(page, /^Hosted scale/)).toHaveAttribute("aria-valuenow", "3");
   await expect(page.getByLabel("Switch view")).toContainText("dashboard");
@@ -264,7 +243,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   expect(persisted.ok()).toBe(true);
   expect(await persisted.text()).toBe(replacement);
   await page.getByLabel("Workspace options").click();
-  await page.getByRole("button", { name: "Source", exact: true }).click();
+  await page.getByRole("button", { name: "Focus Source", exact: true }).click();
   await page.getByRole("tab", { name: "index.html" }).click();
   await expect(page.getByLabel("index.html source")).toContainText("Hosted mount lifecycle");
   await expect(
@@ -273,7 +252,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
       .getByRole("status", { name: "Source document status" }),
   ).toHaveText("Saved");
 
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
+  await selectWorkspaceMode(page, "Notebook");
   await expect(page.locator('iframe[title="Marimo editor"]')).toBeVisible();
   const scale = editorSlider(page, /^Hosted scale/);
   await expect(scale).toBeVisible();
@@ -282,7 +261,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   await expect(value).toHaveText("21");
   await scale.press("End");
   await expect(value).toHaveText("63");
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await selectWorkspaceMode(page, "Develop");
   await waitForPreview(page);
   await expect(preview.getByRole("heading", { name: "Hosted mount lifecycle" })).toBeVisible();
   await expect(value).toHaveText("63");

@@ -1,5 +1,3 @@
-import type { StudioRuntime } from "@marimo-studio/protocol/studio-bootstrap";
-
 import {
   Columns3Icon,
   LayoutTemplateIcon,
@@ -8,7 +6,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { PreviewStatus } from "../preview/status.ts";
 import type { StudioMode } from "../workspace/schema.ts";
 
 import { MoreIcon, PopoutIcon } from "../../shared/ui/icons.tsx";
@@ -16,8 +13,6 @@ import { useDisclosureMenu } from "../../shared/useDisclosureMenu.ts";
 import { closeParentMenu } from "./menu.ts";
 import { type WorkspaceAction, WORKSPACE_ACTION_GROUPS } from "./model.ts";
 import { ModeNavigation } from "./ModeNavigation.tsx";
-import { RuntimeOptions } from "./RuntimeOptions.tsx";
-import { RuntimeStatus } from "./RuntimeStatus.tsx";
 
 const WORKSPACE_ACTION_ICONS = {
   arrange: MoveIcon,
@@ -31,25 +26,15 @@ export const WorkspaceMenu = ({
   mode,
   previewUrl,
   previewVisible,
-  runtime,
-  runtimeDisabled,
-  runtimes,
-  status,
   onWorkspaceAction,
   onModeSelect,
-  onRuntimeSelect,
 }: {
   arranging: boolean;
   mode: StudioMode;
   previewUrl: string;
   previewVisible: boolean;
-  runtime: StudioRuntime;
-  runtimeDisabled: boolean;
-  runtimes: readonly StudioRuntime[];
-  status: PreviewStatus;
   onWorkspaceAction: (action: WorkspaceAction) => void;
   onModeSelect: (mode: Exclude<StudioMode, "workspace">) => void;
-  onRuntimeSelect: (runtime: string) => void;
 }) => {
   const menu = useDisclosureMenu();
   return (
@@ -57,7 +42,7 @@ export const WorkspaceMenu = ({
       ref={menu.detailsRef}
       className="studio-menu studio-workspace-menu"
       data-studio-disclosure-menu
-      data-active={mode === "workspace" || undefined}
+      data-active={arranging || undefined}
       data-arranging={arranging || undefined}
       onKeyDown={menu.onKeyDown}
       onToggle={menu.onToggle}
@@ -71,14 +56,6 @@ export const WorkspaceMenu = ({
       </summary>
       <div className="studio-menu-popover studio-workspace-popover">
         <div className="studio-overflow-preview" hidden={!previewVisible}>
-          <strong className="studio-menu-heading">Run notebook with</strong>
-          <RuntimeStatus status={status} />
-          <RuntimeOptions
-            current={runtime.id}
-            disabled={runtimeDisabled}
-            runtimes={runtimes}
-            onSelect={onRuntimeSelect}
-          />
           <a
             className="studio-menu-item studio-overflow-popout"
             href={previewUrl}
@@ -90,8 +67,8 @@ export const WorkspaceMenu = ({
           </a>
           <div className="studio-menu-separator" />
         </div>
-        <strong className="studio-menu-heading">Show</strong>
-        <ModeNavigation active={mode} variant="overflow" onSelect={onModeSelect} />
+        <strong className="studio-menu-heading">Editor layout</strong>
+        <ModeNavigation active={mode} onSelect={onModeSelect} />
         <strong className="studio-menu-heading">Workspace</strong>
         {WORKSPACE_ACTION_GROUPS.map((group, index) => (
           <div key={group[0].action} className="studio-menu-action-group">

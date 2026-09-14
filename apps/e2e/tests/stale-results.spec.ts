@@ -4,6 +4,7 @@ import { e2eNetwork } from "../scripts/network.mjs";
 import { collaborativeWorkspaceDirectory } from "../scripts/paths.mjs";
 import { studioClientId } from "./authoring-test-support.ts";
 import {
+  selectWorkspaceMode,
   collaborativeCreatedViewHtmlPath,
   expect,
   labeledSlider,
@@ -259,7 +260,7 @@ test("cancels a held old-view request without changing current or cached view st
   const preview = await waitForPreview(page);
   await selectView("next-report", "Next kernel report");
   await selectView("slow-report", "Slow kernel report");
-  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await selectWorkspaceMode(page, "Preview");
   await preview.locator("html").evaluate(() => {
     globalThis.__studioPreviewWindowMarker = "slow-report-window";
   });
@@ -309,9 +310,9 @@ test("cancels a held old-view request without changing current or cached view st
   }
 
   await selectView("next-report", "Next kernel report");
-  await expect(page.getByRole("button", { name: "Preview", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Show notebook beside view" })).toHaveAttribute(
     "aria-pressed",
-    "true",
+    "false",
   );
   const currentScale = labeledSlider(
     preview.locator('marimo-cell[name="controls"]'),

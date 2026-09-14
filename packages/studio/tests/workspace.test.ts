@@ -236,18 +236,18 @@ test("link navigation keeps the active mode and the target view split trees", ()
   );
 });
 
-test("Source toggles beneath Notebook while Preview keeps its height and split width", () => {
+test("Source toggles beneath Preview while Notebook keeps its height and split width", () => {
   const controller = new LayoutController("source-toggle", "dashboard");
   const bounds = { left: 0, top: 0, width: 1205, height: 805 };
   controller.resize(updateRatio(controller.getSnapshot().tree, "notebook-preview", 0.6));
   const initial = controller.getSnapshot().tree;
-  const preview = computeLayout(initial, bounds).panes.get("preview");
+  const notebook = computeLayout(initial, bounds).panes.get("notebook");
   controller.toggleSource();
   const opened = controller.getSnapshot();
   const panes = computeLayout(opened.tree, bounds).panes;
   assert.equal(opened.compact, "source");
-  assert.deepEqual(panes.get("preview"), preview);
-  assert.ok(panes.get("source")!.top > panes.get("notebook")!.top);
+  assert.deepEqual(panes.get("notebook"), notebook);
+  assert.ok(panes.get("source")!.top > panes.get("preview")!.top);
   controller.toggleSource();
   assert.deepEqual(controller.getSnapshot().tree, initial);
   assert.equal(controller.getSnapshot().compact, "notebook");
@@ -258,11 +258,22 @@ test("Source can be opened from Preview and from a Source-only workspace", () =>
   const controller = new LayoutController("source-focus", "dashboard");
   controller.selectMode("preview");
   controller.toggleSource();
-  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["source", "preview"]);
+  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["preview", "source"]);
   controller.toggleSource();
   assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["preview"]);
   controller.applyPaneAction({ tree: { type: "pane", id: "pane-source", surface: "source" } });
   controller.toggleSource();
   assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["notebook", "preview"]);
+  controller.dispose();
+});
+
+test("notebook visibility toggles independently of view source", () => {
+  const controller = new LayoutController("notebook-toggle", "dashboard");
+  controller.toggleSource();
+  const initial = controller.getSnapshot().tree;
+  controller.toggleNotebook();
+  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["preview", "source"]);
+  controller.toggleNotebook();
+  assert.deepEqual(controller.getSnapshot().tree, initial);
   controller.dispose();
 });

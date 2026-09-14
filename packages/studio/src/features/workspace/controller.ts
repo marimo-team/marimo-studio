@@ -4,6 +4,7 @@ import type { StudioMode } from "./schema.ts";
 import { assertNever } from "../../shared/assertNever.ts";
 import {
   closeSurface,
+  notebookBeside,
   developLayout,
   splitSurface,
   sourceLayout,
@@ -34,6 +35,7 @@ export class LayoutController {
   private workspace: LayoutNode = developLayout();
   private compact: Surface = "notebook";
   private arranging = false;
+  private hiddenNotebook: { tree: LayoutNode; withoutNotebook: LayoutNode } | undefined;
   private transientTree: LayoutNode | undefined;
   private snapshot!: LayoutSnapshot;
   private readonly listeners = new Set<Listener>();
@@ -54,6 +56,7 @@ export class LayoutController {
   readonly getSnapshot = (): LayoutSnapshot => this.snapshot;
 
   switchView(view: string, landing: ViewLanding): void {
+    this.hiddenNotebook = undefined;
     const active = { mode: this.mode, compact: this.compact };
     this.persist();
     this.view = view;
@@ -90,6 +93,28 @@ export class LayoutController {
     this.commit();
   }
 
+  toggleNotebook(): void {
+    const tree = this.tree;
+    const visible = visibleSurfaces(tree);
+    if (visible.length === 1 && visible[0] === "notebook") {
+      this.selectMode("develop");
+      return;
+    }
+    this.arranging = false;
+    if (visible.includes("notebook")) {
+      const withoutNotebook = closeSurface(tree, "notebook");
+      this.hiddenNotebook = { tree, withoutNotebook };
+      this.applyPaneAction({ tree: withoutNotebook, compact: "preview" });
+    } else {
+      const restored =
+        this.hiddenNotebook?.withoutNotebook === tree
+          ? this.hiddenNotebook.tree
+          : notebookBeside(tree);
+      this.hiddenNotebook = undefined;
+      this.applyPaneAction({ tree: restored, compact: "notebook" });
+    }
+  }
+
   toggleSource(): void {
     const tree = this.tree;
     const visible = visibleSurfaces(tree);
@@ -104,9 +129,9 @@ export class LayoutController {
         ? closeSurface(tree, "source")
         : splitSurface(
             tree,
-            visible.includes("notebook") ? "notebook" : "preview",
+            visible.includes("preview") ? "preview" : "notebook",
             "source",
-            visible.includes("notebook") ? "below" : "left",
+            "below",
           ),
       compact: showing ? undefined : "source",
     });

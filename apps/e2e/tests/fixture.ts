@@ -661,3 +661,17 @@ export const test = base.extend<
 });
 
 export { expect };
+
+export const selectWorkspaceMode = async (page: Page, mode: string): Promise<void> => {
+  const options = page.getByLabel("Workspace options", { exact: true });
+  if (!(await options.locator("..").evaluate((menu) => menu.hasAttribute("open")))) {
+    await options.click();
+  }
+  const labels = new Map([
+    ["Notebook", "Focus Notebook"],
+    ["Develop", "Split Notebook and View"],
+    ["Preview", "Focus View"],
+    ["Source", "Focus Source"],
+  ]);
+  await page.getByRole("button", { name: labels.get(mode) ?? mode, exact: true }).click();
+};

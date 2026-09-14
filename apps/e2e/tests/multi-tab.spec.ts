@@ -85,13 +85,13 @@ test("shares one native kernel across Studio tabs and views", async ({
     await expect(first.getByRole("button", { name: "Widget count: 10" })).toBeVisible();
     await expect(otherView.getByLabel("Switch view")).toContainText("vanilla-local");
 
-    await otherView.getByLabel("Python preview runtime").click();
+    await otherView.getByLabel(/preview runtime$/).click();
     await otherView.getByRole("button", { name: /Browser/ }).click();
     const wasm = await waitForPreview(otherView, "wasm", WASM_PREVIEW_TIMEOUT);
     await expectPreviewInteractive(otherView, "wasm");
     await expect(wasm.locator('[mo-value="metric"]')).toHaveText("63");
     await expect(first.locator('[mo-value="metric"]')).toHaveText("63");
-    await otherView.getByLabel("Browser preview runtime").click();
+    await otherView.getByLabel(/preview runtime$/).click();
     const controls = browserDiagnostics.expectRequestAbort({
       origin: studioOrigin,
       method: "GET",

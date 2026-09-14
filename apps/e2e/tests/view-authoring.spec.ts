@@ -130,7 +130,7 @@ shown.to_dict()
   supersededConfig.recovered();
 });
 
-test("opens Studio from the first save with the native session", async ({
+test("offers Studio on a fresh notebook and preserves its session through first-view creation", async ({
   browserDiagnostics,
   page,
 }) => {
@@ -156,6 +156,7 @@ test("opens Studio from the first save with the native session", async ({
       response.ok(),
   );
   await page.goto("/?file=__new__s_first1&region=before");
+  await expect(page.getByRole("button", { name: "+ Add view", exact: true })).toBeVisible();
   const instantiateResponse = await instantiated;
   const sessionId = instantiateResponse.request().headers()["marimo-session-id"];
   expect(sessionId).toBeTruthy();
@@ -180,7 +181,7 @@ test("opens Studio from the first save with the native session", async ({
   await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("eu");
   await page.getByRole("button", { name: "Python", exact: true }).click();
   await expect(page.locator("[data-cell-id]")).toHaveCount(2);
-  await page.getByTestId("save-button").click();
+  await page.getByRole("button", { name: "+ Add view", exact: true }).click();
   const filename = page.getByPlaceholder("filename");
   await filename.click();
   await filename.fill("first-save.py");
@@ -191,13 +192,17 @@ test("opens Studio from the first save with the native session", async ({
   unusedPreload.recovered();
   dialogDescription.recovered();
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
-  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
+  expect(
+    await readWorkspaceFile(resolve(workspaceNotebookPath, "..", "first-save.py")),
+  ).not.toContain("tool.marimo.studio");
+  await expect(page.getByText("Add view", { exact: true })).toBeVisible();
+  await page.getByText("Add view", { exact: true }).click();
 
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     1,
   );
-  await page.getByRole("button", { name: "Create dashboard", exact: true }).click();
+  await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
   expect(await studioEditorSessionId(page)).toBe(sessionId);
   await expect(editorFrame(page).locator(".cm-content").first()).toContainText("saved = True");
@@ -210,7 +215,8 @@ test("keeps first-view creation available after reloading its route", async ({
   page,
 }) => {
   await page.goto("/studio/dashboard/?file=plain.py");
-  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
+  await expect(page.getByText("Add view", { exact: true })).toBeVisible();
+  await page.getByText("Add view", { exact: true }).click();
   await expect(editorFrame(page).getByText("Native Marimo notebook").first()).toBeVisible();
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
@@ -229,8 +235,9 @@ test("keeps first-view creation available after reloading its route", async ({
   await page.reload();
 
   await expect(editorFrame(page).getByText("Native Marimo notebook").first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create dashboard", exact: true })).toBeEnabled();
+  await expect(page.getByText("Add view", { exact: true })).toBeVisible();
+  await page.getByText("Add view", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Create view", exact: true })).toBeEnabled();
   await recoverWorkspaceEventStream(replacedWorkspaceStream);
   retirement.recovered();
 });

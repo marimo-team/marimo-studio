@@ -72,6 +72,9 @@ export const previewLayout = (): LayoutNode => pane("preview");
 export const sourceLayout = (): LayoutNode =>
   split("source-preview", "x", pane("source"), pane("preview"));
 
+export const notebookBeside = (tree: LayoutNode): LayoutNode =>
+  split("notebook-view", "x", pane("notebook"), tree);
+
 export const developLayout = (): LayoutNode =>
   split("notebook-preview", "x", pane("notebook"), pane("preview"));
 

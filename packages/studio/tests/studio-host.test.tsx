@@ -1,7 +1,7 @@
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import type { StudioHostBootstrap } from "@marimo-studio/protocol/studio-host";
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
@@ -230,23 +230,22 @@ it("retries first-view authoring options after a transient inventory failure", a
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
   );
+  await user.click(screen.getByText("Add view", { exact: true }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Authoring options are temporarily unavailable.",
   );
-  expect(screen.getByRole("button", { name: "Create dashboard" })).toBeDisabled();
-  expect(editorFrame).toHaveAttribute("inert");
-  expect(editorFrame).toHaveAttribute("aria-hidden", "true");
-  expect(screen.getByRole("main")).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Create view" })).toBeDisabled();
+  expect(editorFrame).not.toHaveAttribute("inert");
+  expect(editorFrame).not.toHaveAttribute("aria-hidden");
+  expect(screen.getByRole("textbox", { name: "New view" })).toHaveFocus();
   await user.click(screen.getByRole("button", { name: "Retry view choices" }));
 
-  expect(await screen.findByRole("combobox", { name: "Start with" })).toHaveValue(
-    "marimo-studio/vanilla:default",
-  );
-  expect(screen.getByRole("button", { name: "Create dashboard" })).toBeEnabled();
+  expect(await screen.findByRole("radio", { name: new RegExp(starter.title) })).toBeChecked();
+  expect(screen.getByRole("button", { name: "Create view" })).toBeEnabled();
   expect(inventories).toBe(2);
   expect(editorFrame.parentElement).toBe(frameHost);
-  frameHost.remove();
+  editorFrame.remove();
 });
 
 it("refreshes first-view ownership after a create conflict", async () => {
@@ -288,14 +287,15 @@ it("refreshes first-view ownership after a create conflict", async () => {
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
   );
+  await user.click(screen.getByText("Add view", { exact: true }));
 
-  await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
+  await user.click(await screen.findByRole("button", { name: "Create view" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "The view catalog changed before this view was created.",
   );
   expect(inventories).toBe(2);
 
-  await user.click(screen.getByRole("button", { name: "Create dashboard" }));
+  await user.click(screen.getByRole("button", { name: "Create view" }));
   await vi.waitFor(() => expect(submittedGenerations).toHaveLength(2));
 
   expect(submittedGenerations).toEqual([initialGeneration, replacementGeneration]);
@@ -356,12 +356,13 @@ it("replaces an in-flight catalog retry after a create conflict", async () => {
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
   );
+  await user.click(screen.getByText("Add view", { exact: true }));
 
-  await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
+  await user.click(await screen.findByRole("button", { name: "Create view" }));
   await user.click(await screen.findByRole("button", { name: "Retry view choices" }));
   await vi.waitFor(() => expect(inventories).toBe(3));
 
-  await user.click(screen.getByRole("button", { name: "Create dashboard" }));
+  await user.click(screen.getByRole("button", { name: "Create view" }));
   await vi.waitFor(() => expect(submittedGenerations).toHaveLength(2));
   await vi.waitFor(() => expect(inventories).toBe(4));
   retryInventory.resolve(
@@ -371,7 +372,7 @@ it("replaces an in-flight catalog retry after a create conflict", async () => {
     }),
   );
 
-  await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
+  await user.click(await screen.findByRole("button", { name: "Create view" }));
   await vi.waitFor(() => expect(submittedGenerations).toHaveLength(3));
 
   expect(submittedGenerations).toEqual([initialGeneration, initialGeneration, currentGeneration]);
@@ -404,25 +405,19 @@ it("shows first-view starter documents and unavailable recovery", async () => {
     />,
   );
 
-  expect(await screen.findByLabelText("Starting options")).toHaveTextContent(
-    "Creates src/App.tsx, src/theme.css",
-  );
-  expect(screen.getByLabelText("Starting options")).toHaveTextContent("Install Deno to use React.");
-  expect(screen.getByRole("button", { name: "Create dashboard" })).toBeDisabled();
+  await userEvent.click(screen.getByText("Add view", { exact: true }));
+  expect(await screen.findByText("Install Deno to use React.")).toBeVisible();
+  expect(screen.getByRole("radio")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create view" })).toBeDisabled();
 });
 
 it("opens an already-created first view after a bootstrap retry", async () => {
   vi.stubGlobal("EventSource", EventSourceStub);
-  const publicHost = {
-    ...host,
-    urls: { ...host.urls, bootstrap: `${host.urls.bootstrap}?region=eu` },
-  };
+  const { editorFrame, editorWindow } = mountActiveEditor("?region=eu");
+  const publicHost = { ...host, urls: { ...host.urls, editor: editorFrame.src } };
   const configured = {
     ...ready,
-    urls: {
-      ...ready.urls,
-      editor: "configured-editor/?file=analysis.py&marimo_studio_editor=configured&region=eu",
-    },
+    urls: { ...ready.urls, editor: configuredEditorUrl(editorFrame, editorWindow).href },
   };
   let creates = 0;
   let createdStarter = "";
@@ -464,14 +459,8 @@ it("opens an already-created first view after a bootstrap retry", async () => {
       throw new Error(`Unexpected request ${url}`);
     }),
   );
-  const frameHost = document.createElement("div");
-  const editorFrame = document.createElement("iframe");
-  globalThis.history.replaceState({}, "", "/entry/?region=eu");
-  editorFrame.src = "editor/?file=analysis.py";
-  frameHost.append(editorFrame);
-  document.body.append(frameHost);
-  const lazyEditorUrl = editorFrame.src;
-  const configuredEditorUrl = new URL(configured.urls.editor, globalThis.location.href).href;
+  const frameHost = editorFrame.parentElement!;
+  const retainedEditorUrl = editorFrame.src;
   const reload = vi.spyOn(editorFrame, "src", "set");
   const publishBootstrap = vi.fn();
   const user = userEvent.setup();
@@ -484,25 +473,19 @@ it("opens an already-created first view after a bootstrap retry", async () => {
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
   );
-  expect(await screen.findByRole("combobox", { name: "Start with" })).toHaveValue(
-    "marimo-studio/vanilla:default",
-  );
-  await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
+  await user.click(screen.getByText("Add view", { exact: true }));
+  expect(await screen.findByRole("radio", { name: new RegExp(starter.title) })).toBeChecked();
+  await user.click(await screen.findByRole("button", { name: "Create view" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Bootstrap is temporarily unavailable.",
   );
   await user.click(screen.getByRole("button", { name: "Open dashboard" }));
   await vi.waitFor(() => expect(publishBootstrap).toHaveBeenCalledWith(configured));
-  expect(reload).toHaveBeenCalledWith(configuredEditorUrl);
-  expect(publishBootstrap.mock.invocationCallOrder[0]).toBeLessThan(
-    reload.mock.invocationCallOrder[0]!,
-  );
-  expect(screen.queryByLabelText("Studio workspace")).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Create the first view" })).toBeVisible();
-
-  fireEvent.load(editorFrame);
+  expect(reload).not.toHaveBeenCalled();
   expect(await screen.findByLabelText("Studio workspace")).toBeVisible();
+  await user.click(screen.getByLabelText("Python preview runtime"));
+  expect(screen.getByRole("status", { name: "Preview runtime status" })).toBeVisible();
 
   expect(creates).toBe(1);
   expect(createdStarter).toBe("marimo-studio/vanilla:default");
@@ -510,10 +493,9 @@ it("opens an already-created first view after a bootstrap retry", async () => {
   expect(editorFrame).not.toHaveAttribute("inert");
   expect(editorFrame).not.toHaveAttribute("aria-hidden");
   expect(editorFrame.parentElement).toBe(frameHost);
-  expect(editorFrame.src).toBe(configuredEditorUrl);
-  expect(editorFrame.src).not.toBe(lazyEditorUrl);
+  expect(editorFrame.src).toBe(retainedEditorUrl);
   expect(new URL(globalThis.location.href).searchParams.get("region")).toBe("eu");
-  frameHost.remove();
+  editorFrame.remove();
 });
 
 it("preserves an active editor and its public query during first-view activation", async () => {

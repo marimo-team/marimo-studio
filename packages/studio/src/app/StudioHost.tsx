@@ -19,11 +19,12 @@ import {
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StarterCatalogController } from "../features/views/catalog.ts";
+import { FirstViewToolbar } from "../features/views/FirstViewToolbar.tsx";
 import { createViewRemote } from "../features/views/remote.ts";
-import { StarterCatalogNotice } from "../features/views/StarterCatalogNotice.tsx";
-import { StarterPlan } from "../features/views/StarterPlan.tsx";
 import { preferredStarterId } from "../features/views/starters.ts";
+import { useEditorWorkspace } from "../shared/editor-workspace.ts";
 import { errorMessage } from "../shared/errors.ts";
+import { StudioThemeProvider, useResolvedStudioTheme } from "../shared/theme.tsx";
 import { useControllerSnapshot } from "../shared/useControllerSnapshot.ts";
 import { StudioRoutes } from "./routes.ts";
 import { StudioApp, type StudioOptions } from "./StudioApp.tsx";
@@ -48,18 +49,6 @@ const responseError = async (response: Response): Promise<string> => {
     return `Studio workspace request failed (${response.status})`;
   }
 };
-
-const reloadRetainedEditor = (frame: HTMLIFrameElement, source: string): Promise<void> =>
-  new Promise((resolve, reject) => {
-    const loaded = () => resolve();
-    frame.addEventListener("load", loaded, { once: true });
-    try {
-      frame.src = source;
-    } catch (cause) {
-      frame.removeEventListener("load", loaded);
-      reject(cause);
-    }
-  });
 
 const EDITOR_AUTHORITY_QUERY_KEYS = new Set([
   "file",
@@ -179,6 +168,25 @@ export const StudioHost = ({
   ...options
 }: StudioHostProps) => {
   const [bootstrap, setBootstrap] = useState(initialBootstrap);
+  const nativeWorkspace = useEditorWorkspace(editorFrame, options.connectEditorWorkspace);
+  useEffect(() => {
+    if (!nativeWorkspace.workspace) return;
+    const parent = editorFrame.parentElement;
+    if (!parent) return;
+    parent.style.top = "0";
+    return () => {
+      parent.style.removeProperty("top");
+    };
+  }, [editorFrame, nativeWorkspace.workspace]);
+  useEffect(() => {
+    if (bootstrap || !nativeWorkspace.bounds) return;
+    const bounds = nativeWorkspace.bounds;
+    nativeWorkspace.workspace?.placeNotebook({
+      ...bounds,
+      top: bounds.top + 34,
+      height: bounds.height - 34,
+    });
+  }, [bootstrap, nativeWorkspace.bounds, nativeWorkspace.workspace]);
   const [initialActivation, setInitialActivation] = useState<ActiveViewRequest>();
   const [attempt, setAttempt] = useState(0);
   const [createdView, setCreatedView] = useState<string>();
@@ -186,7 +194,8 @@ export const StudioHost = ({
   const [opening, setOpening] = useState(false);
   const [starter, setStarter] = useState("");
   const pendingView = useRef<string | null>(null);
-  const initialization = useRef<HTMLElement>(null);
+  const [name, setName] = useState(host.state === "needs-view" ? host.defaultView : "dashboard");
+  const theme = useResolvedStudioTheme(editorFrame, options.connectThemeFrame);
   const views = useMemo(
     () => createViewRemote(host.urls.views, host.serverToken),
     [host.serverToken, host.urls.views],
@@ -201,28 +210,6 @@ export const StudioHost = ({
   useEffect(() => {
     return () => catalog.dispose();
   }, [catalog]);
-
-  useEffect(() => {
-    if (!bootstrap && host.state === "needs-view") {
-      void catalog.ensure();
-    }
-  }, [bootstrap, catalog, host.state]);
-
-  useEffect(() => {
-    const blocked = !bootstrap && host.state === "needs-view";
-    editorFrame.toggleAttribute("inert", blocked);
-    if (blocked) {
-      editorFrame.setAttribute("aria-hidden", "true");
-      const frame = globalThis.requestAnimationFrame(() => initialization.current?.focus());
-      return () => {
-        globalThis.cancelAnimationFrame(frame);
-        editorFrame.removeAttribute("inert");
-        editorFrame.removeAttribute("aria-hidden");
-      };
-    }
-    editorFrame.removeAttribute("aria-hidden");
-    return;
-  }, [bootstrap, editorFrame, host.state]);
 
   useEffect(() => {
     if (
@@ -244,9 +231,7 @@ export const StudioHost = ({
       setMessage(undefined);
       setOpening(true);
       try {
-        const trustedEditor = activation
-          ? trustedEditorAuthority(host.urls.editor, editorFrame.src)
-          : undefined;
+        const trustedEditor = trustedEditorAuthority(host.urls.editor, editorFrame.src);
         let activeEditor = trustedEditor
           ? retainedEditorSnapshot(editorFrame, trustedEditor)
           : undefined;
@@ -283,7 +268,6 @@ export const StudioHost = ({
         if (!ready) {
           throw new Error("The Studio workspace could not be opened.");
         }
-        const editorSource = new URL(ready.urls.editor, globalThis.location.href).href;
         publishBootstrap(ready);
         const studioSource = new StudioRoutes(ready).studio(ready.selectedView);
         const studioQuery =
@@ -293,9 +277,6 @@ export const StudioHost = ({
           "",
           withPublicQuery(studioSource, studioQuery),
         );
-        if (!activation) {
-          await reloadRetainedEditor(editorFrame, editorSource);
-        }
         setInitialActivation(activation);
         setAttempt((current) => current + 1);
         setBootstrap(ready);
@@ -341,6 +322,8 @@ export const StudioHost = ({
         key={attempt}
         bootstrap={bootstrap}
         editorFrame={editorFrame}
+        editorWorkspace={nativeWorkspace.workspace}
+        editorBounds={nativeWorkspace.bounds}
         initialActivation={initialActivation}
         onRetry={retry}
         {...options}
@@ -351,7 +334,7 @@ export const StudioHost = ({
   const selectedStarter = catalogSnapshot.starters.find((candidate) => candidate.id === starter);
   const createFirstView = async (event: FormEvent) => {
     event.preventDefault();
-    if (host.state !== "needs-view" || opening) {
+    if (opening) {
       return;
     }
     setMessage(undefined);
@@ -365,7 +348,7 @@ export const StudioHost = ({
       let view = createdView;
       if (!view) {
         try {
-          view = (await views.create(host.defaultView, starter, catalogSnapshot.generation)).name;
+          view = (await views.create(name, starter, catalogSnapshot.generation)).name;
         } catch (cause) {
           catalog.invalidate();
           await catalog.refresh();
@@ -380,77 +363,32 @@ export const StudioHost = ({
     }
   };
 
-  if (host.state !== "needs-view" && !opening && !message) {
-    return null;
-  }
-
-  if (host.state !== "needs-view") {
-    return (
-      <main className="studio-host-status" role={message ? "alert" : "status"}>
-        {message ?? "Opening Studio"}
-      </main>
-    );
-  }
-
   return (
-    <main
-      ref={initialization}
-      className="studio-initialization"
-      data-studio-initialization=""
-      tabIndex={-1}
-    >
-      <div className="studio-initialization-card">
-        <span className="studio-initialization-eyebrow">Marimo Studio</span>
-        <h1>Create the first view</h1>
-        <p>
-          Create <code>{host.defaultView}</code> to open the notebook, view source, and preview
-          together.
-        </p>
-        <form onSubmit={(event) => void createFirstView(event)}>
-          <StarterCatalogNotice
-            catalog={catalogSnapshot.state}
-            empty={catalogSnapshot.starters.length === 0}
-            onRetry={() => void catalog.ensure()}
-          />
-          <label htmlFor="studio-initial-starter">Start with</label>
-          <select
-            id="studio-initial-starter"
-            value={starter}
-            aria-busy={catalogSnapshot.state.phase === "loading"}
-            disabled={opening || catalogSnapshot.starters.length === 0}
-            onChange={(event) => setStarter(event.target.value)}
-          >
-            {catalogSnapshot.starters.map((candidate) => (
-              <option
-                key={candidate.id}
-                value={candidate.id}
-                disabled={!candidate.availability.available}
-              >
-                {candidate.title}
-              </option>
-            ))}
-          </select>
-          {catalogSnapshot.starters.length > 0 ? (
-            <div className="studio-initial-starter-plans" aria-label="Starting options">
-              {catalogSnapshot.starters.map((candidate) => (
-                <section key={candidate.id} data-selected={candidate.id === starter || undefined}>
-                  <strong>{candidate.title}</strong>
-                  <StarterPlan starter={candidate} />
-                </section>
-              ))}
-            </div>
-          ) : null}
-          <button
-            type="submit"
-            disabled={opening || (!createdView && selectedStarter?.availability.available !== true)}
-          >
-            {createdView ? `Open ${createdView}` : `Create ${host.defaultView}`}
-          </button>
-          <p role={message ? "alert" : "status"} aria-live="polite">
-            {message ?? (opening ? "Opening Studio…" : "")}
-          </p>
-        </form>
+    <StudioThemeProvider theme={theme}>
+      <div
+        className="studio studio-empty"
+        data-theme={theme}
+        style={
+          nativeWorkspace.bounds ? { position: "fixed", ...nativeWorkspace.bounds } : undefined
+        }
+      >
+        <FirstViewToolbar
+          onOpen={() => void catalog.ensure()}
+          form={{
+            busy: opening,
+            message: message ? { state: "error", text: message } : undefined,
+            name,
+            submitLabel: createdView ? `Open ${createdView}` : "Create view",
+            starter,
+            starterCatalog: catalogSnapshot.state,
+            starters: catalogSnapshot.starters,
+            onNameChange: setName,
+            onRetryStarters: () => void catalog.ensure(),
+            onStarterChange: setStarter,
+            onSubmit: (event) => void createFirstView(event),
+          }}
+        />
       </div>
-    </main>
+    </StudioThemeProvider>
   );
 };

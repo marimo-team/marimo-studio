@@ -127,7 +127,7 @@ test("opens the first view and captures Lens feedback from the installed extra",
 }) => {
   await page.goto("/?file=notebook.py");
   await expect(page).toHaveURL(/\/studio\/dashboard\/$/);
-  await expect(page.getByRole("button", { name: "Develop" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Show notebook beside view" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -175,4 +175,57 @@ test("runs an interactive static export from the installed wheel", async ({ cont
     .getByRole("slider")
     .press("End");
   await expect(page.locator("#projected-answer")).toHaveText("63");
+});
+
+test("provides Studio before the first save in an environment with the installed wheel", async ({
+  page,
+  diagnostics,
+}) => {
+  const fallback = diagnostics.expectConsole({
+    type: "warning",
+    text: /^No filename provided, using fallback$/,
+    required: false,
+  });
+  const description = diagnostics.expectConsole({
+    type: "warning",
+    text: /Missing `Description` or `aria-describedby/,
+    required: false,
+  });
+  const instantiated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
+      response.ok(),
+  );
+  await page.goto(installedPackageNetwork.fresh.origin);
+  const initialSession = (await instantiated).request().headers()["marimo-session-id"];
+  expect(initialSession).toBeTruthy();
+  const add = page.getByRole("button", { name: "+ Add view", exact: true });
+  await expect(add).toBeVisible();
+  await expect(page.locator("[data-cell-id]").first()).toBeVisible();
+  await add.click();
+  await expect(page.getByRole("heading", { name: "Save notebook", exact: true })).toBeVisible();
+  await page.getByPlaceholder("filename").click();
+  await page.getByPlaceholder("filename").fill("fresh-studio.py");
+  await page.getByText("Save as: fresh-studio.py", { exact: true }).click();
+  const editor = page.frameLocator("iframe#marimo-studio-editor");
+  await expect(editor.locator("[data-cell-id]").first()).toBeVisible();
+  const editorUrl = await page.locator("iframe#marimo-studio-editor").getAttribute("src");
+  expect(new URL(editorUrl!, page.url()).searchParams.get("session_id")).toBe(initialSession);
+  await page.getByText("Add view", { exact: true }).click();
+  await page.getByRole("radio", { name: /^HTML document/ }).check();
+  const replaced = diagnostics.expectWorkspaceEventStreamReplacement(
+    new URL("/_marimo-studio/dev/events", installedPackageNetwork.fresh.origin).href,
+    1,
+  );
+  await page.getByRole("button", { name: "Create view", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Show notebook beside view" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const preview = page.frameLocator('iframe[data-preview-runtime-frame="server"]');
+  await expect(preview.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  fallback.recovered();
+  description.recovered();
+  replaced.recovered();
 });

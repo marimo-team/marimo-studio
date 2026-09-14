@@ -1,131 +1,26 @@
-@media (max-width: 840px) {
+@media (max-width: 680px) {
   .studio-notebook,
   .studio-title-separator {
     display: none;
   }
-
+  .studio-toolbar {
+    gap: 0.2rem;
+    padding-inline: 0.3rem;
+  }
+  .studio-title {
+    flex: 1;
+  }
   .studio-view-menu,
   .studio-view-menu > summary {
     min-width: 0;
   }
-
   .studio-view-menu > .studio-menu-trigger {
     max-width: 100%;
   }
-
-  .studio-modes button {
-    min-width: 4.4rem;
-    padding-inline: 0.7rem;
-  }
-}
-
-@media (max-width: 1000px) {
-  .studio-controls > :is(.studio-runtime-menu, a.studio-toolbar-action) {
-    display: none;
-  }
-
-  .studio-overflow-preview:not([hidden]) {
-    display: grid;
-    gap: 0.15rem;
-  }
-
-  .studio-workspace-popover:has(.studio-overflow-preview:not([hidden])) {
-    min-width: 17rem;
-  }
-}
-
-@media (max-width: 680px) {
-  .studio {
-    grid-template-rows: calc(var(--studio-toolbar-height) * 2) minmax(0, 1fr);
-  }
-
-  .studio-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: repeat(2, var(--studio-toolbar-height));
-  }
-
-  .studio-title {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .studio-controls {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .studio-modes {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: stretch;
-  }
-
-  .studio-modes button {
-    flex: 1;
-  }
-
-  .studio-notebook,
-  .studio-title-separator {
-    display: none;
-  }
-
-  .studio-title {
-    gap: 0.2rem;
-  }
-
-  .studio-view-menu,
-  .studio-view-menu > summary {
-    min-width: 0;
-  }
-
   .studio-menu-popover {
     max-width: calc(100vw - 1rem);
   }
-
-  .studio-runtime-trigger {
-    min-width: auto;
-  }
-
-  .studio:is([data-mode="develop"], [data-mode="source"], [data-mode="workspace"]):has(
-      .studio-compact-tabs:not([hidden])
-    )
-    .studio-primary-modes {
-    display: none;
-  }
-
-  .studio:is([data-mode="develop"], [data-mode="source"], [data-mode="workspace"])
-    .studio-compact-tabs:not([hidden]) {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: stretch;
-  }
-
-  .studio:is([data-mode="develop"], [data-mode="source"], [data-mode="workspace"])
-    .studio-compact-tabs:not([hidden])
-    button {
-    flex: 1;
-  }
 }
-
-@media (max-width: 440px) {
-  .studio-brand-mark {
-    flex-basis: 2.4rem;
-  }
-
-  .studio-controls {
-    gap: 0.15rem;
-    padding-inline: 0.25rem;
-  }
-
-  .studio-runtime-trigger {
-    padding-inline: 0.4rem;
-  }
-
-  .studio-runtime-trigger .studio-menu-chevron {
-    display: none;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   button:active,
   summary:active,

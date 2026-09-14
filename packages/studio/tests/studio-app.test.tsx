@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -518,11 +518,8 @@ describe("Studio shell", () => {
     services.dispose();
   });
 
-  it("keeps mode selection synchronized across primary and overflow navigation", async () => {
+  it("keeps split controls synchronized with focus commands", async () => {
     const user = userEvent.setup();
-    const previousLayout = new LayoutController("test-workspace", bootstrap.selectedView);
-    previousLayout.selectMode("preview");
-    previousLayout.dispose();
     const { layout, preview, views } = controllers();
     render(
       <Toolbar
@@ -535,44 +532,25 @@ describe("Studio shell", () => {
         layout={layout}
       />,
     );
-
-    expect(screen.getAllByRole("button", { name: "Develop" })[0]).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
+    const split = screen.getByRole("button", { name: "Show notebook beside view" });
+    expect(split).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByLabelText("Workspace options"));
-    let overflow = within(screen.getAllByRole("navigation", { name: "Studio mode" }).at(-1)!);
-    expect(overflow.getByRole("button", { name: "Develop" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await user.click(overflow.getByRole("button", { name: "Source" }));
-
+    await user.click(screen.getByRole("button", { name: "Focus View" }));
+    expect(split).toHaveAttribute("aria-pressed", "false");
+    await user.click(split);
+    expect(split).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByLabelText("Workspace options"));
-    overflow = within(screen.getAllByRole("navigation", { name: "Studio mode" }).at(-1)!);
-    expect(overflow.getByRole("button", { name: "Develop" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(overflow.getByRole("button", { name: "Source" })).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "Focus Source" }));
+    expect(screen.getByRole("button", { name: "Toggle Source editor" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    await user.click(screen.getByLabelText("Workspace options"));
-
-    await user.click(screen.getAllByRole("button", { name: "Preview" })[0]);
-    expect(screen.getAllByRole("button", { name: "Preview" })[0]).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
     layout.dispose();
     preview.dispose();
     views.dispose();
   });
 
-  it("disables both runtime menus while a view selection owns the preview", async () => {
+  it("disables runtime choices while a view selection owns the preview", async () => {
     const user = userEvent.setup();
     const selection = deferred<boolean>();
     const layout = new LayoutController("runtime-selection", bootstrap.selectedView);
@@ -611,15 +589,11 @@ describe("Studio shell", () => {
     await user.click(screen.getByRole("button", { name: "report" }));
     await vi.waitFor(() => expect(views.getSnapshot().selecting).toBe("report"));
 
-    expect(screen.getByLabelText("Python preview runtime")).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
     const runtimeOptions = screen.getAllByRole("button", {
       name: /Browser/,
       hidden: true,
     });
-    expect(runtimeOptions).toHaveLength(2);
+    expect(runtimeOptions).toHaveLength(1);
     runtimeOptions.forEach((option) => expect(option).toBeDisabled());
     await user.click(runtimeOptions[0]!);
     expect(switchRuntime).not.toHaveBeenCalled();
@@ -668,7 +642,7 @@ describe("Studio shell", () => {
     expect(onResize).toHaveBeenLastCalledWith(null);
   });
 
-  it("keeps primary mode navigation when a compact workspace has one surface", () => {
+  it("keeps direct layout controls when a compact workspace has one surface", () => {
     const { layout, preview, views } = controllers();
     render(
       <Toolbar
@@ -683,7 +657,8 @@ describe("Studio shell", () => {
     );
 
     expect(screen.queryByRole("navigation", { name: "Studio surface" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("navigation", { name: "Studio mode" })[0]).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: "Visible surface" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show notebook beside view" })).toBeVisible();
 
     layout.dispose();
     preview.dispose();
