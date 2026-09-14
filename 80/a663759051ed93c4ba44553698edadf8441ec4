@@ -1,0 +1,45 @@
+packages/marimo-studio/src/marimo_studio/_server/ports.py
+  s_b14d28b03d3b7d::t_68cd0b456e0652 90
+packages/marimo-studio/src/marimo_studio/_compat/server/editor_runtime.py
+  s_b14d28b03d3b7d::t_68cd0b456e0652 7,184-185,233,254-255,257,263,292,302-309
+packages/marimo-studio/src/marimo_studio/_server/middleware.py
+  s_b14d28b03d3b7d::t_68cd0b456e0652 28,325-343
+apps/browser/src/notebook-entry.ts
+  s_b14d28b03d3b7d::t_174a2477d24a44 19-21
+  s_b14d28b03d3b7d::t_68cd0b456e0652 1-18
+packages/marimo-frontend/src/notebook-entry.ts
+  s_b14d28b03d3b7d::t_bf6bef60c72942 6,10,16-18,29-30
+  s_b14d28b03d3b7d::t_68cd0b456e0652 1-5,7-9,11-15,19-28,31-34
+packages/marimo-studio/tests/server/test_editor_runtime_assets.py
+  ai_agent 818-823,834-838
+packages/marimo-frontend/package.json
+  s_b14d28b03d3b7d::t_68cd0b456e0652 17
+packages/marimo-frontend/tests/source.test.mjs
+  ai_agent 163
+apps/browser/src/notebook-entry.css
+  s_b14d28b03d3b7d::t_68cd0b456e0652 1-41
+apps/browser/vite.config.ts
+  s_b14d28b03d3b7d::t_68cd0b456e0652 49
+packages/marimo-studio/src/marimo_studio/_server/editor_bridge.py
+  ai_agent 89-105
+packages/marimo-studio/tests/cli/test_browser_asset_graph.py
+  ai_agent 42,67,93
+packages/marimo-studio/src/marimo_studio/_release_checks/browser_assets.py
+  ai_agent 15,30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "80a663759051ed93c4ba44553698edadf8441ec4",
+  "prompts": {},
+  "sessions": {
+    "s_b14d28b03d3b7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a02b-1cd5-7db3-b339-c750d885e0c8",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
