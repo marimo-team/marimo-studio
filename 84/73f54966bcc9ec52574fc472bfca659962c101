@@ -1,0 +1,19 @@
+packages/marimo-studio/README.md
+  ai_agent 22-25
+README.md
+  ai_agent 81-84,92-94
+docs/guide/getting-started.md
+  ai_agent 67-69,71-72
+docs/what-is-studio.md
+  ai_agent 72-74
+docs/guide/work-in-studio.md
+  ai_agent 8,14-17,19,21-22,24-29,33-36,41-42,71
+development_docs/architecture/browser-runtime-and-authoring.md
+  ai_agent 293-309
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8473f54966bcc9ec52574fc472bfca659962c101",
+  "prompts": {}
+}
