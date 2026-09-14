@@ -15,7 +15,8 @@
     "./session-bootstrap": "./src/session-bootstrap.ts",
     "./theme-frame": "./src/theme-frame.ts",
     "./vite": "./src/vite.ts",
-    "./notebook-entry": "./src/notebook-entry.ts"
+    "./notebook-entry": "./src/notebook-entry.ts",
+    "./editor-workspace": "./src/editor-workspace.ts"
   },
   "scripts": {
     "check:upstream": "node scripts/check.mjs",

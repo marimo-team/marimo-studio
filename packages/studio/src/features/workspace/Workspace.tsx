@@ -1,5 +1,6 @@
-import type { RefCallback } from "react";
+import { useLayoutEffect, type RefCallback } from "react";
 
+import type { EditorWorkspace } from "../../shared/editor-workspace.ts";
 import type { SourceController } from "../source-editor/controller.ts";
 import type { WorkspaceModel } from "./useWorkspace.ts";
 
@@ -11,17 +12,38 @@ import { PositionedEditorFrame, PreviewFrame } from "./TrustedFrame.tsx";
 
 interface WorkspaceProps {
   editorFrame: HTMLIFrameElement;
+  editorWorkspace?: EditorWorkspace;
   frameRef: (frameId: string) => RefCallback<HTMLIFrameElement>;
   source: SourceController;
   workspace: WorkspaceModel;
 }
 
-export const Workspace = ({ editorFrame, frameRef, source, workspace }: WorkspaceProps) => {
+export const Workspace = ({
+  editorFrame,
+  editorWorkspace,
+  frameRef,
+  source,
+  workspace,
+}: WorkspaceProps) => {
   const { actions, currentView, geometry, preview, ref, resizing } = workspace;
   const layoutSnapshot = workspace.layout;
   const notebookRectangle = geometry.layout.panes.get("notebook");
   const sourceRectangle = geometry.layout.panes.get("source");
   const previewRectangle = geometry.layout.panes.get("preview");
+
+  useLayoutEffect(() => {
+    if (!editorWorkspace || !workspace.element || !workspace.measured) return;
+    const origin = workspace.element.getBoundingClientRect();
+    editorWorkspace.placeNotebook(
+      notebookRectangle
+        ? {
+            ...notebookRectangle,
+            left: origin.left + notebookRectangle.left,
+            top: origin.top + notebookRectangle.top,
+          }
+        : undefined,
+    );
+  }, [editorWorkspace, notebookRectangle, workspace.element, workspace.measured]);
 
   return (
     <main
@@ -42,11 +64,13 @@ export const Workspace = ({ editorFrame, frameRef, source, workspace }: Workspac
           onArrange={actions.arrangePane}
         >
           <div className="studio-pane-content">
-            <PositionedEditorFrame
-              frame={editorFrame}
-              measured={workspace.measured}
-              placement={notebookRectangle}
-            />
+            {!editorWorkspace ? (
+              <PositionedEditorFrame
+                frame={editorFrame}
+                measured={workspace.measured}
+                placement={notebookRectangle}
+              />
+            ) : null}
           </div>
         </SurfacePane>
 
