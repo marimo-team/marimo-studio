@@ -347,6 +347,8 @@ class PrivateSessionState:
             return False
         consumer = session.room.get_consumer(ConsumerId(session_id))
         file_key = getattr(getattr(consumer, "params", None), "file_key", None)
+        if file_key is None:
+            file_key = getattr(session, "initialization_id", None)
         if (
             consumer is None
             or not isinstance(file_key, str)
