@@ -1,0 +1,20 @@
+skills/marimo-studio/SKILL.md
+  s_f6b7f3f5c9ccd1::t_0160c61e377b76 552
+  s_f6b7f3f5c9ccd1::t_0d94f3d24efe00 34-38,64-67,549-551,553-559,579-584
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b12d22a849de6f7b6d7dd0f0da2879211fd6bd11",
+  "prompts": {},
+  "sessions": {
+    "s_f6b7f3f5c9ccd1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09f19-4cd3-7041-846b-4e924ef311a0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
