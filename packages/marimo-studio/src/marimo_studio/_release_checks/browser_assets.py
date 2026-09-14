@@ -12,6 +12,7 @@ REQUIRED_ASSETS = {
     "build-meta.json",
     "entry-manifest.json",
     "host-session-handoff.js",
+    "notebook-entry.js",
     "runtime.css",
     "runtime.js",
     "studio.css",
@@ -26,6 +27,7 @@ MAX_STUDIO_STARTUP_GZIP_BYTES = 375 * 1024
 BROWSER_ENTRIES = {
     "dev-reload.js",
     "host-session-handoff.js",
+    "notebook-entry.js",
     "runtime.js",
     "studio.js",
 }

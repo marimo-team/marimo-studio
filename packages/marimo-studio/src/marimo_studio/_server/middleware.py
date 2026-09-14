@@ -25,6 +25,7 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_REPLAY_QUERY_PARAM,
     STUDIO_PATH,
     SUPPORT_PATH,
+    public_url,
 )
 from marimo_studio._server.auth import (
     authentication_required_response,
@@ -321,6 +322,25 @@ class PresentationMiddleware:
                 selected_file=authored.file_key if authored is not None else None,
             )
         if location is None:
+            if (
+                mode == "edit"
+                and relative in {"", "/"}
+                and has_read_access(scope)
+                and not has_access_token(scope)
+                and await self._adapters.editor_runtime.serve(
+                    self.app,
+                    scope,
+                    receive,
+                    send,
+                    resource_path=relative,
+                    runtime_url=str(request.url),
+                    eager_runtime=False,
+                    entrypoint_url=public_url(
+                        base_url, f"{SUPPORT_PATH}/assets/notebook-entry.js"
+                    ),
+                )
+            ):
+                return
             await self.app(scope, receive, send)
             return
         if authored is not None:

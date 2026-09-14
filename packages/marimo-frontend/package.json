@@ -14,7 +14,8 @@
     "./projected-output-function-gate": "./src/projected-output-function-gate.ts",
     "./session-bootstrap": "./src/session-bootstrap.ts",
     "./theme-frame": "./src/theme-frame.ts",
-    "./vite": "./src/vite.ts"
+    "./vite": "./src/vite.ts",
+    "./notebook-entry": "./src/notebook-entry.ts"
   },
   "scripts": {
     "check:upstream": "node scripts/check.mjs",

@@ -815,6 +815,12 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
             )
             for url in urls
         ]
+        native = [
+            client.get(
+                url.replace("/_marimo-studio/editor", ""), headers=request_headers
+            )
+            for url in urls
+        ]
         prepare_view(notebook)
         after = [
             client.get(
@@ -825,7 +831,11 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
             for url in urls
         ]
 
-    for response in (*before, *after):
+    assert _DOCUMENT_RUNTIME not in native[2].content
+    assert native[3].content == index.read_bytes()
+    assert native[4].content == panels.read_bytes()
+    assert native[0].content.count(b"e.copilot===`github`?ad.of(Bt()):[]") == 1
+    for response in (*before, *after, *native):
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
         for header in ("accept-ranges", "content-range", "etag", "last-modified"):

@@ -1,0 +1,41 @@
+#marimo-studio-entry {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 34px;
+  z-index: 40;
+  font-family: "PT Sans", ui-sans-serif, system-ui, sans-serif;
+  color: light-dark(#64748b, #adb8b3);
+  background: light-dark(white, #181c1a);
+  color-scheme: light dark;
+}
+body[data-theme="light"] #marimo-studio-entry {
+  color-scheme: light;
+}
+body[data-theme="dark"] #marimo-studio-entry {
+  color-scheme: dark;
+}
+#marimo-studio-entry header {
+  height: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid light-dark(#e2e8f0, #393d3a);
+}
+#marimo-studio-entry button {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+#marimo-studio-entry button:hover {
+  background: light-dark(#f1f5f9, #2b302d);
+}
+#marimo-studio-entry button:focus-visible {
+  outline: 2px solid #5684b6;
+  outline-offset: 1px;
+}
