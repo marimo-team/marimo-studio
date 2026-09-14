@@ -641,3 +641,44 @@ it("gates a replacement view before acknowledging a switched editor mutation", a
   activate.mockRestore();
   dispose.mockRestore();
 });
+
+it("admits another runtime after an initial build overlaps an unchanged notebook transaction", async () => {
+  const gate = vi
+    .spyOn(PreviewController.prototype, "notebookMutationPending")
+    .mockResolvedValue(() => true);
+  const deck = previewDeck({ runtimes: ["server", "zero-python"] });
+  const { frames, windows } = cachedFramesWithWindows(deck, () => ({
+    postMessage: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+  deck.attach(frame("complete"), frames);
+  deck.presentationBuildStarted("dashboard");
+  const acknowledgement = acknowledgementPort();
+  deck.notebookMutationPending(1, acknowledgement.port);
+  await vi.waitFor(() => expect(acknowledgement.postMessage).toHaveBeenCalledOnce());
+  deck.presentationBuildCompleted("dashboard", "revision-1");
+  deck.notebookMutationTransactionApplied(1, false);
+
+  deck.switchRuntime("zero-python");
+  const selected = deck.getSnapshot().frames.find(({ active }) => active)!;
+  const source = windows.get(selected.id)!;
+  const lifecycleId = deck.getSnapshot().states["zero-python"]!.lifecycleId;
+  dispatchPreviewMessage(source, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "zero-python",
+    view: "dashboard",
+    revision: "revision-1",
+    lifecycleId,
+  });
+  dispatchPreviewMessage(source, {
+    type: "marimo-studio:view-ready",
+    runtime: "zero-python",
+    view: "dashboard",
+    revision: "revision-1",
+    lifecycleId,
+  });
+  expect(deck.getSnapshot().frames.find(({ active }) => active)?.interactive).toBe(true);
+  deck.dispose();
+  acknowledgement.channel.port2.close();
+  gate.mockRestore();
+});
