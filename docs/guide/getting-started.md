@@ -64,12 +64,12 @@ Marimo's `--sandbox` flag resolves the notebook's declared Python dependencies
 with uv. It manages the environment and does not isolate untrusted notebook
 code from your files or network.
 
-Studio opens in **Develop** with Notebook and Preview side by side. Click
-**Source** in the toolbar to add the view editor.
+The thin toolbar is available whenever Studio is installed, including before
+the notebook has view configuration. Click **Add view** to choose a name and
+starter. An unsaved notebook first opens Marimo's Save dialog.
 
-When a notebook already has Studio configuration but no view project, Studio
-opens **Create the first view**. Choose a starter, review **Files created**, and
-create the configured default view from that screen.
+Notebook and Preview open side by side. Use the source action to edit the
+view's files beneath Preview. The native agent sidebar remains available.
 
 ## Place one notebook cell
 

@@ -19,9 +19,10 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox
 `uvx` is [uv](https://docs.astral.sh/uv/)'s temporary command runner. It creates
 an isolated Python environment for this invocation.
 
-Add a displayable cell and save the notebook. Studio opens the first-view
-screen. Create a view named `dashboard`, then choose **Develop** to edit the
-notebook, view source, and rendered Preview together.
+Studio's thin toolbar is available immediately. Add a displayable cell and
+click **Add view**. Save the notebook if prompted, then choose a name and
+starter. The new view opens beside the notebook. Use the source action to edit
+its files beneath Preview, with Marimo's agent sidebar still available.
 
 For terminal-first setup with an existing saved notebook, run:
 
