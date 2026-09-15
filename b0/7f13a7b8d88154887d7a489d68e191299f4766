@@ -1,0 +1,31 @@
+packages/studio/src/shared/editor-workspace.ts
+  s_cff992ac1ea85e::t_9ce7c89bfcbf32 19,32-56,61-64
+apps/e2e/tests/workspace-layout.spec.ts
+  s_cff992ac1ea85e::t_7dfe6e5911a6cf 29-30,34
+  s_cff992ac1ea85e::t_e7b9650b3a7afc 1,4-13,16-23,27-28,31-33,35-37
+  s_cff992ac1ea85e::t_21d33333f590d2 14-15,24-26
+packages/marimo-frontend/tests/editor-workspace.test.ts
+  s_cff992ac1ea85e::t_0b3feaabc3780b 80,109
+  s_cff992ac1ea85e::t_21d33333f590d2 7-54
+packages/marimo-frontend/src/editor-workspace.ts
+  s_cff992ac1ea85e::t_0b3feaabc3780b 46
+  s_cff992ac1ea85e::t_9ce7c89bfcbf32 8,13,38,44-45,47-50,57-65,124-125,144
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_cff992ac1ea85e::t_21d33333f590d2 423-425
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b07f13a7b8d88154887d7a489d68e191299f4766",
+  "prompts": {},
+  "sessions": {
+    "s_cff992ac1ea85e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a52c-6225-71d0-a1f4-445235318c7f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
