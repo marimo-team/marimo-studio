@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from html import escape
 from importlib.resources import files
 from typing import cast
 from urllib.parse import urlsplit, urlunsplit
@@ -180,6 +181,8 @@ class PrivateEditorRuntimeBootstrap:
         resource_path: str,
         runtime_url: str,
         eager_runtime: bool,
+        entrypoint_url: str | None = None,
+        bound_editor: bool = True,
     ) -> bool:
         if scope["type"] != "http" or scope.get("method") != "GET":
             return False
@@ -227,6 +230,7 @@ class PrivateEditorRuntimeBootstrap:
                     original,
                     runtime_url=runtime_url,
                     eager_runtime=eager_runtime,
+                    entrypoint_url=entrypoint_url,
                 )
             elif cell_editor:
                 if not _is_javascript(start):
@@ -247,14 +251,16 @@ class PrivateEditorRuntimeBootstrap:
                     )
                 rewritten = _backoff_lsp_reconnects(
                     _serialize_document_transactions(original)
+                    if bound_editor
+                    else original
                 )
-            elif index_asset:
+            elif index_asset and bound_editor:
                 if not _is_javascript(start):
                     raise ProtocolError(
                         "Marimo did not return the editor network asset"
                     )
                 rewritten = _await_document_transactions_before_network_run(original)
-            elif panels_asset:
+            elif panels_asset and bound_editor:
                 if not _is_javascript(start):
                     raise ProtocolError(
                         "Marimo did not return the editor query handler asset"
@@ -283,6 +289,7 @@ class PrivateEditorRuntimeBootstrap:
         *,
         runtime_url: str,
         eager_runtime: bool = True,
+        entrypoint_url: str | None = None,
     ) -> bytes:
         """Adapt the pinned editor document for Studio's notebook-first boot."""
         try:
@@ -292,6 +299,14 @@ class PrivateEditorRuntimeBootstrap:
                 "Marimo returned a non-UTF-8 editor document"
             ) from error
         source = _strip_welcome_texture_preloads(source)
+        if entrypoint_url is not None:
+            source = source.replace(
+                "</body>",
+                (
+                    f'<script type="module" src="{escape(entrypoint_url, quote=True)}">'
+                    "</script></body>"
+                ),
+            )
         if not eager_runtime:
             return source.encode()
         marker = source.find(_MOUNT_VALUE)

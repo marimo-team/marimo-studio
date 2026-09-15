@@ -39,6 +39,7 @@ def test_first_load_budget_follows_transitive_static_imports(
             "isEntry": True,
             "imports": ["shared"],
         },
+        "notebook-entry": {"file": "notebook-entry.js", "isEntry": True},
         "dev": {"file": "dev-reload.js", "isEntry": True, "imports": ["shared"]},
         "shared": {"file": "chunks/shared.js", "imports": ["leaf"]},
         "leaf": {"file": "chunks/leaf.js"},
@@ -63,6 +64,7 @@ def test_first_load_budget_follows_transitive_static_imports(
         "studio.css",
         "dev-reload.js",
         "host-session-handoff.js",
+        "notebook-entry.js",
         "chunks/shared.js",
         "chunks/leaf.js",
         "chunks/session.js",
@@ -88,6 +90,7 @@ def test_first_load_budget_follows_transitive_static_imports(
     }
 
     assert entries == {
+        "notebook-entry.js": {"notebook-entry.js"},
         "dev-reload.js": {
             "dev-reload.js",
             "chunks/shared.js",

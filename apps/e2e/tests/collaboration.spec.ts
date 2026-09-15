@@ -303,7 +303,7 @@ test("shares publication and recovery across two Studio sessions", async ({
     await page.goto(collaborativeStudioEntryUrl);
     const firstPreview = await waitForPreview(page);
     await page.getByLabel("Workspace options").click();
-    await page.getByRole("button", { name: "Source", exact: true }).click();
+    await page.getByRole("button", { name: "Focus Source", exact: true }).click();
     await page.getByRole("tab", { name: "src/index.html" }).click();
     const firstEditor = page.getByLabel("src/index.html source");
     const secondContext = await browser.newContext({ baseURL: secondOrigin });
@@ -320,7 +320,7 @@ test("shares publication and recovery across two Studio sessions", async ({
       await second.goto(secondEntry);
       const secondPreview = await waitForPreview(second);
       await second.getByLabel("Workspace options").click();
-      await second.getByRole("button", { name: "Source", exact: true }).click();
+      await second.getByRole("button", { name: "Focus Source", exact: true }).click();
       await second.getByRole("tab", { name: "src/index.html" }).click();
       const secondEditor = second.getByLabel("src/index.html source");
       await expect(secondEditor).toBeVisible();

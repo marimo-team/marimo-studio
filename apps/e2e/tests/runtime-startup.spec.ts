@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import {
+  selectWorkspaceMode,
   dashboardHtmlPath,
   expect,
   expectPreviewInteractive,
@@ -97,7 +98,7 @@ test("shows a startup failure and retries configuration on request", async ({
   await failure.getByText("Technical details").click();
   await expect(failure.getByLabel("Diagnostic details")).toContainText('"state": "baseline"');
   await expect(failure.getByLabel("Diagnostic details")).toContainText("data/records.csv");
-  await expect(page.getByLabel("Python preview runtime")).toContainText("Needs repair");
+  await expect(page.getByRole("status", { name: "View status" })).toContainText("Needs repair");
   await page.getByRole("button", { name: "Retry preview" }).click();
   await waitForPreview(page);
   await expectPreviewInteractive(page, "server");
@@ -194,14 +195,14 @@ test("keeps streamed progress with its runtime while switching previews", async 
   await expect(progress).toHaveAttribute("aria-valuenow", "1");
   await expect(progress).toHaveAttribute("aria-valuemax", "4");
   await expect(page.getByText("1 of 4", { exact: true })).toBeVisible();
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   await server
     .locator("html")
     .evaluate(() => document.dispatchEvent(new Event("test:runtime-progress")));
   await expect(progress).toHaveCount(0);
   await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
-  await page.getByLabel("Browser preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   const controls = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "GET",
@@ -227,10 +228,7 @@ for (const width of [1280, 390]) {
     await installRuntimeProgress(page);
     await page.goto(studioEntryUrl);
     if (width === 390) {
-      await page
-        .getByRole("navigation", { name: "Studio surface" })
-        .getByRole("button", { name: "Preview", exact: true })
-        .click();
+      await page.getByRole("combobox", { name: "Visible surface" }).selectOption("preview");
     }
     const preview = previewFrame(page);
     const panel = page.locator(".studio-preview-status-panel");
@@ -263,7 +261,7 @@ test("keeps rendered content visible while replacement preparation reports progr
   await installRuntimeProgress(page, false);
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await selectWorkspaceMode(page, "Preview");
   const original = await readWorkspaceFile(dashboardHtmlPath);
   try {
     await preview

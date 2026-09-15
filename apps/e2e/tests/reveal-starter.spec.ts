@@ -34,7 +34,8 @@ test("creates, projects into, and navigates a Reveal.js deck", async ({ page, st
   ).toHaveText("Widget count: 7");
 
   const popoutOpened = page.context().waitForEvent("page");
-  await page.getByLabel("Open preview in a new tab").click();
+  await page.getByLabel("Workspace options").click();
+  await page.getByRole("link", { name: "Open preview in new tab", exact: true }).click();
   const popout = await popoutOpened;
   try {
     await popout.waitForLoadState("domcontentloaded");

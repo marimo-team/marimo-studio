@@ -46,6 +46,7 @@ export default defineConfig({
         "dev-reload": entrypoint("@marimo-studio/presentation/dev-reload"),
         "host-session-handoff": join(packageRoot, "src", "host-session-handoff.ts"),
         studio: join(packageRoot, "src", "studio.ts"),
+        "notebook-entry": join(packageRoot, "src", "notebook-entry.ts"),
       },
       output: {
         entryFileNames: "[name].js",

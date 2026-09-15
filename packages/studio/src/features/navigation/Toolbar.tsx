@@ -1,6 +1,6 @@
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
-import { CodeIcon } from "lucide-react";
+import { CodeIcon, Columns2Icon } from "lucide-react";
 
 import type { StudioBrand } from "../../shared/theme.tsx";
 import type { PreviewDeck } from "../preview/deck.ts";
@@ -9,10 +9,8 @@ import type { LayoutController } from "../workspace/controller.ts";
 import type { Surface } from "../workspace/schema.ts";
 
 import { standaloneViewUrl } from "../../shared/standaloneViewUrl.ts";
-import { PopoutIcon } from "../../shared/ui/icons.tsx";
 import { ViewMenu } from "../views/ViewMenu.tsx";
 import { SURFACE_LABELS } from "../workspace/pane-actions.ts";
-import { ModeNavigation } from "./ModeNavigation.tsx";
 import { RuntimeMenu } from "./RuntimeMenu.tsx";
 import { useToolbar } from "./useToolbar.ts";
 import { WorkspaceMenu } from "./WorkspaceMenu.tsx";
@@ -29,85 +27,77 @@ interface ToolbarProps {
 
 export const Toolbar = (props: ToolbarProps) => {
   const model = useToolbar(props);
-  const popoutUrl = standaloneViewUrl(model.previewState.url);
-  const showCompactNavigation = model.compact && model.compactSurfaces.length > 1;
   return (
-    <header className="studio-toolbar">
+    <header className="studio-toolbar" aria-label="Studio">
       <div className="studio-title">
-        <span className="studio-brand-mark">
-          <img className="studio-mark" src={model.brandMark} alt="" aria-hidden="true" />
-        </span>
         <span className="studio-notebook">{model.notebookName}</span>
         <span className="studio-title-separator">/</span>
         <ViewMenu controller={props.views} />
       </div>
-
-      <ModeNavigation active={model.mode} variant="primary" onSelect={model.actions.selectMode} />
-
       <div className="studio-controls">
         <button
           type="button"
-          className="studio-control studio-source-toggle"
+          className="studio-control studio-icon-button"
+          aria-label="Show notebook beside view"
+          aria-pressed={model.notebookVisible}
+          title="Show notebook beside view"
+          onClick={() => props.layout.toggleNotebook()}
+        >
+          <Columns2Icon className="studio-mode-icon" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="studio-control studio-icon-button studio-source-toggle"
           aria-label="Toggle Source editor"
           aria-pressed={model.sourceVisible}
-          title={model.sourceVisible ? "Hide Source editor" : "Show Source editor"}
+          title={model.sourceVisible ? "Hide Source editor" : "Edit view source"}
           onClick={model.actions.toggleSource}
         >
           <CodeIcon className="studio-mode-icon" aria-hidden />
-          <span>Source</span>
         </button>
-        <RuntimeMenu
-          current={model.runtime}
-          disabled={model.runtimeDisabled}
-          runtimes={model.runtimes}
-          status={model.status}
-          visible={model.previewVisible}
-          onSelect={model.actions.switchRuntime}
-        />
-        <a
-          className="studio-control studio-icon-button studio-toolbar-action"
-          href={popoutUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Open preview in a new tab"
-          hidden={!model.previewVisible}
-        >
-          <PopoutIcon />
-        </a>
-        <WorkspaceMenu
-          arranging={model.arranging}
-          mode={model.mode}
-          previewUrl={popoutUrl}
-          previewVisible={model.previewVisible}
-          runtime={model.runtime}
-          runtimeDisabled={model.runtimeDisabled}
-          runtimes={model.runtimes}
-          status={model.status}
-          onWorkspaceAction={model.actions.applyWorkspaceAction}
-          onModeSelect={model.actions.selectMode}
-          onRuntimeSelect={model.actions.switchRuntime}
-        />
-      </div>
-
-      <nav
-        className="studio-compact-tabs"
-        aria-label="Studio surface"
-        hidden={!showCompactNavigation}
-      >
-        {model.compactSurfaces.map((surface) => (
-          <button
-            key={surface}
-            type="button"
-            className="studio-control"
-            aria-pressed={model.compactSurface === surface}
-            onClick={() => model.actions.selectCompact(surface)}
+        {model.compact && model.compactSurfaces.length > 1 ? (
+          <select
+            className="studio-compact-surface studio-control"
+            aria-label="Visible surface"
+            value={model.compactSurface}
+            onChange={(event) => {
+              const surface = model.compactSurfaces.find(
+                (candidate) => candidate === event.target.value,
+              );
+              if (surface) model.actions.selectCompact(surface);
+            }}
           >
-            {SURFACE_LABELS[surface]}
-          </button>
-        ))}
-      </nav>
-
-      <span className="studio-visually-hidden" data-state={model.status.state} role="status">
+            {model.compactSurfaces.map((surface) => (
+              <option key={surface} value={surface}>
+                {SURFACE_LABELS[surface]}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+      <RuntimeMenu
+        current={model.runtime}
+        disabled={model.runtimeDisabled}
+        runtimes={model.runtimes}
+        status={model.status}
+        visible
+        view={model.currentView}
+        onSelect={model.actions.switchRuntime}
+      />
+      <WorkspaceMenu
+        arranging={model.arranging}
+        mode={model.mode}
+        previewUrl={standaloneViewUrl(model.previewState.url)}
+        previewVisible={model.previewVisible}
+        onWorkspaceAction={model.actions.applyWorkspaceAction}
+        onModeSelect={model.actions.selectMode}
+      />
+      <span
+        className="studio-visually-hidden"
+        data-state={model.status.state}
+        role="status"
+        aria-label="View status"
+      >
         {model.status.message}
       </span>
     </header>

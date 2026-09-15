@@ -290,19 +290,23 @@ The workspace has three surfaces:
 | Source   | Provider-discovered project documents |
 | Preview  | Selected artifact and runtime frame   |
 
-Notebook, Develop, and Preview form the primary mode navigation. Source is an
-additional selectable mode in the workspace menu:
+The thin toolbar exposes view selection, notebook visibility, and source
+editing. A dedicated status item shows the current runtime state, a hover or
+focus summary, and a clickable diagnostic and runtime panel. Focus and
+arrangement commands live in the workspace menu. Source opens beneath Preview. Pane headers appear only
+while arranging, and compact workspaces use a surface selector.
 
-- Notebook
-- Develop
-- Preview
-- Source
+The native editor frame stays mounted across first-view creation. The
+`editor-workspace` frontend facade measures the space beside Marimo's sidebar
+and above its developer panel and footer. Studio places its toolbar and panes
+inside those bounds. The adapter sizes or hides the notebook region while
+keeping native chrome, agent state, and session ownership in Marimo.
 
-Develop gives Notebook and Preview equal, full-height panes. The Source toolbar
-button toggles Source beneath Notebook, or beside Preview when Notebook is hidden.
-A newly created view and Source mode show Source beside Preview. Pane headers
-expose placement, swap, and close actions. The **Open saved layout** workspace
-action restores the persisted layout, which can place any surface beside another.
+An untitled native editor receives the small `notebook-entry` bundle. Its
+adapter waits for the native editor and delegates the first Add view action to
+Marimo's Save dialog. The existing authenticated first-save handoff opens the
+saved notebook's Studio host. Unconfigured and needs-view hosts show the same
+nonblocking creation control and write metadata only through view creation.
 
 `LayoutController` owns layout trees, pane placement, split ratios, compact
 state, per-view persistence, and arranging. The render layer reads controller

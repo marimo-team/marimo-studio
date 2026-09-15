@@ -13,6 +13,7 @@ import {
   studioClientId,
 } from "./authoring-test-support.ts";
 import {
+  selectWorkspaceMode,
   captureProjectionRefresh,
   dashboardCssPath,
   dashboardHtmlPath,
@@ -103,7 +104,7 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   await page.getByLabel("Workspace options").click();
-  await page.getByRole("button", { name: "Source", exact: true }).click();
+  await page.getByRole("button", { name: "Focus Source", exact: true }).click();
   await page.getByRole("tab", { name: "src/index.html" }).click();
   const sourceStatus = page
     .getByRole("region", { name: "Source" })
@@ -139,9 +140,9 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
   await waitForPreview(page);
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("42");
   await expect(preview.locator("#rich-summary-output h3")).toHaveText("Current total: 42");
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
+  await selectWorkspaceMode(page, "Notebook");
   await editorSlider(page).press("End");
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await selectWorkspaceMode(page, "Develop");
   await waitForPreview(page);
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
 
@@ -240,7 +241,7 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
     4,
   );
   const originalView = await readWorkspaceFile(dashboardHtmlPath);
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
+  await selectWorkspaceMode(page, "Notebook");
   const editor = editorFrame(page);
   const metricCell = editor.locator('[data-cell-name="metric"]');
   await metricCell.hover();
@@ -262,7 +263,7 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   await waitForPreview(page);
   await recoverProjectionRefresh(addedRefresh, page);
 
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await selectWorkspaceMode(page, "Develop");
   await waitForPreview(page);
   const projectedView = originalView.replace(
     "</main>",
@@ -276,7 +277,7 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   await expect(note).toHaveText("Added from notebook");
   await recoverProjectionRefresh(projectedSourceRefresh, page);
 
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
+  await selectWorkspaceMode(page, "Notebook");
   const editedRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   await addedEditor.click();
   await addedEditor.press(selectAllShortcut);
@@ -285,12 +286,12 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   await addedCell.hover();
   await addedCell.locator('button[data-testid="run-button"]:not(:disabled)').click();
   await expect(addedCell.locator("..")).toHaveAttribute("data-status", "idle");
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await selectWorkspaceMode(page, "Develop");
   await waitForPreview(page);
   await expect(note).toHaveText("Edited from notebook");
   await recoverProjectionRefresh(editedRefresh, page);
 
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
+  await selectWorkspaceMode(page, "Notebook");
   const cellOrder = () =>
     editor
       .locator("[data-cell-id]")
@@ -305,12 +306,12 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   await addedCell.locator('button[data-testid="cell-actions-button"]').click();
   await editor.getByText("Move cell down", { exact: true }).click();
   await expect.poll(cellOrder).toBe(beforeMove + 1);
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await selectWorkspaceMode(page, "Develop");
   await waitForPreview(page);
   await expect(note).toHaveText("Edited from notebook");
   await recoverProjectionRefresh(movedRefresh, page);
 
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
+  await selectWorkspaceMode(page, "Notebook");
   const deletedRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   await addedCell.hover();
   await addedCell.locator('button[data-testid="cell-actions-button"]').click();
@@ -321,7 +322,7 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   }
   await expect(addedCell).toHaveCount(0);
   await expect.poll(() => readWorkspaceFile(workspaceNotebookPath)).not.toContain("user_note =");
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await selectWorkspaceMode(page, "Develop");
   await waitForPreview(page);
   const missingNoteMessage =
     "Notebook variable 'user_note' does not resolve in the notebook. " +
@@ -396,23 +397,23 @@ test("shows progress while an edited notebook cell runs", async ({ browserDiagno
   );
   const slowRefresh = await captureProjectionRefresh(page, browserDiagnostics);
 
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
+  await selectWorkspaceMode(page, "Notebook");
   const cell = editorFrame(page).locator('[data-cell-name="slow_metric"]');
   const code = cell.getByRole("textbox");
   await code.fill("import time\ntime.sleep(1)\nslow_metric = 8\nslow_metric");
   await cell.hover();
   await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
   await expect(cell.locator("..")).toHaveAttribute("data-status", /queued|running/);
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
-  const runtimeTrigger = page.getByLabel("Python preview runtime");
-  await expect(runtimeTrigger.locator("..")).toHaveAttribute("data-state", "loading");
+  await selectWorkspaceMode(page, "Develop");
+  const runtimeTrigger = page.getByRole("status", { name: "View status" });
+  await expect(runtimeTrigger).toHaveAttribute("data-state", "loading");
   await expect(runtimeTrigger).toContainText("Updating preview");
   await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
   await waitForPreview(page);
   await expect(preview.locator("#slow-value")).toHaveText("8");
   await expect.poll(() => readWorkspaceFile(workspaceNotebookPath)).toContain("slow_metric = 8");
   await recoverProjectionRefresh(slowRefresh, page);
-  await expect(runtimeTrigger.locator("..")).toHaveAttribute("data-state", "ready");
+  await expect(runtimeTrigger).toHaveAttribute("data-state", "ready");
   await expect(runtimeTrigger).toContainText("Live");
   replacedWorkspaceStream.recovered();
 });
@@ -421,7 +422,7 @@ test("keeps Source tabs and the editor reachable at narrow widths", async ({ pag
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   await page.getByLabel("Workspace options").click();
-  await page.getByRole("button", { name: "Source", exact: true }).click();
+  await page.getByRole("button", { name: "Focus Source", exact: true }).click();
   const tablist = page.getByRole("tablist", { name: "View source files" });
   const tabs = page.getByRole("tab");
   expect(await tabs.count()).toBeGreaterThan(3);

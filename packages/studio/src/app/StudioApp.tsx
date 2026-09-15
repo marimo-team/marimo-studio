@@ -2,6 +2,11 @@ import type { ActiveViewRequest } from "@marimo-studio/protocol/development-even
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
+import type {
+  EditorWorkspace,
+  EditorRectangle,
+  EditorWorkspaceConnector,
+} from "../shared/editor-workspace.ts";
 import type { StudioBrand, ThemeFrameConnector } from "../shared/theme.tsx";
 
 import { Toolbar } from "../features/navigation/Toolbar.tsx";
@@ -13,6 +18,7 @@ import { useStudioServices } from "./useStudioServices.ts";
 
 export interface StudioOptions {
   brand: StudioBrand;
+  connectEditorWorkspace?: EditorWorkspaceConnector;
   connectControlFrame?: ControlFrameConnector;
   connectThemeFrame?: ThemeFrameConnector;
 }
@@ -22,6 +28,8 @@ interface StudioAppProps extends StudioOptions {
   editorFrame: HTMLIFrameElement;
   initialActivation?: ActiveViewRequest;
   onRetry: () => void;
+  editorWorkspace?: EditorWorkspace;
+  editorBounds?: EditorRectangle;
 }
 
 const StudioWorkspace = ({
@@ -31,6 +39,8 @@ const StudioWorkspace = ({
   connectThemeFrame,
   editorFrame,
   initialActivation,
+  editorWorkspace,
+  editorBounds,
 }: StudioAppProps) => {
   const services = useStudioServices(
     bootstrap,
@@ -43,7 +53,12 @@ const StudioWorkspace = ({
 
   return (
     <StudioThemeProvider theme={theme}>
-      <div className="studio" data-mode={workspace.layout.mode} data-theme={theme}>
+      <div
+        className="studio"
+        data-mode={workspace.layout.mode}
+        data-theme={theme}
+        style={editorBounds ? { position: "fixed", ...editorBounds } : undefined}
+      >
         <Toolbar
           bootstrap={bootstrap}
           brand={brand}
@@ -54,6 +69,7 @@ const StudioWorkspace = ({
           views={services.views}
         />
         <Workspace
+          editorWorkspace={editorWorkspace}
           editorFrame={editorFrame}
           frameRef={services.frameRef}
           source={services.source}

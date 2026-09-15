@@ -78,10 +78,10 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox
 `uvx` is [uv](https://docs.astral.sh/uv/)'s temporary command runner. It creates
 an isolated Python environment for this invocation.
 
-Add a cell such as `mo.md("## Revenue is on target")`, then save the notebook.
-Studio opens the first-view screen. Choose **HTML document** and click **Create
-dashboard**. The generated view places displayable notebook cells
-inside a frontend document.
+The thin Studio toolbar appears immediately. Add a cell such as
+`mo.md("## Revenue is on target")`, then click **Add view**. Save the notebook
+if prompted, choose **HTML document**, and click **Create view**. The generated
+view places displayable notebook cells inside a frontend document.
 
 Studio connects three surfaces:
 
@@ -89,8 +89,9 @@ Studio connects three surfaces:
 - **Source** for the view project's HTML, styles, and browser code
 - **Preview** for the current artifact and notebook runtime
 
-**Develop** opens Notebook and Preview in an equal split. Click **Source** in the
-toolbar to add the view editor beneath Notebook.
+Notebook and Preview open side by side. The toolbar's source action opens the
+view editor beneath Preview. Marimo's agent sidebar stays available while you
+edit or focus the view.
 
 Saving Source rebuilds Preview. A failed build reports the source problem and
 keeps the current artifact available.

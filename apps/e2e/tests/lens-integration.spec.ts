@@ -290,10 +290,7 @@ for (const provider of ["react", "svelte"] as const) {
     await view.getByRole("button", { name: "Close selections" }).click();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page
-      .getByRole("navigation", { name: "Studio surface" })
-      .getByRole("button", { name: "Preview", exact: true })
-      .click();
+    await page.getByRole("combobox", { name: "Visible surface" }).selectOption("preview");
     await metric.scrollIntoViewIfNeeded();
     await view.getByRole("button", { name: "Select a target", exact: true }).click();
     await metric.hover();

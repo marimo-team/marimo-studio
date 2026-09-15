@@ -5,47 +5,41 @@ description: Work with notebook code, view source, and the rendered result in on
 
 # Edit and preview in Studio
 
-Open the notebook with the launch requirements printed by `view create`. For a
-notebook that uses the default Vanilla starter:
+Open Marimo in an environment containing Studio:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Studio connects three surfaces to the saved notebook:
+The thin Studio toolbar appears immediately, including in a new, unsaved
+notebook. Click **Add view** to name a view and choose a starter. For an
+unsaved notebook, the action first opens Marimo's Save dialog. Studio writes
+view configuration when you create the view.
 
-- **Notebook** edits Python and reactive computation.
-- **Source** edits the selected view project's source documents.
-- **Preview** renders the current artifact with notebook results attached.
+## Work beside the notebook
 
-## Choose a mode
+Studio opens the notebook and custom view side by side. The native agent
+sidebar remains available, including when you focus the custom view.
 
-| Mode         | Surfaces             |
-| ------------ | -------------------- |
-| **Notebook** | Notebook             |
-| **Develop**  | Notebook and Preview |
-| **Preview**  | Preview              |
-| **Source**   | Source and Preview   |
-
-Studio opens in **Develop**, with Notebook and Preview sharing the page equally.
-Click **Source** in the toolbar to open the view editor beneath Notebook. Preview
-keeps its full height. Click **Source** again to close the editor.
-
-Choose **Source** from **Workspace options** to focus on Source and Preview.
+- **Show notebook beside view** toggles the notebook beside the view.
+- **Edit view source** opens Source beneath the custom view. File tabs select
+  the view's authored documents.
+- **Live** (or the current status) gives a short runtime state. Hover or focus it
+  for a contextual summary. Click it for diagnostics and runtime choices.
+- **Workspace options** contains focus commands and **Open preview in new tab**.
 
 ## Arrange the workspace
 
-Use **Arrange** in a pane header to place it above, below, or beside another
-pane, swap panes, add a missing surface, or close the pane. Drag a divider to
-resize. Open **Workspace options** to equalize split sizes, restore the default
-workspace, or open the saved layout.
+Drag a divider to resize. Choose **Arrange panes** from **Workspace options**
+to expose each pane's placement, swap, and close controls. Pane headers remain
+hidden during normal editing. The menu also offers equal split sizes and the
+saved or default layout.
 
 Studio saves the custom layout for each notebook and selected view in the
 current browser. **Open saved layout** returns to that arrangement.
 
-When the available width or height cannot fit every visible pane, Studio uses
-compact navigation. Choose Notebook, Source, or Preview from the compact tabs
-instead of shrinking the surfaces below their working size.
+When the available width or height cannot fit the panes, use the **Visible
+surface** selector to choose Notebook, Source, or Preview.
 
 ## Save and build
 
@@ -74,7 +68,7 @@ The view menu saves pending Source edits before selecting another view. A
 failed save or unresolved conflict stops the switch so the current document can
 be repaired.
 
-The runtime menu controls where notebook code executes:
+Click the status item in the toolbar to choose where notebook code executes:
 
 - **Python runtime** uses the editor's Python session and can access local
   files, databases, installed packages, and server credentials. Its

@@ -10,7 +10,6 @@ export const RuntimeStatus = ({ status }: { status: PreviewStatus }) => (
     aria-label="Preview runtime status"
   >
     <div className="studio-runtime-status-summary">
-      <span className="studio-runtime-dot" aria-hidden="true" />
       <strong>{status.message}</strong>
     </div>
     {status.diagnostics.length > 0 ? (

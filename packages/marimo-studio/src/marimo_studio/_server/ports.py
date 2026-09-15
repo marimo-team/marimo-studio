@@ -87,6 +87,8 @@ class EditorRuntimeBootstrap(Protocol):
         resource_path: str,
         runtime_url: str,
         eager_runtime: bool,
+        entrypoint_url: str | None = None,
+        bound_editor: bool = True,
     ) -> bool: ...
 
 

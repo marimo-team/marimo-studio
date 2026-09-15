@@ -10,6 +10,7 @@ import pytest
 from marimo._config.manager import get_default_config_manager
 from marimo._server.models.home import MarimoFile
 from marimo._server.workspace._directory import DirectoryWorkspace
+from marimo._server.workspace._empty import EmptyWorkspace
 from marimo._server.workspace._fixed import FixedFilesWorkspace
 from marimo._session.model import SessionMode
 from starlette.datastructures import Headers, QueryParams
@@ -252,3 +253,26 @@ def test_presentation_authorization_restores_private_marimo_authentication(
     assert QueryParams(authorized["query_string"])["access_token"] == "browser-token"
     assert authorized["auth"].scopes == ["read", "edit"]
     assert authorized["user"].is_authenticated
+
+
+def test_untitled_singleton_resolves_its_saved_notebook(tmp_path: Path) -> None:
+    notebook = tmp_path / "first.py"
+    notebook.write_text(notebook_source(tmp_path / "output"), encoding="utf-8")
+    state, config_manager = _server(tmp_path)
+    state.session_manager.workspace = EmptyWorkspace()
+    state.session_manager.get_session = lambda _session_id: SimpleNamespace(
+        app_file_manager=SimpleNamespace(path=str(notebook))
+    )
+    gateway = PrivateServerGateway()
+    request = _request(state, "")
+    assert _location(gateway, request) is None
+    assert gateway.uses_file_routing(request.scope)
+    saved = asyncio.run(gateway.session_location(request, "s_123456"))
+    assert saved is not None
+    assert saved.notebook == notebook.resolve()
+    assert saved.routing_query == (("file", str(notebook)),)
+    reopened = _location(gateway, _request(state, str(notebook)))
+    assert reopened is not None
+    assert reopened.notebook == saved.notebook
+    assert reopened.routing_query == saved.routing_query
+    assert request.app.state.config_manager is config_manager

@@ -160,6 +160,8 @@ test("the package exposes capability facades", async () => {
       "./cell-presentation",
       "./control-endpoint",
       "./embedded-runtime",
+      "./editor-workspace",
+      "./notebook-entry",
       "./prepared-presentation",
       "./projected-output",
       "./projected-output-function-gate",

@@ -21,7 +21,7 @@
   --studio-error: light-dark(hsl(4deg 75% 40%), hsl(4deg 100% 77%));
   --studio-error-soft: light-dark(hsl(7deg 100% 97%), hsl(5deg 30% 20%));
   --studio-on-error: light-dark(hsl(210deg 40% 98%), hsl(222.2deg 47.4% 11.2%));
-  --studio-toolbar-height: 2.75rem;
+  --studio-toolbar-height: 2.125rem;
   --studio-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -73,19 +73,11 @@ body,
   z-index: 2;
 }
 
-html[data-marimo-studio-state="needs-view"] #marimo-studio-root {
-  background: var(--studio-background);
-  overflow: auto;
-  pointer-events: auto;
+html:not([data-marimo-studio-state="ready"]) #marimo-studio-editor-host {
+  top: var(--studio-toolbar-height);
 }
 
-html[data-marimo-studio-state="needs-view"] #marimo-studio-editor-host {
-  pointer-events: none;
-}
-
-.studio-startup-error,
-.studio-host-status,
-.studio-initialization-card {
+.studio-startup-error {
   pointer-events: auto;
 }
 
@@ -137,124 +129,6 @@ body {
   background: var(--studio-background);
   color: var(--studio-foreground);
   overflow: hidden;
-}
-
-html[data-marimo-studio-state="needs-view"] body {
-  overflow: auto;
-}
-
-.studio-initialization {
-  background: var(--studio-background);
-  display: grid;
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-  padding: clamp(1.5rem, 6vw, 5rem);
-  place-items: center;
-  pointer-events: auto;
-}
-
-.studio-host-status {
-  background: var(--studio-popover);
-  border: 1px solid var(--studio-border);
-  border-radius: 0.25rem;
-  color: var(--studio-muted);
-  font-size: 0.8125rem;
-  left: 50%;
-  padding: 0.45rem 0.65rem;
-  position: fixed;
-  top: 0.75rem;
-  transform: translateX(-50%);
-}
-
-.studio-initialization-card {
-  border-block-start: 3px solid var(--studio-primary);
-  max-width: 34rem;
-  padding-block: 1.5rem;
-}
-
-.studio-initialization-eyebrow {
-  color: var(--studio-muted);
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.studio-initialization h1 {
-  font-size: clamp(1.75rem, 5vw, 2.5rem);
-  letter-spacing: -0.025em;
-  margin: 0.5rem 0 0.75rem;
-}
-
-.studio-initialization p {
-  color: var(--studio-muted);
-  line-height: 1.55;
-  margin: 0;
-}
-
-.studio-initialization form {
-  margin-block: 1.5rem 1rem;
-}
-
-.studio-initial-starter-plans {
-  display: grid;
-  gap: 0.35rem;
-  margin-block: 0.5rem 0.8rem;
-  max-height: 10rem;
-  overflow-y: auto;
-}
-
-.studio-initial-starter-plans section {
-  border-inline-start: 2px solid var(--studio-border);
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-  padding-inline-start: 0.55rem;
-}
-
-.studio-initial-starter-plans section[data-selected="true"] {
-  border-inline-start-color: var(--studio-primary);
-}
-
-.studio-initial-starter-plans strong,
-.studio-initial-starter-plans small {
-  overflow-wrap: anywhere;
-}
-
-.studio-initial-starter-plans small {
-  color: var(--studio-muted);
-}
-
-.studio-initial-starter-plans .studio-starter-action {
-  color: var(--studio-warning);
-}
-
-.studio-initialization button {
-  background: var(--studio-primary);
-  border: 1px solid var(--studio-primary);
-  border-radius: 0.25rem;
-  color: var(--studio-on-primary);
-  cursor: pointer;
-  font-weight: 700;
-  padding: 0.65rem 0.9rem;
-}
-
-.studio-initialization button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-
-.studio-initialization [role="status"] {
-  color: var(--studio-foreground);
-  min-height: 1.5rem;
-  padding-block-start: 0.5rem;
-}
-
-.studio-initialization a {
-  color: var(--studio-primary);
-  font-size: 0.875rem;
 }
 
 button,

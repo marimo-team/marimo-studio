@@ -76,11 +76,18 @@ def _server_mode(scope: Scope) -> ServerMode | None:
     return None
 
 
+def _unique_notebook_key(manager: Any) -> str | None:
+    from marimo._server.workspace._base import NEW_FILE
+
+    key = manager.workspace.get_unique_file_key()
+    return None if key == NEW_FILE else key
+
+
 def _server_uses_file_routing(scope: Scope) -> bool:
     app = scope.get("app")
     state = getattr(app, "state", None)
     manager = getattr(state, "session_manager", None)
-    return manager is not None and manager.workspace.get_unique_file_key() is None
+    return manager is not None and _unique_notebook_key(manager) is None
 
 
 def _internal_server_url(scope: Scope, base_url: str) -> str | None:
@@ -110,7 +117,7 @@ async def _server_location(
     if manager is None:
         return None
     assert state is not None
-    unique_file = manager.workspace.get_unique_file_key()
+    unique_file = _unique_notebook_key(manager)
     file_key = (
         unique_file
         if unique_file is not None

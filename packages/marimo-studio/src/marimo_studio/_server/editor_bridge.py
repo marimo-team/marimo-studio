@@ -86,6 +86,23 @@ async def delegate_editor_request(
     host_session_active: Callable[[ServerContext, str], bool] | None = None,
 ) -> bool:
     """Delegate one editor or code-mode request and report whether it matched."""
+    if (
+        scope["type"] == "http"
+        and mode == "edit"
+        and relative.startswith("/assets/")
+        and has_edit_access(scope)
+        and await editor_runtime.serve(
+            app,
+            scope,
+            receive,
+            send,
+            resource_path=relative,
+            runtime_url=str(Request(scope, receive).url),
+            eager_runtime=False,
+            bound_editor=False,
+        )
+    ):
+        return True
     editor_target = native_editor_target(relative)
     if editor_target is not None and mode == "edit":
         delegated_scope = _replace_relative_path(scope, relative, editor_target)

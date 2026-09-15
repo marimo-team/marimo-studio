@@ -135,7 +135,7 @@ test("delivers and refreshes dataframe values in Server and WebAssembly runtimes
   await labeledSlider(server.locator('marimo-cell[name="controls"]'), /^Scale/).press("End");
   await expectProjectedDataframe(server, 63);
 
-  await page.getByLabel("Python preview runtime").click();
+  await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await expectProjectedDataframe(wasm, 63);

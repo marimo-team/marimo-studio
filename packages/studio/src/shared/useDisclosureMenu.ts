@@ -126,6 +126,7 @@ export const useDisclosureMenu = ({
   }, [dismissible, menuRef]);
 
   return {
+    close,
     detailsRef: menuRef,
     onKeyDown: handleKeyDown,
     onToggle: handleToggle,

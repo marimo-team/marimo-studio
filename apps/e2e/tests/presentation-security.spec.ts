@@ -128,7 +128,8 @@ test("keeps standalone navigation inside server-authored route authority", async
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const opened = page.context().waitForEvent("page");
-  await page.getByLabel("Open preview in a new tab").click();
+  await page.getByLabel("Workspace options").click();
+  await page.getByRole("link", { name: "Open preview in new tab", exact: true }).click();
   const popout = await opened;
   await popout.waitForLoadState("domcontentloaded");
   const presentation = presentationFrame(popout);

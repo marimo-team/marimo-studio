@@ -8,6 +8,10 @@ const readinessPath = "/_marimo-studio-ready";
 export const installedPackageNetwork = Object.freeze({
   origin: `http://127.0.0.1:${port}`,
   port,
+  fresh: Object.freeze({
+    origin: `http://127.0.0.1:${port + 3}`,
+    port: port + 3,
+  }),
   static: Object.freeze({
     origin: `http://127.0.0.1:${staticPort}`,
     port: staticPort,

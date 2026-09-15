@@ -96,10 +96,10 @@ def test_app_host_session_exposes_its_creation_query() -> None:
     assert not session_creation_query_matches(session, [("region", "apac")])
 
 
-@pytest.mark.parametrize("file_key", ["__new__s_123456", "saved.py"])
+@pytest.mark.parametrize("file_key", [None, "__new__s_123456", "saved.py"])
 def test_first_save_handoff_follows_the_saving_consumer_connection(
     monkeypatch: pytest.MonkeyPatch,
-    file_key: str,
+    file_key: str | None,
 ) -> None:
     notifications: list[object] = []
     peer_notifications: list[object] = []
@@ -121,7 +121,7 @@ def test_first_save_handoff_follows_the_saving_consumer_connection(
     }
 
     session = SimpleNamespace(
-        initialization_id="__new__s_123456",
+        initialization_id="__new__" if file_key is None else "__new__s_123456",
         notify=notify,
         room=SimpleNamespace(get_consumer=consumers.get),
     )

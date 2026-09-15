@@ -438,9 +438,10 @@ export class PreviewDeck {
   ): void {
     const active = view === this.view ? this.frames.find(this.runtime, view) : undefined;
     const activeController = active?.controller;
+    // Publication is complete even when a notebook mutation still gates admission.
+    this.presentationBuilds.delete(view);
     this.notebookMutations.buildCompleted(notebookMutationGeneration, () => {
       let interactivityChanged = false;
-      this.presentationBuilds.delete(view);
       if (revision !== null) {
         this.presentationRevisions.set(view, revision);
       }
