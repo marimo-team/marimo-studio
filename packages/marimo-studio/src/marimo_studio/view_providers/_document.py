@@ -229,7 +229,7 @@ class HTMLDocumentParser(HTMLParser):
         self.authored_source_revision_position: tuple[int, int] | None = None
         self.import_map_position: tuple[int, int] | None = None
         self.base_href_position: tuple[int, int] | None = None
-        self._open_tags: list[tuple[str, bool]] = []
+        self._open_tags: list[tuple[str, bool, bool]] = []
         self._shell_depth = 0
         self._source = ""
         self._line_offsets = [0]
@@ -259,10 +259,13 @@ class HTMLDocumentParser(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
-        if tag in {"script", "style"}:
+        foreign_content = tag in {"svg", "math"} or any(
+            opened in {"svg", "math"} for opened, _, _ in self._open_tags
+        )
+        if tag not in _VOID_ELEMENTS and not foreign_content:
             line, column = self.getpos()
             raise ViewProjectError(
-                f"<{tag}> cannot use self-closing syntax",
+                f"<{tag}> cannot use self-closing syntax in HTML. Use </{tag}>.",
                 line=line,
                 column=column + 1,
             )
@@ -276,12 +279,12 @@ class HTMLDocumentParser(HTMLParser):
         elif tag == "script":
             self._inline_script = False
         for index in range(len(self._open_tags) - 1, -1, -1):
-            opened_tag, _ = self._open_tags[index]
+            opened_tag, _, _ = self._open_tags[index]
             if opened_tag != tag:
                 continue
             closed = self._open_tags[index:]
             del self._open_tags[index:]
-            self._shell_depth -= sum(is_shell for _, is_shell in closed)
+            self._shell_depth -= sum(is_shell for _, is_shell, _ in closed)
             return
 
     def handle_data(self, data: str) -> None:
@@ -488,6 +491,13 @@ class HTMLDocumentParser(HTMLParser):
                 hint=_PROJECTION_USAGE_HINT,
             )
         if declarations:
+            if any(is_projection for _, _, is_projection in self._open_tags):
+                raise ViewProjectError(
+                    "Projection hosts cannot contain other projection hosts. "
+                    "Place them beside each other.",
+                    line=line,
+                    column=column + 1,
+                )
             kind, target = declarations[0]
             self.mounts.append(
                 HTMLMountDeclaration(
@@ -503,7 +513,7 @@ class HTMLDocumentParser(HTMLParser):
             if is_shell:
                 self._shell_depth -= 1
         else:
-            self._open_tags.append((tag, is_shell))
+            self._open_tags.append((tag, is_shell, bool(declarations)))
 
     def _start_tag_insertion_offset(self, line: int, column: int) -> int:
         raw = self.get_starttag_text()
