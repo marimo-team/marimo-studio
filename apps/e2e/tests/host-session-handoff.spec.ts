@@ -1,3 +1,4 @@
+import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
 import { expect, test } from "@playwright/test";
 import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,6 +11,7 @@ import { observeBrowserContext } from "./browser-diagnostics.ts";
 import {
   editorFrame,
   previewFrame,
+  recoverRequestAbort,
   recoverWorkspaceEventStream,
   waitForPreview,
 } from "./fixture.ts";
@@ -132,6 +134,29 @@ for (const editRoot of ["marimo", "studio"] as const) {
       }
       await recoverWorkspaceEventStream(workspaceStream);
       await waitForPreview(page);
+      const mount = mountConfigSchema.parse(
+        await previewFrame(page)
+          .locator("html")
+          .evaluate(() => {
+            if (!("__MARIMO_MOUNT_CONFIG__" in globalThis)) {
+              throw new Error("The preview mount configuration is unavailable.");
+            }
+            return globalThis.__MARIMO_MOUNT_CONFIG__;
+          }),
+      );
+      const support = new URL(mount.supportUrl, server.serverUrl);
+      const boundary = support.pathname.indexOf("/_marimo-studio/views/");
+      if (boundary < 0) throw new Error("The preview has no scoped support URL.");
+      const modelPath = `${support.pathname.slice(0, boundary)}/api/kernel/set_model_value`;
+      // Reload can cancel the old document's model notification after the server
+      // acknowledges it. New presentation requests must remain outside this window.
+      const retiringModelNotification = diagnostics.expectRequestAbort({
+        origin: server.serverUrl,
+        method: "POST",
+        path: new RegExp(`^${RegExp.escape(modelPath)}$`),
+        status: 200,
+        required: false,
+      });
       await executeCodeMode(
         editorFrame(page),
         "host-save.py",
@@ -145,6 +170,7 @@ shown.to_dict()
       `,
       );
       await waitForPreview(page);
+      await recoverRequestAbort(retiringModelNotification);
 
       await writeFile(
         resolve(workspace, "__marimo__/studio/host-save/dashboard/index.html"),
