@@ -1,6 +1,7 @@
 import { projectionDiagnosticSchema } from "@marimo-studio/protocol/runtime-config";
 import { expect as playwrightExpect, test as playwrightTest, type Page } from "@playwright/test";
 
+import { runCellShortcut } from "./authoring-test-support.ts";
 import {
   captureProjectionRefresh,
   editorFrame,
@@ -21,7 +22,6 @@ import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts"
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 import { editServerUrl, startEditServer } from "./recovery-support.ts";
 
-const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a";
 const originalMetricSource =
   'metric = scale.value * 21\nresponsive_value = "responsive" * 80\nmetric';
 
@@ -42,12 +42,7 @@ const replaceMetricCell = async (page: Page, source: string) => {
   const cell = editorFrame(page).locator('.marimo-cell[data-cell-name="metric"]');
   const runtime = cell.locator("..");
   const editor = cell.locator(".cm-content");
-  await editor.click();
-  await editor.press(selectAllShortcut);
-  await page.keyboard.insertText(source);
-  const run = cell.locator('button[data-testid="run-button"]:not(:disabled)');
-  await cell.hover();
-  await expect(run).toHaveCount(1);
+  await editor.fill(source);
   await Promise.all([
     page.waitForResponse((response) => {
       const request = response.request();
@@ -57,7 +52,7 @@ const replaceMetricCell = async (page: Page, source: string) => {
         response.ok()
       );
     }),
-    run.click(),
+    editor.press(runCellShortcut),
   ]);
   await expect(runtime).toHaveAttribute("data-status", "idle");
 };

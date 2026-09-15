@@ -3,6 +3,8 @@ import { expect, type FrameLocator, type Page } from "@playwright/test";
 import { z } from "zod";
 
 export const saveShortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
+// Marimo also supports Ctrl+Enter on macOS.
+export const runCellShortcut = "Control+Enter";
 export const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a";
 
 export const observationStateSchema = z.enum([
