@@ -35,7 +35,6 @@ export class LayoutController {
   private workspace: LayoutNode = developLayout();
   private compact: Surface = "notebook";
   private arranging = false;
-  private hiddenNotebook: { tree: LayoutNode; withoutNotebook: LayoutNode } | undefined;
   private transientTree: LayoutNode | undefined;
   private snapshot!: LayoutSnapshot;
   private readonly listeners = new Set<Listener>();
@@ -56,7 +55,6 @@ export class LayoutController {
   readonly getSnapshot = (): LayoutSnapshot => this.snapshot;
 
   switchView(view: string, landing: ViewLanding): void {
-    this.hiddenNotebook = undefined;
     const active = { mode: this.mode, compact: this.compact };
     this.persist();
     this.view = view;
@@ -93,25 +91,23 @@ export class LayoutController {
     this.commit();
   }
 
-  toggleNotebook(): void {
+  toggleSplit(): void {
     const tree = this.tree;
     const visible = visibleSurfaces(tree);
+    this.arranging = false;
     if (visible.length === 1 && visible[0] === "notebook") {
-      this.selectMode("develop");
+      const saved = visibleSurfaces(this.workspace);
+      this.applyPaneAction({
+        tree: saved.includes("notebook") && saved.length > 1 ? this.workspace : developLayout(),
+        compact: "notebook",
+      });
       return;
     }
-    this.arranging = false;
     if (visible.includes("notebook")) {
-      const withoutNotebook = closeSurface(tree, "notebook");
-      this.hiddenNotebook = { tree, withoutNotebook };
-      this.applyPaneAction({ tree: withoutNotebook, compact: "preview" });
+      this.workspace = tree;
+      this.selectMode("notebook");
     } else {
-      const restored =
-        this.hiddenNotebook?.withoutNotebook === tree
-          ? this.hiddenNotebook.tree
-          : notebookBeside(tree);
-      this.hiddenNotebook = undefined;
-      this.applyPaneAction({ tree: restored, compact: "notebook" });
+      this.applyPaneAction({ tree: notebookBeside(tree), compact: "notebook" });
     }
   }
 

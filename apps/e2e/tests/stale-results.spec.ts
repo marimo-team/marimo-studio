@@ -310,7 +310,7 @@ test("cancels a held old-view request without changing current or cached view st
   }
 
   await selectView("next-report", "Next kernel report");
-  await expect(page.getByRole("button", { name: "Show notebook beside view" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Show view beside notebook" })).toHaveAttribute(
     "aria-pressed",
     "false",
   );

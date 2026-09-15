@@ -127,7 +127,7 @@ test("opens the first view and captures Lens feedback from the installed extra",
 }) => {
   await page.goto("/?file=notebook.py");
   await expect(page).toHaveURL(/\/studio\/dashboard\/$/);
-  await expect(page.getByRole("button", { name: "Show notebook beside view" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Show view beside notebook" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -219,7 +219,7 @@ test("provides Studio before the first save in an environment with the installed
     1,
   );
   await page.getByRole("button", { name: "Create view", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Show notebook beside view" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Show view beside notebook" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );

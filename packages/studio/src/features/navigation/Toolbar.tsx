@@ -38,10 +38,10 @@ export const Toolbar = (props: ToolbarProps) => {
         <button
           type="button"
           className="studio-control studio-icon-button"
-          aria-label="Show notebook beside view"
-          aria-pressed={model.notebookVisible}
-          title="Show notebook beside view"
-          onClick={() => props.layout.toggleNotebook()}
+          aria-label="Show view beside notebook"
+          aria-pressed={model.splitVisible}
+          title={model.splitVisible ? "Show notebook only" : "Show view beside notebook"}
+          onClick={() => props.layout.toggleSplit()}
         >
           <Columns2Icon className="studio-mode-icon" aria-hidden />
         </button>

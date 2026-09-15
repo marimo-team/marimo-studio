@@ -267,13 +267,13 @@ test("Source can be opened from Preview and from a Source-only workspace", () =>
   controller.dispose();
 });
 
-test("notebook visibility toggles independently of view source", () => {
-  const controller = new LayoutController("notebook-toggle", "dashboard");
+test("split toggles to notebook only and restores the view source arrangement", () => {
+  const controller = new LayoutController("split-toggle", "dashboard");
   controller.toggleSource();
   const initial = controller.getSnapshot().tree;
-  controller.toggleNotebook();
-  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["preview", "source"]);
-  controller.toggleNotebook();
+  controller.toggleSplit();
+  assert.deepEqual(visibleSurfaces(controller.getSnapshot().tree), ["notebook"]);
+  controller.toggleSplit();
   assert.deepEqual(controller.getSnapshot().tree, initial);
   controller.dispose();
 });

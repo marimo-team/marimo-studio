@@ -4,6 +4,54 @@ import { expect, test, vi } from "vite-plus/test";
 import { connectMarimoEditorWorkspace } from "../src/editor-workspace.ts";
 import { connectNotebookEntry } from "../src/notebook-entry.ts";
 
+test("tracks notification bounds through resize, dismissal, and workspace closure", async () => {
+  const resized: (() => void)[] = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        resized.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const frame = document.createElement("iframe");
+  document.body.append(frame);
+  const doc = frame.contentDocument!;
+  const notification = vi.fn();
+  const workspace = connectMarimoEditorWorkspace(frame, vi.fn(), vi.fn(), notification);
+  try {
+    const viewport = doc.createElement("ol");
+    const toast = doc.createElement("li");
+    toast.dataset.swipeDirection = "right";
+    toast.dataset.state = "open";
+    viewport.append(toast);
+    let bounds = new DOMRect(600, 650, 400, 150);
+    viewport.getBoundingClientRect = () => bounds;
+    doc.body.append(viewport);
+    await vi.waitFor(() => expect(notification).toHaveBeenLastCalledWith(bounds));
+    bounds = new DOMRect(600, 550, 400, 250);
+    resized.forEach((resize) => resize());
+    expect(notification).toHaveBeenLastCalledWith(bounds);
+    toast.dataset.state = "closed";
+    await vi.waitFor(() => expect(notification).toHaveBeenLastCalledWith(undefined));
+    toast.dataset.state = "open";
+    await vi.waitFor(() => expect(notification).toHaveBeenLastCalledWith(bounds));
+    workspace.close();
+    expect(notification).toHaveBeenLastCalledWith(undefined);
+    notification.mockClear();
+    resized.forEach((resize) => resize());
+    viewport.remove();
+    await Promise.resolve();
+    expect(notification).not.toHaveBeenCalled();
+  } finally {
+    workspace.close();
+    frame.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
 test("keeps native sidebar ownership while the notebook is resized, hidden, and restored", async () => {
   let resized = () => {};
   const disconnect = vi.fn();
@@ -29,7 +77,7 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   developer.getBoundingClientRect = () => new DOMRect(300, 800, 900, 0);
   const listener = vi.fn();
   const dialogState = vi.fn();
-  const workspace = connectMarimoEditorWorkspace(frame, listener, dialogState);
+  const workspace = connectMarimoEditorWorkspace(frame, listener, dialogState, vi.fn());
   workspace.placeNotebook({ left: 300, top: 34, width: 450, height: 766 });
   expect(app.style.width).toBe("450px");
   expect(listener).toHaveBeenLastCalledWith({ left: 300, top: 0, width: 900, height: 800 });
@@ -58,7 +106,7 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   workspace.close();
   expect(app.style.width).toBe("");
   expect(app.style.borderTop).toBe("");
-  expect(disconnect).toHaveBeenCalledOnce();
+  expect(disconnect).toHaveBeenCalled();
   frame.remove();
   vi.unstubAllGlobals();
 });

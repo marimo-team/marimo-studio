@@ -5,11 +5,12 @@ interface Rectangle {
   height: number;
 }
 
-/** Observe native dialogs and size the notebook independently of Marimo's panels. */
+/** Observe native overlays and size the notebook independently of Marimo's panels. */
 export const connectMarimoEditorWorkspace = (
   frame: HTMLIFrameElement,
   onBounds: (bounds: Rectangle | undefined) => void,
   onDialog: (open: boolean) => void,
+  onNotification: (bounds: Rectangle | undefined) => void,
 ) => {
   let disposeDocument = () => {};
   let notebook: HTMLElement | null = null;
@@ -34,17 +35,34 @@ export const connectMarimoEditorWorkspace = (
     bounds = undefined;
     onBounds(undefined);
     onDialog(false);
+    onNotification(undefined);
     const doc = frame.contentDocument;
     if (!doc) return;
     let resize: ResizeObserver | undefined;
     let restore = () => {};
     let container: HTMLElement | null = null;
+    let notifications: HTMLElement | null = null;
+    const measureNotifications = () => {
+      if (closed) return;
+      onNotification(notifications?.getBoundingClientRect());
+    };
+    const notificationResize = new ResizeObserver(measureNotifications);
+    doc.defaultView?.addEventListener("resize", measureNotifications);
     const discover = () => {
       onDialog(
         doc.querySelector(
           '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], dialog[open]',
         ) !== null,
       );
+      const viewport = doc.querySelector<HTMLElement>(
+        'ol:has(> li[data-swipe-direction][data-state="open"])',
+      );
+      if (viewport !== notifications) {
+        notificationResize.disconnect();
+        notifications = viewport;
+        if (viewport) notificationResize.observe(viewport);
+        measureNotifications();
+      }
       const app = doc.getElementById("app");
       const body = doc.getElementById("app-chrome-body");
       const developer = doc.getElementById("app-chrome-panel");
@@ -103,6 +121,8 @@ export const connectMarimoEditorWorkspace = (
     discover();
     disposeDocument = () => {
       observer.disconnect();
+      notificationResize.disconnect();
+      doc.defaultView?.removeEventListener("resize", measureNotifications);
       resize?.disconnect();
       restore();
     };
@@ -121,6 +141,7 @@ export const connectMarimoEditorWorkspace = (
       frame.removeEventListener("load", connect);
       disposeDocument();
       onDialog(false);
+      onNotification(undefined);
     },
   };
 };

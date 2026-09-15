@@ -69,7 +69,9 @@ export const useToolbar = ({
     sourceVisible: visibleSurfaces(layoutSnapshot.tree).includes("source"),
     notebookName: bootstrap.notebook.name,
     currentView: viewSnapshot.current,
-    notebookVisible: visibleSurfaces(layoutSnapshot.tree).includes("notebook"),
+    splitVisible:
+      visibleSurfaces(layoutSnapshot.tree).includes("notebook") &&
+      visibleSurfaces(layoutSnapshot.tree).length > 1,
     previewState,
     previewVisible: previewIsVisible(compact, layoutSnapshot.compact, compactSurfaces),
     runtime,

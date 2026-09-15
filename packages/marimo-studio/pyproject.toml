@@ -104,7 +104,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "tests/views/test_workspace_security.py" = ["TID251"]
 
 [build-system]
-requires = ["agent-plugins>=0.2", "uv_build==0.12.2"]
+requires = ["agent-plugins>=0.2", "uv_build>=0.12,<0.13"]
 build-backend = "agent_plugins.build.uv_build"
 
 [tool.agent-plugins]

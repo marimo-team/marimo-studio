@@ -1,4 +1,40 @@
+import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
 import { selectWorkspaceMode, expect, studioEntryUrl, test, waitForPreview } from "./fixture.ts";
+
+test("native error notifications remain clickable over Preview and release it on dismissal", async ({
+  page,
+}) => {
+  await page.goto(studioEntryUrl);
+  const preview = await waitForPreview(page);
+  const editor = page.frameLocator("iframe#marimo-studio-editor");
+  await executeCodeMode(
+    editor,
+    "notebook.py",
+    await studioEditorSessionId(page),
+    "from marimo._messaging.notification import AlertNotification\n" +
+      "from marimo._messaging.notification_utils import broadcast_notification\n" +
+      'broadcast_notification(AlertNotification(title="Notebook error", description="Check the notebook inputs.", variant="danger"))',
+  );
+  const notification = editor
+    .getByRole("region", { name: /Notifications/ })
+    .getByRole("listitem")
+    .filter({ hasText: "Notebook error" });
+  await notification.hover();
+  const notificationBounds = await notification.boundingBox();
+  const previewBounds = await page
+    .getByRole("region", { name: "Preview", exact: true })
+    .boundingBox();
+  expect(notificationBounds!.x + notificationBounds!.width).toBeGreaterThan(previewBounds!.x);
+  await page.getByRole("button", { name: "Toggle Source editor" }).click();
+  await page.setViewportSize({ width: 320, height: 720 });
+  await notification.hover();
+  await notification.locator("button[toast-close]").click();
+  await expect(notification).toBeHidden();
+  await expect(page.locator("#marimo-studio-root")).toHaveCSS("clip-path", "none");
+  await page.getByRole("combobox", { name: "Visible surface" }).selectOption("preview");
+  await preview.getByRole("button", { name: "Widget count: 7" }).click();
+  await expect(preview.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
+});
 
 test("opens Source in one click and retains the live preview through pane changes", async ({
   page,
@@ -106,11 +142,14 @@ test("keeps the native agent sidebar available beside the notebook, view, and so
   expect(controls!.y).toBeGreaterThanOrEqual(toolbarBounds!.y + toolbarBounds!.height);
   await page.getByRole("button", { name: "Toggle Source editor" }).click();
   await expect(page.getByRole("region", { name: "Source", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Show notebook beside view" }).click();
-  await expect(editor.locator("#app")).toBeHidden();
-  await expect(sidebar).toBeVisible();
-  await page.getByRole("button", { name: "Show notebook beside view" }).click();
+  await page.getByRole("button", { name: "Show view beside notebook" }).click();
   await expect(editor.locator("#app")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Preview", exact: true })).toBeHidden();
+  await expect(page.getByRole("region", { name: "Source", exact: true })).toBeHidden();
+  await expect(sidebar).toBeVisible();
+  await page.getByRole("button", { name: "Show view beside notebook" }).click();
+  await expect(editor.locator("#app")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Source", exact: true })).toBeVisible();
   expect(await retainedSidebar!.evaluate((element) => element.isConnected)).toBe(true);
   await editor.getByTestId("close-helper-pane").click();
   await expect.poll(async () => (await toolbar.boundingBox())!.x).toBeLessThan(100);
