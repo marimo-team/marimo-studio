@@ -448,7 +448,7 @@ it("refreshes when publication advances after receiver readiness", async () => {
   server.dispose();
 });
 
-it("reloads only the active preview for a newer editor binding", () => {
+it("reloads the active preview when a new binding reuses the editor consumer ID", () => {
   const editor = frame("loading");
   const serverFrame = frame("complete");
   const wasmFrame = frame("complete");
@@ -492,7 +492,7 @@ it("reloads only the active preview for a newer editor binding", () => {
   deck.editorSessionChanged({
     schema: 1,
     generation: 8,
-    sessionId: "s_reconnected",
+    sessionId: "s_initial",
     replaced: true,
   });
   expect(serverFrame.src).toBe(initialSources.server);

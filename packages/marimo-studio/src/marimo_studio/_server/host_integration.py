@@ -27,7 +27,11 @@ from marimo_studio._server.headers import (
     edit_document_send,
 )
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
-from marimo_studio._server.ports import ServerGateway, SessionState
+from marimo_studio._server.ports import (
+    EditorRuntimeBootstrap,
+    ServerGateway,
+    SessionState,
+)
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.routing import delegates_edit_root, is_studio_route
@@ -54,12 +58,14 @@ class HostEntryHandler:
         server: ServerGateway,
         sessions: SessionState,
         notebooks: NotebookScopeRegistry,
+        editor_runtime: EditorRuntimeBootstrap,
     ) -> None:
         self._route_policy = route_policy
         self._security_policy = security_policy
         self._server = server
         self._sessions = sessions
         self._notebooks = notebooks
+        self._editor_runtime = editor_runtime
         self._handoffs = HostSessionHandoffRegistry()
 
     def close(self) -> None:
@@ -114,7 +120,7 @@ class HostEntryHandler:
         request = Request(scope, receive)
         location = await self._server.location(request)
         if location is None:
-            await app(scope, receive, send)
+            await self._serve_native_document(app, scope, receive, send)
             return
         context = self._server.context(location)
         session_id = request.query_params.get("session_id")
@@ -163,11 +169,27 @@ class HostEntryHandler:
                 transition="reset",
             )
             return
-        await app(
+        await self._serve_native_document(app, scope, receive, send)
+
+    async def _serve_native_document(
+        self,
+        app: ASGIApp,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        protected_send = edit_document_send(send, self._security_policy)
+        if not await self._editor_runtime.serve(
+            app,
             scope,
             receive,
-            edit_document_send(send, self._security_policy),
-        )
+            protected_send,
+            resource_path="/",
+            runtime_url=str(Request(scope).url),
+            eager_runtime=False,
+            bound_editor=False,
+        ):
+            await app(scope, receive, protected_send)
 
     async def _authorize_handoff(
         self,

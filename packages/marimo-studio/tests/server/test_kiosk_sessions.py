@@ -260,6 +260,9 @@ def test_current_admission_selects_the_reconnect_snapshot_contract(
         def disconnect_main_consumer(self) -> None:
             self.disconnects += 1
 
+        def connect_consumer(self, _handler: object, *, main: bool) -> None:
+            assert main
+
     manager = _Manager()
     runtime_session_id = "s_replay"
     session = Session()
@@ -278,7 +281,11 @@ def test_current_admission_selects_the_reconnect_snapshot_contract(
         handler=cast(
             Any,
             SimpleNamespace(
-                _reconnect_session=lambda _session, replay: replays.append(replay)
+                _reconnect_session=lambda _session, replay: replays.append(replay),
+                cancel_close_handle=None,
+                params=SimpleNamespace(kiosk=False),
+                _write_kernel_ready_from_session_view=lambda _session, _kiosk: None,
+                _replay_previous_session=lambda _session: replays.append(True),
             ),
         ),
         params=cast(

@@ -118,6 +118,33 @@ def test_vanilla_projection_diagnostics_locate_authored_sources(
         assert diagnostic.source.line == 5
 
 
+@pytest.mark.parametrize(
+    "markup",
+    [
+        '<h1 mo-value="a"/>',
+        '<marimo-cell name="mycell"/>',
+        '<marimo-output value="a"/>',
+        "<div/>",
+    ],
+)
+def test_vanilla_rejects_html_that_would_swallow_following_projections(
+    tmp_path: Path, markup: str
+) -> None:
+    project = _project(tmp_path)
+    (project.root / "index.html").write_text(
+        "<!doctype html><html><head><title>Projection</title></head><body>"
+        f'<main id="app-shell">\n{markup}\n'
+        '<marimo-cell name="mycell"></marimo-cell>'
+        '<marimo-output value="a"></marimo-output></main></body></html>',
+        encoding="utf-8",
+    )
+    diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
+    assert diagnostic.code == "entry-document-invalid"
+    assert "cannot use self-closing syntax in HTML" in diagnostic.message
+    assert diagnostic.source is not None
+    assert diagnostic.source.line == 2
+
+
 def test_vanilla_instruments_exact_parser_sites(tmp_path: Path) -> None:
     project = _project(tmp_path)
     source = project.root / "index.html"
@@ -139,7 +166,7 @@ def test_vanilla_instruments_exact_parser_sites(tmp_path: Path) -> None:
     -->
     <main id="app-shell" aria-label="😀 > plain">
       <marimo-cell title="1 > 0" name=" controls "></marimo-cell>
-      <marimo-output value=" report.total " data-label="x > y" />
+      <marimo-output value=" report.total " data-label="x > y"></marimo-output>
       <span data-label=">" mo-value=" report.total "></span>
       <span mo-value="report.total"></span>
     </main>
@@ -176,6 +203,23 @@ def test_vanilla_instruments_exact_parser_sites(tmp_path: Path) -> None:
     assert [attributes["data-marimo-studio-site"] for _, attributes in parser.tags] == [
         site.id for site in inspection.mounts
     ]
+
+
+def test_vanilla_rejects_nested_projection_hosts(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    source = project.root / "index.html"
+    source.write_text(
+        source.read_text().replace(
+            '<section class="view-results"',
+            '<section mo-value="a" class="view-results"',
+        ),
+        encoding="utf-8",
+    )
+    diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
+    assert diagnostic.code == "entry-document-invalid"
+    assert (
+        "Projection hosts cannot contain other projection hosts" in diagnostic.message
+    )
 
 
 def test_vanilla_build_preserves_crlf_line_endings(tmp_path: Path) -> None:

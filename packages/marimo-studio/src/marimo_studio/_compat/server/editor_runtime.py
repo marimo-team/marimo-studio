@@ -9,8 +9,11 @@ from importlib.resources import files
 from typing import cast
 from urllib.parse import urlsplit, urlunsplit
 
+from marimo._server.api.deps import AppState
+from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from marimo_studio._compat.server.editor_session_lifetimes import _canonical_session_id
 from marimo_studio._delivery.urls import (
     PRIVATE_QUERY_KEYS,
     QUERY_OPERATION_QUERY_PARAM,
@@ -23,6 +26,12 @@ _CONFIG_ASSET = re.compile(r"^/assets/config-[A-Za-z0-9_-]+\.js$")
 _CELLS_ASSET = re.compile(r"^/assets/cells-[A-Za-z0-9_-]+\.js$")
 _INDEX_ASSET = re.compile(r"^/assets/index-[A-Za-z0-9_-]+\.js$")
 _PANELS_ASSET = re.compile(r"^/assets/panels-[A-Za-z0-9_-]+\.js$")
+# The pinned hash width distinguishes session from the session-panel bundle.
+_SESSION_ASSET = re.compile(r"^/assets/session-[A-Za-z0-9_-]{8}\.js$")
+_REMOVE_SESSION_QUERY = b"e.has(n.kiosk)||e.delete(n.sessionId)"
+_RETAIN_EDITOR_SESSION_QUERY = (
+    b'e.has(n.kiosk)||e.has("marimo_studio_editor")||e.delete(n.sessionId)'
+)
 _COPILOT_EXTENSION = b"ad.of(Bt())"
 _GATED_COPILOT_EXTENSION = b"e.copilot===`github`?ad.of(Bt()):[]"
 _COPILOT_LSP_URL = b"this.formatWsURL(`/lsp/${e}`)"
@@ -184,7 +193,15 @@ class PrivateEditorRuntimeBootstrap:
         entrypoint_url: str | None = None,
         bound_editor: bool = True,
     ) -> bool:
-        if scope["type"] != "http" or scope.get("method") != "GET":
+        if scope["type"] != "http":
+            return False
+        if (
+            scope.get("method") == "POST"
+            and resource_path == "/api/kernel/restart_session"
+        ):
+            await app(_restart_scope(scope), receive, send)
+            return True
+        if scope.get("method") != "GET":
             return False
         document = resource_path.rstrip("/") == ""
         cell_editor = _CELL_EDITOR_ASSET.fullmatch(resource_path) is not None
@@ -192,6 +209,7 @@ class PrivateEditorRuntimeBootstrap:
         cells_asset = _CELLS_ASSET.fullmatch(resource_path) is not None
         index_asset = _INDEX_ASSET.fullmatch(resource_path) is not None
         panels_asset = _PANELS_ASSET.fullmatch(resource_path) is not None
+        session_asset = _SESSION_ASSET.fullmatch(resource_path) is not None
         if not any(
             (
                 document,
@@ -200,6 +218,7 @@ class PrivateEditorRuntimeBootstrap:
                 cells_asset,
                 index_asset,
                 panels_asset,
+                session_asset,
             )
         ):
             return False
@@ -254,18 +273,40 @@ class PrivateEditorRuntimeBootstrap:
                     if bound_editor
                     else original
                 )
-            elif index_asset and bound_editor:
+            elif index_asset:
                 if not _is_javascript(start):
                     raise ProtocolError(
                         "Marimo did not return the editor network asset"
                     )
-                rewritten = _await_document_transactions_before_network_run(original)
+                # Restart closes the connection before sending its server request.
+                # The lazy runtime must not reject that request as disconnected.
+                rewritten = _replace_pinned_asset(
+                    original,
+                    b"sendRestart:`throwError`",
+                    b"sendRestart:`serverOnly`",
+                    "editor restart admission",
+                )
+                if bound_editor:
+                    rewritten = _await_document_transactions_before_network_run(
+                        rewritten
+                    )
             elif panels_asset and bound_editor:
                 if not _is_javascript(start):
                     raise ProtocolError(
                         "Marimo did not return the editor query handler asset"
                     )
                 rewritten = _protect_editor_query_parameters(original)
+            elif session_asset and bound_editor:
+                if not _is_javascript(start):
+                    raise ProtocolError(
+                        "Marimo did not return the editor session asset"
+                    )
+                rewritten = _replace_pinned_asset(
+                    original,
+                    _REMOVE_SESSION_QUERY,
+                    _RETAIN_EDITOR_SESSION_QUERY,
+                    "editor session identity",
+                )
             await send(
                 _response_headers(
                     start,
@@ -275,6 +316,7 @@ class PrivateEditorRuntimeBootstrap:
                         or cells_asset
                         or index_asset
                         or panels_asset
+                        or session_asset
                     ),
                 )
             )
@@ -387,6 +429,31 @@ def _mount_value(
     except json.JSONDecodeError as error:
         raise ProtocolError(f"Marimo's editor {key} field is invalid") from error
     return start, end, value
+
+
+def _restart_scope(scope: Scope) -> Scope:
+    state = AppState(Request(scope))
+    session = state.get_current_session()
+    if session is None:
+        return scope
+    canonical = _canonical_session_id(state.session_manager, session)
+    if canonical is None:
+        return scope
+    # Native reads resolve consumer IDs, but restart removes the repository key.
+    # Keep this translation local to restart so other requests retain their
+    # consumer identity and permissions.
+    return {
+        **scope,
+        "headers": [
+            (
+                key,
+                str(canonical).encode()
+                if key.lower() == b"marimo-session-id"
+                else value,
+            )
+            for key, value in scope.get("headers", [])
+        ],
+    }
 
 
 def _gate_copilot_extension(document: bytes) -> bytes:

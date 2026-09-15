@@ -372,13 +372,9 @@ export class PreviewDeck {
     if (binding.generation <= this.editorBindingGeneration) {
       return;
     }
-    const previousSessionId = this.editorSessionId;
     const hadEarlierBinding = this.editorBindingGeneration > 0 || binding.replaced;
     this.editorBindingGeneration = binding.generation;
     this.editorSessionId = binding.sessionId;
-    if (hadEarlierBinding && previousSessionId === binding.sessionId) {
-      return;
-    }
     const reload = hadEarlierBinding;
     const active = this.frames.find(this.runtime, this.view);
     for (const slot of this.frames.slots) {

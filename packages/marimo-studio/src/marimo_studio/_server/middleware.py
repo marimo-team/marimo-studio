@@ -117,6 +117,7 @@ class PresentationMiddleware:
             self._adapters.server,
             self._adapters.session_state,
             self._notebooks,
+            self._adapters.editor_runtime,
         )
         self._capabilities = PresentationCapabilityHandler(
             app,

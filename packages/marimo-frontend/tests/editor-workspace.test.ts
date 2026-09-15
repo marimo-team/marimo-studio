@@ -4,7 +4,7 @@ import { expect, test, vi } from "vite-plus/test";
 import { connectMarimoEditorWorkspace } from "../src/editor-workspace.ts";
 import { connectNotebookEntry } from "../src/notebook-entry.ts";
 
-test("keeps native sidebar ownership while the notebook is resized, hidden, and restored", () => {
+test("keeps native sidebar ownership while the notebook is resized, hidden, and restored", async () => {
   let resized = () => {};
   const disconnect = vi.fn();
   vi.stubGlobal(
@@ -28,7 +28,8 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   container.getBoundingClientRect = () => new DOMRect(300, 0, 900, 800);
   developer.getBoundingClientRect = () => new DOMRect(300, 800, 900, 0);
   const listener = vi.fn();
-  const workspace = connectMarimoEditorWorkspace(frame, listener);
+  const dialogState = vi.fn();
+  const workspace = connectMarimoEditorWorkspace(frame, listener, dialogState);
   workspace.placeNotebook({ left: 300, top: 34, width: 450, height: 766 });
   expect(app.style.width).toBe("450px");
   expect(listener).toHaveBeenLastCalledWith({ left: 300, top: 0, width: 900, height: 800 });
@@ -41,7 +42,17 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   workspace.placeNotebook({ left: 400, top: 34, width: 400, height: 766 });
   expect(app.inert).toBe(false);
   expect(app.querySelector("input")!.value).toBe("unsaved draft");
+  const dialog = doc.createElement("div");
+  dialog.setAttribute("role", "alertdialog");
+  dialog.dataset.state = "open";
+  doc.body.append(dialog);
+  await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(true));
+  dialog.dataset.state = "closed";
+  await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(false));
+  dialog.dataset.state = "open";
+  await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(true));
   workspace.close();
+  expect(dialogState).toHaveBeenLastCalledWith(false);
   workspace.placeNotebook({ left: 0, top: 0, width: 900, height: 800 });
   resized();
   workspace.close();

@@ -1,5 +1,5 @@
 import { projectionDiagnosticSchema } from "@marimo-studio/protocol/runtime-config";
-import { rm } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { workspaceDirectory } from "../scripts/paths.mjs";
@@ -8,6 +8,7 @@ import {
   readBrowserValidation,
   readRequestedObservation,
   readViewRevision,
+  runCellShortcut,
   saveShortcut,
   selectAllShortcut,
   studioClientId,
@@ -378,7 +379,10 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   replacedWorkspaceStreams.recovered();
 });
 
-test("shows progress while an edited notebook cell runs", async ({ browserDiagnostics, page }) => {
+test("shows progress while an edited notebook cell runs", async ({
+  browserDiagnostics,
+  page,
+}, testInfo) => {
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const source = await readWorkspaceFile(dashboardHtmlPath);
@@ -397,17 +401,25 @@ test("shows progress while an edited notebook cell runs", async ({ browserDiagno
   );
   const slowRefresh = await captureProjectionRefresh(page, browserDiagnostics);
 
-  await selectWorkspaceMode(page, "Notebook");
   const cell = editorFrame(page).locator('[data-cell-name="slow_metric"]');
   const code = cell.getByRole("textbox");
-  await code.fill("import time\ntime.sleep(1)\nslow_metric = 8\nslow_metric");
-  await cell.hover();
-  await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
-  await expect(cell.locator("..")).toHaveAttribute("data-status", /queued|running/);
-  await selectWorkspaceMode(page, "Develop");
   const runtimeTrigger = page.getByRole("status", { name: "View status" });
-  await expect(runtimeTrigger).toHaveAttribute("data-state", "loading");
-  await expect(runtimeTrigger).toContainText("Updating preview");
+  const gate = testInfo.outputPath("pending-computation");
+  await writeFile(gate, "pending");
+  try {
+    await code.fill(`from pathlib import Path as _Path
+import time as _time
+while _Path(${JSON.stringify(gate)}).exists():
+    _time.sleep(0.01)
+slow_metric = 8
+slow_metric`);
+    await code.press(runCellShortcut);
+    await expect(cell.locator("..")).toHaveAttribute("data-status", /queued|running/);
+    await expect(runtimeTrigger).toHaveAttribute("data-state", "loading");
+    await expect(runtimeTrigger).toContainText("Updating preview");
+  } finally {
+    await rm(gate, { force: true });
+  }
   await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
   await waitForPreview(page);
   await expect(preview.locator("#slow-value")).toHaveText("8");

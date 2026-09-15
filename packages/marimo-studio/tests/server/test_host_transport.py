@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import AsyncMock
 from urllib.parse import urlencode
 
 import pytest
@@ -13,6 +14,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from marimo_studio._server.host_integration import HostEntryHandler
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.ports import (
+    EditorRuntimeBootstrap,
     EditorSessionIdentity,
     ServerGateway,
     SessionOwner,
@@ -87,6 +89,10 @@ class _TransportHarness:
             cast(ServerGateway, _Gateway(self.context)),
             cast(SessionState, self.sessions),
             self.notebooks,
+            cast(
+                EditorRuntimeBootstrap,
+                SimpleNamespace(serve=AsyncMock(return_value=False)),
+            ),
         )
         self.sent: list[Message] = []
 

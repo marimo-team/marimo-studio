@@ -796,12 +796,19 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
         for path in assets.glob("panels-*.js")
         if b"var jn={append:" in path.read_bytes()
     )
+    session = next(
+        path
+        for path in assets.glob("session-*.js")
+        if b"Connecting to existing session" in path.read_bytes()
+    )
+    session_panel = next(assets.glob("session-panel-*.js"))
     urls = [
         f"/_marimo-studio/editor/assets/{path.name}"
-        for path in (cell_editor, runtime_config, cells, index, panels)
+        for path in (cell_editor, runtime_config, cells, index, panels, session)
     ]
 
     with TestClient(app) as client:
+        panel = client.get(f"/_marimo-studio/editor/assets/{session_panel.name}")
         request_headers = {
             "If-None-Match": "cached-native-asset",
             "If-Range": "cached-native-asset",
@@ -831,9 +838,15 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
             for url in urls
         ]
 
+    assert panel.status_code == 200
+    assert panel.content == session_panel.read_bytes()
     assert _DOCUMENT_RUNTIME not in native[2].content
-    assert native[3].content == index.read_bytes()
+    assert native[3].content == index.read_bytes().replace(
+        b"sendRestart:`throwError`", b"sendRestart:`serverOnly`"
+    )
     assert native[4].content == panels.read_bytes()
+    assert native[5].content == session.read_bytes()
+    assert b'e.has("marimo_studio_editor")' in before[5].content
     assert native[0].content.count(b"e.copilot===`github`?ad.of(Bt()):[]") == 1
     for response in (*before, *after, *native):
         assert response.status_code == 200

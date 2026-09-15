@@ -35,17 +35,19 @@ def _live_capture() -> session_state_module._LiveCellCapture:
     )
 
 
-def test_session_owner_uses_the_initialization_identity() -> None:
-    class UnreadablePath:
-        def __fspath__(self) -> str:
-            raise AssertionError("established sessions must not resolve their path")
-
+def test_session_owner_uses_the_initialization_identity_until_saved() -> None:
     session = SimpleNamespace(
         initialization_id="notebook.py",
-        app_file_manager=SimpleNamespace(path=UnreadablePath()),
+        app_file_manager=SimpleNamespace(path=None),
     )
 
     assert session_matches_notebook(
+        cast(Any, session),
+        file_key="notebook.py",
+        notebook=Path("/workspace/notebook.py"),
+    )
+    session.app_file_manager.path = "/workspace/renamed.py"
+    assert not session_matches_notebook(
         cast(Any, session),
         file_key="notebook.py",
         notebook=Path("/workspace/notebook.py"),

@@ -278,7 +278,7 @@ def test_native_editor_health_keeps_marimo_session_routing(notebook_path: Path) 
     assert response.status_code == 200
 
 
-def test_editor_reload_restores_its_server_assigned_session(
+def test_editor_reload_requires_its_signed_session_identity(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
@@ -291,15 +291,13 @@ def test_editor_reload_restores_its_server_assigned_session(
         opened = client.get(editor_url)
         parts = urlsplit(editor_url)
         query = parse_qs(parts.query)
-        session_id = query.pop("session_id")[0]
+        query.pop("session_id")
         reload_query = urlencode({key: values[0] for key, values in query.items()})
         reload_url = f"{parts.path}?{reload_query}"
-        restored = client.get(reload_url, follow_redirects=False)
-        reloaded = client.get(restored.headers["location"])
+        missing_session = client.get(reload_url, follow_redirects=False)
+        reloaded = client.get(editor_url)
 
-    restored_query = parse_qs(urlsplit(restored.headers["location"]).query)
     assert opened.status_code == 200
-    assert restored.status_code == 307
-    assert restored.headers["cache-control"] == "no-store"
-    assert restored_query["session_id"] == [session_id]
+    assert missing_session.status_code == 403
+    assert missing_session.json()["error"] == "invalid-editor-binding"
     assert reloaded.status_code == 200

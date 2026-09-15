@@ -19,8 +19,11 @@ from starlette.websockets import WebSocket
 from marimo_studio._browser_client.ports import CodeModeBridge
 from marimo_studio._delivery.urls import (
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+    PRIVATE_QUERY_KEYS,
     SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
+    public_url,
+    with_query,
 )
 from marimo_studio._server.auth import has_edit_access
 from marimo_studio._server.headers import NO_STORE, edit_document_send
@@ -55,6 +58,7 @@ from marimo_studio.errors import MarimoStudioError
 
 _CODE_MODE_ROUTES = {"/api/ai/chat", "/api/kernel/execute"}
 _SAVE_ROUTE = "/api/kernel/save"
+_RESTART_ROUTE = "/api/kernel/restart_session"
 _DOCUMENT_TRANSACTION_MAX_BYTES = 64 * 1024 * 1024
 EditorBindingResult = Literal["absent", "bound", "invalid"]
 
@@ -63,7 +67,6 @@ EditorBindingResult = Literal["absent", "bound", "invalid"]
 class EditorBinding:
     status: EditorBindingResult
     admission: NativeSessionAdmission | None = None
-    session_id: str | None = None
 
 
 async def delegate_editor_request(
@@ -116,6 +119,31 @@ async def delegate_editor_request(
         context: ServerContext | None = None
         native_transport = editor_target in {"/ws", "/ws_sync", "/sse"}
         editor_root = editor_target.rstrip("/") == ""
+        if (
+            isinstance(connection, Request)
+            and connection.method in {"GET", "HEAD"}
+            and editor_root
+            and location is None
+            and (
+                "file" not in connection.query_params
+                or (_query_value(connection, "file") or "").startswith("__new__")
+            )
+        ):
+            # Native home and new-notebook actions are relative to the embedded
+            # editor. Send their new document through the public entry point.
+            await RedirectResponse(
+                with_query(
+                    public_url(server.base_url(scope) or "", "/"),
+                    [
+                        (key, value)
+                        for key, value in connection.query_params.multi_items()
+                        if key == "file" or key not in PRIVATE_QUERY_KEYS
+                    ],
+                ),
+                status_code=307,
+                headers=NO_STORE,
+            )(scope, receive, send)
+            return True
         if location is not None:
             context = server.context(location)
             lifetime_owner = attachment.claim_editor_lifetime(context)
@@ -175,22 +203,6 @@ async def delegate_editor_request(
                         headers=NO_STORE,
                     )(scope, receive, send)
                 return True
-            if (
-                isinstance(connection, Request)
-                and editor_target.rstrip("/") == ""
-                and "session_id" not in connection.query_params
-                and binding.session_id is not None
-            ):
-                await RedirectResponse(
-                    str(
-                        connection.url.include_query_params(
-                            session_id=binding.session_id
-                        )
-                    ),
-                    status_code=307,
-                    headers=NO_STORE,
-                )(scope, receive, send)
-                return True
             if binding.admission is not None:
                 delegated_scope = {
                     **delegated_scope,
@@ -238,7 +250,10 @@ async def delegate_editor_request(
             not served
             and scope["type"] == "http"
             and isinstance(connection, Request)
-            and connection.method == "GET"
+            and (
+                connection.method == "GET"
+                or (connection.method == "POST" and editor_target == _RESTART_ROUTE)
+            )
         ):
             served = await editor_runtime.serve(
                 app,
@@ -252,6 +267,23 @@ async def delegate_editor_request(
         if not served:
             await app(delegated_scope, receive, delegated_send)
         return True
+
+    if (
+        scope["type"] == "http"
+        and scope.get("method") == "POST"
+        and mode == "edit"
+        and relative.rstrip("/") == _RESTART_ROUTE
+    ):
+        return await editor_runtime.serve(
+            app,
+            scope,
+            receive,
+            send,
+            resource_path=_RESTART_ROUTE,
+            runtime_url=str(Request(scope).url),
+            eager_runtime=False,
+            bound_editor=False,
+        )
 
     if (
         scope["type"] == "http"
@@ -337,14 +369,10 @@ async def _bind_editor_session(
         or re.fullmatch(r"[A-Za-z0-9_-]{16,128}", client_id) is None
     ):
         return EditorBinding("absent")
-    if session_id is None and "session_id" in connection.query_params:
+    if session_id is None:
         return EditorBinding("invalid")
     notebook_scope = notebooks.get(context.notebook)
     retained = await notebook_scope.clients.binding_for_client(client_id)
-    if session_id is None:
-        if retained is None:
-            return EditorBinding("absent")
-        session_id = retained.session_id
     if not sessions.is_session_id(session_id):
         return EditorBinding("invalid")
     if host_session_active is not None and host_session_active(context, session_id):
@@ -369,7 +397,7 @@ async def _bind_editor_session(
         ):
             return EditorBinding("invalid")
     if not bind_session:
-        return EditorBinding("bound", session_id=session_id)
+        return EditorBinding("bound")
     binding = await notebook_scope.clients.bind_session(
         session_id,
         client_id,
@@ -419,7 +447,7 @@ async def _bind_editor_session(
         lifetime_owner=lifetime_owner,
         replay_on_reconnect=True,
     )
-    return EditorBinding("bound", admission, session_id)
+    return EditorBinding("bound", admission)
 
 
 def _query_value(connection: HTTPConnection, key: str) -> str | None:

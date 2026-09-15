@@ -60,6 +60,8 @@ def test_explicit_host_delegates_edit_root_before_allocating_a_notebook_scope(
 
     assert preflight.status_code == 200
     assert root.status_code == 200
+    for texture in ("gradient", "noise"):
+        assert f'rel="preload" href="./assets/{texture}-' not in root.text
 
 
 def test_explicit_host_enters_a_ready_workspace_through_studio(

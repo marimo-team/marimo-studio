@@ -197,6 +197,11 @@ _SYMBOLS = {
         ),
     ),
     "session-replay": (
+        _source_contract(
+            "marimo._server.api.endpoints.ws.session_handler",
+            "SessionHandler._reconnect_session",
+            "4b17dd1f3137dad2ddf62d20ba819150a2210b8b613cc3d09c462adb0e6f7546",
+        ),
         SymbolContract(
             "marimo._server.api.endpoints.ws.ws_session_connector",
             "SessionConnector._reconnect_session",

@@ -398,9 +398,10 @@ then signs the pair for the notebook, base URL, edit mode, and server instance.
 consumer. Marimo resolves these consumers to the notebook's shared Python
 session. Its native connection policy selects the editor and interactors.
 
-An editor-root reload may omit `session_id`. The server resolves the consumer
-from the retained client binding and returns a no-store redirect. The registry
-gives an accepted pair a `SessionBindingLease`. Native connector admission
+The editor retains `session_id` alongside its signed capability through reloads
+and kernel restarts. The server requires that complete identity even after the
+previous native session has closed. The registry gives an accepted pair a
+`SessionBindingLease`. Native connector admission
 revalidates that lease before attachment. Reconnecting an interactor preserves
 the current editor. A rejected attachment releases its consumer, and a rejected
 new session releases its kernel.
@@ -410,6 +411,15 @@ native `/` and `/studio/`. Signed handoffs authorize a consumer transition.
 Fresh documents use fresh consumer IDs, and Marimo's file lookup retains the
 shared kernel. First-save notifications target the saving consumer. Native
 session-close events retire bindings even after a transport disconnect.
+Deliberate document handoffs replay native state without a recovery banner.
+A new untitled consumer gets its own kernel, including when a launcher reuses
+a temporary file key that previously belonged to a saved notebook.
+Restart resolves the consumer to its canonical native session before closing
+the kernel. A new binding generation refreshes previews even when the consumer
+ID stays the same.
+
+The native workspace adapter reports open dialogs. Studio raises the editor
+above its panes and makes those panes inert until the dialog closes.
 
 ## View switching
 

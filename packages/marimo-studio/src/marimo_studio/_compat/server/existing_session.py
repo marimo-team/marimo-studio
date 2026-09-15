@@ -33,6 +33,7 @@ from marimo_studio._compat.server.editor_session_lifetimes import (
     session_is_owned,
 )
 from marimo_studio._compat.server.gateway import context_handle
+from marimo_studio._compat.server.session_replay import replay_editor_session
 from marimo_studio._compat.server.session_state import (
     current_session,
     session_matches_notebook,
@@ -172,6 +173,7 @@ def _router(manager: Any, clock: Callable[[], float]) -> _SessionRouter:
 def _session_connect_replacement(native_connect: Any) -> Any:
     from marimo._server.api.endpoints.ws.ws_session_connector import ConnectionType
     from marimo._server.codes import WebSocketCloseReason, WebSocketCodes
+    from marimo._session.model import SessionMode
 
     @wraps(native_connect)
     def connect_current_server(connector: SessionConnector) -> Any:
@@ -209,8 +211,19 @@ def _session_connect_replacement(native_connect: Any) -> Any:
                         connected = (session, ConnectionType.KIOSK)
                 else:
                     session.disconnect_main_consumer()
-                    connector.handler._reconnect_session(session, replay=True)
+                    replay_editor_session(connector.handler, session)
                     connected = (session, ConnectionType.RECONNECT)
+            elif (
+                admission is None
+                and connector.manager.mode is SessionMode.EDIT
+                and not connector.params.kiosk
+                and connector.params.file_key.startswith("__new__")
+                and connector.manager.get_session(connector.params.session_id) is None
+            ):
+                # A launcher link can retain its original untitled file key after
+                # a save. Only the consumer session may resume an untitled kernel;
+                # the launcher's reusable key must never select another notebook.
+                connected = connector._create_new_session()
             else:
                 connected = native_connect(connector)
         except BaseException:

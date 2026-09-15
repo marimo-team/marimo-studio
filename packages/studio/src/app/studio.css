@@ -59,6 +59,10 @@ body,
   z-index: 1;
 }
 
+#marimo-studio-editor-host:has(iframe[data-native-dialog]) {
+  z-index: 3;
+}
+
 #marimo-studio-editor-host iframe,
 .studio-editor-frame-mount,
 .studio-editor-frame-mount iframe {

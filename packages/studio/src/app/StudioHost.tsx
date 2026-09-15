@@ -57,9 +57,6 @@ const EDITOR_AUTHORITY_QUERY_KEYS = new Set([
   "session_id",
   EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
 ]);
-const LIVE_EDITOR_AUTHORITY_QUERY_KEYS = new Set(
-  [...EDITOR_AUTHORITY_QUERY_KEYS].filter((key) => key !== "session_id"),
-);
 const EDITOR_QUERY_ATTEMPTS = 3;
 
 const normalizedParameters = (
@@ -82,48 +79,27 @@ interface EditorSnapshot {
   readonly publicState: string;
 }
 
-interface TrustedEditorAuthority {
-  readonly full: string;
-  readonly live: string;
-  readonly session: string;
-}
-
-const editorAuthority = (source: string, keys: ReadonlySet<string>): string => {
+const editorAuthority = (source: string): string => {
   const url = new URL(source, globalThis.location.href);
-  return `${url.origin}${url.pathname}\0${normalizedParameters(url.search, (key) => keys.has(key))}`;
+  return `${url.origin}${url.pathname}\0${normalizedParameters(url.search, (key) => EDITOR_AUTHORITY_QUERY_KEYS.has(key))}`;
 };
 
-const trustedEditorAuthority = (
-  configuredSource: string,
-  retainedSource: string,
-): TrustedEditorAuthority => {
-  const full = editorAuthority(configuredSource, EDITOR_AUTHORITY_QUERY_KEYS);
-  if (editorAuthority(retainedSource, EDITOR_AUTHORITY_QUERY_KEYS) !== full) {
+const trustedEditorAuthority = (configuredSource: string, retainedSource: string): string => {
+  const full = editorAuthority(configuredSource);
+  if (editorAuthority(retainedSource) !== full) {
     throw new Error("The configured Marimo editor does not match the retained editor.");
   }
-  const configured = new URL(configuredSource, globalThis.location.href);
-  return {
-    full,
-    live: editorAuthority(configured.href, LIVE_EDITOR_AUTHORITY_QUERY_KEYS),
-    session: normalizedParameters(configured.search, (key) => key === "session_id"),
-  };
+  return full;
 };
 
-const retainedEditorSnapshot = (
-  frame: HTMLIFrameElement,
-  trusted: TrustedEditorAuthority,
-): EditorSnapshot => {
+const retainedEditorSnapshot = (frame: HTMLIFrameElement, trusted: string): EditorSnapshot => {
   const editor = frame.contentWindow;
   const document = frame.contentDocument;
   if (!editor || !document) {
     throw new Error("The Marimo editor is unavailable.");
   }
   const url = new URL(editor.location.href);
-  if (editorAuthority(url.href, LIVE_EDITOR_AUTHORITY_QUERY_KEYS) !== trusted.live) {
-    throw new Error("The active Marimo editor changed while Studio opened.");
-  }
-  const liveSession = normalizedParameters(url.search, (key) => key === "session_id");
-  if (liveSession && liveSession !== trusted.session) {
+  if (editorAuthority(url.href) !== trusted) {
     throw new Error("The active Marimo editor changed while Studio opened.");
   }
   const publicQuery = publicNotebookQuery(url.search);
@@ -135,13 +111,13 @@ const retainedEditorSnapshot = (
 };
 
 const validateConfiguredEditor = (
-  trusted: TrustedEditorAuthority,
+  trusted: string,
   active: EditorSnapshot,
   source: string,
 ): void => {
   const configured = new URL(source, globalThis.location.href);
   if (
-    editorAuthority(configured.href, EDITOR_AUTHORITY_QUERY_KEYS) !== trusted.full ||
+    editorAuthority(configured.href) !== trusted ||
     normalizedParameters(publicNotebookQuery(configured.search)) !== active.publicState
   ) {
     throw new Error("The configured Marimo editor does not match the active editor.");

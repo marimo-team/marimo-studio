@@ -18,6 +18,16 @@ selected notebook runtime, and mounts the result in the host element.
 The Python runtime is configured as `server`. The Browser runtime is
 configured as `wasm`. Both use the same authored projection hosts.
 
+In HTML, close each projection host explicitly and place hosts beside each
+other. Rendering a host replaces its contents. The build rejects nested hosts
+and self-closing HTML elements such as `<h1 mo-value="total"/>`.
+
+```html
+<h1 mo-value="total"></h1>
+<marimo-cell name="summary"></marimo-cell>
+<marimo-output value="chart"></marimo-output>
+```
+
 ## Complete cells
 
 ```html
