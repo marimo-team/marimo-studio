@@ -134,10 +134,10 @@ def session_matches_notebook(
     """Return whether a Marimo session belongs to the selected notebook."""
     if session is None:
         return False
-    if str(session.initialization_id) == file_key:
-        return True
     source = session.app_file_manager.path
-    return source is not None and Path(os.path.abspath(source)) == notebook
+    if source is not None:
+        return Path(os.path.abspath(source)) == notebook.absolute()
+    return str(session.initialization_id) == file_key
 
 
 def _has_notebook_session(context: ServerContext) -> bool:

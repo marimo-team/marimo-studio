@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 from urllib.parse import parse_qs, quote, urlsplit
 
+import pytest
 from marimo._server.workspace._directory import DirectoryWorkspace
 from starlette.applications import Starlette
 from starlette.routing import Mount
@@ -419,3 +420,31 @@ def test_directory_auth_precedes_notebook_configuration(tmp_path: Path) -> None:
         for response in json_responses
     )
     assert lookalike.status_code == 404
+
+
+@pytest.mark.parametrize("file", [None, "__new__s_launch"])
+def test_editor_launcher_navigation_uses_the_public_mount(
+    notebook_path: Path, file: str | None
+) -> None:
+    child = _marimo_app(notebook_path, path="/base", programmatic=True)
+    _edit_mode(child)
+    _session_manager(child).workspace = DirectoryWorkspace(
+        str(notebook_path.parent), include_markdown=False
+    )
+    parent = Starlette(routes=[Mount("/parent", app=child)])
+    query = {"region": "eu", "marimo_studio_client": "old-client"}
+    if file is not None:
+        query["file"] = file
+    with TestClient(parent) as client:
+        response = client.get(
+            "/parent/base/_marimo-studio/editor/",
+            params=query,
+            follow_redirects=False,
+        )
+    target = urlsplit(response.headers["location"])
+    assert response.status_code == 307
+    assert target.path == "/parent/base/"
+    assert parse_qs(target.query) == {
+        "region": ["eu"],
+        **({"file": [file]} if file is not None else {}),
+    }

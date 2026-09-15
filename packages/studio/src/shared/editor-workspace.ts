@@ -15,6 +15,7 @@ export interface EditorWorkspace {
 export type EditorWorkspaceConnector = (
   frame: HTMLIFrameElement,
   onBounds: (bounds: EditorRectangle | undefined) => void,
+  onDialog: (open: boolean) => void,
 ) => EditorWorkspace;
 
 export const useEditorWorkspace = (
@@ -25,9 +26,18 @@ export const useEditorWorkspace = (
   const [workspace, setWorkspace] = useState<EditorWorkspace>();
   useEffect(() => {
     if (!connect) return;
-    const connection = connect(frame, setBounds);
+    const root = frame.ownerDocument.getElementById("marimo-studio-root");
+    const wasInert = root?.inert ?? false;
+    const connection = connect(frame, setBounds, (open) => {
+      frame.toggleAttribute("data-native-dialog", open);
+      if (root) root.inert = open || wasInert;
+    });
     setWorkspace(connection);
-    return () => connection.close();
+    return () => {
+      connection.close();
+      frame.removeAttribute("data-native-dialog");
+      if (root) root.inert = wasInert;
+    };
   }, [connect, frame]);
   return { bounds, workspace };
 };

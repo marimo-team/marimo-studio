@@ -5,10 +5,11 @@ interface Rectangle {
   height: number;
 }
 
-/** Size the native notebook independently of Marimo's sidebar and developer panel. */
+/** Observe native dialogs and size the notebook independently of Marimo's panels. */
 export const connectMarimoEditorWorkspace = (
   frame: HTMLIFrameElement,
   onBounds: (bounds: Rectangle | undefined) => void,
+  onDialog: (open: boolean) => void,
 ) => {
   let disposeDocument = () => {};
   let notebook: HTMLElement | null = null;
@@ -32,12 +33,18 @@ export const connectMarimoEditorWorkspace = (
     notebook = null;
     bounds = undefined;
     onBounds(undefined);
+    onDialog(false);
     const doc = frame.contentDocument;
     if (!doc) return;
     let resize: ResizeObserver | undefined;
     let restore = () => {};
     let container: HTMLElement | null = null;
     const discover = () => {
+      onDialog(
+        doc.querySelector(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], dialog[open]',
+        ) !== null,
+      );
       const app = doc.getElementById("app");
       const body = doc.getElementById("app-chrome-body");
       const developer = doc.getElementById("app-chrome-panel");
@@ -87,7 +94,12 @@ export const connectMarimoEditorWorkspace = (
       measure();
     };
     const observer = new MutationObserver(discover);
-    observer.observe(doc, { childList: true, subtree: true });
+    observer.observe(doc, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["role", "data-state", "open"],
+    });
     discover();
     disposeDocument = () => {
       observer.disconnect();
@@ -108,6 +120,7 @@ export const connectMarimoEditorWorkspace = (
       closed = true;
       frame.removeEventListener("load", connect);
       disposeDocument();
+      onDialog(false);
     },
   };
 };

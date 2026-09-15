@@ -8,7 +8,10 @@ from typing import Any
 from weakref import WeakKeyDictionary
 
 from marimo._runtime.params import QueryParams
+from marimo._server.api.endpoints.ws.session_handler import SessionHandler
 from marimo._server.api.endpoints.ws.ws_session_connector import SessionConnector
+from marimo._session.model import ConnectionState
+from marimo._session.session import Session
 
 from marimo_studio._compat.patch import (
     CallbackCloseHandle,
@@ -23,6 +26,16 @@ from marimo_studio.errors._internal import CompatibilityError
 
 _FILES: WeakKeyDictionary[Any, dict[str, dict[object, Path]]] = WeakKeyDictionary()
 _LOCK = RLock()
+
+
+def replay_editor_session(handler: SessionHandler, session: Session) -> None:
+    """Restore a deliberately transferred editor without a recovery warning."""
+    if handler.cancel_close_handle is not None:
+        handler.cancel_close_handle.cancel()
+    handler.status = ConnectionState.OPEN
+    session.connect_consumer(handler, main=True)
+    handler._write_kernel_ready_from_session_view(session, handler.params.kiosk)
+    handler._replay_previous_session(session)
 
 
 def _reconnect_replacement(native_reconnect: Any) -> Any:
@@ -48,7 +61,7 @@ def _reconnect_replacement(native_reconnect: Any) -> Any:
         if not requested or not replay:
             return native_reconnect(connector, session)
         session.disconnect_main_consumer()
-        connector.handler._reconnect_session(session, replay=True)
+        replay_editor_session(connector.handler, session)
         return session, ConnectionType.RECONNECT
 
     return reconnect

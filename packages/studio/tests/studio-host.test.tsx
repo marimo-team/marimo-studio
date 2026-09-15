@@ -149,23 +149,11 @@ const mountActiveEditor = (query = "", hash = "") => {
   if (!editorWindow) {
     throw new Error("Test editor window did not mount.");
   }
-  const live = new URL(editorWindow.location.href);
-  live.searchParams.delete("session_id");
-  editorWindow.history.replaceState(
-    editorWindow.history.state,
-    "",
-    `${live.pathname}${live.search}${live.hash}`,
-  );
   return { editorFrame, editorWindow };
 };
 
-const configuredEditorUrl = (editorFrame: HTMLIFrameElement, editorWindow: Window): URL => {
+const configuredEditorUrl = (editorWindow: Window): URL => {
   const source = new URL(editorWindow.location.href);
-  const sessionId = new URL(editorFrame.src).searchParams.get("session_id");
-  if (!sessionId) {
-    throw new Error("Test editor authority has no session.");
-  }
-  source.searchParams.set("session_id", sessionId);
   source.hash = "";
   return source;
 };
@@ -417,7 +405,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
   const publicHost = { ...host, urls: { ...host.urls, editor: editorFrame.src } };
   const configured = {
     ...ready,
-    urls: { ...ready.urls, editor: configuredEditorUrl(editorFrame, editorWindow).href },
+    urls: { ...ready.urls, editor: configuredEditorUrl(editorWindow).href },
   };
   let creates = 0;
   let createdStarter = "";
@@ -537,7 +525,7 @@ it("preserves an active editor and its public query during first-view activation
   expect(reload).not.toHaveBeenCalled();
   expect(replaceEditorHistory).not.toHaveBeenCalled();
   expect(editorWindow.location.href).toBe(liveEditorUrl);
-  expect(new URL(editorWindow.location.href).searchParams.has("session_id")).toBe(false);
+  expect(new URL(editorWindow.location.href).searchParams.has("session_id")).toBe(true);
   expect(await screen.findByLabelText("Studio workspace")).toBeVisible();
   await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
@@ -555,14 +543,14 @@ it("retries first-view activation when the editor query changes during bootstrap
   const { editorFrame, editorWindow } = mountActiveEditor("region=eu&tag=a&tag=b");
   const firstBootstrap = deferred<Response>();
   const bootstrapQueries: string[] = [];
-  const initialEditor = configuredEditorUrl(editorFrame, editorWindow);
+  const initialEditor = configuredEditorUrl(editorWindow);
   let currentBootstrap: StudioBootstrap | undefined;
   const request = activationRequest((url) => {
     bootstrapQueries.push(url.search);
     if (bootstrapQueries.length === 1) {
       return firstBootstrap.promise;
     }
-    const configuredEditor = configuredEditorUrl(editorFrame, editorWindow);
+    const configuredEditor = configuredEditorUrl(editorWindow);
     currentBootstrap = {
       ...ready,
       urls: { ...ready.urls, editor: configuredEditor.href },
@@ -650,7 +638,7 @@ it.each(["document", "binding authority"] as const)(
     bootstrap.resolve(
       Response.json({
         ...ready,
-        urls: { ...ready.urls, editor: configuredEditorUrl(editorFrame, editorWindow).href },
+        urls: { ...ready.urls, editor: configuredEditorUrl(editorWindow).href },
       }),
     );
 
@@ -672,7 +660,7 @@ it("fails closed when the editor query outlives the bounded bootstrap retries", 
   let attempts = 0;
   const request = activationRequest(() => {
     attempts += 1;
-    const configuredEditor = configuredEditorUrl(editorFrame, editorWindow);
+    const configuredEditor = configuredEditorUrl(editorWindow);
     const changedEditor = new URL(editorWindow.location.href);
     changedEditor.searchParams.delete("tag");
     for (const value of attempts % 2 === 0 ? ["a", "b"] : ["b", "a"]) {

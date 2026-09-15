@@ -59,8 +59,14 @@ def test_document_replay_requires_an_opted_in_manager_and_query(
         initialization_id="analysis.py",
         app_file_manager=SimpleNamespace(path=Path("analysis.py")),
         disconnect_main_consumer=Mock(),
+        connect_consumer=Mock(),
     )
-    handler = SimpleNamespace(_reconnect_session=Mock())
+    handler = SimpleNamespace(
+        cancel_close_handle=None,
+        params=SimpleNamespace(kiosk=False),
+        _write_kernel_ready_from_session_view=Mock(),
+        _replay_previous_session=Mock(),
+    )
     reconnect = Mock(return_value=("fallback", "new"))
     monkeypatch.setattr(SessionConnector, "_reconnect_session", reconnect)
     replay = PrivateSessionReplay()
@@ -126,7 +132,11 @@ def test_document_replay_requires_an_opted_in_manager_and_query(
         )
 
         session.disconnect_main_consumer.assert_called_once_with()
-        handler._reconnect_session.assert_called_once_with(session, replay=True)
+        session.connect_consumer.assert_called_once_with(handler, main=True)
+        handler._write_kernel_ready_from_session_view.assert_called_once_with(
+            session, False
+        )
+        handler._replay_previous_session.assert_called_once_with(session)
     finally:
         handle.close()
 
