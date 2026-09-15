@@ -1,0 +1,28 @@
+examples/occupancy.py
+  s_cff992ac1ea85e::t_3af0cb726155c4 4-5
+examples/earthquakes.py
+  s_cff992ac1ea85e::t_3af0cb726155c4 4-6
+examples/athletes.py
+  s_cff992ac1ea85e::t_3af0cb726155c4 4-5
+packages/marimo-studio/pyproject.toml
+  s_cff992ac1ea85e::t_3af0cb726155c4 107
+pyproject.toml
+  s_cff992ac1ea85e::t_c3ffec35f5b0fd 24
+  s_cff992ac1ea85e::t_3af0cb726155c4 7-9,11-13,15,21,27,31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1525050c34c11a547f945ceb8e4b5296fc2e816b",
+  "prompts": {},
+  "sessions": {
+    "s_cff992ac1ea85e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a52c-6225-71d0-a1f4-445235318c7f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
