@@ -38,14 +38,6 @@ for (const editRoot of ["marimo", "studio"] as const) {
     });
     const context = await browser.newContext();
     const diagnostics = observeBrowserContext(context);
-    const launcherTexture = diagnostics.expectConsole({
-      type: "warning",
-      text: new RegExp(
-        `^The resource ${server.serverUrl}/assets/(gradient|noise)-.* was preloaded using link preload but not used`,
-      ),
-      count: 2,
-      required: false,
-    });
     const filenameFallback = diagnostics.expectConsole({
       type: "warning",
       text: /^No filename provided, using fallback$/,
@@ -212,7 +204,6 @@ shown.to_dict()
       restartedTransports.recovered();
 
       filenameFallback.recovered();
-      launcherTexture.recovered();
       dialogDescription.recovered();
       closedLspHealth.recovered();
       closedUsageStats.recovered();

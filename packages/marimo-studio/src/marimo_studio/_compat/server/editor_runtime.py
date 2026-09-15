@@ -26,7 +26,8 @@ _CONFIG_ASSET = re.compile(r"^/assets/config-[A-Za-z0-9_-]+\.js$")
 _CELLS_ASSET = re.compile(r"^/assets/cells-[A-Za-z0-9_-]+\.js$")
 _INDEX_ASSET = re.compile(r"^/assets/index-[A-Za-z0-9_-]+\.js$")
 _PANELS_ASSET = re.compile(r"^/assets/panels-[A-Za-z0-9_-]+\.js$")
-_SESSION_ASSET = re.compile(r"^/assets/session-[A-Za-z0-9_-]+\.js$")
+# The pinned hash width distinguishes session from the session-panel bundle.
+_SESSION_ASSET = re.compile(r"^/assets/session-[A-Za-z0-9_-]{8}\.js$")
 _REMOVE_SESSION_QUERY = b"e.has(n.kiosk)||e.delete(n.sessionId)"
 _RETAIN_EDITOR_SESSION_QUERY = (
     b'e.has(n.kiosk)||e.has("marimo_studio_editor")||e.delete(n.sessionId)'

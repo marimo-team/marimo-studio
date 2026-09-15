@@ -399,6 +399,7 @@ def test_middleware_restores_adapters_after_scope_shutdown_fails() -> None:
             SimpleNamespace(
                 session_state=SimpleNamespace(),
                 browser=SimpleNamespace(),
+                editor_runtime=SimpleNamespace(),
                 server=SimpleNamespace(),
                 lifecycle=AdapterLifecycle(),
             ),
