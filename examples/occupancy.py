@@ -1,8 +1,8 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#     "marimo==0.24.0",
-#     "polars==1.33.1",
+#     "marimo>=0.24.0",
+#     "polars>=1.33.1",
 # ]
 #
 # [tool.marimo-studio]

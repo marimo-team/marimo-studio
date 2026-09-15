@@ -2,7 +2,9 @@ version = 1
 revision = 3
 requires-python = ">=3.10, <3.15"
 resolution-markers = [
-    "python_full_version >= '3.12'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
     "python_full_version == '3.11.*'",
     "python_full_version < '3.11'",
 ]
@@ -27,18 +29,23 @@ members = [
 [manifest.dependency-groups]
 dev = [
     { name = "agent-plugins", specifier = ">=0.2" },
-    { name = "basedpyright", specifier = "==1.39.10" },
+    { name = "basedpyright", specifier = ">=1.39.10" },
     { name = "deno", specifier = "==2.9.5" },
     { name = "httpx2", specifier = ">=2.9" },
     { name = "marimo", extras = ["recommended"], specifier = "==0.24.2" },
-    { name = "pandas", specifier = "==2.3.3" },
+    { name = "marimo-lens", specifier = ">=0.1.0" },
+    { name = "pandas", specifier = ">=2.2.2" },
+    { name = "pandas", marker = "python_full_version >= '3.13'", specifier = ">=2.2.3" },
+    { name = "pandas", marker = "python_full_version >= '3.14'", specifier = ">=2.3.3" },
     { name = "polars", specifier = ">=1.42" },
-    { name = "pyarrow", specifier = "==25.0.0" },
+    { name = "pyarrow", specifier = ">=15" },
+    { name = "pyarrow", marker = "python_full_version >= '3.13'", specifier = ">=18.1" },
+    { name = "pyarrow", marker = "python_full_version >= '3.14'", specifier = ">=22" },
     { name = "pyrefly", specifier = ">=1.1" },
     { name = "pytest", specifier = ">=9.1" },
-    { name = "pytest-xdist", specifier = "==3.8.0" },
+    { name = "pytest-xdist", specifier = ">=3.8" },
     { name = "ruff", specifier = ">=0.16" },
-    { name = "tomli", specifier = "==2.3.1" },
+    { name = "tomli", specifier = ">=2.0.1" },
     { name = "ty", specifier = ">=0.0.64" },
 ]
 e2e = [
@@ -48,25 +55,33 @@ e2e = [
 ]
 marimo-studio-build = [
     { name = "agent-plugins", specifier = ">=0.2" },
-    { name = "uv-build", specifier = "==0.12.2" },
+    { name = "uv-build", specifier = ">=0.12,<0.13" },
 ]
-release = [{ name = "twine", specifier = "==6.2.0" }]
+release = [{ name = "twine", specifier = ">=6.2" }]
 test = [
     { name = "httpx2", specifier = ">=2.9" },
-    { name = "pandas", specifier = "==2.3.3" },
+    { name = "pandas", specifier = ">=2.2.2" },
+    { name = "pandas", marker = "python_full_version >= '3.13'", specifier = ">=2.2.3" },
+    { name = "pandas", marker = "python_full_version >= '3.14'", specifier = ">=2.3.3" },
     { name = "polars", specifier = ">=1.42" },
-    { name = "pyarrow", specifier = "==25.0.0" },
+    { name = "pyarrow", specifier = ">=15" },
+    { name = "pyarrow", marker = "python_full_version >= '3.13'", specifier = ">=18.1" },
+    { name = "pyarrow", marker = "python_full_version >= '3.14'", specifier = ">=22" },
     { name = "pytest", specifier = ">=9.1" },
-    { name = "pytest-xdist", specifier = "==3.8.0" },
+    { name = "pytest-xdist", specifier = ">=3.8" },
 ]
 test-deno = [
     { name = "deno", specifier = "==2.9.5" },
     { name = "httpx2", specifier = ">=2.9" },
-    { name = "pandas", specifier = "==2.3.3" },
+    { name = "pandas", specifier = ">=2.2.2" },
+    { name = "pandas", marker = "python_full_version >= '3.13'", specifier = ">=2.2.3" },
+    { name = "pandas", marker = "python_full_version >= '3.14'", specifier = ">=2.3.3" },
     { name = "polars", specifier = ">=1.42" },
-    { name = "pyarrow", specifier = "==25.0.0" },
+    { name = "pyarrow", specifier = ">=15" },
+    { name = "pyarrow", marker = "python_full_version >= '3.13'", specifier = ">=18.1" },
+    { name = "pyarrow", marker = "python_full_version >= '3.14'", specifier = ">=22" },
     { name = "pytest", specifier = ">=9.1" },
-    { name = "pytest-xdist", specifier = "==3.8.0" },
+    { name = "pytest-xdist", specifier = ">=3.8" },
 ]
 
 [[package]]
@@ -736,7 +751,9 @@ name = "ipython"
 version = "9.16.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.12'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
     "python_full_version == '3.11.*'",
 ]
 dependencies = [
@@ -1707,7 +1724,9 @@ name = "numpy"
 version = "2.5.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.12'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9a/80/db0b4559e57ec36362bedbb05530a87fafbcb6067708c946967a41d449e7/numpy-2.5.2.tar.gz", hash = "sha256:d482d171c406ae88c5b19cad3b6a1c4c5209f886ab74bc44c2c865c23f52d860", size = 20773161, upload-time = "2026-08-09T13:48:27.962Z" }
 wheels = [
@@ -2832,7 +2851,9 @@ name = "rpds-py"
 version = "2026.6.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.12'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
     "python_full_version == '3.11.*'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/aa/2a/9618a122aeb2a169a28b03889a2995fe297588964333d4a7d67bdf46e147/rpds_py-2026.6.3.tar.gz", hash = "sha256:1cebd1337c242e4ec2293e541f712b2da849b29f48f0c293684b71c0632625d4", size = 64051, upload-time = "2026-06-30T07:17:53.009Z" }
@@ -3581,7 +3602,9 @@ name = "websockets"
 version = "17.0.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.12'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
     "python_full_version == '3.11.*'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f7/96/e01084f83a64bcb3a27994bd0cb0db68ff29d9c6707fae37ec19b18ba990/websockets-17.0.1.tar.gz", hash = "sha256:5baa9bc0dfbae8c507e51c8cf1b6d4628086f7a87bbd3a9952bd5f035451f1cc", size = 183298, upload-time = "2026-07-31T11:31:27.665Z" }

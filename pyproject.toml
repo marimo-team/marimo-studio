@@ -4,27 +4,32 @@ members = ["apps/e2e/fixtures-provider/provider", "packages/marimo-studio"]
 [dependency-groups]
 test = [
   "httpx2>=2.9",
-  "pandas==2.3.3",
+  "pandas>=2.2.2",
+  "pandas>=2.2.3; python_version >= '3.13'",
+  "pandas>=2.3.3; python_version >= '3.14'",
   "polars>=1.42",
-  "pyarrow==25.0.0",
+  "pyarrow>=15",
+  "pyarrow>=18.1; python_version >= '3.13'",
+  "pyarrow>=22; python_version >= '3.14'",
   "pytest>=9.1",
-  "pytest-xdist==3.8.0",
+  "pytest-xdist>=3.8",
 ]
 test-deno = [{ include-group = "test" }, "deno==2.9.5"]
 dev = [
   { include-group = "test" },
   "agent-plugins>=0.2",
-  "basedpyright==1.39.10",
+  "basedpyright>=1.39.10",
   "deno==2.9.5",
   "marimo[recommended]==0.24.2",
+  "marimo-lens>=0.1.0",
   "pyrefly>=1.1",
   "ruff>=0.16",
-  "tomli==2.3.1",
+  "tomli>=2.0.1",
   "ty>=0.0.64",
 ]
 e2e = ["anywidget", "marimo-studio[lens]", "marimo-studio-e2e-provider"]
-marimo-studio-build = ["agent-plugins>=0.2", "uv-build==0.12.2"]
-release = ["twine==6.2.0"]
+marimo-studio-build = ["agent-plugins>=0.2", "uv-build>=0.12,<0.13"]
+release = ["twine>=6.2"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers"
