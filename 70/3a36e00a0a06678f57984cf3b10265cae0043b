@@ -1,0 +1,29 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_document.py
+  s_31c53d77d6ea62::t_11a214dd7b59d1 232,263,282,287,494-495,498-500,516
+  s_31c53d77d6ea62::t_bd632e8776c484 262,264-265
+  s_31c53d77d6ea62::t_3f1b1c7832079b 268,496-497
+packages/marimo-studio/tests/providers/test_vanilla.py
+  s_31c53d77d6ea62::t_c924a25fcc4869 208-219,223-224
+  s_31c53d77d6ea62::t_80da9816fd685d 121-126,128-134,136-147
+  s_31c53d77d6ea62::t_84b86f99af764b 169
+  s_31c53d77d6ea62::t_222f54d812b158 220-222
+  s_31c53d77d6ea62::t_b027f49d250799 127,135
+docs/reference/projections.md
+  s_31c53d77d6ea62::t_90bd37da176706 21-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "703a36e00a0a06678f57984cf3b10265cae0043b",
+  "prompts": {},
+  "sessions": {
+    "s_31c53d77d6ea62": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a412-7da5-76d3-8342-17c11b17171f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

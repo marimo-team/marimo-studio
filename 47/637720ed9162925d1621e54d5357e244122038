@@ -1,0 +1,21 @@
+packages/marimo-studio/tests/server/test_context.py
+  s_b14d28b03d3b7d::t_b237a17d1f4431 13,256-273,278
+packages/marimo-studio/src/marimo_studio/_compat/server/gateway.py
+  s_b14d28b03d3b7d::t_b237a17d1f4431 79-85,90,120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "47637720ed9162925d1621e54d5357e244122038",
+  "prompts": {},
+  "sessions": {
+    "s_b14d28b03d3b7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a02b-1cd5-7db3-b339-c750d885e0c8",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

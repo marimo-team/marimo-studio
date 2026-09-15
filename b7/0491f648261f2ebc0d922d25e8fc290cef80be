@@ -1,0 +1,21 @@
+packages/studio/tests/preview-deck.test.ts
+  ai_agent 644-684
+packages/studio/src/features/preview/deck.ts
+  s_b14d28b03d3b7d::t_3edc50c25942bc 441
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b70491f648261f2ebc0d922d25e8fc290cef80be",
+  "prompts": {},
+  "sessions": {
+    "s_b14d28b03d3b7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a02b-1cd5-7db3-b339-c750d885e0c8",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
