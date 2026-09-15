@@ -1,0 +1,23 @@
+apps/e2e/tests/recovery.spec.ts
+  s_31c53d77d6ea62::t_d5b5d7cfc7aa68 4,45,55
+apps/e2e/tests/authoring.spec.ts
+  s_31c53d77d6ea62::t_d5b5d7cfc7aa68 2,11,382-385,407-422
+apps/e2e/tests/authoring-test-support.ts
+  s_31c53d77d6ea62::t_e3a8eeeb65608b 6-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7786680181f77ada28a81d27511363a91e820703",
+  "prompts": {},
+  "sessions": {
+    "s_31c53d77d6ea62": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a412-7da5-76d3-8342-17c11b17171f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
