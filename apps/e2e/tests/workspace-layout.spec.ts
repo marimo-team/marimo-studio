@@ -106,11 +106,14 @@ test("keeps the native agent sidebar available beside the notebook, view, and so
   expect(controls!.y).toBeGreaterThanOrEqual(toolbarBounds!.y + toolbarBounds!.height);
   await page.getByRole("button", { name: "Toggle Source editor" }).click();
   await expect(page.getByRole("region", { name: "Source", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Show notebook beside view" }).click();
-  await expect(editor.locator("#app")).toBeHidden();
-  await expect(sidebar).toBeVisible();
-  await page.getByRole("button", { name: "Show notebook beside view" }).click();
+  await page.getByRole("button", { name: "Show view beside notebook" }).click();
   await expect(editor.locator("#app")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Preview", exact: true })).toBeHidden();
+  await expect(page.getByRole("region", { name: "Source", exact: true })).toBeHidden();
+  await expect(sidebar).toBeVisible();
+  await page.getByRole("button", { name: "Show view beside notebook" }).click();
+  await expect(editor.locator("#app")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Source", exact: true })).toBeVisible();
   expect(await retainedSidebar!.evaluate((element) => element.isConnected)).toBe(true);
   await editor.getByTestId("close-helper-pane").click();
   await expect.poll(async () => (await toolbar.boundingBox())!.x).toBeLessThan(100);

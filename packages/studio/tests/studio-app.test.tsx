@@ -532,7 +532,13 @@ describe("Studio shell", () => {
         layout={layout}
       />,
     );
-    const split = screen.getByRole("button", { name: "Show notebook beside view" });
+    const split = screen.getByRole("button", { name: "Show view beside notebook" });
+    expect(split).toHaveAttribute("aria-pressed", "true");
+    expect(split).toHaveAttribute("title", "Show notebook only");
+    await user.click(split);
+    expect(split).toHaveAttribute("aria-pressed", "false");
+    expect(layout.getSnapshot().mode).toBe("notebook");
+    await user.click(split);
     expect(split).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByLabelText("Workspace options"));
     await user.click(screen.getByRole("button", { name: "Focus View" }));
@@ -658,7 +664,7 @@ describe("Studio shell", () => {
 
     expect(screen.queryByRole("navigation", { name: "Studio surface" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Visible surface" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show notebook beside view" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Show view beside notebook" })).toBeVisible();
 
     layout.dispose();
     preview.dispose();

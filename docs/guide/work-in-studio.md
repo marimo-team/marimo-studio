@@ -21,7 +21,8 @@ view configuration when you create the view.
 Studio opens the notebook and custom view side by side. The native agent
 sidebar remains available, including when you focus the custom view.
 
-- **Show notebook beside view** toggles the notebook beside the view.
+- **Show notebook only** focuses the notebook. Click **Show view beside notebook**
+  to restore the split, including its Source pane and sizes.
 - **Edit view source** opens Source beneath the custom view. File tabs select
   the view's authored documents.
 - **Live** (or the current status) gives a short runtime state. Hover or focus it
