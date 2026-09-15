@@ -1,0 +1,37 @@
+apps/e2e/installed-tests/installed-wheel.spec.ts
+  s_cff992ac1ea85e::t_18b50250a804c1 130,222
+packages/studio/src/features/navigation/useToolbar.ts
+  s_cff992ac1ea85e::t_c3ffec35f5b0fd 72-74
+apps/e2e/tests/stale-results.spec.ts
+  s_cff992ac1ea85e::t_18b50250a804c1 313
+docs/guide/work-in-studio.md
+  s_cff992ac1ea85e::t_90b8fe587d8170 24-25
+packages/studio/tests/workspace.test.ts
+  s_cff992ac1ea85e::t_18b50250a804c1 270-271,274-276
+packages/studio/src/features/navigation/Toolbar.tsx
+  s_cff992ac1ea85e::t_c3ffec35f5b0fd 41-44
+packages/studio/src/features/workspace/controller.ts
+  s_cff992ac1ea85e::t_1a3dde48995fe1 97
+  s_cff992ac1ea85e::t_c3ffec35f5b0fd 94,99-103,107-108,110
+apps/e2e/tests/workspace-layout.spec.ts
+  s_cff992ac1ea85e::t_18b50250a804c1 109-112,114,116
+packages/studio/tests/studio-app.test.tsx
+  s_cff992ac1ea85e::t_18b50250a804c1 535,667
+  s_cff992ac1ea85e::t_0b3feaabc3780b 537-541
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "692733ec5da6b08b722f5020658d8a7bc7a45d97",
+  "prompts": {},
+  "sessions": {
+    "s_cff992ac1ea85e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a52c-6225-71d0-a1f4-445235318c7f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
