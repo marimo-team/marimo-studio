@@ -420,6 +420,9 @@ ID stays the same.
 
 The native workspace adapter reports open dialogs. Studio raises the editor
 above its panes and makes those panes inert until the dialog closes.
+For native notifications, the adapter reports the notification viewport bounds.
+Studio clips that region out of its panes so notifications remain visible and
+clickable while the rest of the workspace stays interactive.
 
 ## View switching
 
