@@ -36,9 +36,17 @@ installed, so adding Lens exposes named targets and their source context.
 Keep metadata on authored regions and projection hosts, outside native Marimo
 output subtrees.
 
-Prefer `mo-value` for values, `marimo-output` for rich values, and `marimo-cell`
-for native cell output. Keep analytical computation in the notebook. When custom
-JavaScript rendering is necessary, every result must declare its kernel inputs:
+NEVER hardcode notebook-derived values in view HTML or source code when they
+can be expressed with `mo-value`, `marimo-output`, or `marimo-cell`. This includes
+metrics, counts, dates, categories, chart data, and analytical claims embedded in
+prose. Copied values go stale and sever the link to their analytical context.
+Expose missing results as named notebook values, then project them. Static UI
+copy and design constants may remain literal.
+
+Use `mo-value` for values, `marimo-output` for rich values, and `marimo-cell`
+for native cell output. Keep analytical computation in the notebook. Custom
+JavaScript rendering must consume live projections, handle their updates, and
+declare every kernel input:
 
 - Place hidden `mo-value` hosts directly inside the result, or use
   `data-marimo-lens-inputs="rows-data summary-data"` to reference projection hosts by
@@ -284,9 +292,10 @@ Choose visual direction in this order:
 
 1. Follow the user's explicit style direction.
 2. Follow the starter project's `DESIGN.md` when it exists.
-3. Otherwise use the current
-   [Marimo design guide](https://raw.githubusercontent.com/marimo-team/marimo/refs/heads/main/DESIGN.md)
-   as the aesthetic reference.
+3. Otherwise suggest and use Marimo's visual style from
+   [Marimo's `DESIGN.md`](https://raw.githubusercontent.com/marimo-team/marimo/refs/heads/main/DESIGN.md).
+   Name this file explicitly when explaining the chosen design. Use another
+   design whenever the user requests it.
 
 Read the selected design source before visual authoring. Apply its visual
 character, tokens, typography, surfaces, component treatment, and motion
@@ -640,6 +649,25 @@ hosts reached their expected lifecycle states. It does not prove spacing,
 sizing, responsive layout, scroll choreography, or visual polish. Capture and
 inspect the rendered browser page for visual work. Report the visual check as
 blocked when the environment cannot capture or inspect it.
+
+## Review list before handoff
+
+Complete this review before handing off a view:
+
+- Check every displayed analytical value and claim against its notebook
+  producer. Replace literal copies in HTML, JSX, Svelte, JavaScript, and other
+  view source with live projections. NEVER hand off hardcoded results that
+  could use `mo-value`, `marimo-output`, or `marimo-cell`.
+- Change a relevant notebook input or control and verify that projected values
+  and custom renderers update, including analytical prose.
+- Verify Lens metadata on custom regions: labels, complete input links, current
+  render-source paths, and image context where appropriate. Keep annotations
+  outside native output subtrees and verify selection provenance when Lens is
+  available.
+- Check the view against the chosen design source and record durable design
+  decisions in the project's `AGENTS.md`.
+- Build, show, and pass browser validation for the final revision. Inspect it
+  at wide and narrow widths and exercise the affected controls and navigation.
 
 ## Run or export
 
