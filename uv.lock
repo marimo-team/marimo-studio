@@ -1251,7 +1251,7 @@ wheels = [
 
 [[package]]
 name = "marimo-studio"
-version = "0.1.4"
+version = "0.1.5"
 source = { editable = "packages/marimo-studio" }
 dependencies = [
     { name = "agent-plugins" },
