@@ -5,11 +5,12 @@ from pathlib import Path
 
 import pytest
 
+import marimo_studio._workspace.config as workspace_config
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
 
 
 def _project_workspace(notebook: Path) -> StudioWorkspace:
@@ -74,6 +75,37 @@ def test_config_snapshot_rejects_non_utf8_source(notebook_path: Path) -> None:
 
     with pytest.raises(ConfigurationError, match="not UTF-8"):
         snapshot_workspace_config(studio, reload_studio=load_studio)
+
+
+@pytest.mark.parametrize("missing_read", [1, 2])
+def test_configuration_load_reports_a_replacement_conflict(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    missing_read: int,
+) -> None:
+    prepare_view(notebook_path)
+    original = workspace_config.read_file_snapshot_with_identity
+    reads = 0
+    claimed = notebook_path.with_suffix(".rollback")
+
+    def read_snapshot(path: Path, *, root: Path):
+        nonlocal reads
+        reads += 1
+        if reads == missing_read:
+            notebook_path.rename(claimed)
+        return original(path, root=root)
+
+    monkeypatch.setattr(
+        workspace_config, "read_file_snapshot_with_identity", read_snapshot
+    )
+    try:
+        with pytest.raises(WorkspaceGenerationConflictError):
+            workspace_config.load_studio_definition(notebook_path)
+    finally:
+        if claimed.exists():
+            claimed.rename(notebook_path)
+
+    assert load_studio(notebook_path).default_view == "dashboard"
 
 
 def test_config_snapshot_rejects_a_config_edit_during_reload(
