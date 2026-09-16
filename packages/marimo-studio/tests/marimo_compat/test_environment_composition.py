@@ -8,6 +8,7 @@ from typing import cast
 
 import pytest
 from packaging.markers import default_environment
+from packaging.version import Version
 
 from marimo_studio._cli.environment import environment_command
 from marimo_studio._compat.environment import inline_environment_flags
@@ -149,9 +150,10 @@ build-backend = "uv_build"
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == (
-        f"{version('marimo-studio')}:2.9.5:1.0.0:external-provider:React:Svelte"
-    )
+    studio_version, deno_version, *details = result.stdout.strip().split(":")
+    assert studio_version == version("marimo-studio")
+    assert Version(deno_version) >= Version("2.9.5")
+    assert details == ["1.0.0", "external-provider", "React", "Svelte"]
     assert "--isolated" in command
     assert "--no-project" in command
 

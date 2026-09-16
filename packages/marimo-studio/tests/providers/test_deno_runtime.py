@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
@@ -17,6 +18,7 @@ from marimo_studio._views.inspection import (
     inspection_request,
 )
 from marimo_studio.view_providers import (
+    ProviderAvailability,
     ProviderCancellation,
     ProviderCommandResult,
     ViewProject,
@@ -130,6 +132,70 @@ def test_deno_availability_reports_a_cold_start_timeout(
     _deno_runtime._cached_availability.cache_clear()
 
 
+@pytest.mark.parametrize(
+    ("reported_version", "available"),
+    [
+        ("2.9.4", False),
+        ("2.9.5", True),
+        ("2.10.0", True),
+        ("3.0.0", True),
+        ("invalid", False),
+    ],
+)
+def test_deno_availability_accepts_versions_from_2_9_5(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reported_version: str,
+    available: bool,
+) -> None:
+    binary = tmp_path / "deno"
+    binary.write_bytes(b"deno")
+
+    class Supervisor:
+        def run(self, *_args: object, **_kwargs: object) -> ProcessResult:
+            return ProcessResult(0, f"deno {reported_version}\n".encode(), b"")
+
+    monkeypatch.setattr(_deno_runtime, "deno_binary", lambda: str(binary))
+    monkeypatch.setattr(_deno_runtime, "ProcessSupervisor", Supervisor)
+
+    availability = _deno.deno_availability()
+
+    assert availability.available is available
+    assert availability.version == reported_version
+    if not available:
+        assert (
+            availability.reason == f"requires Deno >= 2.9.5, found {reported_version}"
+        )
+
+
+@pytest.mark.parametrize(
+    ("provider", "provider_id"),
+    [
+        (react_provider, "marimo-studio/react"),
+        (svelte_provider, "marimo-studio/svelte"),
+    ],
+)
+def test_provider_fingerprint_tracks_deno_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: Any,
+    provider_id: str,
+) -> None:
+    _, project = provider_project(tmp_path, provider, provider_id)
+    fingerprints = []
+    for reported_version in ("2.9.5", "2.10.0"):
+        monkeypatch.setattr(
+            _deno,
+            "deno_availability",
+            lambda v=reported_version: ProviderAvailability(True, version=v),
+        )
+        inspection = inspect_view_project_sync(project)
+        assert not [item for item in inspection.diagnostics if item.severity == "error"]
+        fingerprints.append(inspection.build_fingerprint)
+
+    assert fingerprints[0] != fingerprints[1]
+
+
 def test_provider_inspection_selects_cache_without_mutating_the_project(
     tmp_path: Path,
 ) -> None:
@@ -215,6 +281,7 @@ def test_deno_execution_forwards_command_environment_and_cache(
             return ProviderCommandResult(0, "", "")
 
     monkeypatch.setattr(_deno_runtime, "deno_binary", lambda: str(binary))
+    monkeypatch.setattr(_deno_runtime, "distribution_version", lambda _name: "2.10.0")
 
     execution = _deno.DenoExecution(
         project,
@@ -233,9 +300,7 @@ def test_deno_execution_forwards_command_environment_and_cache(
     assert command == [str(binary), "check", "src/main.ts"]
     assert timeout == 30
     assert cwd == root
-    assert environment["DENO_DIR"] == str(
-        (cache_root / "deno" / _deno.DENO_VERSION).resolve()
-    )
+    assert environment["DENO_DIR"] == str((cache_root / "deno" / "2.10.0").resolve())
     assert environment["STUDIO_TEST"] == "ready"
     assert cache_root.is_dir()
     assert not (artifact_root(project) / ".cache").exists()
@@ -290,7 +355,7 @@ def test_deno_cache_rejects_nested_symlink_before_process_start(
 
     assert process_runs == 0
     assert sentinel.read_text(encoding="utf-8") == "outside"
-    assert not (external / _deno.DENO_VERSION).exists()
+    assert not (external / version("deno")).exists()
 
 
 def test_public_assets_reject_case_equivalent_generated_paths(tmp_path: Path) -> None:

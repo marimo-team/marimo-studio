@@ -1275,16 +1275,21 @@ deno = [
 lens = [
     { name = "marimo-lens" },
 ]
+recommended = [
+    { name = "deno" },
+    { name = "marimo-lens" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "agent-plugins", specifier = ">=0.2" },
     { name = "click", specifier = ">=8.2" },
-    { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
+    { name = "deno", marker = "extra == 'deno'", specifier = ">=2.9.5" },
     { name = "htpy", specifier = ">=26.5.1" },
     { name = "marimo", specifier = "==0.24.2" },
     { name = "marimo-export", specifier = ">=0.0.8" },
     { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.1.0" },
+    { name = "marimo-studio", extras = ["deno", "lens"], marker = "extra == 'recommended'", editable = "packages/marimo-studio" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },
@@ -1293,7 +1298,7 @@ requires-dist = [
     { name = "tree-sitter-javascript", specifier = ">=0.25.0" },
     { name = "watchdog", specifier = ">=6.0.0" },
 ]
-provides-extras = ["deno", "lens"]
+provides-extras = ["deno", "lens", "recommended"]
 
 [[package]]
 name = "marimo-studio-e2e-provider"

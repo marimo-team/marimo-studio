@@ -2,7 +2,7 @@
 
 React and Svelte use this package to render starters, identify the files shown
 in Source, copy immutable build inputs, find notebook mounts, merge public
-assets, locate the pinned Deno executable, and reuse its dependency cache.
+assets, locate the installed Deno executable, and reuse its dependency cache.
 
 Both providers therefore apply the same file limits, frozen dependency inputs,
 command cancellation, and setup diagnostics. A missing or incompatible Deno
@@ -15,9 +15,6 @@ from marimo_studio.view_providers._bundled._deno.files import (
 )
 from marimo_studio.view_providers._bundled._deno.files import (
     project_inventory as project_inventory,
-)
-from marimo_studio.view_providers._bundled._deno.runtime import (
-    DENO_VERSION as DENO_VERSION,
 )
 from marimo_studio.view_providers._bundled._deno.runtime import (
     DenoExecution as DenoExecution,

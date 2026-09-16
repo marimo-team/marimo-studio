@@ -2,7 +2,7 @@
 
 The Svelte provider creates a complete TypeScript and Vite starter, shows
 component and configuration files in Source, identifies cell, output, and value
-mounts in Svelte templates, and builds browser files with the pinned Deno
+mounts in Svelte templates, and builds browser files with the installed Deno
 toolchain for Studio to validate and publish.
 
 Inspection records which documents may be edited and which inputs affect a
@@ -101,7 +101,7 @@ _PROJECT = ProviderProjectSpec(
     analyzer_suffixes=frozenset({".js", ".mjs", ".ts", ".svelte"}),
     lockfile="deno.lock",
     build_fingerprint=(
-        f"{_deno.DENO_VERSION}:{SVELTE_VERSION}:{SVELTE_PLUGIN_VERSION}:"
+        f"{SVELTE_VERSION}:{SVELTE_PLUGIN_VERSION}:"
         f"{SVELTE_CHECK_VERSION}:{VITE_VERSION}:{TYPESCRIPT_VERSION}:"
         f"{PROJECTION_CONTRACT_VERSION}:{BUILD_CONTRACT_VERSION}"
     ),
@@ -113,7 +113,7 @@ class DenoSvelteProvider:
 
     info = ProviderInfo(
         title="Svelte",
-        summary="Builds a Svelte project with the pinned Deno toolchain.",
+        summary="Builds a Svelte project with the installed Deno toolchain.",
         api_version=PROVIDER_API_VERSION,
     )
 

@@ -1,4 +1,4 @@
-"""Run the pinned Deno executable inside one view project boundary."""
+"""Run the installed Deno executable inside one view project boundary."""
 
 from __future__ import annotations
 
@@ -7,7 +7,10 @@ from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError, distribution
+from importlib.metadata import version as distribution_version
 from pathlib import Path, PurePosixPath
+
+from packaging.version import InvalidVersion, Version
 
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._processes.provider_runner import ProviderCommandError
@@ -21,7 +24,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._bundled._deno.cache import ensure_cache_directory
 
-DENO_VERSION = "2.9.5"
+DENO_MIN_VERSION = "2.9.5"
 INSTALL_ACTION = "pip install 'marimo-studio[deno]'"
 _AVAILABILITY_TIMEOUT = 15.0
 _SAFE_ENVIRONMENT = frozenset(
@@ -72,7 +75,7 @@ class DenoExecution:
         self._root = project.root.resolve()
         self._binary = deno_binary()
         self._cache_root = cache_root.absolute()
-        self._cache_relative = PurePosixPath("deno") / DENO_VERSION
+        self._cache_relative = PurePosixPath("deno") / distribution_version("deno")
         self._cancellation = cancellation
         self._runner = runner
 
@@ -188,7 +191,7 @@ def deno_binary() -> str:
 
 
 def deno_availability() -> ProviderAvailability:
-    """Report whether the pinned Deno executable can run."""
+    """Report whether the installed Deno executable can run."""
     try:
         binary = str(Path(deno_binary()).resolve())
         stat = Path(binary).stat()
@@ -210,7 +213,7 @@ def deno_availability() -> ProviderAvailability:
         stat.st_ctime_ns,
         stat.st_size,
         stat.st_ino,
-        DENO_VERSION,
+        DENO_MIN_VERSION,
     )
 
 
@@ -221,7 +224,7 @@ def _cached_availability(
     changed_ns: int,
     size: int,
     inode: int,
-    expected_version: str,
+    minimum_version: str,
 ) -> ProviderAvailability:
     del modified_ns, changed_ns, size, inode
     supervisor = ProcessSupervisor()
@@ -263,15 +266,19 @@ def _cached_availability(
     first_line = stdout.splitlines()[0] if stdout else ""
     fields = first_line.removeprefix("deno ").split()
     version = fields[0] if fields else ""
-    if completed.returncode != 0 or version != expected_version:
+    try:
+        supported = Version(version) >= Version(minimum_version)
+    except InvalidVersion:
+        supported = False
+    if completed.returncode != 0 or not supported:
         found = version or "unknown"
         return ProviderAvailability(
             False,
             version=found,
-            reason=f"requires Deno {expected_version}, found {found}",
+            reason=f"requires Deno >= {minimum_version}, found {found}",
             action=INSTALL_ACTION,
         )
-    return ProviderAvailability(True, version=expected_version)
+    return ProviderAvailability(True, version=version)
 
 
 def _filtered_environment(
