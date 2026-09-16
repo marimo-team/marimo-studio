@@ -165,7 +165,7 @@ class ProviderProjectSpec:
             input_scope=self.input_scope,
             mounts=(),
             diagnostics=(),
-            build_fingerprint=self.build_fingerprint,
+            build_fingerprint=f"{availability.version}:{self.build_fingerprint}",
         )
         if availability.available and not diagnostics:
             try:
@@ -225,7 +225,7 @@ class ProviderProjectSpec:
             input_scope=tuple(input_scope),
             mounts=sites,
             diagnostics=tuple(diagnostics),
-            build_fingerprint=self.build_fingerprint,
+            build_fingerprint=f"{availability.version}:{self.build_fingerprint}",
         )
 
 

@@ -2,7 +2,7 @@
 
 The React provider creates a complete TypeScript starter, shows its project
 files in Source, identifies cell, output, and value mounts in JSX, and builds
-browser files with the pinned Deno toolchain for Studio to validate and
+browser files with the installed Deno toolchain for Studio to validate and
 publish.
 
 Inspection records which documents may be edited and which inputs affect a
@@ -89,7 +89,7 @@ _PROJECT = ProviderProjectSpec(
     analyzer_suffixes=frozenset({".js", ".jsx", ".mjs", ".ts", ".tsx"}),
     lockfile="deno.lock",
     build_fingerprint=(
-        f"{_deno.DENO_VERSION}:{REACT_VERSION}:{REACT_DOM_VERSION}:"
+        f"{REACT_VERSION}:{REACT_DOM_VERSION}:"
         f"{TYPESCRIPT_VERSION}:{PROJECTION_CONTRACT_VERSION}:"
         f"{BUILD_CONTRACT_VERSION}"
     ),
@@ -101,7 +101,7 @@ class DenoReactProvider:
 
     info = ProviderInfo(
         title="React",
-        summary="Builds a React project with the pinned Deno toolchain.",
+        summary="Builds a React project with the installed Deno toolchain.",
         api_version=PROVIDER_API_VERSION,
     )
 

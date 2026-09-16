@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -31,8 +33,14 @@ class _Evidence:
 
 
 class _Server:
-    async def location(self, _connection: object) -> None:
-        return None
+    def __init__(self, notebook: Path | None = None) -> None:
+        self.notebook = notebook
+
+    async def location(self, _connection: object) -> Any:
+        return SimpleNamespace(notebook=self.notebook) if self.notebook else None
+
+    def context(self, _location: object) -> Any:
+        return SimpleNamespace(notebook=self.notebook, server_token="server-token")
 
 
 async def _empty_receive() -> Message:
@@ -56,7 +64,9 @@ def _scope(size: int) -> Scope:
     }
 
 
-def _delegate(body: bytes, evidence: _Evidence) -> list[Message]:
+def _delegate(
+    body: bytes, evidence: _Evidence, *, notebook: Path | None = None
+) -> list[Message]:
     messages: list[Message] = [
         {"type": "http.request", "body": body, "more_body": False}
     ]
@@ -78,9 +88,11 @@ def _delegate(body: bytes, evidence: _Evidence) -> list[Message]:
             _scope(len(body)),
             receive,
             send,
-            server=cast(Any, _Server()),
+            server=cast(Any, _Server(notebook)),
             sessions=cast(Any, object()),
-            attachment=cast(Any, object()),
+            attachment=cast(
+                Any, SimpleNamespace(claim_editor_lifetime=lambda _context: object())
+            ),
             persistence=cast(Any, object()),
             code_mode=cast(Any, object()),
             editor_runtime=cast(Any, object()),
@@ -101,6 +113,22 @@ def test_prefixed_transaction_accepts_supported_large_cell_source() -> None:
 
     assert response[0]["status"] == 200
     assert dict(response[0]["headers"])[b"marimo-studio-document-changed"] == b"false"
+    assert evidence.bodies == [body]
+
+
+def test_prefixed_transaction_survives_notebook_configuration_replacement(
+    notebook_path: Path,
+) -> None:
+    evidence = _Evidence()
+    body = b'{"changes":[]}'
+    claimed = notebook_path.with_suffix(".rollback")
+    notebook_path.rename(claimed)
+    try:
+        response = _delegate(body, evidence, notebook=notebook_path)
+    finally:
+        claimed.rename(notebook_path)
+
+    assert response[0]["status"] == 200
     assert evidence.bodies == [body]
 
 

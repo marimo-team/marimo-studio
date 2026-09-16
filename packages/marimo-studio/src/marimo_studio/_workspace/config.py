@@ -209,8 +209,11 @@ def _project_for_notebook(
 def _configuration_for_notebook(
     notebook: Path,
 ) -> tuple[Path, Mapping[str, Any]] | None:
-    inline = notebook_config(notebook)
-    project = _project_for_notebook(notebook)
+    try:
+        inline = notebook_config(notebook)
+        project = _project_for_notebook(notebook)
+    except FileNotFoundError as error:
+        raise WorkspaceGenerationConflictError() from error
     if inline is not None and project is not None:
         raise ConfigurationError(
             f"Studio configuration for {notebook.name} appears in both "
@@ -441,22 +444,29 @@ def load_studio_definition(
     target: str | Path | None = None,
 ) -> StudioDefinition:
     """Load the configuration that declares a Studio workspace."""
-    config_path, _data = _load_config(Path(target or ".").expanduser())
-    payload, _mode, identity = read_file_snapshot_with_identity(
-        config_path,
-        root=config_path.parent,
-    )
     try:
+        config_path, _data = _load_config(Path(target or ".").expanduser())
+    except FileNotFoundError as error:
+        raise WorkspaceGenerationConflictError() from error
+    try:
+        payload, _mode, identity = read_file_snapshot_with_identity(
+            config_path,
+            root=config_path.parent,
+        )
         source = payload.decode("utf-8")
+        definition = studio_definition_from_source(config_path, source)
+        _confirmed, _confirmed_mode, confirmed_identity = (
+            read_file_snapshot_with_identity(
+                config_path,
+                root=config_path.parent,
+            )
+        )
+    except FileNotFoundError as error:
+        raise WorkspaceGenerationConflictError() from error
     except UnicodeDecodeError as error:
         raise ConfigurationError(
             f"Workspace file is not UTF-8 text: {config_path}"
         ) from error
-    definition = studio_definition_from_source(config_path, source)
-    _confirmed, _confirmed_mode, confirmed_identity = read_file_snapshot_with_identity(
-        config_path,
-        root=config_path.parent,
-    )
     if confirmed_identity != identity:
         raise ConfigurationError(
             "Studio configuration changed while it was loaded. Run the operation again."
