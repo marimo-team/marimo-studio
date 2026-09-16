@@ -1,0 +1,42 @@
+packages/marimo-studio/tests/providers/test_deno_runtime.py
+  s_3bb93dd844a4f9::t_1a3da3a735b306 166-168
+  s_3bb93dd844a4f9::t_4776aba1bcf047 21,135-136,144,146-165,169-170,178-181,183,185,187-196
+  s_3bb93dd844a4f9::t_aecbe638110482 137,140-143,171-172,177,182,184
+  s_3bb93dd844a4f9::t_6faddbfc7f0c2a 5,358
+  s_3bb93dd844a4f9::t_1162675e927ca7 138-139,145,186
+  s_3bb93dd844a4f9::t_0e26698f84d23a 173-176,303
+  s_3bb93dd844a4f9::t_147468690c5d04 284
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/runtime.py
+  s_3bb93dd844a4f9::t_6faddbfc7f0c2a 1,10,13-14,78,194,216,227,269-273,278,281
+  s_3bb93dd844a4f9::t_1162675e927ca7 27
+packages/marimo-studio/pyproject.toml
+  s_3bb93dd844a4f9::t_5e7dd0c33a042b 28
+  s_3bb93dd844a4f9::t_1162675e927ca7 26
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/project.py
+  s_3bb93dd844a4f9::t_6faddbfc7f0c2a 168,228
+packages/marimo-studio/tests/marimo_compat/test_environment_composition.py
+  s_3bb93dd844a4f9::t_1162675e927ca7 155
+  s_3bb93dd844a4f9::t_84d16fc5ff26b8 11,153-154,156
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/__init__.py
+  s_3bb93dd844a4f9::t_6faddbfc7f0c2a 5
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/__init__.py
+  s_3bb93dd844a4f9::t_6faddbfc7f0c2a 5,104,116
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/__init__.py
+  s_3bb93dd844a4f9::t_6faddbfc7f0c2a 5,92,104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c14d3f03f341015ca08de44acd71bf71c4ba9b97",
+  "prompts": {},
+  "sessions": {
+    "s_3bb93dd844a4f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ab6a-bec0-7770-aa83-3f9ae59b6aaf",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
