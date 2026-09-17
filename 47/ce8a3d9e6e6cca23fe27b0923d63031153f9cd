@@ -1,0 +1,61 @@
+examples/__marimo__/studio/occupancy/monitor/vite.config.ts
+  ai_agent 1-2,4-8,11
+docs/examples/occupancy.md
+  ai_agent 23-25,61-62
+apps/docs/scripts/build-examples.ts
+  ai_agent 126-128,138,205-237,280
+examples/__marimo__/studio/occupancy/monitor/DESIGN.md
+  ai_agent 1-17
+examples/__marimo__/studio/occupancy/monitor/view.toml
+  s_f47d3aefc3f3dd::t_47f7a317f39844 2
+examples/__marimo__/studio/occupancy/monitor/src/page.tmpl
+  ai_agent 1-11
+examples/__marimo__/studio/earthquakes/operations/src/components/EventDetails.tsx
+  ai_agent 70,101
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingPrimitives.tsx
+  ai_agent 16,54,60
+examples/__marimo__/studio/occupancy/monitor/deno.json
+  ai_agent 2,4
+examples/__marimo__/studio/occupancy/model-review/src/components/ErrorEvidence.tsx
+  ai_agent 70,73
+examples/__marimo__/studio/occupancy/monitor/package.json
+  s_f47d3aefc3f3dd::t_47f7a317f39844 5-7,10
+examples/__marimo__/studio/occupancy/monitor/src/lib/studio-notebook.ts
+  ai_agent 1-63
+examples/__marimo__/studio/occupancy/model-review/src/App.tsx
+  ai_agent 15,20,103,109,289
+apps/docs/scripts/verify-build.ts
+  ai_agent 120-121,138-141
+examples/__marimo__/studio/occupancy/monitor/src/index.html
+  ai_agent 2-92
+apps/docs/examples.ts
+  ai_agent 15-18,178-181
+examples/__marimo__/studio/occupancy/monitor/AGENTS.md
+  ai_agent 1,3-6,8,10-13,17-18,20-30,33-67
+examples/__marimo__/studio/occupancy/monitor/deno.lock
+  ai_agent 4-7,11-12,14-18,21-92,94,97-102,104-110,112-113,115,118-143,145-172,176-177,181-182,186-187,191-192,196-197,201-202,206-207,211-212,216-217,221-222,226-227,231-232,236-237,244-258,263-264,266-267,269-270,273-274,276-280,286-293,295-296,298-299,301-302,305-309,311-312,314-343,345-346,348-349,351-352,355-362,364-368,370,373-541,556-560,562-622,699-700,702,705-709,711-712,715-731,737-744,760-761,763-770,776,794-804,806,812-816,819-828,832-833,835,838-839,841,844-845,861-862,864,867-878,880-881,883-884,886-894,900-903
+docs/examples/index.md
+  ai_agent 29
+examples/__marimo__/studio/occupancy/monitor/src/monitor.js
+  ai_agent 1,3-13,15-28,31-32,34-39,42-78,80,86-106,108-120,122-150,153-155
+examples/__marimo__/studio/occupancy/monitor/src/lib/marimo-value.js
+  ai_agent 1-13
+examples/__marimo__/studio/occupancy/monitor/src/style.css
+  ai_agent 1-2,5-10,14,16-19,21-22,24-26,28-30,32,35-58,61-66,69-73,76-78,81-85,87-90,92-93,95,98,100,102,104-107,109-111,113-117,119-128,130-131,133-137,139-143,146-149,152-154,156-159,161-165,167-171,173,175-185,187-190,192-193,195-197,199-205,207-216,219-220,222-224,226-227,230-232,234-235,238-239,241-243,245-247,249-250,252-253,256-258,262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "47ce8a3d9e6e6cca23fe27b0923d63031153f9cd",
+  "prompts": {},
+  "sessions": {
+    "s_f47d3aefc3f3dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b0c7-6c54-7283-8f62-6f4d63dc4aa3",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
