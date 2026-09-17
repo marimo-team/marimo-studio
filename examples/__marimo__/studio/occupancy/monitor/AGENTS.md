@@ -1,118 +1,67 @@
-# Svelte starter instructions
+# Observable Notebook Kit view
 
-Follow the Marimo Studio skill for notebook ownership, projection selection,
-view lifecycle, and validation. This file covers the Svelte project supplied by
-this starter.
+Edit `src/index.html` using Notebook Kit's `<notebook>` and `<script>` cell
+format. Studio builds it with the project's locked Deno and Vite dependencies.
+`src/page.tmpl` supplies the page shell and `src/style.css` supplies styling.
+Keep the template's `<main id="app-shell">` around the notebook output.
 
-## Project intent
+Put Studio projection hosts in `type="text/html"` cells or the page template:
 
-Build a calm room-operations monitor for facilities staff. Use Svelte and Apache
-ECharts for the selected sensor series. Mount the native
-`analysis_scope_control` and `metric_control` cells, then consume
-`selected_sensor_series`, `occupancy_summary`, and `daily_room_profile`. Follow
-the visual direction in `DESIGN.md`: neutral surfaces, slate text, blue sensor
-readings, muted amber anomaly markers, and plain status text.
-
-## Use the supplied Studio integration
-
-`src/App.svelte` mounts `analysis_scope_control` and `metric_control`, then
-observes `selected_sensor_series`, `occupancy_summary`, and
-`daily_room_profile`. ECharts receives the projected series after the notebook
-reacts to either control.
-
-- `src/app.d.ts` adds Studio attributes to Svelte's element types.
-- `src/lib/marimo-value.ts` supplies the `observeMarimoValue` action. Attach it
-  to an explicit `mo-value` host so Studio can inspect and authorize the
-  selector.
-
-```svelte
-<script lang="ts">
-  import {
-    type MarimoTable,
-    observeMarimoValue,
-  } from "./lib/marimo-value.ts";
-
-  type Row = { id: string; label: string };
-
-  let rows = $state<MarimoTable<Row>>();
+```html
+<script id="3" type="text/html">
+    <marimo-cell name="controls"></marimo-cell>
+    <marimo-output value="summary"></marimo-output>
 </script>
-
-<span
-  hidden
-  mo-value="rows"
-  use:observeMarimoValue={{
-    selector: "rows",
-    onValue: (value: MarimoTable<Row>) => {
-      rows = value;
-    },
-  }}
-></span>
-
-<output>{rows?.numRows ?? 0}</output>
 ```
 
-Use the supplied declaration and action as the integration contract. Keep
-page-specific value handling in the component that consumes it.
+To use live notebook data in Observable expressions, give an HTML cell an
+`output` name and pass its host to the supplied generator:
 
-Eager dataframes arrive as a shared `MarimoTable` backed by Flechette. Use
-[https://github.com/uwdata/flechette](https://github.com/uwdata/flechette) as
-the table API reference. Keep data columnar with `getChild()`, `select()`, and
-`toColumns()`. Call `toArray()` when a component needs row objects.
-
-Treat the table as immutable. `getMarimoDataSource(table)` returns its codec,
-fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
-
-## Add dependencies
-
-Run Deno's package manager from the view root. Use `--package-json` so Vite
-resolves application dependencies through `package.json` and the installed
-`node_modules` tree:
-
-```console
-deno add --package-json --frozen=false --save-exact \
-  npm:d3@7 \
-  npm:@observablehq/plot@0.6 \
-  npm:arquero@8 \
-  jsr:@std/csv@1
+```html
+<script id="4" type="text/html" output="totalHost">
+    <span hidden mo-value="total"></span>
+</script>
+<script id="5" type="module">
+import { marimoValue } from "./lib/marimo-value.js";
+const total = marimoValue(totalHost);
+</script>
+<script id="6" type="text/html">
+    <p>Total: ${total}</p>
+</script>
 ```
 
-Import the package names or explicit alias written to `package.json`:
+The generator reads the current value, subscribes to updates, and releases its
+listener when Observable invalidates it. It also carries Arrow table values.
+Keep the value host independent of cells that consume its value.
 
-```ts
-import * as d3 from "d3";
-import * as Plot from "@observablehq/plot";
-import * as aq from "arquero";
-import { parse as parseCsv } from "@std/csv";
-```
+Use literal targets or conditional expressions with literal branches for
+Prepared exports. Unbounded interpolated selectors require
+`data-marimo-allow="*"` and the Server or WebAssembly runtime. Observable can
+recreate these hosts as its inputs change. Put projections in HTML cells rather
+than constructing them in JavaScript strings or Markdown. Studio authorizes each
+authored host and owns its native output subtree.
 
-Choose the packages the page actually needs. D3 and Observable Plot render
-visualizations, Arquero transforms tabular data, and `@std/csv` parses CSV
-through JSR. Deno also accepts registry package subpaths and explicit local
-aliases when a package's documentation calls for them.
+Configure native control combinations in `states.yaml` for Prepared exports. An
+omitted state file captures the initial notebook state.
 
-Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit
-`package.json` and `deno.lock` after adding or changing an application
-dependency. Use `--frozen=false` for that intentional update. Normal builds
-remain frozen.
+Keep shared computation, data loading, controls, and domain decisions in the
+Marimo notebook. Use Observable cells for this view's presentation and local
+interaction. Build-time interpreter cells and database queries are rejected.
+Relative `FileAttachment` assets under `src/` are included in builds. Bare npm
+imports are bundled by Vite. Notebook Kit's `npm:` and `jsr:` imports use remote
+browser modules, so use bare imports for views that must work offline.
 
-## Work within the Svelte project
+Pin added npm dependencies in `package.json`, then regenerate `deno.lock` with
+`deno install --frozen=false --node-modules-dir=auto --no-save`. Source exposes
+the lockfile as read-only. Keep authored inputs in `src/` and public assets in
+`public/`. Build failure retains the last published preview.
 
-- Use Svelte 5 runes such as `$state` and `$derived` for local browser state.
-- Keep the application entry in `src/main.ts` and compose the page from
-  `src/App.svelte` or focused components under `src/`.
-- Keep page styles in `src/style.css` or component-owned `<style>` blocks.
-- Put static files under `public/` and reference them from the page. Vite copies
-  that directory into the built artifact.
-- Use the versions pinned by `package.json`, `deno.json`, and `deno.lock`.
-  TypeScript source imports may retain their `.ts` suffix.
+## This view
 
-Studio's Svelte build runs `svelte-check` before Vite. Treat that build as the
-acceptance boundary for actions, runes, imports, and packaged assets.
-
-## Visual direction
-
-Keep the presentation calm and focused on the data. Use the current view CSS as
-the visual baseline: restrained headings, readable labels, neutral surfaces,
-fine borders, and color for selection or analytical meaning. Preserve the view's
-distinct audience and interaction model. Check phone, tablet, desktop, and short
-landscape layouts, including populated controls and long values.
+Follow `DESIGN.md` for the Room 01 field-notebook treatment. The native
+`analysis_scope_control` and `metric_control` cells select 12 prepared states.
+Consume `occupancy_summary`, `selected_sensor_series`, and `daily_room_profile`
+through explicit HTML value hosts. `src/monitor.js` formats those results and
+builds Observable Plot charts. Keep baseline, anomaly, and occupancy
+calculations in `occupancy.py`. Build and test this view as a zero-python
+export, including all scopes and signals.

@@ -8,17 +8,12 @@ export const Metric = ({
   label,
   value,
   detail,
-  sources,
 }: {
   detail?: string;
-  sources: readonly string[];
   label: string;
   value: number | string;
 }) => (
-  <div className="metric">
-    {sources.map((source) => (
-      <span key={source} hidden mo-value={source} data-marimo-allow="*" />
-    ))}
+  <div className="metric" data-marimo-lens-inputs="analysis-data">
     <span>{label}</span>
     <strong>{value}</strong>
     {detail ? <small>{detail}</small> : null}
@@ -56,12 +51,13 @@ export const ActivityBars = ({
     <figure
       className={`activity-chart${compact ? " activity-chart-compact" : ""}`}
       data-id="weekly-tempo-chart"
+      data-marimo-lens-inputs="analysis-data"
       aria-label="Daily earthquake count shown as bars and daily maximum magnitude shown as a line"
       role="img"
     >
       <span hidden mo-value="seismic_analysis.activity" />
       <div className="activity-plot">
-        {activity.map((row, index) => {
+        {activity.map((row) => {
           const key = String(row.day);
           const isPeak = key === peakKey;
           return (
@@ -73,21 +69,11 @@ export const ActivityBars = ({
               key={key}
             >
               <span
-                hidden
-                mo-value={`seismic_analysis.activity[${index}]`}
-                data-marimo-allow="*"
-              />
-              <span
                 className="activity-bar"
                 data-id={`tempo-bar-${key}`}
                 style={{ height: `${(row.events / maximum) * 100}%` }}
               >
                 <span className="activity-value">
-                  <span
-                    hidden
-                    mo-value={`seismic_analysis.activity[${index}].events`}
-                    data-marimo-allow="*"
-                  />
                   {row.events}
                 </span>
               </span>
@@ -116,11 +102,6 @@ export const ActivityBars = ({
                 top: `${magnitude(row.maximum_magnitude)}%`,
               }}
             >
-              <span
-                hidden
-                mo-value={`seismic_analysis.activity[${index}].maximum_magnitude`}
-                data-marimo-allow="*"
-              />
             </i>
           ))}
         </span>

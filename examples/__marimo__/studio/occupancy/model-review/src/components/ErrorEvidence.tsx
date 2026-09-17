@@ -30,11 +30,9 @@ const formatTime = (value: unknown) => {
 export const ErrorEvidence = ({
   rows,
   total,
-  source,
 }: {
   rows: readonly ErrorCase[];
   total?: number;
-  source: string | undefined;
 }) => (
   <section className="error-section" aria-labelledby="errors-heading">
     <div className="panel-heading">
@@ -69,34 +67,19 @@ export const ErrorEvidence = ({
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, visibleErrors).map((row, index) => (
+          {rows.slice(0, visibleErrors).map((row) => (
             <tr
               key={String(row.date)}
-              data-marimo-lens-inputs={`error-row-${index}`}
+              data-marimo-lens-inputs="analysis-data"
               data-marimo-lens-label={formatTime(row.date)}
             >
               <td>
-                {source && (
-                  <span
-                    id={`error-row-${index}`}
-                    hidden
-                    mo-value={`${source}[${index}]`}
-                    data-marimo-allow="*"
-                  />
-                )}
                 {formatTime(row.date)}
               </td>
               <td>
                 <span className="outcome">{row.outcome}</span>
               </td>
               <td>
-                {source && (
-                  <span
-                    hidden
-                    mo-value={`${source}[${index}].score`}
-                    data-marimo-allow="*"
-                  />
-                )}
                 {row.score.toFixed(3)}
               </td>
               <td>{row.Occupancy ? "Occupied" : "Empty"}</td>

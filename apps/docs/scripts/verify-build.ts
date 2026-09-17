@@ -117,13 +117,8 @@ for (const family of documentationExampleFamilies) {
     const root = join(distDir, "examples", family.slug, view.key);
     const entrypoint = join(root, "index.html");
     const config = join(root, "_marimo-studio", "views", view.key, "config");
-    const runtimeId = "runtime" in view ? view.runtime : "zero-python";
-    const runtime = join(
-      root,
-      "_marimo-studio",
-      "assets",
-      runtimeId === "zero-python" ? "zero-python.js" : "runtime.js",
-    );
+    const runtimeId = "zero-python";
+    const runtime = join(root, "_marimo-studio", "assets", "zero-python.js");
     const preparedManifest = join(
       root,
       "_marimo-studio",
@@ -140,12 +135,10 @@ for (const family of documentationExampleFamilies) {
     }
     check(await isFile(config), `Missing live example config: ${family.slug}/${view.key}`);
     check(await isFile(runtime), `Missing live example runtime: ${family.slug}/${view.key}`);
-    if (runtimeId === "zero-python") {
-      check(
-        await isFile(preparedManifest),
-        `Missing prepared example manifest: ${family.slug}/${view.key}`,
-      );
-    }
+    check(
+      await isFile(preparedManifest),
+      `Missing prepared example manifest: ${family.slug}/${view.key}`,
+    );
     check(await isFile(noJekyll), `Missing live example .nojekyll: ${family.slug}/${view.key}`);
 
     const document = await readFile(entrypoint, "utf8");

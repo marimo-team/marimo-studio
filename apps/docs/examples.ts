@@ -12,10 +12,10 @@ export const documentationTechnologies = {
     name: "D3",
     projectUrl: "https://github.com/d3/d3",
   },
-  echarts: {
-    description: "A browser charting library for interactive analytical graphics.",
-    name: "ECharts",
-    projectUrl: "https://github.com/apache/echarts",
+  notebookKit: {
+    description: "Reactive JavaScript, Markdown, and HTML cells in an open notebook format.",
+    name: "Notebook Kit",
+    projectUrl: "https://github.com/observablehq/notebook-kit",
   },
   mapLibre: {
     description: "An open-source TypeScript library for interactive vector maps.",
@@ -88,7 +88,6 @@ export const documentationExampleSource = {
 export interface DocumentationExampleView {
   key: string;
   kind: DocumentationExampleKind;
-  runtime?: "zero-python" | "wasm";
   label: string;
   technologies: readonly DocumentationTechnology[];
 }
@@ -149,14 +148,12 @@ export const documentationExampleFamilies = [
       },
       {
         key: "operations",
-        runtime: "wasm",
         kind: "app",
         label: "Operations",
         technologies: [documentationTechnologies.react, documentationTechnologies.mapLibre],
       },
       {
         key: "briefing",
-        runtime: "wasm",
         kind: "slides",
         label: "Interactive lesson",
         technologies: [
@@ -176,14 +173,15 @@ export const documentationExampleFamilies = [
     views: [
       {
         key: "monitor",
-        runtime: "wasm",
         kind: "app",
         label: "Monitor",
-        technologies: [documentationTechnologies.svelte, documentationTechnologies.echarts],
+        technologies: [
+          documentationTechnologies.notebookKit,
+          documentationTechnologies.observablePlot,
+        ],
       },
       {
         key: "model-review",
-        runtime: "wasm",
         kind: "report",
         label: "Model review",
         technologies: [documentationTechnologies.react, documentationTechnologies.recharts],

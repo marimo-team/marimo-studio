@@ -12,16 +12,12 @@ import {
 import { useMarimoValue } from "./lib/use-marimo-value.ts";
 
 const Metric = (
-  { label, value, sources }: {
+  { label, value }: {
     label: string;
     value?: string;
-    sources: readonly string[];
   },
 ) => (
-  <article className="metric">
-    {sources.map((source) => (
-      <span key={source} hidden mo-value={source} data-marimo-allow="*" />
-    ))}
+  <article className="metric" data-marimo-lens-inputs="analysis-data">
     <span>{label}</span>
     <strong>{value ?? "…"}</strong>
   </article>
@@ -104,13 +100,13 @@ const ThresholdControl = ({
 );
 
 const ConfusionCounts = (
-  { summary, source }: {
+  { summary }: {
     summary?: ThresholdMetric;
-    source: string | undefined;
   },
 ) => (
   <article
     className="panel confusion-panel"
+    data-marimo-lens-inputs="analysis-data"
     aria-labelledby="confusion-heading"
   >
     <div className="panel-heading">
@@ -132,24 +128,10 @@ const ConfusionCounts = (
         <tr>
           <th>Occupied</th>
           <td>
-            {source && (
-              <span
-                hidden
-                mo-value={`${source}.true_positive`}
-                data-marimo-allow="*"
-              />
-            )}
             <span>True positive</span>
             <strong>{summary?.true_positive ?? "…"}</strong>
           </td>
           <td className="error-count">
-            {source && (
-              <span
-                hidden
-                mo-value={`${source}.false_negative`}
-                data-marimo-allow="*"
-              />
-            )}
             <span>False negative</span>
             <strong>{summary?.false_negative ?? "…"}</strong>
           </td>
@@ -157,24 +139,10 @@ const ConfusionCounts = (
         <tr>
           <th>Empty</th>
           <td className="error-count">
-            {source && (
-              <span
-                hidden
-                mo-value={`${source}.false_positive`}
-                data-marimo-allow="*"
-              />
-            )}
             <span>False positive</span>
             <strong>{summary?.false_positive ?? "…"}</strong>
           </td>
           <td>
-            {source && (
-              <span
-                hidden
-                mo-value={`${source}.true_negative`}
-                data-marimo-allow="*"
-              />
-            )}
             <span>True negative</span>
             <strong>{summary?.true_negative ?? "…"}</strong>
           </td>
@@ -195,9 +163,6 @@ export const App = () => {
     curve[0]?.threshold ?? 0;
   const model = closestThreshold(curve, requestedThreshold);
   const threshold = model?.threshold ?? requestedThreshold;
-  const modelSource = model
-    ? `occupancy_analysis.model.evidence[${curve.indexOf(model)}]`
-    : undefined;
   const errorRows = model?.errors ?? [];
   const unavailable = analysis.error;
   const loading = !unavailable && analysis.value === undefined;
@@ -282,24 +247,18 @@ export const App = () => {
 
         <section className="metric-grid" aria-label="Current threshold metrics">
           <Metric
-            sources={modelSource ? [`${modelSource}.threshold`] : []}
             label="Threshold"
             value={model?.threshold.toFixed(2)}
           />
           <Metric
-            sources={modelSource ? [`${modelSource}.accuracy`] : []}
             label="In-sample accuracy"
             value={model && formatRate(model.accuracy)}
           />
           <Metric
-            sources={modelSource ? [`${modelSource}.precision`] : []}
             label="In-sample precision"
             value={model && formatRate(model.precision)}
           />
           <Metric
-            sources={modelSource
-              ? [`${modelSource}.recall`, "occupancy_analysis.summary.occupied"]
-              : []}
             label="In-sample recall"
             value={model && scope
               ? scope.occupied > 0 ? formatRate(model.recall) : "n/a"
@@ -327,11 +286,10 @@ export const App = () => {
             />
           </article>
 
-          <ConfusionCounts summary={model} source={modelSource} />
+          <ConfusionCounts summary={model} />
         </section>
 
         <ErrorEvidence
-          source={modelSource && `${modelSource}.errors`}
           rows={errorRows}
           total={model
             ? model.false_positive + model.false_negative

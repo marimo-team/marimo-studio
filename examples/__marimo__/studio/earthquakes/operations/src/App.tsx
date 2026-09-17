@@ -118,11 +118,6 @@ export const App = () => {
         >
           {METRICS.map(({ key, label }) => (
             <article key={key}>
-              <span
-                hidden
-                mo-value={`event_summary.${key}`}
-                data-marimo-allow="*"
-              />
               {key === "maximum_magnitude" && (
                 <span hidden mo-value="event_summary.events" />
               )}
@@ -171,7 +166,6 @@ export const App = () => {
           />
           <EventDetails
             event={selectedEvent}
-            index={events.findIndex((event) => event.id === selectedEvent?.id)}
             loading={isLoading}
           />
         </div>

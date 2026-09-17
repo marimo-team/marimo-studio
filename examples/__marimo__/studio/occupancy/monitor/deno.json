@@ -1,18 +1,5 @@
 {
-  "lock": {
-    "path": "deno.lock",
-    "frozen": true
-  },
+  "lock": { "path": "deno.lock", "frozen": true },
   "nodeModulesDir": "manual",
-  "minimumDependencyAge": "P7D",
-  "fmt": {
-    "include": [
-      "deno.json",
-      "package.json",
-      "svelte.config.js",
-      "src/",
-      "tsconfig.json",
-      "vite.config.ts"
-    ]
-  }
+  "minimumDependencyAge": "P7D"
 }
