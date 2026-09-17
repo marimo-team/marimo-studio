@@ -1,0 +1,5 @@
+{
+  "lock": { "path": "deno.lock", "frozen": true },
+  "nodeModulesDir": "manual",
+  "minimumDependencyAge": "P7D"
+}

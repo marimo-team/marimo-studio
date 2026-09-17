@@ -107,12 +107,17 @@ view_providers/
     vanilla/      provider and vertical starter packages
     _deno/         shared process, inventory, and analyzer support
     deno_react/   provider, build, analyzer, and vertical starter packages
-    deno_svelte/  provider, build, analyzer, and vertical starter packages
+    deno_svelte/  provider, source check, analyzer, and vertical starter packages
+    deno_obsnotebook/ provider, notebook HTML analyzer, and vertical starter packages
 ```
 
 Framework-specific parsing and diagnostics stay inside the matching
 bundled provider. Shared Deno execution, source copying, instrumentation edits,
-and public asset handling stay under `_bundled/_deno`.
+and public asset handling stay under `_bundled/_deno`. Svelte and Notebook Kit
+share the contained Vite build pipeline. Svelte supplies its source check before
+instrumentation. Notebook Kit instruments HTML cell source before its Vite
+plugin transforms the notebook, preserving site identity through reactive
+replacement.
 
 Each bundled provider composes an immutable catalog in `starters/__init__.py`.
 Every `starters/<key>/` package owns one `ProviderStarter`, its renderer, and a

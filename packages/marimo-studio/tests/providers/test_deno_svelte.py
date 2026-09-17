@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from marimo_studio.view_providers._bundled import _deno
-from marimo_studio.view_providers._bundled.deno_svelte import build as _svelte_build
+from marimo_studio.view_providers._bundled._deno import vite_project as _vite_build
 from marimo_studio.view_providers._bundled.deno_svelte import (
     provider as svelte_provider,
 )
@@ -370,13 +370,11 @@ def test_svelte_rejects_unsafe_dependency_configuration_before_install(
     original = {
         path: path.read_text(encoding="utf-8") for path in (deno_config, package_config)
     }
-    install_called = False
 
     def install(*_args: object, **_kwargs: object) -> None:
-        nonlocal install_called
-        install_called = True
+        pytest.fail("Unsafe dependency configuration reached package installation")
 
-    monkeypatch.setattr(_svelte_build, "_run_install", install)
+    monkeypatch.setattr(_vite_build, "install_dependencies", install)
     for invalid in ("allow-scripts", "version-range"):
         for path, source in original.items():
             path.write_text(source, encoding="utf-8")
@@ -389,7 +387,6 @@ def test_svelte_rejects_unsafe_dependency_configuration_before_install(
             payload = json.loads(original[path])
             payload["devDependencies"]["vite"] = "^8.2.1"
         path.write_text(json.dumps(payload), encoding="utf-8")
-        install_called = False
         files = root / ".artifacts" / ".staging" / invalid / "files"
         files.mkdir(parents=True)
 
@@ -405,7 +402,6 @@ def test_svelte_rejects_unsafe_dependency_configuration_before_install(
 
         assert report.document is None, invalid
         assert report.diagnostics[0].code == "svelte-dependencies-invalid", invalid
-        assert not install_called, invalid
 
 
 @pytest.mark.skipif(

@@ -340,8 +340,7 @@ try {
     child: spawn(
       python,
       [
-        "-m",
-        "http.server",
+        resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
         String(installedPackageNetwork.static.port),
         "--bind",
         "127.0.0.1",

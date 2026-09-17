@@ -33,6 +33,7 @@ _ENTRY_POINTS = {
     ("marimo.agent.capability", "studio"),
     ("marimo.kernel.lifespan", "marimo-studio"),
     ("marimo.server.asgi.middleware", "marimo-studio"),
+    ("marimo_studio.view_provider", "notebook-kit"),
     ("marimo_studio.view_provider", "react"),
     ("marimo_studio.view_provider", "svelte"),
     ("marimo_studio.view_provider", "vanilla"),
@@ -263,6 +264,7 @@ def _verify_views(*, deno: bool) -> None:
             workspace = studio_authoring.open_workspace(notebook)
             catalog = {item.id: item for item in await workspace.starters()}
             expected = {
+                "marimo-studio/notebook-kit:default",
                 "marimo-studio/react:default",
                 "marimo-studio/react:reveal",
                 "marimo-studio/svelte:default",
@@ -301,6 +303,7 @@ def _verify_views(*, deno: bool) -> None:
                 _validate_cli(notebook, "dashboard")
                 return
             for view_name, identity in (
+                ("notebook", "marimo-studio/notebook-kit:default"),
                 ("react", "marimo-studio/react:default"),
                 ("slides", "marimo-studio/react:reveal"),
                 ("svelte", "marimo-studio/svelte:default"),

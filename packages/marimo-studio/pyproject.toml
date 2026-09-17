@@ -46,6 +46,7 @@ marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 studio = "marimo_studio.agent"
 
 [project.entry-points."marimo_studio.view_provider"]
+notebook-kit = "marimo_studio.view_providers._bundled.deno_obsnotebook:provider"
 react = "marimo_studio.view_providers._bundled.deno_react:provider"
 svelte = "marimo_studio.view_providers._bundled.deno_svelte:provider"
 vanilla = "marimo_studio.view_providers._bundled.vanilla:provider"

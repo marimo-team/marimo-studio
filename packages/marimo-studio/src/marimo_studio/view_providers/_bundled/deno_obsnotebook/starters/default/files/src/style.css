@@ -1,0 +1,14 @@
+@import "@observablehq/notebook-kit/index.css";
+
+#app-shell {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 3rem);
+}
+
+marimo-cell,
+marimo-output {
+  display: block;
+  min-width: 0;
+  margin-block: 1rem;
+}

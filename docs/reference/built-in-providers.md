@@ -5,8 +5,9 @@ description: Provider keys, starter IDs, source documents, requirements, and vie
 
 # Built-in view providers
 
-Marimo Studio includes Vanilla HTML, [React](https://react.dev/), and
-[Svelte](https://svelte.dev/) view providers. A provider key selects the view
+Marimo Studio includes Vanilla HTML, [React](https://react.dev/),
+[Svelte](https://svelte.dev/), and
+[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit) view providers. A provider key selects the view
 project's inspection and build contract. A starter ID selects the files created
 for a new view project.
 
@@ -21,11 +22,12 @@ input and is not stored in `view.toml`.
 
 ## Catalog
 
-| Provider key            | Starter IDs                                                 | Build requirement        |
-| ----------------------- | ----------------------------------------------------------- | ------------------------ |
-| `marimo-studio/vanilla` | `marimo-studio/vanilla:default`                             | Base Studio installation |
-| `marimo-studio/react`   | `marimo-studio/react:default`, `marimo-studio/react:reveal` | `marimo-studio[deno]`    |
-| `marimo-studio/svelte`  | `marimo-studio/svelte:default`                              | `marimo-studio[deno]`    |
+| Provider key                 | Starter IDs                                                 | Build requirement        |
+| ---------------------------- | ----------------------------------------------------------- | ------------------------ |
+| `marimo-studio/vanilla`      | `marimo-studio/vanilla:default`                             | Base Studio installation |
+| `marimo-studio/react`        | `marimo-studio/react:default`, `marimo-studio/react:reveal` | `marimo-studio[deno]`    |
+| `marimo-studio/svelte`       | `marimo-studio/svelte:default`                              | `marimo-studio[deno]`    |
+| `marimo-studio/notebook-kit` | `marimo-studio/notebook-kit:default`                        | `marimo-studio[deno]`    |
 
 Run `marimo-studio starters --json` for the installed catalog and current
 availability. The `documents` field is the starter's initial Source document
@@ -150,9 +152,90 @@ declared `mo-value` host.
 | `vite_config` | Project-relative POSIX path | `vite.config.ts` | Selects the Vite configuration                                         |
 | `tsconfig`    | Project-relative POSIX path | `tsconfig.json`  | Selects the TypeScript configuration                                   |
 
+## `marimo-studio/notebook-kit`
+
+The Notebook Kit provider builds Observable notebook HTML with Vite and Deno.
+Create a view with:
+
+```sh
+marimo-studio view create report --target analysis.py \
+  --starter marimo-studio/notebook-kit:default
+```
+
+Edit `src/index.html` as a Notebook Kit `<notebook>` document. The starter places
+eligible Marimo cells in `type="text/html"` cells. `src/page.tmpl` provides the
+page shell with `<main id="app-shell">`, and `src/style.css` supplies styling.
+Source also includes the live-value and Vite adapters, `vite.config.ts`, `package.json`,
+`deno.json`, and the read-only `deno.lock`.
+
+Use all three projection forms inside HTML cells or the page template:
+
+```html
+<script id="1" type="text/html">
+  <marimo-cell name="controls"></marimo-cell>
+  <marimo-output value="summary"></marimo-output>
+</script>
+<script id="2" type="text/html" output="totalHost">
+  <span hidden mo-value="total"></span>
+</script>
+<script id="3" type="module">
+  import { marimoValue } from "./lib/marimo-value.js";
+  const total = marimoValue(totalHost);
+</script>
+<script id="4" type="text/html">
+  <p>Total: ${total}</p>
+</script>
+```
+
+The HTML cell's `output` names its DOM node. `marimoValue(host)` exposes that
+host's current and subsequent values to Observable's reactive graph, releasing
+its listener on invalidation. Keep the value host independent of its consumers.
+The generator also carries Arrow tables.
+
+Literal selectors and conditional expressions with literal branches support
+Prepared exports:
+
+```html
+<script id="5" type="text/html">
+  <marimo-output value="${showDetail ? 'detail' : 'summary'}"></marimo-output>
+</script>
+```
+
+Define the native control combinations in `states.yaml` when visitors can change
+Marimo inputs. See [prepared static exports](../guide/run-and-share.md#export-a-prepared-static-view).
+An omitted state file captures the initial notebook state.
+
+For an unbounded runtime selector, use `data-marimo-allow="*"` and the Server or
+WebAssembly runtime:
+
+```html
+<script id="6" type="text/html">
+  <marimo-cell name="${selectedCell}" data-marimo-allow="*"></marimo-cell>
+</script>
+```
+
+Studio authorizes hosts declared in HTML cells and templates. Put projections
+there rather than constructing them in JavaScript strings or Markdown. Native
+projections reconnect when Observable replaces an HTML cell.
+
+Keep shared data loading and computation in Marimo. Build-time interpreter cells
+and database queries produce diagnostics. Relative `FileAttachment` assets
+under `src/` are build inputs. Add exact npm versions to `package.json` and
+refresh `deno.lock` when adding browser dependencies. Bare package imports are
+bundled. Notebook Kit's `npm:` and `jsr:` imports use remote browser modules.
+
+### Options
+
+| Option        | Type                        | Default          | Contract                                                             |
+| ------------- | --------------------------- | ---------------- | -------------------------------------------------------------------- |
+| `entrypoint`  | Project-relative POSIX path | `src/index.html` | Selects the notebook document. Its filename must remain `index.html` |
+| `config`      | Project-relative POSIX path | `deno.json`      | Selects the Deno configuration                                       |
+| `lockfile`    | Project-relative POSIX path | `deno.lock`      | Selects the frozen Deno lockfile                                     |
+| `vite_config` | Project-relative POSIX path | `vite.config.ts` | Selects the Vite configuration                                       |
+
 ## Deno availability
 
-React and Svelte require the Deno executable packaged by
+React, Svelte, and Notebook Kit require the Deno executable packaged by
 `marimo-studio[deno]`. Studio requires the pinned Deno version listed in
 [Compatibility and support](compatibility.md). `doctor` and `starters` report
 an unavailable provider with its recovery action when the executable is

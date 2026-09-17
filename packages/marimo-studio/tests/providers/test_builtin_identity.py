@@ -21,21 +21,18 @@ def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
         item for item in registry.diagnostics() if item.distribution == "marimo-studio"
     )
 
-    assert {item.registration for item in diagnostics} == {
-        "react",
-        "svelte",
-        "vanilla",
-    }
-    assert {item.provider_key for item in diagnostics} == {
-        "marimo-studio/react",
-        "marimo-studio/svelte",
-        "marimo-studio/vanilla",
+    assert {item.registration: item.provider_key for item in diagnostics} == {
+        "notebook-kit": "marimo-studio/notebook-kit",
+        "react": "marimo-studio/react",
+        "svelte": "marimo-studio/svelte",
+        "vanilla": "marimo-studio/vanilla",
     }
     assert {
         provider.key: provider.requirement
         for provider, _starter in registry.starter_records()
         if provider.distribution == "marimo-studio"
     } == {
+        "marimo-studio/notebook-kit": "marimo-studio[deno]",
         "marimo-studio/react": "marimo-studio[deno]",
         "marimo-studio/svelte": "marimo-studio[deno]",
         "marimo-studio/vanilla": "marimo-studio",

@@ -10,7 +10,12 @@ const outputOffset = `offset-${process.env.MARIMO_STUDIO_E2E_PORT_OFFSET ?? "0"}
 
 export default defineConfig({
   testDir: "./tests",
-  testIgnore: ["provider-runtime.spec.ts", "provider-reveal.spec.ts", "external-provider.spec.ts"],
+  testIgnore: [
+    "provider-runtime.spec.ts",
+    "provider-reveal.spec.ts",
+    "provider-notebook.spec.ts",
+    "external-provider.spec.ts",
+  ],
   timeout: process.platform === "win32" ? 180_000 : 90_000,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),

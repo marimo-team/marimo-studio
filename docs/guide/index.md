@@ -27,7 +27,7 @@ you need to do.
 - [Style a view](styling.md) covers authored CSS, utility classes, projected
   Marimo output, loading states, and icons.
 - [Choose a frontend](frontend-options.md) compares Vanilla HTML, React,
-  Reveal.js, and Svelte starters.
+  Reveal.js, Svelte, and Observable Notebook Kit starters.
 - [Author with a coding agent](coding-agents.md) gives agents the same
   inspect, edit, build, show, and verify loop.
 

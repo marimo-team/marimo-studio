@@ -10,6 +10,7 @@ VANILLA_PROVIDER_ID: Final = "marimo-studio/vanilla"
 
 BUNDLED_PROVIDER_REQUIREMENTS: Final = MappingProxyType(
     {
+        "marimo-studio/notebook-kit": "marimo-studio[deno]",
         "marimo-studio/react": "marimo-studio[deno]",
         "marimo-studio/svelte": "marimo-studio[deno]",
         VANILLA_PROVIDER_ID: "marimo-studio",

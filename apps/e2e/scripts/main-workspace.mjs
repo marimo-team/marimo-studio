@@ -135,8 +135,7 @@ export class MainWorkspace {
     await this.#services.start(
       [
         "python",
-        "-m",
-        "http.server",
+        resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
         String(endpoint.port),
         "--bind",
         "127.0.0.1",

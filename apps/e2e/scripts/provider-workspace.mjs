@@ -1,4 +1,5 @@
-import { mkdir, rm } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { cleanupProviderEnvironment } from "./cleanup-provider-runtime.mjs";
 import { copyFixtureProviderPackage } from "./fixture-provider-package.mjs";
@@ -9,6 +10,8 @@ import {
   providerConfigDirectory,
   providerGalleryStaticDirectory,
   providerNotebookPath,
+  providerNotebookStaticDirectory,
+  providerNotebookPreparedDirectory,
   providerRevealStaticDirectory,
   providerStoryStaticDirectory,
   providerWebStaticDirectory,
@@ -24,28 +27,73 @@ import {
 const candidates = [
   { view: "overview", starter: "marimo-studio/vanilla:default" },
   {
+    view: "notebook",
+    starter: "marimo-studio/notebook-kit:default",
+    files: {
+      "src/index.html": resolve(repositoryDirectory, "apps/e2e/fixtures-provider/notebook.html"),
+      "src/rows.json": resolve(repositoryDirectory, "apps/e2e/fixtures-provider/rows.json"),
+      "states.yaml": resolve(
+        repositoryDirectory,
+        "apps/e2e/fixtures-provider/notebook-states.yaml",
+      ),
+    },
+    exports: [
+      {
+        directory: providerNotebookStaticDirectory,
+        endpoint: e2eNetwork.provider.notebook,
+        runtime: "wasm",
+      },
+      {
+        directory: providerNotebookPreparedDirectory,
+        endpoint: e2eNetwork.provider.notebookPrepared,
+        runtime: "zero-python",
+      },
+    ],
+  },
+  {
     view: "gallery",
     starter: "marimo-studio/react:default",
-    output: providerGalleryStaticDirectory,
-    endpoint: e2eNetwork.provider.gallery,
+    exports: [
+      {
+        directory: providerGalleryStaticDirectory,
+        endpoint: e2eNetwork.provider.gallery,
+        runtime: "wasm",
+      },
+    ],
   },
   {
     view: "story",
     starter: "marimo-studio/svelte:default",
-    output: providerStoryStaticDirectory,
-    endpoint: e2eNetwork.provider.story,
+    exports: [
+      {
+        directory: providerStoryStaticDirectory,
+        endpoint: e2eNetwork.provider.story,
+        runtime: "wasm",
+      },
+    ],
   },
   {
     view: "slides",
     starter: "marimo-studio/react:reveal",
-    output: providerRevealStaticDirectory,
-    endpoint: e2eNetwork.provider.reveal,
+    exports: [
+      {
+        directory: providerRevealStaticDirectory,
+        endpoint: e2eNetwork.provider.reveal,
+        runtime: "wasm",
+      },
+    ],
   },
   {
     view: "web",
     starter: "marimo-studio-e2e-provider/web:default",
-    output: providerWebStaticDirectory,
-    endpoint: e2eNetwork.provider.web,
+    exports: [
+      {
+        directory: providerWebStaticDirectory,
+        endpoint: e2eNetwork.provider.web,
+        runtime: "wasm",
+        entrypoint: "src/index.html",
+      },
+    ],
   },
   { view: "dashboard", starter: "marimo-studio-e2e-provider/report:default" },
 ];
@@ -74,7 +122,18 @@ export class ProviderWorkspace {
         candidate.starter,
         "--json",
       ]);
-      if (candidate.output !== undefined) {
+      for (const [relative, source] of Object.entries(candidate.files ?? {})) {
+        await cp(
+          source,
+          resolve(
+            providerWorkspaceDirectory,
+            "__marimo__/studio/projections",
+            candidate.view,
+            relative,
+          ),
+        );
+      }
+      for (const publication of candidate.exports ?? []) {
         await this.#run(`export ${candidate.view}`, [
           "view",
           "export",
@@ -82,33 +141,33 @@ export class ProviderWorkspace {
           "--target",
           notebook,
           "--output",
-          candidate.output,
+          publication.directory,
           "--runtime",
-          "wasm",
+          publication.runtime,
           "--json",
         ]);
       }
     }
     await clearProviderGeneratedState();
     for (const candidate of selected) {
-      if (candidate.output === undefined) continue;
-      await this.#services.start(
-        [
-          "python",
-          "-m",
-          "http.server",
-          String(candidate.endpoint.port),
-          "--bind",
-          "127.0.0.1",
-          "--directory",
-          candidate.output,
-        ],
-        candidate.endpoint,
-        "process",
-        {
-          readyUrl: `${candidate.endpoint.origin}/${candidate.view === "web" ? "src/index.html" : ""}`,
-        },
-      );
+      for (const publication of candidate.exports ?? []) {
+        await this.#services.start(
+          [
+            "python",
+            resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
+            String(publication.endpoint.port),
+            "--bind",
+            "127.0.0.1",
+            "--directory",
+            publication.directory,
+          ],
+          publication.endpoint,
+          "process",
+          {
+            readyUrl: `${publication.endpoint.origin}/${publication.entrypoint ?? "index.html"}`,
+          },
+        );
+      }
     }
     if (views.includes("dashboard")) {
       await this.#runServer(externalProviderNotebookPath, e2eNetwork.provider.external);

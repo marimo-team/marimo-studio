@@ -8,7 +8,15 @@ import { ProviderWorkspace } from "../scripts/provider-workspace.mjs";
 export const test = base.extend<
   {},
   {
-    providerViews: readonly ("overview" | "gallery" | "story" | "slides" | "web" | "dashboard")[];
+    providerViews: readonly (
+      | "overview"
+      | "gallery"
+      | "story"
+      | "slides"
+      | "notebook"
+      | "web"
+      | "dashboard"
+    )[];
     providerWorkspace: ProviderWorkspace;
   }
 >({

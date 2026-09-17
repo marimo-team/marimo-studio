@@ -49,8 +49,14 @@ class ProviderProjectSpec:
     read_only: frozenset[str]
     option_paths: Mapping[str, str]
     analyzer_suffixes: frozenset[str]
-    lockfile: str
     build_fingerprint: str
+
+    def option_path(self, project: ViewProject, name: str) -> PurePosixPath:
+        """Resolve a declared path option against this provider's defaults."""
+        return validate_relative_path(
+            project.options.get(name, self.option_paths[name]),
+            field=f"{self.provider_id} {name}",
+        )
 
     def source_paths(self, inspection: ProjectInspection) -> tuple[PurePosixPath, ...]:
         return tuple(
@@ -65,10 +71,7 @@ class ProviderProjectSpec:
         inspection: ProjectInspection,
         execution: _deno.DenoExecution,
     ) -> SourceAnalysis:
-        lockfile = validate_relative_path(
-            project.options.get("lockfile", self.lockfile),
-            field=f"{self.provider_id} lockfile",
-        )
+        lockfile = self.option_path(project, "lockfile")
         return analyze_sources(
             project,
             self.provider_id,
@@ -97,12 +100,9 @@ class ProviderProjectSpec:
             )
             for name in sorted(set(project.options) - set(self.option_paths))
         ]
-        for name, default in self.option_paths.items():
+        for name in self.option_paths:
             try:
-                configured_paths[name] = validate_relative_path(
-                    project.options.get(name, default),
-                    field=f"{self.provider_id} {name}",
-                )
+                configured_paths[name] = self.option_path(project, name)
             except ValueError as error:
                 option_diagnostics.append(
                     ProjectDiagnostic(
