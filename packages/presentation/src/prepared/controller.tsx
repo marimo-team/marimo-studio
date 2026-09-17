@@ -17,9 +17,14 @@ import type { PreparedOutputOwners, PreparedResources } from "./resources.ts";
 import { getCellHosts, setCellHostState } from "../cells/host.ts";
 import { getOutputHosts, setOutputHostState } from "../outputs/host.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
-import { markValuePending, markValueRetainedError } from "../values/hosts.ts";
+import {
+  applyValues,
+  markValuePending,
+  markValueRetainedError,
+  subscribeValueHostProjections,
+} from "../values/hosts.ts";
 import { immutablePreparedSnapshot } from "./records.ts";
-import { prepareProjectionResources } from "./resources.ts";
+import { prepareProjectionResources, preparedValueRecord } from "./resources.ts";
 import {
   applyPreparedSnapshot,
   attempt,
@@ -127,6 +132,18 @@ const linkAbort = (controller: AbortController, signal: AbortSignal | undefined)
   return () => signal.removeEventListener("abort", abort);
 };
 
+interface CommittedProjection {
+  readonly snapshot: PreparedProjectionSnapshot;
+  readonly resources: PreparedResources;
+  readonly projectionRevision: string;
+}
+
+interface SavedProjection {
+  readonly snapshot: PreparedProjectionSnapshot;
+  readonly resources: PreparedResources;
+  readonly bindings: PreparedControlBindings;
+}
+
 export interface PreparedProjectionDependencies {
   readonly mountPresentation: typeof mountPreparedPresentation;
   readonly releaseOutputResources: typeof releaseProjectedOutputResources;
@@ -135,19 +152,8 @@ export interface PreparedProjectionDependencies {
 export const createPreparedProjectionMount =
   (dependencies: PreparedProjectionDependencies) =>
   (options: MountPreparedProjectionsOptions): PreparedProjectionHandle => {
-    const shell = dependencies.mountPresentation({
-      ...options,
-      onControlInput:
-        options.onControlInput === undefined
-          ? undefined
-          : (input: MarimoPreparedControlInput) => options.onControlInput?.(input),
-      onPeerControlInput:
-        options.onPeerControlInput === undefined
-          ? undefined
-          : (input: MarimoPreparedControlInput) => options.onPeerControlInput?.(input),
-    });
-    let current: PreparedProjectionSnapshot | undefined;
-    let currentResources: PreparedResources | undefined;
+    const shell = dependencies.mountPresentation(options);
+    let committed: CommittedProjection | undefined;
     let currentControlBindings = immutableControlBindings({});
     let currentOwners: PreparedOutputOwners = new Map();
     let active: AbortController | undefined;
@@ -156,6 +162,24 @@ export const createPreparedProjectionMount =
     let portalRevision = 0;
     let disposed = false;
     let disposal: Promise<void> | undefined;
+
+    // Frameworks can mount value hosts after consuming another prepared value.
+    // Replay the committed snapshot after pending replacements settle.
+    let replayPending = false;
+    const stopValueReplay = subscribeValueHostProjections(() => {
+      if (disposed || replayPending) return;
+      replayPending = true;
+      const operation = queue.then(() => {
+        replayPending = false;
+        if (disposed || active !== undefined || committed === undefined) return;
+        applyValues(preparedValueRecord(committed.snapshot), committed.projectionRevision);
+      });
+      queue = operation.catch((error) => {
+        replayPending = false;
+        if (!disposed && committed !== undefined)
+          markFailure(committed.snapshot, preparedFailure(error));
+      });
+    });
 
     const applySnapshot = async (
       snapshot: PreparedProjectionSnapshot,
@@ -184,12 +208,12 @@ export const createPreparedProjectionMount =
       replaceModels: boolean,
       signal?: AbortSignal,
     ): Promise<void> => {
-      if (current === undefined || currentResources === undefined) {
+      if (committed === undefined) {
         signal?.throwIfAborted();
         shell.render(null);
         return;
       }
-      await applySnapshot(current, currentResources, replaceModels, signal);
+      await applySnapshot(committed.snapshot, committed.resources, replaceModels, signal);
     };
 
     const perform = async (
@@ -199,10 +223,10 @@ export const createPreparedProjectionMount =
     ): Promise<void> => {
       controller.signal.throwIfAborted();
       const resources = prepared ?? prepareProjectionResources(snapshot);
+      const projectionRevision = getRuntimeConfig().projectionRevision;
       try {
         await applySnapshot(snapshot, resources, true, controller.signal);
-        current = snapshot;
-        currentResources = resources;
+        committed = { snapshot, resources, projectionRevision };
       } catch (error) {
         const cause = preparedFailure(error);
         const cleanupErrors: Error[] = [];
@@ -296,39 +320,31 @@ export const createPreparedProjectionMount =
     };
 
     const checkpoint = (): PreparedProjectionCheckpoint => {
-      if (current === undefined || currentResources === undefined) {
+      if (committed === undefined) {
         throw new Error("Prepared projections require a committed snapshot before checkpointing");
       }
       const modelCheckpoint = shell.models.snapshot();
-      let snapshot: PreparedProjectionSnapshot | undefined = current;
-      let resources: PreparedResources | undefined = {
-        files: structuredClone(modelCheckpoint.files),
-        modelNotifications: structuredClone([...modelCheckpoint.modelNotifications]),
-        uiValues: structuredClone(shell.uiValues.snapshot()),
-        modelCheckpoint,
+      let saved: SavedProjection | undefined = {
+        snapshot: committed.snapshot,
+        resources: {
+          files: structuredClone(modelCheckpoint.files),
+          modelNotifications: structuredClone([...modelCheckpoint.modelNotifications]),
+          uiValues: structuredClone(shell.uiValues.snapshot()),
+          modelCheckpoint,
+        },
+        bindings: currentControlBindings,
       };
-      let bindings: PreparedControlBindings | undefined = currentControlBindings;
       let restoration: Promise<void> | undefined;
-      let checkpointDisposed = false;
       const restoreCheckpoint = (): Promise<void> => {
-        if (checkpointDisposed || disposed) {
+        if (saved === undefined || disposed) {
           return Promise.resolve();
         }
         if (restoration !== undefined) {
           return restoration;
         }
-        const targetSnapshot = snapshot;
-        const targetResources = resources;
-        const targetBindings = bindings;
-        if (
-          targetSnapshot === undefined ||
-          targetResources === undefined ||
-          targetBindings === undefined
-        ) {
-          return Promise.resolve();
-        }
-        const operation = replacePrepared(targetSnapshot, targetResources).then(() => {
-          applyControlBindings(targetBindings);
+        const target = saved;
+        const operation = replacePrepared(target.snapshot, target.resources).then(() => {
+          applyControlBindings(target.bindings);
         });
         const tracked = operation.finally(() => {
           if (restoration === tracked) {
@@ -341,13 +357,7 @@ export const createPreparedProjectionMount =
       return Object.freeze({
         restore: restoreCheckpoint,
         dispose() {
-          if (checkpointDisposed) {
-            return;
-          }
-          checkpointDisposed = true;
-          snapshot = undefined;
-          resources = undefined;
-          bindings = undefined;
+          saved = undefined;
         },
       });
     };
@@ -355,6 +365,7 @@ export const createPreparedProjectionMount =
     const dispose = (): Promise<void> => {
       disposal ??= (async () => {
         disposed = true;
+        stopValueReplay();
         active?.abort(new DOMException("Prepared projections were disposed", "AbortError"));
         const errors: Error[] = [];
         await attemptAsync(errors, () => queue);
@@ -362,8 +373,7 @@ export const createPreparedProjectionMount =
           releasePreparedOwners(currentOwners, dependencies.releaseOutputResources),
         );
         await attemptAsync(errors, () => shell.dispose());
-        current = undefined;
-        currentResources = undefined;
+        committed = undefined;
         currentControlBindings = immutableControlBindings({});
         currentOwners = new Map();
         throwCleanupErrors(errors, "Prepared projection disposal failed");
