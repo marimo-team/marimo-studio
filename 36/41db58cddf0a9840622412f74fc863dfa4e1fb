@@ -1,0 +1,29 @@
+examples/__marimo__/studio/earthquakes/briefing/src/App.tsx
+  s_f47d3aefc3f3dd::t_6eabad982d683b 89
+examples/__marimo__/studio/occupancy/model-review/src/components/ErrorEvidence.tsx
+  s_f47d3aefc3f3dd::t_6eabad982d683b 31,35,72,75,77-79
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingPrimitives.tsx
+  s_f47d3aefc3f3dd::t_6eabad982d683b 11,14,18-23,61
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingSlides.tsx
+  s_f47d3aefc3f3dd::t_6eabad982d683b 181-183,187-189,219-221,229-231
+examples/__marimo__/studio/occupancy/model-review/src/App.tsx
+  s_f47d3aefc3f3dd::t_6eabad982d683b 274-278,297
+docs/reference/projections.md
+  s_f47d3aefc3f3dd::t_43d684f26770f1 261-265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3641db58cddf0a9840622412f74fc863dfa4e1fb",
+  "prompts": {},
+  "sessions": {
+    "s_f47d3aefc3f3dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b0c7-6c54-7283-8f62-6f4d63dc4aa3",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
