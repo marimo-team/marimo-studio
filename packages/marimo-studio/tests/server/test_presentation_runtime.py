@@ -43,6 +43,26 @@ from .app_test_support import (
 )
 
 
+def test_presentation_publishes_default_and_view_owned_lens_scopes(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    custom = studio.views["executive"].root / "index.html"
+    custom.write_text(
+        custom.read_text().replace(
+            'id="app-shell"', 'id="app-shell" data-marimo-lens-scope=".card, header"'
+        )
+    )
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        dashboard = client.get(_presentation_fallback_url(client.get("/").text))
+        executive = client.get(
+            _presentation_fallback_url(client.get("/executive/").text)
+        )
+    assert 'data-marimo-lens-scope="article, section,' in dashboard.text
+    assert 'data-marimo-lens-scope=".card, header"' in executive.text
+    assert executive.text.count("data-marimo-lens-scope=") == 1
+
+
 def test_deleted_named_cell_keeps_the_view_live_until_repaired(
     tmp_path: Path,
 ) -> None:

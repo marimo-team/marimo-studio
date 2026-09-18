@@ -565,7 +565,9 @@ authoring follows the conventions directly, without Lens setup prompts or
 additional discovery calls.
 
 To enable feedback, install `marimo-studio[lens]` (or `marimo-lens>=0.1.0`) in
-the notebook environment, then define one Lens value with Studio's result selector:
+the notebook environment. Development previews reuse the notebook's Lens or mount
+one when installed. Reuse that instance without adding a Lens cell or projection.
+For an explicitly authored Lens in another Server view, define one value:
 
 ```python
 from marimo_lens import Lens
@@ -597,8 +599,14 @@ rendered regions to their existing notebook input hosts:
 
 `STUDIO_RESULT_SELECTOR` covers connected `marimo-cell`, `marimo-output`, and
 `mo-value` hosts, parents containing hidden value hosts, and regions annotated
-with `data-marimo-lens-inputs`. For layout or copy without notebook inputs, extend
-`dom_selector` with a focused CSS selector such as `[data-lens-target]`.
+with `data-marimo-lens-inputs`. Studio also scopes default HTML picking to
+`#app-shell`. Ordinary HTML is selectable without annotation. Lens frames the
+nearest semantic region or block and retains the clicked child's bounded DOM
+hint. Set `data-marimo-lens-scope=".card, header, figure"` on the shell to customize
+grouping for that view. Mark a parent that should outrank smaller nested targets with
+`data-marimo-lens-target` and a stable, unique ID. Each view owns these regions
+in its authored markup. Keep labels and rendering-source references on the
+selected root. Such selections have empty notebook provenance.
 
 Use the packaged Marimo Lens skill for the feedback lifecycle. Pass the
 captured `SelectionReference` to Lens activity and reveal calls. Use its
