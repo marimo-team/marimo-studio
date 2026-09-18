@@ -1,0 +1,21 @@
+apps/e2e/tests/lens-integration.spec.ts
+  s_3fd814a2f82500::t_7202d6b14e8faf 213
+apps/e2e/fixtures/lens/index.html
+  s_3fd814a2f82500::t_0f4c0973306779 19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6a6d76e798429a615ee1589a9eac61b6eaf59649",
+  "prompts": {},
+  "sessions": {
+    "s_3fd814a2f82500": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b33c-a511-7712-ac29-174372a0cff0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
