@@ -111,6 +111,7 @@ for (const path of paths) {
     diagnostics.push({ code, severity: "error", ...copy, ...point(offset) });
   };
   for (const source of htmlSources(text, report)) {
+    let valid = true;
     const fragment = parseFragment(maskExpressions(source), {
       sourceCodeLocationInfo: true,
       onParseError(error) {
@@ -118,12 +119,14 @@ for (const path of paths) {
           start <= error.startOffset && error.startOffset <= end
         );
         if (error.code === "duplicate-attribute" && !inExpression) {
+          valid = false;
           report(source.offset + error.startOffset, "notebook-html-invalid", {
             message: "HTML attributes must be unique.",
           });
         }
       },
     });
+    if (!valid) continue;
     for (const node of elements(fragment)) {
       const location = node.sourceCodeLocation?.startTag;
       if (!location) continue;
@@ -167,26 +170,30 @@ for (const path of paths) {
         );
         continue;
       }
-      const targets = wildcard === "*" ? null : targetsFromResult(
+      const targets = targetsFromResult(
         kind,
         targetDomain(source, node, attribute, target),
       );
-      if (targets !== null && "status" in targets) {
+      let allowedTargets: readonly string[] | null = null;
+      if ("status" in targets) {
         if (targets.status === "invalid") {
           report(offset, targets.code, { message: targets.message });
-        } else {
+          continue;
+        } else if (wildcard !== "*") {
           report(offset, "projection-target-unbounded", {
             ...projectionTargetUnbounded(kind),
             hint:
               'Use a literal selector or a conditional with literal targets. Add data-marimo-allow="*" for runtime selectors or attribute spreads.',
           });
+          continue;
         }
-        continue;
+      } else if (wildcard !== "*") {
+        allowedTargets = targets;
       }
       sites.push({
         ...point(offset),
         kind,
-        allowedTargets: targets,
+        allowedTargets,
         offset: encoder.encode(text.slice(0, offset + 1 + tag.length)).length,
       });
     }

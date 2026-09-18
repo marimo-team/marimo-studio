@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -154,6 +155,8 @@ def test_svelte_keeps_mutated_static_domains_fail_closed(
     reason="marimo-studio[deno] is unavailable",
 )
 def test_svelte_starter_builds_without_possible_output_cells(tmp_path: Path) -> None:
+    tmp_path = tmp_path / "project, with commas"
+    tmp_path.mkdir()
     tmp_path.joinpath("analysis.py").write_text(
         no_display_notebook_source(),
         encoding="utf-8",
@@ -278,6 +281,8 @@ def test_svelte_each_extracts_bounded_and_wildcard_mounts(
 def test_svelte_vite_config_cannot_access_paths_outside_staging(
     tmp_path: Path,
 ) -> None:
+    tmp_path = tmp_path / "project, with commas"
+    tmp_path.mkdir()
     root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
     external = tmp_path / "external"
     external.mkdir()
@@ -486,3 +491,32 @@ def test_registered_svelte_starter_builds_typed_projections_and_reports_warnings
         path.read_text(encoding="utf-8") for path in files.rglob("*.js")
     )
     assert all(site.id in javascript for site in inspection.mounts)
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_svelte_revalidates_tsconfig_before_installation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    inspection = _inspect(svelte_provider, project)
+    project = replace(project, options={"tsconfig": "../outside.json"})
+
+    def install(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Invalid tsconfig reached package installation")
+
+    monkeypatch.setattr(_vite_build, "install_dependencies", install)
+    files = root / ".artifacts" / ".staging" / "invalid-options" / "files"
+    files.mkdir(parents=True)
+
+    report = _build(
+        svelte_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    assert report.document is None
+    assert [item.code for item in report.diagnostics] == ["provider-options-invalid"]
+    assert "tsconfig" in report.diagnostics[0].message

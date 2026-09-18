@@ -24,6 +24,12 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._bundled._deno.cache import ensure_cache_directory
 
+
+def permission_paths(*paths: Path) -> str:
+    """Encode filesystem allowlists using Deno's doubled-comma escaping."""
+    return ",".join(str(path.resolve()).replace(",", ",,") for path in paths)
+
+
 DENO_MIN_VERSION = "2.9.5"
 INSTALL_ACTION = "pip install 'marimo-studio[deno]'"
 _AVAILABILITY_TIMEOUT = 15.0

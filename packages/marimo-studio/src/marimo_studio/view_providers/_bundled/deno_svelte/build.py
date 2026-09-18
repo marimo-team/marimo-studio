@@ -19,6 +19,7 @@ from marimo_studio.view_providers._bundled._deno.project import (
     command,
     failure,
 )
+from marimo_studio.view_providers._bundled._deno.runtime import permission_paths
 from marimo_studio.view_providers._bundled._deno.vite import ViteBuildPaths
 from marimo_studio.view_providers._bundled._deno.vite_project import build_vite_project
 
@@ -113,7 +114,7 @@ def _run_check(
             "--cached-only",
             "--no-remote",
             "--deny-import",
-            f"--allow-read={work.resolve()}",
+            f"--allow-read={permission_paths(work)}",
             f"--ignore-env={_IGNORED_CHECK_ENVIRONMENT}",
             "--no-prompt",
             f"--config={paths.config.as_posix()}",
@@ -167,6 +168,19 @@ def build_svelte(
     vite_version: str,
 ) -> BuildResult:
     """Check Svelte source and build one contained Vite candidate."""
+    try:
+        tsconfig = spec.option_path(request.project, "tsconfig")
+    except ValueError as error:
+        return BuildResult(
+            None,
+            (
+                ProjectDiagnostic(
+                    code="provider-options-invalid",
+                    severity="error",
+                    message=str(error),
+                ),
+            ),
+        )
     return build_vite_project(
         request,
         spec,
@@ -179,6 +193,6 @@ def build_svelte(
             paths,
             execution,
             version=svelte_check_version,
-            tsconfig=spec.option_path(request.project, "tsconfig"),
+            tsconfig=tsconfig,
         ),
     )

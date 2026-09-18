@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 from marimo_studio.view_providers import BuildRequest, ProjectDiagnostic
 from marimo_studio.view_providers._bundled import _deno
 from marimo_studio.view_providers._bundled._deno.project import command, failure
+from marimo_studio.view_providers._bundled._deno.runtime import permission_paths
 
 
 @dataclass(frozen=True)
@@ -72,10 +73,6 @@ def validate_install_manifests(work: Path, paths: ViteBuildPaths) -> None:
                 raise ValueError(
                     f"package.json dependency {name!r} must use an exact npm version"
                 )
-
-
-def _permission_paths(*paths: Path) -> str:
-    return ",".join(str(path.resolve()) for path in paths)
 
 
 def _build_read_paths(work: Path, output: Path) -> tuple[Path, ...]:
@@ -174,11 +171,11 @@ def build_vite(
         "--cached-only",
         "--no-remote",
         "--deny-import",
-        f"--allow-read={_permission_paths(*_build_read_paths(work, output))}",
-        f"--allow-write={output}",
+        f"--allow-read={permission_paths(*_build_read_paths(work, output))}",
+        f"--allow-write={permission_paths(output)}",
         "--allow-env",
         "--allow-sys=uid,osRelease",
-        f"--allow-ffi={_permission_paths(*bindings)}",
+        f"--allow-ffi={permission_paths(*bindings)}",
         "--no-prompt",
         f"--config={paths.config.as_posix()}",
         f"--lock={paths.lockfile.as_posix()}",

@@ -189,8 +189,9 @@ Use all three projection forms inside HTML cells or the page template:
 
 The HTML cell's `output` names its DOM node. `marimoValue(host)` exposes that
 host's current and subsequent values to Observable's reactive graph, releasing
-its listener on invalidation. Keep the value host independent of its consumers.
-The generator also carries Arrow tables.
+its listeners on invalidation. Keep the value host independent of its consumers.
+The generator also carries Arrow tables. A terminal projection error stops the
+generator and appears in dependent cells. Reload the view after correcting the error.
 
 Literal selectors and conditional expressions with literal branches support
 Prepared exports:

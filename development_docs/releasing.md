@@ -147,9 +147,8 @@ and attaches the distributions and checksum manifest to the GitHub release.
 
 `scripts/verify-pypi.sh` polls for the exact package version with a minimal
 probe. After the version appears, it runs the complete base check and Deno
-check once. The Deno check creates and builds the React application starter,
-Reveal.js slide deck starter, and Svelte application starter with the published
-package.
+check once. The Deno check creates and builds the React, Reveal.js, Svelte, and
+Observable Notebook Kit starters with the published package.
 
 Installed-wheel acceptance uses fresh isolated environments with cached
 dependency downloads. It reports elapsed time for each base, external-provider,

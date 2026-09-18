@@ -67,6 +67,39 @@ for (const runtime of ["Server", "static WebAssembly", "Prepared"] as const) {
         path: testInfo.outputPath("notebook-kit-narrow.png"),
         fullPage: true,
       });
+      await scale.press("ArrowRight");
+      await expect(root.locator("#observable-metric")).toHaveText("Observable metric: 42");
+      await expect(results.locator('marimo-cell[name="metric"]')).toHaveText("42");
+      await expect(results.locator("#late-scale")).toHaveText("2");
+      const projectionFailure = diagnostics.expectConsole({
+        type: "error",
+        text: /Projected metric unavailable/,
+      });
+      await root.locator('[mo-value="metric"]').evaluate((host) => {
+        host.dispatchEvent(
+          new CustomEvent("marimo-value-error", {
+            detail: {
+              selector: "metric",
+              code: "value-unavailable",
+              message: "Projected metric unavailable",
+            },
+          }),
+        );
+      });
+      await expect(root.locator("#cell-4").getByText("Projected metric unavailable")).toBeVisible();
+      const frameElement =
+        runtime === "Server"
+          ? await page.locator("iframe#marimo-studio-presentation").elementHandle()
+          : null;
+      const retiringFrame = await frameElement?.contentFrame();
+      await frameElement?.dispose();
+      const retirement = retiringFrame
+        ? diagnostics.expectFrameRetirement(retiringFrame)
+        : undefined;
+      await page.reload();
+      await expect(root.locator("#observable-metric")).toHaveText("Observable metric: 42");
+      retirement?.recovered();
+      projectionFailure.recovered();
       if (runtime === "Prepared") expect(pythonRequests).toEqual([]);
       expect(remoteTemplateRequests).toEqual([]);
     } finally {

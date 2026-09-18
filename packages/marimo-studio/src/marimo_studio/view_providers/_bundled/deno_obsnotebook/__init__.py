@@ -32,7 +32,7 @@ from marimo_studio.view_providers._bundled.deno_obsnotebook.starters import (
 PROVIDER_KEY = "marimo-studio/notebook-kit"
 NOTEBOOK_KIT_VERSION = "2.6.4"
 VITE_VERSION = "8.2.1"
-PROJECTION_CONTRACT_VERSION = "notebook-kit-projections-v2"
+PROJECTION_CONTRACT_VERSION = "notebook-kit-projections-v3"
 BUILD_CONTRACT_VERSION = "vite-notebook-kit-artifact-v1"
 _INPUT_SCOPE = (
     ProjectInput(PurePosixPath("src"), "directory"),

@@ -106,6 +106,11 @@ def test_notebook_html_cells_and_template_declare_source_located_mounts(
             "<marimo-cell name=\"${ready ? '' : 'controls'}\"></marimo-cell>",
             "projection-target-domain-invalid",
         ),
+        (
+            "<marimo-cell name=\"${ready ? '' : 'controls'}\" "
+            'data-marimo-allow="*"></marimo-cell>',
+            "projection-target-domain-invalid",
+        ),
         ("<marimo-cell></marimo-cell>", "projection-target-missing"),
         (
             '<marimo-cell name="controls" data-marimo-allow="maybe"></marimo-cell>',
@@ -190,6 +195,7 @@ def test_notebook_rejects_duplicate_authored_attributes_next_to_a_binding(
     )
     inspection = inspect_provider(provider, view)
     assert [item.code for item in inspection.diagnostics] == ["notebook-html-invalid"]
+    assert inspection.mounts == ()
     output = root / ".artifacts/.staging/invalid/files"
     output.mkdir(parents=True)
     result = provider.build(provider_build_request(view, inspection, output))

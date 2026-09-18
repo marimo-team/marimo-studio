@@ -216,6 +216,7 @@ main_browser:
   - "apps/e2e/fixtures-hosted/**"
   - "apps/e2e/fixtures-provider/provider/**"
   - "apps/e2e/tests/**"
+  - "!apps/e2e/tests/provider-notebook.spec.ts"
   - "!apps/e2e/tests/provider-runtime.spec.ts"
   - "!apps/e2e/tests/provider-reveal.spec.ts"
   - "!apps/e2e/tests/external-provider.spec.ts"
@@ -229,6 +230,7 @@ provider_browser:
   - *browser_infra
   - "apps/e2e/playwright.providers.config.ts"
   - "apps/e2e/fixtures-provider/**"
+  - "apps/e2e/tests/provider-notebook.spec.ts"
   - "apps/e2e/tests/provider-runtime.spec.ts"
   - "apps/e2e/tests/provider-reveal.spec.ts"
   - "apps/e2e/tests/external-provider.spec.ts"

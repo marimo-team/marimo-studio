@@ -31,7 +31,9 @@ const total = marimoValue(totalHost);
 ```
 
 The generator reads the current value, subscribes to updates, and releases its
-listener when Observable invalidates it. It also carries Arrow table values.
+listeners when Observable invalidates it. It also carries Arrow table values.
+A terminal projection error stops the generator and appears in dependent cells.
+Reload the view after correcting the error.
 Keep the value host independent of cells that consume its value.
 
 Use literal targets or conditional expressions with literal branches for

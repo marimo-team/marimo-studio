@@ -18,6 +18,7 @@ from marimo_studio.view_providers import (
     mount_attribute,
 )
 from marimo_studio.view_providers._bundled import _deno
+from marimo_studio.view_providers._bundled._deno.runtime import permission_paths
 from marimo_studio.view_providers._validation import validate_relative_path
 
 _TYPESCRIPT_ENVIRONMENT = ",".join(
@@ -130,6 +131,9 @@ def analyze_sources(
     script = resources.files(analyzer_package).joinpath("analyzer.ts")
     with resources.as_file(script) as script_path:
         shared_analyzers = script_path.parent.parent / "_deno" / "analyzers"
+        read_paths = permission_paths(
+            project.root, script_path.parent, shared_analyzers
+        )
         try:
             result = execution.run(
                 (
@@ -139,7 +143,7 @@ def analyze_sources(
                     f"--lock={project.root.joinpath(*lockfile.parts)}",
                     "--frozen",
                     "--node-modules-dir=none",
-                    f"--allow-read={project.root},{script_path.parent},{shared_analyzers}",
+                    f"--allow-read={read_paths}",
                     f"--allow-env={_TYPESCRIPT_ENVIRONMENT}",
                     str(script_path),
                     str(project.root),
