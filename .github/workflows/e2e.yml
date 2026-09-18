@@ -150,6 +150,21 @@ jobs:
 
       - name: Set up JavaScript workspace
         uses: ./.github/actions/setup-js
+      # Replace this candidate with the released dependency before merging Studio #111.
+      - name: Check out the coordinated Lens candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: marimo-team/marimo-lens
+          ref: 72e2e20cc6a7712a215679841963128a3325aee6
+          path: .context/lens-candidate
+          persist-credentials: false
+
+      - name: Build the Lens candidate
+        working-directory: .context/lens-candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @marimo-lens/python build
+
       - name: Download browser assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -166,6 +181,7 @@ jobs:
 
       - name: Run browser shard
         env:
+          PYTHONPATH: ${{ github.workspace }}/.context/lens-candidate/packages/marimo-lens/src
           MARIMO_STUDIO_E2E_PORT_OFFSET: ${{ matrix.port_offset }}
           PLAYWRIGHT_BLOB_OUTPUT_NAME: main-linux-${{ matrix.port_offset }}.zip
         run: >-
