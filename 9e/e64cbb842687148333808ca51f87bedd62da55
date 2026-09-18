@@ -1,0 +1,21 @@
+examples/__marimo__/studio/occupancy/monitor/AGENTS.md
+  s_f47d3aefc3f3dd::t_8a97442f6722b8 34-37
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_obsnotebook/starters/default/files/AGENTS.md
+  s_f47d3aefc3f3dd::t_8a97442f6722b8 34-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9ee64cbb842687148333808ca51f87bedd62da55",
+  "prompts": {},
+  "sessions": {
+    "s_f47d3aefc3f3dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b0c7-6c54-7283-8f62-6f4d63dc4aa3",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
