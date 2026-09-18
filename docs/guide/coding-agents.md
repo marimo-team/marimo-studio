@@ -23,13 +23,13 @@ inspect -> edit -> build -> show -> verify
 [Marimo Lens](https://marimo-team.github.io/marimo-lens/) is an optional companion
 for selecting a rendered result, adding a note, and giving a coding agent its
 producing notebook context and image. For feedback in a Server view, install
-version 0.1.0 or newer in the notebook's Python environment:
+version 0.1.2 or newer in the notebook's Python environment:
 
 ```sh
-uv pip install "marimo-lens>=0.1.0"
+uv pip install "marimo-lens>=0.1.2"
 ```
 
-For sandboxed notebooks, also declare `marimo-lens>=0.1.0` in the script's
+For sandboxed notebooks, also declare `marimo-lens>=0.1.2` in the script's
 dependencies. Restart a running notebook after installing or upgrading Lens.
 
 Development previews reuse the notebook's Lens, including an automatically
@@ -97,8 +97,8 @@ Keep the ID stable across rebuilds so Lens can reconnect the feedback.
 
 Use the public [Lens documentation](https://marimo-team.github.io/marimo-lens/)
 for its agent API and feedback workflow. The
-[source repository](https://github.com/marimo-team/marimo-lens) currently requires
-organization access.
+[source repository](https://github.com/marimo-team/marimo-lens) contains its
+implementation and contributor documentation.
 
 ## Open the current workspace
 
