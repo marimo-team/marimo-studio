@@ -210,7 +210,7 @@ test("Default Lens groups unannotated view HTML while preserving the clicked chi
   await expect(view.locator("#app-shell")).toHaveAttribute("data-marimo-lens-scope", "p");
   await select(view, view.locator("#detail"), "A paragraph in this view");
   const changed = await capturedContext(view, 2);
-  expect(changed.references.selections[1]?.target.domSelector).not.toBe("#layout");
+  expect(changed.references.selections[1]?.target.domSelector).toBe("#paragraph");
   expect(changed.references.selections[1]?.domHint).toMatchObject({ tag: "em", path: "em" });
 });
 
