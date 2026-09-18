@@ -174,6 +174,11 @@ class _DocumentLayout(HTMLParser):
             if source is not None:
                 self.head_open_end = self._offset() + len(source)
 
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        super().handle_startendtag(tag, attrs)
+        if dict(attrs).get("id") == "app-shell" and self.lens_scope_insert is not None:
+            self.lens_scope_insert -= 1
+
     def handle_endtag(self, tag: str) -> None:
         if tag == "head":
             self.head_close = self._offset()

@@ -4,6 +4,7 @@ import threading
 import time
 from collections.abc import MutableMapping
 from concurrent.futures import ThreadPoolExecutor
+from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -61,6 +62,44 @@ def test_presentation_publishes_default_and_view_owned_lens_scopes(
     assert 'data-marimo-lens-scope="article, section,' in dashboard.text
     assert 'data-marimo-lens-scope=".card, header"' in executive.text
     assert executive.text.count("data-marimo-lens-scope=") == 1
+
+
+@pytest.mark.parametrize(
+    ("shell", "closed_tag"),
+    [
+        ('<svg id="app-shell"/>', "svg"),
+        ('<svg><g id="app-shell" /></svg>', "g"),
+        ('<math id="app-shell"/>', "math"),
+        ('<svg id="app-shell" data-path=/></svg>', None),
+    ],
+)
+def test_presentation_preserves_foreign_shell_closing_syntax(
+    notebook_path: Path, shell: str, closed_tag: str | None
+) -> None:
+    studio = _configured(notebook_path)
+    (studio.views["dashboard"].root / "index.html").write_text(
+        "<!doctype html><html><head></head><body>"
+        + shell
+        + '<a id="after-shell">After</a></body></html>'
+    )
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        page = client.get(_presentation_fallback_url(client.get("/").text))
+    assert page.status_code == 200
+    closed_shells: list[str] = []
+
+    class Parser(HTMLParser):
+        def handle_startendtag(
+            self, tag: str, attrs: list[tuple[str, str | None]]
+        ) -> None:
+            attributes = dict(attrs)
+            if attributes.get("id") == "app-shell":
+                assert "data-marimo-lens-scope" in attributes
+                closed_shells.append(tag)
+
+    Parser().feed(page.text)
+    assert closed_shells == ([closed_tag] if closed_tag else [])
+    if closed_tag is None:
+        assert "data-path=/ data-marimo-lens-scope=" in page.text
 
 
 def test_deleted_named_cell_keeps_the_view_live_until_repaired(
