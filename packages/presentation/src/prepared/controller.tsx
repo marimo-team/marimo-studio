@@ -19,6 +19,7 @@ import { getOutputHosts, setOutputHostState } from "../outputs/host.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
 import {
   applyValues,
+  getValueHostProjections,
   markValuePending,
   markValueRetainedError,
   subscribeValueHostProjections,
@@ -164,29 +165,46 @@ export const createPreparedProjectionMount =
     let disposal: Promise<void> | undefined;
 
     // Frameworks can mount value hosts after consuming another prepared value.
-    // Replay the committed snapshot after pending replacements settle.
+    // Recheck pending values when a replacement settles, including aborted work.
     let replayPending = false;
-    const stopValueReplay = subscribeValueHostProjections(() => {
-      if (disposed || replayPending) return;
+    const scheduleValueReplay = (): void => {
+      if (disposed || replayPending || active !== undefined || committed === undefined) return;
       replayPending = true;
       const operation = queue.then(() => {
         replayPending = false;
         if (disposed || active !== undefined || committed === undefined) return;
-        applyValues(preparedValueRecord(committed.snapshot), committed.projectionRevision);
+        const current = committed;
+        const pending = new Set(
+          getValueHostProjections()
+            .filter(
+              ({ host, projectionRevision }) =>
+                projectionRevision === current.projectionRevision &&
+                ["connecting", "loading", "stale"].includes(host.dataset.state ?? ""),
+            )
+            .map(({ request }) => request.target),
+        );
+        const values = current.snapshot.values.filter(({ selector }) => pending.has(selector));
+        if (values.length > 0) {
+          applyValues(
+            preparedValueRecord({ ...current.snapshot, values }),
+            current.projectionRevision,
+          );
+        }
       });
       queue = operation.catch((error) => {
         replayPending = false;
         if (!disposed && committed !== undefined)
           markFailure(committed.snapshot, preparedFailure(error));
       });
-    });
+    };
+    const stopValueReplay = subscribeValueHostProjections(scheduleValueReplay);
 
     const applySnapshot = async (
       snapshot: PreparedProjectionSnapshot,
       resources: PreparedResources,
       replaceModels: boolean,
       signal?: AbortSignal,
-    ): Promise<void> => {
+    ): Promise<string> => {
       const application = await applyPreparedSnapshot({
         shell,
         snapshot,
@@ -202,6 +220,7 @@ export const createPreparedProjectionMount =
         throw application.error;
       }
       currentOwners = application.owners;
+      return application.projectionRevision;
     };
 
     const restoreCommitted = async (
@@ -213,7 +232,13 @@ export const createPreparedProjectionMount =
         shell.render(null);
         return;
       }
-      await applySnapshot(committed.snapshot, committed.resources, replaceModels, signal);
+      const projectionRevision = await applySnapshot(
+        committed.snapshot,
+        committed.resources,
+        replaceModels,
+        signal,
+      );
+      committed = { ...committed, projectionRevision };
     };
 
     const perform = async (
@@ -223,9 +248,13 @@ export const createPreparedProjectionMount =
     ): Promise<void> => {
       controller.signal.throwIfAborted();
       const resources = prepared ?? prepareProjectionResources(snapshot);
-      const projectionRevision = getRuntimeConfig().projectionRevision;
       try {
-        await applySnapshot(snapshot, resources, true, controller.signal);
+        const projectionRevision = await applySnapshot(
+          snapshot,
+          resources,
+          true,
+          controller.signal,
+        );
         committed = { snapshot, resources, projectionRevision };
       } catch (error) {
         const cause = preparedFailure(error);
@@ -262,6 +291,7 @@ export const createPreparedProjectionMount =
       const tracked = operation.finally(() => {
         if (active === controller) {
           active = undefined;
+          scheduleValueReplay();
         }
         if (restoration === tracked) {
           restoration = undefined;
@@ -303,6 +333,7 @@ export const createPreparedProjectionMount =
         unlink();
         if (active === controller) {
           active = undefined;
+          scheduleValueReplay();
         }
       });
     };
