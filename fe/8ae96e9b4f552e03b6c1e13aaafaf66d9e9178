@@ -1,0 +1,30 @@
+apps/docs/scripts/example-publication.ts
+  s_f47d3aefc3f3dd::t_b8753b715575d3 1-10,12-27
+  s_f47d3aefc3f3dd::t_48dc8e149f9868 11
+examples/__marimo__/studio/earthquakes/operations/src/components/EventDetails.tsx
+  s_f47d3aefc3f3dd::t_b8753b715575d3 105,109,113,117
+apps/docs/scripts/build-examples.ts
+  s_f47d3aefc3f3dd::t_b8753b715575d3 7,205
+apps/docs/scripts/example-publication.test.ts
+  s_f47d3aefc3f3dd::t_1de3f016a55408 128-131
+  s_f47d3aefc3f3dd::t_1c4fff6e6fa949 133-138
+  s_f47d3aefc3f3dd::t_48dc8e149f9868 10,111-127,132,139-147
+apps/docs/scripts/verify-build.ts
+  s_f47d3aefc3f3dd::t_1de3f016a55408 7,131-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fe8ae96e9b4f552e03b6c1e13aaafaf66d9e9178",
+  "prompts": {},
+  "sessions": {
+    "s_f47d3aefc3f3dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b0c7-6c54-7283-8f62-6f4d63dc4aa3",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
