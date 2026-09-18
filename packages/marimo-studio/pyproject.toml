@@ -24,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 deno = ["deno>=2.9.5"]
-lens = ["marimo-lens>=0.1.0"]
+lens = ["marimo-lens>=0.1.2"]
 recommended = ["marimo-studio[deno,lens]"]
 
 [project.urls]

@@ -170,7 +170,7 @@ try {
         "from pathlib import Path",
         "from packaging.version import Version",
         "import marimo_lens, sys",
-        "assert Version(version('marimo-lens')) >= Version('0.1.0')",
+        "assert Version(version('marimo-lens')) >= Version('0.1.2')",
         "assert distribution('marimo-lens').read_text('direct_url.json') is None",
         "assert Path(marimo_lens.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())",
         "assert version('marimo-export') == '0.0.8'",

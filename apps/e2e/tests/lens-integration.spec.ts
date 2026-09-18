@@ -26,6 +26,7 @@ const contextSchema = z.object({
         id: z.string(),
         note: z.string(),
         target: z.object({
+          domSelector: z.string().optional(),
           sources: z
             .array(z.object({ cellId: z.string(), selector: z.string().nullable() }))
             .default([]),
@@ -40,6 +41,9 @@ const contextSchema = z.object({
               })
               .optional(),
           })
+          .optional(),
+        domHint: z
+          .object({ tag: z.string(), text: z.string().optional(), path: z.string().optional() })
           .optional(),
         cells: z.array(z.object({ id: z.string(), status: z.string() })),
         snapshot: z.object({ status: z.string() }),
@@ -89,6 +93,8 @@ async function openView(
         .replace("return Lens, STUDIO_RESULT_SELECTOR, html, json, mo", "return html, json, mo");
     }
   }
+  if (provider !== "vanilla")
+    notebook = notebook.replace("Lens(dom_selector=STUDIO_RESULT_SELECTOR)", "Lens()");
   await writeWorkspaceFile(workspaceNotebookPath, notebook);
   await cli.addWorkspaceView(workspaceNotebookPath, "lens", `marimo-studio/${provider}:default`);
   const source = { vanilla: "index.html", react: "App.tsx", svelte: "App.svelte" }[provider];
@@ -116,28 +122,52 @@ for (const mount of ["notebook", "installed", "anonymous"] as const) {
   test(`Development preview mounts ${mount} Lens and preserves feedback through rebuild`, async ({
     page,
     studioCli,
-  }) => {
+  }, testInfo) => {
     const view = await openView(page, studioCli, "vanilla", mount);
     await expect(view.locator("[data-marimo-lens-view-conflict]")).toHaveCount(0);
-    await select(
-      view,
-      view.locator(mount === "anonymous" ? "#cell" : "#scalar"),
-      "Preview feedback",
-    );
+    await select(view, view.locator("#scalar"), "Preview feedback");
     expect((await inspect(view)).references.selections).toMatchObject([
       { note: "Preview feedback" },
     ]);
+    await select(view, view.locator("#intro"), "Make this heading clearer");
+    const feedback = await capturedContext(view, 2);
+    expect(feedback.references.selections[1]).toMatchObject({
+      note: "Make this heading clearer",
+      target: { sources: [] },
+      cells: [],
+      description: { label: "Introduction", renderSource: { path: "index.html" } },
+    });
+    expect(feedback.images[feedback.references.selections[1]!.id]).toBe("89504e470d0a1a0a");
     const source = workspaceCreatedViewHtmlPath("lens");
     await writeWorkspaceFile(
       source,
-      (await readFile(source, "utf8")).replace("Lens projections</h1>", "Rebuilt preview</h1>"),
+      (await readFile(source, "utf8")).replaceAll("Lens projections", "Rebuilt preview"),
     );
     await studioCli.buildWorkspaceView("lens");
     await expect(view.getByRole("heading", { name: "Rebuilt preview" })).toBeVisible();
     await expect(view.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
     await expect(
-      view.getByRole("button", { name: "Open selections, 1 open, 0 in history" }),
+      view.getByRole("button", { name: "Open selections, 2 open, 0 in history" }),
     ).toBeVisible();
+    await view.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
+    await expect(
+      view.getByRole("button", { name: /^(Activate|Current) selection S2[, ]/ }),
+    ).not.toHaveAttribute("aria-label", /target unavailable/);
+    await testInfo.attach("lens-layout-and-data", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+    await view.getByRole("button", { name: "Close selections" }).click();
+    if (mount === "anonymous") {
+      expect((await inspect(view, "Resolve")).references.selections).toEqual([]);
+      await view.getByRole("button", { name: "Open selections, 0 open, 2 in history" }).click();
+      await view.getByRole("tab", { name: /History/ }).click();
+      await view.getByRole("button", { name: "Reopen S2", exact: true }).click();
+      await view.getByRole("button", { name: "Close selections" }).click();
+      expect((await capturedContext(view, 1)).references.selections).toMatchObject([
+        { note: "Make this heading clearer", target: { sources: [] }, cells: [] },
+      ]);
+    }
     if (mount === "notebook") {
       const scale = labeledSlider(view.locator('marimo-cell[name="controls"]'), /^Scale/);
       await scale.focus();
@@ -152,6 +182,37 @@ for (const mount of ["notebook", "installed", "anonymous"] as const) {
     }
   });
 }
+
+test("Default Lens groups unannotated view HTML while preserving the clicked child", async ({
+  page,
+  studioCli,
+}) => {
+  const view = await openView(page, studioCli, "vanilla", "anonymous");
+  await select(view, view.locator("#detail"), "Explain this phrase");
+  const result = await capturedContext(view, 1);
+  expect(result.references.selections).toMatchObject([
+    {
+      note: "Explain this phrase",
+      target: { domSelector: "#layout", sources: [] },
+      cells: [],
+      domHint: { tag: "em", text: "this small phrase", path: "p > em" },
+    },
+  ]);
+  const source = workspaceCreatedViewHtmlPath("lens");
+  await writeWorkspaceFile(
+    source,
+    (await readFile(source, "utf8")).replace(
+      'id="app-shell"',
+      'id="app-shell" data-marimo-lens-scope="p"',
+    ),
+  );
+  await studioCli.buildWorkspaceView("lens");
+  await expect(view.locator("#app-shell")).toHaveAttribute("data-marimo-lens-scope", "p");
+  await select(view, view.locator("#detail"), "A paragraph in this view");
+  const changed = await capturedContext(view, 2);
+  expect(changed.references.selections[1]?.target.domSelector).toBe("#paragraph");
+  expect(changed.references.selections[1]?.domHint).toMatchObject({ tag: "em", path: "em" });
+});
 
 async function select(view: FrameLocator, target: Locator, note: string) {
   await target.scrollIntoViewIfNeeded();
@@ -171,7 +232,10 @@ async function select(view: FrameLocator, target: Locator, note: string) {
 async function inspect(view: FrameLocator, action = "Inspect") {
   const report = view.locator("#lens-context");
   const previous = (await report.count()) ? await report.textContent() : null;
-  await view.getByRole("combobox", { name: "Lens action" }).selectOption({ label: action });
+  const control = view.getByRole("combobox", { name: "Lens action" });
+  const changed = (await control.locator("option:checked").textContent()) !== action;
+  await control.selectOption({ label: action });
+  if (changed) await expect(report).toHaveCount(0);
   await view.getByRole("button", { name: "Run Lens action", exact: true }).click();
   await expect(report).not.toHaveText(previous ?? "");
   return contextSchema.parse(JSON.parse(await report.innerText()));

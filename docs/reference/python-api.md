@@ -626,7 +626,8 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
 ### `STUDIO_RESULT_SELECTOR`
 
 CSS selector for connected cell, output, and value hosts, parents containing
-hidden value hosts, and custom regions annotated with `data-marimo-lens-inputs`.
+hidden value hosts, custom regions annotated with `data-marimo-lens-inputs`,
+and authored regions marked with `data-marimo-lens-target`.
 See [custom JavaScript rendering](projections.md#trace-custom-javascript-rendering)
 for the authoring contract.
 
@@ -642,8 +643,12 @@ studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
 
 Render `studio_lens` through `<marimo-output value="studio_lens">` in the view.
 Lens reads resolved producer and value-selector metadata from the linked hosts.
-For page regions without notebook inputs, extend `dom_selector` with another
-focused CSS selector.
+Studio also publishes a document-local `data-marimo-lens-scope` on `#app-shell`
+so unannotated HTML can receive feedback. Its value is a CSS selector for
+preferred grouping regions, with the nearest block as a fallback. Set it in a
+view's source to choose that view's grouping policy. `data-marimo-lens-target`
+makes an explicit parent take precedence over smaller targets inside it. Give
+regions stable IDs to preserve feedback across rebuilds.
 
 ### `ASGIApp`
 

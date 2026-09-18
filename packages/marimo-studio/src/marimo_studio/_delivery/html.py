@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from html import escape
 from html.parser import HTMLParser
 from typing import cast
 
 from htpy import Element, Node, Renderable, base, div, fragment, link, script
 from markupsafe import Markup
 
+from marimo_studio._projections import STUDIO_REGION_SELECTOR
 from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers._document import (
     HTMLDocumentParser,
@@ -143,11 +145,13 @@ class _DocumentLayout(HTMLParser):
     def __init__(self, source: str) -> None:
         super().__init__(convert_charrefs=False)
         self._line_starts = [0]
-        for line in source.splitlines(keepends=True):
-            self._line_starts.append(self._line_starts[-1] + len(line))
+        # HTMLParser advances lines only at LF, including in mixed Windows output.
+        for line in source.split("\n"):
+            self._line_starts.append(self._line_starts[-1] + len(line) + 1)
         self.head_open_end: int | None = None
         self.head_close: int | None = None
         self.body_close: int | None = None
+        self.lens_scope_insert: int | None = None
 
     def _offset(self) -> int:
         line, column = self.getpos()
@@ -158,11 +162,23 @@ class _DocumentLayout(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
-        del attrs
+        attributes = dict(attrs)
+        if (
+            attributes.get("id") == "app-shell"
+            and "data-marimo-lens-scope" not in attributes
+        ):
+            source = self.get_starttag_text()
+            if source is not None:
+                self.lens_scope_insert = self._offset() + len(source) - 1
         if tag == "head" and self.head_open_end is None:
             source = self.get_starttag_text()
             if source is not None:
                 self.head_open_end = self._offset() + len(source)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        super().handle_startendtag(tag, attrs)
+        if dict(attrs).get("id") == "app-shell" and self.lens_scope_insert is not None:
+            self.lens_scope_insert -= 1
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "head":
@@ -234,11 +250,17 @@ def runtime_document(
     body_content = (
         "\n" + render(runtime_root()) + "\n" + render(runtime_metadata(filename)) + "\n"
     )
-    return (
-        document[: layout.head_open_end]
-        + head_content
-        + document[layout.head_open_end : layout.head_close]
-        + document[layout.head_close : layout.body_close]
-        + body_content
-        + document[layout.body_close :]
-    )
+    insertions = [
+        (layout.head_open_end, head_content),
+        (layout.body_close, body_content),
+    ]
+    if layout.lens_scope_insert is not None:
+        insertions.append(
+            (
+                layout.lens_scope_insert,
+                f' data-marimo-lens-scope="{escape(STUDIO_REGION_SELECTOR)}"',
+            )
+        )
+    for offset, content in sorted(insertions, reverse=True):
+        document = document[:offset] + content + document[offset:]
+    return document

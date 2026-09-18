@@ -6,7 +6,20 @@
   </head>
   <body>
     <main id="app-shell" style="padding: 24px; display: grid; gap: 24px">
-      <h1>Lens projections</h1>
+      <h1
+        id="intro"
+        data-marimo-lens-target
+        data-marimo-lens-label="Introduction"
+        data-marimo-lens-render-source='{"path":"index.html"}'
+      >
+        Lens projections
+      </h1>
+      <div id="layout">
+        <h2>Reading the report</h2>
+        <p id="paragraph">
+          Focus on <em id="detail">this small phrase</em> while reviewing the page.
+        </p>
+      </div>
       <marimo-cell name="controls"></marimo-cell>
       <strong id="scalar" mo-value="metrics.revenue"></strong>
       <marimo-output id="rich" value="rich"></marimo-output>
