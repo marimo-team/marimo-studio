@@ -4,7 +4,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { documentationExampleFamilies } from "../examples.ts";
-import { publishExamples } from "./example-publication.ts";
+import { publishExamples, validatePreparedExample } from "./example-publication.ts";
 import { selectDocumentationExamples } from "./example-selection.ts";
 
 interface ExportResult {
@@ -107,7 +107,6 @@ const exportView = async (
   notebook: string,
   slug: string,
   view: string,
-  runtime: "zero-python" | "wasm" = "zero-python",
 ): Promise<void> => {
   const output = join(stagingRoot, slug, view);
   await rm(output, { force: true, recursive: true });
@@ -124,8 +123,9 @@ const exportView = async (
     "--output",
     output,
     "--runtime",
-    runtime,
-    ...(runtime === "zero-python" ? ["--prepare-timeout", "900"] : []),
+    "zero-python",
+    "--prepare-timeout",
+    "900",
     "--json",
   ]);
   // SAFETY: The same-worktree CLI owns schema 1. The checks below bind its
@@ -135,7 +135,7 @@ const exportView = async (
 
   if (
     result.schema !== 1 ||
-    result.runtime !== runtime ||
+    result.runtime !== "zero-python" ||
     result.preflight?.ok !== true ||
     !Array.isArray(result.warnings) ||
     result.view !== view ||
@@ -202,6 +202,7 @@ const validateExamplePublication = async (root: string): Promise<void> => {
       if (!(await isFile(entrypoint))) {
         throw new Error(`The ${family.slug}/${view.key} export is unavailable.`);
       }
+      await validatePreparedExample(root, family.slug, view.key);
       const document = await readFile(entrypoint, "utf8");
       for (const match of document.matchAll(/\bhref="\.\.\/([^/"?#]+)\/index\.html"/g)) {
         const target = match[1];
@@ -244,7 +245,7 @@ const main = async (): Promise<void> => {
         await exportNotebook(stagingRoot, family.notebook, family.slug);
       }
       for (const view of selected.views) {
-        await exportView(stagingRoot, family.notebook, family.slug, view.key, view.runtime);
+        await exportView(stagingRoot, family.notebook, family.slug, view.key);
       }
     }
 

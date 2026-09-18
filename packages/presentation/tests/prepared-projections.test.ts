@@ -19,6 +19,7 @@ import {
 } from "../src/prepared/index.ts";
 import { projectionHosts } from "../src/projections/host-runtime.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
+import { isMarimoValueHost } from "../src/values/hosts.ts";
 import {
   preparedPresentation as presentation,
   preparedResources as resources,
@@ -906,4 +907,38 @@ test("prepared disposal attempts shell cleanup after owner release fails", async
   );
   assert.equal(injected.release.mock.calls.length, 1);
   assert.equal(injected.shellDispose.mock.calls.length, 1);
+});
+
+test("prepared values replay to late and remounted hosts until their owner closes", async () => {
+  commitRuntimeConfig(config);
+  document.body.innerHTML = '<div id="runtime"></div>';
+  projectionHosts.connect();
+  const handle = mountPreparedProjections({
+    root: document.querySelector<HTMLElement>("#runtime")!,
+    presentation,
+    theme,
+  });
+  handles.push(handle);
+  await handle.replace({ ...snapshot("first"), outputs: [], cells: [] });
+  const host = document.createElement("span");
+  host.setAttribute("data-marimo-studio-site", "value-report");
+  host.setAttribute("mo-value", "report");
+  document.body.append(host);
+  await vi.waitFor(() => assert.equal(host.dataset.state, "ready"));
+  assert.ok(isMarimoValueHost(host));
+  assert.deepEqual(host.marimoValue, { label: "first", total: 42 });
+
+  host.remove();
+  await vi.waitFor(() => assert.equal(host.dataset.state, undefined));
+  await handle.replace({ ...snapshot("second"), outputs: [], cells: [] });
+  document.body.append(host);
+  await vi.waitFor(() => assert.equal(host.dataset.state, "ready"));
+  assert.deepEqual(host.marimoValue, { label: "second", total: 42 });
+
+  await handle.dispose();
+  host.remove();
+  await vi.waitFor(() => assert.equal(host.dataset.state, undefined));
+  document.body.append(host);
+  await vi.waitFor(() => assert.equal(host.dataset.state, "connecting"));
+  assert.equal(host.marimoValue, undefined);
 });

@@ -26,7 +26,7 @@ analysis as a report, explorer, story, map, monitor, model review, or deck.
   <a href="./occupancy">
     <strong>Building occupancy</strong>
     <p>A facilities monitor, interactive model review, and printable field report.</p>
-    <small>ECharts · Recharts · React PDF · Marimo controls</small>
+    <small>Notebook Kit · Observable Plot · Recharts · React PDF</small>
   </a>
 </div>
 

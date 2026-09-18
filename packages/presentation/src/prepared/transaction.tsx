@@ -159,6 +159,7 @@ const reconcileSnapshot = (
 };
 
 interface PreparedCommit {
+  readonly projectionRevision: string;
   readonly owners: Map<string, readonly string[]>;
   readonly uiStage: PreparedUiValueStage;
   rollback(): void;
@@ -191,8 +192,9 @@ const commitSnapshot = (
         timestamp,
       }),
     );
-    applyValues(preparedValueRecord(snapshot), getRuntimeConfig().projectionRevision);
-    return { owners: nextOwners, uiStage, rollback };
+    const projectionRevision = getRuntimeConfig().projectionRevision;
+    applyValues(preparedValueRecord(snapshot), projectionRevision);
+    return { owners: nextOwners, uiStage, rollback, projectionRevision };
   } catch (error) {
     const cleanupErrors: Error[] = [];
     attempt(cleanupErrors, rollback);
@@ -212,6 +214,7 @@ const requiresPortalRemount = (
 export type PreparedSnapshotApplication =
   | {
       readonly ok: true;
+      readonly projectionRevision: string;
       readonly owners: Map<string, readonly string[]>;
       readonly portalRevision: number;
     }
@@ -260,7 +263,12 @@ export const applyPreparedSnapshot = async ({
     signal?.throwIfAborted();
     await models?.commit();
     committed.uiStage.commit();
-    return { ok: true, owners: committed.owners, portalRevision: nextPortalRevision };
+    return {
+      ok: true,
+      owners: committed.owners,
+      portalRevision: nextPortalRevision,
+      projectionRevision: committed.projectionRevision,
+    };
   } catch (error) {
     const failure = preparedFailure(error);
     const cleanupErrors: Error[] = [];

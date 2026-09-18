@@ -1,0 +1,42 @@
+<!doctype html>
+<notebook theme="air">
+  <title>Notebook Kit projections</title>
+  <script id="1" type="text/html">
+    <h1>Notebook Kit projections</h1>
+    <marimo-cell name="controls"></marimo-cell>
+  </script>
+  <script id="2" type="text/html" output="metricHost">
+    <span hidden mo-value="metric"></span>
+  </script>
+  <script id="3" type="module">
+    import { marimoValue } from "./lib/marimo-value.js";
+    const metricValue = marimoValue(metricHost);
+  </script>
+  <script id="4" type="text/html">
+    <section aria-label="Reactive results" data-metric="${metricValue}">
+      <span id="late-scale" hidden mo-value="scale.value"></span>
+      <p id="observable-metric">Observable metric: ${metricValue}</p>
+      <marimo-cell name="metric"></marimo-cell>
+    </section>
+  </script>
+  <script id="5" type="text/html" output="projectionChoice">
+    <select aria-label="Projected result">
+      <option value="first">First result</option>
+      <option value="second">Second result</option>
+    </select>
+  </script>
+  <script id="6" type="module">
+    const selected = Generators.input(projectionChoice);
+  </script>
+  <script id="7" type="text/html">
+    <section aria-label="Selected output">
+      <marimo-output value="${selected === 'second' ? 'second' : 'first'}"></marimo-output>
+    </section>
+  </script>
+  <script id="8" type="module">
+    const rows = FileAttachment("./rows.json").json();
+  </script>
+  <script id="9" type="text/html">
+    <p>Attached total: ${rows.reduce((total, row) => total + row.value, 0)}</p>
+  </script>
+</notebook>

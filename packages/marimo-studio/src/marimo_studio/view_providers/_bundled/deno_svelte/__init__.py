@@ -99,7 +99,6 @@ _PROJECT = ProviderProjectSpec(
         "tsconfig": "tsconfig.json",
     },
     analyzer_suffixes=frozenset({".js", ".mjs", ".ts", ".svelte"}),
-    lockfile="deno.lock",
     build_fingerprint=(
         f"{SVELTE_VERSION}:{SVELTE_PLUGIN_VERSION}:"
         f"{SVELTE_CHECK_VERSION}:{VITE_VERSION}:{TYPESCRIPT_VERSION}:"

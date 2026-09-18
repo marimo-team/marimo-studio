@@ -1,26 +1,92 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
-    <meta name="theme-color" content="#f8f9fb" />
-    <meta
-      name="description"
-      content="Room occupancy sensor history, rolling baseline, and anomaly monitor"
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link crossorigin="anonymous"
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <title>Environmental monitor · Room 01</title>
-    <script type="module" src="./main.ts"></script>
-  </head>
-  <body>
-    <div id="app-shell"></div>
-  </body>
-</html>
+<notebook theme="air">
+  <title>Room 01, observed</title>
+  <script id="1" type="text/html">
+    <header class="masthead">
+      <a class="wordmark" href="./index.html"><span class="field-mark" aria-hidden="true">◒</span> Field notes</a>
+      <nav aria-label="Occupancy views">
+        <a href="../model-review/index.html">Model review ↗</a>
+        <a href="../pdf-report/index.html">Field report ↗</a>
+      </nav>
+    </header>
+    <section class="introduction">
+      <p class="eyebrow">Building occupancy / Room 01</p>
+      <h1>Room 01, observed.</h1>
+      <p class="lede">A field notebook of environmental signals, room use, and the readings that stand apart.</p>
+    </section>
+    <section class="controls" aria-label="Observation controls">
+      <marimo-cell name="analysis_scope_control"></marimo-cell>
+      <marimo-cell name="metric_control"></marimo-cell>
+    </section>
+  </script>
+  <script id="2" type="text/html" output="summaryHost">
+    <span id="summary-data" hidden mo-value="occupancy_summary"></span>
+  </script>
+  <script id="3" type="text/html" output="seriesHost">
+    <span id="series-data" hidden mo-value="selected_sensor_series"></span>
+  </script>
+  <script id="4" type="text/html" output="dailyHost">
+    <span id="daily-data" hidden mo-value="daily_room_profile"></span>
+  </script>
+  <script id="5" type="module">
+  import { marimoValue } from "./lib/marimo-value.js";
+  import {
+    decimal,
+    historyChart,
+    integer,
+    occupancyChart,
+    percent,
+    readingRows,
+    unitFor,
+  } from "./monitor.js";
+  </script>
+  <script id="6" type="module">
+  const summary = marimoValue(summaryHost);
+  </script>
+  <script id="7" type="module">
+  const series = marimoValue(seriesHost);
+  </script>
+  <script id="8" type="module">
+  const daily = marimoValue(dailyHost);
+  </script>
+  <script id="9" type="module">
+  const rows = readingRows(series);
+  const latest = rows.at(-1);
+  </script>
+  <script id="10" type="text/html">
+    <section class="readout" aria-label="Room readings" data-marimo-lens-inputs="summary-data series-data">
+      <div class="scope-line"><span class="status-dot" aria-hidden="true"></span><span id="scope-label">${summary.scope_label}</span><span>${integer.format(summary.observations)} readings</span></div>
+      <div class="metrics">
+        <article><h2>Latest ${summary.metric}</h2><p><strong id="latest-reading">${decimal.format(latest?.value ?? 0)}</strong> <span>${unitFor(summary.metric)}</span></p><small>Final reading in this scope</small></article>
+        <article><h2>Occupied share</h2><p><strong id="occupied-share">${percent.format(summary.occupancy_rate)}</strong></p><small>${integer.format(summary.occupied)} occupied readings</small></article>
+        <article><h2>Flagged readings</h2><p><strong id="flagged-readings">${integer.format(summary.anomalies)}</strong></p><small>Above the local deviation threshold</small></article>
+        <article><h2>Occupied time</h2><p><strong>${decimal.format(summary.estimated_occupied_hours)}</strong> <span>hours</span></p><small>Estimated from the sampling interval</small></article>
+      </div>
+    </section>
+    <section class="section-heading" data-marimo-lens-inputs="summary-data">
+      <p class="eyebrow">01 / The signal</p>
+      <h2 id="signal-heading">${summary.metric}, through time.</h2>
+      <p>The measured signal against a ${summary.monitor.baseline_window}-reading rolling baseline. Amber marks readings beyond the local ${Math.round(summary.monitor.anomaly_quantile * 100)}th-percentile deviation.</p>
+    </section>
+  </script>
+  <script id="11" type="module">
+  display(historyChart(rows, summary.metric, width));
+  </script>
+  <script id="12" type="text/html">
+    <div class="chart-key"><span><i class="key-signal"></i>Measured signal</span><span><i class="key-baseline"></i>Rolling baseline</span><span><i class="key-anomaly"></i>Flagged deviation</span></div>
+    <section class="section-heading">
+      <p class="eyebrow">02 / The room in use</p>
+      <h2>A daily occupancy rhythm.</h2>
+      <p>The share of readings labelled occupied on each day, within the selected observation scope.</p>
+    </section>
+  </script>
+  <script id="13" type="module">
+  display(occupancyChart(daily.toArray(), width));
+  </script>
+  <script id="14" type="text/html">
+    <footer class="field-footer" data-marimo-lens-inputs="summary-data">
+      <div><p class="eyebrow">About this record</p><p>UCI Occupancy Detection · training split<br>${summary.period_start} to ${summary.period_end}</p></div>
+      <p>Occupancy labels describe the source observations. Flagged sensor deviations are candidates for review, not evidence of an equipment fault.</p>
+    </footer>
+  </script>
+</notebook>

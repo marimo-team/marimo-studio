@@ -7,6 +7,7 @@ import {
   type ExamplePublicationFileSystem,
   type ExamplePublicationPaths,
   publishExamples,
+  validatePreparedExample,
 } from "./example-publication.ts";
 
 interface PublicationFixture {
@@ -107,3 +108,40 @@ test("removes staging when the current publication cannot be moved", async () =>
     await expectMissing(fixture.paths.previous);
   });
 });
+
+test("accepts a prepared example with its runtime config and manifest", async () => {
+  await withFixture(false, async ({ root }) => {
+    const view = join(root, "occupancy/monitor/_marimo-studio/views/monitor");
+    await mkdir(join(view, "zero-python"), { recursive: true });
+    await writeFile(join(view, "config"), JSON.stringify({ runtime: { id: "zero-python" } }));
+    await writeFile(join(view, "zero-python/current"), "{}");
+
+    await validatePreparedExample(root, "occupancy", "monitor");
+  });
+});
+
+test.each(["missing config", "malformed config", "wrong runtime", "missing manifest"])(
+  "reports the example publication contract for %s",
+  async (fault) => {
+    await withFixture(false, async ({ root }) => {
+      const view = join(root, "occupancy/monitor/_marimo-studio/views/monitor");
+      await mkdir(join(view, "zero-python"), { recursive: true });
+      if (fault !== "missing manifest") {
+        await writeFile(join(view, "zero-python/current"), "{}");
+      }
+      if (fault !== "missing config") {
+        const config =
+          fault === "malformed config"
+            ? "{"
+            : JSON.stringify({
+                runtime: { id: fault === "wrong runtime" ? "wasm" : "zero-python" },
+              });
+        await writeFile(join(view, "config"), config);
+      }
+
+      await expect(validatePreparedExample(root, "occupancy", "monitor")).rejects.toThrow(
+        "The occupancy/monitor example must be a complete zero-python export.",
+      );
+    });
+  },
+);

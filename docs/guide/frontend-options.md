@@ -8,17 +8,20 @@ description: Match each view to the smallest frontend and browser toolchain that
 Start with Vanilla HTML, CSS, and JavaScript. Choose
 [React](https://react.dev/) or [Svelte](https://svelte.dev/) when component
 structure, imported assets, or a larger module graph makes the view project
-easier to maintain.
+easier to maintain. Choose [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
+for reactive JavaScript, Markdown, and HTML cells.
 
 Every built-in view provider supports `marimo-cell`, `marimo-output`, and
-`mo-value`.
+`mo-value`. Add support for any web framework or custom build workflow with a
+[view provider](../reference/provider-api.md).
 
-| Starter                         | Choose it for                                            |
-| ------------------------------- | -------------------------------------------------------- |
-| `marimo-studio/vanilla:default` | Reports, small tools, and browser-native pages           |
-| `marimo-studio/react:default`   | Typed React applications and component systems           |
-| `marimo-studio/react:reveal`    | Ordered [Reveal.js](https://revealjs.com/) presentations |
-| `marimo-studio/svelte:default`  | Svelte applications with concise reactive browser state  |
+| Starter                              | Choose it for                                             |
+| ------------------------------------ | --------------------------------------------------------- |
+| `marimo-studio/vanilla:default`      | Reports, small tools, and browser-native pages            |
+| `marimo-studio/react:default`        | Typed React applications and component systems            |
+| `marimo-studio/react:reveal`         | Ordered [Reveal.js](https://revealjs.com/) presentations  |
+| `marimo-studio/svelte:default`       | Svelte applications with concise reactive browser state   |
+| `marimo-studio/notebook-kit:default` | Observable notebook HTML with reactive presentation cells |
 
 ## Vanilla HTML
 
@@ -111,6 +114,30 @@ deno add --package-json --frozen=false --save-exact npm:d3@7
 ```
 
 Commit `package.json` and `deno.lock` after the update.
+
+## Observable Notebook Kit
+
+[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit) demonstrates
+a bespoke provider integration: its notebook HTML format and reactive JavaScript
+runtime work with the same Marimo projections as the other frontends.
+
+Create an Observable notebook view:
+
+```console
+uvx --from 'marimo-studio[deno]' marimo-studio view create report \
+  --target analysis.py \
+  --starter marimo-studio/notebook-kit:default
+```
+
+Write Notebook Kit cells in `src/index.html`. Put `marimo-cell`, `marimo-output`,
+and `mo-value` hosts inside `type="text/html"` cells. The supplied
+`marimoValue(host)` generator connects a declared value host to Observable's
+reactive graph. Keep shared computations and controls in the Marimo notebook.
+
+The starter builds through Vite and Deno with frozen dependencies. Edit the
+page template in `src/page.tmpl` and styles in `src/style.css`. See the
+[Notebook Kit provider reference](../reference/built-in-providers.md#marimo-studio-notebook-kit)
+for value subscriptions, interpolated targets, and project options.
 
 ## Inspect installed starters
 

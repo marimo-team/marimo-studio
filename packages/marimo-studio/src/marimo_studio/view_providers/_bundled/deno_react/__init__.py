@@ -87,7 +87,6 @@ _PROJECT = ProviderProjectSpec(
         "lockfile": "deno.lock",
     },
     analyzer_suffixes=frozenset({".js", ".jsx", ".mjs", ".ts", ".tsx"}),
-    lockfile="deno.lock",
     build_fingerprint=(
         f"{REACT_VERSION}:{REACT_DOM_VERSION}:"
         f"{TYPESCRIPT_VERSION}:{PROJECTION_CONTRACT_VERSION}:"

@@ -42,7 +42,7 @@ features:
       width: "24"
       height: "24"
     title: Web frontends
-    details: Use HTML, React, Svelte, or Reveal.js.
+    details: Use built-in frontends or add support for any web framework with a custom provider.
     link: ./guide/frontend-options
   - icon:
       src: /icons/cpu.svg

@@ -75,7 +75,7 @@ Creating the first view can add these settings to a standalone notebook:
 | `provider_dependencies` | array of requirements          | Omitted     | Inline PEP 723 ownership record for third-party requirements that Studio added |
 
 For a standalone notebook, view creation pins the installed Studio version.
-React and Svelte add the `deno` extra to that exact Studio requirement. An
+React, Svelte, and Notebook Kit add the `deno` extra to that exact Studio requirement. An
 installed third-party provider adds its exact distribution version to
 `dependencies`.
 

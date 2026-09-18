@@ -41,7 +41,7 @@ uvx marimo-studio doctor marimo-studio/react
 uvx marimo-studio starters
 ```
 
-React, Reveal.js, and Svelte creation require the Deno extra:
+React, Reveal.js, Svelte, and Notebook Kit creation require the Deno extra:
 
 ```console
 uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \

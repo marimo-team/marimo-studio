@@ -178,9 +178,15 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
 };
 
 export const TempoSlide = ({ model }: { model: BriefingModel }) => {
+  const countPeakIndex = model.peakActivity
+    ? model.activity.indexOf(model.peakActivity)
+    : undefined;
   const magnitudePeak = model.activity.find((row) =>
     row.maximum_magnitude === model.maximumDailyMagnitude
   );
+  const magnitudePeakIndex = magnitudePeak
+    ? model.activity.indexOf(magnitudePeak)
+    : undefined;
 
   return (
     <Slide
@@ -208,35 +214,21 @@ export const TempoSlide = ({ model }: { model: BriefingModel }) => {
 
         <div className="tempo-findings">
           <Metric
-            sources={model.peakActivity
-              ? [
-                `seismic_analysis.activity[${
-                  model.activity.indexOf(model.peakActivity)
-                }].events`,
-                `seismic_analysis.activity[${
-                  model.activity.indexOf(model.peakActivity)
-                }].day`,
-              ]
-              : []}
             detail="highest daily count"
             label={model.peakActivity ? formatDay(model.peakActivity.day) : "…"}
+            sourceDetail={countPeakIndex === undefined
+              ? undefined
+              : `seismic_analysis.activity[${countPeakIndex}].day, seismic_analysis.activity[${countPeakIndex}].events`}
             value={model.peakActivity
               ? integer.format(model.peakActivity.events)
               : "…"}
           />
           <Metric
-            sources={magnitudePeak
-              ? [
-                `seismic_analysis.activity[${
-                  model.activity.indexOf(magnitudePeak)
-                }].maximum_magnitude`,
-                `seismic_analysis.activity[${
-                  model.activity.indexOf(magnitudePeak)
-                }].day`,
-              ]
-              : []}
             detail="largest daily maximum"
             label={magnitudePeak ? formatDay(magnitudePeak.day) : "…"}
+            sourceDetail={magnitudePeakIndex === undefined
+              ? undefined
+              : `seismic_analysis.activity[${magnitudePeakIndex}].day, seismic_analysis.activity[${magnitudePeakIndex}].maximum_magnitude`}
             value={`M${model.maximumDailyMagnitude.toFixed(1)}`}
           />
           <blockquote>
@@ -253,9 +245,6 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
   const comparisons = magnitude?.comparisons ?? [];
   const [reference, setReference] = useState(magnitude?.default_reference ?? 4);
   const scaling = magnitudeScalingAt(comparisons, reference);
-  const scalingSource = scaling
-    ? `seismic_analysis.magnitude.comparisons[${comparisons.indexOf(scaling)}]`
-    : undefined;
   const minimum = comparisons[0]?.reference_magnitude ?? 2.5;
   const maximum = comparisons.at(-1)?.reference_magnitude ?? 7;
   const step = model.analysis?.weekly.magnitude_step ?? 0.1;
@@ -284,13 +273,6 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
             </div>
             <div className="lesson-range">
               <output htmlFor="comparison-magnitude">
-                {scalingSource && (
-                  <span
-                    hidden
-                    mo-value={`${scalingSource}.reference_magnitude`}
-                    data-marimo-allow="*"
-                  />
-                )}
                 M{scaling?.reference_magnitude.toFixed(1) ?? "…"}
               </output>
               <input
@@ -324,24 +306,10 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
 
           <div className="ratio-proof" aria-live="polite">
             <div className="ratio-equation">
-              {scalingSource && (
-                <span
-                  hidden
-                  mo-value={`${scalingSource}.difference`}
-                  data-marimo-allow="*"
-                />
-              )}
               <span>Magnitude difference</span>
               <strong>ΔM = {scaling?.difference.toFixed(1) ?? "…"}</strong>
             </div>
             <div className="ratio-result ratio-result-amplitude">
-              {scalingSource && (
-                <span
-                  hidden
-                  mo-value={`${scalingSource}.amplitude_ratio`}
-                  data-marimo-allow="*"
-                />
-              )}
               <span>Recorded amplitude</span>
               <strong>
                 {scaling ? formatRatio(scaling.amplitude_ratio) : "…"}×
@@ -351,13 +319,6 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
               </small>
             </div>
             <div className="ratio-result ratio-result-energy">
-              {scalingSource && (
-                <span
-                  hidden
-                  mo-value={`${scalingSource}.energy_ratio`}
-                  data-marimo-allow="*"
-                />
-              )}
               <span>Released energy, approximate</span>
               <strong>
                 {scaling ? formatRatio(scaling.energy_ratio) : "…"}×
@@ -381,9 +342,6 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
     frequency?.default_magnitude ?? 4.5,
   );
   const selected = frequencyPointAt(curve, magnitude);
-  const frequencySource = selected
-    ? `seismic_analysis.frequency.curve[${curve.indexOf(selected)}]`
-    : undefined;
   const minimum = fit?.fit_minimum ?? 3;
   const maximum = fit?.fit_maximum ?? 6;
   const step = model.analysis?.weekly.magnitude_step ?? 0.1;
@@ -420,13 +378,6 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
               </div>
               <div className="lesson-range lesson-range-compact">
                 <output htmlFor="frequency-threshold">
-                  {frequencySource && (
-                    <span
-                      hidden
-                      mo-value={`${frequencySource}.magnitude`}
-                      data-marimo-allow="*"
-                    />
-                  )}
                   M{selected?.magnitude.toFixed(1) ?? "…"}
                 </output>
                 <input
@@ -451,26 +402,12 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
                 </span>
                 <dl>
                   <div>
-                    {frequencySource && (
-                      <span
-                        hidden
-                        mo-value={`${frequencySource}.events`}
-                        data-marimo-allow="*"
-                      />
-                    )}
                     <dt>Observed</dt>
                     <dd>
                       {selected ? integer.format(selected.events) : "…"}
                     </dd>
                   </div>
                   <div>
-                    {frequencySource && (
-                      <span
-                        hidden
-                        mo-value={`${frequencySource}.fitted_events`}
-                        data-marimo-allow="*"
-                      />
-                    )}
                     <dt>Fit estimate</dt>
                     <dd>
                       {selected
@@ -699,15 +636,6 @@ export const ImpactSlide = ({ model }: { model: BriefingModel }) => {
               </p>
             </article>
             <article>
-              {mostFelt && (
-                <span
-                  hidden
-                  mo-value={`seismic_analysis.events[${
-                    model.events.indexOf(mostFelt)
-                  }]`}
-                  data-marimo-allow="*"
-                />
-              )}
               <span>Most reported</span>
               <strong>{integer.format(mostFelt?.felt ?? 0)}</strong>
               <h3>{mostFelt?.place ?? "Loading event"}</h3>

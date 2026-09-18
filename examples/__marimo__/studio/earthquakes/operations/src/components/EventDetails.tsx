@@ -63,12 +63,11 @@ export const PriorityEvents = ({
 );
 
 interface EventDetailsProps {
-  index: number;
   event: EarthquakeEvent | null;
   loading: boolean;
 }
 
-export const EventDetails = ({ event, index, loading }: EventDetailsProps) => (
+export const EventDetails = ({ event, loading }: EventDetailsProps) => (
   <aside
     data-marimo-lens-inputs="events-data"
     className="detail-panel"
@@ -99,49 +98,23 @@ export const EventDetails = ({ event, index, loading }: EventDetailsProps) => (
         <>
           <p className="event-place">{event.place}</p>
           <dl className="event-facts">
-            <div data-marimo-lens-inputs="event-time-data">
-              <marimo-output
-                id="event-time-data"
-                hidden
-                value={`filtered_events["time"][${index}]`}
-                data-marimo-allow="*"
-              />
+            <div data-marimo-lens-inputs="events-data">
               <dt>Observed</dt>
               <dd>{formatEventTime(event.time)}</dd>
             </div>
-            <div>
-              <span
-                hidden
-                mo-value={`filtered_events["felt"][${index}]`}
-                data-marimo-allow="*"
-              />
+            <div data-marimo-lens-inputs="events-data">
               <dt>Felt reports</dt>
               <dd>{formatInteger(event.felt)}</dd>
             </div>
-            <div>
-              <span
-                hidden
-                mo-value={`filtered_events["significance"][${index}]`}
-                data-marimo-allow="*"
-              />
+            <div data-marimo-lens-inputs="events-data">
               <dt>Significance</dt>
               <dd>{formatInteger(event.significance)}</dd>
             </div>
-            <div>
-              <span
-                hidden
-                mo-value={`filtered_events["status"][${index}]`}
-                data-marimo-allow="*"
-              />
+            <div data-marimo-lens-inputs="events-data">
               <dt>Review status</dt>
               <dd>{event.status}</dd>
             </div>
-            <div>
-              <span
-                hidden
-                mo-value={`filtered_events["tsunami"][${index}]`}
-                data-marimo-allow="*"
-              />
+            <div data-marimo-lens-inputs="events-data">
               <dt>Tsunami flag</dt>
               <dd className={event.tsunami ? "alert-value" : undefined}>
                 {event.tsunami ? "Flagged" : "None"}

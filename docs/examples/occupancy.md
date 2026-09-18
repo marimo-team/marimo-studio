@@ -20,8 +20,9 @@ threshold sweep.
 <StudioExample family="occupancy" />
 
 In **Monitor**, choose an observation scope and signal. The controls resolve 12
-prepared combinations while [ECharts](https://echarts.apache.org/) renders the
-trend, baseline, anomalies, and current summary together.
+prepared combinations. [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
+connects those results to [Observable Plot](https://observablehq.com/plot/) charts
+in a field-notebook layout, updating the signal, baseline, anomalies, and summary together.
 
 In **Model review**, choose one of three prepared scopes and move the threshold
 across 17 notebook-computed operating points. Threshold changes update
@@ -57,5 +58,6 @@ browser, and its Python packages on an uncached run.
 - [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
 - [PDF field report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
 
-All three views keep statistical definitions in the notebook. Their component
+All three deployed views use prepared states and run without a Python kernel.
+They keep statistical definitions in the notebook. Their presentation
 code formats and presents those results for separate decisions.
