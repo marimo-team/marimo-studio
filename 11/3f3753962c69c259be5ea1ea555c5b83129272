@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/delivery/test_html.py
+  s_3fd814a2f82500::t_89fe3254bc391b 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "113f3753962c69c259be5ea1ea555c5b83129272",
+  "prompts": {},
+  "sessions": {
+    "s_3fd814a2f82500": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b33c-a511-7712-ac29-174372a0cff0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
