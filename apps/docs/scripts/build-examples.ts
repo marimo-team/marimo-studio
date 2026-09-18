@@ -4,7 +4,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { documentationExampleFamilies } from "../examples.ts";
-import { publishExamples } from "./example-publication.ts";
+import { publishExamples, validatePreparedExample } from "./example-publication.ts";
 import { selectDocumentationExamples } from "./example-selection.ts";
 
 interface ExportResult {
@@ -202,39 +202,7 @@ const validateExamplePublication = async (root: string): Promise<void> => {
       if (!(await isFile(entrypoint))) {
         throw new Error(`The ${family.slug}/${view.key} export is unavailable.`);
       }
-      const configPath = join(
-        root,
-        family.slug,
-        view.key,
-        "_marimo-studio",
-        "views",
-        view.key,
-        "config",
-      );
-      // SAFETY: The same-worktree exporter owns this config. Publication checks
-      // its runtime and prepared manifest before accepting the generated tree.
-      const config = JSON.parse(await readFile(configPath, "utf8")) as {
-        runtime?: { id?: string };
-      };
-      if (
-        config.runtime?.id !== "zero-python" ||
-        !(await isFile(
-          join(
-            root,
-            family.slug,
-            view.key,
-            "_marimo-studio",
-            "views",
-            view.key,
-            "zero-python",
-            "current",
-          ),
-        ))
-      ) {
-        throw new Error(
-          `The ${family.slug}/${view.key} example must be a complete zero-python export.`,
-        );
-      }
+      await validatePreparedExample(root, family.slug, view.key);
       const document = await readFile(entrypoint, "utf8");
       for (const match of document.matchAll(/\bhref="\.\.\/([^/"?#]+)\/index\.html"/g)) {
         const target = match[1];

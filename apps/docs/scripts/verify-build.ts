@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { headIcons, normalizeBasePath, siteRoutes, withBasePath } from "../.vitepress/routes.ts";
 import { documentationDefaultExamplePaths, documentationExampleFamilies } from "../examples.ts";
+import { validatePreparedExample } from "./example-publication.ts";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const distDir = resolve(process.argv[2] ?? join(packageRoot, ".vitepress", "dist"));
@@ -116,42 +117,21 @@ for (const family of documentationExampleFamilies) {
     exampleCount += 1;
     const root = join(distDir, "examples", family.slug, view.key);
     const entrypoint = join(root, "index.html");
-    const config = join(root, "_marimo-studio", "views", view.key, "config");
-    const runtimeId = "zero-python";
     const runtime = join(root, "_marimo-studio", "assets", "zero-python.js");
-    const preparedManifest = join(
-      root,
-      "_marimo-studio",
-      "views",
-      view.key,
-      "zero-python",
-      "current",
-    );
     const noJekyll = join(root, ".nojekyll");
 
     if (!(await isFile(entrypoint))) {
       failures.push(`Missing live example entrypoint: ${family.slug}/${view.key}`);
       continue;
     }
-    check(await isFile(config), `Missing live example config: ${family.slug}/${view.key}`);
     check(await isFile(runtime), `Missing live example runtime: ${family.slug}/${view.key}`);
-    check(
-      await isFile(preparedManifest),
-      `Missing prepared example manifest: ${family.slug}/${view.key}`,
-    );
     check(await isFile(noJekyll), `Missing live example .nojekyll: ${family.slug}/${view.key}`);
 
     const document = await readFile(entrypoint, "utf8");
-    if (await isFile(config)) {
-      // SAFETY: The same-worktree CLI owns this config and the runtime field is
-      // checked before it contributes to build acceptance.
-      const runtimeConfig = JSON.parse(await readFile(config, "utf8")) as {
-        runtime?: { id?: string };
-      };
-      check(
-        runtimeConfig.runtime?.id === runtimeId,
-        `Invalid live example runtime: ${family.slug}/${view.key}`,
-      );
+    try {
+      await validatePreparedExample(join(distDir, "examples"), family.slug, view.key);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
     }
     check(
       document.includes('<base href="./">'),

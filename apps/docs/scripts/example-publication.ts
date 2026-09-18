@@ -1,4 +1,30 @@
-import { rename, rm } from "node:fs/promises";
+import { readFile, rename, rm, stat } from "node:fs/promises";
+import { join } from "node:path";
+
+export const validatePreparedExample = async (
+  root: string,
+  family: string,
+  view: string,
+): Promise<void> => {
+  const viewRoot = join(root, family, view, "_marimo-studio", "views", view);
+  try {
+    // SAFETY: The exporter owns this record. Validate the publication policy even when
+    // an interrupted or corrupt previous export is being selectively rebuilt.
+    const config = JSON.parse(await readFile(join(viewRoot, "config"), "utf8")) as {
+      runtime?: { id?: string };
+    } | null;
+    if (config?.runtime?.id !== "zero-python") {
+      throw new Error("Expected the zero-python runtime.");
+    }
+    if (!(await stat(join(viewRoot, "zero-python", "current"))).isFile()) {
+      throw new Error("Expected a prepared manifest file.");
+    }
+  } catch (cause) {
+    throw new Error(`The ${family}/${view} example must be a complete zero-python export.`, {
+      cause,
+    });
+  }
+};
 
 export interface ExamplePublicationPaths {
   destination: string;

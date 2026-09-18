@@ -102,19 +102,19 @@ export const EventDetails = ({ event, loading }: EventDetailsProps) => (
               <dt>Observed</dt>
               <dd>{formatEventTime(event.time)}</dd>
             </div>
-            <div>
+            <div data-marimo-lens-inputs="events-data">
               <dt>Felt reports</dt>
               <dd>{formatInteger(event.felt)}</dd>
             </div>
-            <div>
+            <div data-marimo-lens-inputs="events-data">
               <dt>Significance</dt>
               <dd>{formatInteger(event.significance)}</dd>
             </div>
-            <div>
+            <div data-marimo-lens-inputs="events-data">
               <dt>Review status</dt>
               <dd>{event.status}</dd>
             </div>
-            <div>
+            <div data-marimo-lens-inputs="events-data">
               <dt>Tsunami flag</dt>
               <dd className={event.tsunami ? "alert-value" : undefined}>
                 {event.tsunami ? "Flagged" : "None"}
