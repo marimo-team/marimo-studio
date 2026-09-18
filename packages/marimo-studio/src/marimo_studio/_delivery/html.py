@@ -145,8 +145,9 @@ class _DocumentLayout(HTMLParser):
     def __init__(self, source: str) -> None:
         super().__init__(convert_charrefs=False)
         self._line_starts = [0]
-        for line in source.splitlines(keepends=True):
-            self._line_starts.append(self._line_starts[-1] + len(line))
+        # HTMLParser advances lines only at LF, including in mixed Windows output.
+        for line in source.split("\n"):
+            self._line_starts.append(self._line_starts[-1] + len(line) + 1)
         self.head_open_end: int | None = None
         self.head_close: int | None = None
         self.body_close: int | None = None
