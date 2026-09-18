@@ -1,0 +1,21 @@
+packages/marimo-studio/pyproject.toml
+  s_69c63f629c72cf::t_cbd09c0ce96170 3
+.github/release-notes/v0.1.6.md
+  s_69c63f629c72cf::t_1a332a69816b56 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7f9e6cc0fe5fa708e432cc4362a50a05ca44e1cf",
+  "prompts": {},
+  "sessions": {
+    "s_69c63f629c72cf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b433-e24d-7f92-8593-5ae0a57051ce",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
