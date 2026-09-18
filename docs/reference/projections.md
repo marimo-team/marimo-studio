@@ -258,6 +258,11 @@ Dynamic selectors require the Python or Browser runtime. Prepared exports need
 a finite authored target set; use `view export --runtime wasm` when row or
 threshold selection generates paths at runtime.
 
+Prepared views can project a collection through a fixed selector and reference
+that host from each row. Add the selected row path with `data-marimo-lens-detail`
+and a `data-marimo-lens-label`. The path supplies descriptive selection context.
+The resolved source selector remains the collection.
+
 Browser calculations must reference their real kernel inputs. They can be
 separate targets even when they share a dataframe. Canvas charts and PDF pages
 are single surfaces unless their renderer supplies finer DOM targets.

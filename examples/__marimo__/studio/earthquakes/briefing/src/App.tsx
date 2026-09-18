@@ -86,6 +86,7 @@ export const App = () => {
       />
 
       <span id="briefing-events" hidden mo-value="seismic_analysis.events" />
+      <span id="activity-data" hidden mo-value="seismic_analysis.activity" />
       <main
         data-marimo-lens-inputs="analysis-data"
         className="deck-shell"

@@ -8,12 +8,19 @@ export const Metric = ({
   label,
   value,
   detail,
+  sourceDetail,
 }: {
   detail?: string;
+  sourceDetail?: string;
   label: string;
   value: number | string;
 }) => (
-  <div className="metric" data-marimo-lens-inputs="analysis-data">
+  <div
+    className="metric"
+    data-marimo-lens-inputs="activity-data"
+    data-marimo-lens-label={detail ? `${detail} · ${label}` : label}
+    data-marimo-lens-detail={sourceDetail}
+  >
     <span>{label}</span>
     <strong>{value}</strong>
     {detail ? <small>{detail}</small> : null}
@@ -51,11 +58,10 @@ export const ActivityBars = ({
     <figure
       className={`activity-chart${compact ? " activity-chart-compact" : ""}`}
       data-id="weekly-tempo-chart"
-      data-marimo-lens-inputs="analysis-data"
+      data-marimo-lens-inputs="activity-data"
       aria-label="Daily earthquake count shown as bars and daily maximum magnitude shown as a line"
       role="img"
     >
-      <span hidden mo-value="seismic_analysis.activity" />
       <div className="activity-plot">
         {activity.map((row) => {
           const key = String(row.day);

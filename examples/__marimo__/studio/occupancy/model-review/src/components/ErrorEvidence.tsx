@@ -28,9 +28,11 @@ const formatTime = (value: unknown) => {
 };
 
 export const ErrorEvidence = ({
+  evidenceIndex,
   rows,
   total,
 }: {
+  evidenceIndex?: number;
   rows: readonly ErrorCase[];
   total?: number;
 }) => (
@@ -67,11 +69,14 @@ export const ErrorEvidence = ({
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, visibleErrors).map((row) => (
+          {rows.slice(0, visibleErrors).map((row, index) => (
             <tr
               key={String(row.date)}
-              data-marimo-lens-inputs="analysis-data"
+              data-marimo-lens-inputs="model-evidence-data"
               data-marimo-lens-label={formatTime(row.date)}
+              data-marimo-lens-detail={evidenceIndex === undefined
+                ? undefined
+                : `occupancy_analysis.model.evidence[${evidenceIndex}].errors[${index}]`}
             >
               <td>
                 {formatTime(row.date)}

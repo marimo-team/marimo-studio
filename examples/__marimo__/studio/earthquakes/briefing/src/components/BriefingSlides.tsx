@@ -178,9 +178,15 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
 };
 
 export const TempoSlide = ({ model }: { model: BriefingModel }) => {
+  const countPeakIndex = model.peakActivity
+    ? model.activity.indexOf(model.peakActivity)
+    : undefined;
   const magnitudePeak = model.activity.find((row) =>
     row.maximum_magnitude === model.maximumDailyMagnitude
   );
+  const magnitudePeakIndex = magnitudePeak
+    ? model.activity.indexOf(magnitudePeak)
+    : undefined;
 
   return (
     <Slide
@@ -210,6 +216,9 @@ export const TempoSlide = ({ model }: { model: BriefingModel }) => {
           <Metric
             detail="highest daily count"
             label={model.peakActivity ? formatDay(model.peakActivity.day) : "…"}
+            sourceDetail={countPeakIndex === undefined
+              ? undefined
+              : `seismic_analysis.activity[${countPeakIndex}].day, seismic_analysis.activity[${countPeakIndex}].events`}
             value={model.peakActivity
               ? integer.format(model.peakActivity.events)
               : "…"}
@@ -217,6 +226,9 @@ export const TempoSlide = ({ model }: { model: BriefingModel }) => {
           <Metric
             detail="largest daily maximum"
             label={magnitudePeak ? formatDay(magnitudePeak.day) : "…"}
+            sourceDetail={magnitudePeakIndex === undefined
+              ? undefined
+              : `seismic_analysis.activity[${magnitudePeakIndex}].day, seismic_analysis.activity[${magnitudePeakIndex}].maximum_magnitude`}
             value={`M${model.maximumDailyMagnitude.toFixed(1)}`}
           />
           <blockquote>

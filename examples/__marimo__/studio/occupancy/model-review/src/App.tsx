@@ -271,7 +271,11 @@ export const App = () => {
             className="panel curve-panel"
             aria-labelledby="curve-heading"
           >
-            <span hidden mo-value="occupancy_analysis.model.evidence" />
+            <span
+              hidden
+              id="model-evidence-data"
+              mo-value="occupancy_analysis.model.evidence"
+            />
             <div className="panel-heading">
               <div>
                 <p className="section-index">02 / Threshold sweep</p>
@@ -290,6 +294,7 @@ export const App = () => {
         </section>
 
         <ErrorEvidence
+          evidenceIndex={model ? curve.indexOf(model) : undefined}
           rows={errorRows}
           total={model
             ? model.false_positive + model.false_negative
