@@ -1,0 +1,22 @@
+packages/marimo-studio/tests/server/test_presentation_runtime.py
+  s_3fd814a2f82500::t_09e22f6a6f7bc3 7,67,69-72,74-75,78-91,93-96,98-99
+  s_3fd814a2f82500::t_c8629b54efbf80 68,73,76-77,92,97,100-102
+packages/marimo-studio/src/marimo_studio/_delivery/html.py
+  s_3fd814a2f82500::t_c8629b54efbf80 177-180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7eb1d5f94b8ea0d1d5ff5f81ea601b56036a523e",
+  "prompts": {},
+  "sessions": {
+    "s_3fd814a2f82500": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b33c-a511-7712-ac29-174372a0cff0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
