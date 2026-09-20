@@ -639,7 +639,7 @@ test("a scriptless structural edit morphs an unchanged projection topology", asy
   const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
   document.body.innerHTML =
     '<main id="app-shell"><h1>Before</h1>' +
-    '<marimo-output id="summary" value="report" data-hx-preserve></marimo-output></main>';
+    '<marimo-output id="summary" value="report" data-marimo-studio-preserve></marimo-output></main>';
   setSupportUrl("/support/old");
   commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
   const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
@@ -659,7 +659,7 @@ test("a scriptless structural edit morphs an unchanged projection topology", asy
       return new Response(
         "<html><head><title>Dashboard</title></head><body>" +
           '<main id="app-shell"><h1>After</h1>' +
-          '<marimo-output id="summary" value="report" data-hx-preserve></marimo-output>' +
+          '<marimo-output id="summary" value="report" data-marimo-studio-preserve></marimo-output>' +
           "</main></body></html>",
         {
           headers: {
@@ -683,58 +683,6 @@ test("a scriptless structural edit morphs an unchanged projection topology", asy
   expect(document.querySelector("h1")?.textContent).toBe("After");
   expect(document.querySelector("marimo-output")).toBe(host);
   expect(host.firstChild).toBe(rendered);
-});
-
-test("a post-swap callback failure keeps the committed document transaction", async () => {
-  const evaluate = XPathExpression.prototype.evaluate;
-  vi.spyOn(XPathExpression.prototype, "evaluate").mockImplementation(function (
-    this: XPathExpression,
-    contextNode,
-    type = XPathResult.ANY_TYPE,
-    result,
-  ) {
-    return evaluate.call(this, contextNode, type, result);
-  });
-  const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
-  const { default: htmx } = await import("htmx.org");
-  document.body.innerHTML = '<main id="app-shell">Old shell</main>';
-  setSupportUrl("/support/old");
-  commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
-  const next = runtimeConfig({
-    revision: "revision-new",
-    projectionRevision: "b".repeat(64),
-    supportUrl: "/support/new",
-  });
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
-      const url = input instanceof Request ? input.url : input.toString();
-      if (url.includes("/support/new/config")) {
-        return Response.json(next);
-      }
-      return new Response(
-        '<html><head><title>New title</title></head><body><main id="app-shell">New shell</main></body></html>',
-        {
-          headers: {
-            "Marimo-Studio-Revision": "revision-new",
-            "Marimo-Studio-Support-Url": "/support/new",
-          },
-        },
-      );
-    }),
-  );
-  const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
-  let processed: string | Element | undefined;
-  vi.spyOn(htmx, "process").mockImplementation((target) => {
-    processed = target;
-    throw new Error("settle callback failed");
-  });
-
-  await adapter.replace("/next/", "/support/new", new AbortController().signal, vi.fn());
-
-  expect(processed).toBe(document.querySelector("#app-shell"));
-  expect(document.querySelector("#app-shell")?.textContent).toBe("New shell");
-  expect(getRuntimeConfig().revision).toBe("revision-new");
 });
 
 test("failed document refresh preserves error context in browser diagnostics", async () => {

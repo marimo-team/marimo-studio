@@ -7,7 +7,10 @@ import type { DecodedValue, MarimoValue } from "./codecs.ts";
 import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
-import { PROJECTION_SITE_ATTRIBUTE } from "../projections/identity.ts";
+import {
+  PROJECTION_PRESERVE_ATTRIBUTE,
+  PROJECTION_SITE_ATTRIBUTE,
+} from "../projections/identity.ts";
 import {
   setProjectionRuntimeCell,
   applyProjectionMetadata,
@@ -189,7 +192,7 @@ const prepareValueHost = (host: HTMLElement): void => {
     }
   }
   if (host.id) {
-    host.setAttribute("data-hx-preserve", "");
+    host.setAttribute(PROJECTION_PRESERVE_ATTRIBUTE, "");
   }
 };
 
@@ -199,7 +202,7 @@ export const prepareValueHosts = (root: ParentNode): void => {
 
 export const syncPreservedValueHosts = (source: ParentNode, live: Document): void => {
   source
-    .querySelectorAll<HTMLElement>(`${ATTRIBUTE_SELECTOR}[data-hx-preserve][id]`)
+    .querySelectorAll<HTMLElement>(`${ATTRIBUTE_SELECTOR}[${PROJECTION_PRESERVE_ATTRIBUTE}][id]`)
     .forEach((host) => {
       if (!isArtifactProjectionHost(host)) {
         return;

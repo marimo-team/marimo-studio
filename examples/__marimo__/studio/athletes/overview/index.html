@@ -8,6 +8,17 @@
     />
     <meta name="theme-color" content="#0a0a0a" />
     <title>Rio 2016 athlete report</title>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js"
+      integrity="sha384-iX+gEyr2u+Tmd8XxbySu2iimH7dOfTZn9xahADx38mJHYzAI2CJUCo5+PPGOSU2b"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/dist/iconify-icon.min.js"
+      integrity="sha384-jypoV+nlFXLykSFUJkpVjPG/eid90inFxyvUI1corcUR778eMGexPBFzNC94eOc+"
+      crossorigin="anonymous"
+    ></script>
     <style>
     :root {
       color-scheme: light;
@@ -44,15 +55,7 @@
       outline-offset: 4px;
     }
 
-    #app-shell {
-      width: min(90rem, 100%);
-      margin: 0 auto;
-      overflow: hidden;
-    }
-
     nav {
-      display: flex;
-      justify-content: space-between;
       padding: 1rem clamp(1rem, 4vw, 4rem);
       border-bottom: 1px solid #363636;
       background: var(--ink);
@@ -63,15 +66,7 @@
       text-transform: uppercase;
     }
 
-    nav div {
-      display: flex;
-      gap: 1.5rem;
-    }
-
     nav a {
-      display: inline-flex;
-      min-height: 2.75rem;
-      align-items: center;
       text-decoration: none;
     }
 
@@ -80,14 +75,10 @@
     }
 
     .hero {
-      position: relative;
-      display: grid;
       min-height: min(46rem, 76vh);
       grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.38fr);
       gap: 3rem;
-      align-items: end;
       padding: clamp(3rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem) 3rem;
-      overflow: hidden;
       background: var(--ink);
       color: #fff;
     }
@@ -157,8 +148,6 @@
     }
 
     .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
       background: var(--volt);
     }
 
@@ -196,14 +185,12 @@
     }
 
     .content {
-      display: grid;
       grid-template-columns: minmax(18rem, 0.34fr) minmax(0, 0.66fr);
       gap: clamp(2rem, 6vw, 6rem);
       padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem);
     }
 
     .section-mark {
-      display: inline-block;
       margin-bottom: 1.2rem;
       padding: 0.3rem 0.5rem;
       background: var(--ink);
@@ -254,13 +241,6 @@
       align-self: start;
     }
 
-    .roster-heading {
-      display: flex;
-      gap: 2rem;
-      align-items: end;
-      justify-content: space-between;
-    }
-
     .roster-heading p {
       margin: 0;
       color: var(--muted);
@@ -283,11 +263,6 @@
     }
 
     .ranking-heading {
-      display: flex;
-      gap: 2rem;
-      align-items: end;
-      justify-content: space-between;
-      padding-bottom: 1.5rem;
       border-bottom: 1px solid #343434;
     }
 
@@ -301,9 +276,6 @@
     }
 
     .ranking-legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem 1.25rem;
       color: #b9b9b3;
       font-family: var(--monospace-font);
       font-size: 0.68rem;
@@ -330,14 +302,6 @@
     .sports-chart {
       min-height: 28rem;
       padding-top: 1.5rem;
-    }
-
-    .sports-chart ol {
-      display: grid;
-      gap: 0.9rem;
-      margin: 0;
-      padding: 0;
-      list-style: none;
     }
 
     .sports-chart li {
@@ -564,9 +528,6 @@
     }
 
     footer {
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
       padding: 1.5rem clamp(1rem, 4vw, 4rem);
       background: var(--ink);
       color: #aaa9a2;
@@ -595,10 +556,6 @@
         opacity: 0.35;
       }
 
-      .metrics {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
       .metric:nth-child(2) {
         border-right: 0;
       }
@@ -607,19 +564,8 @@
         border-top: 2px solid var(--ink);
       }
 
-      .roster-heading {
-        align-items: start;
-        flex-direction: column;
-        gap: 1rem;
-      }
-
       .roster-heading p {
         text-align: left;
-      }
-
-      .ranking-heading {
-        align-items: start;
-        flex-direction: column;
       }
 
       .sports-chart li {
@@ -663,7 +609,6 @@
 
       nav div {
         width: 100%;
-        gap: 0.5rem;
         justify-content: space-between;
       }
 
@@ -715,9 +660,6 @@
         font-size: 2.55rem;
       }
 
-      footer {
-        flex-direction: column;
-      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -735,17 +677,17 @@
     </style>
   </head>
   <body>
-    <main id="app-shell">
-      <nav aria-label="Athlete views">
+    <main id="app-shell" class="mx-auto w-full max-w-[90rem] overflow-hidden">
+      <nav class="flex justify-between" aria-label="Athlete views">
         <span>Rio 2016 / Athlete report</span>
-        <div>
-          <a href="../overview/index.html" aria-current="page">01 Overview</a>
-          <a href="../explorer/index.html">02 Explorer</a>
-          <a href="../field/index.html">03 Field</a>
+        <div class="flex gap-6 max-[460px]:gap-2">
+          <a class="inline-flex min-h-11 items-center gap-2" href="../overview/index.html" aria-current="page"><iconify-icon inline icon="lucide:layout-dashboard" aria-hidden="true"></iconify-icon>01 Overview</a>
+          <a class="inline-flex min-h-11 items-center gap-2" href="../explorer/index.html"><iconify-icon inline icon="lucide:search" aria-hidden="true"></iconify-icon>02 Explorer</a>
+          <a class="inline-flex min-h-11 items-center gap-2" href="../field/index.html"><iconify-icon inline icon="lucide:orbit" aria-hidden="true"></iconify-icon>03 Field</a>
         </div>
       </nav>
 
-      <header class="hero">
+      <header class="hero relative grid items-end overflow-hidden">
         <div class="hero-copy">
           <p class="eyebrow">Rio de Janeiro // 2016</p>
           <h1>The athlete index.</h1>
@@ -759,7 +701,7 @@
         </div>
       </header>
 
-      <section class="metrics" aria-label="Selected athlete measures">
+      <section class="metrics grid grid-cols-4 max-[56rem]:grid-cols-2" aria-label="Selected athlete measures">
         <article class="metric" data-marimo-lens-context>
           <span>Athletes</span>
           <strong mo-value="athlete_summary.athletes"></strong>
@@ -778,9 +720,9 @@
         </article>
       </section>
 
-      <section class="content">
+      <section class="content grid">
         <div class="controls">
-          <span class="section-mark">Sport filter</span>
+          <span class="section-mark inline-block">Sport filter</span>
           <h2>Filter the field.</h2>
           <p>
             Choose a sport to update the headline totals and athlete roster.
@@ -794,8 +736,8 @@
           class="table-panel roster-panel"
           aria-labelledby="roster-title"
         >
-          <span class="section-mark">Selected roster</span>
-          <div class="roster-heading">
+          <span class="section-mark inline-block">Selected roster</span>
+          <div class="roster-heading flex items-end justify-between gap-8 max-[56rem]:flex-col max-[56rem]:items-start max-[56rem]:gap-4">
             <h2 id="roster-title">Athletes in view.</h2>
             <p>
               <strong mo-value="athlete_summary.selection"></strong>
@@ -813,12 +755,12 @@
         </article>
 
         <article class="ranking-panel" aria-labelledby="sports-title">
-          <div class="ranking-heading">
+          <div class="ranking-heading flex items-end justify-between gap-8 pb-6 max-[56rem]:flex-col max-[56rem]:items-start">
             <div>
-              <span class="section-mark">Games-wide ranking</span>
+              <span class="section-mark inline-block">Games-wide ranking</span>
               <h2 id="sports-title">Biggest fields.</h2>
             </div>
-            <div class="ranking-legend" aria-label="Chart legend">
+            <div class="ranking-legend flex flex-wrap gap-x-5 gap-y-3" aria-label="Chart legend">
               <span><i></i>Athletes</span>
               <span><i class="medalist-key"></i>Medalists</span>
             </div>
@@ -844,7 +786,7 @@
         </article>
       </section>
 
-      <footer data-marimo-lens-context>
+      <footer class="flex justify-between gap-4 max-[460px]:flex-col" data-marimo-lens-context>
         <strong
           ><span mo-value="games_summary.athletes"></span> ways to
           compete</strong
@@ -968,7 +910,7 @@
       }
 
       const maximum = sports[0].athletes;
-      const list = chartNode("ol");
+      const list = chartNode("ol", "m-0 grid list-none gap-[0.9rem] p-0");
       list.setAttribute(
         "aria-label",
         "Ten largest sports by athlete participation",

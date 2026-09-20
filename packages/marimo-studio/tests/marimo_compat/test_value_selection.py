@@ -104,7 +104,7 @@ def test_kernel_projection_returns_exact_json_leaves_and_local_errors() -> None:
     namespace = {
         "context": {
             "label": "July 29, 2026",
-            "rows": [{"ticker": "HTMX"}],
+            "rows": [{"ticker": "MARS"}],
         },
         "infinite": math.inf,
         "opaque": object(),
@@ -134,7 +134,7 @@ def test_kernel_projection_returns_exact_json_leaves_and_local_errors() -> None:
 
     assert result.values == {
         "context.label": _encoded_json("July 29, 2026"),
-        "context.rows[0].ticker": _encoded_json("HTMX"),
+        "context.rows[0].ticker": _encoded_json("MARS"),
     }
     errors = cast(dict[str, object], result.to_dict()["errors"])
     assert cast(dict[str, str], errors["context.missing"])["code"] == (

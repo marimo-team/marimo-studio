@@ -15,7 +15,6 @@
     "@marimo-studio/studio": "workspace:*",
     "@marimo-team/marimo-export": "catalog:",
     "@uwdata/flechette": "catalog:",
-    "htmx.org": "catalog:",
     "lz4js": "0.2.0",
     "zod": "catalog:"
   },

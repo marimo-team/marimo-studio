@@ -18,30 +18,6 @@ from marimo_studio.view_providers._document import (
 )
 
 _MARIMO_FILENAME = Element("marimo-filename")
-_STYLE_LOADING_SCRIPT = """\
-(() => {
-  const root = document.documentElement;
-  root.dataset.marimoStudioStyles = "loading";
-  const reveal = () => {
-    if (root.dataset.marimoStudioStyles !== "loading") return;
-    root.dataset.marimoStudioStyles = "error";
-    const show = () => {
-      if (document.querySelector("[data-marimo-studio-style-error]")) return;
-      const status = document.createElement("div");
-      status.dataset.marimoStudioRuntimeDiagnostic = "";
-      status.dataset.marimoStudioStyleError = "";
-      status.dataset.state = "error";
-      status.setAttribute("role", "alert");
-      status.textContent =
-        "View styling could not start. The authored view remains available.";
-      document.body.append(status);
-    };
-    if (document.body) show();
-    else window.addEventListener("DOMContentLoaded", show, { once: true });
-  };
-  window.__MARIMO_STUDIO_STYLE_TIMEOUT__ = window.setTimeout(reveal, 3000);
-})();
-"""
 
 
 def node_list(*nodes: object) -> list[Node]:
@@ -108,8 +84,7 @@ def runtime_head(
             ),
             script({"data-marimo-studio-runtime": True})[
                 Markup(
-                    _STYLE_LOADING_SCRIPT
-                    + "Object.defineProperty(window,'__MARIMO_MOUNT_CONFIG__',{"
+                    "Object.defineProperty(window,'__MARIMO_MOUNT_CONFIG__',{"
                     + f"value:Object.freeze({mount_config}),"
                     + "writable:false,configurable:false,enumerable:true});"
                 )

@@ -6,6 +6,7 @@ const instanceIds = new WeakMap<Element, string>();
 let nextInstanceId = 1;
 
 export const PROJECTION_SITE_ATTRIBUTE = "data-marimo-studio-site";
+export const PROJECTION_PRESERVE_ATTRIBUTE = "data-marimo-studio-preserve";
 
 export const projectionKindForHost = (host: Element): ProjectionKind => {
   if (host.localName === "marimo-cell") {

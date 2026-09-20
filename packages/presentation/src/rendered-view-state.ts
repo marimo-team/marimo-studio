@@ -11,7 +11,6 @@ import {
   hasRuntimeConfig,
 } from "./runtime-config/index.ts";
 import { serverRuntimeDataSchema } from "./runtime/server-config.ts";
-import { viewStyleDiagnostic } from "./view-styles/runtime.ts";
 
 export interface RenderedViewIdentity {
   readonly runtime: string;
@@ -80,25 +79,12 @@ export const renderedViewIdentity = (): RenderedViewIdentity => {
 export const renderedViewDiagnostics = (): readonly StudioDiagnostic[] => {
   const snapshot = readiness.snapshot();
   const view = configuredView();
-  const style = viewStyleDiagnostic();
   return [
     ...collectStudioDiagnostics({
       configured: hasRuntimeConfig() ? getRuntimeDiagnostics() : [],
       hosts: projectionHosts.hosts(),
       runtime: snapshot.runtimeDiagnostic,
-      presentation: [
-        ...(snapshot.presentationDiagnostic ? [snapshot.presentationDiagnostic] : []),
-        ...(style
-          ? [
-              {
-                ...style,
-                scope: "presentation" as const,
-                severity: "error" as const,
-                view,
-              },
-            ]
-          : []),
-      ],
+      presentation: snapshot.presentationDiagnostic ? [snapshot.presentationDiagnostic] : [],
       view,
     }),
   ];

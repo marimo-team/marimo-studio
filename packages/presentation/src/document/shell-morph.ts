@@ -1,10 +1,11 @@
 import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
+import { PROJECTION_PRESERVE_ATTRIBUTE } from "../projections/identity.ts";
 
 const PROJECTION_HOST_SELECTOR =
-  "marimo-cell[data-hx-preserve][id], " +
-  "marimo-output[data-hx-preserve][id], " +
-  "[mo-value][data-hx-preserve][id]";
+  `marimo-cell[${PROJECTION_PRESERVE_ATTRIBUTE}][id], ` +
+  `marimo-output[${PROJECTION_PRESERVE_ATTRIBUTE}][id], ` +
+  `[mo-value][${PROJECTION_PRESERVE_ATTRIBUTE}][id]`;
 
 const isProjectionHost = (node: Node): node is HTMLElement =>
   node instanceof HTMLElement &&

@@ -72,16 +72,9 @@ a:focus-visible {
 }
 
 .topbar {
-  position: fixed;
-  z-index: 10;
-  top: 0;
-  right: 0;
-  left: 0;
-  display: grid;
   min-height: 4.25rem;
   grid-template-columns: minmax(10rem, 1fr) auto minmax(10rem, 1fr);
   gap: 1.5rem;
-  align-items: center;
   padding: 0.9rem clamp(1rem, 3vw, 2.5rem);
   border-bottom: 1px solid var(--line);
   background: var(--canvas);
@@ -103,15 +96,7 @@ a:focus-visible {
   vertical-align: -0.02rem;
 }
 
-.view-nav {
-  display: flex;
-  gap: clamp(0.8rem, 2vw, 1.8rem);
-}
-
 .view-nav a {
-  display: inline-flex;
-  min-height: 2.75rem;
-  align-items: center;
   color: var(--muted);
   text-decoration: none;
 }
@@ -164,21 +149,12 @@ a:focus-visible {
   }
 }
 
-.slides {
-  position: relative;
-  z-index: 2;
-}
-
 .slide {
   min-height: min(72vh, 46rem);
   margin: 6.5rem auto 2rem;
   padding: clamp(2rem, 5vw, 4rem);
   border: 1px solid var(--line);
   background: var(--canvas);
-}
-
-.slide-copy {
-  max-width: 38rem;
 }
 
 .chapter {
@@ -222,13 +198,9 @@ a:focus-visible {
 }
 
 .facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 2.4rem;
   margin: 1.8rem 0 0;
   padding: 1.1rem 0 0;
   border-top: 1px solid var(--line);
-  list-style: none;
 }
 
 .facts li {
@@ -283,9 +255,6 @@ a:focus-visible {
 }
 
 .legend {
-  display: flex;
-  gap: 1.2rem;
-  align-items: center;
   margin-top: 1.2rem;
   color: var(--muted);
   font-family: var(--mono);
@@ -362,16 +331,9 @@ body[data-mode="profile"] .profile-axes {
 }
 
 .controls {
-  position: fixed;
-  z-index: 10;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: grid;
   min-height: 4.4rem;
   grid-template-columns: minmax(8rem, 1fr) auto minmax(8rem, 1fr);
   gap: 1.5rem;
-  align-items: center;
   padding: 0.85rem clamp(1rem, 3vw, 2.5rem);
   border-top: 1px solid var(--line);
   background: var(--canvas);
@@ -387,9 +349,6 @@ body[data-mode="profile"] .profile-axes {
 }
 
 .control-actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
   justify-self: end;
 }
 
@@ -559,7 +518,6 @@ body[data-mode="profile"] .profile-axes {
   }
 
   .facts {
-    gap: 0.8rem 1.6rem;
     margin-top: 1rem;
     padding-top: 0.8rem;
   }

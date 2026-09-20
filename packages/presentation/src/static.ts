@@ -1,7 +1,5 @@
 import type { RuntimeRegistry } from "@marimo-studio/runtime";
 
-import htmx from "htmx.org";
-
 import { documentBase } from "./document/base.ts";
 import { onFinalPageHide } from "./document/page-lifecycle.ts";
 import { startQuerySync } from "./document/query-sync.ts";
@@ -15,18 +13,15 @@ import {
   mountConfiguredRuntime,
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator.ts";
-import { initializeViewStyles } from "./view-styles/runtime.ts";
 
 declare global {
   interface Window {
-    htmx: typeof htmx;
     __MARIMO_STUDIO_RUNTIME_STATE__?: "booting" | "failed" | "mounted";
   }
 }
 
 export const startStaticPresentation = (registry: RuntimeRegistry): void => {
   const lifetime = new AbortController();
-  window.htmx = htmx;
   window.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
   documentBase.start(document.baseURI);
   startQuerySync();
@@ -40,7 +35,6 @@ export const startStaticPresentation = (registry: RuntimeRegistry): void => {
 
   void (async () => {
     const config = await loadRuntimeConfig(undefined, lifetime.signal);
-    await initializeViewStyles(undefined, lifetime.signal);
     projectionHosts.register();
     projectionHosts.connect();
     startPresentationObservers(updateConfiguredRuntimeQuery);

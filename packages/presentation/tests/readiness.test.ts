@@ -15,7 +15,6 @@ import {
 } from "../src/rendered-view-observer.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { valueCellPhase } from "../src/runtime/value-cell-state.ts";
-import { initializeViewStyles } from "../src/view-styles/runtime.ts";
 import { projectionRequest, projectionRuntimeConfig } from "./runtime-fixtures.ts";
 
 const mountConfig = {
@@ -66,18 +65,15 @@ test("page readiness accounts for pending and retained hosts", () => {
   assert.deepEqual(pageReadinessState("ready", ["ready"], "error"), "error");
 });
 
-test("runtime startup, document, and style refresh owners settle independently", () => {
+test("runtime startup and document refresh owners settle independently", () => {
   const controller = new ReadinessController();
   controller.start();
   controller.setRuntime("ready");
   controller.setHosts(["ready"]);
   const documentClaim = controller.beginPresentation("document");
-  const styleClaim = controller.beginPresentation("styles");
   const runtimeClaim = controller.beginPresentation("runtime");
 
   controller.setPresentation(documentClaim, "ready");
-  assert.equal(controller.snapshot().page, "loading");
-  controller.setPresentation(styleClaim, "ready");
   assert.equal(controller.snapshot().page, "loading");
   controller.setPresentation(runtimeClaim, "ready");
   assert.equal(controller.snapshot().page, "ready");
@@ -203,22 +199,6 @@ test("document identity survives browser URL canonicalization", () => {
 
   globalThis.history.replaceState({}, "", "/?runtime=wasm");
   assert.equal(activeDocumentLifecycleId(), 7);
-});
-
-test("runtime readiness preserves a visible style failure", async () => {
-  document.body.innerHTML = '<main id="app-shell"></main>';
-  const diagnostic = await initializeViewStyles(false);
-  const styleError = document.querySelector<HTMLElement>("[data-marimo-studio-style-error]")!;
-  const message = styleError.textContent;
-
-  startPresentationObservers(async () => {});
-  setRuntimeConnectionState("ready");
-  await settleMutations();
-
-  assert.equal(diagnostic?.code, "view-styles-unsupported");
-  assert.equal(styleError.hidden, false);
-  assert.equal(styleError.textContent, message);
-  assert.equal(styleError.hasAttribute("data-marimo-studio-runtime-diagnostic"), false);
 });
 
 test("a stale value opens a new idle batch while its snapshot remains visible", async () => {

@@ -12,6 +12,11 @@ story steps. Follow the Seismic Broadsheet Atlas in `DESIGN.md`: concrete paper,
 serif narrative, orange chapter signals, and a moss atlas plate. Use the
 complete weekly event data and preserve source links to USGS records.
 
+The entry document loads the pinned UnoCSS runtime and Iconify web component.
+Use UnoCSS for ordinary page layout, spacing, and navigation icons. Keep inline
+CSS for the atlas plate, scrollytelling states, chart transitions, tokens, and
+responsive story behavior.
+
 ## Use the supplied Studio integration
 
 `index.html` observes the complete `events` table and mounts the notebook's

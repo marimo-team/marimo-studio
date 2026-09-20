@@ -12,7 +12,7 @@ test("authored shell updates preserve mounted projection content", () => {
     <main id="app-shell">
       <h1>Before</h1>
       <svg aria-label="mark"><circle></circle></svg>
-      <marimo-output id="summary" value="summary" data-hx-preserve></marimo-output>
+      <marimo-output id="summary" value="summary" data-marimo-studio-preserve></marimo-output>
     </main>
   `);
   document.body.replaceChildren(current);
@@ -31,7 +31,7 @@ test("authored shell updates preserve mounted projection content", () => {
         value="summary"
         class="featured"
         data-marimo-lens-label="Revenue"
-        data-hx-preserve
+        data-marimo-studio-preserve
       ></marimo-output>
     </main>
   `);
@@ -52,13 +52,13 @@ test("authored shell updates preserve mounted projection content", () => {
 test("projection host movement requires a document reload", () => {
   const current = shell(`
     <main id="app-shell">
-      <marimo-output id="summary" value="summary" data-hx-preserve></marimo-output>
+      <marimo-output id="summary" value="summary" data-marimo-studio-preserve></marimo-output>
     </main>
   `);
   const next = shell(`
     <main id="app-shell">
       <section>
-        <marimo-output id="summary" value="summary" data-hx-preserve></marimo-output>
+        <marimo-output id="summary" value="summary" data-marimo-studio-preserve></marimo-output>
       </section>
     </main>
   `);
@@ -70,14 +70,14 @@ test("wrapper element changes are rejected before the live shell is mutated", ()
   const current = shell(`
     <main id="app-shell">
       <section class="before">
-        <marimo-output id="summary" value="summary" data-hx-preserve></marimo-output>
+        <marimo-output id="summary" value="summary" data-marimo-studio-preserve></marimo-output>
       </section>
     </main>
   `);
   const next = shell(`
     <main id="app-shell">
       <div class="after">
-        <marimo-output id="summary" value="summary" data-hx-preserve></marimo-output>
+        <marimo-output id="summary" value="summary" data-marimo-studio-preserve></marimo-output>
       </div>
     </main>
   `);
@@ -96,12 +96,12 @@ test("wrapper element changes are rejected before the live shell is mutated", ()
 test("shell updates resolve authored hosts beside native output with matching IDs", () => {
   const current = shell(`
     <main id="app-shell">
-      <marimo-output id="outer" value="outer" data-hx-preserve>
+      <marimo-output id="outer" value="outer" data-marimo-studio-preserve>
         <div data-marimo-cell-output>
-          <marimo-output id="summary" value="native" data-hx-preserve>Native content</marimo-output>
+          <marimo-output id="summary" value="native" data-marimo-studio-preserve>Native content</marimo-output>
         </div>
       </marimo-output>
-      <marimo-output id="summary" value="summary" data-hx-preserve>Authored content</marimo-output>
+      <marimo-output id="summary" value="summary" data-marimo-studio-preserve>Authored content</marimo-output>
     </main>
   `);
   document.body.replaceChildren(current);
@@ -110,8 +110,8 @@ test("shell updates resolve authored hosts beside native output with matching ID
   const authored = current.lastElementChild!;
   const next = shell(`
     <main id="app-shell">
-      <marimo-output id="outer" value="outer" data-hx-preserve></marimo-output>
-      <marimo-output id="summary" value="summary" class="updated" data-hx-preserve></marimo-output>
+      <marimo-output id="outer" value="outer" data-marimo-studio-preserve></marimo-output>
+      <marimo-output id="summary" value="summary" class="updated" data-marimo-studio-preserve></marimo-output>
     </main>
   `);
 

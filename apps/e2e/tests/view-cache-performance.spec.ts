@@ -140,7 +140,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   await studioCli.addWorkspaceView(workspaceNotebookPath, "report");
   const reportPath = resolve(workspaceDirectory, "__marimo__/studio/notebook/report/index.html");
   const reportSource = await readWorkspaceFile(reportPath);
-  const resultsSection = '<section class="view-results" aria-label="Notebook results">';
+  const resultsSection = '<section class="grid gap-6" aria-label="Notebook results">';
   const projectedReport = reportSource.replace(
     resultsSection,
     `${resultsSection}<strong mo-value="metric"></strong>`,

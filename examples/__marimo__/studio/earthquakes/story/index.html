@@ -15,6 +15,17 @@
       crossorigin="anonymous"
     />
     <title>Earthquake Watch · one week in motion</title>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js"
+      integrity="sha384-iX+gEyr2u+Tmd8XxbySu2iimH7dOfTZn9xahADx38mJHYzAI2CJUCo5+PPGOSU2b"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/dist/iconify-icon.min.js"
+      integrity="sha384-jypoV+nlFXLykSFUJkpVjPG/eid90inFxyvUI1corcUR778eMGexPBFzNC94eOc+"
+      crossorigin="anonymous"
+    ></script>
     <style>
     :root {
       color-scheme: light;
@@ -51,15 +62,7 @@
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
     }
-    #app-shell {
-      width: min(80rem, calc(100% - 3rem));
-      margin: 0 auto;
-    }
     nav {
-      position: relative;
-      z-index: 4;
-      display: flex;
-      gap: 1.2rem;
       padding: 1.2rem 0;
       border-bottom: 1px solid var(--line);
       font-family: var(--monospace-font);
@@ -69,9 +72,6 @@
       text-transform: uppercase;
     }
     nav a {
-      display: inline-flex;
-      min-height: 2.75rem;
-      align-items: center;
       text-decoration: none;
     }
     nav a:hover,
@@ -85,10 +85,7 @@
     .hero {
       min-height: 0;
       padding: clamp(3rem, 7vw, 6rem) 0;
-      display: grid;
-      align-content: center;
       grid-template-columns: minmax(0, 1fr) minmax(16rem, 28rem);
-      gap: 3rem;
       border-bottom: 1px solid var(--line);
     }
     .eyebrow {
@@ -121,7 +118,6 @@
       line-height: 1.55;
     }
     .story {
-      display: grid;
       grid-template-columns: minmax(16rem, 0.36fr) minmax(0, 0.64fr);
       gap: clamp(1.5rem, 4vw, 4rem);
       padding: 5rem 0 8rem;
@@ -133,8 +129,6 @@
     .step {
       min-height: 0;
       padding: clamp(3rem, 7vw, 6rem) 0;
-      display: grid;
-      align-content: center;
       padding-left: clamp(1rem, 2vw, 1.5rem);
       border-left: 2px solid transparent;
       transition: border-color 180ms ease;
@@ -161,27 +155,16 @@
     .visual {
       grid-column: 2;
       grid-row: 1;
-      position: sticky;
-      top: 1rem;
-      z-index: 1;
       height: calc(100vh - 2rem);
       min-height: 34rem;
-      display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto;
-      align-items: center;
       padding: clamp(1rem, 3vw, 2.5rem);
-      margin: 0;
       border: 1px solid var(--atlas-elevated);
       border-radius: 8px;
       background: var(--atlas);
       color: var(--atlas-text);
     }
     .visual-header {
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      align-items: baseline;
-      padding-bottom: 1rem;
       border-bottom: 1px solid var(--atlas-elevated);
     }
     .visual-header strong {
@@ -196,12 +179,7 @@
       font-size: 0.78rem;
     }
     #plot {
-      position: relative;
-      min-width: 0;
       min-height: 20rem;
-      display: grid;
-      place-items: center;
-      overflow: hidden;
     }
     #plot > * {
       max-width: 100%;
@@ -223,11 +201,8 @@
       pointer-events: none;
     }
     .atlas-loader {
-      position: relative;
-      display: grid;
       width: 5rem;
       height: 5rem;
-      place-items: center;
     }
     .atlas-loader i {
       position: absolute;
@@ -255,12 +230,6 @@
     }
     .visual-footer {
       min-height: 1.3rem;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 0.5rem 1rem;
-      padding-top: 1rem;
       border-top: 1px solid var(--atlas-elevated);
     }
     .visual-footer a {
@@ -314,16 +283,13 @@
       .hero {
         min-height: 0;
         grid-template-columns: 1fr;
-        gap: 1.5rem;
         padding: 2.5rem 0 3rem;
       }
       .story {
         --mobile-visual-height: clamp(16rem, 43svh, 26rem);
-        display: block;
         padding: 1.5rem 0 5rem;
       }
       .visual {
-        top: 0;
         height: var(--mobile-visual-height);
         min-height: 0;
         padding: 1rem;
@@ -338,7 +304,6 @@
       }
       .step {
         min-height: 88vh;
-        display: block;
         padding: calc(var(--mobile-visual-height) + 1.5rem) 0 1.5rem;
         border: 0;
       }
@@ -380,13 +345,13 @@
     </style>
   </head>
   <body>
-    <main id="app-shell">
-      <nav aria-label="Earthquake views">
-        <a href="../story/index.html" aria-current="page">Story</a
-        ><a href="../operations/index.html">Operations</a
-        ><a href="../briefing/index.html">Briefing</a>
+    <main id="app-shell" class="mx-auto w-[calc(100%_-_3rem)] max-w-[80rem]">
+      <nav class="relative z-4 flex gap-[1.2rem]" aria-label="Earthquake views">
+        <a class="inline-flex min-h-11 items-center gap-2" href="../story/index.html" aria-current="page"><iconify-icon inline icon="lucide:book-open" aria-hidden="true"></iconify-icon>Story</a
+        ><a class="inline-flex min-h-11 items-center gap-2" href="../operations/index.html"><iconify-icon inline icon="lucide:map" aria-hidden="true"></iconify-icon>Operations</a
+        ><a class="inline-flex min-h-11 items-center gap-2" href="../briefing/index.html"><iconify-icon inline icon="lucide:presentation" aria-hidden="true"></iconify-icon>Briefing</a>
       </nav>
-      <header class="hero">
+      <header class="hero grid content-center gap-12 max-[52rem]:gap-6">
         <div>
           <p class="eyebrow">
             USGS · Magnitude
@@ -401,24 +366,24 @@
           <span mo-value="weekly_summary.tsunami_flags"></span> tsunami flags.
         </p>
       </header>
-      <section class="story" aria-label="Earthquake story">
+      <section class="story grid max-[52rem]:block" aria-label="Earthquake story">
         <figure
           data-marimo-lens-inputs="events-data"
           aria-busy="true"
-          class="visual"
+          class="visual sticky top-4 z-1 m-0 grid items-center max-[52rem]:top-0"
           aria-labelledby="visual-title"
           data-state="loading"
         >
-          <figcaption class="visual-header">
+          <figcaption class="visual-header flex items-baseline justify-between gap-4 pb-4">
             <strong id="visual-title">Weekly event map</strong
             ><span id="event-count" data-marimo-lens-inputs="events-data" data-marimo-lens-label="Visible events" data-marimo-lens-detail="Browser selection · events">Loading weekly events</span>
           </figcaption>
-          <div id="plot">
-            <span class="atlas-loader" aria-hidden="true">
+          <div id="plot" class="relative grid min-w-0 place-items-center overflow-hidden">
+            <span class="atlas-loader relative grid place-items-center" aria-hidden="true">
               <i></i><i></i><i></i>
             </span>
           </div>
-          <div class="visual-footer">
+          <div class="visual-footer flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 pt-4">
             <div id="status" data-marimo-lens-inputs="events-data" data-marimo-lens-label="Current event summary" role="status">Loading weekly events.</div>
             <a
               id="source-link" data-marimo-lens-inputs="events-data" data-marimo-lens-label="Strongest event"
@@ -431,7 +396,7 @@
         </figure>
         <div class="steps">
           <article
-            class="step"
+            class="step grid content-center max-[52rem]:block"
             data-step="0"
             data-active="true"
             aria-current="step"
@@ -448,7 +413,7 @@
               </p>
             </div>
           </article>
-          <article class="step" data-step="1">
+          <article class="step grid content-center max-[52rem]:block" data-step="1">
             <div class="step-copy">
               <span class="step-number">02 / MAGNITUDE</span>
               <h2>Large events are sparse</h2>
@@ -458,7 +423,7 @@
               </p>
             </div>
           </article>
-          <article class="step" data-step="2">
+          <article class="step grid content-center max-[52rem]:block" data-step="2">
             <div class="step-copy">
               <span class="step-number">03 / FELT REPORTS</span>
               <h2>Felt reports follow population</h2>
@@ -468,7 +433,7 @@
               </p>
             </div>
           </article>
-          <article class="step" data-step="3">
+          <article class="step grid content-center max-[52rem]:block" data-step="3">
             <div class="step-copy">
               <span class="step-number">04 / TSUNAMI FLAGS</span>
               <h2>

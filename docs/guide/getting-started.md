@@ -88,7 +88,7 @@ def sales_summary():
 Place the complete cell inside `#app-shell`:
 
 ```html
-<main id="app-shell" class="studio-view">
+<main id="app-shell">
   <marimo-cell name="sales_summary"></marimo-cell>
 </main>
 ```

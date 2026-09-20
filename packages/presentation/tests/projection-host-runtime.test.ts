@@ -30,12 +30,12 @@ test("committing a shell swap moves retained hosts into the incoming tree", () =
       <marimo-cell
         id="marimo-studio-cell-summary"
         name="summary"
-        data-hx-preserve
+        data-marimo-studio-preserve
       ><em>Rendered cell</em></marimo-cell>
       <marimo-output
         id="marimo-studio-output-report"
         value="report"
-        data-hx-preserve
+        data-marimo-studio-preserve
       ><strong>Rendered report</strong></marimo-output>
       <strong mo-value="metric" data-marimo-studio-site="site-value">42</strong>
     </main>
@@ -51,13 +51,13 @@ test("committing a shell swap moves retained hosts into the incoming tree", () =
         id="marimo-studio-cell-summary"
         name="summary"
         aria-label="Updated summary"
-        data-hx-preserve
+        data-marimo-studio-preserve
       ></marimo-cell>
       <marimo-output
         id="marimo-studio-output-report"
         value="report"
         aria-label="Updated report"
-        data-hx-preserve
+        data-marimo-studio-preserve
       ></marimo-output>
       <strong
         mo-value="metric"
@@ -97,7 +97,7 @@ test("rolling back staged preservation restores live host attributes", () => {
         id="marimo-studio-output-report"
         value="report"
         class="current"
-        data-hx-preserve
+        data-marimo-studio-preserve
       ><strong>Rendered report</strong></marimo-output>
     </main>
   `;
@@ -108,7 +108,7 @@ test("rolling back staged preservation restores live host attributes", () => {
         id="marimo-studio-output-report"
         value="report"
         class="incoming"
-        data-hx-preserve
+        data-marimo-studio-preserve
       ></marimo-output>
     </main>`,
     "text/html",

@@ -2,7 +2,10 @@ import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
 import { hostsInDocumentOrder } from "../projections/host-order.ts";
-import { PROJECTION_SITE_ATTRIBUTE } from "../projections/identity.ts";
+import {
+  PROJECTION_PRESERVE_ATTRIBUTE,
+  PROJECTION_SITE_ATTRIBUTE,
+} from "../projections/identity.ts";
 import { resetProjectionHostMetadata } from "../projections/instances.ts";
 
 export type OutputHostState = "connecting" | "loading" | "stale" | "ready" | "error";
@@ -137,7 +140,7 @@ export const prepareOutputHost = (host: Element) => {
     }
   }
   if (host.id) {
-    host.setAttribute("data-hx-preserve", "");
+    host.setAttribute(PROJECTION_PRESERVE_ATTRIBUTE, "");
   }
 };
 
@@ -148,20 +151,22 @@ export const prepareOutputHosts = (root: ParentNode) => {
 };
 
 export const syncPreservedOutputHosts = (source: ParentNode, live: Document): void => {
-  source.querySelectorAll<HTMLElement>("marimo-output[data-hx-preserve][id]").forEach((host) => {
-    if (!isArtifactProjectionHost(host)) {
-      return;
-    }
-    const preserved = live.getElementById(host.id);
-    if (
-      preserved?.localName === "marimo-output" &&
-      preserved !== host &&
-      isArtifactProjectionHost(preserved)
-    ) {
-      syncProjectionHostAttributes(preserved, host);
-      prepareOutputHost(preserved);
-    }
-  });
+  source
+    .querySelectorAll<HTMLElement>(`marimo-output[${PROJECTION_PRESERVE_ATTRIBUTE}][id]`)
+    .forEach((host) => {
+      if (!isArtifactProjectionHost(host)) {
+        return;
+      }
+      const preserved = live.getElementById(host.id);
+      if (
+        preserved?.localName === "marimo-output" &&
+        preserved !== host &&
+        isArtifactProjectionHost(preserved)
+      ) {
+        syncProjectionHostAttributes(preserved, host);
+        prepareOutputHost(preserved);
+      }
+    });
 };
 
 export const registerMarimoOutputElement = () => {

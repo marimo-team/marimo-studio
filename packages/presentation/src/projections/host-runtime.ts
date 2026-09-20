@@ -20,6 +20,7 @@ import {
 import { isArtifactProjectionHost } from "./artifact-host.ts";
 import { subscribeProjectionChanges } from "./changes.ts";
 import { hostsInDocumentOrder } from "./host-order.ts";
+import { PROJECTION_PRESERVE_ATTRIBUTE } from "./identity.ts";
 
 interface ProjectionHostAdapter {
   readonly selector: string;
@@ -140,7 +141,7 @@ export class ProjectionHostRuntime {
     const hosts: PreservedHost[] = [];
     for (const adapter of adapters) {
       source
-        .querySelectorAll<HTMLElement>(`${adapter.selector}[data-hx-preserve][id]`)
+        .querySelectorAll<HTMLElement>(`${adapter.selector}[${PROJECTION_PRESERVE_ATTRIBUTE}][id]`)
         .forEach((candidate) => {
           if (!isArtifactProjectionHost(candidate)) {
             return;

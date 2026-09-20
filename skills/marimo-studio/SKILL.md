@@ -316,8 +316,8 @@ and build inputs for either editing path. Keep generated `.artifacts/` files
 under Studio's ownership. Use view files for structure, wording, styles, and
 browser interaction.
 
-`studio-view` sets a maximum width and page padding. Mount a component that
-defines its own page layout in a plain `<div id="app-shell"></div>`.
+The view project owns page layout, styles, icons, and browser dependencies.
+Mount the authored page or component beneath `#app-shell`.
 
 ### Edit the selected provider's source
 

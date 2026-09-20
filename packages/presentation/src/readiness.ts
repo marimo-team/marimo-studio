@@ -2,7 +2,7 @@ import type { PresentationDiagnostic, RuntimeDiagnostic } from "./diagnostics.ts
 
 export type RuntimeConnectionState = "connecting" | "ready" | "error";
 export type PresentationRefreshState = "ready" | "loading" | "error";
-export type PresentationRefreshOwner = "document" | "styles" | "runtime";
+export type PresentationRefreshOwner = "document" | "runtime";
 export type PageReadinessState = "connecting" | "loading" | "ready" | "error";
 
 export interface PresentationRefreshClaim {
