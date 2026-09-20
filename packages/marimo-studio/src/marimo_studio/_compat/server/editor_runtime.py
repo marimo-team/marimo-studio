@@ -96,12 +96,19 @@ _NETWORK_SEND_DOCUMENT_TRANSACTION = (
     b"{body:t,params:n()}).then(lp))"
 )
 _NETWORK_REQUEST_FACTORY = b"n=()=>({header:t()});return{sendComponentValues:"
+_HOST_HANDOFF_QUERY_JSON = json.dumps(HOST_SESSION_HANDOFF_QUERY_PARAM).encode()
 _DOCUMENT_NETWORK_BOOTSTRAP = (
     b"""
-let marimoStudioDocumentPageHiding=false;
-globalThis.addEventListener?.("pagehide",()=>{
-  marimoStudioDocumentPageHiding=true;
-},{once:true});
+const marimoStudioHostHandoff="""
+    + _HOST_HANDOFF_QUERY_JSON
+    + b""";
+const marimoStudioHostHandoffFromLocation=()=>{
+  try{
+    return new URL(globalThis.location.href).searchParams
+      .get(marimoStudioHostHandoff);
+  }catch{return null}
+};
+const marimoStudioInitialHostHandoff=marimoStudioHostHandoffFromLocation();
 const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   flush:()=>studioFlushDocumentChanges(),
   flushBeforeSave:()=>studioFlushBeforeDocumentSave(),
@@ -113,12 +120,11 @@ const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   waitForConnection:()=>sn(),
   params:()=>n(),
   handleResponse:result=>lp(result),
-  handoffAccepted:()=>marimoStudioDocumentPageHiding&&/^[a-f0-9]{64}$/.test(
-    new URL(globalThis.location.href).searchParams.get("""
-    + json.dumps(HOST_SESSION_HANDOFF_QUERY_PARAM).encode()
-    + b"""
-    )??""
-  ),
+  handoffAccepted:()=>{
+    const handoff=marimoStudioHostHandoffFromLocation();
+    return /^[a-f0-9]{64}$/.test(handoff??"")&&
+      handoff!==marimoStudioInitialHostHandoff;
+  },
 });
 """
 )
