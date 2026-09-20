@@ -5,14 +5,15 @@ import os
 import sys
 from io import StringIO
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread, current_thread
 from typing import TextIO
 
+import pytest
 from marimo_export.progress import CacheActivity, ProgressEvent
 
 from marimo_studio._cli.activity import activity
 from marimo_studio._cli.diagnostics import DiagnosticStream
-from marimo_studio._cli.environment import _run_command
+from marimo_studio._cli.environment import _live_diagnostics, _run_command
 from marimo_studio._delivery.progress import StaticExportProgress
 
 
@@ -84,3 +85,50 @@ def test_heartbeat_reports_last_observed_state_and_stops_on_exit() -> None:
     assert heartbeat["details"]["cache"]["authored_hits"] == 2
     assert heartbeat["details"]["cell"] is None
     assert heartbeat["details"]["elapsed_seconds"] >= 0
+
+
+def test_operation_failure_stops_the_heartbeat_before_propagating() -> None:
+    observed = Event()
+    workers: list[Thread] = []
+
+    class Output(StringIO):
+        def write(self, value: str) -> int:
+            written = super().write(value)
+            if '"heartbeat"' in value:
+                workers.append(current_thread())
+                observed.set()
+            return written
+
+    failure = RuntimeError("operation failed")
+    stream = DiagnosticStream(format="jsonl", diagnostic_stream=Output())
+    with (
+        pytest.raises(RuntimeError) as raised,
+        activity(stream, phase="prepare", view="report", interval=0.01),
+    ):
+        assert observed.wait(2), "heartbeat did not start"
+        raise failure
+
+    assert raised.value is failure
+    assert workers and all(not worker.is_alive() for worker in workers)
+
+
+def test_diagnostic_relay_failure_is_propagated_after_worker_exit(
+    tmp_path: Path,
+) -> None:
+    channel = tmp_path / "diagnostics"
+    channel.write_text("progress\n")
+    observed = Event()
+    workers: list[Thread] = []
+    failure = OSError("diagnostic destination closed")
+
+    def relay(source: TextIO) -> None:
+        assert source.read() == "progress\n"
+        workers.append(current_thread())
+        observed.set()
+        raise failure
+
+    with pytest.raises(OSError) as raised, _live_diagnostics(channel, relay):
+        assert observed.wait(2), "relay did not receive the diagnostic"
+
+    assert raised.value is failure
+    assert workers and all(not worker.is_alive() for worker in workers)
