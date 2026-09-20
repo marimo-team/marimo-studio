@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { availableParallelism } from "node:os";
 
 import { e2eBrowserUse } from "./scripts/browser.ts";
 
@@ -17,7 +18,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  workers: 1,
+  workers: process.env.CI ? 1 : Math.min(2, availableParallelism()),
   reporter: process.env.CI ? [["list"], ["blob", { outputDir: blobReportDirectory }]] : "list",
   outputDir: playwrightOutputDirectory,
   expect: { timeout: 65_000 },
