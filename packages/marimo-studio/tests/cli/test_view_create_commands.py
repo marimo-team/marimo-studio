@@ -349,7 +349,10 @@ def test_create_preserves_project_execution(notebook_path: Path, inline: bool) -
     project.write_text(original)
     if inline:
         notebook_path.write_text(
-            '# /// script\n# dependencies = ["polars"]\n# ///\n'
+            '# /// script\n# dependencies = ["pandas"]\n'
+            '# requires-python = ">=3.11"\n'
+            '# [[tool.uv.index]]\n# url = "https://packages.example/simple"\n'
+            '# [tool.uv.sources]\n# pandas = { path = "./local analytics" }\n# ///\n'
             + notebook_path.read_text()
         )
     result = CliRunner().invoke(
@@ -364,7 +367,12 @@ def test_create_preserves_project_execution(notebook_path: Path, inline: bool) -
     metadata = read_notebook_metadata(notebook_path)
     assert metadata is not None
     if inline:
-        assert "polars" in metadata["dependencies"]
+        assert "pandas" in metadata["dependencies"]
+        assert str(notebook_path.parent / "local analytics") in result.stderr
+        assert "https://packages.example/simple" in result.stderr
+        assert "--python" in result.stderr
+        assert ">=3.11" in result.stderr
     else:
         assert "dependencies" not in metadata
+    assert "--with-requirements" not in result.stderr
     assert metadata["tool"]["marimo-studio"]["default"] == "dashboard"

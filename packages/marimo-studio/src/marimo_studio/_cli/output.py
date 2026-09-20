@@ -11,6 +11,7 @@ from typing import Any
 
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._cli.diagnostics import diagnostics
+from marimo_studio._cli.environment import environment_command
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
 from marimo_studio._delivery.export import StaticExportResult
 from marimo_studio._delivery.preflight import StaticPreflightReport
@@ -89,13 +90,12 @@ def render_view_next_command(result: ViewSetupResult) -> None:
             ["marimo", "edit", str(result.notebook), "--sandbox"],
         )
     else:
-        arguments = ["uv", "run", "--project", str(project)]
-        if (project / "uv.lock").is_file():
-            arguments.append("--frozen")
-        for requirement in result.launch_requirements:
-            arguments.extend(["--with", requirement])
-        arguments.extend(["marimo", "edit", str(result.notebook), "--no-sandbox"])
-        command = _shell_command(arguments)
+        command = _shell_command(
+            environment_command(
+                result,
+                ["marimo", "edit", str(result.notebook), "--no-sandbox"],
+            )
+        )
     _echo_next_command("edit", command)
 
 

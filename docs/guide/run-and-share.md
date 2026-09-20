@@ -51,7 +51,9 @@ Each external dataset must be reachable from the visitor's browser.
 ## Run a live view locally
 
 Use the launch command printed by `view create`. For a notebook owned by a
-Python project, retain that project's environment:
+Python project, Studio composes project and existing inline dependencies,
+sources, indexes, and Python constraints. Use the emitted command to preserve
+that complete environment. For a project notebook with no inline dependencies:
 
 ```console
 uv run --with marimo-studio --project . marimo run analysis.py --no-sandbox

@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from importlib.metadata import version
+from itertools import pairwise
 from pathlib import Path
 from typing import cast
 
@@ -360,16 +361,37 @@ def test_inline_environment_preserves_the_notebook_studio_source(
         compose_project=False,
         marker_environment=None,
     )
-    requirements = Path(flags[flags.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
+    requirements = [value for flag, value in pairwise(flags) if flag == "--with"]
 
-    assert set(requirements.splitlines()) == {
+    assert set(requirements) == {
         "humanize>=4",
         f"marimo=={version('marimo')}",
         "marimo-studio @ git+https://example.test/old.git",
     }
     assert flags[flags.index("--index") + 1] == "https://packages.example/simple"
+
+
+def test_inline_environment_keeps_editable_marimo_without_temporary_requirements(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from marimo._cli import sandbox
+
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text('# /// script\n# dependencies = ["humanize"]\n# ///\n')
+    source = tmp_path / "marimo checkout"
+    monkeypatch.setattr(sandbox, "is_editable", lambda _name: True)
+    monkeypatch.setattr(sandbox, "get_marimo_dir", lambda: source)
+
+    flags = inline_environment_flags(
+        notebook,
+        (f"marimo-studio=={version('marimo-studio')}",),
+        compose_project=False,
+        marker_environment=None,
+    )
+
+    assert flags[flags.index("--with-editable") + 1] == str(source)
+    assert "humanize" in flags
+    assert "--with-requirements" not in flags
 
 
 @pytest.mark.parametrize(
@@ -400,11 +422,9 @@ def test_inline_environment_preserves_exact_pin_and_declared_provider_extras(
         compose_project=False,
         marker_environment=None,
     )
-    requirements = Path(flags[flags.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
+    requirements = [value for flag, value in pairwise(flags) if flag == "--with"]
 
-    assert "marimo-studio[deno]==1.2.3" in requirements.splitlines()
+    assert "marimo-studio[deno]==1.2.3" in requirements
 
 
 def test_inline_environment_accepts_equivalent_exact_version_spellings(
@@ -427,11 +447,9 @@ def test_inline_environment_accepts_equivalent_exact_version_spellings(
         compose_project=False,
         marker_environment=None,
     )
-    requirements = Path(flags[flags.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
+    requirements = [value for flag, value in pairwise(flags) if flag == "--with"]
 
-    assert "marimo-studio[deno]==1.0" in requirements.splitlines()
+    assert "marimo-studio[deno]==1.0" in requirements
 
 
 def test_inline_environment_pins_each_launch_requirement_in_isolation(
@@ -457,11 +475,9 @@ def test_inline_environment_pins_each_launch_requirement_in_isolation(
         compose_project=False,
         marker_environment=None,
     )
-    requirements = Path(flags[flags.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
+    requirements = [value for flag, value in pairwise(flags) if flag == "--with"]
 
-    assert set(requirements.splitlines()) == {
+    assert set(requirements) == {
         f"marimo=={version('marimo')}",
         "marimo-studio[deno]==0.1.0",
         "example-suite[runtime]==1.0.0",
@@ -499,12 +515,10 @@ def test_inline_environment_ignores_a_false_external_provider_source(
         compose_project=False,
         marker_environment=cast(dict[str, str], default_environment()),
     )
-    requirements = Path(flags[flags.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
+    requirements = [value for flag, value in pairwise(flags) if flag == "--with"]
 
-    assert "example-suite[render]==1.0.0" in requirements.splitlines()
-    assert "inactive-provider" not in requirements
+    assert "example-suite[render]==1.0.0" in requirements
+    assert all("inactive-provider" not in value for value in requirements)
 
 
 def test_inline_environment_ignores_a_false_studio_uv_source(
@@ -532,12 +546,10 @@ def test_inline_environment_ignores_a_false_studio_uv_source(
         compose_project=False,
         marker_environment=cast(dict[str, str], default_environment()),
     )
-    requirements = Path(flags[flags.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
+    requirements = [value for flag, value in pairwise(flags) if flag == "--with"]
 
-    assert "marimo-studio==0.1.0" in requirements.splitlines()
-    assert "inactive-studio" not in requirements
+    assert "marimo-studio==0.1.0" in requirements
+    assert all("inactive-studio" not in value for value in requirements)
 
 
 def test_inline_environment_rejects_conflicting_external_provider_sources(
