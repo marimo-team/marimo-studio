@@ -49,6 +49,15 @@ test("provider workspace changes select provider browser acceptance", () => {
   ]);
 });
 
+test("export repository isolation selects every workspace consumer", () => {
+  assert.deepEqual(selected("apps/e2e/scripts/export-repository.ts"), [
+    "main_browser",
+    "provider_browser",
+    "windows_lifecycle",
+    "windows_unit",
+  ]);
+});
+
 test("notebook service ownership selects every server consumer", () => {
   for (const path of [
     "apps/e2e/scripts/notebook-services.ts",

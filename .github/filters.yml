@@ -224,6 +224,7 @@ main_browser:
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
   - apps/e2e/scripts/main-workspace.ts
+  - apps/e2e/scripts/export-repository.ts
   - "!apps/e2e/tests/provider-fixture.ts"
 
 provider_browser:
@@ -239,6 +240,7 @@ provider_browser:
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
   - apps/e2e/scripts/provider-workspace.ts
+  - apps/e2e/scripts/export-repository.ts
   - apps/e2e/tests/provider-fixture.ts
 
 installed_browser:
@@ -273,4 +275,5 @@ windows_lifecycle:
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
   - apps/e2e/scripts/main-workspace.ts
+  - apps/e2e/scripts/export-repository.ts
   - "!apps/e2e/tests/provider-fixture.ts"
