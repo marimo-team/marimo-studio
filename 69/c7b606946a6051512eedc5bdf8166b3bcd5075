@@ -1,0 +1,11 @@
+apps/e2e/scripts/run-installed-package.ts
+  ai_agent 127-132
+apps/e2e/tests/notebook-server.ts
+  ai_agent 91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "69c7b606946a6051512eedc5bdf8166b3bcd5075",
+  "prompts": {}
+}
