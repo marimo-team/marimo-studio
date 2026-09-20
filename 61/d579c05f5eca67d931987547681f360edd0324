@@ -1,0 +1,11 @@
+skills/marimo-studio/SKILL.md
+  ai_agent 756-757
+docs/guide/run-and-share.md
+  ai_agent 53-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "61d579c05f5eca67d931987547681f360edd0324",
+  "prompts": {}
+}
