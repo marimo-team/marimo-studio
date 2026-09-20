@@ -333,7 +333,7 @@ def _configured_view_root(
             )
         except ValueError as error:
             raise ConfigurationError(str(error)) from error
-    return config_path.parent.joinpath(*relative.parts).resolve()
+    return config_path.parent.joinpath(*relative.parts)
 
 
 def discover_views(

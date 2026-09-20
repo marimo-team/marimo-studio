@@ -905,6 +905,34 @@ default = "dashboard"
     assert not canonical_view_root(notebook_path).exists()
 
 
+@pytest.mark.parametrize("view_root", ("linked", "linked/views"))
+def test_configured_view_root_rejects_symlinks_before_creation(
+    notebook_path: Path,
+    view_root: str,
+) -> None:
+    destination = notebook_path.parent / "destination"
+    destination.mkdir()
+    sentinel = destination / "keep.txt"
+    sentinel.write_text("existing project content", encoding="utf-8")
+    (notebook_path.parent / "linked").symlink_to(destination, target_is_directory=True)
+    pyproject = notebook_path.parent / "pyproject.toml"
+    pyproject.write_text(
+        f'[tool.marimo-studio]\nnotebook = "{notebook_path.name}"\n'
+        f'view_root = "{view_root}"\ndefault = "dashboard"\n',
+        encoding="utf-8",
+    )
+    original_notebook = notebook_path.read_bytes()
+    original_config = pyproject.read_bytes()
+
+    with pytest.raises(ConfigurationError, match="symlink"):
+        prepare_view(notebook_path)
+
+    assert notebook_path.read_bytes() == original_notebook
+    assert pyproject.read_bytes() == original_config
+    assert list(destination.iterdir()) == [sentinel]
+    assert sentinel.read_text(encoding="utf-8") == "existing project content"
+
+
 @pytest.mark.parametrize(
     "view_root",
     ("", "/absolute/views", "../outside", "studio\\views", "studio/con"),

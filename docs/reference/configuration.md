@@ -337,13 +337,17 @@ anonymous cells placed by the selected starter.
 
 ## Rename a notebook
 
-The notebook filename stem must fit one portable cross-platform filename. It
-also determines the view directory. Rename both in the same change:
+The notebook filename stem must fit one portable cross-platform filename. With
+the default view root, it also determines the view directory. Rename both in
+the same change:
 
 ```console
 mv analysis.py revenue.py
 mv __marimo__/studio/analysis __marimo__/studio/revenue
 ```
+
+When `view_root` is configured, rename the notebook and keep the configured
+view directory unchanged.
 
 For project settings, update `tool.marimo-studio.notebook` as part of that
 change.
