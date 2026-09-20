@@ -1,6 +1,6 @@
 import { once } from "node:events";
-import { createServer, request, type Server } from "node:http";
-import { connect } from "node:net";
+import { Agent, createServer, request, type Server } from "node:http";
+import { connect, type Socket } from "node:net";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
@@ -90,6 +90,7 @@ test("network teardown closes upgraded sockets without stopping the backend", as
   const service = await backend();
   service.server.on("upgrade", (_request, socket) => {
     socket.on("end", () => socket.destroy());
+    socket.on("data", (chunk) => socket.write(chunk));
     socket.resume();
     socket.write(
       "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
@@ -105,6 +106,9 @@ test("network teardown closes upgraded sockets without stopping the backend", as
       "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
     );
     expect(String((await response)[0])).toContain("101 Switching Protocols");
+    const echoed = once(socket, "data");
+    socket.write("upgraded payload");
+    expect(String((await echoed)[0])).toBe("upgraded payload");
     const disconnected = once(socket, "close");
     await network.close();
     await disconnected;
@@ -121,5 +125,64 @@ test("network identity cannot escape its run namespace", () => {
     expect(() =>
       createE2ENetwork({ runId: "run", suite: "main", workerId: "0", [key]: "../other" }),
     ).toThrow("portable identifier");
+  }
+});
+
+test("releases completed upstream connections while keeping streamed responses live", async () => {
+  const network = createE2ENetwork({ runId: "upstream-lifetime", suite: "main", workerId: "0" });
+  const sockets = new Set<Socket>();
+  const server = createServer((incoming, response) => {
+    if (incoming.url === "/events") {
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.write("data: ready\n\n");
+    } else {
+      response.end("complete");
+    }
+  });
+  server.keepAliveTimeout = 60_000;
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const agent = new Agent({ keepAlive: true, maxSockets: 4 });
+  let streaming: ReturnType<typeof request> | undefined;
+  try {
+    await network.start();
+    network.main.studio.bindBackend(z.object({ port: z.number() }).parse(server.address()).port);
+    const options = { host: "127.0.0.1", port: network.main.studio.port, agent };
+    const completed = () =>
+      new Promise<{ status: number | undefined; body: string }>((resolve, reject) => {
+        const call = request(options, (response) => {
+          let body = "";
+          response.on("data", (chunk) => (body += String(chunk)));
+          response.once("error", reject);
+          response.once("end", () => resolve({ status: response.statusCode, body }));
+        });
+        call.once("error", reject);
+        call.end();
+      });
+    for (const response of await Promise.all(Array.from({ length: 12 }, completed))) {
+      expect(response).toEqual({ status: 200, body: "complete" });
+    }
+    await expect.poll(() => sockets.size, { timeout: 1000 }).toBe(0);
+
+    streaming = request({ ...options, path: "/events" });
+    const received = once(streaming, "response");
+    streaming.end();
+    const [response] = await received;
+    expect(response.statusCode).toBe(200);
+    expect(String((await once(response, "data"))[0])).toBe("data: ready\n\n");
+    expect(response.complete).toBe(false);
+    expect(sockets.size).toBe(1);
+    response.destroy();
+    streaming.destroy();
+    await expect.poll(() => sockets.size, { timeout: 1000 }).toBe(0);
+  } finally {
+    streaming?.destroy();
+    agent.destroy();
+    await network.close();
+    await close(server);
   }
 });

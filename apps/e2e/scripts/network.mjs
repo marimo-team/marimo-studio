@@ -114,6 +114,12 @@ export const createE2ENetwork = (input) => {
                 { hostname: resource.hostname, port: resource.backend.port },
               ],
       });
+      // Portless opens an unpooled upstream connection for every HTTP request.
+      // Native edit servers keep idle connections indefinitely; close each
+      // upstream after its response, while leaving streams and upgrades live.
+      server.prependListener("request", (request) => {
+        request.headers.connection = "close";
+      });
       resource.server = server;
       server.on("connection", (socket) => {
         resource.sockets.add(socket);
