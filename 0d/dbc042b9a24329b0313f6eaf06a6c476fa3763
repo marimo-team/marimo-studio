@@ -1,0 +1,43 @@
+apps/e2e/scripts/notebook-process-supervisor.ts
+  ai_agent 16-21,23,30,33,48,57,59,144,149-163,190-195,214,218-227
+apps/e2e/scripts/registered-notebook-process.ts
+  ai_agent 12,37,68,90-91,153
+apps/e2e/scripts/run-installed-package.ts
+  ai_agent 97-107,109-117
+apps/e2e/scripts/notebook-process-registry.ts
+  ai_agent 222,225,231,287-294,305,310-315,321
+apps/e2e/scripts/process-group.ts
+  ai_agent 7,128,132,134,138,140-142
+apps/e2e/unit/notebook-server.test.ts
+  ai_agent 193-202,263-272,311,323-332,345-358,370-371
+apps/e2e/unit/process-group.test.ts
+  ai_agent 1-2,4,18-34
+apps/e2e/unit/marimo-edit.test.ts
+  ai_agent 28-40,42,102-118,120,127-133,136,162
+apps/e2e/scripts/_compat/endpoint.py
+  ai_agent 13-14,17-19
+apps/e2e/unit/server-handle.test.ts
+  s_1d547b3fd29c2e::t_052f970991c04f 5-6,10,14-43,63,75-170,172,174,176,178-185,187,191
+apps/e2e/unit/notebook-process-registry.test.ts
+  ai_agent 63-72,172,273,444,483,526-546
+apps/e2e/scripts/notebook-services.ts
+  ai_agent 75-84
+apps/e2e/scripts/server-process.ts
+  s_1d547b3fd29c2e::t_052f970991c04f 1,4,14,34,36,62-66,68-77,79,82-103,108-115,184-188,191,214,258,264,283,288,294,298-323,325-337,365,375,382-390,403
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0ddbc042b9a24329b0313f6eaf06a6c476fa3763",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
