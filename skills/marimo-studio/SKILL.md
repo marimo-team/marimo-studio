@@ -139,6 +139,8 @@ For a standalone browser test, open the public view URL with
 `?marimo_studio_unframed=1`, preserving `file` and `runtime` when present
 (for example `/dashboard/?file=notebook.py&marimo_studio_unframed=1`). This
 renders the view in the top-level document for screenshots and DOM evaluation.
+After navigation, wait for `html[data-marimo-studio-state="ready"]` before
+inspecting outputs or following links.
 It creates a separate presentation, retains the document sandbox, and requires
 the server's usual authentication. In edit mode, keep the notebook session open. Call
 `show()` again after changing the view, runtime, or browser session.

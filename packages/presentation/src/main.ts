@@ -2,7 +2,7 @@ import type { ReplayDocumentMessage } from "@marimo-studio/protocol/preview-mess
 import type { RuntimeRegistry } from "@marimo-studio/runtime";
 
 import { bootstrapSession } from "@marimo-studio/marimo-frontend/session-bootstrap";
-import { publicNotebookQuery } from "@marimo-studio/protocol/query";
+import { publicNotebookQuery, UNFRAMED_QUERY_PARAM } from "@marimo-studio/protocol/query";
 import htmx from "htmx.org";
 
 import { documentBase } from "./document/base";
@@ -140,6 +140,7 @@ const bindRuntimeNavigation = (
       documentRootUrl: config.documentRootUrl,
       publicQuery: publicNotebookQuery(globalThis.location.search),
       trustedRuntime: { id: config.runtime.id, explicit: runtimeExplicit },
+      unframed: new URLSearchParams(globalThis.location.search).get(UNFRAMED_QUERY_PARAM) === "1",
       views: config.views,
       currentView: config.view,
       mountedDocumentUrl: presentationRevisions.url,

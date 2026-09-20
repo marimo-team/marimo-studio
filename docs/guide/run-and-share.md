@@ -75,7 +75,9 @@ opens at `http://127.0.0.1:8000/report/`.
 For browser automation, append `?marimo_studio_unframed=1` to the public view
 URL, such as `/report/?marimo_studio_unframed=1`. Keep any `file` and `runtime`
 parameters. The view renders directly in the top-level document, so screenshots
-and DOM evaluation need no Studio frame switch. Authentication and the document
+and DOM evaluation need no Studio frame switch. Wait for
+`html[data-marimo-studio-state="ready"]` after navigation before interacting.
+Authentication and the document
 sandbox still apply. This is a separate presentation from the editor preview.
 Keep the notebook session open when testing an edit-mode server.
 

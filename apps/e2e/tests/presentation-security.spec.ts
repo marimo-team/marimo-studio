@@ -541,6 +541,31 @@ test("serves an unframed preview for browser automation", async ({ page, context
         .getByRole("heading", { name: "Studio browser fixture" })
         .evaluate((node) => node.textContent),
     ).toBe("Studio browser fixture");
+    const follow = async (href: string) => {
+      await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+      await preview.evaluate((destination) => {
+        const anchor = document.createElement("a");
+        anchor.href = destination;
+        anchor.textContent = "Follow view link";
+        document.body.append(anchor);
+      }, href);
+      await preview.getByRole("link", { name: "Follow view link" }).click();
+    };
+    await follow("?automation-state=next");
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    expect(new URL(preview.url()).searchParams.get("marimo_studio_unframed")).toBe("1");
+    await expect(preview.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
+    await follow("#app-shell");
+    await preview.reload();
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    await follow("../vanilla-local/");
+    await expect(preview.getByRole("heading", { name: "Vanilla local sources" })).toBeVisible();
+    expect(new URL(preview.url()).searchParams.get("marimo_studio_unframed")).toBe("1");
+    await preview.goBack();
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    await preview.goForward();
+    await expect(preview.getByRole("heading", { name: "Vanilla local sources" })).toBeVisible();
+    await expect(preview.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
   } finally {
     await preview.close();
   }

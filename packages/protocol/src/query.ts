@@ -6,6 +6,7 @@ export const WORKSPACE_STREAM_QUERY_PARAM = "marimo_studio_connection";
 export const WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM = "marimo_studio_events";
 export const EDITOR_BINDING_CAPABILITY_QUERY_PARAM = "marimo_studio_editor";
 export const PRESENTATION_RENEWAL_QUERY_PARAM = "marimo_studio_renewal";
+export const UNFRAMED_QUERY_PARAM = "marimo_studio_unframed";
 export const DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume";
 
 const PRIVATE_QUERY_KEYS = [
@@ -22,7 +23,7 @@ const PRIVATE_QUERY_KEYS = [
   WORKSPACE_STREAM_QUERY_PARAM,
   DOCUMENT_REPLAY_QUERY_PARAM,
   "marimo_studio_view",
-  "marimo_studio_unframed",
+  UNFRAMED_QUERY_PARAM,
   "refresh_token",
   "session_id",
   "runtime",
