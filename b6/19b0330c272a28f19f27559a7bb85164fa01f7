@@ -1,0 +1,29 @@
+packages/marimo-studio/src/marimo_studio/_workspace/metadata.py
+  ai_agent 18,516-530
+packages/marimo-studio/src/marimo_studio/_cli/environment.py
+  s_1d547b3fd29c2e::t_f312b88a1bdee2 43-51
+packages/marimo-studio/src/marimo_studio/_workspace/python_project.py
+  ai_agent 1-58
+packages/marimo-studio/tests/cli/test_view_create_commands.py
+  s_1d547b3fd29c2e::t_f312b88a1bdee2 338-370
+development_docs/architecture/provider-environments.md
+  s_1d547b3fd29c2e::t_f312b88a1bdee2 30-35
+packages/marimo-studio/src/marimo_studio/_cli/output.py
+  ai_agent 23,85-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b619b0330c272a28f19f27559a7bb85164fa01f7",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
