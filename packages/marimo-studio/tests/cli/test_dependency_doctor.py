@@ -163,24 +163,52 @@ def test_dependency_doctor_accepts_the_owning_project_package(
     assert json.loads(result.stdout)["imports"][0]["available"]
 
 
-@pytest.mark.deno
-def test_dependency_doctor_resolves_provider_umbrella_extras(tmp_path: Path) -> None:
+def test_dependency_doctor_resolves_provider_umbrella_extras(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from marimo_studio.view_providers._host.registry import ProviderRegistry
+
+    from ..provider_test_support import ProviderStub, candidate, install_registry
+
+    metadata = tmp_path / "example_suite-1.0.dist-info"
+    metadata.mkdir()
+    (metadata / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: example-suite\nVersion: 1.0\n"
+        "Provides-Extra: recommended\nProvides-Extra: render\n"
+        'Requires-Dist: example-suite[render]; extra == "recommended"\n'
+        'Requires-Dist: packaging; extra == "render"\n'
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    install_registry(
+        monkeypatch,
+        ProviderRegistry(
+            (
+                candidate(
+                    "report",
+                    ProviderStub("example-suite/report", "default"),
+                    distribution="example-suite",
+                ),
+            ),
+            {"example-suite/report": "example-suite[render]"},
+        ),
+    )
     notebook = tmp_path / "analysis.py"
-    notebook.write_text("import marimo\n")
+    notebook.write_text("import packaging\n")
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "analysis"\nversion = "0.1"\n'
-        'dependencies = ["marimo-studio[recommended]"]\n'
+        'dependencies = ["example-suite[recommended]"]\n'
     )
     view = tmp_path / "__marimo__" / "studio" / "analysis" / "dashboard"
     view.mkdir(parents=True)
-    (view / "view.toml").write_text('schema = 1\nprovider = "marimo-studio/react"\n')
+    (view / "view.toml").write_text('schema = 1\nprovider = "example-suite/report"\n')
     result = CliRunner().invoke(
         cli, ["doctor", "--dependencies", "--target", str(notebook), "--json"]
     )
     assert result.exit_code == 0, result.output
     report = json.loads(result.stdout)
     assert report["ok"]
-    assert report["installed"]["deno"]
+    assert report["declarations"]["providers"] == ["example-suite[render]"]
+    assert report["installed"]["packaging"]
 
 
 @pytest.mark.deno
