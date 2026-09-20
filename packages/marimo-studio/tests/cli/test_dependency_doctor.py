@@ -78,6 +78,64 @@ def test_dependency_doctor_checks_configured_provider_requirements(
     assert any(item["code"] == "version-mismatch" for item in report["issues"])
 
 
+@pytest.mark.parametrize("configuration", ["invalid", "dual", "removed"])
+def test_dependency_doctor_reports_dependencies_when_studio_discovery_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    configuration: str,
+) -> None:
+    import marimo_studio._workspace.config as config_module
+
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text("import absent_module_for_studio_test\n")
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        '[project]\nname = "analysis"\nversion = "0.1"\n'
+        'dependencies = ["absent-package-for-studio-test"]\n'
+        '[tool.marimo-studio]\nnotebook = "analysis.py"\n'
+        + (
+            "default = 42\n"
+            if configuration == "invalid"
+            else 'default = "dashboard"\n'
+        )
+    )
+    if configuration == "dual":
+        notebook.write_text(
+            '# /// script\n# [tool.marimo-studio]\n# default = "dashboard"\n# ///\n'
+            + notebook.read_text()
+        )
+    elif configuration == "removed":
+
+        def missing_snapshot(*_args: object, **_kwargs: object) -> None:
+            raise FileNotFoundError(project)
+
+        monkeypatch.setattr(
+            config_module, "read_file_snapshot_with_identity", missing_snapshot
+        )
+    view = tmp_path / "__marimo__" / "studio" / "analysis" / "dashboard"
+    view.mkdir(parents=True)
+    (view / "view.toml").write_text('schema = 1\nprovider = "marimo-studio/vanilla"\n')
+
+    result = CliRunner().invoke(
+        cli, ["doctor", "--dependencies", "--target", str(notebook), "--json"]
+    )
+
+    assert result.exit_code == 1, result.output
+    report = json.loads(result.stdout)
+    assert not report["ok"]
+    assert {issue["code"] for issue in report["issues"]} == {
+        "workspace-generation-conflict"
+        if configuration == "removed"
+        else "configuration-error",
+        "missing-distribution",
+        "missing-import",
+        "undeclared-provider",
+    }
+    assert report["declarations"]["providers"] == ["marimo-studio"]
+    assert report["installed"]["absent-package-for-studio-test"] is None
+    assert not report["imports"][0]["available"]
+
+
 def test_dependency_doctor_rejects_unknown_distribution_extras(tmp_path: Path) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text(
@@ -163,8 +221,9 @@ def test_dependency_doctor_accepts_the_owning_project_package(
     assert json.loads(result.stdout)["imports"][0]["available"]
 
 
+@pytest.mark.parametrize("view_root", [None, "views"])
 def test_dependency_doctor_resolves_provider_umbrella_extras(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, view_root: str | None
 ) -> None:
     from marimo_studio.view_providers._host.registry import ProviderRegistry
 
@@ -197,8 +256,14 @@ def test_dependency_doctor_resolves_provider_umbrella_extras(
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "analysis"\nversion = "0.1"\n'
         'dependencies = ["example-suite[recommended]"]\n'
+        + (
+            '[tool.marimo-studio]\nnotebook = "analysis.py"\n'
+            f'default = "dashboard"\nview_root = "{view_root}"\n'
+            if view_root is not None
+            else ""
+        )
     )
-    view = tmp_path / "__marimo__" / "studio" / "analysis" / "dashboard"
+    view = tmp_path / (view_root or "__marimo__/studio/analysis") / "dashboard"
     view.mkdir(parents=True)
     (view / "view.toml").write_text('schema = 1\nprovider = "example-suite/report"\n')
     result = CliRunner().invoke(

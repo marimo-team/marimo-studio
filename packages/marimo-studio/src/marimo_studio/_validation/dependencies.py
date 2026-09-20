@@ -21,7 +21,11 @@ from marimo_studio._workspace.config import (
 )
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.python_project import owning_project, project_metadata
-from marimo_studio.errors import ConfigurationError, MarimoStudioError
+from marimo_studio.errors import (
+    ConfigurationError,
+    MarimoStudioError,
+    WorkspaceGenerationConflictError,
+)
 from marimo_studio.view_providers._host import provider_registry
 
 
@@ -248,7 +252,11 @@ def diagnose_dependencies(notebook: Path) -> DependencyReport:
                 )
     providers: list[str] = []
     registry = provider_registry()
-    definition = discover_studio_definition(notebook)
+    try:
+        definition = discover_studio_definition(notebook)
+    except (ConfigurationError, WorkspaceGenerationConflictError) as error:
+        issues.append(DependencyIssue(error.code, str(error)))
+        definition = None
     view_root = (
         definition.view_root
         if definition is not None
