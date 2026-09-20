@@ -1,0 +1,22 @@
+packages/marimo-studio/src/marimo_studio/_validation/dependencies.py
+  s_707852fa342e68::t_83f034dac49c7b 24-28,255-259
+packages/marimo-studio/tests/cli/test_dependency_doctor.py
+  s_707852fa342e68::t_0a6fc9a224fae1 96-100,127-129
+  s_707852fa342e68::t_fa3306d4531acc 81-95,101-126,130-138,224,226,259-264,266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2eeae7e778ab4a47df56f7c5d6c113ba17b88bb5",
+  "prompts": {},
+  "sessions": {
+    "s_707852fa342e68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c024-d52c-77a2-a777-67431c3b2808",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
