@@ -1,0 +1,21 @@
+apps/e2e/tests/presentation-security.spec.ts
+  s_1d547b3fd29c2e::t_d4c41d0cd8d801 536-538
+packages/marimo-studio/src/marimo_studio/_server/pages.py
+  s_1d547b3fd29c2e::t_5538f9bfe9787c 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0b67ccb1c9a15fde2680fded77ce60c009d1a09a",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
