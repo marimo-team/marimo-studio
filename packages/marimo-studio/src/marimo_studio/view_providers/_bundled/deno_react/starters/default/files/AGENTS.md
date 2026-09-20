@@ -124,3 +124,12 @@ JavaScript rendering is necessary, every result must declare its kernel inputs:
 - Studio supplies native projection labels. Give custom regions a
   `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
   supplements the source links that connect results to the analytical graph.
+
+## Maintain project ignore rules
+
+You own this view project's `.gitignore`. When adding libraries, extensions, or
+build tools, ignore their generated files, caches, local configuration, and
+secrets. Keep authored source, dependency manifests, and lockfiles tracked.
+Studio supplies workspace rules for its own artifacts and locks. Check
+`git status --short --ignored` after running new tooling and update the view's
+ignore rules before committing.

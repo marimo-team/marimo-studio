@@ -57,3 +57,12 @@ Pin added npm dependencies in `package.json`, then regenerate `deno.lock` with
 `deno install --frozen=false --node-modules-dir=auto --no-save`. Source exposes
 the lockfile as read-only. Keep authored inputs in `src/` and public assets in
 `public/`. Build failure retains the last published preview.
+
+## Maintain project ignore rules
+
+You own this view project's `.gitignore`. When adding libraries, extensions, or
+build tools, ignore their generated files, caches, local configuration, and
+secrets. Keep authored source, dependency manifests, and lockfiles tracked.
+Studio supplies workspace rules for its own artifacts and locks. Check
+`git status --short --ignored` after running new tooling and update the view's
+ignore rules before committing.
