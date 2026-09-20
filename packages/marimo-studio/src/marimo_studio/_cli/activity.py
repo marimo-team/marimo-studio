@@ -27,7 +27,7 @@ def activity(
     stopped = Event()
     lock = Lock()
     failures: list[BaseException] = []
-    current: dict[str, object] = {
+    status: dict[str, object] = {
         "view": view,
         "phase": phase,
         "state": None,
@@ -38,32 +38,32 @@ def activity(
     def progress(event: StaticExportProgress) -> None:
         with lock:
             record = event.event.to_dict()
-            current["phase"] = record["kind"]
+            status["phase"] = record["kind"]
             for key in ("state", "cache"):
                 if record.get(key) is not None:
-                    current[key] = record[key]
+                    status[key] = record[key]
             stream.emit_progress(event)
 
     def heartbeat() -> None:
         try:
-            run_heartbeat()
+            while not stopped.wait(interval):
+                with lock:
+                    elapsed = time.monotonic() - started
+                    details = {**status, "elapsed_seconds": elapsed}
+                    message = (
+                        f"{status['phase']} | state {status['state'] or 'unavailable'}"
+                        f" | {elapsed:.1f}s | cache {status['cache'] or 'unavailable'}"
+                        " | cell unavailable"
+                    )
+                    if not stream.emit(
+                        code="heartbeat",
+                        severity="info",
+                        message=message,
+                        details=details,
+                    ):
+                        stream.write_activity(message)
         except BaseException as error:
             failures.append(error)
-
-    def run_heartbeat() -> None:
-        while not stopped.wait(interval):
-            with lock:
-                elapsed = time.monotonic() - started
-                details = {**current, "elapsed_seconds": elapsed}
-                message = (
-                    f"{current['phase']} | state {current['state'] or 'unavailable'}"
-                    f" | {elapsed:.1f}s | cache {current['cache'] or 'unavailable'}"
-                    " | cell unavailable"
-                )
-                if not stream.emit(
-                    code="heartbeat", severity="info", message=message, details=details
-                ):
-                    stream.write_activity(message)
 
     worker = Thread(target=heartbeat, name="studio-progress")
     worker.start()
