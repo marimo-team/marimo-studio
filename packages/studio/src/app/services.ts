@@ -93,9 +93,13 @@ export const createStudioServices = (
       return true;
     },
     stage: (view, changed, navigation, signal, owner) => {
-      const staged = signal
-        ? preview.stageNavigation(view, changed, navigation, signal)
-        : preview.stageNavigation(view, changed, navigation);
+      const staged = preview.stageNavigation(
+        view,
+        changed,
+        navigation,
+        signal,
+        owner === "agent" ? "document" : "rendered",
+      );
       const fromView = views?.getSnapshot().current ?? bootstrap.selectedView;
       return stageCommittedView(
         staged,

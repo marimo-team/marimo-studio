@@ -512,6 +512,10 @@ test("shows an agent-requested page and records its rendered revision", async ({
     "src",
     activated.preview_url,
   );
+  await expect(page.frameLocator(activated.frame_selector).locator("html")).toHaveAttribute(
+    "data-marimo-studio-state",
+    "ready",
+  );
   await expect(
     page.frameLocator(activated.frame_selector).getByRole("heading", { name: "Qa View" }),
   ).toBeVisible();
@@ -524,6 +528,10 @@ test("shows an agent-requested page and records its rendered revision", async ({
   await expect(page.locator(refreshed.frame_selector)).toHaveJSProperty(
     "src",
     refreshed.preview_url,
+  );
+  await expect(page.frameLocator(refreshed.frame_selector).locator("html")).toHaveAttribute(
+    "data-marimo-studio-state",
+    "ready",
   );
   await expect(
     page.frameLocator(refreshed.frame_selector).getByRole("heading", { name: "Qa View" }),

@@ -77,19 +77,11 @@ it("acknowledges an activation with one parsed view owner", async () => {
 
 it("refreshes an already active view before acknowledging its activation", async () => {
   const { acknowledge, coordinator, model, preview } = setup();
-  const ready = deferred<{ previewUrl: string; frameSelector: string }>();
-  preview.automationTarget.mockReturnValueOnce(ready.promise);
 
   EventSourceStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 8, view: "dashboard" }),
   );
-  await vi.waitFor(() => expect(preview.automationTarget).toHaveBeenCalledOnce());
-  expect(acknowledge).not.toHaveBeenCalled();
-  ready.resolve({
-    previewUrl: "http://localhost/preview/",
-    frameSelector: "iframe[data-test-preview]",
-  });
 
   await vi.waitFor(() =>
     expect(acknowledge).toHaveBeenCalledWith(
@@ -307,7 +299,7 @@ it("cancels an older selection before a newer unavailable activation settles", a
       cancelPendingSelection,
     },
     preview: {
-      automationTarget: vi.fn(async () => ({
+      automationTarget: vi.fn(() => ({
         previewUrl: "http://localhost/preview/",
         frameSelector: "iframe[data-test-preview]",
       })),

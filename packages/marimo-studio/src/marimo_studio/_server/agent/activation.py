@@ -244,7 +244,7 @@ class ActivationCoordinator:
         if not isinstance(operation, (AcknowledgedActivation, RetainedActivation)):
             raise AgentRequestError(
                 "activation-unacknowledged",
-                "The Studio browser did not acknowledge a ready preview.",
+                "The Studio browser did not acknowledge an activated preview document.",
                 status_code=409,
             )
         return operation.preview

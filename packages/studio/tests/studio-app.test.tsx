@@ -1,5 +1,3 @@
-import type { PreviewAutomationTarget } from "@marimo-studio/protocol/development-events";
-
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -506,10 +504,15 @@ describe("Studio shell", () => {
       view: "dashboard",
     });
     vi.spyOn(services.source, "start").mockReturnValue(sourcePending);
-    const previewReady = deferred<PreviewAutomationTarget>();
-    const automationTarget = vi
-      .spyOn(services.preview, "automationTarget")
-      .mockReturnValue(previewReady.promise);
+    const documentAttached = deferred<boolean>();
+    const stageNavigation = vi.spyOn(services.preview, "stageNavigation").mockReturnValue({
+      ready: documentAttached.promise,
+      rollback: async () => undefined,
+    });
+    const automationTarget = vi.spyOn(services.preview, "automationTarget").mockReturnValue({
+      previewUrl: "http://localhost:3000/dashboard/",
+      frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+    });
     const editor = document.createElement("iframe");
     const frames = new Map(
       bootstrap.runtimes.map((runtime) => [runtime.id, document.createElement("iframe")]),
@@ -521,17 +524,21 @@ describe("Studio shell", () => {
     });
     try {
       await vi.waitFor(() =>
-        expect(automationTarget).toHaveBeenCalledWith("dashboard", false, expect.any(AbortSignal)),
+        expect(stageNavigation).toHaveBeenCalledWith(
+          "dashboard",
+          false,
+          undefined,
+          expect.any(AbortSignal),
+          "document",
+        ),
       );
       expect(
         request.mock.calls.some(([input]) =>
           String(input instanceof Request ? input.url : input).includes("/activations/12/ack"),
         ),
       ).toBe(false);
-      previewReady.resolve({
-        previewUrl: "http://localhost:3000/dashboard/",
-        frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
-      });
+      expect(automationTarget).not.toHaveBeenCalled();
+      documentAttached.resolve(true);
       await vi.waitFor(() =>
         expect(request).toHaveBeenCalledWith(
           expect.stringContaining("/activations/12/ack"),

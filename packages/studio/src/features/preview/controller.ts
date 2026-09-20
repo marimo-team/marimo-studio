@@ -26,6 +26,7 @@ import type { RecordBrowserObservation } from "./observation-remote.ts";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
+import { errorMessage } from "../../shared/errors.ts";
 import { PreviewAdmission } from "./admission.ts";
 import { PreviewControlController } from "./control-controller.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
@@ -256,6 +257,40 @@ export class PreviewController {
     return this.waitForView(this.view, this.activeLifecycleId, signal);
   }
 
+  activateDocument(navigation: ViewNavigationIntent, reload = false): void {
+    const rendered = this.activate(navigation, undefined, reload);
+    const lifecycleId = this.activeLifecycleId;
+    void rendered.catch((cause: unknown) => {
+      if (!this.activeOwner || this.activeLifecycleId !== lifecycleId) return;
+      this.admission.viewError(
+        this.lifecycleDiagnostic(
+          "preview-activation-failed",
+          "error",
+          errorMessage(cause),
+          "Reload the preview to retry.",
+        ),
+        this.admission.identity?.revision ?? null,
+        this.admissionOwner(),
+      );
+    });
+  }
+
+  private prepareDocument(navigation: ViewNavigationIntent, reload = false): void {
+    const reactivating = !this.activeOwner;
+    this.activeOwner = true;
+    this.navigation = navigation;
+    this.queries.commitNavigation(navigation.query);
+    if (reload) {
+      this.admission.requireReady();
+      this.reload();
+    } else if (reactivating) {
+      this.admission.reactivate(this.admissionOwner());
+    }
+    if (this.preview.src === "about:blank") {
+      this.reloadCurrentDocument();
+    }
+  }
+
   async activate(
     navigation: ViewNavigationIntent,
     signal?: AbortSignal,
@@ -266,24 +301,16 @@ export class PreviewController {
     }
     this.activationsInProgress += 1;
     try {
-      const reactivating = !this.activeOwner;
-      this.activeOwner = true;
-      this.navigation = navigation;
-      this.queries.commitNavigation(navigation.query);
-      if (reload) {
-        this.admission.requireReady();
-        this.reload();
-      } else if (reactivating) {
-        this.admission.reactivate(this.admissionOwner());
-      }
+      this.prepareDocument(navigation, reload);
+      const lifecycleId = this.activeLifecycleId;
       const ready = await this.waitUntilReady(signal);
-      if (!ready || !this.activeOwner) {
+      if (!ready || !this.activeOwner || this.activeLifecycleId !== lifecycleId) {
         return false;
       }
       const identity = this.admission.identity;
       if (this.admission.isInteractive && identity !== null) {
         await this.queries.applyToPreview(true, navigation.hash);
-        if (!this.activeOwner) {
+        if (!this.activeOwner || this.activeLifecycleId !== lifecycleId) {
           return false;
         }
         this.controls.begin(

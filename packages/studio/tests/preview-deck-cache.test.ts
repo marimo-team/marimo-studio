@@ -544,3 +544,66 @@ it("loads a fresh WebAssembly document when returning to an earlier view", async
   await expect(returning.ready).resolves.toBe(true);
   deck.dispose();
 });
+
+it("synchronizes query and fragment after document activation restores a cached view", async () => {
+  const deck = previewDeck({ initialNavigation: { query: "?region=eu", hash: "" } });
+  const { frames, windows } = cachedFramesWithWindows(deck, createFrameBridgeSource);
+  deck.attach(frame("complete"), frames);
+  const render = async (view: string) => {
+    const currentView = deck.getSnapshot().frames.find((item) => item.active)?.view;
+    if (currentView !== view) {
+      const selected = deck.stageView(view, undefined, undefined, "document");
+      expect(await selected.ready).toBe(true);
+    }
+    const slot = deck.getSnapshot().frames.find((item) => item.active && item.view === view)!;
+    const source = windows.get(slot.id)!;
+    const target = frames.get(slot.id)!;
+    const identity = {
+      lifecycleId: deck.getSnapshot().states.server!.lifecycleId,
+      revision: `revision:${view}`,
+      runtime: "server",
+      sessionId: "s_editor",
+      view,
+    };
+    installFrameBridge(target, source, identity);
+    const receiver = {
+      lifecycleId: identity.lifecycleId,
+      revision: identity.revision,
+      runtime: identity.runtime,
+      view,
+    };
+    dispatchPreviewMessage(source, { type: "marimo-studio:receiver-ready", ...receiver });
+    dispatchPreviewMessage(source, { type: "marimo-studio:view-ready", ...identity });
+    await vi.waitFor(() => expect(deck.getSnapshot().states.server?.rendered).toBe(true));
+    return { source, target, identity, receiver };
+  };
+  try {
+    const cached = await render("dashboard");
+    const originalUrl = cached.target.src;
+    await render("report");
+    deck.navigateWithinView({ query: "?region=us", hash: "#details" });
+    cached.source.postMessage.mockClear();
+    const restored = deck.stageView(
+      "dashboard",
+      { query: "?region=us", hash: "#details" },
+      undefined,
+      "document",
+    );
+    expect(await restored.ready).toBe(true);
+    expect(cached.target.src).toBe(originalUrl);
+    dispatchPreviewRefreshHandshake(cached.source, cached.receiver);
+    dispatchPreviewMessage(cached.source, { type: "marimo-studio:view-ready", ...cached.identity });
+    await vi.waitFor(() =>
+      expect(cached.source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "marimo-studio:frame-query-apply",
+          query: "?region=us",
+          hash: "#details",
+        }),
+        "*",
+      ),
+    );
+  } finally {
+    deck.dispose();
+  }
+});

@@ -133,8 +133,11 @@ await studio_agent.current_workspace().view("dashboard").show()
 ```
 
 `show()` returns `client_id`, `preview_url`, and `frame_selector` for the
-acknowledged preview. Use that exact selector for browser frame switching and
-DOM evaluation. Cached and hidden frames are outside this selector.
+activated preview document. Use that exact selector for browser frame switching
+and DOM evaluation. Cached and hidden frames are outside this selector. `show()`
+commits the selected frame without waiting for notebook execution. After it returns,
+wait inside that frame for `html[data-marimo-studio-state="ready"]` before
+inspecting outputs or interacting. The kernel can then finish the preview work.
 For a standalone browser test, open the public view URL with
 `?marimo_studio_unframed=1`, preserving `file` and `runtime` when present
 (for example `/dashboard/?file=notebook.py&marimo_studio_unframed=1`). This

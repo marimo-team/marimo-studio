@@ -8,7 +8,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class PreviewAutomationTarget:
-    """Browser-owned addressing for one ready preview."""
+    """Browser-owned addressing for one activated preview document."""
 
     preview_url: str
     frame_selector: str
@@ -16,7 +16,7 @@ class PreviewAutomationTarget:
 
 @dataclass(frozen=True)
 class ShowResult(PreviewAutomationTarget):
-    """The connected Studio tab selected and rendered a view."""
+    """The connected Studio tab selected a view and activated its preview document."""
 
     notebook: Path
     view: str

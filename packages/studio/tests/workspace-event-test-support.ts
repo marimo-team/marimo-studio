@@ -97,7 +97,7 @@ export const setup = (
 ) => {
   const model = workspace(initialViews);
   const preview = {
-    automationTarget: vi.fn(async (_view: string, _reload: boolean, _signal: AbortSignal) => ({
+    automationTarget: vi.fn((_view: string, _reload: boolean, _signal: AbortSignal) => ({
       previewUrl: "http://localhost/preview/",
       frameSelector: "iframe[data-test-preview]",
     })),

@@ -130,6 +130,37 @@ shown.to_dict()
   supersededConfig.recovered();
 });
 
+test("switches existing views from code mode before kernel rendering resumes", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  const sessionId = await studioEditorSessionId(page);
+  const replacements = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
+    2,
+  );
+  await executeCodeMode(
+    editorFrame(page),
+    "notebook.py",
+    sessionId,
+    `
+import marimo_studio.agent as studio_agent
+workspace = studio_agent.current_workspace()
+first = await workspace.view("vanilla-local").show()
+second = await workspace.view("dashboard").show()
+assert first.view == "vanilla-local" and second.view == "dashboard"
+assert first.preview_url and second.preview_url
+`,
+  );
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=notebook\.py$/);
+  const preview = await waitForPreview(page);
+  await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+  expect(await studioEditorSessionId(page)).toBe(sessionId);
+  await recoverWorkspaceEventStream(replacements);
+});
+
 test("offers Studio on a fresh notebook and preserves its session through first-view creation", async ({
   browserDiagnostics,
   page,

@@ -1,4 +1,3 @@
-import type { PreviewAutomationTarget } from "@marimo-studio/protocol/development-events";
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import type { StudioHostBootstrap } from "@marimo-studio/protocol/studio-host";
 
@@ -490,10 +489,15 @@ it("opens an already-created first view after a bootstrap retry", async () => {
 
 it("preserves an active editor and its public query during first-view activation", async () => {
   useActivationEvents();
-  const previewReady = deferred<PreviewAutomationTarget>();
-  const automationTarget = vi
-    .spyOn(PreviewDeck.prototype, "automationTarget")
-    .mockReturnValue(previewReady.promise);
+  const documentAttached = deferred<boolean>();
+  const stageNavigation = vi.spyOn(PreviewDeck.prototype, "stageNavigation").mockReturnValue({
+    ready: documentAttached.promise,
+    rollback: async () => undefined,
+  });
+  const automationTarget = vi.spyOn(PreviewDeck.prototype, "automationTarget").mockReturnValue({
+    previewUrl: "http://localhost:3000/dashboard/",
+    frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+  });
   const configured = {
     ...ready,
     urls: {
@@ -534,19 +538,21 @@ it("preserves an active editor and its public query during first-view activation
   expect(new URL(editorWindow.location.href).searchParams.has("session_id")).toBe(true);
   expect(await screen.findByLabelText("Studio workspace")).toBeVisible();
   await vi.waitFor(() =>
-    expect(automationTarget).toHaveBeenCalledWith("dashboard", false, expect.any(AbortSignal)),
+    expect(stageNavigation).toHaveBeenCalledWith(
+      "dashboard",
+      false,
+      undefined,
+      expect.any(AbortSignal),
+      "document",
+    ),
   );
   expect(
     request.mock.calls.some(([input]) =>
       String(input instanceof Request ? input.url : input).includes("/activations/7/ack"),
     ),
   ).toBe(false);
-  await act(async () =>
-    previewReady.resolve({
-      previewUrl: "http://localhost:3000/dashboard/",
-      frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
-    }),
-  );
+  expect(automationTarget).not.toHaveBeenCalled();
+  await act(async () => documentAttached.resolve(true));
   await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.stringContaining("/activations/7/ack"),
@@ -559,10 +565,15 @@ it("preserves an active editor and its public query during first-view activation
 
 it("retries first-view activation when the editor query changes during bootstrap", async () => {
   useActivationEvents();
-  const previewReady = deferred<PreviewAutomationTarget>();
-  const automationTarget = vi
-    .spyOn(PreviewDeck.prototype, "automationTarget")
-    .mockReturnValue(previewReady.promise);
+  const documentAttached = deferred<boolean>();
+  const stageNavigation = vi.spyOn(PreviewDeck.prototype, "stageNavigation").mockReturnValue({
+    ready: documentAttached.promise,
+    rollback: async () => undefined,
+  });
+  const automationTarget = vi.spyOn(PreviewDeck.prototype, "automationTarget").mockReturnValue({
+    previewUrl: "http://localhost:3000/dashboard/",
+    frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+  });
   globalThis.history.replaceState({}, "", "/entry/");
   const { editorFrame, editorWindow } = mountActiveEditor("region=eu&tag=a&tag=b");
   const firstBootstrap = deferred<Response>();
@@ -617,19 +628,21 @@ it("retries first-view activation when the editor query changes during bootstrap
   expect(new URL(globalThis.location.href).searchParams.getAll("tag")).toEqual(["b", "a"]);
   expect(new URL(editorWindow.location.href).searchParams.getAll("tag")).toEqual(["b", "a"]);
   await vi.waitFor(() =>
-    expect(automationTarget).toHaveBeenCalledWith("dashboard", false, expect.any(AbortSignal)),
+    expect(stageNavigation).toHaveBeenCalledWith(
+      "dashboard",
+      false,
+      undefined,
+      expect.any(AbortSignal),
+      "document",
+    ),
   );
   expect(
     request.mock.calls.some(([input]) =>
       String(input instanceof Request ? input.url : input).includes("/activations/7/ack"),
     ),
   ).toBe(false);
-  await act(async () =>
-    previewReady.resolve({
-      previewUrl: "http://localhost:3000/dashboard/",
-      frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
-    }),
-  );
+  expect(automationTarget).not.toHaveBeenCalled();
+  await act(async () => documentAttached.resolve(true));
   await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.stringContaining("/activations/7/ack"),

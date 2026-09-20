@@ -492,7 +492,7 @@ describe("Studio view handoff lifecycle", () => {
       services.previewFrameIds.map((id) => [id, document.createElement("iframe")]),
     );
     await services.start(document.createElement("iframe"), frames);
-    const automationTarget = vi.spyOn(services.preview, "automationTarget").mockResolvedValue({
+    const automationTarget = vi.spyOn(services.preview, "automationTarget").mockReturnValue({
       previewUrl: "http://localhost:3000/report/",
       frameSelector: 'iframe[data-preview-view-frame="report"]',
     });

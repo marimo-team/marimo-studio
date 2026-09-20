@@ -43,11 +43,7 @@ interface WorkspacePreviewPort {
   requestObservation(request: ObserveViewRequest): void;
   editorSessionChanged(binding: EditorSessionBinding): void;
   reload(): void;
-  automationTarget(
-    view: string,
-    reload: boolean,
-    signal: AbortSignal,
-  ): Promise<PreviewAutomationTarget>;
+  automationTarget(view: string, reload: boolean, signal: AbortSignal): PreviewAutomationTarget;
   presentationBaseline(view: string, revision: string | null): void;
   presentationBuildStarted(view: string, notebookMutationGeneration?: number): void;
   presentationBuildCompleted(
@@ -417,7 +413,7 @@ export class WorkspaceEventCoordinator {
       ) {
         return false;
       }
-      const preview = await this.options.preview.automationTarget(
+      const preview = this.options.preview.automationTarget(
         view,
         alreadyActive && reloadActive,
         signal,

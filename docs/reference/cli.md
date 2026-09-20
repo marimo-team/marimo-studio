@@ -278,9 +278,11 @@ tabs are connected, the error lists their IDs. Pass one through
 
 The result includes `client_id`, `session_id`, `preview_url`, and
 `frame_selector`. Use the selector in the selected Studio tab to target its
-active, interactive preview. Successful activation waits for the preview to be
-ready, including when refreshing the currently selected view. The browser supplies
-both addressing fields; the URL identifies the acknowledged document.
+active preview document, including while its notebook outputs are preparing.
+Successful activation commits the selected frame and its browser-authored address.
+Before inspecting outputs or interacting, wait inside the frame for
+`html[data-marimo-studio-state="ready"]`. Keeping these milestones separate lets
+`show()` return from code mode so Marimo can process the preview's kernel work.
 Refresh these fields with `view show` after a view, runtime, or session change.
 
 Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
