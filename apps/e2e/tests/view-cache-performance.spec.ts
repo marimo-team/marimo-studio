@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { workspaceDirectory } from "../scripts/paths.mjs";
+import { workspaceDirectory } from "../scripts/paths.ts";
 import { selectAllShortcut } from "./authoring-test-support.ts";
 import {
   captureProjectionRefresh,

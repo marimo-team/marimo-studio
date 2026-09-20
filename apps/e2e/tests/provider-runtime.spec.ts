@@ -1,7 +1,7 @@
 import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
 import { expect, type Locator, type Page } from "@playwright/test";
 
-import { e2eNetwork } from "../scripts/network.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { labeledSlider, presentationFrame, WASM_PREVIEW_TIMEOUT } from "./fixture.ts";
 import { test } from "./provider-fixture.ts";

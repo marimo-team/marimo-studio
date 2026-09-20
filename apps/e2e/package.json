@@ -4,21 +4,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check-browser": "node scripts/check-browser.mjs",
+    "check-browser": "node scripts/check-browser.ts",
     "e2e": "playwright test",
-    "e2e:installed": "node scripts/run-installed-package.mjs",
+    "e2e:installed": "node scripts/run-installed-package.ts",
     "e2e:providers": "playwright test --config playwright.providers.config.ts",
     "e2e:windows": "playwright test tests/forced-interruption.spec.ts tests/vanilla-local-sources.spec.ts",
     "e2e:windows:providers": "playwright test --config playwright.providers.config.ts provider-runtime.spec.ts provider-reveal.spec.ts provider-notebook.spec.ts external-provider.spec.ts",
     "e2e:ui": "playwright test --ui",
     "install-browser": "playwright install --with-deps chromium",
-    "test": "vp test unit"
+    "test": "vp test unit",
+    "typecheck": "tsc --noEmit -p scripts/tsconfig.json"
   },
   "devDependencies": {
     "@marimo-studio/protocol": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "portless": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
     "zod": "catalog:"
   }
 }

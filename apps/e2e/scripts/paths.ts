@@ -1,7 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { e2eNetwork } from "./network.mjs";
+import { e2eNetwork, type E2ENetworkIdentity } from "./network.ts";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 
@@ -10,7 +10,7 @@ export const repositoryDirectory = resolve(appDirectory, "../..");
 export const studioPackageDirectory = resolve(repositoryDirectory, "packages/marimo-studio");
 export const fixtureDirectory = resolve(appDirectory, "fixtures");
 
-export const createE2EPaths = (root, { runId, suite, workerId }) => {
+export const createE2EPaths = (root: string, { runId, suite, workerId }: E2ENetworkIdentity) => {
   const resultRoot = resolve(root, "test-results", runId, suite, workerId);
   const workspaceDirectory = resolve(resultRoot, "workspace");
   const providerWorkspaceRoot = resolve(resultRoot, "workspaces");

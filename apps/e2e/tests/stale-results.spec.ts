@@ -1,7 +1,7 @@
 import { valueReadResponseSchema } from "@marimo-studio/protocol/value-read";
 
-import { e2eNetwork } from "../scripts/network.mjs";
-import { collaborativeWorkspaceDirectory } from "../scripts/paths.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
+import { collaborativeWorkspaceDirectory } from "../scripts/paths.ts";
 import { studioClientId } from "./authoring-test-support.ts";
 import {
   selectWorkspaceMode,
@@ -21,11 +21,7 @@ import {
   workspaceNotebookPath,
   writeWorkspaceFile,
 } from "./fixture.ts";
-import {
-  startNotebookServer,
-  stopNotebookServer,
-  waitForNotebookServer,
-} from "./notebook-server.ts";
+import { startNotebookServer } from "./notebook-server.ts";
 
 declare global {
   var __studioPreviewWindowMarker: string | undefined;
@@ -89,8 +85,8 @@ test("cancels one client's held old-view request without changing the peer view"
   const second = await secondContext.newPage();
   try {
     await Promise.all([
-      waitForNotebookServer(firstServer, entry),
-      waitForNotebookServer(secondServer, secondEntry),
+      firstServer.waitUntilReady(entry),
+      secondServer.waitUntilReady(secondEntry),
     ]);
     await page.goto(entry);
     await second.goto(secondEntry);
@@ -197,7 +193,7 @@ test("cancels one client's held old-view request without changing the peer view"
     expect(secondDiagnostics.messages, "unexpected second-client diagnostics").toEqual([]);
     await secondContext.close();
     await page.close();
-    await Promise.all([stopNotebookServer(firstServer), stopNotebookServer(secondServer)]);
+    await Promise.all([firstServer.close(), secondServer.close()]);
   }
 });
 

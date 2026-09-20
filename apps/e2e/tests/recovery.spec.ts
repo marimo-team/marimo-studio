@@ -19,7 +19,6 @@ import {
   workspaceNotebookPath,
 } from "./fixture.ts";
 import { test as playwrightTest } from "./network-fixture.ts";
-import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 import { editServerUrl, startEditServer } from "./recovery-support.ts";
 
@@ -134,7 +133,7 @@ playwrightTest(
     let diagnosticsClosed = false;
 
     try {
-      await waitForNotebookServer(server, editServerUrl());
+      await server.waitUntilReady(editServerUrl());
       await page.goto(editServerUrl());
       await waitForPreview(page);
       await playwrightExpect.poll(() => eventSourceCount(page)).toBe(1);
@@ -159,10 +158,10 @@ playwrightTest(
         count: openSockets.length,
       });
 
-      await stopNotebookServer(server);
+      await server.close();
       server = startEditServer();
       servers.push(server);
-      await waitForNotebookServer(server, editServerUrl());
+      await server.waitUntilReady(editServerUrl());
       await playwrightExpect
         .poll(() =>
           page.evaluate(
@@ -206,7 +205,7 @@ playwrightTest(
         await diagnostics.close();
       }
       await fresh?.close();
-      await stopNotebookServer(server);
+      await server.close();
       await restoreWorkspace();
     }
   },

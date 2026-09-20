@@ -1,7 +1,8 @@
-import { spawn } from "node:child_process";
-import { readFileSync, watch } from "node:fs";
-import { connect } from "node:net";
+import { spawn, type ChildProcess } from "node:child_process";
+import { readFileSync, watch, type FSWatcher } from "node:fs";
 import { z } from "zod";
+
+import type { SupervisorMessage } from "./registered-notebook-process.ts";
 
 import {
   NOTEBOOK_PROCESS_OWNER_ENV,
@@ -12,16 +13,16 @@ import {
   notebookProcessEndpointPath,
   removeNotebookEndpointReceipt,
   unregisterNotebookProcess,
-} from "./notebook-process-registry.mjs";
-import { processEnvironmentContains, stopProcessGroup } from "./process-group.mjs";
+} from "./notebook-process-registry.ts";
+import { portIsOpen, processEnvironmentContains, stopProcessGroup } from "./process-group.ts";
 
 const FORCE_STOP_DELAY = 250;
 const PORT_CLOSE_TIMEOUT = 5_000;
 const PORT_POLL_INTERVAL = 50;
-const command = process.argv[2];
+const command = process.argv[2] ?? "";
 const args = process.argv.slice(3);
-const directory = process.env[NOTEBOOK_PROCESS_REGISTRY_ENV];
-const ownerNonce = process.env[NOTEBOOK_PROCESS_OWNER_ENV];
+const directory = process.env[NOTEBOOK_PROCESS_REGISTRY_ENV] ?? "";
+const ownerNonce = process.env[NOTEBOOK_PROCESS_OWNER_ENV] ?? "";
 const portValue = process.env[NOTEBOOK_PROCESS_PORT_ENV];
 let port = portValue === "null" ? null : Number(portValue);
 const processGroupId = process.pid;
@@ -51,13 +52,13 @@ else delete childEnvironment[NOTEBOOK_PROCESS_ENDPOINT_ENV];
 delete childEnvironment[NOTEBOOK_PROCESS_PORT_ENV];
 delete childEnvironment[NOTEBOOK_PROCESS_REGISTRY_ENV];
 
-let child;
+let child: ChildProcess | undefined;
 let childExitCode = 1;
 let finished = false;
-let forceStopTimer;
-let portPollTimer;
+let forceStopTimer: NodeJS.Timeout | undefined;
+let portPollTimer: NodeJS.Timeout | undefined;
 let shuttingDown = false;
-let endpointWatcher;
+let endpointWatcher: FSWatcher | undefined;
 let endpointSettled = port !== null;
 
 const disposeEndpoint = () => {
@@ -73,8 +74,10 @@ const inspectEndpoint = () => {
   try {
     source = readFileSync(endpointPath, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT") return;
-    failEndpoint(error);
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    failEndpoint(
+      error instanceof Error ? error : new Error("Notebook endpoint failed", { cause: error }),
+    );
     return;
   }
   try {
@@ -92,17 +95,22 @@ const inspectEndpoint = () => {
     disposeEndpoint();
     send({ type: "bound", port });
   } catch (error) {
-    failEndpoint(error);
+    failEndpoint(
+      error instanceof Error ? error : new Error("Notebook endpoint failed", { cause: error }),
+    );
   }
 };
 
-const failEndpoint = (error) => {
+const failEndpoint = (error: Error) => {
   disposeEndpoint();
-  send({ type: "failed", message: `Invalid notebook endpoint receipt: ${error.message}` });
+  send({
+    type: "failed",
+    message: `Invalid notebook endpoint receipt: ${error.message}`,
+  });
   beginShutdown(true);
 };
 
-const send = (message) => {
+const send = (message: SupervisorMessage) => {
   if (!process.connected || !process.send) return;
   try {
     process.send(message, () => undefined);
@@ -110,20 +118,6 @@ const send = (message) => {
     beginShutdown(true);
   }
 };
-
-const portIsOpen = () =>
-  port === null
-    ? Promise.resolve(false)
-    : new Promise((resolveOpen) => {
-        const socket = connect({ host: "127.0.0.1", port });
-        const finish = (open) => {
-          socket.destroy();
-          resolveOpen(open);
-        };
-        socket.setTimeout(100, () => finish(false));
-        socket.once("connect", () => finish(true));
-        socket.once("error", () => finish(false));
-      });
 
 const finish = () => {
   if (finished) return;
@@ -138,7 +132,7 @@ const finish = () => {
 
 const finishWhenPortCloses = async (deadline = Date.now() + PORT_CLOSE_TIMEOUT) => {
   if (finished) return;
-  if (await portIsOpen()) {
+  if (await portIsOpen(port)) {
     if (Date.now() >= deadline) {
       finish();
       forceStop();
@@ -158,7 +152,7 @@ const forceStop = () => {
   process.kill(-processGroupId, "SIGKILL");
 };
 
-const beginShutdown = (signalGroup, force = true) => {
+const beginShutdown = (signalGroup: boolean, force = true) => {
   if (shuttingDown || finished) return;
   shuttingDown = true;
   disposeEndpoint();
@@ -176,7 +170,9 @@ const start = () => {
   try {
     registerNotebookProcess({ ownerNonce, port, processGroupId }, { directory });
   } catch (error) {
-    failEndpoint(error);
+    failEndpoint(
+      error instanceof Error ? error : new Error("Notebook endpoint failed", { cause: error }),
+    );
     return;
   }
   try {
@@ -197,7 +193,9 @@ const start = () => {
       stdio: ["ignore", "inherit", "inherit"],
     });
   } catch (error) {
-    failEndpoint(error);
+    failEndpoint(
+      error instanceof Error ? error : new Error("Notebook endpoint failed", { cause: error }),
+    );
     return;
   }
   child.once("error", (error) => {
@@ -221,7 +219,7 @@ process.on("SIGINT", () => beginShutdown(true, false));
 process.on("SIGHUP", () => beginShutdown(true, false));
 process.on("SIGTERM", () => beginShutdown(true, false));
 process.on("message", (message) => {
-  if (message?.type === "start") start();
+  if (z.object({ type: z.literal("start") }).safeParse(message).success) start();
 });
 
 if (!process.connected || !process.send) {

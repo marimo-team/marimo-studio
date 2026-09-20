@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "vite-plus/test";
 
-import { withExportRepository } from "../scripts/export-repository.mjs";
+import { withExportRepository } from "../scripts/export-repository.ts";
 
 const exec = promisify(execFile);
 

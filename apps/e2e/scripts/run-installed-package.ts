@@ -1,18 +1,16 @@
-import { cp, mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  INSTALLED_NETWORK_ENV,
-  INSTALLED_NETWORK_FILE_ENV,
-  readInstalledPackageNetwork,
-} from "./installed-package-network.mjs";
+import { INSTALLED_NETWORK_ENV } from "./installed-package-network.ts";
 
 process.env.MARIMO_STUDIO_E2E_SUITE = "installed";
 const { appDirectory, repositoryDirectory, blobReportDirectory, playwrightOutputDirectory } =
-  await import("./paths.mjs");
-import { PreparationCancelled, PreparationProcessOwner } from "./preparation-process.mjs";
+  await import("./paths.ts");
+const { InstalledWorkspace } = await import("./installed-workspace.ts");
+const { e2eNetwork } = await import("./network.ts");
+import { PreparationCancelled, PreparationProcessOwner } from "./preparation-process.ts";
 
 const wheelPattern = /^marimo_studio-.*\.whl$/;
 const playwrightCli = fileURLToPath(import.meta.resolve("@playwright/test/cli"));
@@ -24,21 +22,23 @@ const signalExitCodes = Object.freeze({
   SIGTERM: 143,
 });
 
-const builtWheel = async (wheelDirectory) => {
+const builtWheel = async (wheelDirectory: string) => {
   const entries = await readdir(wheelDirectory, { withFileTypes: true });
   const wheels = entries
     .filter((entry) => entry.isFile() && wheelPattern.test(entry.name))
     .map((entry) => resolve(wheelDirectory, entry.name));
-  if (wheels.length !== 1) {
+  const [wheel] = wheels;
+  if (wheels.length !== 1 || wheel === undefined) {
     throw new Error(`Wheel build produced ${wheels.length} marimo-studio wheels`);
   }
-  return wheels[0];
+  return wheel;
 };
 
 const preparation = new PreparationProcessOwner();
 let exitCode = 0;
 let stopping = false;
-let temporaryRoot;
+let temporaryRoot: string | undefined;
+let workspace: InstanceType<typeof InstalledWorkspace> | undefined;
 
 const removeStableArtifacts = () =>
   Promise.all(
@@ -47,26 +47,27 @@ const removeStableArtifacts = () =>
     ),
   );
 
-const preserveArtifact = async (source, destination) => {
+const preserveArtifact = async (source: string, destination: string) => {
   try {
     await mkdir(resolve(destination, ".."), { recursive: true });
     await cp(source, destination, { force: true, recursive: true });
   } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
   }
 };
 
-const stop = (signal) => {
+type StopSignal = keyof typeof signalExitCodes;
+const stop = (signal: StopSignal) => {
   if (stopping) return;
   stopping = true;
-  exitCode = signalExitCodes[signal] ?? 1;
-  void preparation.stop(signal).catch((error) => {
+  exitCode = signalExitCodes[signal];
+  void Promise.all([preparation.stop(signal), workspace?.close()]).catch((error) => {
     console.error(error);
     exitCode = 1;
   });
 };
 
-const signals = ["SIGINT", "SIGTERM", "SIGHUP"];
+const signals: StopSignal[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 const signalHandlers = new Map(signals.map((signal) => [signal, () => stop(signal)]));
 for (const [signal, handler] of signalHandlers) {
   process.on(signal, handler);
@@ -88,44 +89,11 @@ try {
     wheel = await builtWheel(wheelDirectory);
   }
   preparation.requireActive();
-  const networkFile = resolve(temporaryRoot, "network.json");
-  const services = preparation.run(
-    "serve installed-wheel acceptance",
-    process.execPath,
-    [resolve(appDirectory, "scripts/serve-installed-package.mjs")],
-    {
-      cwd: appDirectory,
-      env: {
-        ...process.env,
-        MARIMO_STUDIO_E2E_WHEEL: wheel,
-        [INSTALLED_NETWORK_FILE_ENV]: networkFile,
-      },
-      stdio: "inherit",
-    },
-  );
-  const serviceExit = services.then(() => {
-    throw new Error("Installed services exited before acceptance completed");
-  });
-  void serviceExit.catch(() => undefined);
-  const deadline = Date.now() + 420_000;
-  let networkSource;
-  while (networkSource === undefined) {
-    preparation.requireActive();
-    try {
-      networkSource = await readFile(networkFile, "utf8");
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    if (Date.now() >= deadline) throw new Error("Installed services did not publish their network");
-    if (networkSource === undefined) {
-      await Promise.race([
-        serviceExit,
-        new Promise((resolveReady) => setTimeout(resolveReady, 50)),
-      ]);
-    }
-  }
-  process.env[INSTALLED_NETWORK_ENV] = networkSource;
-  readInstalledPackageNetwork();
+  await e2eNetwork.start();
+  preparation.requireActive();
+  workspace = new InstalledWorkspace(temporaryRoot);
+  const network = await workspace.prepare(wheel);
+  const serviceExit = workspace.waitForExit();
   await Promise.race([
     serviceExit,
     preparation.run(
@@ -142,6 +110,7 @@ try {
         cwd: appDirectory,
         env: {
           ...process.env,
+          [INSTALLED_NETWORK_ENV]: JSON.stringify(network),
           MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT: temporaryRoot,
           MARIMO_STUDIO_E2E_WHEEL: wheel,
         },
@@ -156,7 +125,20 @@ try {
   if (!stopping) exitCode = 1;
 } finally {
   try {
-    await preparation.stop("SIGTERM");
+    const results = await Promise.allSettled([preparation.stop("SIGTERM"), workspace?.close()]);
+    const errors = results
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason);
+    if (errors.length > 0) {
+      console.error(new AggregateError(errors, "Installed acceptance shutdown failed"));
+      exitCode = 1;
+    }
+  } catch (error) {
+    console.error(error);
+    exitCode = 1;
+  }
+  try {
+    await e2eNetwork.close();
   } catch (error) {
     console.error(error);
     exitCode = 1;

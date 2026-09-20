@@ -1,6 +1,6 @@
 import { access } from "node:fs/promises";
 
-import { configuredBrowserExecutablePath } from "./browser.mjs";
+import { configuredBrowserExecutablePath } from "./browser.ts";
 
 try {
   const { chromium } = await import("@playwright/test");

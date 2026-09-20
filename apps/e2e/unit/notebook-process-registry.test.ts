@@ -13,13 +13,13 @@ import {
   registerNotebookProcess,
   stopRegisteredNotebookProcesses,
   unregisterNotebookProcess,
-} from "../scripts/notebook-process-registry.mjs";
-import { appDirectory } from "../scripts/paths.mjs";
-import { processGroupIsRunning, stopProcessGroup } from "../scripts/process-group.mjs";
+} from "../scripts/notebook-process-registry.ts";
+import { appDirectory } from "../scripts/paths.ts";
+import { processGroupIsRunning, stopProcessGroup } from "../scripts/process-group.ts";
 import {
   spawnRegisteredNotebookSupervisor,
   startRegisteredNotebookProcess,
-} from "../scripts/registered-notebook-process.mjs";
+} from "../scripts/registered-notebook-process.ts";
 
 const boundAddressSchema = z.object({ port: z.number().int().positive() });
 const supervisorMessageSchema = z.object({ processGroupId: z.number().int().positive() });
@@ -27,10 +27,10 @@ const registrationResultSchema = z.object({ registered: z.boolean() });
 const supportsProcessEnvironmentInspection =
   process.platform === "darwin" || process.platform === "linux";
 const launcherUrl = pathToFileURL(
-  resolve(appDirectory, "scripts/registered-notebook-process.mjs"),
+  resolve(appDirectory, "scripts/registered-notebook-process.ts"),
 ).href;
 const registryUrl = pathToFileURL(
-  resolve(appDirectory, "scripts/notebook-process-registry.mjs"),
+  resolve(appDirectory, "scripts/notebook-process-registry.ts"),
 ).href;
 
 const availablePort = async (): Promise<number> => {

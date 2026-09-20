@@ -11,11 +11,11 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.mjs";
-import { withExportRepository } from "../scripts/export-repository.mjs";
-import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
-import { MainWorkspace } from "../scripts/main-workspace.mjs";
-import { e2eNetwork } from "../scripts/network.mjs";
+import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.ts";
+import { withExportRepository } from "../scripts/export-repository.ts";
+import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.ts";
+import { MainWorkspace } from "../scripts/main-workspace.ts";
+import { e2eNetwork } from "../scripts/network.ts";
 import {
   collaborativeWorkspaceDirectory,
   configDirectory,
@@ -27,7 +27,7 @@ import {
   noDisplayNotebookPath,
   noDisplayStaticExportDirectory,
   workspaceDirectory,
-} from "../scripts/paths.mjs";
+} from "../scripts/paths.ts";
 import {
   observeBrowserContext,
   type BrowserDiagnostics,

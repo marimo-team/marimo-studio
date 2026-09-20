@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 export const INSTALLED_NETWORK_ENV = "MARIMO_STUDIO_E2E_INSTALLED_NETWORK";
-export const INSTALLED_NETWORK_FILE_ENV = "MARIMO_STUDIO_E2E_INSTALLED_NETWORK_FILE";
 const endpointSchema = z
   .object({
     origin: z.string().url(),
@@ -22,8 +21,15 @@ const networkSchema = z
   })
   .strict();
 
-export const createInstalledPackageNetwork = (endpoints) => {
-  const endpoint = (value) => ({ origin: value.origin, port: value.port });
+export type InstalledPackageNetwork = z.infer<typeof networkSchema>;
+
+export const createInstalledPackageNetwork = (
+  endpoints: Record<"edit" | "fresh" | "static" | "run", { origin: string; port: number }>,
+) => {
+  const endpoint = (value: { origin: string; port: number }) => ({
+    origin: value.origin,
+    port: value.port,
+  });
   return networkSchema.parse({
     ...endpoint(endpoints.edit),
     fresh: endpoint(endpoints.fresh),

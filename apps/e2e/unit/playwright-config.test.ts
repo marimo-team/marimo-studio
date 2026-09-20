@@ -15,7 +15,7 @@ test.each([
   delete environment.MARIMO_STUDIO_E2E_RUN_ID;
   delete environment.MARIMO_STUDIO_E2E_SUITE;
   const configUrl = new URL(`../${config}`, import.meta.url).href;
-  const networkUrl = new URL("../scripts/network.mjs", import.meta.url).href;
+  const networkUrl = new URL("../scripts/network.ts", import.meta.url).href;
   const { stdout } = await exec(
     process.execPath,
     [

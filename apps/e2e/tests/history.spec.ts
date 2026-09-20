@@ -16,7 +16,6 @@ import {
   writeWorkspaceFile,
 } from "./fixture.ts";
 import { test as playwrightTest } from "./network-fixture.ts";
-import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
 import { runServerToken, runServerUrl, startRunServer } from "./recovery-support.ts";
 
 test("keeps the configured WebAssembly default implicit across wrapper reload", async ({
@@ -56,8 +55,7 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
     rendered.locator("html").evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__.runtime);
 
   try {
-    await waitForNotebookServer(
-      server,
+    await server.waitUntilReady(
       `${runServerUrl()}/dashboard/?access_token=${runServerToken}&region=emea`,
     );
     await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}&region=emea`);
@@ -115,7 +113,7 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });
@@ -143,7 +141,7 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
   const target = `${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=wasm`;
 
   try {
-    await waitForNotebookServer(server, target);
+    await server.waitUntilReady(target);
     await page.goto(target);
     const startupUrl = new URL(page.url());
     expect(startupUrl.pathname).toBe("/dashboard/");
@@ -194,7 +192,7 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });
@@ -222,10 +220,7 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
   const rendered = presentationFrame(page);
 
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl()}/dashboard/?access_token=${runServerToken}`,
-    );
+    await server.waitUntilReady(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
     await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
     await playwrightExpect(rendered.locator("html")).toHaveAttribute(
       "data-marimo-studio-state",
@@ -264,7 +259,7 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
     await diagnostics.close();
     await context.close();
     await browser.close();
-    await stopNotebookServer(server);
+    await server.close();
     await restoreWorkspace();
   }
   playwrightExpect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
@@ -322,8 +317,7 @@ test("keeps direct view history hot and starts a fresh session for a new public 
   };
 
   try {
-    await waitForNotebookServer(
-      server,
+    await server.waitUntilReady(
       `${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=server`,
     );
     await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=server`);
@@ -424,7 +418,7 @@ test("keeps direct view history hot and starts a fresh session for a new public 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });

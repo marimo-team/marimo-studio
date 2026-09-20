@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 
-import { createE2EPaths } from "../scripts/paths.mjs";
+import { createE2EPaths } from "../scripts/paths.ts";
 
 test("isolates workspaces and reports across runs, suites, and restarted workers", () => {
   const root = resolve("apps/e2e");

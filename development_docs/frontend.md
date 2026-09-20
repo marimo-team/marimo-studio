@@ -81,6 +81,11 @@ and worker identity under `test-results/blob-<suite>/` and
 `test-results/playwright-<suite>/`. Worker restarts receive a new worker ID,
 so concurrent runs and replacement workers keep separate files and services.
 
+E2E tooling belongs to the `@marimo-studio/e2e` workspace. Its scripts run
+directly with Node as erasable TypeScript; `pnpm --filter @marimo-studio/e2e
+typecheck` checks the Node module boundary. `ServerHandle` owns each backend
+and route, and each workspace owns its services and preparation commands.
+
 E2E services use the Portless SDK through worker-owned loopback proxies. Each
 proxy and backend binds an OS-assigned port. The backend retains its socket and
 publishes its actual address through a nonce-bound readiness receipt before the

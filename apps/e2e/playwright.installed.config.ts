@@ -1,8 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 import { resolve } from "node:path";
 
-import { e2eBrowserUse } from "./scripts/browser.mjs";
-import { readInstalledPackageNetwork } from "./scripts/installed-package-network.mjs";
+import { e2eBrowserUse } from "./scripts/browser.ts";
+import { readInstalledPackageNetwork } from "./scripts/installed-package-network.ts";
 
 const installedPackageNetwork = readInstalledPackageNetwork();
 

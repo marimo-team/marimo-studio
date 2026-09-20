@@ -2,7 +2,7 @@ import { projectionDiagnosticSchema } from "@marimo-studio/protocol/runtime-conf
 import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { workspaceDirectory } from "../scripts/paths.mjs";
+import { workspaceDirectory } from "../scripts/paths.ts";
 import {
   changedObservationSourceSchema,
   readBrowserValidation,

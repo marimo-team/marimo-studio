@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 
-import { withExportRepository } from "../scripts/export-repository.mjs";
-import { providerConfigDirectory } from "../scripts/paths.mjs";
-import { ProviderWorkspace } from "../scripts/provider-workspace.mjs";
+import { withExportRepository } from "../scripts/export-repository.ts";
+import { providerConfigDirectory } from "../scripts/paths.ts";
+import { ProviderWorkspace } from "../scripts/provider-workspace.ts";
 import { test as base } from "./network-fixture.ts";
 
 export const test = base.extend<

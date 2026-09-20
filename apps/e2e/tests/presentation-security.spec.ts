@@ -1,7 +1,7 @@
 import type { BrowserContext } from "@playwright/test";
 
-import { e2eNetwork } from "../scripts/network.mjs";
-import { workspaceDirectory } from "../scripts/paths.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
+import { workspaceDirectory } from "../scripts/paths.ts";
 import {
   dashboardHtmlPath,
   dashboardManifestPath,
@@ -19,11 +19,7 @@ import {
   writeDashboardSource,
   writeWorkspaceFile,
 } from "./fixture.ts";
-import {
-  startNotebookServer,
-  stopNotebookServer,
-  waitForNotebookServer,
-} from "./notebook-server.ts";
+import { startNotebookServer } from "./notebook-server.ts";
 
 test.use({ services: ["studio", "static"] });
 
@@ -91,7 +87,7 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
     context = await browser.newContext();
     diagnostics = observeBrowserContext(context);
     const page = await context.newPage();
-    await waitForNotebookServer(server, `${server.serverUrl}/health`);
+    await server.waitUntilReady(`${server.serverUrl}/health`);
     const authenticated = await page.request.get(studioUrl.href);
     expect(authenticated.ok()).toBe(true);
 
@@ -115,7 +111,7 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
       try {
         await context?.close();
       } finally {
-        await stopNotebookServer(server);
+        await server.close();
       }
     }
   }

@@ -1,3 +1,6 @@
+import type { ChildProcess, SpawnOptions } from "node:child_process";
+import type { Readable } from "node:stream";
+
 import { spawn as spawnChild } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
@@ -5,24 +8,37 @@ import {
   processGroupIsRunning,
   processGroupOwnerState,
   stopProcessGroup,
-} from "./process-group.mjs";
+} from "./process-group.ts";
 
 const DEFAULT_STOP_TIMEOUT = 5_000;
-const DEFAULT_LEADER_STOP_TIMEOUT = 15_000;
 const STOP_POLL_INTERVAL = 50;
 const DEFAULT_CAPTURE_LIMIT = 1024 * 1024;
 const PREPARATION_PROCESS_OWNER_ENV = "MARIMO_STUDIO_E2E_PREPARATION_PROCESS_OWNER";
-/** @type {(command: string, args: string[], options: import("node:child_process").SpawnOptions) => import("node:child_process").ChildProcess} */
-const defaultSpawn = spawnChild;
+type Spawn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
+interface OwnerOptions {
+  spawn?: Spawn;
+}
+interface CaptureOptions {
+  maxBuffer: number;
+  timeout?: number;
+}
+interface ProcessOptions {
+  spawn: Spawn;
+  label: string;
+  command: string;
+  args: string[];
+  options: SpawnOptions;
+  capture?: CaptureOptions;
+}
 
 export class PreparationCancelled extends Error {
-  constructor(options) {
+  constructor(options?: ErrorOptions) {
     super("E2E preparation was cancelled", options);
     this.name = "PreparationCancelled";
   }
 }
 
-const waitUntil = async (condition, timeout) => {
+const waitUntil = async (condition: () => boolean, timeout: number) => {
   const deadline = Date.now() + timeout;
   while (!condition()) {
     if (Date.now() >= deadline) return false;
@@ -33,22 +49,22 @@ const waitUntil = async (condition, timeout) => {
 
 class OwnedProcess {
   #cancelled = false;
-  #capture;
-  #child;
-  #completion;
-  #forcedError;
-  #label;
+  #capture: CaptureOptions | undefined;
+  #child: ChildProcess;
+  #completion: Promise<void>;
+  #forcedError: Error | undefined;
+  #label: string;
   #ownerNonce = randomBytes(32).toString("hex");
-  #processGroupId;
+  #processGroupId: number | undefined;
   #settled = false;
   #stderrBytes = 0;
-  #stderrChunks = [];
+  #stderrChunks: Buffer[] = [];
   #stdoutBytes = 0;
-  #stdoutChunks = [];
-  #stopPromise;
-  #timer;
+  #stdoutChunks: Buffer[] = [];
+  #stopPromise: Promise<void> | undefined;
+  #timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor({ spawn, label, command, args, options, capture }) {
+  constructor({ spawn, label, command, args, options, capture }: ProcessOptions) {
     this.#capture = capture;
     this.#label = label;
     this.#child = spawn(command, args, {
@@ -72,7 +88,7 @@ class OwnedProcess {
   }
 
   async result() {
-    let operationError;
+    let operationError: unknown;
     try {
       await this.#completion;
     } catch (error) {
@@ -81,7 +97,7 @@ class OwnedProcess {
       clearTimeout(this.#timer);
     }
 
-    let cleanupError;
+    let cleanupError: unknown;
     try {
       await (this.#stopPromise ?? this.#terminate("SIGTERM", DEFAULT_STOP_TIMEOUT));
     } catch (error) {
@@ -92,7 +108,10 @@ class OwnedProcess {
         throw new PreparationCancelled({ cause: cleanupError });
       }
       if (operationError !== undefined) {
-        throw new Error(cleanupError.message, { cause: operationError });
+        throw new AggregateError(
+          [operationError, cleanupError],
+          "E2E preparation and cleanup failed",
+        );
       }
       throw cleanupError;
     }
@@ -100,29 +119,20 @@ class OwnedProcess {
     return Object.freeze(this.#output());
   }
 
-  cancel(signal, timeout) {
+  cancel(signal: NodeJS.Signals, timeout: number) {
     this.#cancelled = true;
     return this.#terminate(signal, timeout);
   }
 
-  cancelLeaders(signal, leaderTimeout, fallbackTimeout) {
-    this.#cancelled = true;
-    if (this.#stopPromise === undefined) {
-      this.#stopPromise = this.#stopLeader(signal, leaderTimeout, fallbackTimeout);
-    }
-    return this.#stopPromise;
-  }
-
-  #captureStream(stream, name) {
-    if (this.#capture === undefined) return;
-    stream?.on("data", (chunk) => {
+  #captureStream(stream: Readable | null, name: "stdout" | "stderr") {
+    const capture = this.#capture;
+    if (capture === undefined) return;
+    stream?.on("data", (chunk: Buffer | string) => {
       if (this.#forcedError !== undefined) return;
       const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       const bytes = name === "stdout" ? this.#stdoutBytes : this.#stderrBytes;
-      if (bytes + value.byteLength > this.#capture.maxBuffer) {
-        this.#failAndStop(
-          new Error(`${this.#label} ${name} exceeded ${this.#capture.maxBuffer} bytes`),
-        );
+      if (bytes + value.byteLength > capture.maxBuffer) {
+        this.#failAndStop(new Error(`${this.#label} ${name} exceeded ${capture.maxBuffer} bytes`));
         return;
       }
       if (name === "stdout") {
@@ -135,39 +145,39 @@ class OwnedProcess {
     });
   }
 
-  #failAndStop(error) {
+  #failAndStop(error: Error) {
     if (this.#forcedError !== undefined) return;
     this.#forcedError = error;
     void this.#terminate("SIGTERM", DEFAULT_STOP_TIMEOUT).catch(() => undefined);
   }
 
   #observeCompletion() {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       let completed = false;
-      const finish = (outcome) => {
+      const finish = (outcome: () => void) => {
         if (completed) return;
         completed = true;
         this.#settled = true;
-        outcome(resolve, reject);
+        outcome();
       };
-      this.#child.once("error", (error) => finish((_resolve, rejectError) => rejectError(error)));
+      this.#child.once("error", (error) => finish(() => reject(error)));
       this.#child.once(this.#capture === undefined ? "exit" : "close", (code, signal) => {
-        finish((resolveExit, rejectExit) => {
+        finish(() => {
           const output = this.#output();
           if (this.#forcedError !== undefined) {
             Object.assign(this.#forcedError, output);
-            rejectExit(this.#forcedError);
+            reject(this.#forcedError);
           } else if (this.#cancelled) {
-            rejectExit(new PreparationCancelled());
+            reject(new PreparationCancelled());
           } else if (code === 0 && signal === null) {
-            resolveExit();
+            resolve();
           } else {
             const detail = output.stderr || output.stdout;
             const error = new Error(
               `${this.#label} exited with ${code ?? signal}${detail ? `\n${detail}` : ""}`,
             );
             Object.assign(error, { code, signal, ...output });
-            rejectExit(error);
+            reject(error);
           }
         });
       });
@@ -195,7 +205,7 @@ class OwnedProcess {
     );
   }
 
-  #signalGroup(signal) {
+  #signalGroup(signal: NodeJS.Signals) {
     const state = this.#ownerState();
     if (state === "unknown") {
       throw new Error("E2E preparation process group ownership could not be verified");
@@ -205,39 +215,19 @@ class OwnedProcess {
     return true;
   }
 
-  #signalLeader(signal) {
-    const state = this.#ownerState();
-    if (state === "unknown") {
-      throw new Error("E2E preparation process group ownership could not be verified");
-    }
-    if (state !== "owned") return false;
-    try {
-      this.#child.kill(signal);
-    } catch (error) {
-      if (error?.code !== "ESRCH") throw error;
-    }
-    return true;
-  }
-
   #isRunning() {
     const state = this.#ownerState();
     return state === "owned" || state === "unknown";
   }
 
-  #terminate(signal, timeout) {
+  #terminate(signal: NodeJS.Signals, timeout: number) {
     if (this.#stopPromise === undefined) {
       this.#stopPromise = this.#stopGroup(signal, timeout);
     }
     return this.#stopPromise;
   }
 
-  async #stopLeader(signal, leaderTimeout, fallbackTimeout) {
-    if (!this.#signalLeader(signal)) return;
-    await waitUntil(() => this.#settled, leaderTimeout);
-    await this.#stopGroup(signal, fallbackTimeout);
-  }
-
-  async #stopGroup(signal, timeout) {
+  async #stopGroup(signal: NodeJS.Signals, timeout: number) {
     if (!this.#signalGroup(signal)) return;
     if (await waitUntil(() => !this.#isRunning(), timeout)) return;
     if (!this.#signalGroup("SIGKILL")) return;
@@ -248,12 +238,12 @@ class OwnedProcess {
 }
 
 export class PreparationProcessOwner {
-  #processes = new Set();
-  #spawn;
+  #processes = new Set<OwnedProcess>();
+  #spawn: Spawn;
   #stopping = false;
-  #stopPromise;
+  #stopPromise: Promise<void> | undefined;
 
-  constructor({ spawn = defaultSpawn } = {}) {
+  constructor({ spawn = spawnChild }: OwnerOptions = {}) {
     this.#spawn = spawn;
   }
 
@@ -261,19 +251,17 @@ export class PreparationProcessOwner {
     if (this.#stopping) throw new PreparationCancelled();
   }
 
-  run(label, command, args, options = {}) {
+  run(label: string, command: string, args: string[], options: SpawnOptions = {}) {
     return this.#run(label, command, args, options).then(() => undefined);
   }
 
-  /**
-   * @param {string} label
-   * @param {string} command
-   * @param {string[]} args
-   * @param {import("node:child_process").SpawnOptions} [options]
-   * @param {{ maxBuffer?: number, timeout?: number }} [captureOptions]
-   * @returns {Promise<Readonly<{ stderr: string, stdout: string }>>}
-   */
-  runCaptured(label, command, args, options = {}, captureOptions = {}) {
+  runCaptured(
+    label: string,
+    command: string,
+    args: string[],
+    options: SpawnOptions = {},
+    captureOptions: Partial<CaptureOptions> = {},
+  ) {
     const { maxBuffer = DEFAULT_CAPTURE_LIMIT, timeout } = captureOptions;
     if (!Number.isSafeInteger(maxBuffer) || maxBuffer <= 0) {
       throw new RangeError("Captured process output limit must be a positive integer");
@@ -290,7 +278,13 @@ export class PreparationProcessOwner {
     );
   }
 
-  async #run(label, command, args, options, capture) {
+  async #run(
+    label: string,
+    command: string,
+    args: string[],
+    options: SpawnOptions,
+    capture?: CaptureOptions,
+  ) {
     this.requireActive();
     const owned = new OwnedProcess({
       args,
@@ -308,26 +302,11 @@ export class PreparationProcessOwner {
     }
   }
 
-  stop(signal = "SIGTERM", timeout = DEFAULT_STOP_TIMEOUT) {
+  stop(signal: NodeJS.Signals = "SIGTERM", timeout = DEFAULT_STOP_TIMEOUT) {
     if (this.#stopPromise !== undefined) return this.#stopPromise;
     this.#stopping = true;
     this.#stopPromise = Promise.all(
       [...this.#processes].map((owned) => owned.cancel(signal, timeout)),
-    ).then(() => undefined);
-    return this.#stopPromise;
-  }
-
-  stopLeaders(
-    signal = "SIGTERM",
-    leaderTimeout = DEFAULT_LEADER_STOP_TIMEOUT,
-    fallbackTimeout = DEFAULT_STOP_TIMEOUT,
-  ) {
-    if (this.#stopPromise !== undefined) return this.#stopPromise;
-    this.#stopping = true;
-    this.#stopPromise = Promise.all(
-      [...this.#processes].map((owned) =>
-        owned.cancelLeaders(signal, leaderTimeout, fallbackTimeout),
-      ),
     ).then(() => undefined);
     return this.#stopPromise;
   }

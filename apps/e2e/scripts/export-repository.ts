@@ -1,4 +1,7 @@
-export const withExportRepository = async (directory, operation) => {
+export const withExportRepository = async <T>(
+  directory: string,
+  operation: () => Promise<T>,
+): Promise<T> => {
   const previous = process.env.MARIMO_EXPORT_REPOSITORY;
   process.env.MARIMO_EXPORT_REPOSITORY = directory;
   try {

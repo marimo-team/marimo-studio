@@ -1,5 +1,8 @@
+import type { IncomingMessage } from "node:http";
+import type { Socket } from "node:net";
+
 import { createHash, randomUUID } from "node:crypto";
-import { createProxyServer } from "portless";
+import { createProxyServer, type ProxyServer } from "portless";
 import { z } from "zod";
 
 export const E2E_RUN_ID_ENV = "MARIMO_STUDIO_E2E_RUN_ID";
@@ -27,7 +30,7 @@ const endpointNames = {
     "notebookPrepared",
   ],
   installed: ["edit", "fresh", "static", "run"],
-};
+} as const;
 
 const identitySchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/, {
   message: "Network identity must be a nonempty portable identifier",
@@ -39,21 +42,38 @@ const networkIdentitySchema = z.object({
 });
 const listenerAddressSchema = z.object({ port: z.number().int().min(1).max(65535) });
 
-export const createE2ENetwork = (input) => {
+export type E2ENetworkIdentity = z.infer<typeof networkIdentitySchema>;
+export interface E2EEndpoint {
+  readonly hostname: string;
+  readonly port: number;
+  readonly origin: string;
+  readonly namedOrigin: string;
+  bindBackend(port: number): () => void;
+}
+interface EndpointResource {
+  hostname: string;
+  server: ProxyServer | undefined;
+  sockets: Set<Socket>;
+  port: number;
+  backend: { port: number } | undefined;
+}
+type NetworkState = "new" | "starting" | "running" | "closing" | "closed";
+
+export const createE2ENetwork = (input: E2ENetworkIdentity) => {
   const { runId, suite, workerId } = networkIdentitySchema.parse(input);
   const runNamespace = [runId, suite, workerId].join("/");
   const suffix = createHash("sha256").update(runNamespace).digest("hex").slice(0, 20);
-  let state = "new";
-  let starting;
-  let closing;
-  const owned = [];
+  let state: NetworkState = "new";
+  let starting: Promise<void> | undefined;
+  let closing: Promise<void> | undefined;
+  const owned: EndpointResource[] = [];
 
   const requireRunning = () => {
     if (state !== "running") throw new Error(`E2E network is ${state}; await start() before use`);
   };
-  const createEndpoint = (group, name) => {
+  const createEndpoint = (group: string, name: string): E2EEndpoint => {
     const hostname = `${group}-${name.toLowerCase()}.${suffix}.localhost`;
-    const resource = {
+    const resource: EndpointResource = {
       hostname,
       server: undefined,
       sockets: new Set(),
@@ -75,7 +95,7 @@ export const createE2ENetwork = (input) => {
         requireRunning();
         return `http://${hostname}:${resource.port}`;
       },
-      bindBackend(port) {
+      bindBackend(port: number) {
         requireRunning();
         if (!Number.isInteger(port) || port < 1 || port > 65535 || port === resource.port) {
           throw new RangeError("Backend port must identify a separate listening TCP server");
@@ -90,17 +110,20 @@ export const createE2ENetwork = (input) => {
       },
     });
   };
-  /** @returns {Readonly<Record<string, ReturnType<typeof createEndpoint>>>} */
-  const createGroup = (group, names) =>
-    Object.freeze(Object.fromEntries(names.map((name) => [name, createEndpoint(group, name)])));
+  const createGroup = <Name extends string>(group: string, names: readonly Name[]) => {
+    // SAFETY: Each name from the fixed catalog becomes a key with exactly one endpoint.
+    return Object.freeze(
+      Object.fromEntries(names.map((name) => [name, createEndpoint(group, name)])),
+    ) as Readonly<Record<Name, E2EEndpoint>>;
+  };
   const groups = {
     main: createGroup("main", endpointNames.main),
     provider: createGroup("provider", endpointNames.provider),
     installed: createGroup("installed", endpointNames.installed),
   };
 
-  const startEndpoint = (resource) =>
-    new Promise((resolve, reject) => {
+  const startEndpoint = (resource: EndpointResource) =>
+    new Promise<void>((resolve, reject) => {
       // Portless uses proxyPort only in unknown-host help links. The actual owned
       // listener address below supplies every fixture URL; no port is reserved/released.
       const server = createProxyServer({
@@ -117,11 +140,11 @@ export const createE2ENetwork = (input) => {
       // Portless opens an unpooled upstream connection for every HTTP request.
       // Native edit servers keep idle connections indefinitely; close each
       // upstream after its response, while leaving streams and upgrades live.
-      server.prependListener("request", (request) => {
+      server.prependListener("request", (request: IncomingMessage) => {
         request.headers.connection = "close";
       });
       resource.server = server;
-      server.on("connection", (socket) => {
+      server.on("connection", (socket: Socket) => {
         resource.sockets.add(socket);
         socket.once("close", () => resource.sockets.delete(socket));
       });
@@ -139,7 +162,7 @@ export const createE2ENetwork = (input) => {
         resource.backend = undefined;
         const server = resource.server;
         if (!server?.listening) return;
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
           const deadline = setTimeout(() => reject(new Error("E2E proxy did not close")), 1000);
           for (const socket of resource.sockets) socket.destroy();
           server.close((error) => {

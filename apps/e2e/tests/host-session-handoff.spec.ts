@@ -4,8 +4,8 @@ import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import { e2eNetwork } from "../scripts/network.mjs";
-import { fixtureDirectory } from "../scripts/paths.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
+import { fixtureDirectory } from "../scripts/paths.ts";
 import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import {
@@ -16,12 +16,7 @@ import {
   waitForPreview,
 } from "./fixture.ts";
 import { test } from "./network-fixture.ts";
-import {
-  closeFailedNotebookServer,
-  startNotebookServer,
-  stopNotebookServer,
-  waitForNotebookServer,
-} from "./notebook-server.ts";
+import { closeFailedNotebookServer, startNotebookServer } from "./notebook-server.ts";
 
 test.describe.configure({ mode: "serial" });
 
@@ -68,7 +63,7 @@ for (const editRoot of ["marimo", "studio"] as const) {
     let diagnosticsClosed = false;
     let stopped = false;
     try {
-      await waitForNotebookServer(server, `${server.serverUrl}/`);
+      await server.waitUntilReady(`${server.serverUrl}/`);
       const launcher = await context.newPage();
       await launcher.goto(`${server.serverUrl}/`);
       const instantiated = context.waitForEvent("response", {
@@ -237,7 +232,7 @@ shown.to_dict()
       await diagnostics.close();
       diagnosticsClosed = true;
       expect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
-      await stopNotebookServer(server);
+      await server.close();
       stopped = true;
     } finally {
       if (!diagnosticsClosed) {

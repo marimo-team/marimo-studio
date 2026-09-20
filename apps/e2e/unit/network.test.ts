@@ -4,7 +4,7 @@ import { connect, type Socket } from "node:net";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
-import { createE2ENetwork } from "../scripts/network.mjs";
+import { createE2ENetwork } from "../scripts/network.ts";
 
 const backend = async () => {
   const server = createServer((_request, response) => response.end("owned backend"));

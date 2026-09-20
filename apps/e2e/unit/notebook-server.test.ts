@@ -8,26 +8,19 @@ import { resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
-import { requestStudioShutdown } from "../scripts/graceful-shutdown.mjs";
-import { createE2ENetwork } from "../scripts/network.mjs";
-import { unregisterNotebookProcess } from "../scripts/notebook-process-registry.mjs";
-import { fixtureDirectory } from "../scripts/paths.mjs";
-import { processGroupIsRunning, stopProcessGroup } from "../scripts/process-group.mjs";
-import { startRegisteredNotebookProcess } from "../scripts/registered-notebook-process.mjs";
+import { requestStudioShutdown } from "../scripts/graceful-shutdown.ts";
+import { createE2ENetwork } from "../scripts/network.ts";
+import { unregisterNotebookProcess } from "../scripts/notebook-process-registry.ts";
+import { fixtureDirectory } from "../scripts/paths.ts";
+import { portIsOpen, processGroupIsRunning, stopProcessGroup } from "../scripts/process-group.ts";
+import { startRegisteredNotebookProcess } from "../scripts/registered-notebook-process.ts";
 import {
   assertNoLeakedSemaphoreWarning,
   stopNotebookProcess,
   verifyNotebookProcessOutput,
   waitForServer,
-} from "../scripts/server-process.mjs";
-import {
-  type NotebookServer,
-  closeFailedNotebookServer,
-  notebookServerPortIsOpen,
-  startNotebookServer,
-  stopNotebookServer,
-  waitForNotebookServer,
-} from "../tests/notebook-server.ts";
+} from "../scripts/server-process.ts";
+import { closeFailedNotebookServer, startNotebookServer } from "../tests/notebook-server.ts";
 
 const boundAddressSchema = z.object({ port: z.number().int().positive() });
 const FIXTURE_PROCESS_STOP_TIMEOUT = 1_000;
@@ -239,8 +232,12 @@ test("reports bootstrap failure after containing the registered notebook process
     ).rejects.toThrow("Marimo bootstrap returned 503");
 
     expectProcessTreeRootStopped(registration.child, registration.processGroupId);
-    expect(await notebookServerPortIsOpen(port)).toBe(false);
-    unregisterNotebookProcess(registration, { directory });
+    expect(await portIsOpen(port)).toBe(false);
+    if (registration.processGroupId === undefined) throw new Error("Missing process group");
+    unregisterNotebookProcess(
+      { ...registration, processGroupId: registration.processGroupId },
+      { directory },
+    );
     expect(existsSync(directory)).toBe(false);
   } finally {
     stopProcessGroup(registration.processGroupId, "SIGKILL");
@@ -277,13 +274,17 @@ test("run shutdown owns the full grace period before forcing a resistant group",
         processGroupId: registration.processGroupId,
         serverUrl: `http://127.0.0.1:${port}`,
       },
-      { shutdown: "run", timeout: 750 },
+      { shutdown: "process", timeout: 750 },
     );
 
     expect(performance.now() - started).toBeGreaterThanOrEqual(650);
     expectProcessTreeRootStopped(registration.child, registration.processGroupId);
-    expect(await notebookServerPortIsOpen(port)).toBe(false);
-    unregisterNotebookProcess(registration, { directory });
+    expect(await portIsOpen(port)).toBe(false);
+    if (registration.processGroupId === undefined) throw new Error("Missing process group");
+    unregisterNotebookProcess(
+      { ...registration, processGroupId: registration.processGroupId },
+      { directory },
+    );
     expect(existsSync(directory)).toBe(false);
   } finally {
     stopProcessGroup(registration.processGroupId, "SIGKILL");
@@ -324,14 +325,18 @@ const delayedCooperativeKernelExit = async () => {
         processGroupId: registration.processGroupId,
         serverUrl: `http://127.0.0.1:${port}`,
       },
-      { shutdown: "run", timeout: 1_500 },
+      { shutdown: "process", timeout: 1_500 },
     );
 
     expect(registration.child.exitCode).toBe(0);
     expect(registration.child.signalCode).toBeNull();
     expect(processGroupIsRunning(registration.processGroupId)).toBe(false);
-    expect(await notebookServerPortIsOpen(port)).toBe(false);
-    unregisterNotebookProcess(registration, { directory });
+    expect(await portIsOpen(port)).toBe(false);
+    if (registration.processGroupId === undefined) throw new Error("Missing process group");
+    unregisterNotebookProcess(
+      { ...registration, processGroupId: registration.processGroupId },
+      { directory },
+    );
     expect(existsSync(directory)).toBe(false);
   } finally {
     stopProcessGroup(registration.processGroupId, "SIGKILL");
@@ -346,7 +351,7 @@ posixTest(
 
 test("stops a native authenticated Marimo run server without Studio bootstrap", async () => {
   const root = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-wrapper-"));
-  const network = createE2ENetwork({ runId: randomUUID(), suite: "unit", workerId: "native" });
+  const network = createE2ENetwork({ runId: randomUUID(), suite: "main", workerId: "native" });
   await network.start();
   try {
     const workspace = resolve(root, "workspace");
@@ -363,7 +368,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
     });
     let stopped = false;
     try {
-      await waitForNotebookServer(server, `${server.serverUrl}/?access_token=run-access-token`, {
+      await server.waitUntilReady(`${server.serverUrl}/?access_token=run-access-token`, {
         timeout: NATIVE_SERVER_START_TIMEOUT,
       });
       const studioAsset = await fetch(
@@ -375,7 +380,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
       );
       await studioAsset.body?.cancel();
       expect(studioAsset.status).toBe(404);
-      await stopNotebookServer(server, { timeout: 2_000 });
+      await server.close({ timeout: 2_000 });
       stopped = true;
 
       expect(() => assertNoLeakedSemaphoreWarning(server.output())).not.toThrow();
@@ -384,8 +389,8 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
         ? await closeFailedNotebookServer(server, { timeout: 2_000 })
         : undefined;
       expect.soft(cleanupFailure).toBeUndefined();
-      expectProcessTreeRootStopped(server.process, server.processGroupId);
-      expect(await notebookServerPortIsOpen(server.port)).toBe(false);
+      expectProcessTreeRootStopped(server.child, server.processGroupId);
+      expect(await portIsOpen(server.port)).toBe(false);
       expect(existsSync(registryDirectory)).toBe(false);
     }
   } finally {
@@ -395,7 +400,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
 }, 30_000);
 
 test("reports a signal exit immediately while waiting for startup", async () => {
-  const child = {
+  const child: Pick<ReturnType<typeof spawn>, "exitCode" | "signalCode"> = {
     exitCode: null,
     signalCode: "SIGTERM",
   };
@@ -460,25 +465,16 @@ const stopListeningDescendant = async () => {
     env: { ...process.env, MARIMO_STUDIO_TEST_PORT: String(port) },
     stdio: "ignore",
   });
-  const server: NotebookServer = {
-    beginClose() {},
-    releaseRoute() {},
-    authToken: undefined,
-    output: () => "",
-    port,
-    process: child,
-    processGroupId: child.pid,
-    ready: Promise.resolve(),
-    serverUrl: `http://127.0.0.1:${port}`,
-    shutdown: "studio",
-  };
 
   try {
     await new Promise<void>((resolve) => child.once("close", () => resolve()));
     expect(child.exitCode).toBe(0);
     await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
-    await stopNotebookServer(server, { timeout: FIXTURE_PROCESS_STOP_TIMEOUT });
-    expect(await notebookServerPortIsOpen(port)).toBe(false);
+    await stopNotebookProcess(
+      { child, port, processGroupId: child.pid, serverUrl: `http://127.0.0.1:${port}` },
+      { shutdown: "studio", timeout: FIXTURE_PROCESS_STOP_TIMEOUT },
+    );
+    expect(await portIsOpen(port)).toBe(false);
   } finally {
     if (child.pid !== undefined) {
       stopProcessGroup(child.pid, "SIGKILL");
@@ -519,7 +515,7 @@ test("forces shutdown when the graceful endpoint leaves the server alive", async
       { shutdown: "studio", timeout: FIXTURE_PROCESS_STOP_TIMEOUT },
     );
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
-    expect(await notebookServerPortIsOpen(port)).toBe(false);
+    expect(await portIsOpen(port)).toBe(false);
   } finally {
     if (child.pid !== undefined) {
       stopProcessGroup(child.pid, "SIGKILL");
@@ -562,7 +558,7 @@ test("reports a session drain failure after forcing the server process closed", 
       ),
     ).rejects.toThrow("Marimo session inventory returned 503");
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
-    expect(await notebookServerPortIsOpen(port)).toBe(false);
+    expect(await portIsOpen(port)).toBe(false);
   } finally {
     if (child.pid !== undefined) {
       stopProcessGroup(child.pid, "SIGKILL");
@@ -595,7 +591,7 @@ test("forces a signal-resistant static server to exit", async () => {
       { shutdown: "process", timeout: FIXTURE_PROCESS_STOP_TIMEOUT },
     );
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
-    expect(await notebookServerPortIsOpen(port)).toBe(false);
+    expect(await portIsOpen(port)).toBe(false);
   } finally {
     if (child.pid !== undefined) {
       stopProcessGroup(child.pid, "SIGKILL");

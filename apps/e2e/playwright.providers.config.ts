@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { e2eBrowserUse } from "./scripts/browser.mjs";
+import { e2eBrowserUse } from "./scripts/browser.ts";
 
 process.env.MARIMO_STUDIO_E2E_SUITE = "provider";
-const { blobReportDirectory, playwrightOutputDirectory } = await import("./scripts/paths.mjs");
+const { blobReportDirectory, playwrightOutputDirectory } = await import("./scripts/paths.ts");
 
 export default defineConfig({
   testDir: "./tests",

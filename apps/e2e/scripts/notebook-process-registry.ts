@@ -9,12 +9,16 @@ import {
   rmdirSync,
   writeFileSync,
 } from "node:fs";
-import { connect } from "node:net";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-import { notebookProcessRegistryDirectory } from "./paths.mjs";
-import { processGroupOwnerState, stopProcessGroup } from "./process-group.mjs";
+import { notebookProcessRegistryDirectory } from "./paths.ts";
+import {
+  portIsOpen,
+  processGroupOwnerState,
+  stopProcessGroup,
+  type ProcessOwnerState,
+} from "./process-group.ts";
 
 export const NOTEBOOK_PROCESS_OWNER_ENV = "MARIMO_STUDIO_E2E_PROCESS_OWNER";
 export const NOTEBOOK_PROCESS_ENDPOINT_ENV = "MARIMO_STUDIO_E2E_ENDPOINT_FILE";
@@ -30,21 +34,41 @@ const recordSchema = z.object({
   processGroupId: z.number().int().positive().safe(),
 });
 
+export interface NotebookProcessOwner {
+  ownerNonce: string;
+  processGroupId: number;
+}
+interface NotebookProcessRecord extends NotebookProcessOwner {
+  port: number | null;
+  path: string;
+}
+type InspectOwner = (record: NotebookProcessRecord) => ProcessOwnerState;
+type PortProbe = (port: number | null) => Promise<boolean>;
+interface RegistryOptions {
+  directory?: string;
+}
+
 export const createNotebookProcessOwnerNonce = () => randomBytes(32).toString("hex");
 
-const recordPath = (directory, processGroupId, ownerNonce) =>
+const recordPath = (directory: string, processGroupId: number, ownerNonce: string) =>
   resolve(directory, `${processGroupId}-${ownerNonce}.json`);
 
-export const notebookProcessEndpointPath = (directory, processGroupId, ownerNonce) =>
-  resolve(directory, `${processGroupId}-${ownerNonce}.endpoint`);
+export const notebookProcessEndpointPath = (
+  directory: string,
+  processGroupId: number,
+  ownerNonce: string,
+) => resolve(directory, `${processGroupId}-${ownerNonce}.endpoint`);
 
-export const removeNotebookEndpointReceipt = ({ ownerNonce, processGroupId }, { directory }) => {
+export const removeNotebookEndpointReceipt = (
+  { ownerNonce, processGroupId }: NotebookProcessOwner,
+  { directory }: { directory: string },
+) => {
   const filename = `${processGroupId}-${ownerNonce}.endpoint`;
   let names;
   try {
     names = readdirSync(directory);
   } catch (error) {
-    if (error?.code === "ENOENT") return;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
     throw error;
   }
   for (const name of names) {
@@ -54,11 +78,11 @@ export const removeNotebookEndpointReceipt = ({ ownerNonce, processGroupId }, { 
   }
 };
 
-const closingPath = (directory) => resolve(directory, REGISTRY_CLOSING_FILE);
+const closingPath = (directory: string) => resolve(directory, REGISTRY_CLOSING_FILE);
 
 export const closeNotebookProcessRegistry = ({
   directory = notebookProcessRegistryDirectory,
-} = {}) => {
+}: RegistryOptions = {}) => {
   mkdirSync(directory, { recursive: true });
   try {
     writeFileSync(closingPath(directory), String(process.pid), {
@@ -67,11 +91,11 @@ export const closeNotebookProcessRegistry = ({
       mode: 0o600,
     });
   } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
+    if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
   }
 };
 
-const parseRecord = (source, path) => {
+const parseRecord = (source: string, path: string) => {
   let record;
   try {
     record = recordSchema.parse(JSON.parse(source));
@@ -86,15 +110,15 @@ const parseRecord = (source, path) => {
   });
 };
 
-const readRecords = (directory) => {
+const readRecords = (directory: string) => {
   let names;
   try {
     names = readdirSync(directory);
   } catch (error) {
-    if (error?.code === "ENOENT") return [];
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
     throw error;
   }
-  const records = [];
+  const records: NotebookProcessRecord[] = [];
   for (const name of names.filter((candidate) => candidate.endsWith(".json"))) {
     const path = resolve(directory, name);
     try {
@@ -107,36 +131,38 @@ const readRecords = (directory) => {
   return records;
 };
 
-const removeDirectoryIfEmpty = (directory) => {
+const removeDirectoryIfEmpty = (directory: string) => {
   try {
     rmdirSync(directory);
   } catch (error) {
-    if (error?.code !== "ENOENT" && error?.code !== "ENOTEMPTY") throw error;
+    if (
+      !(
+        error instanceof Error &&
+        "code" in error &&
+        (error.code === "ENOENT" || error.code === "ENOTEMPTY")
+      )
+    )
+      throw error;
   }
 };
 
-const portIsOpen = (port) =>
-  new Promise((resolveOpen) => {
-    const socket = connect({ host: "127.0.0.1", port });
-    const finish = (open) => {
-      socket.destroy();
-      resolveOpen(open);
-    };
-    socket.setTimeout(100, () => finish(false));
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-  });
-
-const ownerState = (record) =>
+const ownerState = (record: NotebookProcessRecord) =>
   processGroupOwnerState(record.processGroupId, NOTEBOOK_PROCESS_OWNER_ENV, record.ownerNonce);
 
-const removeRecord = (record, directory) => {
+const removeRecord = (record: NotebookProcessRecord, directory: string) => {
   rmSync(record.path, { force: true });
   removeNotebookEndpointReceipt(record, { directory });
   removeDirectoryIfEmpty(directory);
 };
 
-const signalOwned = async (records, signal, inspect, isPortOpen, stop, directory) => {
+const signalOwned = async (
+  records: NotebookProcessRecord[],
+  signal: NodeJS.Signals,
+  inspect: InspectOwner,
+  isPortOpen: PortProbe,
+  stop: typeof stopProcessGroup,
+  directory: string,
+) => {
   const signaled = [];
   const blocked = [];
   for (const record of records) {
@@ -158,7 +184,12 @@ const signalOwned = async (records, signal, inspect, isPortOpen, stop, directory
   return { blocked, signaled };
 };
 
-const pendingRecords = async (records, inspect, isPortOpen, directory) => {
+const pendingRecords = async (
+  records: NotebookProcessRecord[],
+  inspect: InspectOwner,
+  isPortOpen: PortProbe,
+  directory: string,
+) => {
   const blocked = [];
   const pending = [];
   for (const record of records) {
@@ -180,7 +211,13 @@ const pendingRecords = async (records, inspect, isPortOpen, directory) => {
   return { blocked, pending };
 };
 
-const waitForStopped = async (records, inspect, isPortOpen, directory, timeout) => {
+const waitForStopped = async (
+  records: NotebookProcessRecord[],
+  inspect: InspectOwner,
+  isPortOpen: PortProbe,
+  directory: string,
+  timeout: number,
+) => {
   const deadline = Date.now() + timeout;
   const blocked = [];
   let result = await pendingRecords(records, inspect, isPortOpen, directory);
@@ -201,8 +238,8 @@ const waitForStopped = async (records, inspect, isPortOpen, directory, timeout) 
 };
 
 export const registerNotebookProcess = (
-  { ownerNonce, port, processGroupId },
-  { directory = notebookProcessRegistryDirectory } = {},
+  { ownerNonce, port, processGroupId }: NotebookProcessOwner & { port: number | null },
+  { directory = notebookProcessRegistryDirectory }: RegistryOptions = {},
 ) => {
   if (existsSync(closingPath(directory))) {
     throw new Error("E2E notebook process registry is closing");
@@ -228,10 +265,11 @@ export const registerNotebookProcess = (
 };
 
 export const unregisterNotebookProcess = (
-  { ownerNonce, processGroupId },
-  { directory = notebookProcessRegistryDirectory } = {},
+  { ownerNonce, processGroupId }: NotebookProcessOwner,
+  { directory = notebookProcessRegistryDirectory }: RegistryOptions = {},
 ) => {
   rmSync(recordPath(directory, processGroupId, ownerNonce), { force: true });
+  removeNotebookEndpointReceipt({ ownerNonce, processGroupId }, { directory });
   removeDirectoryIfEmpty(directory);
 };
 
@@ -242,6 +280,12 @@ export const stopRegisteredNotebookProcesses = async ({
   signal = "SIGTERM",
   stop = stopProcessGroup,
   timeout = DEFAULT_STOP_TIMEOUT,
+}: RegistryOptions & {
+  inspect?: InspectOwner;
+  isPortOpen?: PortProbe;
+  signal?: NodeJS.Signals;
+  stop?: typeof stopProcessGroup;
+  timeout?: number;
 } = {}) => {
   const records = readRecords(directory);
   removeDirectoryIfEmpty(directory);

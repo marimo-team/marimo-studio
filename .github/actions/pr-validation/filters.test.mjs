@@ -31,7 +31,7 @@ const selected = (path) =>
   });
 
 test("main workspace changes select live browser and Windows lifecycle acceptance", () => {
-  assert.deepEqual(selected("apps/e2e/scripts/main-workspace.mjs"), [
+  assert.deepEqual(selected("apps/e2e/scripts/main-workspace.ts"), [
     "main_browser",
     "windows_lifecycle",
     "windows_unit",
@@ -39,7 +39,7 @@ test("main workspace changes select live browser and Windows lifecycle acceptanc
 });
 
 test("provider workspace changes select provider browser acceptance", () => {
-  assert.deepEqual(selected("apps/e2e/scripts/provider-workspace.mjs"), [
+  assert.deepEqual(selected("apps/e2e/scripts/provider-workspace.ts"), [
     "provider_browser",
     "windows_unit",
   ]);
@@ -49,16 +49,22 @@ test("provider workspace changes select provider browser acceptance", () => {
   ]);
 });
 
-test("notebook service ownership selects both live and provider consumers", () => {
+test("notebook service ownership selects every server consumer", () => {
   for (const path of [
-    "apps/e2e/scripts/notebook-services.mjs",
-    "apps/e2e/scripts/server-exit.mjs",
-    "apps/e2e/scripts/notebook-process-supervisor.mjs",
-    "apps/e2e/scripts/_compat/marimo_edit.py",
+    "apps/e2e/scripts/notebook-services.ts",
+    "apps/e2e/scripts/notebook-process-supervisor.ts",
+    "apps/e2e/scripts/_compat/server.py",
+    "apps/e2e/scripts/_compat/endpoint.py",
   ]) {
     assert.deepEqual(
       selected(path),
-      ["main_browser", "provider_browser", "windows_lifecycle", "windows_unit"],
+      [
+        "main_browser",
+        "provider_browser",
+        "installed_browser",
+        "windows_lifecycle",
+        "windows_unit",
+      ],
       path,
     );
   }
@@ -75,7 +81,7 @@ test("shared browser diagnostics select installed acceptance as well", () => {
 });
 
 test("prepared Python assets select every browser consumer", () => {
-  assert.deepEqual(selected("apps/e2e/scripts/prepare-pyodide.mjs"), [
+  assert.deepEqual(selected("apps/e2e/scripts/prepare-pyodide.ts"), [
     "main_browser",
     "provider_browser",
     "installed_browser",

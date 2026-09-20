@@ -1,12 +1,16 @@
 import { cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { cleanupProviderEnvironment } from "./cleanup-provider-runtime.mjs";
-import { copyFixtureProviderPackage } from "./fixture-provider-package.mjs";
-import { e2eNetwork } from "./network.mjs";
-import { NotebookServices } from "./notebook-services.mjs";
+import type { E2EEndpoint } from "./network.ts";
+
+import { copyFixtureProviderPackage } from "./fixture-provider-package.ts";
+import { e2eNetwork } from "./network.ts";
+import { NotebookServices } from "./notebook-services.ts";
 import {
   externalProviderNotebookPath,
+  externalProviderNotebookFixture,
+  providerNotebookFixturePath,
+  providerStaticRoot,
   providerConfigDirectory,
   providerGalleryStaticDirectory,
   providerNotebookPath,
@@ -17,14 +21,19 @@ import {
   providerWebStaticDirectory,
   providerWorkspaceDirectory,
   repositoryDirectory,
-} from "./paths.mjs";
-import { PreparationProcessOwner } from "./preparation-process.mjs";
-import {
-  clearProviderGeneratedState,
-  prepareProviderWorkspace,
-} from "./prepare-provider-runtime.mjs";
+} from "./paths.ts";
+import { PreparationProcessOwner } from "./preparation-process.ts";
+const removeTree = (directory: string) =>
+  rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 
-const candidates = [
+interface Candidate {
+  view: string;
+  starter: string;
+  files?: Record<string, string>;
+  exports?: { directory: string; endpoint: E2EEndpoint; runtime: string; entrypoint?: string }[];
+}
+
+const candidates: Candidate[] = [
   { view: "overview", starter: "marimo-studio/vanilla:default" },
   {
     view: "notebook",
@@ -102,12 +111,19 @@ export class ProviderWorkspace {
   #preparation = new PreparationProcessOwner();
   #services = new NotebookServices(providerConfigDirectory);
 
-  async prepare(views) {
+  async prepare(views: readonly string[]) {
     await this.#services.prepare();
-    await prepareProviderWorkspace();
+    for (const directory of [
+      providerWorkspaceDirectory,
+      providerStaticRoot,
+      providerConfigDirectory,
+    ]) {
+      await removeTree(directory);
+      await mkdir(directory, { recursive: true });
+    }
+    await cp(providerNotebookFixturePath, providerNotebookPath);
+    await cp(externalProviderNotebookFixture, externalProviderNotebookPath);
     await copyFixtureProviderPackage(providerWorkspaceDirectory);
-    await rm(providerConfigDirectory, { force: true, recursive: true });
-    await mkdir(providerConfigDirectory, { recursive: true });
     const selected = candidates.filter(({ view }) => view === "overview" || views.includes(view));
     for (const candidate of selected) {
       const notebook =
@@ -148,7 +164,11 @@ export class ProviderWorkspace {
         ]);
       }
     }
-    await clearProviderGeneratedState();
+    const projections = resolve(providerWorkspaceDirectory, "__marimo__/studio/projections");
+    for (const candidate of selected) {
+      await removeTree(resolve(projections, candidate.view, ".artifacts"));
+    }
+    await removeTree(resolve(projections, ".locks"));
     for (const candidate of selected) {
       for (const publication of candidate.exports ?? []) {
         await this.#services.start(
@@ -177,7 +197,7 @@ export class ProviderWorkspace {
     }
   }
 
-  #run(label, args) {
+  #run(label: string, args: string[]) {
     return this.#preparation.run(
       label,
       "uv",
@@ -190,7 +210,7 @@ export class ProviderWorkspace {
     );
   }
 
-  #runServer(notebook, endpoint) {
+  #runServer(notebook: string, endpoint: E2EEndpoint) {
     return this.#services.start(
       [
         "python",
@@ -203,7 +223,7 @@ export class ProviderWorkspace {
         "--no-token",
       ],
       endpoint,
-      "run",
+      "process",
       { readyUrl: `${endpoint.origin}/_marimo-studio/status` },
     );
   }
@@ -214,6 +234,8 @@ export class ProviderWorkspace {
       .filter((result) => result.status === "rejected")
       .map((result) => result.reason);
     if (errors.length > 0) throw new AggregateError(errors, "Provider workspace shutdown failed");
-    await cleanupProviderEnvironment();
+    await Promise.all(
+      [providerWorkspaceDirectory, providerStaticRoot, providerConfigDirectory].map(removeTree),
+    );
   }
 }

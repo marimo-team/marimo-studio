@@ -1,6 +1,6 @@
 import { test as base } from "@playwright/test";
 
-import { e2eNetwork } from "../scripts/network.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
 
 export const test = base.extend<{}, { network: typeof e2eNetwork }>({
   network: [

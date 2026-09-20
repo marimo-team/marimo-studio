@@ -1,4 +1,4 @@
-import { e2eNetwork } from "../scripts/network.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
 import { workspaceNotebookPath } from "./fixture.ts";
 import { startNotebookServer } from "./notebook-server.ts";
 

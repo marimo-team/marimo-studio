@@ -67,6 +67,7 @@ typecheck: _frontend-ready ## Type-check Python and TypeScript sources.
 	$(UV) run pyrefly check
 	$(UV) run basedpyright --level error
 	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
+	$(PNPM) --filter @marimo-studio/e2e typecheck
 
 python-test: ## Run the complete Python test profile for this environment.
 	./scripts/python-test.sh --profile all --parallel
@@ -85,7 +86,7 @@ _browser-install:
 	$(PNPM) --filter @marimo-studio/e2e install-browser
 
 _prepare-browser-tests: _frontend-ready
-	$(PNPM) --filter @marimo-studio/e2e exec node scripts/prepare-pyodide.mjs
+	$(PNPM) --filter @marimo-studio/e2e exec node scripts/prepare-pyodide.ts
 
 e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
 	$(PNPM) --filter @marimo-studio/e2e e2e

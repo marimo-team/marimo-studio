@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 
-import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
-import { externalProviderPackage } from "../scripts/paths.mjs";
+import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.ts";
+import { externalProviderPackage } from "../scripts/paths.ts";
 
 test("copies the fixture provider into an arbitrary workspace", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-fixture-provider-"));

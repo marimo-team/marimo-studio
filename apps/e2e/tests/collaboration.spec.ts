@@ -1,7 +1,7 @@
 import type { FrameLocator, Page } from "@playwright/test";
 
-import { e2eNetwork } from "../scripts/network.mjs";
-import { collaborativeNotebookPath } from "../scripts/paths.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
+import { collaborativeNotebookPath } from "../scripts/paths.ts";
 import {
   saveShortcut,
   selectAllShortcut,
@@ -29,11 +29,7 @@ import {
   writeViewSource,
   writeWorkspaceFile,
 } from "./fixture.ts";
-import {
-  startNotebookServer,
-  stopNotebookServer,
-  waitForNotebookServer,
-} from "./notebook-server.ts";
+import { startNotebookServer } from "./notebook-server.ts";
 
 const holdDashboardSourceWrites = async (page: Page): Promise<() => Promise<void>> => {
   const sourceRoute = /\/_marimo-studio\/views\/dashboard\/source\/src\/index\.html(?:\?|$)/;
@@ -297,8 +293,8 @@ test("shares publication and recovery across two Studio sessions", async ({
   });
   try {
     await Promise.all([
-      waitForNotebookServer(firstServer, collaborativeStudioEntryUrl()),
-      waitForNotebookServer(secondServer, secondEntry),
+      firstServer.waitUntilReady(collaborativeStudioEntryUrl()),
+      secondServer.waitUntilReady(secondEntry),
     ]);
     await page.goto(collaborativeStudioEntryUrl());
     const firstPreview = await waitForPreview(page);
@@ -452,7 +448,7 @@ test("shares publication and recovery across two Studio sessions", async ({
     await expect(widget).not.toHaveText(before ?? "");
   } finally {
     await page.close();
-    await Promise.all([stopNotebookServer(firstServer), stopNotebookServer(secondServer)]);
+    await Promise.all([firstServer.close(), secondServer.close()]);
     if (testInfo.status !== testInfo.expectedStatus) {
       await testInfo.attach("first-collaboration-server", {
         body: Buffer.from(firstServer.output()),

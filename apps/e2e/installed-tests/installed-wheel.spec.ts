@@ -1,6 +1,6 @@
 import { expect, test as base } from "@playwright/test";
 
-import { readInstalledPackageNetwork } from "../scripts/installed-package-network.mjs";
+import { readInstalledPackageNetwork } from "../scripts/installed-package-network.ts";
 
 const installedPackageNetwork = readInstalledPackageNetwork();
 import { observeBrowserContext } from "../tests/browser-diagnostics.ts";

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 
-import { appDirectory, repositoryDirectory } from "../scripts/paths.mjs";
+import { appDirectory, repositoryDirectory } from "../scripts/paths.ts";
 
 const compatibilityDirectory = resolve(appDirectory, "scripts/_compat");
 const launcher = resolve(compatibilityDirectory, "server.py");

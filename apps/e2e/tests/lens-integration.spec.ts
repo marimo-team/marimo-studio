@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import type { StudioCli } from "./studio-cli.ts";
 
-import { fixtureDirectory, workspaceDirectory } from "../scripts/paths.mjs";
+import { fixtureDirectory, workspaceDirectory } from "../scripts/paths.ts";
 import {
   expect,
   labeledSlider,
