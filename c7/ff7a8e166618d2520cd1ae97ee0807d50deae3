@@ -1,0 +1,9 @@
+docs/reference/cli.md
+  ai_agent 147-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c7ff7a8e166618d2520cd1ae97ee0807d50deae3",
+  "prompts": {}
+}
