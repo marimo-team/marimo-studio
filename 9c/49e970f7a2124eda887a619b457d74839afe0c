@@ -1,0 +1,11 @@
+apps/e2e/unit/paths.test.ts
+  ai_agent 6,9
+apps/e2e/scripts/paths.ts
+  ai_agent 29-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9c49e970f7a2124eda887a619b457d74839afe0c",
+  "prompts": {}
+}
