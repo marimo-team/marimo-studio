@@ -149,6 +149,7 @@ const proxyUpgrade = (
     port: backend.port,
   });
   let upgraded = false;
+  let fallbackResponse: IncomingMessage | undefined;
   const close = () => {
     upstream.destroy();
     socket.destroy();
@@ -171,15 +172,21 @@ const proxyUpgrade = (
     socket.on("end", closeUpgrade);
   });
   upstream.on("response", (upstreamResponse) => {
-    upgraded = true;
+    fallbackResponse = upstreamResponse;
     socket.write(responseHead(upstreamResponse));
     upstreamResponse.pipe(socket);
   });
   upstream.on("error", close);
   socket.on("error", close);
-  socket.on("close", () => {
-    if (!upgraded) upstream.destroy();
-  });
+  const closeFallback = () => {
+    if (fallbackResponse !== undefined) {
+      fallbackResponse.destroy();
+    } else if (!upgraded) {
+      upstream.destroy();
+    }
+  };
+  socket.on("close", closeFallback);
+  socket.on("end", closeFallback);
   upstream.end();
 };
 

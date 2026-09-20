@@ -1,3 +1,5 @@
+import type { Duplex } from "node:stream";
+
 import { once } from "node:events";
 import { Agent, createServer, request, type Server } from "node:http";
 import { connect, Server as NetServer, type Socket } from "node:net";
@@ -130,6 +132,41 @@ test("network teardown closes upgraded sockets without stopping the backend", as
     expect(await status(service.port)).toBe(200);
   } finally {
     socket.destroy();
+    await network.close();
+    await close(service.server);
+  }
+});
+
+test("closing an ordinary upgrade response releases its backend stream", async () => {
+  const network = createE2ENetwork({ runId: "rejected-upgrade", suite: "main", workerId: "0" });
+  const service = await backend();
+  let upstreamSocket: Duplex | undefined;
+  service.server.on("upgrade", (_request, socket) => {
+    upstreamSocket = socket;
+    socket.resume();
+    socket.on("error", () => socket.destroy());
+    const stream = setInterval(() => socket.write("1\r\nx\r\n"), 10);
+    socket.once("close", () => clearInterval(stream));
+    socket.write(
+      "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nready\r\n",
+    );
+  });
+  await network.start();
+  network.main.studio.bindBackend(service.port);
+  const socket = connect(network.main.studio.port, "127.0.0.1");
+  try {
+    await once(socket, "connect");
+    let response = "";
+    socket.on("data", (chunk) => (response += String(chunk)));
+    socket.write(
+      "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: unsupported\r\n\r\n",
+    );
+    await expect.poll(() => response).toContain("200 OK");
+    await network.close();
+    await expect.poll(() => upstreamSocket?.destroyed).toBe(true);
+  } finally {
+    socket.destroy();
+    upstreamSocket?.destroy();
     await network.close();
     await close(service.server);
   }
