@@ -144,9 +144,10 @@ Creates one named view and rejects an existing name. The default starter is
 local CSS and JavaScript files. `--starter` selects another installed starter.
 `--dry-run` reports every planned write without committing it.
 
-A completed creation returns exact `launch_requirements` in JSON and prints the
-next `uvx` command with one `--with` argument for each requirement. Install and
-run requirements for reviewed providers.
+A completed creation returns exact `launch_requirements` in JSON and prints an
+environment-aware launch command. Project notebooks use `uv run` with
+`--no-sandbox`; standalone notebooks use `uvx` with `--sandbox`. Install and run
+requirements for reviewed providers.
 
 ## `marimo-studio view inspect`
 
