@@ -275,22 +275,6 @@ export class PreviewController {
     });
   }
 
-  private prepareDocument(navigation: ViewNavigationIntent, reload = false): void {
-    const reactivating = !this.activeOwner;
-    this.activeOwner = true;
-    this.navigation = navigation;
-    this.queries.commitNavigation(navigation.query);
-    if (reload) {
-      this.admission.requireReady();
-      this.reload();
-    } else if (reactivating) {
-      this.admission.reactivate(this.admissionOwner());
-    }
-    if (this.preview.src === "about:blank") {
-      this.reloadCurrentDocument();
-    }
-  }
-
   async activate(
     navigation: ViewNavigationIntent,
     signal?: AbortSignal,
@@ -301,7 +285,19 @@ export class PreviewController {
     }
     this.activationsInProgress += 1;
     try {
-      this.prepareDocument(navigation, reload);
+      const reactivating = !this.activeOwner;
+      this.activeOwner = true;
+      this.navigation = navigation;
+      this.queries.commitNavigation(navigation.query);
+      if (reload) {
+        this.admission.requireReady();
+        this.reload();
+      } else if (reactivating) {
+        this.admission.reactivate(this.admissionOwner());
+      }
+      if (this.preview.src === "about:blank") {
+        this.reloadCurrentDocument();
+      }
       const lifecycleId = this.activeLifecycleId;
       const ready = await this.waitUntilReady(signal);
       if (!ready || !this.activeOwner || this.activeLifecycleId !== lifecycleId) {
