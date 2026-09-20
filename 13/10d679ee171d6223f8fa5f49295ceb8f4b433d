@@ -1,0 +1,38 @@
+examples/__marimo__/studio/athletes/field/style.css
+  s_d57e408148bc2a::t_70af41ff1279df 505
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/index.html
+  s_d57e408148bc2a::t_70af41ff1279df 7-17,23,31
+  s_d57e408148bc2a::t_1328400418a3df 21-22
+examples/__marimo__/studio/athletes/overview/index.html
+  s_d57e408148bc2a::t_70af41ff1279df 11-21
+examples/__marimo__/studio/earthquakes/story/index.html
+  s_d57e408148bc2a::t_70af41ff1279df 18-28,348
+examples/__marimo__/studio/athletes/field/index.html
+  s_d57e408148bc2a::t_70af41ff1279df 11-21,40,42,71,104,130
+docs/guide/styling.md
+  s_d57e408148bc2a::t_b45885bfac3bfc 10-12,24-43,95-100
+packages/marimo-studio/tests/providers/test_vanilla.py
+  s_d57e408148bc2a::t_28cd802ba54399 34-47,64-87
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/AGENTS.md
+  s_d57e408148bc2a::t_b45885bfac3bfc 65-71
+docs/guide/frontend-options.md
+  s_d57e408148bc2a::t_b45885bfac3bfc 52-54
+docs/reference/built-in-providers.md
+  s_d57e408148bc2a::t_b45885bfac3bfc 52-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1310d679ee171d6223f8fa5f49295ceb8f4b433d",
+  "prompts": {},
+  "sessions": {
+    "s_d57e408148bc2a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c040-66f0-7f61-ae77-a9452edb8c03",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
