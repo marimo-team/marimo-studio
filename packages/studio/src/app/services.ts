@@ -153,7 +153,6 @@ export const createStudioServices = (
       routes.endpoint(bootstrap.urls.agent),
       bootstrap.serverToken,
       bootstrap.clientId,
-      (view) => preview.automationUrl(view),
     ),
   });
   activeViewHandoff = createActiveViewHandoffRemote(

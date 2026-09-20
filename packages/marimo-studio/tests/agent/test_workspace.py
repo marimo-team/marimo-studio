@@ -777,6 +777,8 @@ def test_view_show_targets_the_attached_browser(
             generation=2,
             client_id="browser-client-1234",
             session_id="s_123456",
+            preview_url="http://localhost/preview/",
+            frame_selector="iframe[data-test-preview]",
         )
 
     monkeypatch.setattr(

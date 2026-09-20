@@ -458,6 +458,8 @@ def test_show_rejects_a_replacement_before_browser_acknowledgement(
                 "schema": 1,
                 "clientId": client_id,
                 "view": "dashboard",
+                "previewUrl": "http://localhost/preview/",
+                "frameSelector": "iframe[data-test-preview]",
                 "catalogGeneration": studio.catalog_generation,
                 "viewGeneration": studio.view_generations["dashboard"],
             },

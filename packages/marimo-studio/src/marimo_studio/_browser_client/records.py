@@ -7,7 +7,15 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class ShowResult:
+class PreviewAutomationTarget:
+    """Browser-owned addressing for one ready preview."""
+
+    preview_url: str
+    frame_selector: str
+
+
+@dataclass(frozen=True)
+class ShowResult(PreviewAutomationTarget):
     """The connected Studio tab selected and rendered a view."""
 
     notebook: Path
@@ -15,14 +23,6 @@ class ShowResult:
     generation: int
     session_id: str
     client_id: str
-    preview_url: str | None = None
-
-    @property
-    def frame_selector(self) -> str:
-        return (
-            f'iframe[data-preview-frame][data-preview-view-frame="{self.view}"]'
-            ":not([hidden]):not([inert])"
-        )
 
     def to_dict(self) -> dict[str, object]:
         return {

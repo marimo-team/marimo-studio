@@ -8,7 +8,7 @@ import re
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._browser_client.protocol import ViewShowRequest
+from marimo_studio._browser_client.protocol import ViewShowRequest, parse_preview_target
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.agent.browser import observe_views
 from marimo_studio._server.auth import (
@@ -52,6 +52,7 @@ from marimo_studio._workspace.ownership import (
 from marimo_studio.errors import (
     CapabilityInputError,
     MarimoStudioError,
+    ProtocolError,
 )
 
 _AGENT_JSON_MAX_BYTES = 256 * 1024
@@ -159,8 +160,8 @@ async def activation_ack_response(
     except JSONBodyError as error:
         return json_body_error_response(error)
     schema = body.get("schema") if isinstance(body, dict) else None
-    required = {"schema", "clientId", "view"}
-    allowed = {*required, "catalogGeneration", "viewGeneration", "previewUrl"}
+    required = {"schema", "clientId", "view", "previewUrl", "frameSelector"}
+    allowed = {*required, "catalogGeneration", "viewGeneration"}
     if (
         not isinstance(body, dict)
         or not required.issubset(body)
@@ -172,12 +173,9 @@ async def activation_ack_response(
         or not _nonempty(body.get("view"))
     ):
         return _invalid_payload("invalid-activation-ack")
-    preview_url = body.get("previewUrl")
-    if preview_url is not None and (
-        not isinstance(preview_url, str)
-        or len(preview_url) > 16384
-        or not preview_url.startswith(("http://", "https://"))
-    ):
+    try:
+        preview = parse_preview_target(body["previewUrl"], body["frameSelector"])
+    except ProtocolError:
         return _invalid_payload("invalid-activation-ack")
     has_catalog_owner = "catalogGeneration" in body
     has_view_owner = "viewGeneration" in body
@@ -217,7 +215,7 @@ async def activation_ack_response(
         generation,
         body["view"],
         owner=owner,
-        preview_url=preview_url,
+        preview=preview,
     )
     return JSONResponse(
         {"schema": 1, "outcome": outcome.value},

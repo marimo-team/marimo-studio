@@ -28,6 +28,7 @@ it("selects and then acknowledges an agent activation", async () => {
   await vi.waitFor(() =>
     expect(acknowledge).toHaveBeenCalledWith(
       { schema: 1, generation: 7, view: "report" },
+      expect.objectContaining({ previewUrl: "http://localhost/preview/" }),
       expect.any(AbortSignal),
     ),
   );
@@ -67,6 +68,7 @@ it("acknowledges an activation with one parsed view owner", async () => {
         view: "report",
         owner: { kind: "present", catalogGeneration, viewGeneration },
       },
+      expect.objectContaining({ previewUrl: "http://localhost/preview/" }),
       expect.any(AbortSignal),
     ),
   );
@@ -75,15 +77,24 @@ it("acknowledges an activation with one parsed view owner", async () => {
 
 it("refreshes an already active view before acknowledging its activation", async () => {
   const { acknowledge, coordinator, model, preview } = setup();
+  const ready = deferred<{ previewUrl: string; frameSelector: string }>();
+  preview.automationTarget.mockReturnValueOnce(ready.promise);
 
   EventSourceStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 8, view: "dashboard" }),
   );
+  await vi.waitFor(() => expect(preview.automationTarget).toHaveBeenCalledOnce());
+  expect(acknowledge).not.toHaveBeenCalled();
+  ready.resolve({
+    previewUrl: "http://localhost/preview/",
+    frameSelector: "iframe[data-test-preview]",
+  });
 
   await vi.waitFor(() =>
     expect(acknowledge).toHaveBeenCalledWith(
       { schema: 1, generation: 8, view: "dashboard" },
+      expect.objectContaining({ previewUrl: "http://localhost/preview/" }),
       expect.any(AbortSignal),
     ),
   );
@@ -94,8 +105,8 @@ it("refreshes an already active view before acknowledging its activation", async
     expect.any(AbortSignal),
     "agent",
   );
-  expect(preview.reload).toHaveBeenCalledOnce();
-  expect(preview.reload.mock.invocationCallOrder[0]).toBeLessThan(
+  expect(preview.automationTarget).toHaveBeenCalledWith("dashboard", true, expect.any(AbortSignal));
+  expect(preview.automationTarget.mock.invocationCallOrder[0]).toBeLessThan(
     acknowledge.mock.invocationCallOrder[0]!,
   );
   coordinator.dispose();
@@ -108,6 +119,7 @@ it("acknowledges host promotion without reloading the starting preview", async (
   await vi.waitFor(() =>
     expect(acknowledge).toHaveBeenCalledWith(
       { schema: 1, generation: 8, view: "dashboard" },
+      expect.objectContaining({ previewUrl: "http://localhost/preview/" }),
       expect.any(AbortSignal),
     ),
   );
@@ -244,6 +256,7 @@ it("lets the newest activation generation own selection and acknowledgement", as
   await vi.waitFor(() =>
     expect(acknowledge).toHaveBeenCalledWith(
       { schema: 1, generation: 11, view: "analysis" },
+      expect.objectContaining({ previewUrl: "http://localhost/preview/" }),
       expect.any(AbortSignal),
     ),
   );
@@ -294,6 +307,10 @@ it("cancels an older selection before a newer unavailable activation settles", a
       cancelPendingSelection,
     },
     preview: {
+      automationTarget: vi.fn(async () => ({
+        previewUrl: "http://localhost/preview/",
+        frameSelector: "iframe[data-test-preview]",
+      })),
       requestObservation: vi.fn(),
       editorSessionChanged: vi.fn(),
       reload: vi.fn(),
@@ -397,7 +414,7 @@ it("forwards validated session replacement evidence", () => {
 it("aborts pending acknowledgement and blocks events after disposal", async () => {
   let signal: AbortSignal | undefined;
   const { acknowledge, coordinator, model } = setup();
-  acknowledge.mockImplementation(async (_activation, activeSignal) => {
+  acknowledge.mockImplementation(async (_activation, _preview, activeSignal) => {
     signal = activeSignal;
     await new Promise<void>(() => {});
   });

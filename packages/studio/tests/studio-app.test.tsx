@@ -1,3 +1,5 @@
+import type { PreviewAutomationTarget } from "@marimo-studio/protocol/development-events";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -487,7 +489,12 @@ describe("Studio shell", () => {
       close(): void {}
     }
     vi.stubGlobal("EventSource", EventSourceStub);
-    const request = vi.fn(async () => new Response(null, { status: 204 }));
+    const request = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+      return url.pathname.endsWith("/activations/12/ack")
+        ? Response.json({ schema: 1, outcome: "applied" })
+        : Response.json(viewList(["dashboard", "report"]));
+    });
     vi.stubGlobal("fetch", request);
     let finishSource!: () => void;
     const sourcePending = new Promise<void>((resolve) => {
@@ -499,23 +506,45 @@ describe("Studio shell", () => {
       view: "dashboard",
     });
     vi.spyOn(services.source, "start").mockReturnValue(sourcePending);
+    const previewReady = deferred<PreviewAutomationTarget>();
+    const automationTarget = vi
+      .spyOn(services.preview, "automationTarget")
+      .mockReturnValue(previewReady.promise);
     const editor = document.createElement("iframe");
     const frames = new Map(
       bootstrap.runtimes.map((runtime) => [runtime.id, document.createElement("iframe")]),
     );
 
-    const starting = services.start(editor, frames);
-    await vi.waitFor(() =>
-      expect(request).toHaveBeenCalledWith(
-        expect.stringContaining("/activations/12/ack"),
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
-    expect(services.source.start).toHaveBeenCalledOnce();
-
-    finishSource();
-    await starting;
-    services.dispose();
+    let hydrated = false;
+    const starting = services.start(editor, frames).then(() => {
+      hydrated = true;
+    });
+    try {
+      await vi.waitFor(() =>
+        expect(automationTarget).toHaveBeenCalledWith("dashboard", false, expect.any(AbortSignal)),
+      );
+      expect(
+        request.mock.calls.some(([input]) =>
+          String(input instanceof Request ? input.url : input).includes("/activations/12/ack"),
+        ),
+      ).toBe(false);
+      previewReady.resolve({
+        previewUrl: "http://localhost:3000/dashboard/",
+        frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+      });
+      await vi.waitFor(() =>
+        expect(request).toHaveBeenCalledWith(
+          expect.stringContaining("/activations/12/ack"),
+          expect.objectContaining({ method: "POST" }),
+        ),
+      );
+      expect(services.source.start).toHaveBeenCalledOnce();
+      expect(hydrated).toBe(false);
+    } finally {
+      finishSource();
+      await starting;
+      await services.close();
+    }
   });
 
   it("keeps split controls synchronized with focus commands", async () => {

@@ -7,6 +7,11 @@ import {
   ViewActivationAcknowledgementError,
 } from "../src/app/activation-remote.ts";
 
+const preview = {
+  previewUrl: "http://localhost/preview/",
+  frameSelector: "iframe[data-test-preview]",
+};
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -21,10 +26,13 @@ it("acknowledges an activation with its browser identity", async () => {
     "/_marimo-studio",
     "server-token",
     "browser-client-1234",
-    () => "http://localhost/preview/",
   );
 
-  await acknowledge({ schema: 1, generation: 9, view: "report" }, new AbortController().signal);
+  await acknowledge(
+    { schema: 1, generation: 9, view: "report" },
+    preview,
+    new AbortController().signal,
+  );
 
   expect(fetch).toHaveBeenCalledWith(
     expect.stringContaining("/_marimo-studio/activations/9/ack"),
@@ -34,7 +42,7 @@ it("acknowledges an activation with its browser identity", async () => {
         schema: 1,
         clientId: "browser-client-1234",
         view: "report",
-        previewUrl: "http://localhost/preview/",
+        ...preview,
       }),
     }),
   );
@@ -58,10 +66,12 @@ it("binds an activation acknowledgement to its observed view owner", async () =>
       view: "report",
       owner: {
         kind: "present",
+        ...preview,
         catalogGeneration: "a".repeat(64),
         viewGeneration: "b".repeat(64),
       },
     },
+    preview,
     new AbortController().signal,
   );
 
@@ -72,6 +82,7 @@ it("binds an activation acknowledgement to its observed view owner", async () =>
         schema: 1,
         clientId: "browser-client-1234",
         view: "report",
+        ...preview,
         catalogGeneration: "a".repeat(64),
         viewGeneration: "b".repeat(64),
       }),
@@ -97,6 +108,7 @@ it("acknowledges a catalog-owned absent view name", async () => {
       view: "report",
       owner: { kind: "absent", catalogGeneration: "a".repeat(64) },
     },
+    preview,
     new AbortController().signal,
   );
 
@@ -107,6 +119,7 @@ it("acknowledges a catalog-owned absent view name", async () => {
         schema: 1,
         clientId: "browser-client-1234",
         view: "report",
+        ...preview,
         catalogGeneration: "a".repeat(64),
         viewGeneration: null,
       }),
@@ -141,7 +154,11 @@ it("retries when an activation acknowledgement body stalls", async () => {
   );
 
   const owner = new AbortController();
-  const acknowledged = acknowledge({ schema: 1, generation: 11, view: "report" }, owner.signal);
+  const acknowledged = acknowledge(
+    { schema: 1, generation: 11, view: "report" },
+    preview,
+    owner.signal,
+  );
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   await vi.advanceTimersByTimeAsync(10_100);
   await acknowledged;
@@ -167,6 +184,7 @@ it("retries an activation acknowledgement while the browser binding settles", as
 
   const acknowledged = acknowledge(
     { schema: 1, generation: 12, view: "report" },
+    preview,
     new AbortController().signal,
   );
   await vi.advanceTimersByTimeAsync(100);
@@ -187,7 +205,11 @@ it("does not retry a rejected activation acknowledgement", async () => {
   );
 
   await expect(
-    acknowledge({ schema: 1, generation: 13, view: "report" }, new AbortController().signal),
+    acknowledge(
+      { schema: 1, generation: 13, view: "report" },
+      preview,
+      new AbortController().signal,
+    ),
   ).rejects.toMatchObject({ outcome: "rejected" });
 
   expect(fetch).toHaveBeenCalledOnce();
@@ -207,6 +229,7 @@ it("reports uncertainty when every acknowledgement response is lost", async () =
 
   const result = acknowledge(
     { schema: 1, generation: 14, view: "report" },
+    preview,
     new AbortController().signal,
   );
   const rejected = expect(result).rejects.toBeInstanceOf(ViewActivationAcknowledgementError);

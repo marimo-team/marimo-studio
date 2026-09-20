@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TypeAlias
 
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.agent.events import ObservationRequest, ViewActivation
 from marimo_studio._validation.evidence import BrowserObservation
@@ -34,7 +35,7 @@ class AcknowledgedActivation:
 
     activation: ViewActivation
     active_view_generation: int
-    preview_url: str | None = None
+    preview: PreviewAutomationTarget
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,7 @@ class RetainedActivation:
 
     activation: ViewActivation
     active_view_generation: int
-    preview_url: str | None = None
+    preview: PreviewAutomationTarget
 
 
 @dataclass(frozen=True)

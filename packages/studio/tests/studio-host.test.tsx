@@ -1,3 +1,4 @@
+import type { PreviewAutomationTarget } from "@marimo-studio/protocol/development-events";
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import type { StudioHostBootstrap } from "@marimo-studio/protocol/studio-host";
 
@@ -7,6 +8,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 
 import { StudioHost } from "../src/app/StudioHost.tsx";
+import { PreviewDeck } from "../src/features/preview/deck.ts";
 import {
   starter,
   componentStarter,
@@ -488,6 +490,10 @@ it("opens an already-created first view after a bootstrap retry", async () => {
 
 it("preserves an active editor and its public query during first-view activation", async () => {
   useActivationEvents();
+  const previewReady = deferred<PreviewAutomationTarget>();
+  const automationTarget = vi
+    .spyOn(PreviewDeck.prototype, "automationTarget")
+    .mockReturnValue(previewReady.promise);
   const configured = {
     ...ready,
     urls: {
@@ -528,6 +534,20 @@ it("preserves an active editor and its public query during first-view activation
   expect(new URL(editorWindow.location.href).searchParams.has("session_id")).toBe(true);
   expect(await screen.findByLabelText("Studio workspace")).toBeVisible();
   await vi.waitFor(() =>
+    expect(automationTarget).toHaveBeenCalledWith("dashboard", false, expect.any(AbortSignal)),
+  );
+  expect(
+    request.mock.calls.some(([input]) =>
+      String(input instanceof Request ? input.url : input).includes("/activations/7/ack"),
+    ),
+  ).toBe(false);
+  await act(async () =>
+    previewReady.resolve({
+      previewUrl: "http://localhost:3000/dashboard/",
+      frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+    }),
+  );
+  await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.stringContaining("/activations/7/ack"),
       expect.objectContaining({ method: "POST" }),
@@ -539,6 +559,10 @@ it("preserves an active editor and its public query during first-view activation
 
 it("retries first-view activation when the editor query changes during bootstrap", async () => {
   useActivationEvents();
+  const previewReady = deferred<PreviewAutomationTarget>();
+  const automationTarget = vi
+    .spyOn(PreviewDeck.prototype, "automationTarget")
+    .mockReturnValue(previewReady.promise);
   globalThis.history.replaceState({}, "", "/entry/");
   const { editorFrame, editorWindow } = mountActiveEditor("region=eu&tag=a&tag=b");
   const firstBootstrap = deferred<Response>();
@@ -592,6 +616,20 @@ it("retries first-view activation when the editor query changes during bootstrap
   expect(new URLSearchParams(bootstrapQueries[1]).getAll("tag")).toEqual(["b", "a"]);
   expect(new URL(globalThis.location.href).searchParams.getAll("tag")).toEqual(["b", "a"]);
   expect(new URL(editorWindow.location.href).searchParams.getAll("tag")).toEqual(["b", "a"]);
+  await vi.waitFor(() =>
+    expect(automationTarget).toHaveBeenCalledWith("dashboard", false, expect.any(AbortSignal)),
+  );
+  expect(
+    request.mock.calls.some(([input]) =>
+      String(input instanceof Request ? input.url : input).includes("/activations/7/ack"),
+    ),
+  ).toBe(false);
+  await act(async () =>
+    previewReady.resolve({
+      previewUrl: "http://localhost:3000/dashboard/",
+      frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+    }),
+  );
   await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.stringContaining("/activations/7/ack"),

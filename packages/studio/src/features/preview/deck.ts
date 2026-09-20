@@ -5,6 +5,7 @@ import type {
 import type {
   EditorSessionBinding,
   ObserveViewRequest,
+  PreviewAutomationTarget,
 } from "@marimo-studio/protocol/development-events";
 import type { ViewNavigationIntent } from "@marimo-studio/protocol/preview-messages";
 
@@ -133,9 +134,38 @@ export class PreviewDeck {
     return () => this.listeners.delete(listener);
   };
 
-  automationUrl(view: string): string | undefined {
-    const active = view === this.view ? this.frames.find(this.runtime, view) : undefined;
-    return active?.state?.rendered ? active.frame?.src : undefined;
+  async automationTarget(
+    view: string,
+    reload: boolean,
+    signal: AbortSignal,
+  ): Promise<PreviewAutomationTarget> {
+    const slot = view === this.view ? this.frames.find(this.runtime, view) : undefined;
+    const controller = slot?.controller;
+    const frame = slot?.frame;
+    if (!slot || !controller || !frame) {
+      throw new Error("The requested preview is unavailable.");
+    }
+    const reloadDocument = reload || slot.stale;
+    slot.stale = false;
+    const ready = controller.activate(this.navigation, signal, reloadDocument);
+    const lifecycleId = slot.state?.lifecycleId;
+    if (
+      !(await ready) ||
+      signal.aborted ||
+      !this.isActive(slot) ||
+      slot.controller !== controller ||
+      slot.stale ||
+      slot.state?.lifecycleId !== lifecycleId ||
+      !controller.readyForInteraction()
+    ) {
+      throw new Error("The requested preview changed before it became ready.");
+    }
+    return {
+      previewUrl: frame.src,
+      frameSelector:
+        `iframe[data-preview-view-frame="${view}"][data-preview-cache-runtime="${slot.runtime}"]` +
+        ":not([hidden]):not([inert])",
+    };
   }
 
   readonly getSnapshot = (): PreviewDeckSnapshot => this.snapshot;

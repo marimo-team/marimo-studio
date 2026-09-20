@@ -131,7 +131,7 @@ async def _activate_connected_view(
         view_name,
         owner=owner,
     )
-    preview_url = await notebook_scope.agents.wait_for_activation(
+    preview = await notebook_scope.agents.wait_for_activation(
         activation,
         VIEW_ACTIVATION_TIMEOUT,
     )
@@ -141,5 +141,6 @@ async def _activate_connected_view(
         generation=activation.generation,
         session_id=session_id,
         client_id=target.client_id,
-        preview_url=preview_url,
+        preview_url=preview.preview_url,
+        frame_selector=preview.frame_selector,
     )

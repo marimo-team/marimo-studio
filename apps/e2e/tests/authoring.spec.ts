@@ -518,6 +518,16 @@ test("shows an agent-requested page and records its rendered revision", async ({
   await expect(page.getByLabel("Switch view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
   replacedEventStream.recovered();
+  const refreshed = await studioCli.activateWorkspaceView("qa-view", clientId);
+  expect(refreshed.preview_url).not.toBe(activated.preview_url);
+  await expect(page.locator(refreshed.frame_selector)).toHaveCount(1);
+  await expect(page.locator(refreshed.frame_selector)).toHaveJSProperty(
+    "src",
+    refreshed.preview_url,
+  );
+  await expect(
+    page.frameLocator(refreshed.frame_selector).getByRole("heading", { name: "Qa View" }),
+  ).toBeVisible();
   const abandonedObservation = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "PUT",

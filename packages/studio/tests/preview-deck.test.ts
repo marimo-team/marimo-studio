@@ -682,3 +682,17 @@ it("admits another runtime after an initial build overlaps an unchanged notebook
   acknowledgement.channel.port2.close();
   gate.mockRestore();
 });
+
+it("rejects automation addressing when the active runtime changes during readiness", async () => {
+  const deck = previewDeck({ runtimes: ["server", "wasm"] });
+  deck.attach(frame("complete"), cachedFrames(deck, {}));
+  try {
+    const target = expect(
+      deck.automationTarget("dashboard", false, new AbortController().signal),
+    ).rejects.toThrow("changed before it became ready");
+    deck.switchRuntime("wasm");
+    await target;
+  } finally {
+    deck.dispose();
+  }
+});

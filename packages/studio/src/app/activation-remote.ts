@@ -1,16 +1,18 @@
 import {
   parseActivationAckResponse,
   type ActiveViewRequest,
+  type PreviewAutomationTarget,
 } from "@marimo-studio/protocol/development-events";
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 export type AcknowledgeViewActivation = (
   activation: ActiveViewRequest,
+  preview: PreviewAutomationTarget,
   signal: AbortSignal,
 ) => Promise<void>;
 
-interface ActivationAcknowledgement {
+interface ActivationAcknowledgement extends PreviewAutomationTarget {
   readonly schema: 1;
   readonly clientId: string;
   readonly view: string;
@@ -115,19 +117,14 @@ const acknowledge = async (
 };
 
 export const createViewActivationRemote =
-  (
-    agentUrl: string,
-    serverToken: string,
-    clientId: string,
-    previewUrl?: (view: string) => string | undefined,
-  ): AcknowledgeViewActivation =>
-  async (activation, signal) => {
+  (agentUrl: string, serverToken: string, clientId: string): AcknowledgeViewActivation =>
+  async (activation, preview, signal) => {
     const owner = activation.owner;
     const acknowledgement = {
       schema: 1,
       clientId,
       view: activation.view,
-      previewUrl: previewUrl?.(activation.view),
+      ...preview,
     } as const;
     const request: ActivationAcknowledgementRequest =
       owner === undefined

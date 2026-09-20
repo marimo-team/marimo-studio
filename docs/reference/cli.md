@@ -278,7 +278,9 @@ tabs are connected, the error lists their IDs. Pass one through
 
 The result includes `client_id`, `session_id`, `preview_url`, and
 `frame_selector`. Use the selector in the selected Studio tab to target its
-active, interactive preview. The URL identifies the acknowledged document.
+active, interactive preview. Successful activation waits for the preview to be
+ready, including when refreshing the currently selected view. The browser supplies
+both addressing fields; the URL identifies the acknowledged document.
 Refresh these fields with `view show` after a view, runtime, or session change.
 
 Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as

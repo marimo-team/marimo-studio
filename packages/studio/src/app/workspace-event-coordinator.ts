@@ -8,6 +8,7 @@ import {
   type EditorSessionBinding,
   type ActiveViewRequest,
   type ObserveViewRequest,
+  type PreviewAutomationTarget,
 } from "@marimo-studio/protocol/development-events";
 import { WORKSPACE_STREAM_QUERY_PARAM } from "@marimo-studio/protocol/query";
 import {
@@ -42,6 +43,11 @@ interface WorkspacePreviewPort {
   requestObservation(request: ObserveViewRequest): void;
   editorSessionChanged(binding: EditorSessionBinding): void;
   reload(): void;
+  automationTarget(
+    view: string,
+    reload: boolean,
+    signal: AbortSignal,
+  ): Promise<PreviewAutomationTarget>;
   presentationBaseline(view: string, revision: string | null): void;
   presentationBuildStarted(view: string, notebookMutationGeneration?: number): void;
   presentationBuildCompleted(
@@ -411,13 +417,15 @@ export class WorkspaceEventCoordinator {
       ) {
         return false;
       }
-      if (alreadyActive && reloadActive) {
-        this.options.preview.reload();
-      }
+      const preview = await this.options.preview.automationTarget(
+        view,
+        alreadyActive && reloadActive,
+        signal,
+      );
       if (!this.isCurrentActivation(generation, signal)) {
         return false;
       }
-      await this.options.acknowledge(request, signal);
+      await this.options.acknowledge(request, preview, signal);
       return this.isCurrentActivation(generation, signal);
     } catch (error) {
       if (

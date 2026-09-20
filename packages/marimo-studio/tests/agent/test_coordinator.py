@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.agent.clients import (
     PeerTarget,
@@ -79,6 +80,9 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "dashboard",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.REJECTED
         )
@@ -88,6 +92,9 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -102,6 +109,9 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -110,6 +120,9 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "dashboard",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.REJECTED
         )
@@ -137,6 +150,9 @@ def test_activation_replay_requires_the_acknowledged_workspace_owner() -> None:
                 activation.generation,
                 activation.view,
                 owner=activation.owner,
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -148,6 +164,9 @@ def test_activation_replay_requires_the_acknowledged_workspace_owner() -> None:
                 activation.generation,
                 activation.view,
                 owner=PresentViewOwner("c" * 64, "b" * 64),
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.REJECTED
         )
@@ -184,6 +203,9 @@ def test_activation_rejection_requires_the_pending_workspace_owner() -> None:
                 activation.generation,
                 activation.view,
                 owner=activation.owner,
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -243,6 +265,9 @@ def test_manual_view_change_invalidates_an_older_activation() -> None:
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.REJECTED
         )
@@ -302,6 +327,9 @@ def test_activation_commit_wins_atomically_over_timeout(
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
         )
 
@@ -543,6 +571,9 @@ def test_view_activation_survives_an_event_stream_reconnect(
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -751,6 +782,9 @@ def test_close_rejects_operations_paused_before_store_admission(
                     target.client_id,
                     activation.generation,
                     "executive",
+                    preview=PreviewAutomationTarget(
+                        "http://localhost/preview/", "iframe[data-test-preview]"
+                    ),
                 )
             if operation == "request-observation":
                 return await agents.request_observation(
@@ -825,6 +859,9 @@ def test_closed_coordinator_rejects_every_request_visible_operation() -> None:
                     activation_target.client_id,
                     activation.generation,
                     activation.view,
+                    preview=PreviewAutomationTarget(
+                        "http://localhost/preview/", "iframe[data-test-preview]"
+                    ),
                 )
             if operation == "wait-activation":
                 return await agents.wait_for_activation(activation, 1)
