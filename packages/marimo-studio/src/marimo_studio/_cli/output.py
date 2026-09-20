@@ -11,6 +11,7 @@ from typing import Any
 
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._cli.diagnostics import diagnostics
+from marimo_studio._cli.environment import environment_command
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
 from marimo_studio._delivery.export import StaticExportResult
 from marimo_studio._delivery.preflight import StaticPreflightReport
@@ -20,6 +21,7 @@ from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.overview import StudioOverview
 from marimo_studio._views.records import ViewDocument, ViewInspection, ViewSetupResult
 from marimo_studio._workspace.models import BindingResult
+from marimo_studio._workspace.python_project import owning_project
 
 
 def _shell_command(arguments: list[str]) -> str:
@@ -81,15 +83,19 @@ def render_view_next_command(result: ViewSetupResult) -> None:
     """Show the next command after a completed view creation."""
     if result.dry_run:
         return
-    command = _uvx_command(
-        result.launch_requirements,
-        [
-            "marimo",
-            "edit",
-            str(result.notebook),
-            "--sandbox",
-        ],
-    )
+    project = owning_project(result.notebook)
+    if project is None:
+        command = _uvx_command(
+            result.launch_requirements,
+            ["marimo", "edit", str(result.notebook), "--sandbox"],
+        )
+    else:
+        command = _shell_command(
+            environment_command(
+                result,
+                ["marimo", "edit", str(result.notebook), "--no-sandbox"],
+            )
+        )
     _echo_next_command("edit", command)
 
 
@@ -206,6 +212,8 @@ def render_view_show(result: ShowResult) -> None:
     """Write a completed browser view selection in human text."""
     echo(f"{green('Showing')} view {result.view} in {result.client_id}")
     echo(f"  {light_blue('session')} {result.session_id}")
+    echo(f"  {light_blue('preview')} {result.preview_url}")
+    echo(f"  {light_blue('frame')} {result.frame_selector}")
 
 
 def render_static_export(result: StaticExportResult) -> None:

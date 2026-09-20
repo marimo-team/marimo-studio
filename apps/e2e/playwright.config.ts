@@ -1,12 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
-import { resolve } from "node:path";
+import { availableParallelism } from "node:os";
 
-import { e2eBrowserUse } from "./scripts/browser.mjs";
-import { appDirectory } from "./scripts/paths.mjs";
+import { e2eBrowserUse } from "./scripts/browser.ts";
 
 process.env.MARIMO_STUDIO_E2E_SUITE = "main";
-
-const outputOffset = `offset-${process.env.MARIMO_STUDIO_E2E_PORT_OFFSET ?? "0"}`;
+const { blobReportDirectory, playwrightOutputDirectory } = await import("./scripts/paths.ts");
 
 export default defineConfig({
   testDir: "./tests",
@@ -20,14 +18,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  workers: process.env.CI ? 1 : 2,
-  reporter: process.env.CI
-    ? [
-        ["list"],
-        ["blob", { outputDir: resolve(appDirectory, "test-results/blob-main", outputOffset) }],
-      ]
-    : "list",
-  outputDir: resolve(appDirectory, "test-results/playwright-main", outputOffset),
+  workers: process.env.CI ? 1 : Math.min(4, availableParallelism()),
+  reporter: process.env.CI ? [["list"], ["blob", { outputDir: blobReportDirectory }]] : "list",
+  outputDir: playwrightOutputDirectory,
   expect: { timeout: 15_000 },
   use: {
     screenshot: "only-on-failure",

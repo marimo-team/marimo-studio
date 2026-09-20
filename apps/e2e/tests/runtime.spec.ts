@@ -32,7 +32,7 @@ const activateServerPreview = async (
 ): Promise<void> => {
   // Control discovery can start while the runtime menu is open.
   const controls = diagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/views\/dashboard\/controls$/,
     count: 1,
@@ -98,7 +98,7 @@ test("mounts the Copilot editor extension only while GitHub completion is enable
     required: false,
   });
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     2,
   );
   const loadSession = async (navigate: () => Promise<void>) => {
@@ -154,7 +154,7 @@ test("mounts the Copilot editor extension only while GitHub completion is enable
 });
 
 test("static WebAssembly executes the mounted dependency closure", async ({ page }) => {
-  await page.goto(staticExportUrl);
+  await page.goto(staticExportUrl());
   const status = page.locator("#projected-status");
 
   await expect(status).toHaveAttribute("data-state", "ready", {
@@ -231,7 +231,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
     required: false,
   });
   const refreshedOutputs = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/outputs$/,
     count: 3,
@@ -402,7 +402,7 @@ test("preserves runtime state while modes and controls change", async ({
 }) => {
   test.setTimeout(210_000);
   const supersededDocuments = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?dashboard\/$/,
     count: 2,
@@ -531,21 +531,21 @@ test("refreshes a popout view and preserves its public query across reload", asy
       <p>Region: <strong id="popout-region" mo-value='query_params["region"]'></strong></p>`,
     );
     const retiredDevelopmentStream = browserDiagnostics.expectActiveRequestAbort({
-      origin: studioOrigin,
+      origin: studioOrigin(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/dev\/events$/,
       count: 1,
       status: 200,
     });
     const refreshedProjectionReads = browserDiagnostics.expectRequestAbort({
-      origin: studioOrigin,
+      origin: studioOrigin(),
       method: "POST",
       path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/(?:values|outputs)$/,
       count: 2,
       required: false,
     });
     const refreshedDocument = browserDiagnostics.expectRequestAbort({
-      origin: studioOrigin,
+      origin: studioOrigin(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/,
       count: 1,
@@ -578,7 +578,7 @@ test("refreshes a popout view and preserves its public query across reload", asy
     expect(publicUrl.searchParams.has("access_token")).toBe(false);
 
     const preReloadDocument = browserDiagnostics.expectActiveRequestAbort({
-      origin: studioOrigin,
+      origin: studioOrigin(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/,
       count: 1,

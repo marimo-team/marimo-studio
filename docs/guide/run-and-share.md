@@ -50,8 +50,17 @@ Each external dataset must be reachable from the visitor's browser.
 
 ## Run a live view locally
 
-Use the launch requirements printed by `view create`. A notebook whose view
-uses the default Vanilla provider runs with:
+Start with the launch command printed by `view create` and replace `marimo edit`
+with `marimo run`, keeping its environment options and sandbox flag. For a
+notebook owned by a Python project, Studio composes project and existing inline dependencies,
+sources, indexes, and Python constraints. Retaining those options preserves
+that complete environment. For a project notebook with no inline dependencies:
+
+```console
+uv run --with marimo-studio --project . marimo run analysis.py --no-sandbox
+```
+
+A standalone notebook whose view uses the default Vanilla provider runs with:
 
 ```console
 uv run --with marimo-studio marimo run analysis.py \
@@ -63,6 +72,15 @@ uv run --with marimo-studio marimo run analysis.py \
 
 The default view opens at `http://127.0.0.1:8000/`. A view named `report`
 opens at `http://127.0.0.1:8000/report/`.
+
+For browser automation, append `?marimo_studio_unframed=1` to the public view
+URL, such as `/report/?marimo_studio_unframed=1`. Keep any `file` and `runtime`
+parameters. The view renders directly in the top-level document, so screenshots
+and DOM evaluation need no Studio frame switch. Wait for
+`html[data-marimo-studio-state="ready"]` after navigation before interacting.
+Authentication and the document
+sandbox still apply. This is a separate presentation from the editor preview.
+Keep the notebook session open when testing an edit-mode server.
 
 Run `marimo-studio status --target analysis.py --json` when a project uses
 additional view providers. Its `launch_requirements` list contains the Studio
@@ -103,6 +121,13 @@ See [marimo-export](https://github.com/marimo-team/marimo-export) for the
 publication format and browser reader.
 :::
 
+Export and preflight flush progress as it arrives, including when the CLI
+re-enters a project environment. Long operations emit a heartbeat every five
+seconds with phase, elapsed time, state name, and the latest cache evidence.
+`--json` keeps the terminal result on stdout and progress on stderr as JSONL.
+Unknown state or cache evidence is `null`. The current export API does not expose
+an active notebook cell, so the heartbeat's `cell` is `null`.
+
 Each Zero-Python export uses the authored notebook's `__marimo__/cache/`
 directory. [Marimo's native cell cache](https://docs.marimo.io/api/caching/)
 decides which authored cells can be restored across states, views, and later
@@ -110,6 +135,13 @@ export commands. marimo-export retains the resulting portable states in its
 configured export repository. An exact later export can reuse that prepared
 generation before starting the notebook. Set `MARIMO_EXPORT_REPOSITORY` to
 choose the repository directory.
+
+Prepared publication identity includes the saved notebook document. Changing a
+Python control label therefore creates a new publication and walks the prepared
+states again, even when Marimo restores analytical cells from cache. Keep
+presentation-only headings and labels in view source when they should change
+independently of notebook computation. View-only edits can reuse the prepared
+notebook states while Studio rebuilds the presentation artifact.
 
 The repository stores verified portable publications. Marimo remains the
 owner of computation cache keys, invalidation, serialization, and restoration.

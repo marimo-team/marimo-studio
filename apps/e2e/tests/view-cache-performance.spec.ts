@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { workspaceDirectory } from "../scripts/paths.mjs";
+import { workspaceDirectory } from "../scripts/paths.ts";
 import { selectAllShortcut } from "./authoring-test-support.ts";
 import {
   captureProjectionRefresh,
@@ -63,7 +63,7 @@ const selectView = async (page: Page, view: string, heading: string) => {
     return (
       response.status() === 200 &&
       response.request().method() === "GET" &&
-      url.origin === studioOrigin &&
+      url.origin === studioOrigin() &&
       url.pathname === "/_marimo-studio/dev/events" &&
       url.searchParams.get("marimo_studio_view") === view
     );
@@ -99,11 +99,11 @@ test("reuses isolated named-view documents after their cold load", async ({
   await waitForPreview(page);
 
   const streamChanges = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     4,
   );
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 4,
@@ -152,7 +152,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 3,
@@ -160,7 +160,7 @@ test("reloads a cached sibling after notebook state changes", async ({
     status: 204,
   });
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     4,
   );
   await selectView(page, "report", "Report");
@@ -168,7 +168,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   await expect(report.locator('[mo-value="metric"]')).toHaveText("42");
 
   const dashboardProjectRefresh = browserDiagnostics.expectResponseTransition(page, {
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/views\/dashboard\/project$/,
     failureStatus: 500,

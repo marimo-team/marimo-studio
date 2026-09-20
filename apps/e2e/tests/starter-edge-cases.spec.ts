@@ -68,7 +68,7 @@ test("builds, renders, and exports a view when no cell may display output", asyn
   await expectEmptyPreview(page, noDisplayView);
 
   const staticPage = await page.context().newPage();
-  await staticPage.goto(noDisplayStaticExportUrl);
+  await staticPage.goto(noDisplayStaticExportUrl());
   await expect(staticPage.getByRole("heading", { name: "Empty Html" })).toBeVisible({
     timeout: 65_000,
   });
@@ -82,7 +82,7 @@ test("keeps the active preview usable after a manifestless creation conflict", a
   studioCli,
 }) => {
   const supersededPresentation = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?(?:dashboard|blocked)\/$/,
     count: 1,
@@ -92,14 +92,14 @@ test("keeps the active preview usable after a manifestless creation conflict", a
   await page.goto("/?file=notebook.py");
   const preview = await waitForPreview(page);
   const abandonedHandoff = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 1,
     status: 204,
   });
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const identity = await preview.locator("html").evaluate(() => globalThis.marimoStudio.identity());
@@ -158,7 +158,7 @@ test("creates distinct provider projects concurrently and refreshes the active v
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   const documentPath = await dashboard.locator("html").evaluate(() => location.pathname);
   const documentRefresh = browserDiagnostics.expectResponseTransition(page, {
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: new RegExp(`^${documentPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
     failureStatus: 409,

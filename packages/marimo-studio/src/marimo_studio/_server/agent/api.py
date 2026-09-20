@@ -8,7 +8,7 @@ import re
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._browser_client.protocol import ViewShowRequest
+from marimo_studio._browser_client.protocol import ViewShowRequest, parse_preview_target
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.agent.browser import observe_views
 from marimo_studio._server.auth import (
@@ -50,8 +50,10 @@ from marimo_studio._workspace.ownership import (
     require_view_owner,
 )
 from marimo_studio.errors import (
+    AgentRequestError,
     CapabilityInputError,
     MarimoStudioError,
+    ProtocolError,
 )
 
 _AGENT_JSON_MAX_BYTES = 256 * 1024
@@ -160,14 +162,19 @@ async def activation_ack_response(
         return json_body_error_response(error)
     schema = body.get("schema") if isinstance(body, dict) else None
     required = {"schema", "clientId", "view"}
-    allowed = {*required, "catalogGeneration", "viewGeneration"}
+    allowed = {
+        *required,
+        "previewUrl",
+        "frameSelector",
+        "catalogGeneration",
+        "viewGeneration",
+    }
     if (
         not isinstance(body, dict)
         or not required.issubset(body)
         or not set(body).issubset(allowed)
         or not isinstance(schema, int)
         or isinstance(schema, bool)
-        or schema != 1
         or not _nonempty(body.get("clientId"))
         or not _nonempty(body.get("view"))
     ):
@@ -187,6 +194,31 @@ async def activation_ack_response(
         assert isinstance(catalog_generation, str)
         assert isinstance(view_generation, str) or view_generation is None
         owner = observed_view_owner(catalog_generation, view_generation)
+    if schema != 2:
+        await notebook_scope.agents.reject_activation(
+            body["clientId"],
+            generation,
+            body["view"],
+            AgentRequestError(
+                "activation-protocol-mismatch",
+                "The Studio browser uses an unsupported activation protocol. "
+                "Reload Studio.",
+                status_code=409,
+            ),
+            owner=owner,
+        )
+        return JSONResponse(
+            {"schema": 1, "outcome": ActivationAckOutcome.REJECTED.value},
+            status_code=409,
+            headers=NO_STORE,
+        )
+    try:
+        preview = parse_preview_target(
+            body.get("previewUrl"), body.get("frameSelector")
+        )
+    except ProtocolError:
+        return _invalid_payload("invalid-activation-ack")
+    if owner is not None:
         acknowledged_view = body["view"]
         assert isinstance(acknowledged_view, str)
         try:
@@ -210,6 +242,7 @@ async def activation_ack_response(
         generation,
         body["view"],
         owner=owner,
+        preview=preview,
     )
     return JSONResponse(
         {"schema": 1, "outcome": outcome.value},

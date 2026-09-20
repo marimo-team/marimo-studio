@@ -29,6 +29,23 @@ its bundled resources as needed. Repeat discovery when the notebook environment
 or installed Studio version changes. Once this installed body is loaded,
 continue with the workflow.
 
+## Choose the delivery runtime
+
+Choose before designing controls or exposing data:
+
+| Runtime                     | Interaction                                                                             | Privacy boundary                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Server (`server`)           | Python computes new states using server packages and services                           | Source and credentials stay on the server. Projected outputs reach visitors.                                                 |
+| WASM (`wasm`)               | Pyodide computes new states in the visitor's browser                                    | Visitors receive notebook source and browser-accessible data. Never embed secrets.                                           |
+| Zero-Python (`zero-python`) | Visitors select finite prepared states, with browser-only interaction on published data | Python runs during preparation. Visitors receive prepared outputs and public files, including states they have not selected. |
+
+Static export defaults to Zero-Python. Choose WASM explicitly when visitors
+need unprepared states and the notebook supports Pyodide. Use Server for
+interactions that need private services or native Python packages. The editor
+can preview all three runtimes. A live `marimo run` serves Server or WASM.
+Follow [Run or export](#run-or-export) to configure, preflight, and verify the
+chosen delivery.
+
 ## Preserve notebook traceability
 
 Apply these conventions while authoring every view, even when Lens is not
@@ -114,6 +131,22 @@ import marimo_studio.agent as studio_agent
 
 await studio_agent.current_workspace().view("dashboard").show()
 ```
+
+`show()` returns `client_id`, `session_id`, `preview_url`, and `frame_selector` for the
+activated preview document. Use that exact selector for browser frame switching
+and DOM evaluation. Cached and hidden frames are outside this selector. `show()`
+commits the selected frame without waiting for notebook execution. After it returns,
+wait inside that frame for `html[data-marimo-studio-state="ready"]` before
+inspecting outputs or interacting. The kernel can then finish the preview work.
+For a standalone browser test, open the public view URL with
+`?marimo_studio_unframed=1`, preserving `file` and `runtime` when present
+(for example `/dashboard/?file=notebook.py&marimo_studio_unframed=1`). This
+renders the view in the top-level document for screenshots and DOM evaluation.
+After navigation, wait for `html[data-marimo-studio-state="ready"]` before
+inspecting outputs or following links.
+It creates a separate presentation, retains the document sandbox, and requires
+the server's usual authentication. In edit mode, keep the notebook session open. Call
+`show()` again after changing the view, runtime, or browser session.
 
 Reimport `marimo_studio.agent` and reacquire the workspace and view in each
 code-mode execution. Scratch imports and handles from a preceding execution
@@ -286,6 +319,37 @@ browser interaction.
 `studio-view` sets a maximum width and page padding. Mount a component that
 defines its own page layout in a plain `<div id="app-shell"></div>`.
 
+### Edit the selected provider's source
+
+Use `view.inspect()` and the project's `AGENTS.md` to choose files before
+editing. Bundled starters use these entry points:
+
+| Provider                | Page source                       | Styles                           |
+| ----------------------- | --------------------------------- | -------------------------------- |
+| Vanilla                 | `index.html`                      | Inline CSS or linked project CSS |
+| React                   | `src/App.tsx`                     | `src/style.css`                  |
+| Svelte                  | `src/App.svelte`                  | `src/style.css`                  |
+| Observable Notebook Kit | `src/index.html`, `src/page.tmpl` | `src/style.css`                  |
+
+Run dependency commands from the view root through the notebook's Python
+environment with `marimo-studio[deno]` installed. This keeps authoring and
+builds on the same Deno version. For a standalone tool environment, replace
+`uv run -- deno` with `uvx --from 'deno==<installed-deno-version>' deno`.
+Use the Deno package version installed in the notebook's Python environment.
+Pinning Studio alone does not pin Deno, because its extra allows newer versions.
+
+- React: `uv run -- deno add --frozen=false --save-exact <package>` updates
+  `deno.json` and `deno.lock`.
+- Svelte: `uv run -- deno add --package-json --frozen=false --save-exact <package>`
+  updates `package.json` and `deno.lock` for Vite's package resolution.
+- Notebook Kit: pin npm dependencies in `package.json`, then run
+  `uv run -- deno install --frozen=false --node-modules-dir=auto --no-save`
+  to regenerate `deno.lock`.
+
+Preserve the project's minimum dependency age and frozen-build policy. Commit
+the changed dependency manifest and lockfile together. Follow the selected
+starter's `AGENTS.md` for its dependency workflow, then run `view.build()`.
+
 ### Choose visual direction
 
 Choose visual direction in this order:
@@ -429,7 +493,7 @@ await view.write(
 
 ### Save against the version you read
 
-Read each affected file immediately before writing it:
+Read each affected file immediately before writing it. For a Vanilla view:
 
 ```python
 document = await view.read("index.html")
@@ -681,11 +745,11 @@ Complete this review before handing off a view:
 
 Choose the runtime from the visitor's task:
 
-| Runtime                 | Result                                                                     |
-| ----------------------- | -------------------------------------------------------------------------- |
-| Python, `server`        | Live notebook execution with the server's packages, files, and credentials |
-| Browser, `wasm`         | New notebook states computed in the visitor's Pyodide worker               |
-| Prepared, `zero-python` | Finite precomputed states with notebook source retained on the producer    |
+| Runtime                    | Result                                                                     |
+| -------------------------- | -------------------------------------------------------------------------- |
+| Server, `server`           | Live notebook execution with the server's packages, files, and credentials |
+| WASM, `wasm`               | New notebook states computed in the visitor's Pyodide worker               |
+| Zero-Python, `zero-python` | Finite precomputed states with notebook source retained on the producer    |
 
 Run through marimo when the notebook needs Python packages, local files,
 databases, or server credentials:
@@ -695,8 +759,20 @@ status = await workspace.status()
 print(status.launch_requirements)
 ```
 
-Pass every exact requirement through the environment tool. A notebook whose
-only provider is the default Vanilla provider runs with:
+Check dependency consistency in the notebook's environment before validation
+or export:
+
+```console
+marimo-studio doctor --dependencies --target notebook.py --json
+```
+
+Read its interpreter path, declaration drift, provider requirements, and import
+availability. It inspects imports without executing notebook cells. Preserve
+project-managed execution with `uv run --project <root>` and `--no-sandbox`.
+Use `--sandbox` when the notebook's PEP 723 dependencies own execution.
+
+Pass every exact requirement through the environment tool. A standalone
+notebook whose only provider is the default Vanilla provider runs with:
 
 ```console
 uv run --with marimo-studio marimo run notebook.py --sandbox
@@ -716,24 +792,57 @@ must verify finite projection targets across the configured input states. Use
 WebAssembly when visitors must recompute unprepared states and the notebook can
 run through Pyodide.
 
-For Prepared controls, inspect `states.yaml` in the selected view project. Use
+For Zero-Python controls, configure `states.yaml` in the selected view project.
+An omitted state file prepares the initial notebook state. Keep presentation-only
+copy in view source. A Python label edit changes notebook publication identity
+and requires another state walk, even if native cell caching avoids recomputation.
+Use
 explicit state rows when valid combinations are sparse. Keep browser-only
 filtering of projected data in the view. A matrix prepares every combination
 of its input choices.
+
+Prepared state values use each control's **frontend value**, which can differ
+from its Python `.value`. A dropdown takes a one-item array of its option label,
+a multiselect takes an array of labels, and a slider takes a number. For a
+`scenario` dropdown with labels `Overview` and `Reviewed` and a
+`minimum_magnitude` slider, put this in the selected view's `states.yaml`:
+
+```yaml
+schema: marimo-export.states.v1
+default_state: overview
+states:
+  overview:
+    scenario: [Overview]
+    minimum_magnitude: 2.5
+  reviewed:
+    scenario: [Reviewed]
+    minimum_magnitude: 4.0
+```
+
+State keys name the notebook control variables. For dropdown options that map
+labels to Python objects, use the label array rather than the mapped object.
+Preflight this file before export and exercise every offered state in the
+exported browser view.
 
 Export the verified runtime:
 
 ```console
 marimo-studio view export dashboard \
   --target notebook.py \
+  --runtime zero-python \
   --output dist/dashboard
 ```
+
+Use `--runtime wasm` on both commands for a WASM export.
 
 Export runs the same preflight before committing its destination. Progress is
 written to stderr, including marimo-export prepared-state reuse and cache
 activity. Each progress record names its owning source and nests that owner's
 event. With `--json`, stdout remains one terminal result and stderr contains
-JSON Lines progress and diagnostics.
+JSON Lines progress and diagnostics. Events are flushed during environment
+re-entry. Five-second heartbeats report the phase, state, elapsed time, and
+latest cache evidence. Unavailable state, cache, or active-cell evidence is
+`null`.
 
 Zero-Python keeps Python source on the build machine and publishes prepared
 outputs. WebAssembly includes saved notebook source for browser execution.

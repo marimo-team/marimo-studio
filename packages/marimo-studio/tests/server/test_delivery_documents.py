@@ -500,3 +500,22 @@ def test_run_mode_serves_the_configured_wasm_runtime_and_source(
     assert set(browser_metadata) == {"requires-python", "dependencies"}
     assert list(browser_metadata["dependencies"]) == []
     assert studio.notebook.read_bytes() == configured
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["marimo_studio_unframed=1", "marimo_studio_unframed=1&marimo_studio_unframed=0"],
+)
+def test_unframed_view_preserves_document_sandbox(
+    notebook_path: Path, query: str
+) -> None:
+    studio = _configured(notebook_path)
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        response = client.get(f"/dashboard/?{query}")
+    assert response.status_code == 200
+    assert "<marimo-cell" in response.text
+    assert 'id="marimo-studio-presentation"' not in response.text
+    policy = response.headers["content-security-policy"]
+    assert policy.startswith("sandbox ")
+    assert "allow-same-origin" not in policy
+    assert _editor_mount_value(response.text, "runtime") == "server"

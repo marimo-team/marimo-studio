@@ -23,6 +23,20 @@ Every built-in view provider supports `marimo-cell`, `marimo-output`, and
 | `marimo-studio/svelte:default`       | Svelte applications with concise reactive browser state   |
 | `marimo-studio/notebook-kit:default` | Observable notebook HTML with reactive presentation cells |
 
+For React, Svelte, and Notebook Kit, install the Deno toolchain in the
+notebook's Python project before running dependency commands:
+
+```console
+uv add 'marimo-studio[deno]'
+```
+
+Run Deno through that environment with `uv run -- deno` so dependency changes
+and Studio builds use the same Deno version. For a standalone tool environment,
+use `uvx --from 'deno==<installed-deno-version>' deno` in place of `uv run -- deno`.
+Replace `<installed-deno-version>` with the Deno package version installed in
+the notebook's Python environment, available through
+`python -c "from importlib.metadata import version; print(version('deno'))"`.
+
 ## Vanilla HTML
 
 Create the default starter:
@@ -55,7 +69,7 @@ delivery base when it publishes the artifact.
 
 ## React
 
-Create a typed React project with the pinned [Deno](https://docs.deno.com/)
+Create a typed React project with the [Deno](https://docs.deno.com/)
 JavaScript and TypeScript toolchain:
 
 ```console
@@ -72,7 +86,7 @@ checking before bundling.
 Add an exact dependency from the view project root:
 
 ```console
-deno add --frozen=false --save-exact npm:d3@7
+uv run -- deno add --frozen=false --save-exact npm:d3@7
 ```
 
 Commit `deno.json` and `deno.lock` after an intentional update. Normal Studio
@@ -110,7 +124,7 @@ lockfile. Its build runs `svelte-check` before Vite.
 Add an exact application dependency from the view project root:
 
 ```console
-deno add --package-json --frozen=false --save-exact npm:d3@7
+uv run -- deno add --package-json --frozen=false --save-exact npm:d3@7
 ```
 
 Commit `package.json` and `deno.lock` after the update.

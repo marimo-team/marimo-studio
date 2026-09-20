@@ -23,5 +23,7 @@ export const isStudioParentMessage = (event: MessageEvent<unknown>): boolean =>
   event.source === globalThis.parent && event.origin === studioOrigin();
 
 export const postToStudioParent = (message: StudioParentMessage): void => {
-  globalThis.parent.postMessage(message, studioOrigin());
+  if (globalThis.parent !== globalThis.window) {
+    globalThis.parent.postMessage(message, studioOrigin());
+  }
 };

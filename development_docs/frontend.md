@@ -74,6 +74,30 @@ responsive layout:
 make e2e
 ```
 
+Each invocation generates `MARIMO_STUDIO_E2E_RUN_ID` unless already set,
+then passes it to its workers. Mutable workspaces live under
+`apps/e2e/test-results/<run>/<suite>/<worker>/`. Reports use the same run
+and worker identity under `test-results/blob-<suite>/` and
+`test-results/playwright-<suite>/`. Worker restarts receive a new worker ID,
+so concurrent runs and replacement workers keep separate files and services.
+
+E2E tooling belongs to the `@marimo-studio/e2e` workspace. Its scripts run
+directly with Node as erasable TypeScript; `pnpm --filter @marimo-studio/e2e
+typecheck` checks the Node module boundary. `ServerHandle` owns each backend
+and route, and each workspace owns its services and preparation commands.
+
+E2E services use the Portless SDK through worker-owned loopback proxies. Each
+proxy and backend binds an OS-assigned port. The backend retains its socket and
+publishes its actual address through a nonce-bound readiness receipt before the
+proxy route is registered. Teardown removes routes, drains owned processes, and
+closes proxy sockets. Tests require no port-offset configuration or global
+Portless daemon.
+
+The pinned fixture launcher keeps native HTTP socket integration under
+`apps/e2e/scripts/_compat`. The Copilot case verifies persisted configuration
+and editor extension mounting, with external completion transport suppressed
+in that fixture.
+
 The `e2e` Python dependency group includes the released Marimo Lens package for
 native projection and React/Svelte feedback acceptance. Run that boundary after
 building browser assets with:

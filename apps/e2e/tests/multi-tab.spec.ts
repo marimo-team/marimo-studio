@@ -51,7 +51,7 @@ test("shares one native kernel across Studio tabs and views", async ({
     ).toHaveCount(0);
     await expect(second.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
 
-    await otherView.goto(`${studioOrigin}/studio/vanilla-local/?file=notebook.py`);
+    await otherView.goto(`${studioOrigin()}/studio/vanilla-local/?file=notebook.py`);
     const third = await waitForPreview(otherView);
     const token = await studioServerToken(page);
     const inventory = await page.request.post("/api/home/running_notebooks", {
@@ -93,7 +93,7 @@ test("shares one native kernel across Studio tabs and views", async ({
     await expect(first.locator('[mo-value="metric"]')).toHaveText("63");
     await otherView.getByLabel(/preview runtime$/).click();
     const controls = browserDiagnostics.expectRequestAbort({
-      origin: studioOrigin,
+      origin: studioOrigin(),
       method: "GET",
       path: /^\/_marimo-studio\/views\/vanilla-local\/controls$/,
       count: 1,
@@ -105,7 +105,7 @@ test("shares one native kernel across Studio tabs and views", async ({
     await expect(third.locator('[mo-value="metric"]')).toHaveText("63");
 
     const replacedStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-      `${studioOrigin}/_marimo-studio/dev/events`,
+      `${studioOrigin()}/_marimo-studio/dev/events`,
     );
     await page.reload();
     const reloaded = await waitForPreview(page);

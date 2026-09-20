@@ -335,3 +335,44 @@ default = "dashboard"
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["config"] == str(pyproject)
     assert load_studio(pyproject).default_view == "dashboard"
+
+
+@pytest.mark.parametrize("inline", [False, True])
+def test_create_preserves_project_execution(notebook_path: Path, inline: bool) -> None:
+    from marimo_studio._workspace.metadata import read_notebook_metadata
+
+    project = notebook_path.parent / "pyproject.toml"
+    original = (
+        '[project]\nname = "analysis"\nversion = "0.1"\n'
+        'dependencies = ["polars", "duckdb"]\n'
+    )
+    project.write_text(original)
+    if inline:
+        notebook_path.write_text(
+            '# /// script\n# dependencies = ["pandas"]\n'
+            '# requires-python = ">=3.11"\n'
+            '# [[tool.uv.index]]\n# url = "https://packages.example/simple"\n'
+            '# [tool.uv.sources]\n# pandas = { path = "./local analytics" }\n# ///\n'
+            + notebook_path.read_text()
+        )
+    result = CliRunner().invoke(
+        cli,
+        ["view", "create", "dashboard", "--target", str(notebook_path)],
+        env={SANDBOX_ENV: "1"},
+    )
+    assert result.exit_code == 0, result.output
+    assert "uv run --project" in result.stderr
+    assert "--no-sandbox" in result.stderr
+    assert project.read_text() == original
+    metadata = read_notebook_metadata(notebook_path)
+    assert metadata is not None
+    if inline:
+        assert "pandas" in metadata["dependencies"]
+        assert str(notebook_path.parent / "local analytics") in result.stderr
+        assert "https://packages.example/simple" in result.stderr
+        assert "--python" in result.stderr
+        assert ">=3.11" in result.stderr
+    else:
+        assert "dependencies" not in metadata
+    assert "--with-requirements" not in result.stderr
+    assert metadata["tool"]["marimo-studio"]["default"] == "dashboard"

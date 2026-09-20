@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { e2eNetwork } from "../scripts/network.mjs";
-import { collaborativeNotebookPath, notebookPath, repositoryDirectory } from "../scripts/paths.mjs";
-import { PreparationProcessOwner } from "../scripts/preparation-process.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
+import { collaborativeNotebookPath, notebookPath, repositoryDirectory } from "../scripts/paths.ts";
+import { PreparationProcessOwner } from "../scripts/preparation-process.ts";
 
 const CLI_PROCESS_TIMEOUT = 90_000;
 const workspaceCheckSchema = z.object({ ok: z.boolean() });
@@ -13,6 +13,8 @@ const workspaceShowSchema = z.object({
   generation: z.number().int().positive(),
   client_id: z.string(),
   session_id: z.string(),
+  preview_url: z.string().url(),
+  frame_selector: z.string(),
 });
 
 export class StudioCli {

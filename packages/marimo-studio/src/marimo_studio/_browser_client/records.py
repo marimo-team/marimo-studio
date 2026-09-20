@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
 @dataclass(frozen=True)
-class ShowResult:
-    """The connected Studio tab selected and rendered a view."""
+class PreviewAutomationTarget:
+    """Browser-owned addressing for one activated preview document."""
+
+    preview_url: str
+    frame_selector: str
+
+
+@dataclass(frozen=True)
+class ShowResult(PreviewAutomationTarget):
+    """The connected Studio tab selected a view and activated its preview document."""
+
+    preview_url: str = field(kw_only=True)
+    frame_selector: str = field(kw_only=True)
 
     notebook: Path
     view: str
@@ -24,4 +35,6 @@ class ShowResult:
             "generation": self.generation,
             "client_id": self.client_id,
             "session_id": self.session_id,
+            "preview_url": self.preview_url,
+            "frame_selector": self.frame_selector,
         }

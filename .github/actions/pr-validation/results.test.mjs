@@ -37,7 +37,7 @@ test("frontend test failure survives timing-log capture", async () => {
   }
 });
 
-test("browser result uploads include offset-owned report directories", async () => {
+test("browser result uploads include run and worker report directories", async () => {
   const browser = await workflow("e2e");
   const uploads = Object.values(browser.jobs)
     .flatMap((job) => job.steps ?? [])
@@ -46,9 +46,9 @@ test("browser result uploads include offset-owned report directories", async () 
   for (const upload of uploads) {
     const matches = picomatch(upload.with.path);
     for (const path of [
-      "apps/e2e/test-results/blob-main/offset-100/main-linux-100.zip",
-      "apps/e2e/test-results/blob-provider/offset-0/provider-linux.zip",
-      "apps/e2e/test-results/blob-installed/offset-0/installed-windows.zip",
+      "apps/e2e/test-results/blob-main/run-a/controller/main-linux-1.zip",
+      "apps/e2e/test-results/blob-provider/run-b/controller/provider-linux.zip",
+      "apps/e2e/test-results/blob-installed/run-c/controller/installed-windows.zip",
     ]) {
       assert.ok(matches(path), `${upload.with.name} must include ${path}`);
     }

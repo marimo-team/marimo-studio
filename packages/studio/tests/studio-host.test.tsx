@@ -7,6 +7,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 
 import { StudioHost } from "../src/app/StudioHost.tsx";
+import { PreviewDeck } from "../src/features/preview/deck.ts";
 import {
   starter,
   componentStarter,
@@ -488,6 +489,15 @@ it("opens an already-created first view after a bootstrap retry", async () => {
 
 it("preserves an active editor and its public query during first-view activation", async () => {
   useActivationEvents();
+  const documentAttached = deferred<boolean>();
+  const stageNavigation = vi.spyOn(PreviewDeck.prototype, "stageNavigation").mockReturnValue({
+    ready: documentAttached.promise,
+    rollback: async () => undefined,
+  });
+  const automationTarget = vi.spyOn(PreviewDeck.prototype, "automationTarget").mockReturnValue({
+    previewUrl: "http://localhost:3000/dashboard/",
+    frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+  });
   const configured = {
     ...ready,
     urls: {
@@ -528,6 +538,22 @@ it("preserves an active editor and its public query during first-view activation
   expect(new URL(editorWindow.location.href).searchParams.has("session_id")).toBe(true);
   expect(await screen.findByLabelText("Studio workspace")).toBeVisible();
   await vi.waitFor(() =>
+    expect(stageNavigation).toHaveBeenCalledWith(
+      "dashboard",
+      false,
+      undefined,
+      expect.any(AbortSignal),
+      "document",
+    ),
+  );
+  expect(
+    request.mock.calls.some(([input]) =>
+      String(input instanceof Request ? input.url : input).includes("/activations/7/ack"),
+    ),
+  ).toBe(false);
+  expect(automationTarget).not.toHaveBeenCalled();
+  await act(async () => documentAttached.resolve(true));
+  await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.stringContaining("/activations/7/ack"),
       expect.objectContaining({ method: "POST" }),
@@ -539,6 +565,14 @@ it("preserves an active editor and its public query during first-view activation
 
 it("retries first-view activation when the editor query changes during bootstrap", async () => {
   useActivationEvents();
+  vi.spyOn(PreviewDeck.prototype, "stageNavigation").mockReturnValue({
+    ready: Promise.resolve(true),
+    rollback: async () => undefined,
+  });
+  vi.spyOn(PreviewDeck.prototype, "automationTarget").mockReturnValue({
+    previewUrl: "http://localhost:3000/dashboard/",
+    frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
+  });
   globalThis.history.replaceState({}, "", "/entry/");
   const { editorFrame, editorWindow } = mountActiveEditor("region=eu&tag=a&tag=b");
   const firstBootstrap = deferred<Response>();

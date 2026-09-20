@@ -1,29 +1,26 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
-import { e2eNetwork } from "../scripts/network.mjs";
-import { fixtureDirectory } from "../scripts/paths.mjs";
-import { processGroupIsRunning } from "../scripts/process-group.mjs";
+import type { ServerHandle } from "../scripts/server-process.ts";
+
+import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.ts";
+import { e2eNetwork } from "../scripts/network.ts";
+import { fixtureDirectory } from "../scripts/paths.ts";
+import { portIsOpen, processGroupIsRunning } from "../scripts/process-group.ts";
 import { readStudioBootstrap } from "./authoring-test-support.ts";
 import { waitForViewPreview } from "./fixture.ts";
-import {
-  type NotebookServer,
-  closeFailedNotebookServer,
-  startNotebookServer,
-  stopNotebookServer,
-  waitForNotebookServer,
-} from "./notebook-server.ts";
+import { test } from "./network-fixture.ts";
+import { closeFailedNotebookServer, startNotebookServer } from "./notebook-server.ts";
 
-const expectProcessTreeRootStopped = (server: NotebookServer): void => {
+const expectProcessTreeRootStopped = (server: ServerHandle): void => {
   const groupRunning = processGroupIsRunning(server.processGroupId);
   if (groupRunning !== undefined) {
     expect(groupRunning).toBe(false);
   }
-  expect(server.process.exitCode !== null || server.process.signalCode !== null).toBe(true);
+  expect(server.child.exitCode !== null || server.child.signalCode !== null).toBe(true);
 };
 
 const inventorySchema = z.object({ files: z.array(z.object({ sessionId: z.string() })) });
@@ -31,19 +28,9 @@ const MULTI_SESSION_SHUTDOWN_TIMEOUT = 15_000;
 const MULTI_SESSION_PREVIEW_TIMEOUT = process.platform === "win32" ? 180_000 : 65_000;
 const MULTI_SESSION_TEST_TIMEOUT = process.platform === "win32" ? 300_000 : 150_000;
 
-const serverIsReachable = async (port: number): Promise<boolean> => {
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}`);
-    await response.body?.cancel();
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const expectNotebookServerStopped = async (server: NotebookServer, port: number): Promise<void> => {
+const expectNotebookServerStopped = async (server: ServerHandle): Promise<void> => {
   expectProcessTreeRootStopped(server);
-  expect(await serverIsReachable(port)).toBe(false);
+  expect(await portIsOpen(server.port)).toBe(false);
 };
 
 test("forced runner shutdown drains every open native notebook session", async ({
@@ -60,17 +47,17 @@ test("forced runner shutdown drains every open native notebook session", async (
     { recursive: true },
   );
   await copyFixtureProviderPackage(workspace);
-  const port = e2eNetwork.main.forcedInterruption.port;
+  const endpoint = e2eNetwork.main.forcedInterruption;
   const server = startNotebookServer({
     authentication: ["--no-token"],
     command: "edit",
-    port,
+    endpoint,
     target: workspace,
   });
   const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
   let stopped = false;
   try {
-    await waitForNotebookServer(server, `${server.serverUrl}/?file=notebook.py`);
+    await server.waitUntilReady(`${server.serverUrl}/?file=notebook.py`);
     const pages = await Promise.all(contexts.map((context) => context.newPage()));
     for (const [index, page] of pages.entries()) {
       const filename = index === 0 ? "notebook.py" : "peer.py";
@@ -93,8 +80,8 @@ test("forced runner shutdown drains every open native notebook session", async (
       })
       .toBe(2);
 
-    await stopNotebookServer(server, { timeout: MULTI_SESSION_SHUTDOWN_TIMEOUT });
-    await expectNotebookServerStopped(server, port);
+    await server.close({ timeout: MULTI_SESSION_SHUTDOWN_TIMEOUT });
+    await expectNotebookServerStopped(server);
     stopped = true;
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
@@ -107,7 +94,7 @@ test("forced runner shutdown drains every open native notebook session", async (
         contentType: "text/plain",
       });
     }
-    await expectNotebookServerStopped(server, port);
+    await expectNotebookServerStopped(server);
     await rm(root, { force: true, recursive: true });
   }
 });
@@ -127,18 +114,18 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
       "# preserve_session = true",
     ),
   );
-  const port = e2eNetwork.main.runInterruption.port;
+  const endpoint = e2eNetwork.main.runInterruption;
   const server = startNotebookServer({
     authentication: ["--token-password", "run-access-token"],
     command: "run",
-    port,
+    endpoint,
     target: notebook,
   });
   const context = await browser.newContext();
   let stopped = false;
   try {
     const url = `${server.serverUrl}/dashboard/?access_token=run-access-token`;
-    await waitForNotebookServer(server, url);
+    await server.waitUntilReady(url);
     const page = await context.newPage();
     await page.goto(url);
     const presentation = page.frameLocator("iframe#marimo-studio-presentation");
@@ -153,8 +140,8 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
       timeout: 60_000,
     });
 
-    await stopNotebookServer(server);
-    await expectNotebookServerStopped(server, port);
+    await server.close();
+    await expectNotebookServerStopped(server);
     stopped = true;
   } finally {
     await context.close();
@@ -165,7 +152,7 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
         contentType: "text/plain",
       });
     }
-    await expectNotebookServerStopped(server, port);
+    await expectNotebookServerStopped(server);
     await rm(root, { force: true, recursive: true });
   }
 });

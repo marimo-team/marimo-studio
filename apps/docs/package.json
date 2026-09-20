@@ -6,10 +6,11 @@
   "scripts": {
     "build": "pnpm test && pnpm examples:build && vitepress build && pnpm verify",
     "dev": "portless",
-    "dev:server": "pnpm examples:build && vitepress dev",
+    "dev:server": "pnpm examples:build && node scripts/serve-docs.ts dev",
     "examples:build": "node scripts/build-examples.ts",
-    "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort",
-    "test": "vp test scripts/source-integrity.test.ts scripts/example-publication.test.ts scripts/example-selection.test.ts",
+    "preview": "portless run --name preview.docs.marimo-studio pnpm run preview:server",
+    "preview:server": "node scripts/serve-docs.ts preview",
+    "test": "vp test scripts/source-integrity.test.ts scripts/example-publication.test.ts scripts/example-selection.test.ts scripts/server-arguments.test.ts",
     "verify": "node scripts/verify-build.ts"
   },
   "devDependencies": {

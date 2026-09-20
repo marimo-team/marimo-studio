@@ -294,6 +294,8 @@ def test_show_adapters_return_the_same_result(
         generation=3,
         client_id="browser-client-1234",
         session_id="s_123456",
+        preview_url="http://localhost/preview/",
+        frame_selector="iframe[data-test-preview]",
     )
     code_connection = StudioServerConnection(
         "http://localhost:2718",

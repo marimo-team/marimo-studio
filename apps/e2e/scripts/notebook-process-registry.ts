@@ -9,15 +9,19 @@ import {
   rmdirSync,
   writeFileSync,
 } from "node:fs";
-import { connect } from "node:net";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-import { notebookProcessRegistryDirectory } from "./paths.mjs";
-import { processGroupOwnerState, stopProcessGroup } from "./process-group.mjs";
+import { notebookProcessRegistryDirectory } from "./paths.ts";
+import {
+  portIsOpen,
+  processGroupOwnerState,
+  stopProcessGroup,
+  type ProcessOwnerState,
+} from "./process-group.ts";
 
 export const NOTEBOOK_PROCESS_OWNER_ENV = "MARIMO_STUDIO_E2E_PROCESS_OWNER";
-export const NOTEBOOK_PROCESS_PORT_ENV = "MARIMO_STUDIO_E2E_PROCESS_PORT";
+export const NOTEBOOK_PROCESS_ENDPOINT_ENV = "MARIMO_STUDIO_E2E_ENDPOINT_FILE";
 export const NOTEBOOK_PROCESS_REGISTRY_ENV = "MARIMO_STUDIO_E2E_PROCESS_REGISTRY";
 
 const DEFAULT_STOP_TIMEOUT = 5_000;
@@ -25,20 +29,59 @@ const STOP_POLL_INTERVAL = 50;
 const REGISTRY_CLOSING_FILE = ".closing";
 const recordSchema = z.object({
   ownerNonce: z.string().regex(/^[a-f\d]{64}$/),
-  port: z.number().int().positive().max(65_535),
+  port: z.number().int().positive().max(65_535).nullable(),
   processGroupId: z.number().int().positive().safe(),
 });
 
+export interface NotebookProcessOwner {
+  ownerNonce: string;
+  processGroupId: number;
+}
+interface NotebookProcessRecord extends NotebookProcessOwner {
+  port: number | null;
+  path: string;
+}
+type InspectOwner = (record: NotebookProcessRecord) => ProcessOwnerState;
+type PortProbe = (port: number | null) => Promise<boolean>;
+interface RegistryOptions {
+  directory?: string;
+}
+
 export const createNotebookProcessOwnerNonce = () => randomBytes(32).toString("hex");
 
-const recordPath = (directory, processGroupId, ownerNonce) =>
+const recordPath = (directory: string, processGroupId: number, ownerNonce: string) =>
   resolve(directory, `${processGroupId}-${ownerNonce}.json`);
 
-const closingPath = (directory) => resolve(directory, REGISTRY_CLOSING_FILE);
+export const notebookProcessEndpointPath = (
+  directory: string,
+  processGroupId: number,
+  ownerNonce: string,
+) => resolve(directory, `${processGroupId}-${ownerNonce}.endpoint`);
+
+export const removeNotebookEndpointReceipt = (
+  { ownerNonce, processGroupId }: NotebookProcessOwner,
+  { directory }: { directory: string },
+) => {
+  const filename = `${processGroupId}-${ownerNonce}.endpoint`;
+  let names;
+  try {
+    names = readdirSync(directory);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    throw error;
+  }
+  for (const name of names) {
+    if (name === filename || (name.startsWith(`${filename}.`) && name.endsWith(".tmp"))) {
+      rmSync(resolve(directory, name), { force: true });
+    }
+  }
+};
+
+const closingPath = (directory: string) => resolve(directory, REGISTRY_CLOSING_FILE);
 
 export const closeNotebookProcessRegistry = ({
   directory = notebookProcessRegistryDirectory,
-} = {}) => {
+}: RegistryOptions = {}) => {
   mkdirSync(directory, { recursive: true });
   try {
     writeFileSync(closingPath(directory), String(process.pid), {
@@ -47,11 +90,11 @@ export const closeNotebookProcessRegistry = ({
       mode: 0o600,
     });
   } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
+    if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
   }
 };
 
-const parseRecord = (source, path) => {
+const parseRecord = (source: string, path: string) => {
   let record;
   try {
     record = recordSchema.parse(JSON.parse(source));
@@ -66,15 +109,15 @@ const parseRecord = (source, path) => {
   });
 };
 
-const readRecords = (directory) => {
+const readRecords = (directory: string) => {
   let names;
   try {
     names = readdirSync(directory);
   } catch (error) {
-    if (error?.code === "ENOENT") return [];
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
     throw error;
   }
-  const records = [];
+  const records: NotebookProcessRecord[] = [];
   for (const name of names.filter((candidate) => candidate.endsWith(".json"))) {
     const path = resolve(directory, name);
     try {
@@ -87,41 +130,47 @@ const readRecords = (directory) => {
   return records;
 };
 
-const removeDirectoryIfEmpty = (directory) => {
+const removeDirectoryIfEmpty = (directory: string) => {
   try {
     rmdirSync(directory);
   } catch (error) {
-    if (error?.code !== "ENOENT" && error?.code !== "ENOTEMPTY") throw error;
+    if (
+      !(
+        error instanceof Error &&
+        "code" in error &&
+        (error.code === "ENOENT" || error.code === "ENOTEMPTY")
+      )
+    )
+      throw error;
   }
 };
 
-const portIsOpen = (port) =>
-  new Promise((resolveOpen) => {
-    const socket = connect({ host: "127.0.0.1", port });
-    const finish = (open) => {
-      socket.destroy();
-      resolveOpen(open);
-    };
-    socket.setTimeout(100, () => finish(false));
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-  });
-
-const ownerState = (record) =>
+const ownerState = (record: NotebookProcessRecord) =>
   processGroupOwnerState(record.processGroupId, NOTEBOOK_PROCESS_OWNER_ENV, record.ownerNonce);
 
-const removeRecord = (record, directory) => {
+const removeRecord = (record: NotebookProcessRecord, directory: string) => {
   rmSync(record.path, { force: true });
+  removeNotebookEndpointReceipt(record, { directory });
   removeDirectoryIfEmpty(directory);
 };
 
-const signalOwned = async (records, signal, inspect, isPortOpen, stop, directory) => {
+const signalOwned = async (
+  records: NotebookProcessRecord[],
+  signal: NodeJS.Signals,
+  inspect: InspectOwner,
+  isPortOpen: PortProbe,
+  stop: typeof stopProcessGroup,
+  directory: string,
+) => {
   const signaled = [];
   const blocked = [];
   for (const record of records) {
     const state = inspect(record);
     if (state !== "owned") {
-      if (await isPortOpen(record.port)) {
+      if (
+        (record.port === null && state !== "stopped") ||
+        (record.port !== null && (await isPortOpen(record.port)))
+      ) {
         blocked.push({ record, state });
         continue;
       }
@@ -134,20 +183,26 @@ const signalOwned = async (records, signal, inspect, isPortOpen, stop, directory
   return { blocked, signaled };
 };
 
-const pendingRecords = async (records, inspect, isPortOpen, directory) => {
+const pendingRecords = async (
+  records: NotebookProcessRecord[],
+  inspect: InspectOwner,
+  isPortOpen: PortProbe,
+  directory: string,
+) => {
   const blocked = [];
   const pending = [];
   for (const record of records) {
     const state = inspect(record);
+    if (!existsSync(record.path)) continue;
     if (state === "foreign" || state === "unknown") {
-      if (await isPortOpen(record.port)) {
+      if (record.port === null || (record.port !== null && (await isPortOpen(record.port)))) {
         blocked.push({ record, state });
         continue;
       }
       removeRecord(record, directory);
       continue;
     }
-    if (state === "owned" || (await isPortOpen(record.port))) {
+    if (state === "owned" || (record.port !== null && (await isPortOpen(record.port)))) {
       pending.push({ record, state });
       continue;
     }
@@ -156,29 +211,30 @@ const pendingRecords = async (records, inspect, isPortOpen, directory) => {
   return { blocked, pending };
 };
 
-const waitForStopped = async (records, inspect, isPortOpen, directory, timeout) => {
+const waitForStopped = async (
+  records: NotebookProcessRecord[],
+  inspect: InspectOwner,
+  isPortOpen: PortProbe,
+  directory: string,
+  timeout: number,
+) => {
   const deadline = Date.now() + timeout;
-  const blocked = [];
   let result = await pendingRecords(records, inspect, isPortOpen, directory);
-  blocked.push(...result.blocked);
-  let { pending } = result;
-  while (pending.length > 0 && Date.now() < deadline) {
+  while ((result.pending.length || result.blocked.length) && Date.now() < deadline) {
     await new Promise((resolveWait) => setTimeout(resolveWait, STOP_POLL_INTERVAL));
     result = await pendingRecords(
-      pending.map(({ record }) => record),
+      [...result.pending, ...result.blocked].map(({ record }) => record),
       inspect,
       isPortOpen,
       directory,
     );
-    blocked.push(...result.blocked);
-    pending = result.pending;
   }
-  return { blocked, pending };
+  return result;
 };
 
 export const registerNotebookProcess = (
-  { ownerNonce, port, processGroupId },
-  { directory = notebookProcessRegistryDirectory } = {},
+  { ownerNonce, port, processGroupId }: NotebookProcessOwner & { port: number | null },
+  { directory = notebookProcessRegistryDirectory }: RegistryOptions = {},
 ) => {
   if (existsSync(closingPath(directory))) {
     throw new Error("E2E notebook process registry is closing");
@@ -204,10 +260,11 @@ export const registerNotebookProcess = (
 };
 
 export const unregisterNotebookProcess = (
-  { ownerNonce, processGroupId },
-  { directory = notebookProcessRegistryDirectory } = {},
+  { ownerNonce, processGroupId }: NotebookProcessOwner,
+  { directory = notebookProcessRegistryDirectory }: RegistryOptions = {},
 ) => {
   rmSync(recordPath(directory, processGroupId, ownerNonce), { force: true });
+  removeNotebookEndpointReceipt({ ownerNonce, processGroupId }, { directory });
   removeDirectoryIfEmpty(directory);
 };
 
@@ -218,12 +275,24 @@ export const stopRegisteredNotebookProcesses = async ({
   signal = "SIGTERM",
   stop = stopProcessGroup,
   timeout = DEFAULT_STOP_TIMEOUT,
+}: RegistryOptions & {
+  inspect?: InspectOwner;
+  isPortOpen?: PortProbe;
+  signal?: NodeJS.Signals;
+  stop?: typeof stopProcessGroup;
+  timeout?: number;
 } = {}) => {
   const records = readRecords(directory);
   removeDirectoryIfEmpty(directory);
   const initial = await signalOwned(records, signal, inspect, isPortOpen, stop, directory);
-  let result = await waitForStopped(initial.signaled, inspect, isPortOpen, directory, timeout);
-  const blocked = [...initial.blocked, ...result.blocked];
+  let result = await waitForStopped(
+    [...initial.signaled, ...initial.blocked.map(({ record }) => record)],
+    inspect,
+    isPortOpen,
+    directory,
+    timeout,
+  );
+  let blocked = result.blocked;
   let { pending } = result;
   if (pending.length > 0 && signal !== "SIGKILL") {
     const forced = await signalOwned(
@@ -234,18 +303,23 @@ export const stopRegisteredNotebookProcesses = async ({
       stop,
       directory,
     );
-    blocked.push(...forced.blocked);
+
     const stoppedGroups = pending
       .filter(({ state }) => state === "stopped")
       .map(({ record }) => record);
     result = await waitForStopped(
-      [...forced.signaled, ...stoppedGroups],
+      [
+        ...forced.signaled,
+        ...stoppedGroups,
+        ...blocked.map(({ record }) => record),
+        ...forced.blocked.map(({ record }) => record),
+      ],
       inspect,
       isPortOpen,
       directory,
       timeout,
     );
-    blocked.push(...result.blocked);
+    blocked = result.blocked;
     pending = result.pending;
   }
   const survived = [...blocked, ...pending];
@@ -254,8 +328,8 @@ export const stopRegisteredNotebookProcesses = async ({
       `E2E notebook processes survived shutdown: ${survived
         .map(({ record, state }) =>
           state === "owned"
-            ? `${record.processGroupId} on port ${record.port}`
-            : `${state} owner at ${record.path} on live port ${record.port}`,
+            ? `${record.processGroupId} ${record.port === null ? "awaiting backend binding" : `on port ${record.port}`}`
+            : `${state} owner at ${record.path} ${record.port === null ? "awaiting backend binding" : `on live port ${record.port}`}`,
         )
         .join(", ")}`,
     );

@@ -777,6 +777,8 @@ def test_view_show_targets_the_attached_browser(
             generation=2,
             client_id="browser-client-1234",
             session_id="s_123456",
+            preview_url="http://localhost/preview/",
+            frame_selector="iframe[data-test-preview]",
         )
 
     monkeypatch.setattr(
@@ -788,6 +790,8 @@ def test_view_show_targets_the_attached_browser(
 
     assert result.view == "dashboard"
     assert result.generation == 2
+    assert result.preview_url == "http://localhost/preview/"
+    assert result.frame_selector == "iframe[data-test-preview]"
 
 
 def test_view_show_rejects_a_name_created_after_the_handle_was_captured(

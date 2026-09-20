@@ -5,7 +5,7 @@ const sessionInventorySchema = z.object({
   files: z.array(z.object({ sessionId: z.string() })),
 });
 
-const requestWithin = async (url, deadline, options = {}) => {
+const requestWithin = async (url: string, deadline: number, options: RequestInit = {}) => {
   const remaining = deadline - Date.now();
   if (remaining <= 0) throw new Error("Notebook session shutdown timed out");
   return fetch(url, {
@@ -14,7 +14,7 @@ const requestWithin = async (url, deadline, options = {}) => {
   });
 };
 
-const readSessionInventory = async (apiRoot, headers, deadline) => {
+const readSessionInventory = async (apiRoot: string, headers: Headers, deadline: number) => {
   const response = await requestWithin(`${apiRoot}/running_notebooks`, deadline, {
     headers,
     method: "POST",
@@ -25,10 +25,17 @@ const readSessionInventory = async (apiRoot, headers, deadline) => {
   return sessionInventorySchema.parse(await response.json()).files;
 };
 
-const shutdownSession = async (apiRoot, headers, sessionId, deadline) => {
+const shutdownSession = async (
+  apiRoot: string,
+  headers: Headers,
+  sessionId: string,
+  deadline: number,
+) => {
+  const contentHeaders = new Headers(headers);
+  contentHeaders.set("Content-Type", "application/json");
   const response = await requestWithin(`${apiRoot}/shutdown_session`, deadline, {
     body: JSON.stringify({ sessionId }),
-    headers: { ...headers, "Content-Type": "application/json" },
+    headers: contentHeaders,
     method: "POST",
   });
   if (!response.ok) {
@@ -36,7 +43,7 @@ const shutdownSession = async (apiRoot, headers, sessionId, deadline) => {
   }
 };
 
-const drainSessions = async (apiRoot, headers, deadline) => {
+const drainSessions = async (apiRoot: string, headers: Headers, deadline: number) => {
   while (true) {
     const sessions = await readSessionInventory(apiRoot, headers, deadline);
     if (sessions.length === 0) return;
@@ -49,22 +56,20 @@ const drainSessions = async (apiRoot, headers, deadline) => {
   }
 };
 
-const accessHeaders = (authToken) => (authToken ? { Authorization: `Bearer ${authToken}` } : {});
-
 export const requestStudioShutdown = async (
-  serverUrl,
-  authToken,
+  serverUrl: string,
+  authToken = "",
   timeout = 5_000,
   studioEntry = "",
 ) => {
-  const authorization = accessHeaders(authToken);
+  const headers = new Headers(authToken ? { Authorization: `Bearer ${authToken}` } : {});
   const deadline = Date.now() + timeout;
   const entrySession = studioEntry ? "&session_id=s_shutdn" : "";
   const documentResponse = await requestWithin(
     `${serverUrl}${studioEntry}/?file=notebook.py${entrySession}`,
     deadline,
     {
-      headers: authorization,
+      headers,
     },
   );
   if (!documentResponse.ok) {
@@ -75,7 +80,7 @@ export const requestStudioShutdown = async (
   if (!token) {
     throw new Error("Studio bootstrap did not contain a server token");
   }
-  const headers = { ...authorization, "Marimo-Server-Token": token };
+  headers.set("Marimo-Server-Token", token);
   await drainSessions(`${serverUrl}/api/home`, headers, deadline);
   const response = await requestWithin(`${serverUrl}/api/kernel/shutdown`, deadline, {
     headers,

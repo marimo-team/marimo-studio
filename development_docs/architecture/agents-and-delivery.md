@@ -173,6 +173,20 @@ The returned entrypoint may be nested. Artifact-relative assets remain beside
 the provider document. `View.preflight()` runs the same build, preparation, and
 staged-tree checks in a temporary directory.
 
+### Prepared reuse dependency blocker
+
+marimo-export currently keys prepared states by the complete notebook document,
+producer environment, and output plan. A control-label edit changes that identity
+and walks the state space again, even for an unchanged projected metric.
+Marimo's cell cache can still restore analytical computation during that walk.
+
+Reusing analytical states across presentation-only notebook edits requires a
+marimo-export public contract for dependency-scoped execution identity and
+presentation metadata refresh. It must publish current source provenance,
+refresh native controls, and invalidate results that inspect changed metadata.
+Studio must not substitute an older document digest or relabel an old publication.
+Until that contract exists, keep independent presentation copy in view source.
+
 ## Packaging
 
 The wheel contains Python services, provider entry points, starter resources,

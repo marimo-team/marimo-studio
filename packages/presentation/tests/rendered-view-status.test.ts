@@ -1,3 +1,4 @@
+import "./framed-document.ts";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import {

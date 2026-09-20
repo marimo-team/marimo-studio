@@ -78,11 +78,13 @@ objects.
 
 ## Add dependencies
 
-Run Deno's package manager from the view root so it updates `deno.json` and
-`deno.lock` together:
+Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
+environment so dependency updates and Studio builds use the same version.
+
+Run from the view root so it updates `deno.json` and `deno.lock` together:
 
 ```console
-deno add --frozen=false --save-exact npm:reveal.js@6.0.1
+uv run -- deno add --frozen=false --save-exact npm:reveal.js@6.0.1
 ```
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
@@ -123,3 +125,12 @@ JavaScript rendering is necessary, every result must declare its kernel inputs:
 - Studio supplies native projection labels. Give custom regions a
   `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
   supplements the source links that connect results to the analytical graph.
+
+## Maintain project ignore rules
+
+You own this view project's `.gitignore`. When adding libraries, extensions, or
+build tools, ignore their generated files, caches, local configuration, and
+secrets. Keep authored source, dependency manifests, and lockfiles tracked.
+Studio supplies workspace rules for its own artifacts and locks. Check
+`git status --short --ignored` after running new tooling and update the view's
+ignore rules before committing.

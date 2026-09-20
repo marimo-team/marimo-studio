@@ -1,9 +1,9 @@
 import { cp, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { externalProviderPackage } from "./paths.mjs";
+import { externalProviderPackage } from "./paths.ts";
 
-export const copyFixtureProviderPackage = async (workspace) => {
+export const copyFixtureProviderPackage = async (workspace: string) => {
   const destination = resolve(workspace, "../fixtures-provider/provider");
   if (destination === externalProviderPackage) return;
   await rm(destination, {

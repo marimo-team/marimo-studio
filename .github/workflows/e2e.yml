@@ -126,13 +126,13 @@ jobs:
         include:
           - name: Linux 1/3
             shard: 1/3
-            port_offset: 100
+            shard_id: 1
           - name: Linux 2/3
             shard: 2/3
-            port_offset: 200
+            shard_id: 2
           - name: Linux 3/3
             shard: 3/3
-            port_offset: 300
+            shard_id: 3
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -166,8 +166,7 @@ jobs:
 
       - name: Run browser shard
         env:
-          MARIMO_STUDIO_E2E_PORT_OFFSET: ${{ matrix.port_offset }}
-          PLAYWRIGHT_BLOB_OUTPUT_NAME: main-linux-${{ matrix.port_offset }}.zip
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: main-linux-${{ matrix.shard_id }}.zip
         run: >-
           pnpm --filter @marimo-studio/e2e exec playwright test --shard=${{ matrix.shard }}
 
@@ -175,7 +174,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-report-${{ matrix.port_offset }}
+          name: playwright-report-${{ matrix.shard_id }}
           path: |
             apps/e2e/playwright-report/
             apps/e2e/playwright-report-installed/
@@ -186,7 +185,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: browser-results-linux-${{ matrix.port_offset }}
+          name: browser-results-linux-${{ matrix.shard_id }}
           path: apps/e2e/test-results/blob-*/**/*.zip
           retention-days: 7
           if-no-files-found: warn

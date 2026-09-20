@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from enum import Enum
 
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent.clients import PeerStatus, PeerTarget
 from marimo_studio._server.agent.events import ViewActivation
 from marimo_studio._server.agent.store import (
@@ -90,6 +91,7 @@ class ActivationCoordinator:
         view: str,
         *,
         owner: ObservedViewOwner | None = None,
+        preview: PreviewAutomationTarget,
     ) -> ActivationAckOutcome:
         async with self._store.condition:
             self._store.require_open()
@@ -101,7 +103,8 @@ class ActivationCoordinator:
                 target = await self._store.clients.target_for_client(client_id)
                 return (
                     ActivationAckOutcome.APPLIED
-                    if target is not None
+                    if preview == operation.preview
+                    and target is not None
                     and target.session_id == operation.activation.session_id
                     and target.binding_generation
                     == operation.activation.binding_generation
@@ -137,6 +140,7 @@ class ActivationCoordinator:
             self._store.activation_operations[client_id] = AcknowledgedActivation(
                 activation=activation,
                 active_view_generation=committed.active_view_generation,
+                preview=preview,
             )
             self._store.condition.notify_all()
             return ActivationAckOutcome.APPLIED
@@ -166,7 +170,9 @@ class ActivationCoordinator:
             self._store.condition.notify_all()
             return ActivationAckOutcome.REJECTED
 
-    async def wait(self, activation: ViewActivation, timeout: float) -> None:
+    async def wait(
+        self, activation: ViewActivation, timeout: float
+    ) -> PreviewAutomationTarget:
         timed_out = False
         closed = False
         failure: MarimoStudioError | None = None
@@ -190,6 +196,7 @@ class ActivationCoordinator:
                     RetainedActivation(
                         operation.activation,
                         operation.active_view_generation,
+                        operation.preview,
                     )
                 )
                 self._store.condition.notify_all()
@@ -234,6 +241,14 @@ class ActivationCoordinator:
                 "The active Studio view changed during view activation.",
                 status_code=409,
             )
+
+        if not isinstance(operation, (AcknowledgedActivation, RetainedActivation)):
+            raise AgentRequestError(
+                "activation-unacknowledged",
+                "The Studio browser did not acknowledge an activated preview document.",
+                status_code=409,
+            )
+        return operation.preview
 
     def pending_for(
         self,

@@ -8,6 +8,7 @@ from typing import Any, cast
 import pytest
 from starlette.testclient import TestClient
 
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._compat.server.session_state import PrivateSessionState
 from marimo_studio._server.agent import browser as browser_agent
 from marimo_studio._server.agent.clients import StudioClientRegistry
@@ -403,6 +404,9 @@ def test_external_observation_uses_the_selected_browser_session() -> None:
             client_id,
             pending.activation.generation,
             "dashboard",
+            preview=PreviewAutomationTarget(
+                "http://localhost/preview/", "iframe[data-test-preview]"
+            ),
         )
         assert outcome.value == "applied"
         await asyncio.wait_for(requested.wait(), timeout=1)

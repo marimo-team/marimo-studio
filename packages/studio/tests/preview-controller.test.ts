@@ -805,3 +805,104 @@ it("retires measurements when the source revision changes or preparation fails",
   );
   preview.dispose();
 });
+
+it.each(["active", "deactivated", "replaced"] as const)(
+  "reports document activation timeout only for its active lifecycle: %s",
+  async (state) => {
+    vi.useFakeTimers();
+    const report = vi.fn();
+    const server = controller(
+      "server",
+      frame("complete"),
+      frame("complete"),
+      (view, runtime) => `/${view}?runtime=${runtime}`,
+      report,
+    );
+    try {
+      server.activateDocument({ query: "", hash: "" });
+      if (state === "deactivated") server.deactivate();
+      if (state === "replaced") server.reload();
+      await vi.advanceTimersByTimeAsync(100_000);
+      const failures = report.mock.calls
+        .flatMap(([snapshot]) => snapshot.status.diagnostics)
+        .filter((diagnostic) => diagnostic.code === "preview-activation-failed");
+      expect(failures.length > 0).toBe(state === "active");
+    } finally {
+      server.dispose();
+    }
+  },
+);
+
+it.each(["document", "rendered"] as const)(
+  "does not report a superseded document activation when another %s activation owns the same lifecycle",
+  async (milestone) => {
+    vi.useFakeTimers();
+    const report = vi.fn();
+    const preview = frame("complete");
+    const server = controller(
+      "server",
+      frame("complete"),
+      preview,
+      (view, runtime) => `/${view}?runtime=${runtime}`,
+      report,
+    );
+    try {
+      server.activateDocument({ query: "", hash: "" });
+      const lifecycle = preview.dataset.previewLifecycleId;
+      const replacement =
+        milestone === "document"
+          ? server.activateDocument({ query: "", hash: "" })
+          : server.activate({ query: "", hash: "" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(preview.dataset.previewLifecycleId).toBe(lifecycle);
+      const activationFailures = () =>
+        report.mock.calls
+          .flatMap(([snapshot]) => snapshot.status.diagnostics)
+          .filter((diagnostic) => diagnostic.code === "preview-activation-failed");
+      expect(activationFailures()).toEqual([]);
+      await vi.advanceTimersByTimeAsync(100_000);
+      expect(activationFailures().length > 0).toBe(milestone === "document");
+      if (replacement) await expect(replacement).resolves.toBe(false);
+    } finally {
+      server.dispose();
+    }
+  },
+);
+
+it("preserves the reported runtime failure when document activation ends unsuccessfully", async () => {
+  vi.useFakeTimers();
+  const report = vi.fn();
+  const server = controller(
+    "server",
+    frame("complete"),
+    frame("complete"),
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    report,
+  );
+  const diagnostic = {
+    code: "preparation-failed",
+    message: "The view build failed.",
+    hint: "Fix the view source.",
+    severity: "error" as const,
+    scope: "runtime" as const,
+    view: "dashboard",
+  };
+  try {
+    server.activateDocument({ query: "", hash: "" });
+    dispatchPreviewMessage(null, {
+      type: "marimo-studio:view-error",
+      runtime: "server",
+      view: "dashboard",
+      lifecycleId: 1,
+      diagnostic,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(report).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: expect.objectContaining({ state: "error", diagnostics: [diagnostic] }),
+      }),
+    );
+  } finally {
+    server.dispose();
+  }
+});

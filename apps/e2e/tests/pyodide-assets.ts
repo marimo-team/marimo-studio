@@ -6,9 +6,9 @@ import {
   PYODIDE_CDN_ROOT,
   pyodidePayloadDirectory,
   verifyPyodidePayload,
-} from "../scripts/prepare-pyodide.mjs";
+} from "../scripts/prepare-pyodide.ts";
 
-export { PYODIDE_CDN_ROOT, PYODIDE_VERSION } from "../scripts/prepare-pyodide.mjs";
+export { PYODIDE_CDN_ROOT, PYODIDE_VERSION } from "../scripts/prepare-pyodide.ts";
 
 type AssetHandler = (
   route: Pick<Route, "fulfill" | "continue">,

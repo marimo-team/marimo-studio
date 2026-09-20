@@ -19,6 +19,11 @@ const activationAckResponseSchema = z
   })
   .strict();
 
+export interface PreviewAutomationTarget {
+  readonly previewUrl: string;
+  readonly frameSelector: string;
+}
+
 export type ActivationAckResponse = z.infer<typeof activationAckResponseSchema>;
 
 export const parseActivationAckResponse = (

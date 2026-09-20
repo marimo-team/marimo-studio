@@ -7,11 +7,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
-from contextlib import ExitStack
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, metadata, requires, version
+from io import StringIO
 from pathlib import Path
+from threading import Event, Thread
 from typing import Protocol, TextIO
 
 if sys.version_info >= (3, 11):
@@ -40,6 +42,15 @@ from marimo_studio._workspace.environment_requirements import (
 )
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.models import NotebookEnvironment, StudioWorkspace
+from marimo_studio._workspace.python_project import (
+    declares_project_environment as _declares_project_environment,
+)
+from marimo_studio._workspace.python_project import (
+    has_project_environment,
+)
+from marimo_studio._workspace.python_project import (
+    project_metadata as _project_metadata,
+)
 from marimo_studio.errors import ConfigurationError, DependencyError
 from marimo_studio.view_providers._host.package_policy import (
     BUNDLED_PROVIDER_REQUIREMENTS,
@@ -94,43 +105,6 @@ def include_provider_ids(
         notebook=target.notebook,
         provider_ids=tuple(sorted({*existing, *provider_ids})),
     )
-
-
-def _project_metadata(root: Path) -> dict[str, object] | None:
-    pyproject = root / "pyproject.toml"
-    try:
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    except OSError as error:
-        raise DependencyError(
-            f"Could not read project metadata: {pyproject}"
-        ) from error
-    except UnicodeError as error:
-        raise DependencyError(
-            f"Project metadata must be UTF-8 text: {pyproject}"
-        ) from error
-    except tomllib.TOMLDecodeError as error:
-        raise DependencyError(
-            f"Invalid project metadata in {pyproject}: {error}"
-        ) from error
-    return data
-
-
-def _declares_project_environment(data: dict[str, object] | None) -> bool:
-    if data is None:
-        return False
-    project = data.get("project")
-    tool = data.get("tool")
-    uv = tool.get("uv") if isinstance(tool, dict) else None
-    return isinstance(project, dict) or (
-        isinstance(uv, dict) and isinstance(uv.get("workspace"), dict)
-    )
-
-
-def has_project_environment(root: Path) -> bool:
-    """Return whether ``root`` declares a Python project or uv workspace."""
-    return _declares_project_environment(_project_metadata(root))
 
 
 def environment_root(target: EnvironmentTarget) -> Path:
@@ -435,6 +409,49 @@ def should_reenter(target: EnvironmentTarget, requested: bool | None) -> bool:
     )
 
 
+@contextmanager
+def _live_diagnostics(path: Path, relay: Callable[[TextIO], None]) -> Iterator[None]:
+    stopped = Event()
+    failures: list[BaseException] = []
+
+    def follow() -> None:
+        try:
+            with path.open(encoding="utf-8", errors="replace") as source:
+                while True:
+                    terminal = stopped.is_set()
+                    batch = StringIO()
+                    while batch.tell() < 64 * 1024:
+                        position = source.tell()
+                        line = source.readline()
+                        if not line:
+                            break
+                        if not line.endswith("\n") and not terminal:
+                            source.seek(position)
+                            break
+                        batch.write(line)
+                    full_batch = batch.tell() >= 64 * 1024
+                    if batch.tell():
+                        batch.seek(0)
+                        relay(batch)
+                    if full_batch:
+                        continue
+                    if terminal:
+                        return
+                    stopped.wait(0.1)
+        except BaseException as error:
+            failures.append(error)
+
+    worker = Thread(target=follow, name="studio-diagnostics")
+    worker.start()
+    try:
+        yield
+    finally:
+        stopped.set()
+        worker.join()
+        if failures and sys.exc_info()[0] is None:
+            raise failures[0]
+
+
 def _run_command(
     command: list[str],
     child_env: dict[str, str],
@@ -478,23 +495,21 @@ def _run_command(
                 errors="replace",
             )
         )
-        result = subprocess.run(
-            command,
-            env=child_env,
-            check=False,
-            stdout=stdout,
-            stderr=stderr,
-        )
+        if diagnostic_stream is not None:
+            live = _live_diagnostics(diagnostic_channel, diagnostic_stream)
+        else:
+            live = nullcontext()
+        with live:
+            result = subprocess.run(
+                command,
+                env=child_env,
+                check=False,
+                stdout=stdout,
+                stderr=stderr,
+            )
         captured_result = (
             result_channel.read_text(encoding="utf-8") if capture_result else ""
         )
-        if diagnostic_stream is not None:
-            with diagnostic_channel.open(
-                mode="r",
-                encoding="utf-8",
-                errors="replace",
-            ) as diagnostics:
-                diagnostic_stream(diagnostics)
         if process_stream is not None:
             for output in (stdout, stderr):
                 if output is None:

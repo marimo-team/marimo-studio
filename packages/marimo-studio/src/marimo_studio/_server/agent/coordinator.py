@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent.activation import (
     ActivationAckOutcome,
     ActivationCoordinator,
@@ -76,6 +77,7 @@ class AgentCoordinator:
         view: str,
         *,
         owner: ObservedViewOwner | None = None,
+        preview: PreviewAutomationTarget,
     ) -> ActivationAckOutcome:
         self._require_open()
         return await self._activations.acknowledge(
@@ -83,6 +85,7 @@ class AgentCoordinator:
             generation,
             view,
             owner=owner,
+            preview=preview,
         )
 
     async def reject_activation(
@@ -107,9 +110,9 @@ class AgentCoordinator:
         self,
         activation: ViewActivation,
         timeout: float,
-    ) -> None:
+    ) -> PreviewAutomationTarget:
         self._require_open()
-        await self._activations.wait(activation, timeout)
+        return await self._activations.wait(activation, timeout)
 
     async def request_observation(
         self,

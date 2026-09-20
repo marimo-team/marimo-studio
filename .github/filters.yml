@@ -83,26 +83,26 @@ browser_infra: &browser_infra
   - "tsconfig.json"
   - "uv.lock"
   - "apps/e2e/package.json"
-  - "apps/e2e/scripts/browser.mjs"
-  - "apps/e2e/scripts/graceful-shutdown.mjs"
-  - "apps/e2e/scripts/network.mjs"
-  - "apps/e2e/scripts/paths.mjs"
-  - "apps/e2e/scripts/preparation-process.mjs"
-  - "apps/e2e/scripts/prepare-pyodide.mjs"
-  - "apps/e2e/scripts/process-group.mjs"
-  - "apps/e2e/scripts/server-process.mjs"
+  - "apps/e2e/scripts/tsconfig.json"
+  - "apps/e2e/scripts/browser.ts"
+  - "apps/e2e/scripts/graceful-shutdown.ts"
+  - "apps/e2e/scripts/network.ts"
+  - "apps/e2e/scripts/paths.ts"
+  - "apps/e2e/scripts/preparation-process.ts"
+  - "apps/e2e/scripts/prepare-pyodide.ts"
+  - "apps/e2e/scripts/process-group.ts"
+  - "apps/e2e/scripts/server-process.ts"
   - Makefile
   - scripts/verify-dist.sh
   - scripts/write-dist-checksums.py
   - apps/e2e/playwright.merge.config.ts
 notebook_services: &notebook_services
-  - apps/e2e/scripts/notebook-services.mjs
-  - apps/e2e/scripts/server-exit.mjs
-  - apps/e2e/scripts/fixture-provider-package.mjs
-  - apps/e2e/scripts/notebook-process-registry.mjs
-  - apps/e2e/scripts/notebook-process-supervisor.mjs
-  - apps/e2e/scripts/registered-notebook-process.mjs
-  - apps/e2e/scripts/_compat/marimo_edit.py
+  - apps/e2e/scripts/notebook-services.ts
+  - apps/e2e/scripts/notebook-process-registry.ts
+  - apps/e2e/scripts/notebook-process-supervisor.ts
+  - apps/e2e/scripts/registered-notebook-process.ts
+  - apps/e2e/scripts/_compat/**
+  - apps/e2e/scripts/static-server.py
 
 documentation:
   - "README.md"
@@ -220,9 +220,11 @@ main_browser:
   - "!apps/e2e/tests/provider-runtime.spec.ts"
   - "!apps/e2e/tests/provider-reveal.spec.ts"
   - "!apps/e2e/tests/external-provider.spec.ts"
-  - "apps/e2e/scripts/collaborative-workspace.mjs"
+  - "apps/e2e/scripts/collaborative-workspace.ts"
   - *notebook_services
-  - apps/e2e/scripts/main-workspace.mjs
+  - apps/e2e/scripts/fixture-provider-package.ts
+  - apps/e2e/scripts/main-workspace.ts
+  - apps/e2e/scripts/export-repository.ts
   - "!apps/e2e/tests/provider-fixture.ts"
 
 provider_browser:
@@ -235,10 +237,10 @@ provider_browser:
   - "apps/e2e/tests/provider-reveal.spec.ts"
   - "apps/e2e/tests/external-provider.spec.ts"
   - "apps/e2e/tests/!(*.spec).ts"
-  - "apps/e2e/scripts/cleanup-provider-runtime.mjs"
-  - "apps/e2e/scripts/prepare-provider-runtime.mjs"
   - *notebook_services
-  - apps/e2e/scripts/provider-workspace.mjs
+  - apps/e2e/scripts/fixture-provider-package.ts
+  - apps/e2e/scripts/provider-workspace.ts
+  - apps/e2e/scripts/export-repository.ts
   - apps/e2e/tests/provider-fixture.ts
 
 installed_browser:
@@ -247,9 +249,10 @@ installed_browser:
   - "apps/e2e/playwright.installed.config.ts"
   - "apps/e2e/fixtures-installed/**"
   - "apps/e2e/installed-tests/**"
-  - "apps/e2e/scripts/installed-package-network.mjs"
-  - "apps/e2e/scripts/run-installed-package.mjs"
-  - "apps/e2e/scripts/serve-installed-package.mjs"
+  - "apps/e2e/scripts/installed-package-network.ts"
+  - "apps/e2e/scripts/run-installed-package.ts"
+  - "apps/e2e/scripts/installed-workspace.ts"
+  - *notebook_services
   - "apps/e2e/tests/!(*.spec).ts"
   - "!apps/e2e/tests/provider-fixture.ts"
 
@@ -268,7 +271,9 @@ windows_lifecycle:
   - "apps/e2e/tests/vanilla-local-sources.spec.ts"
   - "apps/e2e/tests/!(*.spec).ts"
   - "apps/e2e/fixtures/**"
-  - "apps/e2e/scripts/collaborative-workspace.mjs"
+  - "apps/e2e/scripts/collaborative-workspace.ts"
   - *notebook_services
-  - apps/e2e/scripts/main-workspace.mjs
+  - apps/e2e/scripts/fixture-provider-package.ts
+  - apps/e2e/scripts/main-workspace.ts
+  - apps/e2e/scripts/export-repository.ts
   - "!apps/e2e/tests/provider-fixture.ts"

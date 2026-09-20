@@ -204,7 +204,7 @@ test("keeps streamed progress with its runtime while switching previews", async 
   await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await page.getByLabel(/preview runtime$/).click();
   const controls = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/views\/dashboard\/controls$/,
     count: 1,

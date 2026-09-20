@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 
-import { configuredBrowserExecutablePath } from "../scripts/browser.mjs";
+import { configuredBrowserExecutablePath } from "../scripts/browser.ts";
 
 test("selects the configured E2E browser executable", () => {
   const executablePath = resolve("/browser/chromium");

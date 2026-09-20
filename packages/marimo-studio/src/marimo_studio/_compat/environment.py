@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import atexit
 import copy
-import os
 import tempfile
 from collections.abc import Mapping, MutableMapping
-from contextlib import suppress
 from pathlib import Path
 
 from packaging.requirements import InvalidRequirement, Requirement
@@ -25,6 +22,24 @@ from marimo_studio._workspace.metadata import set_package_requirement
 from marimo_studio.errors import ConfigurationError
 
 _PACKAGE_NAME = canonicalize_name("marimo-studio")
+
+
+def _with_requirement(value: str) -> str:
+    try:
+        parsed = Requirement(value)
+    except InvalidRequirement:
+        source = value.partition(" ;")[0]
+    else:
+        if parsed.url is None:
+            return value
+        source = parsed.url
+    if Path(source).is_absolute():
+        replacement = Path(source).as_uri()
+    elif source.startswith("file:"):
+        replacement = source.replace(",", "%2C")
+    else:
+        return value
+    return value.replace(source, replacement, 1)
 
 
 def _replace_requirement(
@@ -103,7 +118,7 @@ def inline_environment_flags(
     compose_project: bool,
     marker_environment: MarkerEnvironment | None,
 ) -> list[str]:
-    """Resolve complete PEP 723 sources and indexes through Marimo."""
+    """Resolve PEP 723 sources and indexes into self-contained uv arguments."""
     from marimo._cli.sandbox import construct_uv_flags
     from marimo._utils.inline_script_metadata import PyProjectReader
 
@@ -132,8 +147,7 @@ def inline_environment_flags(
             _replace_requirement(project, name, requirement)
     reader = PyProjectReader(project, config_path=str(notebook))
     with tempfile.NamedTemporaryFile(
-        mode="w",
-        delete=False,
+        mode="w+",
         suffix=".txt",
         encoding="utf-8",
     ) as temporary:
@@ -143,16 +157,23 @@ def inline_environment_flags(
             [],
             [],
         )
-        temporary_name = temporary.name
-    atexit.register(_unlink, temporary_name)
+        temporary.seek(0)
+        requirements = temporary.read().splitlines()
+    requirement_flags = []
+    for requirement in requirements:
+        if requirement.startswith("-e "):
+            requirement_flags.extend(["--with-editable", requirement[3:]])
+        else:
+            if requirement.startswith("-"):
+                raise ConfigurationError(
+                    f"Unsupported notebook requirement: {requirement!r}"
+                )
+            requirement_flags.extend(["--with", _with_requirement(requirement)])
+    requirement_index = flags.index("--with-requirements")
+    flags[requirement_index : requirement_index + 2] = requirement_flags
     if compose_project:
         flags = [flag for flag in flags if flag not in {"--isolated", "--no-project"}]
         if reader.python_version is None and "--python" in flags:
             index = flags.index("--python")
             del flags[index : index + 2]
     return flags
-
-
-def _unlink(path: str) -> None:
-    with suppress(FileNotFoundError):
-        os.unlink(path)

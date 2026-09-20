@@ -1,6 +1,6 @@
 import { expect, type Locator } from "@playwright/test";
 
-import { e2eNetwork } from "../scripts/network.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { presentationFrame } from "./fixture.ts";
 import { test } from "./provider-fixture.ts";

@@ -1,13 +1,14 @@
 import type { BrowserContext } from "@playwright/test";
 
-import { e2eNetwork } from "../scripts/network.mjs";
-import { workspaceDirectory } from "../scripts/paths.mjs";
+import { e2eNetwork } from "../scripts/network.ts";
+import { workspaceDirectory } from "../scripts/paths.ts";
 import {
   dashboardHtmlPath,
   dashboardManifestPath,
   expect,
   observeBrowserContext,
   presentationFrame,
+  PREVIEW_TIMEOUT,
   previewFrame,
   readWorkspaceFile,
   recoverRequestAbort,
@@ -19,11 +20,7 @@ import {
   writeDashboardSource,
   writeWorkspaceFile,
 } from "./fixture.ts";
-import {
-  startNotebookServer,
-  stopNotebookServer,
-  waitForNotebookServer,
-} from "./notebook-server.ts";
+import { startNotebookServer } from "./notebook-server.ts";
 
 test.use({ services: ["studio", "static"] });
 
@@ -75,7 +72,7 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
   const server = startNotebookServer({
     command: "edit",
     target: workspaceDirectory,
-    port: e2eNetwork.main.recovery.port,
+    endpoint: e2eNetwork.main.recovery,
     authentication: ["--token-password", token],
     environment: { MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS: parentOrigin },
   });
@@ -91,7 +88,7 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
     context = await browser.newContext();
     diagnostics = observeBrowserContext(context);
     const page = await context.newPage();
-    await waitForNotebookServer(server, `${server.serverUrl}/health`);
+    await server.waitUntilReady(`${server.serverUrl}/health`);
     const authenticated = await page.request.get(studioUrl.href);
     expect(authenticated.ok()).toBe(true);
 
@@ -115,7 +112,7 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
       try {
         await context?.close();
       } finally {
-        await stopNotebookServer(server);
+        await server.close();
       }
     }
   }
@@ -152,7 +149,7 @@ test("keeps standalone navigation inside server-authored route authority", async
       { view, query, hash },
     );
   const supersededPresentation = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
     errorText: "net::ERR_ABORTED",
@@ -220,7 +217,7 @@ test("rejects an untrusted authored workspace stream before client state changes
     text: /\/_marimo-studio\/dev\/events.*blocked by CORS policy/,
   });
   const closed = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     path: /^\/_marimo-studio\/dev\/events$/,
     method: "GET",
     errorText: "net::ERR_FAILED",
@@ -452,14 +449,14 @@ test("repairs an opaque preview through its scoped event stream", async ({
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const supersededDocument = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?dashboard\/$/,
     count: 1,
     required: false,
   });
   const closedRepairStream = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/dev\/events$/,
     count: 1,
@@ -467,7 +464,7 @@ test("repairs an opaque preview through its scoped event stream", async ({
   });
   const manifest = await readWorkspaceFile(dashboardManifestPath);
   const projectRepair = browserDiagnostics.expectResponseTransition(page, {
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/views\/dashboard\/project$/,
     failureStatus: 500,
@@ -522,5 +519,53 @@ test("repairs an opaque preview through its scoped event stream", async ({
     await recoverRequestAbort(closedRepairStream);
   } finally {
     await writeWorkspaceFile(dashboardManifestPath, manifest);
+  }
+});
+
+test("serves an unframed preview for browser automation", async ({ page, context }) => {
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  const preview = await context.newPage();
+  try {
+    await preview.goto(`${studioOrigin()}/dashboard/?file=notebook.py&marimo_studio_unframed=1`);
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    await expect(preview.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
+    await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
+    await preview.getByRole("button", { name: "Widget count: 7" }).click();
+    await expect(preview.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
+    expect(
+      await preview
+        .getByRole("heading", { name: "Studio browser fixture" })
+        .evaluate((node) => node.textContent),
+    ).toBe("Studio browser fixture");
+    const follow = async (href: string) => {
+      await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready", {
+        timeout: PREVIEW_TIMEOUT,
+      });
+      await preview.evaluate((destination) => {
+        const anchor = document.createElement("a");
+        anchor.href = destination;
+        anchor.textContent = "Follow view link";
+        document.body.append(anchor);
+      }, href);
+      await preview.getByRole("link", { name: "Follow view link" }).click();
+    };
+    await follow("?automation-state=next");
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    expect(new URL(preview.url()).searchParams.get("marimo_studio_unframed")).toBe("1");
+    await expect(preview.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
+    await follow("#app-shell");
+    await preview.reload();
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    await follow("../vanilla-local/");
+    await expect(preview.getByRole("heading", { name: "Vanilla local sources" })).toBeVisible();
+    expect(new URL(preview.url()).searchParams.get("marimo_studio_unframed")).toBe("1");
+    await preview.goBack();
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    await preview.goForward();
+    await expect(preview.getByRole("heading", { name: "Vanilla local sources" })).toBeVisible();
+    await expect(preview.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
+  } finally {
+    await preview.close();
   }
 });

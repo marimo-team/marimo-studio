@@ -1,5 +1,5 @@
 import { projectionDiagnosticSchema } from "@marimo-studio/protocol/runtime-config";
-import { expect as playwrightExpect, test as playwrightTest, type Page } from "@playwright/test";
+import { expect as playwrightExpect, type Page } from "@playwright/test";
 
 import { runCellShortcut } from "./authoring-test-support.ts";
 import {
@@ -18,7 +18,7 @@ import {
   waitForPreview,
   workspaceNotebookPath,
 } from "./fixture.ts";
-import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
+import { test as playwrightTest } from "./network-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 import { editServerUrl, startEditServer } from "./recovery-support.ts";
 
@@ -133,8 +133,8 @@ playwrightTest(
     let diagnosticsClosed = false;
 
     try {
-      await waitForNotebookServer(server, editServerUrl);
-      await page.goto(editServerUrl);
+      await server.waitUntilReady(editServerUrl());
+      await page.goto(editServerUrl());
       await waitForPreview(page);
       await playwrightExpect.poll(() => eventSourceCount(page)).toBe(1);
       await playwrightExpect
@@ -158,10 +158,10 @@ playwrightTest(
         count: openSockets.length,
       });
 
-      await stopNotebookServer(server);
+      await server.close();
       server = startEditServer();
       servers.push(server);
-      await waitForNotebookServer(server, editServerUrl);
+      await server.waitUntilReady(editServerUrl());
       await playwrightExpect
         .poll(() =>
           page.evaluate(
@@ -182,7 +182,7 @@ playwrightTest(
 
       const current = await context.newPage();
       fresh = current;
-      await current.goto(editServerUrl);
+      await current.goto(editServerUrl());
       const preview = await waitForPreview(current);
       await playwrightExpect(preview.getByText("Projected total:")).toBeVisible();
       await playwrightExpect.poll(() => eventSourceCount(current)).toBe(1);
@@ -205,7 +205,7 @@ playwrightTest(
         await diagnostics.close();
       }
       await fresh?.close();
-      await stopNotebookServer(server);
+      await server.close();
       await restoreWorkspace();
     }
   },
@@ -218,7 +218,7 @@ test("restores value and function output hosts after their notebook values retur
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     2,
   );
   const value = preview.locator('[mo-value="metric"]');

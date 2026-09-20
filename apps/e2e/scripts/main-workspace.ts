@@ -1,9 +1,9 @@
 import { cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { copyFixtureProviderPackage } from "./fixture-provider-package.mjs";
-import { e2eNetwork } from "./network.mjs";
-import { NotebookServices } from "./notebook-services.mjs";
+import { copyFixtureProviderPackage } from "./fixture-provider-package.ts";
+import { e2eNetwork } from "./network.ts";
+import { NotebookServices } from "./notebook-services.ts";
 import {
   appDirectory,
   configDirectory,
@@ -15,8 +15,8 @@ import {
   repositoryDirectory,
   staticExportDirectory,
   workspaceDirectory,
-} from "./paths.mjs";
-import { PreparationProcessOwner } from "./preparation-process.mjs";
+} from "./paths.ts";
+import { PreparationProcessOwner } from "./preparation-process.ts";
 
 export class MainWorkspace {
   #preparation = new PreparationProcessOwner();
@@ -32,7 +32,7 @@ export class MainWorkspace {
     await copyFixtureProviderPackage(workspaceDirectory);
   }
 
-  async start(services) {
+  async start(services: readonly string[]) {
     for (const service of services) {
       if (service === "studio") await this.#studio();
       else if (service === "hosted") await this.#hosted();
@@ -46,17 +46,13 @@ export class MainWorkspace {
     return this.#services.start(
       [
         "python",
-        resolve(appDirectory, "scripts/_compat/marimo_edit.py"),
-        "--port-offset",
-        String(e2eNetwork.portOffset),
+        resolve(appDirectory, "scripts/_compat/server.py"),
+        "marimo",
+        "edit",
         workspaceDirectory,
         "--no-sandbox",
         "--headless",
         "--no-token",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(endpoint.port),
       ],
       endpoint,
       "studio",
@@ -74,9 +70,9 @@ export class MainWorkspace {
     await this.#services.start(
       [
         "python",
-        resolve(appDirectory, "scripts/_compat/marimo_edit.py"),
-        "--port-offset",
-        String(e2eNetwork.portOffset),
+        resolve(appDirectory, "scripts/_compat/server.py"),
+        "marimo",
+        "edit",
         hostedNotebookPath,
         "--no-sandbox",
         "--headless",
@@ -84,10 +80,6 @@ export class MainWorkspace {
         "studio-e2e-token",
         "--base-url",
         "/hosted",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(endpoint.port),
       ],
       endpoint,
       "studio",
@@ -136,7 +128,7 @@ export class MainWorkspace {
       [
         "python",
         resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
-        String(endpoint.port),
+        "0",
         "--bind",
         "127.0.0.1",
         "--directory",

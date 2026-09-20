@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from importlib.metadata import version
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -70,10 +71,8 @@ def test_main_e2e_fixtures_bootstrap_their_saved_external_provider(
     target = _Target(notebook.parent, notebook)
     assert provider_bootstrap_required(target)
     command = environment_command(target, ["python", "-V"])
-    requirements = Path(command[command.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
-    prepared = [Requirement(value) for value in requirements.splitlines()]
+    requirements = [value for flag, value in pairwise(command) if flag == "--with"]
+    prepared = [Requirement(value) for value in requirements]
     provider = next(
         requirement
         for requirement in prepared
@@ -442,10 +441,8 @@ def test_source_checkout_respects_the_declared_exact_studio_version(
         assert command[command.index("--with-editable") + 1] == str(source_root)
     else:
         assert "--with-editable" not in command
-        requirements = Path(
-            command[command.index("--with-requirements") + 1]
-        ).read_text(encoding="utf-8")
-        assert "marimo-studio==999.0.0" in requirements.splitlines()
+        requirements = [value for flag, value in pairwise(command) if flag == "--with"]
+        assert "marimo-studio==999.0.0" in requirements
 
 
 def test_notebook_source_claim_omits_the_invoking_checkout(
@@ -478,7 +475,5 @@ def test_notebook_source_claim_omits_the_invoking_checkout(
     command = environment_command(_Target(tmp_path, notebook), ["python", "-V"])
 
     assert "--with-editable" not in command
-    requirements = Path(command[command.index("--with-requirements") + 1]).read_text(
-        encoding="utf-8"
-    )
-    assert str(declared_source) in requirements
+    requirements = [value for flag, value in pairwise(command) if flag == "--with"]
+    assert f"marimo-studio @ {declared_source.as_uri()}" in requirements

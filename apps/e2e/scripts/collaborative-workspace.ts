@@ -1,8 +1,8 @@
 import { cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { copyFixtureProviderPackage } from "./fixture-provider-package.mjs";
-import { collaborativeWorkspaceDirectory, fixtureDirectory } from "./paths.mjs";
+import { copyFixtureProviderPackage } from "./fixture-provider-package.ts";
+import { collaborativeWorkspaceDirectory, fixtureDirectory } from "./paths.ts";
 
 export const prepareCollaborativeWorkspace = async () => {
   await rm(collaborativeWorkspaceDirectory, {

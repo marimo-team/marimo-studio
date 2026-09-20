@@ -2,7 +2,7 @@ import { projectionDiagnosticSchema } from "@marimo-studio/protocol/runtime-conf
 import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { workspaceDirectory } from "../scripts/paths.mjs";
+import { workspaceDirectory } from "../scripts/paths.ts";
 import {
   changedObservationSourceSchema,
   readBrowserValidation,
@@ -59,7 +59,7 @@ test("reuses a warm view artifact with current notebook changes", async ({
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     2,
   );
   await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
@@ -83,7 +83,7 @@ test("reuses a warm view artifact with current notebook changes", async ({
   await recoverProjectionRefresh(metricRefresh, page);
 
   const abandonedHandoff = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 1,
@@ -150,7 +150,7 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
   const source = await readWorkspaceFile(dashboardHtmlPath);
   const changed = source.replace("Studio browser fixture</h1>", "Edited in Studio</h1>");
   const replacedSourceWrite = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "PUT",
     path: /^\/_marimo-studio\/views\/dashboard\/source\/src\/index\.html$/,
     count: 1,
@@ -187,7 +187,7 @@ test("keeps configured aliases attached to edited notebook cells", async ({
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const currentRevision = async () => {
@@ -238,7 +238,7 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     4,
   );
   const originalView = await readWorkspaceFile(dashboardHtmlPath);
@@ -396,7 +396,7 @@ test("shows progress while an edited notebook cell runs", async ({
   await waitForPreview(page);
   await expect(preview.locator("#slow-value")).toHaveText("7");
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const slowRefresh = await captureProjectionRefresh(page, browserDiagnostics);
@@ -497,7 +497,7 @@ test("shows an agent-requested page and records its rendered revision", async ({
   const serverToken = await studioServerToken(page);
   const clientId = await studioClientId(page);
   const replacedEventStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const activated = await studioCli.activateWorkspaceView("qa-view", clientId);
@@ -507,11 +507,37 @@ test("shows an agent-requested page and records its rendered revision", async ({
     session_id: sessionId,
     view: "qa-view",
   });
+  await expect(page.locator(activated.frame_selector)).toHaveCount(1);
+  await expect(page.locator(activated.frame_selector)).toHaveJSProperty(
+    "src",
+    activated.preview_url,
+  );
+  await expect(page.frameLocator(activated.frame_selector).locator("html")).toHaveAttribute(
+    "data-marimo-studio-state",
+    "ready",
+  );
+  await expect(
+    page.frameLocator(activated.frame_selector).getByRole("heading", { name: "Qa View" }),
+  ).toBeVisible();
   await expect(page.getByLabel("Switch view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
   replacedEventStream.recovered();
+  const refreshed = await studioCli.activateWorkspaceView("qa-view", clientId);
+  expect(refreshed.preview_url).not.toBe(activated.preview_url);
+  await expect(page.locator(refreshed.frame_selector)).toHaveCount(1);
+  await expect(page.locator(refreshed.frame_selector)).toHaveJSProperty(
+    "src",
+    refreshed.preview_url,
+  );
+  await expect(page.frameLocator(refreshed.frame_selector).locator("html")).toHaveAttribute(
+    "data-marimo-studio-state",
+    "ready",
+  );
+  await expect(
+    page.frameLocator(refreshed.frame_selector).getByRole("heading", { name: "Qa View" }),
+  ).toBeVisible();
   const abandonedObservation = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "PUT",
     path: /^\/_marimo-studio\/views\/qa-view\/observation$/,
     count: 1,
@@ -576,11 +602,11 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
 }) => {
   test.setTimeout(60_000);
   const replacedEventStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const timedOutAcknowledgement = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/activations\/\d+\/ack$/,
     count: 1,
@@ -662,7 +688,7 @@ test("retains agent validation after the native editor reconnects", async ({
     return readBrowserValidation(await response.text());
   };
   const abandonedObservations = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "PUT",
     path: /^\/_marimo-studio\/views\/dashboard\/observation$/,
     count: 2,

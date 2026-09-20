@@ -15,7 +15,7 @@ DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -na
 PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-group marimo-studio-build --no-emit-workspace --no-annotate --no-header
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
-.PHONY: e2e e2e-ui docs-examples docs-build docs-serve package
+.PHONY: e2e e2e-ui docs-examples docs-build docs-serve docs-preview package
 .PHONY: _anti-slop-check _architecture-check _provider-sources-check _workflow-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 .PHONY: _prepare-browser-tests
@@ -67,6 +67,7 @@ typecheck: _frontend-ready ## Type-check Python and TypeScript sources.
 	$(UV) run pyrefly check
 	$(UV) run basedpyright --level error
 	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
+	$(PNPM) --filter @marimo-studio/e2e typecheck
 
 python-test: ## Run the complete Python test profile for this environment.
 	./scripts/python-test.sh --profile all --parallel
@@ -85,7 +86,7 @@ _browser-install:
 	$(PNPM) --filter @marimo-studio/e2e install-browser
 
 _prepare-browser-tests: _frontend-ready
-	$(PNPM) --filter @marimo-studio/e2e exec node scripts/prepare-pyodide.mjs
+	$(PNPM) --filter @marimo-studio/e2e exec node scripts/prepare-pyodide.ts
 
 e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
 	$(PNPM) --filter @marimo-studio/e2e e2e
@@ -103,6 +104,9 @@ docs-build: _frontend-ready build ## Build the VitePress documentation.
 
 docs-serve: _frontend-ready build ## Serve documentation through Portless.
 	BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
+
+docs-preview: _frontend-ready ## Preview built documentation through Portless.
+	$(VP) run --filter @marimo-studio/docs preview
 
 package: _package-build ## Build and validate the wheel and source distribution.
 	./scripts/verify-installed-wheel.sh "$(DIST_DIR)"

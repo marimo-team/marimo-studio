@@ -11,7 +11,7 @@ import {
   type PresentationRefreshMessage,
   type SwitchViewMessage,
 } from "@marimo-studio/protocol/preview-messages";
-import { publicNotebookQuery } from "@marimo-studio/protocol/query";
+import { publicNotebookQuery, UNFRAMED_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
 import { getMountConfig, getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
 import {
@@ -255,6 +255,7 @@ export const bindViewNavigation = (
       documentRootUrl: config.documentRootUrl,
       publicQuery: publicNotebookQuery(globalThis.location.search),
       trustedRuntime: { id: config.runtime.id, explicit: runtimeExplicit },
+      unframed: new URLSearchParams(globalThis.location.search).get(UNFRAMED_QUERY_PARAM) === "1",
       views: config.views,
       currentView: config.view,
     });

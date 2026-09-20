@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-import { appDirectory } from "./paths.mjs";
+import { appDirectory } from "./paths.ts";
 
 export const PYODIDE_VERSION = "314.0.0";
 export const PYODIDE_CDN_ROOT = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
@@ -36,9 +36,9 @@ const manifestSchema = z
     ),
   })
   .strict();
-const digest = (content) => createHash("sha256").update(content).digest("hex");
+const digest = (content: Uint8Array) => createHash("sha256").update(content).digest("hex");
 
-export const verifyPyodidePayload = async (directory) => {
+export const verifyPyodidePayload = async (directory: string) => {
   const manifest = manifestSchema.parse(
     JSON.parse(await readFile(join(directory, "manifest.json"), "utf8")),
   );
@@ -57,13 +57,13 @@ export const verifyPyodidePayload = async (directory) => {
   return Object.freeze({ directory, files: Object.freeze(names), manifest });
 };
 
-export const preparePyodidePayload = async (source, destination) => {
+export const preparePyodidePayload = async (source: string, destination: string) => {
   packageSchema.parse(JSON.parse(await readFile(join(source, "package.json"), "utf8")));
   const contents = await Promise.all(
     runtimeFiles.map(async (name) => {
       const content = await readFile(join(source, name));
       if (content.byteLength === 0) throw new Error(`Pyodide runtime file is empty: ${name}`);
-      return [name, content];
+      return [name, content] as const;
     }),
   );
   const manifest = {

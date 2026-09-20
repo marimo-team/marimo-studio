@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
-import { preparePyodidePayload, verifyPyodidePayload } from "../scripts/prepare-pyodide.mjs";
+import { preparePyodidePayload, verifyPyodidePayload } from "../scripts/prepare-pyodide.ts";
 import { installPinnedPyodideAssets } from "../tests/pyodide-assets.ts";
 
 const roots: string[] = [];

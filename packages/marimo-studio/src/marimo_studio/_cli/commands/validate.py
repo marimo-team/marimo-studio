@@ -13,6 +13,7 @@ import click
 
 from marimo_studio._authoring.validation import validate as validate_workspace
 from marimo_studio._browser_client.transport import studio_server_connection
+from marimo_studio._cli.activity import activity
 from marimo_studio._cli.diagnostics import (
     capture_runtime_stderr,
     diagnostics,
@@ -111,7 +112,10 @@ def validate(
             )
         except ProtocolError as error:
             raise click.BadParameter(str(error), param_hint="--server") from error
-    with capture_runtime_stderr() if level != "static" else nullcontext():
+    with (
+        activity(diagnostics(), phase=f"validate:{level}", view=view_name),
+        capture_runtime_stderr() if level != "static" else nullcontext(),
+    ):
         report = asyncio.run(
             validate_workspace(
                 studio.notebook,

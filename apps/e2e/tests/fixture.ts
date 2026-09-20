@@ -2,7 +2,6 @@ import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
 import { deletedViewSchema, viewListSchema } from "@marimo-studio/protocol/views";
 import {
   expect,
-  test as base,
   type APIRequestContext,
   type FrameLocator,
   type Locator,
@@ -12,11 +11,11 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.mjs";
-import { withExportRepository } from "../scripts/export-repository.mjs";
-import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
-import { MainWorkspace } from "../scripts/main-workspace.mjs";
-import { e2eNetwork } from "../scripts/network.mjs";
+import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.ts";
+import { withExportRepository } from "../scripts/export-repository.ts";
+import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.ts";
+import { MainWorkspace } from "../scripts/main-workspace.ts";
+import { e2eNetwork } from "../scripts/network.ts";
 import {
   collaborativeWorkspaceDirectory,
   configDirectory,
@@ -28,7 +27,7 @@ import {
   noDisplayNotebookPath,
   noDisplayStaticExportDirectory,
   workspaceDirectory,
-} from "../scripts/paths.mjs";
+} from "../scripts/paths.ts";
 import {
   observeBrowserContext,
   type BrowserDiagnostics,
@@ -39,6 +38,7 @@ import {
   type ResponseTransitionCapture,
   type WorkspaceEventStreamCapture,
 } from "./browser-diagnostics.ts";
+import { test as base } from "./network-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 import { StudioCli } from "./studio-cli.ts";
 
@@ -98,12 +98,14 @@ export const hostedDashboardHtmlPath = resolve(
   "__marimo__/studio/notebook/dashboard/index.html",
 );
 export const hostedViewFixturePath = resolve(hostedFixtureDirectory, "dashboard.html");
-export const studioOrigin = e2eNetwork.main.studio.origin;
-export const hostedOrigin = e2eNetwork.main.hosted.origin;
+export const studioOrigin = () => e2eNetwork.main.studio.origin;
+export const hostedOrigin = () => e2eNetwork.main.hosted.origin;
 export const studioEntryUrl = "/?file=notebook.py";
-export const collaborativeStudioEntryUrl = `${e2eNetwork.main.collaboration.origin}/?file=notebook.py`;
-export const staticExportUrl = `${e2eNetwork.main.exported.origin}/src/index.html`;
-export const noDisplayStaticExportUrl = `${e2eNetwork.main.exported.origin}/no-display/index.html`;
+export const collaborativeStudioEntryUrl = () =>
+  `${e2eNetwork.main.collaboration.origin}/?file=notebook.py`;
+export const staticExportUrl = () => `${e2eNetwork.main.exported.origin}/src/index.html`;
+export const noDisplayStaticExportUrl = () =>
+  `${e2eNetwork.main.exported.origin}/no-display/index.html`;
 
 const sessionAdminBootstrapSchema = z.object({
   serverToken: z.string(),
@@ -567,7 +569,7 @@ export const test = base.extend<
 >({
   services: [["studio"], { option: true, scope: "worker" }],
   mainWorkspace: [
-    async ({ services }, use) =>
+    async ({ services, network: _network }, use) =>
       withExportRepository(resolve(configDirectory, "export-repository"), async () => {
         const workspace = new MainWorkspace();
         const failures: unknown[] = [];
@@ -591,7 +593,7 @@ export const test = base.extend<
     { scope: "worker", auto: true, timeout: 180_000 },
   ],
   baseURL: async ({ mainWorkspace: _mainWorkspace }, use) => {
-    await use(studioOrigin);
+    await use(studioOrigin());
   },
   studioCli: async ({ browserName: _browserName }, use) => {
     const studioCli = new StudioCli();
@@ -620,8 +622,8 @@ export const test = base.extend<
       await use(observed);
 
       const currentUrl = page.url();
-      const hosted = currentUrl.startsWith(`${hostedOrigin}/`);
-      const managed = hosted || currentUrl.startsWith(`${studioOrigin}/`);
+      const hosted = currentUrl.startsWith(`${hostedOrigin()}/`);
+      const managed = hosted || currentUrl.startsWith(`${studioOrigin()}/`);
       const retirement =
         process.platform === "win32" && !page.isClosed()
           ? observed.expectPageRetirement(page)

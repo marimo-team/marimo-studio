@@ -15,6 +15,7 @@ from marimo_studio._browser_client.protocol import (
     parse_show_result,
     parse_validation_evidence,
 )
+from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._validation.evidence import (
     BrowserDiagnostic,
     BrowserObservation,
@@ -323,6 +324,8 @@ def _show_payload(notebook: Path) -> dict[str, object]:
         "generation": 1,
         "client_id": "browser-client-1234",
         "session_id": "s_123456",
+        "preview_url": "http://localhost/preview/",
+        "frame_selector": "iframe[data-browser-owned-selector]",
     }
 
 
@@ -334,6 +337,8 @@ def test_show_protocol_accepts_identity_results(tmp_path: Path) -> None:
         "dashboard",
     )
     assert active.client_id == "browser-client-1234"
+    assert active.frame_selector == "iframe[data-browser-owned-selector]"
+    assert active.preview_url == "http://localhost/preview/"
 
 
 @pytest.mark.parametrize(
@@ -682,3 +687,46 @@ def test_truncated_browser_diagnostics_fit_the_server_protocol() -> None:
             {**payload, "diagnostics": [*diagnostics, diagnostics[0]]},
             "dashboard",
         )
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("preview_url", None),
+        ("preview_url", "https://"),
+        ("preview_url", "http://localhost:invalid/"),
+        ("preview_url", "http://localhost:65536/"),
+        ("frame_selector", None),
+        ("frame_selector", 7),
+    ],
+)
+def test_show_protocol_requires_browser_automation_target(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    payload = _show_payload(notebook)
+    with pytest.raises(ProtocolError):
+        parse_show_result({**payload, field: value}, notebook, "dashboard")
+    del payload[field]
+    with pytest.raises(ProtocolError):
+        parse_show_result(payload, notebook, "dashboard")
+
+
+def test_show_result_preserves_positional_identity_fields(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    result = ShowResult(
+        notebook,
+        "dashboard",
+        2,
+        "s_123456",
+        "browser-client-1234",
+        preview_url="http://localhost/preview/",
+        frame_selector="iframe[data-test-preview]",
+    )
+    assert result.to_dict() == {
+        **_show_payload(notebook),
+        "generation": 2,
+        "frame_selector": "iframe[data-test-preview]",
+    }

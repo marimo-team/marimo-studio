@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 
 from marimo_studio._browser_client.protocol import ViewShowRequest
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.development.client_events import WorkspaceClientEventProducer
 from marimo_studio._server.notebook_scope import NotebookScope
@@ -87,6 +88,10 @@ async def _activate_connected(
                 browser.client_id,
                 pending.activation.generation,
                 "dashboard",
+                preview=PreviewAutomationTarget(
+                    "http://localhost/dashboard/?runtime=server",
+                    'iframe[data-preview-view-frame="dashboard"]',
+                ),
             )
             break
         await asyncio.sleep(0.01)
@@ -123,6 +128,8 @@ def test_external_activation_targets_the_selected_or_only_browser(
 
     selected, implicit = asyncio.run(exercise())
 
+    assert selected.preview_url == "http://localhost/dashboard/?runtime=server"
+    assert 'data-preview-view-frame="dashboard"' in selected.frame_selector
     assert selected.view == "dashboard"
     assert selected.client_id == "browser-client-1234"
     assert selected.session_id == "s_123456"
@@ -262,6 +269,9 @@ def test_first_view_activation_replays_across_host_promotion(notebook_path) -> N
                 client_id,
                 replayed[0],
                 replayed[1],
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.APPLIED
         )

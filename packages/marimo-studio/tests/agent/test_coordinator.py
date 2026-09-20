@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.agent.clients import (
     PeerTarget,
@@ -24,6 +25,10 @@ from marimo_studio.errors import AgentRequestError
 
 from ..async_test_support import wait_for_event
 from ..client_test_support import bind_native_session
+
+PREVIEW_TARGET = PreviewAutomationTarget(
+    "http://localhost/preview/", "iframe[data-test-preview]"
+)
 
 
 async def connected_target(
@@ -79,6 +84,7 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "dashboard",
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.REJECTED
         )
@@ -88,6 +94,7 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -102,6 +109,7 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -110,12 +118,52 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
                 target.client_id,
                 activation.generation,
                 "dashboard",
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.REJECTED
         )
         target = await clients.select_target(client_id=target.client_id)
         replacement = await agents.activate(target, "report")
         assert replacement.view == "report"
+        await agents.close()
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("retained", [False, True])
+def test_activation_replay_rejects_changed_preview_identity(retained: bool) -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target, _lease = await connected_target(clients)
+        activation = await agents.activate(target, "executive")
+        assert (
+            await agents.acknowledge_activation(
+                target.client_id,
+                activation.generation,
+                activation.view,
+                preview=PREVIEW_TARGET,
+            )
+            is ActivationAckOutcome.APPLIED
+        )
+        if retained:
+            assert await agents.wait_for_activation(activation, 1) == PREVIEW_TARGET
+        for changed in (
+            replace(PREVIEW_TARGET, preview_url="http://localhost/replacement/"),
+            replace(PREVIEW_TARGET, frame_selector="iframe[data-replacement]"),
+        ):
+            assert (
+                await agents.acknowledge_activation(
+                    target.client_id,
+                    activation.generation,
+                    activation.view,
+                    preview=changed,
+                )
+                is ActivationAckOutcome.REJECTED
+            )
+        if not retained:
+            assert await agents.wait_for_activation(activation, 1) == PREVIEW_TARGET
         await agents.close()
         await clients.close()
 
@@ -137,6 +185,7 @@ def test_activation_replay_requires_the_acknowledged_workspace_owner() -> None:
                 activation.generation,
                 activation.view,
                 owner=activation.owner,
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -148,6 +197,7 @@ def test_activation_replay_requires_the_acknowledged_workspace_owner() -> None:
                 activation.generation,
                 activation.view,
                 owner=PresentViewOwner("c" * 64, "b" * 64),
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.REJECTED
         )
@@ -184,6 +234,7 @@ def test_activation_rejection_requires_the_pending_workspace_owner() -> None:
                 activation.generation,
                 activation.view,
                 owner=activation.owner,
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -243,6 +294,7 @@ def test_manual_view_change_invalidates_an_older_activation() -> None:
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.REJECTED
         )
@@ -302,6 +354,7 @@ def test_activation_commit_wins_atomically_over_timeout(
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PREVIEW_TARGET,
             )
         )
 
@@ -543,6 +596,7 @@ def test_view_activation_survives_an_event_stream_reconnect(
                 target.client_id,
                 activation.generation,
                 "executive",
+                preview=PREVIEW_TARGET,
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -751,6 +805,7 @@ def test_close_rejects_operations_paused_before_store_admission(
                     target.client_id,
                     activation.generation,
                     "executive",
+                    preview=PREVIEW_TARGET,
                 )
             if operation == "request-observation":
                 return await agents.request_observation(
@@ -825,6 +880,7 @@ def test_closed_coordinator_rejects_every_request_visible_operation() -> None:
                     activation_target.client_id,
                     activation.generation,
                     activation.view,
+                    preview=PREVIEW_TARGET,
                 )
             if operation == "wait-activation":
                 return await agents.wait_for_activation(activation, 1)

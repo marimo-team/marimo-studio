@@ -63,12 +63,14 @@ fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
 
 ## Add dependencies
 
-Run Deno's package manager from the view root. Use `--package-json` so Vite
-resolves application dependencies through `package.json` and the installed
-`node_modules` tree:
+Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
+environment so dependency updates and Studio builds use the same version.
+
+Run from the view root. Use `--package-json` so Vite resolves application
+dependencies through `package.json` and the installed `node_modules` tree:
 
 ```console
-deno add --package-json --frozen=false --save-exact \
+uv run -- deno add --package-json --frozen=false --save-exact \
   npm:d3@7 \
   npm:@observablehq/plot@0.6 \
   npm:arquero@8 \
@@ -136,3 +138,12 @@ JavaScript rendering is necessary, every result must declare its kernel inputs:
 - Studio supplies native projection labels. Give custom regions a
   `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
   supplements the source links that connect results to the analytical graph.
+
+## Maintain project ignore rules
+
+You own this view project's `.gitignore`. When adding libraries, extensions, or
+build tools, ignore their generated files, caches, local configuration, and
+secrets. Keep authored source, dependency manifests, and lockfiles tracked.
+Studio supplies workspace rules for its own artifacts and locks. Check
+`git status --short --ignored` after running new tooling and update the view's
+ignore rules before committing.

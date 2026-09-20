@@ -10,7 +10,6 @@ import {
   workspaceNotebookPath,
   writeWorkspaceFile,
 } from "./fixture.ts";
-import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
 import { runServerToken, runServerUrl, startRunServer } from "./recovery-support.ts";
 
 test.use({ services: [] });
@@ -29,13 +28,10 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
   };
 
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl}/dashboard/?access_token=${runServerToken}`,
-    );
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
+    await server.waitUntilReady(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
+    await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
     await waitForRunMode();
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/`);
     const scale = labeledSlider(rendered.locator('marimo-cell[name="controls"]'), /^Scale/);
     await scale.press("End");
     await expect(rendered.locator('[mo-value="metric"]')).toHaveText("63");
@@ -51,7 +47,7 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
     await page.reload();
     await waitForRunMode();
 
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/`);
     expect(
       await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
     ).toBe(sessionId);
@@ -61,7 +57,7 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });
@@ -79,11 +75,10 @@ test("trusted wrapper retains its server-selected runtime", async ({ page }) => 
   };
 
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl}/dashboard/?access_token=${runServerToken}&runtime=server`,
+    await server.waitUntilReady(
+      `${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=server`,
     );
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}&runtime=server`);
+    await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=server`);
     await waitForRunMode();
     const sessionId = await rendered
       .locator("html")
@@ -101,10 +96,10 @@ test("trusted wrapper retains its server-selected runtime", async ({ page }) => 
       );
     });
 
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?runtime=server`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?runtime=server`);
     await page.reload();
     await waitForRunMode();
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?runtime=server`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?runtime=server`);
     expect(
       await rendered.locator("html").evaluate(() => ({
         runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
@@ -115,7 +110,7 @@ test("trusted wrapper retains its server-selected runtime", async ({ page }) => 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });
@@ -165,11 +160,8 @@ test("closing wrapper does not attach a delayed replay document", async ({ page 
     await route.continue();
   };
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl}/dashboard/?access_token=${runServerToken}`,
-    );
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
+    await server.waitUntilReady(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
+    await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
     await expect(rendered.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
     await page.route("**/*", delayReplayHead);
 
@@ -187,7 +179,7 @@ test("closing wrapper does not attach a delayed replay document", async ({ page 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });
@@ -251,17 +243,14 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
 
   let second: Page | undefined;
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl}/dashboard/?access_token=${runServerToken}`,
-    );
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
+    await server.waitUntilReady(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
+    await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
     await waitForReady(rendered);
     const firstSession = await sessionId(rendered);
 
     second = await page.context().newPage();
     const secondRendered = presentationFrame(second);
-    await second.goto(`${runServerUrl}/dashboard/`);
+    await second.goto(`${runServerUrl()}/dashboard/`);
     await waitForReady(secondRendered);
     let currentSession = await sessionId(secondRendered);
     expect(currentSession).not.toBe(firstSession);
@@ -298,7 +287,7 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
     await second.reload();
     await waitForReady(secondRendered);
     expect(await sessionId(secondRendered)).toBe(currentSession);
-    await expect(second).toHaveURL(`${runServerUrl}/dashboard/`);
+    await expect(second).toHaveURL(`${runServerUrl()}/dashboard/`);
     expect(
       await secondRendered.locator("html").evaluate(() => {
         const query = new URLSearchParams(location.search);
@@ -342,7 +331,7 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
           intercepted = true;
           await route.fulfill({
             status,
-            headers: status === 302 ? { location: `${runServerUrl}/dashboard/` } : {},
+            headers: status === 302 ? { location: `${runServerUrl()}/dashboard/` } : {},
           });
           return;
         }
@@ -358,11 +347,11 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
       expect(intercepted).toBe(true);
       expect(await sessionId(secondRendered)).not.toBe(currentSession);
       currentSession = await sessionId(secondRendered);
-      await expect(second).toHaveURL(`${runServerUrl}/dashboard/`);
+      await expect(second).toHaveURL(`${runServerUrl()}/dashboard/`);
     }
 
     const rejectedTamperedProbe = browserDiagnostics.expectRequestAbort({
-      origin: runServerUrl,
+      origin: runServerUrl(),
       method: "HEAD",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\.0{64}\/dashboard\/$/,
       count: 1,
@@ -380,7 +369,7 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });

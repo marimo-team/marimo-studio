@@ -1,14 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { connect } from "node:net";
 
-const PROCESS_OWNER_STATES = Object.freeze({
-  foreign: "foreign",
-  owned: "owned",
-  stopped: "stopped",
-  unknown: "unknown",
-});
+export type ProcessOwnerState = "foreign" | "owned" | "stopped" | "unknown";
 
-const liveProcessGroupMembers = (processGroupId) => {
+export const liveProcessGroupMembers = (processGroupId: number): number[] | undefined => {
   const result = spawnSync("ps", ["-axo", "pid=,pgid=,stat="], {
     encoding: "utf8",
     maxBuffer: 4 * 1024 * 1024,
@@ -31,12 +27,22 @@ const liveProcessGroupMembers = (processGroupId) => {
     .sort((left, right) => left - right);
 };
 
+interface ProcessInspection {
+  platform?: NodeJS.Platform;
+  readFile?: (path: string) => Buffer;
+  run?: (
+    command: string,
+    args: string[],
+    options: { encoding: "utf8"; maxBuffer: number },
+  ) => { error?: Error; status: number | null; stdout: string };
+}
+
 export const processEnvironmentContains = (
-  pid,
-  name,
-  value,
-  { platform = process.platform, readFile = readFileSync, run = spawnSync } = {},
-) => {
+  pid: number,
+  name: string,
+  value: string,
+  { platform = process.platform, readFile = readFileSync, run = spawnSync }: ProcessInspection = {},
+): boolean | undefined => {
   const marker = `${name}=${value}`;
   if (platform === "linux") {
     try {
@@ -54,33 +60,38 @@ export const processEnvironmentContains = (
   return result.stdout.split(/\s+/).includes(marker);
 };
 
-const sameMembers = (left, right) =>
+const sameMembers = (left: number[], right: number[]) =>
   left.length === right.length && left.every((pid, index) => pid === right[index]);
 
-export const processGroupOwnerState = (processGroupId, environmentName, ownerNonce) => {
+export const processGroupOwnerState = (
+  processGroupId: number,
+  environmentName: string,
+  ownerNonce: string,
+): ProcessOwnerState => {
   if (process.platform !== "darwin" && process.platform !== "linux") {
-    return PROCESS_OWNER_STATES.unknown;
+    return "unknown";
   }
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const members = liveProcessGroupMembers(processGroupId);
-    if (members === undefined) return PROCESS_OWNER_STATES.unknown;
-    if (members.length === 0) return PROCESS_OWNER_STATES.stopped;
+    if (members === undefined) return "unknown";
+    if (members.length === 0) return "stopped";
     const matches = members.map((pid) =>
       processEnvironmentContains(pid, environmentName, ownerNonce),
     );
-    if (matches.every((match) => match === true)) return PROCESS_OWNER_STATES.owned;
+    if (matches.every((match) => match === true)) return "owned";
     const refreshed = liveProcessGroupMembers(processGroupId);
-    if (refreshed === undefined) return PROCESS_OWNER_STATES.unknown;
+    if (refreshed === undefined) return "unknown";
     if (sameMembers(members, refreshed)) {
-      return matches.some((match) => match === false)
-        ? PROCESS_OWNER_STATES.foreign
-        : PROCESS_OWNER_STATES.unknown;
+      return matches.some((match) => match === false) ? "foreign" : "unknown";
     }
   }
-  return PROCESS_OWNER_STATES.unknown;
+  return "unknown";
 };
 
-export const stopProcessGroup = (processGroupId, signal = "SIGTERM") => {
+export const stopProcessGroup = (
+  processGroupId: number | undefined,
+  signal: NodeJS.Signals = "SIGTERM",
+): void => {
   if (processGroupId === undefined) return;
   const selected = signal === "SIGINT" ? "SIGTERM" : signal;
   if (process.platform === "win32") {
@@ -97,18 +108,36 @@ export const stopProcessGroup = (processGroupId, signal = "SIGTERM") => {
   try {
     process.kill(-processGroupId, selected);
   } catch (error) {
-    if (error?.code !== "ESRCH") throw error;
+    if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
   }
 };
 
-export const processGroupIsRunning = (processGroupId) => {
+export const processGroupIsRunning = (processGroupId: number | undefined): boolean | undefined => {
+  if (processGroupId === undefined) return false;
   if (process.platform === "win32") return undefined;
   try {
     process.kill(-processGroupId, 0);
     return true;
   } catch (error) {
-    if (error?.code === "ESRCH") return false;
-    if (error?.code === "EPERM") return true;
+    if (error instanceof Error && "code" in error && error.code === "ESRCH") return false;
+    if (error instanceof Error && "code" in error && error.code === "EPERM") return true;
     throw error;
   }
 };
+
+export const portIsOpen = (port: number | null, connectSocket = connect): Promise<boolean> =>
+  port === null
+    ? Promise.resolve(false)
+    : new Promise((resolveOpen) => {
+        const socket = connectSocket({ host: "127.0.0.1", port });
+        const finish = (open: boolean) => {
+          clearTimeout(deadline);
+          socket.destroy();
+          resolveOpen(open);
+        };
+        const deadline = setTimeout(() => finish(true), 1_000);
+        socket.once("connect", () => finish(true));
+        socket.once("error", (error) =>
+          finish(!("code" in error && error.code === "ECONNREFUSED")),
+        );
+      });

@@ -297,7 +297,7 @@ const startDevelopmentReload = async (): Promise<void> => {
     transitionToView(request.documentUrl, request.supportUrl);
   });
   const unbindViewNavigation = bindViewNavigation((request) => {
-    transitionToView(request.documentUrl, getSupportUrl());
+    globalThis.location.assign(request.documentUrl);
     return false;
   });
   const unbindPresentationEvents = bindPresentationEvents({

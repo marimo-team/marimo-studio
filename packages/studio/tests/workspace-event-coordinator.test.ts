@@ -75,6 +75,7 @@ it("keeps agent acknowledgement behind target preparation and committed stream o
   await vi.waitFor(() =>
     expect(acknowledge).toHaveBeenCalledWith(
       { schema: 1, generation: 7, view: "report" },
+      expect.objectContaining({ previewUrl: "http://localhost/preview/" }),
       expect.any(AbortSignal),
     ),
   );

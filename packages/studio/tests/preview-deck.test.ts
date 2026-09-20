@@ -682,3 +682,24 @@ it("admits another runtime after an initial build overlaps an unchanged notebook
   acknowledgement.channel.port2.close();
   gate.mockRestore();
 });
+
+it("addresses activated documents before rendering and rejects a retired selection", async () => {
+  const deck = previewDeck();
+  const frames = cachedFrames(deck, {});
+  deck.attach(frame("complete"), frames);
+  try {
+    const target = deck.automationTarget("dashboard", false, new AbortController().signal);
+    expect(target.previewUrl).toContain("/dashboard");
+    expect(deck.getSnapshot().states.server?.rendered).toBe(false);
+    const next = deck.stageView("report", undefined, undefined, "document");
+    expect(await next.ready).toBe(true);
+    expect(deck.getSnapshot().states.server?.rendered).toBe(false);
+    expect(() => deck.automationTarget("dashboard", false, new AbortController().signal)).toThrow(
+      "unavailable",
+    );
+    const current = deck.automationTarget("report", false, new AbortController().signal);
+    expect(current.previewUrl).toContain("/report");
+  } finally {
+    deck.dispose();
+  }
+});

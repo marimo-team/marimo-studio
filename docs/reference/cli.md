@@ -51,6 +51,7 @@ is unavailable or its content needs repair.
 
 ```text
 marimo-studio doctor [PROVIDER] [--json]
+marimo-studio doctor --dependencies --target notebook.py [--json]
 ```
 
 Lists installed view provider registrations, package versions, metadata,
@@ -58,6 +59,26 @@ availability, and starter IDs. A named provider exits with status `1` when it
 cannot load or reports unavailable. `doctor` does not inspect a view project or
 run a provider build. The full inventory remains available when another
 optional provider is unavailable.
+
+`--dependencies` compares active PEP 723 and owning project dependencies,
+configured provider requirements, installed versions and extras, and resolution
+of imports found in notebook source. Runtime checks use the combined project
+and notebook dependency environment, including transitive requirements and
+nested extras such as `marimo-studio[recommended]`. The owning project's package
+is a valid import owner. It reports drift even when both declarations
+accept the installed version. Run it in the notebook's Python environment:
+
+```console
+uv run --project . marimo-studio doctor --dependencies --target notebook.py --json
+```
+
+The report includes the interpreter, project path, declarations, installed
+versions, import availability, and issues. Exit status is `1` when issues exist.
+This check reads metadata and resolves top-level modules without executing
+notebook cells. Conditional imports are included. Dynamic imports, package
+initialization failures, and direct-source provenance require runtime validation
+or source review. Dependency groups and optional project extras are not direct
+`project.dependencies` declarations.
 
 ## `marimo-studio starters`
 
@@ -123,9 +144,10 @@ Creates one named view and rejects an existing name. The default starter is
 local CSS and JavaScript files. `--starter` selects another installed starter.
 `--dry-run` reports every planned write without committing it.
 
-A completed creation returns exact `launch_requirements` in JSON and prints the
-next `uvx` command with one `--with` argument for each requirement. Install and
-run requirements for reviewed providers.
+A completed creation returns exact `launch_requirements` in JSON and prints an
+environment-aware launch command. Project notebooks use `uv run` with
+`--no-sandbox`; standalone notebooks use `uvx` with `--sandbox`. Install and run
+requirements for reviewed providers.
 
 ## `marimo-studio view inspect`
 
@@ -254,6 +276,15 @@ of `--server` when the URL is already known. Set
 Studio selects the connected tab automatically when there is one. When several
 tabs are connected, the error lists their IDs. Pass one through
 `--browser-client` or `MARIMO_STUDIO_BROWSER_CLIENT`.
+
+The result includes `client_id`, `session_id`, `preview_url`, and
+`frame_selector`. Use the selector in the selected Studio tab to target its
+active preview document, including while its notebook outputs are preparing.
+Successful activation commits the selected frame and its browser-authored address.
+Before inspecting outputs or interacting, wait inside the frame for
+`html[data-marimo-studio-state="ready"]`. Keeping these milestones separate lets
+`show()` return from code mode so Marimo can process the preview's kernel work.
+Refresh these fields with `view show` after a view, runtime, or session change.
 
 Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
 `127.0.0.1` and `localhost`. Pass access tokens through

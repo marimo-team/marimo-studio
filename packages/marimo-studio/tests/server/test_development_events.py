@@ -10,6 +10,7 @@ from typing import Any, cast
 import pytest
 from starlette.requests import Request
 
+from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent import api as agent_api
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.agent.clients import StudioClientRegistry
@@ -74,9 +75,11 @@ async def _activation_acknowledgement(
 ) -> dict[str, object]:
     body = json.dumps(
         {
-            "schema": 1,
+            "schema": 2,
             "clientId": "browser-client-1234",
             "view": "executive",
+            "previewUrl": "http://localhost/preview/",
+            "frameSelector": "iframe[data-test-preview]",
         }
     ).encode()
 
@@ -152,6 +155,9 @@ async def _browser_event_payloads(
                 target.client_id,
                 activation.generation,
                 activation.view,
+                preview=PreviewAutomationTarget(
+                    "http://localhost/preview/", "iframe[data-test-preview]"
+                ),
             )
             is ActivationAckOutcome.APPLIED
         )
@@ -309,6 +315,9 @@ def test_control_events_preempt_a_blocked_presentation_build(
                         client_id,
                         cast(int, payload["generation"]),
                         cast(str, payload["view"]),
+                        preview=PreviewAutomationTarget(
+                            "http://localhost/preview/", "iframe[data-test-preview]"
+                        ),
                     )
                     await agents.wait_for_activation(activation, timeout=0.5)
             else:

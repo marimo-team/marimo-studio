@@ -1,3 +1,4 @@
+import "./framed-document.ts";
 import { previewMessageSchema } from "@marimo-studio/protocol/preview-messages";
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { afterEach, expect, test, vi } from "vite-plus/test";

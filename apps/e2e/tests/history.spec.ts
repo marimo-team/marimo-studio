@@ -1,4 +1,4 @@
-import { chromium, expect as playwrightExpect, test as playwrightTest } from "@playwright/test";
+import { chromium, expect as playwrightExpect } from "@playwright/test";
 
 import {
   dashboardHtmlPath,
@@ -15,7 +15,7 @@ import {
   workspaceNotebookPath,
   writeWorkspaceFile,
 } from "./fixture.ts";
-import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
+import { test as playwrightTest } from "./network-fixture.ts";
 import { runServerToken, runServerUrl, startRunServer } from "./recovery-support.ts";
 
 test("keeps the configured WebAssembly default implicit across wrapper reload", async ({
@@ -55,18 +55,17 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
     rendered.locator("html").evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__.runtime);
 
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl}/dashboard/?access_token=${runServerToken}&region=emea`,
+    await server.waitUntilReady(
+      `${runServerUrl()}/dashboard/?access_token=${runServerToken}&region=emea`,
     );
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}&region=emea`);
+    await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}&region=emea`);
     await waitForReady(WASM_PREVIEW_TIMEOUT);
     expect(await mountedRuntime()).toBe("wasm");
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?region=emea`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?region=emea`);
     await expect(rendered.locator("#wasm-region")).toHaveText("emea");
 
     const implicitReloadDocument = browserDiagnostics.expectActiveRequestAbort({
-      origin: runServerUrl,
+      origin: runServerUrl(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/,
       count: 1,
@@ -74,12 +73,12 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
     await page.reload();
     await waitForReady();
     expect(await mountedRuntime()).toBe("wasm");
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?region=emea`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?region=emea`);
     await expect(rendered.locator("#wasm-region")).toHaveText("emea");
     await recoverRequestAbort(implicitReloadDocument);
 
     const historyDocument = browserDiagnostics.expectActiveRequestAbort({
-      origin: runServerUrl,
+      origin: runServerUrl(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/,
       count: 1,
@@ -88,15 +87,15 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
     await page.goBack();
     await waitForReady();
     expect(await mountedRuntime()).toBe("wasm");
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?region=emea`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?region=emea`);
     await expect(rendered.locator("#wasm-region")).toHaveText("emea");
     await recoverRequestAbort(historyDocument);
 
-    await page.goto(`${runServerUrl}/dashboard/?region=emea&runtime=wasm`);
+    await page.goto(`${runServerUrl()}/dashboard/?region=emea&runtime=wasm`);
     await waitForReady();
     expect(await mountedRuntime()).toBe("wasm");
     const explicitReloadDocument = browserDiagnostics.expectActiveRequestAbort({
-      origin: runServerUrl,
+      origin: runServerUrl(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/,
       count: 1,
@@ -104,7 +103,7 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
     await page.reload();
     await waitForReady();
     expect(await mountedRuntime()).toBe("wasm");
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?region=emea&runtime=wasm`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?region=emea&runtime=wasm`);
     await expect(rendered.locator("#wasm-region")).toHaveText("emea");
     const scale = labeledSlider(rendered.locator('marimo-cell[name="controls"]'), /^Scale/);
     await scale.press("End");
@@ -114,7 +113,7 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });
@@ -139,10 +138,10 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
   });
   const server = startRunServer();
   const rendered = presentationFrame(page);
-  const target = `${runServerUrl}/dashboard/?access_token=${runServerToken}&runtime=wasm`;
+  const target = `${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=wasm`;
 
   try {
-    await waitForNotebookServer(server, target);
+    await server.waitUntilReady(target);
     await page.goto(target);
     const startupUrl = new URL(page.url());
     expect(startupUrl.pathname).toBe("/dashboard/");
@@ -178,7 +177,7 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
       timeout: WASM_PREVIEW_TIMEOUT,
     });
     retirement.recovered();
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?runtime=wasm`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?runtime=wasm`);
     const mounted = await rendered.locator("html").evaluate(() => ({
       runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
       runtimeExplicit: globalThis.__MARIMO_MOUNT_CONFIG__.runtimeExplicit,
@@ -193,7 +192,7 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });
@@ -221,11 +220,8 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
   const rendered = presentationFrame(page);
 
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl}/dashboard/?access_token=${runServerToken}`,
-    );
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
+    await server.waitUntilReady(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
+    await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}`);
     await playwrightExpect(rendered.locator("html")).toHaveAttribute(
       "data-marimo-studio-state",
       "ready",
@@ -241,7 +237,7 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
       .evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__);
 
     const replacedDocument = diagnostics.expectActiveRequestAbort({
-      origin: runServerUrl,
+      origin: runServerUrl(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/,
       count: 1,
@@ -263,7 +259,7 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
     await diagnostics.close();
     await context.close();
     await browser.close();
-    await stopNotebookServer(server);
+    await server.close();
     await restoreWorkspace();
   }
   playwrightExpect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
@@ -321,13 +317,12 @@ test("keeps direct view history hot and starts a fresh session for a new public 
   };
 
   try {
-    await waitForNotebookServer(
-      server,
-      `${runServerUrl}/dashboard/?access_token=${runServerToken}&runtime=server`,
+    await server.waitUntilReady(
+      `${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=server`,
     );
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}&runtime=server`);
+    await page.goto(`${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=server`);
     await waitForReady();
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/?runtime=server`);
+    await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?runtime=server`);
     const scale = labeledSlider(rendered.locator('marimo-cell[name="controls"]'), /^Scale/);
     await scale.press("End");
     await expect(rendered.locator('[mo-value="metric"]')).toHaveText("63");
@@ -356,7 +351,7 @@ test("keeps direct view history hot and starts a fresh session for a new public 
       "view-transition",
     );
     const replacedNestedDashboard = browserDiagnostics.expectActiveRequestAbort({
-      origin: runServerUrl,
+      origin: runServerUrl(),
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/,
       count: 1,
@@ -423,7 +418,7 @@ test("keeps direct view history hot and starts a fresh session for a new public 
     try {
       await page.close();
     } finally {
-      await stopNotebookServer(server);
+      await server.close();
     }
   }
 });

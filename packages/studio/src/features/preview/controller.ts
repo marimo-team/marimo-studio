@@ -26,6 +26,7 @@ import type { RecordBrowserObservation } from "./observation-remote.ts";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
+import { errorMessage } from "../../shared/errors.ts";
 import { PreviewAdmission } from "./admission.ts";
 import { PreviewControlController } from "./control-controller.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
@@ -82,6 +83,7 @@ export class PreviewController {
   private queryDiagnostic: BrowserDiagnostic | undefined;
   private queryPhase: QuerySyncStatus["phase"] = "ready";
   private activationsInProgress = 0;
+  private activationGeneration = 0;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly retrySchedule = new RetrySchedule();
   private editorSessionId: string | undefined;
@@ -256,6 +258,35 @@ export class PreviewController {
     return this.waitForView(this.view, this.activeLifecycleId, signal);
   }
 
+  activateDocument(navigation: ViewNavigationIntent, reload = false): void {
+    const rendered = this.activate(navigation, undefined, reload);
+    const activationGeneration = this.activationGeneration;
+    const lifecycleId = this.activeLifecycleId;
+    void rendered
+      .then((ready) => {
+        if (!ready && this.admission.snapshot.view !== "failed")
+          throw new Error("The preview did not become ready before activation completed.");
+      })
+      .catch((cause: unknown) => {
+        if (
+          !this.activeOwner ||
+          this.activeLifecycleId !== lifecycleId ||
+          this.activationGeneration !== activationGeneration
+        )
+          return;
+        this.admission.viewError(
+          this.lifecycleDiagnostic(
+            "preview-activation-failed",
+            "error",
+            errorMessage(cause),
+            "Reload the preview to retry.",
+          ),
+          this.admission.identity?.revision ?? null,
+          this.admissionOwner(),
+        );
+      });
+  }
+
   async activate(
     navigation: ViewNavigationIntent,
     signal?: AbortSignal,
@@ -264,6 +295,7 @@ export class PreviewController {
     if (signal?.aborted) {
       return false;
     }
+    this.activationGeneration += 1;
     this.activationsInProgress += 1;
     try {
       const reactivating = !this.activeOwner;
@@ -276,14 +308,18 @@ export class PreviewController {
       } else if (reactivating) {
         this.admission.reactivate(this.admissionOwner());
       }
+      if (this.preview.src === "about:blank") {
+        this.reloadCurrentDocument();
+      }
+      const lifecycleId = this.activeLifecycleId;
       const ready = await this.waitUntilReady(signal);
-      if (!ready || !this.activeOwner) {
+      if (!ready || !this.activeOwner || this.activeLifecycleId !== lifecycleId) {
         return false;
       }
       const identity = this.admission.identity;
       if (this.admission.isInteractive && identity !== null) {
         await this.queries.applyToPreview(true, navigation.hash);
-        if (!this.activeOwner) {
+        if (!this.activeOwner || this.activeLifecycleId !== lifecycleId) {
           return false;
         }
         this.controls.begin(

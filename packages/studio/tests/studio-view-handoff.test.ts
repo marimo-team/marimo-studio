@@ -492,6 +492,10 @@ describe("Studio view handoff lifecycle", () => {
       services.previewFrameIds.map((id) => [id, document.createElement("iframe")]),
     );
     await services.start(document.createElement("iframe"), frames);
+    const automationTarget = vi.spyOn(services.preview, "automationTarget").mockReturnValue({
+      previewUrl: "http://localhost:3000/report/",
+      frameSelector: 'iframe[data-preview-view-frame="report"]',
+    });
     const stageNavigation = vi.spyOn(services.preview, "stageNavigation").mockReturnValue({
       ready: Promise.resolve(true),
       commit: vi.fn(),
@@ -504,6 +508,7 @@ describe("Studio view handoff lifecycle", () => {
     );
 
     await vi.waitFor(() => expect(stageNavigation).toHaveBeenCalledTimes(2));
+    expect(automationTarget).toHaveBeenCalledWith("report", false, expect.any(AbortSignal));
     expect(services.views.getSnapshot().current).toBe("dashboard");
     expect(services.source.getSnapshot().view).toBe("dashboard");
     expect(globalThis.location.pathname).toBe("/studio/dashboard/");

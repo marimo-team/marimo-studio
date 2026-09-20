@@ -39,11 +39,11 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
     count: 1,
   });
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const retiredPlainHealth = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/editor\/health$/,
     count: 1,
@@ -78,7 +78,7 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
 test("activates Studio after the first view is created", async ({ browserDiagnostics, page }) => {
   const supersededConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const instantiated = page.waitForResponse(
@@ -128,6 +128,37 @@ shown.to_dict()
   await expect(preview.locator("#papers")).toHaveText("3877 papers", { timeout: 65_000 });
   await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   supersededConfig.recovered();
+});
+
+test("switches existing views from code mode before kernel rendering resumes", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  const sessionId = await studioEditorSessionId(page);
+  const replacements = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
+    2,
+  );
+  await executeCodeMode(
+    editorFrame(page),
+    "notebook.py",
+    sessionId,
+    `
+import marimo_studio.agent as studio_agent
+workspace = studio_agent.current_workspace()
+first = await workspace.view("vanilla-local").show()
+second = await workspace.view("dashboard").show()
+assert first.view == "vanilla-local" and second.view == "dashboard"
+assert first.preview_url and second.preview_url
+`,
+  );
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=notebook\.py$/);
+  const preview = await waitForPreview(page);
+  await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+  expect(await studioEditorSessionId(page)).toBe(sessionId);
+  await recoverWorkspaceEventStream(replacements);
 });
 
 test("offers Studio on a fresh notebook and preserves its session through first-view creation", async ({
@@ -199,7 +230,7 @@ test("offers Studio on a fresh notebook and preserves its session through first-
   await page.getByText("Add view", { exact: true }).click();
 
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   await page.getByRole("button", { name: "Create view", exact: true }).click();
@@ -219,7 +250,7 @@ test("keeps first-view creation available after reloading its route", async ({
   await page.getByText("Add view", { exact: true }).click();
   await expect(editorFrame(page).getByText("Native Marimo notebook").first()).toBeVisible();
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   const frameElement = await page.locator("iframe#marimo-studio-editor").elementHandle();
@@ -246,7 +277,7 @@ test("loads a native module graph from a directory view", async ({ browserDiagno
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const supersededDocument = browserDiagnostics.expectActiveRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/presentation\/d\.[A-Za-z0-9._-]+\/dashboard\/$/,
     count: 1,
@@ -280,7 +311,7 @@ test("publishes a framework edit and retains the last good view across a failed 
   await studioCli.buildWorkspaceView("react-view");
 
   const completedSourceWrites = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "PUT",
     path: /^\/_marimo-studio\/views\/react-view\/source\/src\/App\.tsx$/,
     count: 3,
@@ -395,7 +426,7 @@ test("keeps relative navigation public across direct view reloads", async ({
   page,
 }) => {
   const abandonedHandoff = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 1,
@@ -403,7 +434,7 @@ test("keeps relative navigation public across direct view reloads", async ({
     status: 204,
   });
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     1,
   );
   await page.goto(`${studioEntryUrl}&region=eu`);
@@ -522,11 +553,11 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   test.setTimeout(180_000);
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     2,
   );
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 2,
@@ -564,7 +595,7 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   const createdDirectory = resolve(workspaceNotebookPath, "../__marimo__/studio/notebook/qa-view");
   await expect.poll(async () => access(createdDirectory).then(() => true)).toBe(true);
   const supersededDashboardRenewal = browserDiagnostics.expectActiveRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/presentation\/d\.[A-Za-z0-9._-]+\/dashboard\/$/,
     count: 1,

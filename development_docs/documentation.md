@@ -89,6 +89,17 @@ receive a branch prefix, so each running workspace has its own URL. Use the URL
 printed by `make docs-serve`. On its first HTTPS run, Portless may request local
 administrator access to bind port 443 and trust its local certificate authority.
 
+Preview an existing `make docs-build` artifact with:
+
+```console
+make docs-preview
+```
+
+Preview uses `https://preview.docs.marimo-studio.localhost/`, with the same
+worktree prefix policy. Development and preview can run together. Both commands
+pass Portless's assigned `PORT` to VitePress; use the printed URL to open them.
+The internal `dev:server` and `preview:server` scripts require `PORT` explicitly.
+
 The development server uses an empty deployment base. Inspect the landing page,
 changed pages, navigation, search, code blocks, tables, examples, and local
 links at desktop and narrow widths.

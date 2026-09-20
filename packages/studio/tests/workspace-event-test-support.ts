@@ -97,6 +97,10 @@ export const setup = (
 ) => {
   const model = workspace(initialViews);
   const preview = {
+    automationTarget: vi.fn((_view: string, _reload: boolean, _signal: AbortSignal) => ({
+      previewUrl: "http://localhost/preview/",
+      frameSelector: "iframe[data-test-preview]",
+    })),
     requestObservation: vi.fn(),
     editorSessionChanged: vi.fn(),
     reload: vi.fn(),
@@ -108,7 +112,11 @@ export const setup = (
   };
   const source = { reconcile: vi.fn(), externalChanges: vi.fn() };
   const acknowledge = vi.fn(
-    async (_activation: ActiveViewRequest, _signal: AbortSignal) => undefined,
+    async (
+      _activation: ActiveViewRequest,
+      _preview: { previewUrl: string; frameSelector: string },
+      _signal: AbortSignal,
+    ) => undefined,
   );
   if (failFirstActivation) {
     acknowledge.mockRejectedValueOnce(new Error("temporary acknowledgement failure"));

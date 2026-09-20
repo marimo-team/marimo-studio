@@ -17,6 +17,7 @@ from marimo_studio._authoring.view import (
     show_view,
 )
 from marimo_studio._browser_client.transport import studio_server_connection
+from marimo_studio._cli.activity import activity
 from marimo_studio._cli.diagnostics import diagnostics, json_option, run_in_environment
 from marimo_studio._cli.environment import provider_bootstrap_required
 from marimo_studio._cli.help import ColoredCommand
@@ -206,17 +207,18 @@ def export(
         )
     notebook = resolve_notebook(target)
     _bootstrap_provider_environment(target, notebook)
-    result = asyncio.run(
-        export_view(
-            notebook,
-            view_name,
-            output,
-            runtime=runtime,
-            force=force,
-            prepare_timeout=prepare_timeout,
-            progress=diagnostics().emit_progress,
+    with activity(diagnostics(), phase="export", view=view_name) as progress:
+        result = asyncio.run(
+            export_view(
+                notebook,
+                view_name,
+                output,
+                runtime=runtime,
+                force=force,
+                prepare_timeout=prepare_timeout,
+                progress=progress,
+            )
         )
-    )
     _emit_export_warnings(result)
     _emit_preflight_issues(result.preflight)
     if json_output:
@@ -269,16 +271,16 @@ def preflight(
         )
     notebook = resolve_notebook(target)
     _bootstrap_provider_environment(target, notebook)
-    stream = diagnostics()
-    result = asyncio.run(
-        preflight_view(
-            notebook,
-            view_name,
-            runtime=runtime,
-            prepare_timeout=prepare_timeout,
-            progress=stream.emit_progress,
+    with activity(diagnostics(), phase="preflight", view=view_name) as progress:
+        result = asyncio.run(
+            preflight_view(
+                notebook,
+                view_name,
+                runtime=runtime,
+                prepare_timeout=prepare_timeout,
+                progress=progress,
+            )
         )
-    )
     _emit_preflight_issues(result)
     if json_output:
         echo_json(result.to_dict())

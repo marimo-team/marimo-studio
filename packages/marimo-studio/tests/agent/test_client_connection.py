@@ -247,6 +247,8 @@ def test_code_mode_request_negotiates_the_server_token(
             "generation": 1,
             "client_id": "browser-client-1234",
             "session_id": "s_123456",
+            "preview_url": "http://localhost:2718/dashboard/",
+            "frame_selector": 'iframe[data-preview-view-frame="dashboard"]',
         }
 
     monkeypatch.setattr(browser_client, "request_json", send)

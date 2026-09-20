@@ -1,4 +1,4 @@
-import { publicNotebookQuery } from "@marimo-studio/protocol/query";
+import { publicNotebookQuery, UNFRAMED_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
 export interface ViewNavigation {
   view: string;
@@ -39,6 +39,7 @@ export const viewNavigationForUrl = ({
   documentRootUrl,
   publicQuery,
   trustedRuntime,
+  unframed,
   views,
   currentView,
 }: {
@@ -48,6 +49,7 @@ export const viewNavigationForUrl = ({
   documentRootUrl: string;
   publicQuery: string;
   trustedRuntime: TrustedRuntimeSelection;
+  unframed: boolean;
   views: readonly string[];
   currentView: string;
 }): ViewNavigation | undefined => {
@@ -72,6 +74,9 @@ export const viewNavigationForUrl = ({
   const viewQuery = candidate.search ? publicNotebookQuery(candidate.search) : publicQuery;
   const documentUrl = publicViewUrl(publicRoot, directView, viewQuery);
   setTrustedRuntimeQuery(documentUrl, trustedRuntime);
+  if (unframed) {
+    documentUrl.searchParams.set(UNFRAMED_QUERY_PARAM, "1");
+  }
   documentUrl.hash = candidate.hash;
   return {
     view: directView,

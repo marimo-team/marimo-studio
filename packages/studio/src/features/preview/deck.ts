@@ -5,6 +5,7 @@ import type {
 import type {
   EditorSessionBinding,
   ObserveViewRequest,
+  PreviewAutomationTarget,
 } from "@marimo-studio/protocol/development-events";
 import type { ViewNavigationIntent } from "@marimo-studio/protocol/preview-messages";
 
@@ -68,6 +69,7 @@ export interface PreviewDeckSnapshot {
 }
 
 type Listener = () => void;
+type ActivationMilestone = "document" | "rendered";
 
 export class PreviewDeck {
   private readonly frames: PreviewFrames;
@@ -132,6 +134,35 @@ export class PreviewDeck {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
+
+  automationTarget(view: string, reload: boolean, signal: AbortSignal): PreviewAutomationTarget {
+    signal.throwIfAborted();
+    const slot = view === this.view ? this.frames.find(this.runtime, view) : undefined;
+    const controller = slot?.controller;
+    const frame = slot?.frame;
+    if (!slot || !controller || !frame) {
+      throw new Error("The requested preview is unavailable.");
+    }
+    if (reload || slot.stale || frame.src === "about:blank") {
+      controller.activateDocument(this.navigation, reload || slot.stale);
+      slot.stale = false;
+    }
+    if (
+      signal.aborted ||
+      !this.isActive(slot) ||
+      slot.controller !== controller ||
+      !frame.src ||
+      frame.src === "about:blank"
+    ) {
+      throw new Error("The requested preview changed before its document was activated.");
+    }
+    return {
+      previewUrl: frame.src,
+      frameSelector:
+        `iframe[data-preview-view-frame="${view}"][data-preview-cache-runtime="${slot.runtime}"]` +
+        ":not([hidden])",
+    };
+  }
 
   readonly getSnapshot = (): PreviewDeckSnapshot => this.snapshot;
 
@@ -198,10 +229,11 @@ export class PreviewDeck {
     view: string,
     navigation?: ViewNavigationIntent,
     signal?: AbortSignal,
+    milestone: ActivationMilestone = "rendered",
   ): StagedPreviewView {
     const previousView = this.view;
     const previousNavigation = this.navigation;
-    const ready = this.applyView(view, navigation, signal);
+    const ready = this.applyView(view, navigation, signal, milestone);
     const owner = this.viewSwitch;
     let rollback: Promise<void> | undefined;
     return {
@@ -211,7 +243,7 @@ export class PreviewDeck {
           if (this.viewSwitch !== owner) {
             return;
           }
-          await this.applyView(previousView, previousNavigation);
+          await this.applyView(previousView, previousNavigation, undefined, milestone);
         })();
         return rollback;
       },
@@ -223,10 +255,11 @@ export class PreviewDeck {
     changed: boolean,
     navigation?: ViewNavigationIntent,
     signal?: AbortSignal,
+    milestone: ActivationMilestone = "rendered",
   ): StagedPreviewView {
     return this.navigationTransaction.stage(
       navigation ? (owner) => this.stageNavigationQuery(navigation.query, owner) : undefined,
-      changed ? () => this.stageView(view, navigation, signal) : undefined,
+      changed ? () => this.stageView(view, navigation, signal, milestone) : undefined,
     );
   }
 
@@ -234,7 +267,9 @@ export class PreviewDeck {
     view: string,
     navigation?: ViewNavigationIntent,
     signal?: AbortSignal,
+    milestone: ActivationMilestone = "rendered",
   ): Promise<boolean> {
+    if (signal?.aborted) return Promise.resolve(false);
     this.deactivateActive();
     this.view = view;
     this.navigation = navigation ?? { query: this.navigation.query, hash: "" };
@@ -246,7 +281,13 @@ export class PreviewDeck {
     const controller = this.ensure(this.runtime, view);
     const reload = active.stale;
     active.stale = false;
-    const ready = controller?.activate(this.navigation, signal, reload) ?? Promise.resolve(false);
+    let ready: Promise<boolean>;
+    if (controller && milestone === "document") {
+      controller.activateDocument(this.navigation, reload);
+      ready = Promise.resolve(true);
+    } else {
+      ready = controller?.activate(this.navigation, signal, reload) ?? Promise.resolve(false);
+    }
     this.viewSwitch = { view, runtime: this.runtime, ready };
     this.publish();
     return ready;
