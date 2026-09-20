@@ -10,6 +10,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
 from io import StringIO
+from threading import Lock
 from typing import TYPE_CHECKING, TextIO
 
 import click
@@ -64,18 +65,29 @@ class DiagnosticStream:
     result_stream: TextIO | None = None
     diagnostic_stream: TextIO | None = None
     _owned_streams: tuple[TextIO, ...] = field(default=(), repr=False)
+    _write_lock: Lock = field(default_factory=Lock, repr=False)
 
     def _write(self, event: dict[str, object]) -> None:
+        with self._write_lock:
+            click.echo(
+                json.dumps(
+                    event,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
+                file=self.diagnostic_stream,
+                err=self.diagnostic_stream is None,
+            )
+
+    def write_activity(self, message: str) -> None:
         click.echo(
-            json.dumps(
-                event,
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            ),
-            file=self.diagnostic_stream,
-            err=self.diagnostic_stream is None,
+            message, file=self.diagnostic_stream, err=self.diagnostic_stream is None
         )
+
+    def relay_activity_stream(self, output: TextIO) -> None:
+        for line in output:
+            self.write_activity(line.rstrip("\r\n"))
 
     def emit(
         self,
@@ -121,7 +133,7 @@ class DiagnosticStream:
                 }
             )
             return
-        click.echo(progress.format_message(), err=True)
+        self.write_activity(progress.format_message())
 
     def _trusted_event(self, line: str) -> dict[str, object] | None:
         if len(line) > _MAX_DIAGNOSTIC_EVENT_CHARS:
@@ -467,7 +479,9 @@ def run_in_environment(target: EnvironmentTarget, args: list[str]) -> int:
         args,
         capture_result=machine_result,
         diagnostic_stream=(
-            stream.relay_trusted_stream if stream.format == "jsonl" else None
+            stream.relay_trusted_stream
+            if stream.format == "jsonl"
+            else stream.relay_activity_stream
         ),
         process_stream=stream.relay_process_stream,
     )

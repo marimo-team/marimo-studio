@@ -7,11 +7,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
-from contextlib import ExitStack
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, metadata, requires, version
+from io import StringIO
 from pathlib import Path
+from threading import Event, Thread
 from typing import Protocol, TextIO
 
 if sys.version_info >= (3, 11):
@@ -407,6 +409,42 @@ def should_reenter(target: EnvironmentTarget, requested: bool | None) -> bool:
     )
 
 
+@contextmanager
+def _live_diagnostics(path: Path, relay: Callable[[TextIO], None]) -> Iterator[None]:
+    stopped = Event()
+    failures: list[BaseException] = []
+
+    def follow() -> None:
+        try:
+            with path.open(encoding="utf-8", errors="replace") as source:
+                while True:
+                    terminal = stopped.is_set()
+                    while True:
+                        position = source.tell()
+                        line = source.readline()
+                        if not line:
+                            break
+                        if not line.endswith("\n") and not terminal:
+                            source.seek(position)
+                            break
+                        relay(StringIO(line))
+                    if terminal:
+                        return
+                    stopped.wait(0.1)
+        except BaseException as error:
+            failures.append(error)
+
+    worker = Thread(target=follow, name="studio-diagnostics")
+    worker.start()
+    try:
+        yield
+    finally:
+        stopped.set()
+        worker.join()
+        if failures and sys.exc_info()[0] is None:
+            raise failures[0]
+
+
 def _run_command(
     command: list[str],
     child_env: dict[str, str],
@@ -450,23 +488,21 @@ def _run_command(
                 errors="replace",
             )
         )
-        result = subprocess.run(
-            command,
-            env=child_env,
-            check=False,
-            stdout=stdout,
-            stderr=stderr,
-        )
+        if diagnostic_stream is not None:
+            live = _live_diagnostics(diagnostic_channel, diagnostic_stream)
+        else:
+            live = nullcontext()
+        with live:
+            result = subprocess.run(
+                command,
+                env=child_env,
+                check=False,
+                stdout=stdout,
+                stderr=stderr,
+            )
         captured_result = (
             result_channel.read_text(encoding="utf-8") if capture_result else ""
         )
-        if diagnostic_stream is not None:
-            with diagnostic_channel.open(
-                mode="r",
-                encoding="utf-8",
-                errors="replace",
-            ) as diagnostics:
-                diagnostic_stream(diagnostics)
         if process_stream is not None:
             for output in (stdout, stderr):
                 if output is None:

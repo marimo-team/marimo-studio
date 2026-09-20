@@ -795,7 +795,10 @@ Export runs the same preflight before committing its destination. Progress is
 written to stderr, including marimo-export prepared-state reuse and cache
 activity. Each progress record names its owning source and nests that owner's
 event. With `--json`, stdout remains one terminal result and stderr contains
-JSON Lines progress and diagnostics.
+JSON Lines progress and diagnostics. Events are flushed during environment
+re-entry. Five-second heartbeats report the phase, state, elapsed time, and
+latest cache evidence. Unavailable state, cache, or active-cell evidence is
+`null`.
 
 Zero-Python keeps Python source on the build machine and publishes prepared
 outputs. WebAssembly includes saved notebook source for browser execution.

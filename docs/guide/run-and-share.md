@@ -116,6 +116,13 @@ See [marimo-export](https://github.com/marimo-team/marimo-export) for the
 publication format and browser reader.
 :::
 
+Export and preflight flush progress as it arrives, including when the CLI
+re-enters a project environment. Long operations emit a heartbeat every five
+seconds with phase, elapsed time, state name, and the latest cache evidence.
+`--json` keeps the terminal result on stdout and progress on stderr as JSONL.
+Unknown state or cache evidence is `null`. The current export API does not expose
+an active notebook cell, so the heartbeat's `cell` is `null`.
+
 Each Zero-Python export uses the authored notebook's `__marimo__/cache/`
 directory. [Marimo's native cell cache](https://docs.marimo.io/api/caching/)
 decides which authored cells can be restored across states, views, and later
