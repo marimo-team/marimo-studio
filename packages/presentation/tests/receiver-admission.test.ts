@@ -1,3 +1,4 @@
+import "./framed-document.ts";
 import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -42,8 +43,7 @@ test("Studio admission accepts only the current document identity", async () => 
     "",
     "/dashboard/?marimo_studio_client=client-123456789&marimo_studio_lifecycle=7",
   );
-  const parent = globalThis.window;
-  vi.stubGlobal("parent", parent);
+  const parent = globalThis.parent;
   const post = vi.spyOn(parent, "postMessage");
   let revision = "revision-current";
   const admitted = waitForReceiverAdmission(
@@ -88,8 +88,7 @@ test("Studio admission accepts only the current document identity", async () => 
 });
 
 test("Studio admission listens before announcing receiver readiness", async () => {
-  const parent = globalThis.window;
-  vi.stubGlobal("parent", parent);
+  const parent = globalThis.parent;
   const post = vi.spyOn(parent, "postMessage").mockImplementation((message) => {
     const ready = parsePreviewMessage(message);
     if (ready?.type === "marimo-studio:receiver-ready") {
@@ -131,8 +130,7 @@ test("standalone presentations do not require Studio admission", async () => {
 });
 
 test("document retirement releases a pending Studio admission", async () => {
-  const parent = globalThis.window;
-  vi.stubGlobal("parent", parent);
+  const parent = globalThis.parent;
   const lifetime = new AbortController();
   const retirement = new PresentationDocumentRetiredError();
   const admitted = waitForReceiverAdmission(

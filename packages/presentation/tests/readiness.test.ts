@@ -1,3 +1,4 @@
+import "./framed-document.ts";
 import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import assert from "node:assert/strict";

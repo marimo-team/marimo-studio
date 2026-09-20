@@ -134,7 +134,13 @@ await studio_agent.current_workspace().view("dashboard").show()
 
 `show()` returns `client_id`, `preview_url`, and `frame_selector` for the
 acknowledged preview. Use that exact selector for browser frame switching and
-DOM evaluation. Cached and hidden frames are outside this selector. Call
+DOM evaluation. Cached and hidden frames are outside this selector.
+For a standalone browser test, open the public view URL with
+`?marimo_studio_unframed=1`, preserving `file` and `runtime` when present
+(for example `/dashboard/?file=notebook.py&marimo_studio_unframed=1`). This
+renders the view in the top-level document for screenshots and DOM evaluation.
+It creates a separate presentation, retains the document sandbox, and requires
+the server's usual authentication. In edit mode, keep the notebook session open. Call
 `show()` again after changing the view, runtime, or browser session.
 
 Reimport `marimo_studio.agent` and reacquire the workspace and view in each

@@ -22,6 +22,7 @@ const PRIVATE_QUERY_KEYS = [
   WORKSPACE_STREAM_QUERY_PARAM,
   DOCUMENT_REPLAY_QUERY_PARAM,
   "marimo_studio_view",
+  "marimo_studio_unframed",
   "refresh_token",
   "session_id",
   "runtime",

@@ -70,6 +70,13 @@ uv run --with marimo-studio marimo run analysis.py \
 The default view opens at `http://127.0.0.1:8000/`. A view named `report`
 opens at `http://127.0.0.1:8000/report/`.
 
+For browser automation, append `?marimo_studio_unframed=1` to the public view
+URL, such as `/report/?marimo_studio_unframed=1`. Keep any `file` and `runtime`
+parameters. The view renders directly in the top-level document, so screenshots
+and DOM evaluation need no Studio frame switch. Authentication and the document
+sandbox still apply. This is a separate presentation from the editor preview.
+Keep the notebook session open when testing an edit-mode server.
+
 Run `marimo-studio status --target analysis.py --json` when a project uses
 additional view providers. Its `launch_requirements` list contains the Studio
 and provider environment required by `marimo run`. Reviewing status can

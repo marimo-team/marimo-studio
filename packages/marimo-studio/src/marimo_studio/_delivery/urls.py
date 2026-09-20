@@ -17,6 +17,7 @@ QUERY_OPERATION_QUERY_PARAM = "marimo_studio_query_operation"
 DOCUMENT_LIFECYCLE_QUERY_PARAM = "marimo_studio_lifecycle"
 PRESENTATION_RENEWAL_QUERY_PARAM = "marimo_studio_renewal"
 DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume"
+UNFRAMED_QUERY_PARAM = "marimo_studio_unframed"
 HOST_SESSION_HANDOFF_QUERY_PARAM = "marimo_studio_handoff"
 PRIVATE_QUERY_KEYS = frozenset(
     {
@@ -34,6 +35,7 @@ PRIVATE_QUERY_KEYS = frozenset(
         WORKSPACE_STREAM_QUERY_PARAM,
         DOCUMENT_REPLAY_QUERY_PARAM,
         HOST_SESSION_HANDOFF_QUERY_PARAM,
+        UNFRAMED_QUERY_PARAM,
         "refresh_token",
         "session_id",
         "runtime",

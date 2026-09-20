@@ -28,6 +28,7 @@ from marimo_studio._delivery.urls import (
     SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
     SUPPORT_PATH,
+    UNFRAMED_QUERY_PARAM,
     WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
     public_url,
     studio_url,
@@ -239,8 +240,11 @@ async def document_response(
     }
     if request.method == "HEAD":
         return Response(headers=headers)
-    isolated = trusted_shell and not (
-        context.mode == "edit" and studio_owned_request(request)
+    unframed = request.query_params.getlist(UNFRAMED_QUERY_PARAM) == ["1"]
+    isolated = (
+        trusted_shell
+        and not unframed
+        and not (context.mode == "edit" and studio_owned_request(request))
     )
     if isolated:
         nonce = secrets.token_urlsafe(18)
@@ -284,7 +288,7 @@ async def document_response(
             headers=shell_headers,
         )
     runtime_headers = dict(headers)
-    if context.mode == "edit":
+    if context.mode == "edit" or unframed:
         runtime_headers.update(PRESENTATION_RESPONSE_HEADERS)
         runtime_headers["Content-Security-Policy"] = f"sandbox {PRESENTATION_SANDBOX}"
     return HTMLResponse(

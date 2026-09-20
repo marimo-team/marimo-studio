@@ -524,3 +524,24 @@ test("repairs an opaque preview through its scoped event stream", async ({
     await writeWorkspaceFile(dashboardManifestPath, manifest);
   }
 });
+
+test("serves an unframed preview for browser automation", async ({ page, context }) => {
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  const preview = await context.newPage();
+  try {
+    await preview.goto(`${studioOrigin}/dashboard/?file=notebook.py&marimo_studio_unframed=1`);
+    await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+    await expect(preview.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
+    await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
+    await preview.getByRole("button", { name: "Widget count: 7" }).click();
+    await expect(preview.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
+    expect(
+      await preview
+        .getByRole("heading", { name: "Studio browser fixture" })
+        .evaluate((node) => node.textContent),
+    ).toBe("Studio browser fixture");
+  } finally {
+    await preview.close();
+  }
+});
