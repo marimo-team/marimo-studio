@@ -1,0 +1,63 @@
+packages/marimo-studio/src/marimo_studio/_browser_client/protocol.py
+  ai_agent 8,19,147-149,152,163,170-171,194-212
+packages/marimo-studio/src/marimo_studio/_server/agent/coordinator.py
+  ai_agent 7,80,88,113
+packages/marimo-studio/tests/agent/test_coordinator.py
+  ai_agent 11,83-85,95-97,112-114,123-125,153-155,167-169,206-208,268-270,330-332,574-576,785-787,862-864
+packages/studio/tests/activation-remote.test.ts
+  ai_agent 10-14,31-35,45,69,74,85,111,122,157-161,187,208-212,232
+packages/marimo-studio/src/marimo_studio/_server/agent/store.py
+  ai_agent 9,38,47
+packages/marimo-studio/tests/agent/test_workspace.py
+  ai_agent 780-781
+packages/marimo-studio/tests/cli/test_view_show_commands.py
+  ai_agent 30,63
+packages/studio/tests/preview-deck.test.ts
+  ai_agent 685-698
+packages/marimo-studio/src/marimo_studio/_server/agent/activation.py
+  ai_agent 8,94,142,172-174,198,244-250
+packages/protocol/src/development-events.ts
+  ai_agent 22-26
+packages/marimo-studio/tests/agent/test_request_lifecycle.py
+  ai_agent 461-462
+packages/studio/src/app/workspace-event-coordinator.ts
+  ai_agent 11,46-50,420-424,428
+packages/studio/tests/workspace-event-test-support.ts
+  ai_agent 100-103,115-119
+packages/marimo-studio/tests/server/test_view_activation.py
+  ai_agent 10,91-94,272-274
+packages/marimo-studio/tests/agent/test_protocol.py
+  ai_agent 326-327,339-340,689-711
+packages/studio/src/app/activation-remote.ts
+  ai_agent 4,11,15,120-121,127
+apps/e2e/tests/authoring.spec.ts
+  ai_agent 521-530
+packages/studio/tests/workspace-event-coordinator.test.ts
+  ai_agent 78
+packages/marimo-studio/tests/server/test_development_events.py
+  ai_agent 13,81-82,158-160,318-320
+docs/reference/cli.md
+  ai_agent 281-283
+packages/marimo-studio/src/marimo_studio/_server/agent/api.py
+  ai_agent 11,55,163-164,176-178,218
+packages/studio/tests/workspace-event-activation.test.ts
+  ai_agent 31,71,80-81,87-92,97,108-109,122,259,310-313,417
+packages/marimo-studio/src/marimo_studio/_browser_client/records.py
+  ai_agent 10-18
+packages/studio/src/features/preview/deck.ts
+  ai_agent 8,137-168
+packages/marimo-studio/src/marimo_studio/_cli/output.py
+  ai_agent 215
+packages/marimo-studio/tests/marimo_compat/test_capability_parity.py
+  ai_agent 297-298
+packages/marimo-studio/src/marimo_studio/_server/presentation/activation.py
+  ai_agent 134,144-145
+packages/marimo-studio/tests/agent/test_browser_activation_observation.py
+  ai_agent 11,407-409
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "edc996cfcaea8fa7707b62aee1ac838df9136519",
+  "prompts": {}
+}
