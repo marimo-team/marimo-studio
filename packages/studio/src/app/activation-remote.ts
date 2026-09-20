@@ -115,13 +115,19 @@ const acknowledge = async (
 };
 
 export const createViewActivationRemote =
-  (agentUrl: string, serverToken: string, clientId: string): AcknowledgeViewActivation =>
+  (
+    agentUrl: string,
+    serverToken: string,
+    clientId: string,
+    previewUrl?: (view: string) => string | undefined,
+  ): AcknowledgeViewActivation =>
   async (activation, signal) => {
     const owner = activation.owner;
     const acknowledgement = {
       schema: 1,
       clientId,
       view: activation.view,
+      previewUrl: previewUrl?.(activation.view),
     } as const;
     const request: ActivationAcknowledgementRequest =
       owner === undefined

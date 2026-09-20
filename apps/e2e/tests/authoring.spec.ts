@@ -507,6 +507,14 @@ test("shows an agent-requested page and records its rendered revision", async ({
     session_id: sessionId,
     view: "qa-view",
   });
+  await expect(page.locator(activated.frame_selector)).toHaveCount(1);
+  await expect(page.locator(activated.frame_selector)).toHaveJSProperty(
+    "src",
+    activated.preview_url,
+  );
+  await expect(
+    page.frameLocator(activated.frame_selector).getByRole("heading", { name: "Qa View" }),
+  ).toBeVisible();
   await expect(page.getByLabel("Switch view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
   replacedEventStream.recovered();

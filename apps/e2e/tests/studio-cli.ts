@@ -13,6 +13,8 @@ const workspaceShowSchema = z.object({
   generation: z.number().int().positive(),
   client_id: z.string(),
   session_id: z.string(),
+  preview_url: z.string().url(),
+  frame_selector: z.string(),
 });
 
 export class StudioCli {

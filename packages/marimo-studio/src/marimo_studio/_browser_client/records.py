@@ -15,6 +15,14 @@ class ShowResult:
     generation: int
     session_id: str
     client_id: str
+    preview_url: str | None = None
+
+    @property
+    def frame_selector(self) -> str:
+        return (
+            f'iframe[data-preview-frame][data-preview-view-frame="{self.view}"]'
+            ":not([hidden]):not([inert])"
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -24,4 +32,6 @@ class ShowResult:
             "generation": self.generation,
             "client_id": self.client_id,
             "session_id": self.session_id,
+            "preview_url": self.preview_url,
+            "frame_selector": self.frame_selector,
         }

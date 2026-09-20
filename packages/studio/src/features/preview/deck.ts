@@ -133,6 +133,11 @@ export class PreviewDeck {
     return () => this.listeners.delete(listener);
   };
 
+  automationUrl(view: string): string | undefined {
+    const active = view === this.view ? this.frames.find(this.runtime, view) : undefined;
+    return active?.state?.rendered ? active.frame?.src : undefined;
+  }
+
   readonly getSnapshot = (): PreviewDeckSnapshot => this.snapshot;
 
   private readonly recordObservation: RecordBrowserObservation = async (observation) => {

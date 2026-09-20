@@ -90,6 +90,7 @@ class ActivationCoordinator:
         view: str,
         *,
         owner: ObservedViewOwner | None = None,
+        preview_url: str | None = None,
     ) -> ActivationAckOutcome:
         async with self._store.condition:
             self._store.require_open()
@@ -137,6 +138,7 @@ class ActivationCoordinator:
             self._store.activation_operations[client_id] = AcknowledgedActivation(
                 activation=activation,
                 active_view_generation=committed.active_view_generation,
+                preview_url=preview_url,
             )
             self._store.condition.notify_all()
             return ActivationAckOutcome.APPLIED
@@ -166,7 +168,7 @@ class ActivationCoordinator:
             self._store.condition.notify_all()
             return ActivationAckOutcome.REJECTED
 
-    async def wait(self, activation: ViewActivation, timeout: float) -> None:
+    async def wait(self, activation: ViewActivation, timeout: float) -> str | None:
         timed_out = False
         closed = False
         failure: MarimoStudioError | None = None
@@ -190,6 +192,7 @@ class ActivationCoordinator:
                     RetainedActivation(
                         operation.activation,
                         operation.active_view_generation,
+                        operation.preview_url,
                     )
                 )
                 self._store.condition.notify_all()
@@ -234,6 +237,12 @@ class ActivationCoordinator:
                 "The active Studio view changed during view activation.",
                 status_code=409,
             )
+
+        return (
+            operation.preview_url
+            if isinstance(operation, (AcknowledgedActivation, RetainedActivation))
+            else None
+        )
 
     def pending_for(
         self,

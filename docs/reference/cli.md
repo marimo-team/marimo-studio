@@ -273,6 +273,11 @@ Studio selects the connected tab automatically when there is one. When several
 tabs are connected, the error lists their IDs. Pass one through
 `--browser-client` or `MARIMO_STUDIO_BROWSER_CLIENT`.
 
+The result includes `client_id`, `session_id`, `preview_url`, and
+`frame_selector`. Use the selector in the selected Studio tab to target its
+active, interactive preview. The URL identifies the acknowledged document.
+Refresh these fields with `view show` after a view, runtime, or session change.
+
 Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
 `127.0.0.1` and `localhost`. Pass access tokens through
 `MARIMO_STUDIO_ACCESS_TOKEN`, not through the URL.

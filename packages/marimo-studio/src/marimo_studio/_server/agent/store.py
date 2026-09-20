@@ -34,6 +34,7 @@ class AcknowledgedActivation:
 
     activation: ViewActivation
     active_view_generation: int
+    preview_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class RetainedActivation:
 
     activation: ViewActivation
     active_view_generation: int
+    preview_url: str | None = None
 
 
 @dataclass(frozen=True)

@@ -21,6 +21,7 @@ it("acknowledges an activation with its browser identity", async () => {
     "/_marimo-studio",
     "server-token",
     "browser-client-1234",
+    () => "http://localhost/preview/",
   );
 
   await acknowledge({ schema: 1, generation: 9, view: "report" }, new AbortController().signal);
@@ -33,6 +34,7 @@ it("acknowledges an activation with its browser identity", async () => {
         schema: 1,
         clientId: "browser-client-1234",
         view: "report",
+        previewUrl: "http://localhost/preview/",
       }),
     }),
   );

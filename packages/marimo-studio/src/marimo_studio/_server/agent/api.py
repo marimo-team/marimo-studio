@@ -160,7 +160,7 @@ async def activation_ack_response(
         return json_body_error_response(error)
     schema = body.get("schema") if isinstance(body, dict) else None
     required = {"schema", "clientId", "view"}
-    allowed = {*required, "catalogGeneration", "viewGeneration"}
+    allowed = {*required, "catalogGeneration", "viewGeneration", "previewUrl"}
     if (
         not isinstance(body, dict)
         or not required.issubset(body)
@@ -170,6 +170,13 @@ async def activation_ack_response(
         or schema != 1
         or not _nonempty(body.get("clientId"))
         or not _nonempty(body.get("view"))
+    ):
+        return _invalid_payload("invalid-activation-ack")
+    preview_url = body.get("previewUrl")
+    if preview_url is not None and (
+        not isinstance(preview_url, str)
+        or len(preview_url) > 16384
+        or not preview_url.startswith(("http://", "https://"))
     ):
         return _invalid_payload("invalid-activation-ack")
     has_catalog_owner = "catalogGeneration" in body
@@ -210,6 +217,7 @@ async def activation_ack_response(
         generation,
         body["view"],
         owner=owner,
+        preview_url=preview_url,
     )
     return JSONResponse(
         {"schema": 1, "outcome": outcome.value},

@@ -87,6 +87,7 @@ async def _activate_connected(
                 browser.client_id,
                 pending.activation.generation,
                 "dashboard",
+                preview_url="http://localhost/dashboard/?runtime=server",
             )
             break
         await asyncio.sleep(0.01)
@@ -123,6 +124,8 @@ def test_external_activation_targets_the_selected_or_only_browser(
 
     selected, implicit = asyncio.run(exercise())
 
+    assert selected.preview_url == "http://localhost/dashboard/?runtime=server"
+    assert 'data-preview-view-frame="dashboard"' in selected.frame_selector
     assert selected.view == "dashboard"
     assert selected.client_id == "browser-client-1234"
     assert selected.session_id == "s_123456"

@@ -132,6 +132,11 @@ import marimo_studio.agent as studio_agent
 await studio_agent.current_workspace().view("dashboard").show()
 ```
 
+`show()` returns `client_id`, `preview_url`, and `frame_selector` for the
+acknowledged preview. Use that exact selector for browser frame switching and
+DOM evaluation. Cached and hidden frames are outside this selector. Call
+`show()` again after changing the view, runtime, or browser session.
+
 Reimport `marimo_studio.agent` and reacquire the workspace and view in each
 code-mode execution. Scratch imports and handles from a preceding execution
 may be gone. If build or activation fails, repair the reported problem and

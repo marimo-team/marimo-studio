@@ -212,6 +212,9 @@ def render_view_show(result: ShowResult) -> None:
     """Write a completed browser view selection in human text."""
     echo(f"{green('Showing')} view {result.view} in {result.client_id}")
     echo(f"  {light_blue('session')} {result.session_id}")
+    if result.preview_url is not None:
+        echo(f"  {light_blue('preview')} {result.preview_url}")
+    echo(f"  {light_blue('frame')} {result.frame_selector}")
 
 
 def render_static_export(result: StaticExportResult) -> None:

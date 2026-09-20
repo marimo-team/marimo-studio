@@ -145,7 +145,7 @@ def parse_show_result(
         "generation",
         "session_id",
     }
-    optional = {"client_id"}
+    optional = {"client_id", "preview_url", "frame_selector"}
     if (
         not required.issubset(payload)
         or not set(payload).issubset(required | optional)
@@ -157,6 +157,10 @@ def parse_show_result(
         or not _nonnegative_int(generation)
         or (client_id is not None and not _nonempty(client_id))
         or not _nonempty(session_id)
+        or (
+            payload.get("preview_url") is not None
+            and not _nonempty(payload["preview_url"])
+        )
         or not client_id_present
         or not _nonempty(client_id)
     ):
@@ -167,6 +171,7 @@ def parse_show_result(
         generation=cast(int, generation),
         client_id=cast(str, client_id),
         session_id=cast(str, session_id),
+        preview_url=cast(str | None, payload.get("preview_url")),
     )
 
 

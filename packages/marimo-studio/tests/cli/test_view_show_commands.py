@@ -26,6 +26,7 @@ def test_view_show_returns_the_shared_result(
             generation=2,
             session_id="s_123456",
             client_id=connection.browser_client,
+            preview_url="http://localhost:2718/dashboard/",
         )
 
     monkeypatch.setattr(
@@ -57,6 +58,11 @@ def test_view_show_returns_the_shared_result(
         "generation": 2,
         "session_id": "s_123456",
         "client_id": "browser-client-1234",
+        "preview_url": "http://localhost:2718/dashboard/",
+        "frame_selector": (
+            'iframe[data-preview-frame][data-preview-view-frame="dashboard"]'
+            ":not([hidden]):not([inert])"
+        ),
     }
 
 
