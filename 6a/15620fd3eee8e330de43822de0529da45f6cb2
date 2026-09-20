@@ -1,0 +1,19 @@
+apps/e2e/tests/provider-notebook.spec.ts
+  s_707852fa342e68::t_5e5a26626f010f 5,99-107,110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6a15620fd3eee8e330de43822de0529da45f6cb2",
+  "prompts": {},
+  "sessions": {
+    "s_707852fa342e68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c024-d52c-77a2-a777-67431c3b2808",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
