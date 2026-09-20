@@ -35,9 +35,10 @@ const endpointNames = {
 const identitySchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/, {
   message: "Network identity must be a nonempty portable identifier",
 });
+const suiteSchema = z.enum(["main", "provider", "installed"]);
 const networkIdentitySchema = z.object({
   runId: identitySchema,
-  suite: identitySchema,
+  suite: identitySchema.pipe(suiteSchema),
   workerId: identitySchema,
 });
 const listenerAddressSchema = z.object({ port: z.number().int().min(1).max(65535) });
@@ -47,7 +48,6 @@ export interface E2EEndpoint {
   readonly hostname: string;
   readonly port: number;
   readonly origin: string;
-  readonly namedOrigin: string;
   bindBackend(port: number): () => void;
 }
 interface EndpointResource {
@@ -68,10 +68,11 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
   let closing: Promise<void> | undefined;
   const owned: EndpointResource[] = [];
 
-  const requireRunning = () => {
+  const requireRunning = (group: keyof typeof endpointNames) => {
+    if (group !== suite) throw new Error(`${group} endpoint does not belong to ${suite} suite`);
     if (state !== "running") throw new Error(`E2E network is ${state}; await start() before use`);
   };
-  const createEndpoint = (group: string, name: string): E2EEndpoint => {
+  const createEndpoint = (group: keyof typeof endpointNames, name: string): E2EEndpoint => {
     const hostname = `${group}-${name.toLowerCase()}.${suffix}.localhost`;
     const resource: EndpointResource = {
       hostname,
@@ -80,23 +81,19 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
       port: 0,
       backend: undefined,
     };
-    owned.push(resource);
+    if (group === suite) owned.push(resource);
     return Object.freeze({
       hostname,
       get port() {
-        requireRunning();
+        requireRunning(group);
         return resource.port;
       },
       get origin() {
-        requireRunning();
+        requireRunning(group);
         return `http://127.0.0.1:${resource.port}`;
       },
-      get namedOrigin() {
-        requireRunning();
-        return `http://${hostname}:${resource.port}`;
-      },
       bindBackend(port: number) {
-        requireRunning();
+        requireRunning(group);
         if (!Number.isInteger(port) || port < 1 || port > 65535 || port === resource.port) {
           throw new RangeError("Backend port must identify a separate listening TCP server");
         }
@@ -110,7 +107,10 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
       },
     });
   };
-  const createGroup = <Name extends string>(group: string, names: readonly Name[]) => {
+  const createGroup = <Name extends string>(
+    group: keyof typeof endpointNames,
+    names: readonly Name[],
+  ) => {
     // SAFETY: Each name from the fixed catalog becomes a key with exactly one endpoint.
     return Object.freeze(
       Object.fromEntries(names.map((name) => [name, createEndpoint(group, name)])),
@@ -228,6 +228,6 @@ const runId = process.env[E2E_RUN_ID_ENV] ?? randomUUID();
 process.env[E2E_RUN_ID_ENV] = runId;
 export const e2eNetwork = createE2ENetwork({
   runId,
-  suite: process.env.MARIMO_STUDIO_E2E_SUITE ?? "main",
+  suite: suiteSchema.parse(process.env.MARIMO_STUDIO_E2E_SUITE ?? "main"),
   workerId: process.env.TEST_WORKER_INDEX ?? "controller",
 });

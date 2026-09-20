@@ -39,11 +39,7 @@ test("simultaneous workers own distinct listeners and bind routes only after bac
     expect(() => first.main.studio.origin).toThrow("await start()");
     expect(() => first.main.studio.bindBackend(service.port)).toThrow("await start()");
     await Promise.all([first.start(), first.start(), second.start()]);
-    const endpoints = [first, second].flatMap((network) => [
-      ...Object.values(network.main),
-      ...Object.values(network.provider),
-      ...Object.values(network.installed),
-    ]);
+    const endpoints = [first, second].flatMap((network) => Object.values(network.main));
     const ports = endpoints.map((endpoint) => endpoint.port);
     expect(new Set(ports).size).toBe(ports.length);
     expect(ports).not.toContain(service.port);
@@ -73,6 +69,25 @@ test("simultaneous workers own distinct listeners and bind routes only after bac
     await close(service.server);
   }
 });
+
+test.each(["main", "provider", "installed"] as const)(
+  "%s workers expose only their selected suite's listeners",
+  async (suite) => {
+    const network = createE2ENetwork({ runId: "suite-isolation", suite, workerId: "0" });
+    try {
+      await network.start();
+      const endpoint = Object.values(network[suite])[0]!;
+      expect(await status(endpoint.port)).toBe(404);
+      expect(endpoint.origin).toBe(`http://127.0.0.1:${endpoint.port}`);
+      const foreign = suite === "main" ? network.provider.live : network.main.studio;
+      expect(() => foreign.port).toThrow("does not belong");
+      expect(() => foreign.origin).toThrow("does not belong");
+      expect(() => foreign.bindBackend(12345)).toThrow("does not belong");
+    } finally {
+      await network.close();
+    }
+  },
+);
 
 test("closing during startup releases listeners and prevents later acquisitions", async () => {
   const network = createE2ENetwork({ runId: "closing-run", suite: "provider", workerId: "0" });
