@@ -780,6 +780,29 @@ explicit state rows when valid combinations are sparse. Keep browser-only
 filtering of projected data in the view. A matrix prepares every combination
 of its input choices.
 
+Prepared state values use each control's **frontend value**, which can differ
+from its Python `.value`. A dropdown takes a one-item array of its option label,
+a multiselect takes an array of labels, and a slider takes a number. For a
+`scenario` dropdown with labels `Overview` and `Reviewed` and a
+`minimum_magnitude` slider, put this in the selected view's `states.yaml`:
+
+```yaml
+schema: marimo-export.states.v1
+default_state: overview
+states:
+  overview:
+    scenario: [Overview]
+    minimum_magnitude: 2.5
+  reviewed:
+    scenario: [Reviewed]
+    minimum_magnitude: 4.0
+```
+
+State keys name the notebook control variables. For dropdown options that map
+labels to Python objects, use the label array rather than the mapped object.
+Preflight this file before export and exercise every offered state in the
+exported browser view.
+
 Export the verified runtime:
 
 ```console
