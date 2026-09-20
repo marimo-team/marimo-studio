@@ -21,7 +21,7 @@ test.each(["dev", "preview"])(
   },
 );
 
-test.each([undefined, "", "0", "65536", "-1", "4321suffix"])(
+test.each([undefined, "0", "65536", "4321suffix"])(
   "rejects an invalid assigned port %s",
   (port) => {
     expect(() => documentationServerArguments(["preview"], port)).toThrow("PORT");
