@@ -187,6 +187,7 @@ test("bounds upstream connections while keeping streamed responses live", async 
     }
     expect(connections).toBeLessThanOrEqual(8);
     expect(sockets.size).toBeLessThanOrEqual(8);
+    await expect.poll(() => sockets.size, { timeout: 1000 }).toBe(0);
 
     streaming = request({ ...options, path: "/events" });
     const received = once(streaming, "response");
@@ -195,7 +196,9 @@ test("bounds upstream connections while keeping streamed responses live", async 
     expect(response.statusCode).toBe(200);
     expect(String((await once(response, "data"))[0])).toBe("data: ready\n\n");
     expect(response.complete).toBe(false);
-    expect(sockets.size).toBeLessThanOrEqual(8);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(response.destroyed).toBe(false);
+    expect(sockets.size).toBe(1);
     release();
     await expect.poll(() => sockets.size, { timeout: 1000 }).toBe(0);
     expect(await status(network.main.studio.port)).toBe(404);

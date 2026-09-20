@@ -60,6 +60,7 @@ interface EndpointResource {
 type NetworkState = "new" | "starting" | "running" | "closing" | "closed";
 
 const MAX_UPSTREAM_SOCKETS = 8;
+const UPSTREAM_IDLE_TIMEOUT = 250;
 
 const responseHead = (upstream: IncomingMessage) => {
   const headers = upstream.rawHeaders
@@ -230,6 +231,7 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
             keepAlive: true,
             maxFreeSockets: MAX_UPSTREAM_SOCKETS,
             maxSockets: MAX_UPSTREAM_SOCKETS,
+            timeout: UPSTREAM_IDLE_TIMEOUT,
           }),
         };
         resource.backend = binding;
