@@ -24,6 +24,24 @@ from marimo_studio.errors import ConfigurationError
 _PACKAGE_NAME = canonicalize_name("marimo-studio")
 
 
+def _with_requirement(value: str) -> str:
+    try:
+        parsed = Requirement(value)
+    except InvalidRequirement:
+        source = value.partition(" ;")[0]
+    else:
+        if parsed.url is None:
+            return value
+        source = parsed.url
+    if Path(source).is_absolute():
+        replacement = Path(source).as_uri()
+    elif source.startswith("file:"):
+        replacement = source.replace(",", "%2C")
+    else:
+        return value
+    return value.replace(source, replacement, 1)
+
+
 def _replace_requirement(
     project: MutableMapping[str, object],
     name: str,
@@ -150,7 +168,7 @@ def inline_environment_flags(
                 raise ConfigurationError(
                     f"Unsupported notebook requirement: {requirement!r}"
                 )
-            requirement_flags.extend(["--with", requirement])
+            requirement_flags.extend(["--with", _with_requirement(requirement)])
     requirement_index = flags.index("--with-requirements")
     flags[requirement_index : requirement_index + 2] = requirement_flags
     if compose_project:

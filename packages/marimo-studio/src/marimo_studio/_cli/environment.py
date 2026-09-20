@@ -419,7 +419,8 @@ def _live_diagnostics(path: Path, relay: Callable[[TextIO], None]) -> Iterator[N
             with path.open(encoding="utf-8", errors="replace") as source:
                 while True:
                     terminal = stopped.is_set()
-                    while True:
+                    batch = StringIO()
+                    while batch.tell() < 64 * 1024:
                         position = source.tell()
                         line = source.readline()
                         if not line:
@@ -427,7 +428,13 @@ def _live_diagnostics(path: Path, relay: Callable[[TextIO], None]) -> Iterator[N
                         if not line.endswith("\n") and not terminal:
                             source.seek(position)
                             break
-                        relay(StringIO(line))
+                        batch.write(line)
+                    full_batch = batch.tell() >= 64 * 1024
+                    if batch.tell():
+                        batch.seek(0)
+                        relay(batch)
+                    if full_batch:
+                        continue
                     if terminal:
                         return
                     stopped.wait(0.1)

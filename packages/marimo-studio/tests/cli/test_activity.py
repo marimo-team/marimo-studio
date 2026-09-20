@@ -58,7 +58,7 @@ def test_heartbeat_reports_last_observed_state_and_stops_on_exit() -> None:
     class Output(StringIO):
         def write(self, value: str) -> int:
             written = super().write(value)
-            if '"heartbeat"' in value:
+            if '"heartbeat"' in value and '"reviewed"' in value:
                 observed.set()
             return written
 
@@ -80,7 +80,9 @@ def test_heartbeat_reports_last_observed_state_and_stops_on_exit() -> None:
         )
         assert observed.wait(2), "heartbeat did not arrive during active preparation"
     events = [json.loads(line) for line in output.getvalue().splitlines()]
-    heartbeat = next(item for item in events if item.get("code") == "heartbeat")
+    heartbeat = next(
+        item for item in reversed(events) if item.get("code") == "heartbeat"
+    )
     assert heartbeat["details"]["state"] == "reviewed"
     assert heartbeat["details"]["cache"]["authored_hits"] == 2
     assert heartbeat["details"]["cell"] is None
@@ -132,3 +134,20 @@ def test_diagnostic_relay_failure_is_propagated_after_worker_exit(
 
     assert raised.value is failure
     assert workers and all(not worker.is_alive() for worker in workers)
+
+
+def test_live_diagnostics_group_and_bound_each_available_batch(tmp_path: Path) -> None:
+    channel = tmp_path / "diagnostics"
+    channel.write_text("first line\n" + "x" * 20_000 + "\nlast line\n")
+    output = StringIO()
+    stream = DiagnosticStream(format="jsonl", diagnostic_stream=output)
+
+    with _live_diagnostics(channel, stream.relay_trusted_stream):
+        pass
+
+    event = json.loads(output.getvalue())
+    assert event["code"] == "process-output"
+    assert event["details"]["line_count"] == 3
+    assert event["details"]["truncated"]
+    assert len(event["message"]) <= 16 * 1024
+    assert event["message"].endswith("last line")

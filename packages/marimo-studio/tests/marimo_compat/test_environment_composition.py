@@ -268,7 +268,7 @@ version = "1.0.0"
         'VALUE = "project-source"\n',
         encoding="utf-8",
     )
-    notebook_package = tmp_path / "notebook-demo"
+    notebook_package = tmp_path / "notebook,demo"
     (notebook_package / "src" / "notebook_demo").mkdir(parents=True)
     (notebook_package / "pyproject.toml").write_text(
         """\
@@ -292,7 +292,7 @@ version = "1.0.0"
         ).replace(
             "# ///\nimport marimo",
             "#\n# [tool.uv.sources]\n"
-            '# notebook-demo = { path = "../notebook-demo" }\n'
+            '# notebook-demo = { path = "../notebook,demo" }\n'
             "# ///\nimport marimo",
         ),
         encoding="utf-8",
@@ -392,6 +392,32 @@ def test_inline_environment_keeps_editable_marimo_without_temporary_requirements
     assert flags[flags.index("--with-editable") + 1] == str(source)
     assert "humanize" in flags
     assert "--with-requirements" not in flags
+
+
+def test_inline_environment_encodes_exported_local_paths_and_keeps_markers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from marimo._cli import sandbox
+
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text('# /// script\n# dependencies = ["local-package"]\n# ///\n')
+    source = tmp_path / "local,package"
+    marker = " ; python_version >= '3.10'"
+    monkeypatch.setattr(
+        sandbox,
+        "_resolve_requirements_txt_lines",
+        lambda _reader: [f"{source}{marker}"],
+    )
+
+    flags = inline_environment_flags(
+        notebook,
+        (f"marimo-studio=={version('marimo-studio')}",),
+        compose_project=False,
+        marker_environment=None,
+    )
+
+    requirements = [value for flag, value in pairwise(flags) if flag == "--with"]
+    assert f"{source.as_uri()}{marker}" in requirements
 
 
 @pytest.mark.parametrize(

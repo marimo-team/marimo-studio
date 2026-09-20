@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from packaging.markers import UndefinedEnvironmentName
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
@@ -73,9 +74,10 @@ def _requirements(values: object) -> tuple[Requirement, ...]:
             raise ConfigurationError("Dependencies must be strings")
         try:
             requirement = Requirement(value)
-        except InvalidRequirement as error:
+            active = requirement.marker is None or requirement.marker.evaluate()
+        except (InvalidRequirement, UndefinedEnvironmentName) as error:
             raise ConfigurationError(f"Invalid dependency: {value}") from error
-        if requirement.marker is None or requirement.marker.evaluate():
+        if active:
             result.append(requirement)
     return tuple(result)
 
@@ -137,10 +139,21 @@ def _installed_requirements(
                 )
             )
         for dependency in distribution.requires or ():
-            selected = Requirement(dependency)
-            if selected.marker is None or any(
-                selected.marker.evaluate({"extra": extra}) for extra in {"", *extras}
-            ):
+            try:
+                selected = Requirement(dependency)
+                active = selected.marker is None or any(
+                    selected.marker.evaluate({"extra": extra})
+                    for extra in {"", *extras}
+                )
+            except (InvalidRequirement, UndefinedEnvironmentName):
+                issues.append(
+                    DependencyIssue(
+                        "invalid-dependency",
+                        f"{name} declares an invalid dependency: {dependency}",
+                    )
+                )
+                continue
+            if active:
                 pending.append(selected)
     return enabled
 

@@ -7,6 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from marimo_studio._cli import cli
+from marimo_studio.errors import ConfigurationError
 
 
 def test_dependency_doctor_reports_drift_and_missing_runtime_imports(
@@ -92,6 +93,54 @@ def test_dependency_doctor_rejects_unknown_distribution_extras(tmp_path: Path) -
     }
 
 
+def test_dependency_doctor_reports_undefined_marker_environment(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        "# /// script\n# dependencies = [\"packaging; extras == 'test'\"]\n# ///\n"
+    )
+
+    result = CliRunner().invoke(
+        cli, ["doctor", "--dependencies", "--target", str(notebook), "--json"]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, ConfigurationError)
+    assert "Invalid dependency: packaging; extras" in str(result.exception)
+
+
+@pytest.mark.parametrize("dependency", ["broken >= !", 'broken; extras == "test"'])
+def test_dependency_doctor_reports_invalid_installed_metadata_and_continues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dependency: str
+) -> None:
+    metadata = tmp_path / "broken_distribution-1.0.dist-info"
+    metadata.mkdir()
+    (metadata / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: broken-distribution\nVersion: 1.0\n"
+        f"Requires-Dist: {dependency}\nRequires-Dist: packaging\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        '# /// script\n# dependencies = ["broken-distribution"]\n# ///\n'
+    )
+
+    result = CliRunner().invoke(
+        cli, ["doctor", "--dependencies", "--target", str(notebook), "--json"]
+    )
+
+    assert result.exit_code == 1, result.output
+    report = json.loads(result.stdout)
+    assert report["installed"]["packaging"]
+    assert report["issues"] == [
+        {
+            "code": "invalid-dependency",
+            "message": (
+                f"broken-distribution declares an invalid dependency: {dependency}"
+            ),
+        }
+    ]
+
+
 def test_dependency_doctor_accepts_the_owning_project_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -114,6 +163,7 @@ def test_dependency_doctor_accepts_the_owning_project_package(
     assert json.loads(result.stdout)["imports"][0]["available"]
 
 
+@pytest.mark.deno
 def test_dependency_doctor_resolves_provider_umbrella_extras(tmp_path: Path) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text("import marimo\n")
@@ -133,6 +183,7 @@ def test_dependency_doctor_resolves_provider_umbrella_extras(tmp_path: Path) -> 
     assert report["installed"]["deno"]
 
 
+@pytest.mark.deno
 def test_dependency_doctor_checks_the_combined_execution_environment(
     tmp_path: Path,
 ) -> None:

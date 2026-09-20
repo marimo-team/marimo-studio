@@ -476,4 +476,4 @@ def test_notebook_source_claim_omits_the_invoking_checkout(
 
     assert "--with-editable" not in command
     requirements = [value for flag, value in pairwise(command) if flag == "--with"]
-    assert f"marimo-studio @ {declared_source}" in requirements
+    assert f"marimo-studio @ {declared_source.as_uri()}" in requirements
