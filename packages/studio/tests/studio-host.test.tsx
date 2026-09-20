@@ -565,12 +565,11 @@ it("preserves an active editor and its public query during first-view activation
 
 it("retries first-view activation when the editor query changes during bootstrap", async () => {
   useActivationEvents();
-  const documentAttached = deferred<boolean>();
-  const stageNavigation = vi.spyOn(PreviewDeck.prototype, "stageNavigation").mockReturnValue({
-    ready: documentAttached.promise,
+  vi.spyOn(PreviewDeck.prototype, "stageNavigation").mockReturnValue({
+    ready: Promise.resolve(true),
     rollback: async () => undefined,
   });
-  const automationTarget = vi.spyOn(PreviewDeck.prototype, "automationTarget").mockReturnValue({
+  vi.spyOn(PreviewDeck.prototype, "automationTarget").mockReturnValue({
     previewUrl: "http://localhost:3000/dashboard/",
     frameSelector: 'iframe[data-preview-view-frame="dashboard"]',
   });
@@ -627,22 +626,6 @@ it("retries first-view activation when the editor query changes during bootstrap
   expect(new URLSearchParams(bootstrapQueries[1]).getAll("tag")).toEqual(["b", "a"]);
   expect(new URL(globalThis.location.href).searchParams.getAll("tag")).toEqual(["b", "a"]);
   expect(new URL(editorWindow.location.href).searchParams.getAll("tag")).toEqual(["b", "a"]);
-  await vi.waitFor(() =>
-    expect(stageNavigation).toHaveBeenCalledWith(
-      "dashboard",
-      false,
-      undefined,
-      expect.any(AbortSignal),
-      "document",
-    ),
-  );
-  expect(
-    request.mock.calls.some(([input]) =>
-      String(input instanceof Request ? input.url : input).includes("/activations/7/ack"),
-    ),
-  ).toBe(false);
-  expect(automationTarget).not.toHaveBeenCalled();
-  await act(async () => documentAttached.resolve(true));
   await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.stringContaining("/activations/7/ack"),

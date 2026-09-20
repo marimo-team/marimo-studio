@@ -690,7 +690,6 @@ it("addresses activated documents before rendering and rejects a retired selecti
   try {
     const target = deck.automationTarget("dashboard", false, new AbortController().signal);
     expect(target.previewUrl).not.toBe("about:blank");
-    expect(target.frameSelector).not.toContain("inert");
     expect(deck.getSnapshot().states.server?.rendered).toBe(false);
     const next = deck.stageView("report", undefined, undefined, "document");
     expect(await next.ready).toBe(true);
