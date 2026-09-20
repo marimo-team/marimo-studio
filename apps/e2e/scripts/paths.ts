@@ -13,7 +13,6 @@ export const fixtureDirectory = resolve(appDirectory, "fixtures");
 export const createE2EPaths = (root: string, { runId, suite, workerId }: E2ENetworkIdentity) => {
   const resultRoot = resolve(root, "test-results", runId, suite, workerId);
   const workspaceDirectory = resolve(resultRoot, "workspace");
-  const providerWorkspaceRoot = resolve(resultRoot, "workspaces");
   return Object.freeze({
     resultRoot,
     blobReportDirectory: resolve(root, "test-results", `blob-${suite}`, runId, workerId),
@@ -27,10 +26,11 @@ export const createE2EPaths = (root: string, { runId, suite, workerId }: E2ENetw
     configDirectory: resolve(resultRoot, "xdg-config"),
     workspaceDirectory,
     notebookProcessRegistryDirectory: resolve(workspaceDirectory, ".notebook-processes"),
-    providerWorkspaceDirectory: resolve(providerWorkspaceRoot, "provider-runtime"),
-    providerStaticRoot: resolve(providerWorkspaceRoot, "provider-runtime-static"),
-    providerConfigDirectory: resolve(providerWorkspaceRoot, "provider-runtime-xdg-config"),
-    hostedWorkspaceDirectory: resolve(providerWorkspaceRoot, "hosted"),
+    // Provider snapshots and npm packages need room below Windows' cwd path limit.
+    providerWorkspaceDirectory: resolve(resultRoot, "provider"),
+    providerStaticRoot: resolve(resultRoot, "provider-static"),
+    providerConfigDirectory: resolve(resultRoot, "provider-config"),
+    hostedWorkspaceDirectory: resolve(resultRoot, "workspaces", "hosted"),
   });
 };
 

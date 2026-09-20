@@ -3,10 +3,10 @@ import { expect, test } from "vite-plus/test";
 
 import type { E2ENetworkIdentity } from "../scripts/network.ts";
 
-import { createE2EPaths } from "../scripts/paths.ts";
+import { appDirectory, createE2EPaths } from "../scripts/paths.ts";
 
 test("isolates workspaces and reports across runs, suites, and restarted workers", () => {
-  const root = resolve("apps/e2e");
+  const root = appDirectory;
   const identities: E2ENetworkIdentity[] = [
     { runId: "run-a", suite: "main", workerId: "0" },
     { runId: "run-b", suite: "main", workerId: "0" },
