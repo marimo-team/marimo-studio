@@ -775,7 +775,10 @@ WebAssembly when visitors must recompute unprepared states and the notebook can
 run through Pyodide.
 
 For Zero-Python controls, configure `states.yaml` in the selected view project.
-An omitted state file prepares the initial notebook state. Use
+An omitted state file prepares the initial notebook state. Keep presentation-only
+copy in view source. A Python label edit changes notebook publication identity
+and requires another state walk, even if native cell caching avoids recomputation.
+Use
 explicit state rows when valid combinations are sparse. Keep browser-only
 filtering of projected data in the view. A matrix prepares every combination
 of its input choices.

@@ -131,6 +131,13 @@ configured export repository. An exact later export can reuse that prepared
 generation before starting the notebook. Set `MARIMO_EXPORT_REPOSITORY` to
 choose the repository directory.
 
+Prepared publication identity includes the saved notebook document. Changing a
+Python control label therefore creates a new publication and walks the prepared
+states again, even when Marimo restores analytical cells from cache. Keep
+presentation-only headings and labels in view source when they should change
+independently of notebook computation. View-only edits can reuse the prepared
+notebook states while Studio rebuilds the presentation artifact.
+
 The repository stores verified portable publications. Marimo remains the
 owner of computation cache keys, invalidation, serialization, and restoration.
 Use `mo.watch.file` in an upstream notebook cell when a result depends on file
