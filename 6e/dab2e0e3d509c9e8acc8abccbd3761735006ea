@@ -1,0 +1,20 @@
+packages/studio/src/features/preview/controller.ts
+  s_1d547b3fd29c2e::t_3a8e04728fda8d 260,276-277
+  ai_agent 288-300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6edab2e0e3d509c9e8acc8abccbd3761735006ea",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

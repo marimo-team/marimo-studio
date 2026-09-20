@@ -1,0 +1,28 @@
+skills/marimo-studio/SKILL.md
+  ai_agent 737,750,771,740,743-744,749
+  s_1d547b3fd29c2e::t_ed1edc532c5eff 791
+packages/marimo-studio/src/marimo_studio/_cli/output.py
+  ai_agent 23,85-91
+docs/reference/cli.md
+  ai_agent 275-277,279-280
+packages/marimo-studio/tests/cli/test_view_show_commands.py
+  ai_agent 29,61
+packages/marimo-studio/src/marimo_studio/_browser_client/records.py
+  ai_agent 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "81d5d0c97d06ff10b09387fd188011014dd3291d",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_obsnotebook/starters/default/files/AGENTS.md
+  s_1d547b3fd29c2e::t_f4e14f59b3dc18 60-62,66-68
+  ai_agent 63-65
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/AGENTS.md
+  s_1d547b3fd29c2e::t_f4e14f59b3dc18 138-140,144-146
+  ai_agent 141-143
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/AGENTS.md
+  s_1d547b3fd29c2e::t_f4e14f59b3dc18 126-128,132-134
+  ai_agent 129-131
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/default/files/AGENTS.md
+  s_1d547b3fd29c2e::t_f4e14f59b3dc18 127-129,133-135
+  ai_agent 130-132
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/starters/default/files/AGENTS.md
+  s_1d547b3fd29c2e::t_f4e14f59b3dc18 139-141,145-147
+  ai_agent 142-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "03815db08dc67501f6528dc60cd87ea1a28e8721",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

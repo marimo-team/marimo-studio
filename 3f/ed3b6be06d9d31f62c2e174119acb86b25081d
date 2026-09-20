@@ -1,0 +1,122 @@
+apps/e2e/tests/notebook-server.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 4,20,54,76,84-85
+  ai_agent 7
+apps/e2e/tests/forced-interruption.spec.ts
+  s_1d547b3fd29c2e::t_309cf6143cee16 1,13
+apps/e2e/tests/authoring.spec.ts
+  ai_agent 521-530
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 62,86,153,190,241,399,500,532,597,601,683
+apps/e2e/tests/host-session-handoff.spec.ts
+  s_1d547b3fd29c2e::t_309cf6143cee16 2
+  ai_agent 18
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 39
+apps/e2e/tests/multi-tab.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 54,96,108
+apps/e2e/tests/recovery.spec.ts
+  s_1d547b3fd29c2e::t_309cf6143cee16 2
+  ai_agent 21
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 138,186,222
+apps/e2e/tests/provider-fixture.ts
+  s_1d547b3fd29c2e::t_309cf6143cee16 6,25
+apps/e2e/tests/runtime-startup.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 207
+apps/e2e/tests/view-cache-performance.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 66,102,106,155,163,171
+apps/e2e/tests/collaboration.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 99,157,202,287,295,303
+apps/e2e/unit/paths.test.ts
+  s_1d547b3fd29c2e::t_983b67a2cdad85 1-3,6-7,9-15,20-21,23
+  s_1d547b3fd29c2e::t_08eec23603fb0a 5
+  s_1d547b3fd29c2e::t_f48ea7ac7abe98 16-19
+  s_1d547b3fd29c2e::t_5fa030b46f42cd 22
+apps/e2e/tests/history.spec.ts
+  s_1d547b3fd29c2e::t_309cf6143cee16 1
+  ai_agent 18
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 61,63,66,70,78,83,92,96,100,108,143,182,229,245,327,329,331,360
+apps/e2e/package.json
+  s_1d547b3fd29c2e::t_460599ebd85a17 21
+apps/e2e/tests/fixture.ts
+  s_1d547b3fd29c2e::t_309cf6143cee16 41,572
+  s_1d547b3fd29c2e::t_0f7fd738f3b904 101-102,106
+  s_1d547b3fd29c2e::t_5fa030b46f42cd 104-105,107-108,596,625-626
+apps/e2e/tests/provider-runtime.spec.ts
+  s_1d547b3fd29c2e::t_334d2422a703d9 14-15,20-21,196,202
+apps/e2e/tests/catalog-invalidation.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 24,42
+.github/actions/pr-validation/results.test.mjs
+  s_1d547b3fd29c2e::t_983b67a2cdad85 40,49-51
+apps/e2e/tests/hosted-mount.spec.ts
+  s_1d547b3fd29c2e::t_334d2422a703d9 22,69,93,193,199
+  s_1d547b3fd29c2e::t_241666beb6a675 32,35,42,50,58,89,113,120-121,129-130,149,159,166,184,187,206,233,241
+apps/e2e/scripts/_compat/server.py
+  s_1d547b3fd29c2e::t_ca4c182731775f 1-2,5-10,13-15,23-24,27-28,30-33,35-39,41-45,47,50-57,61-84,86-91,94
+  s_1d547b3fd29c2e::t_733021f98832ad 12
+  s_1d547b3fd29c2e::t_4db11bd0bba7e6 16-18,92-93
+  s_1d547b3fd29c2e::t_7a212112944b85 58-60
+apps/e2e/tests/runtime.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 35,101,157,234,405,534,541,548,581
+apps/e2e/tests/stale-results.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 76,84,210,228,236
+apps/e2e/unit/playwright-config.test.ts
+  s_1d547b3fd29c2e::t_be063550f43cb3 1-10,12-17,19-43,45-49
+  s_1d547b3fd29c2e::t_309cf6143cee16 11,44
+.github/workflows/e2e.yml
+  s_1d547b3fd29c2e::t_983b67a2cdad85 129,132,135,169,177,188
+apps/e2e/tests/replay.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 36,38,54,84,86,104,107,172,258,264,301,345,361,365
+apps/e2e/playwright.providers.config.ts
+  s_1d547b3fd29c2e::t_5fa030b46f42cd 21
+  s_1d547b3fd29c2e::t_9a8d463ce3dd96 22
+apps/e2e/unit/marimo-edit.test.ts
+  s_1d547b3fd29c2e::t_790337aa1f5289 1-4,10-17,19-24,26,29-32,37-68,71-97,99-140
+  s_1d547b3fd29c2e::t_4db11bd0bba7e6 98
+pnpm-lock.yaml
+  ai_agent 244-246
+development_docs/frontend.md
+  s_1d547b3fd29c2e::t_fd65770cd6a7d8 77-78
+  s_1d547b3fd29c2e::t_983b67a2cdad85 79-83
+  s_1d547b3fd29c2e::t_c6476e05fa0207 84-95
+apps/e2e/playwright.config.ts
+  s_1d547b3fd29c2e::t_5fa030b46f42cd 21
+  s_1d547b3fd29c2e::t_9a8d463ce3dd96 22
+apps/e2e/scripts/_compat/endpoint.py
+  s_1d547b3fd29c2e::t_ca4c182731775f 1-15,19-26,30-36
+  s_1d547b3fd29c2e::t_7a212112944b85 16-18
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 71,85,95,102,161
+apps/e2e/tests/presentation-security.spec.ts
+  s_1d547b3fd29c2e::t_d4c41d0cd8d801 536-538
+  s_1d547b3fd29c2e::t_de9826523dfe00 544-568
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 78,155,223,455,462,470,533
+apps/e2e/playwright.installed.config.ts
+  s_1d547b3fd29c2e::t_2f37dc788b9b42 6-7
+apps/e2e/tests/recovery-support.ts
+  s_1d547b3fd29c2e::t_334d2422a703d9 5,13,21
+apps/e2e/tests/view-authoring.spec.ts
+  s_1d547b3fd29c2e::t_2ac2e95ea9645b 42,46,81,202,222,249,283,398,406,525,529,567
+apps/e2e/tests/network-fixture.ts
+  s_1d547b3fd29c2e::t_309cf6143cee16 1-2,4-17
+apps/e2e/installed-tests/installed-wheel.spec.ts
+  s_1d547b3fd29c2e::t_2f37dc788b9b42 4-5
+apps/e2e/unit/network.test.ts
+  s_1d547b3fd29c2e::t_5dc804e27a784b 92-93
+apps/e2e/scripts/static-server.py
+  s_1d547b3fd29c2e::t_4db11bd0bba7e6 6,9-13
+  s_1d547b3fd29c2e::t_ca4c182731775f 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3fed3b6be06d9d31f62c2e174119acb86b25081d",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

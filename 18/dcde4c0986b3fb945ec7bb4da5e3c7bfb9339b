@@ -1,0 +1,40 @@
+packages/protocol/src/query.ts
+  ai_agent 9,26
+packages/presentation/src/document/view-navigation.ts
+  ai_agent 1,42,52,77-79
+apps/e2e/tests/presentation-security.spec.ts
+  s_1d547b3fd29c2e::t_d4c41d0cd8d801 536-538
+  s_1d547b3fd29c2e::t_de9826523dfe00 544-568
+docs/guide/run-and-share.md
+  ai_agent 53,57-62,117-122,137-144
+  s_1d547b3fd29c2e::t_b751ec0c526d44 54-56
+  s_1d547b3fd29c2e::t_fb0f5221b5d438 78-80
+packages/presentation/src/dev-reload.ts
+  ai_agent 300
+packages/presentation/src/document/events.ts
+  ai_agent 14,258
+packages/presentation/src/main.ts
+  ai_agent 5,143
+packages/presentation/tests/view-navigation.test.ts
+  ai_agent 16,31,44,167,221-240
+skills/marimo-studio/SKILL.md
+  ai_agent 758,771,792,761,764-765,770,801-823
+  s_1d547b3fd29c2e::t_ed1edc532c5eff 838,839-841
+  s_1d547b3fd29c2e::t_fb0f5221b5d438 142-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "18dcde4c0986b3fb945ec7bb4da5e3c7bfb9339b",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

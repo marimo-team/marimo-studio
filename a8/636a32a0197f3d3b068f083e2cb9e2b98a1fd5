@@ -1,0 +1,22 @@
+apps/e2e/playwright.providers.config.ts
+  s_1d547b3fd29c2e::t_5fa030b46f42cd 22
+  s_1d547b3fd29c2e::t_9a8d463ce3dd96 23
+  s_1d547b3fd29c2e::t_b48ec9152af84b 4,7
+  ai_agent 2,21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a8636a32a0197f3d3b068f083e2cb9e2b98a1fd5",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
