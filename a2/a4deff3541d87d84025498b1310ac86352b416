@@ -1,0 +1,9 @@
+development_docs/architecture/agents-and-delivery.md
+  ai_agent 176-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a2a4deff3541d87d84025498b1310ac86352b416",
+  "prompts": {}
+}
