@@ -31,6 +31,20 @@ class _ProjectionTags(HTMLParser):
     handle_startendtag = handle_starttag
 
 
+class _ScriptTags(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.tags: list[dict[str, str | None]] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        if tag == "script":
+            self.tags.append(dict(attrs))
+
+
 def test_vanilla_starter_exposes_its_generated_notebook_cell(tmp_path: Path) -> None:
     project = _project(tmp_path)
 
@@ -47,14 +61,30 @@ def test_vanilla_starter_loads_provider_owned_browser_dependencies(
     project = _project(tmp_path)
     source = project.root.joinpath("index.html").read_text(encoding="utf-8")
 
-    assert (
-        '<script src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/'
-        'uno.global.js"></script>' in source
-    )
-    assert (
-        '<script src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/'
-        'dist/iconify-icon.min.js"></script>' in source
-    )
+    parser = _ScriptTags()
+    parser.feed(source)
+    assert parser.tags[:2] == [
+        {
+            "src": "https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js",
+            "integrity": (
+                "sha384-iX+gEyr2u+Tmd8XxbySu2iimH7dOfTZn9xahADx38mJHYzAI2CJUCo5+"
+                "PPGOSU2b"
+            ),
+            "crossorigin": "anonymous",
+        },
+        {
+            "defer": None,
+            "src": (
+                "https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/"
+                "dist/iconify-icon.min.js"
+            ),
+            "integrity": (
+                "sha384-jypoV+nlFXLykSFUJkpVjPG/eid90inFxyvUI1corcUR778eMGexPBFz"
+                "NC94eOc+"
+            ),
+            "crossorigin": "anonymous",
+        },
+    ]
 
 
 def test_vanilla_starter_builds_without_possible_output_cells(tmp_path: Path) -> None:

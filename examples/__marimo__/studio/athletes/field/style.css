@@ -502,6 +502,7 @@ body[data-mode="profile"] .profile-axes {
 
   .shower.full .slide-copy {
     width: 100%;
+    max-width: 34rem;
   }
 
   .slide h2 {

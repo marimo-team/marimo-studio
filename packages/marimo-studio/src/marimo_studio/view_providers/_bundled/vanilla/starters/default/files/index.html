@@ -4,14 +4,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>__NOTEBOOK_NAME_HTML__ · __VIEW_NAME_HTML__</title>
-    <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/dist/iconify-icon.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js"
+      integrity="sha384-iX+gEyr2u+Tmd8XxbySu2iimH7dOfTZn9xahADx38mJHYzAI2CJUCo5+PPGOSU2b"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/dist/iconify-icon.min.js"
+      integrity="sha384-jypoV+nlFXLykSFUJkpVjPG/eid90inFxyvUI1corcUR778eMGexPBFzNC94eOc+"
+      crossorigin="anonymous"
+    ></script>
     <style>
       body {
         margin: 0;
-        background: var(--background);
-        color: var(--foreground);
-        font-family: var(--text-font);
+        background: var(--background, Canvas);
+        color: var(--foreground, CanvasText);
+        font-family: var(--text-font, system-ui, sans-serif);
       }
 
       .view-header {
@@ -19,7 +28,7 @@
       }
 
       .view-header p {
-        color: var(--muted-foreground);
+        color: var(--muted-foreground, color-mix(in srgb, currentColor 66%, transparent));
         font-size: 0.75rem;
         font-weight: 600;
         letter-spacing: 0.1em;
