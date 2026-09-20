@@ -27,6 +27,12 @@ or `[tool.uv.workspace]`. Otherwise the notebook's
 [PEP 723](https://peps.python.org/pep-0723/) inline metadata owns Python and
 dependency selection.
 
+View creation preserves project-managed execution. For a project notebook with
+no inline dependency list, Studio adds its view configuration without inventing
+a sandbox dependency list. The emitted editor command uses `uv run --project`
+and `--no-sandbox`, retaining project dependencies and sources. Existing inline
+dependencies remain intact. Standalone notebooks receive sandbox requirements.
+
 Notebook execution re-enters the complete target environment when any condition
 holds:
 

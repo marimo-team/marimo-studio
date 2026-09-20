@@ -15,6 +15,7 @@ from tomlkit import TOMLDocument
 
 from marimo_studio._filesystem.io import atomic_write_text, read_text
 from marimo_studio._notebook.records import CellRef
+from marimo_studio._workspace.python_project import owning_project
 from marimo_studio._workspace.python_requirement import (
     intersect_python_requirements,
 )
@@ -512,20 +513,21 @@ def configured_notebook_source(
     else:
         config.setdefault("default", default_view)
         config.setdefault("cells", tomlkit.table())
-    _set_provider_dependency_ownership(
-        document,
-        config,
-        provider_requirements,
-    )
-    provider_owned = frozenset(
-        canonicalize_name(Requirement(value).name)
-        for value in _provider_dependency_requirements(config)
-    )
-    _set_provider_requirements(
-        document,
-        (_package_requirement(), *provider_requirements),
-        provider_owned=provider_owned,
-    )
+    if "dependencies" in document or owning_project(path) is None:
+        _set_provider_dependency_ownership(
+            document,
+            config,
+            provider_requirements,
+        )
+        provider_owned = frozenset(
+            canonicalize_name(Requirement(value).name)
+            for value in _provider_dependency_requirements(config)
+        )
+        _set_provider_requirements(
+            document,
+            (_package_requirement(), *provider_requirements),
+            provider_owned=provider_owned,
+        )
     set_cell_bindings(config, cell_bindings or {})
     return _replace_metadata(source, path, document)
 

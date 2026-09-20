@@ -730,8 +730,8 @@ status = await workspace.status()
 print(status.launch_requirements)
 ```
 
-Pass every exact requirement through the environment tool. A notebook whose
-only provider is the default Vanilla provider runs with:
+Pass every exact requirement through the environment tool. A standalone
+notebook whose only provider is the default Vanilla provider runs with:
 
 ```console
 uv run --with marimo-studio marimo run notebook.py --sandbox

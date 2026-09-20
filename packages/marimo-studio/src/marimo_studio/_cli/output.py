@@ -20,6 +20,7 @@ from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.overview import StudioOverview
 from marimo_studio._views.records import ViewDocument, ViewInspection, ViewSetupResult
 from marimo_studio._workspace.models import BindingResult
+from marimo_studio._workspace.python_project import owning_project
 
 
 def _shell_command(arguments: list[str]) -> str:
@@ -81,15 +82,20 @@ def render_view_next_command(result: ViewSetupResult) -> None:
     """Show the next command after a completed view creation."""
     if result.dry_run:
         return
-    command = _uvx_command(
-        result.launch_requirements,
-        [
-            "marimo",
-            "edit",
-            str(result.notebook),
-            "--sandbox",
-        ],
-    )
+    project = owning_project(result.notebook)
+    if project is None:
+        command = _uvx_command(
+            result.launch_requirements,
+            ["marimo", "edit", str(result.notebook), "--sandbox"],
+        )
+    else:
+        arguments = ["uv", "run", "--project", str(project)]
+        if (project / "uv.lock").is_file():
+            arguments.append("--frozen")
+        for requirement in result.launch_requirements:
+            arguments.extend(["--with", requirement])
+        arguments.extend(["marimo", "edit", str(result.notebook), "--no-sandbox"])
+        command = _shell_command(arguments)
     _echo_next_command("edit", command)
 
 

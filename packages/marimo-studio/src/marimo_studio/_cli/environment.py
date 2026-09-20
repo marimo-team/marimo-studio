@@ -40,6 +40,15 @@ from marimo_studio._workspace.environment_requirements import (
 )
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.models import NotebookEnvironment, StudioWorkspace
+from marimo_studio._workspace.python_project import (
+    declares_project_environment as _declares_project_environment,
+)
+from marimo_studio._workspace.python_project import (
+    has_project_environment,
+)
+from marimo_studio._workspace.python_project import (
+    project_metadata as _project_metadata,
+)
 from marimo_studio.errors import ConfigurationError, DependencyError
 from marimo_studio.view_providers._host.package_policy import (
     BUNDLED_PROVIDER_REQUIREMENTS,
@@ -94,43 +103,6 @@ def include_provider_ids(
         notebook=target.notebook,
         provider_ids=tuple(sorted({*existing, *provider_ids})),
     )
-
-
-def _project_metadata(root: Path) -> dict[str, object] | None:
-    pyproject = root / "pyproject.toml"
-    try:
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    except OSError as error:
-        raise DependencyError(
-            f"Could not read project metadata: {pyproject}"
-        ) from error
-    except UnicodeError as error:
-        raise DependencyError(
-            f"Project metadata must be UTF-8 text: {pyproject}"
-        ) from error
-    except tomllib.TOMLDecodeError as error:
-        raise DependencyError(
-            f"Invalid project metadata in {pyproject}: {error}"
-        ) from error
-    return data
-
-
-def _declares_project_environment(data: dict[str, object] | None) -> bool:
-    if data is None:
-        return False
-    project = data.get("project")
-    tool = data.get("tool")
-    uv = tool.get("uv") if isinstance(tool, dict) else None
-    return isinstance(project, dict) or (
-        isinstance(uv, dict) and isinstance(uv.get("workspace"), dict)
-    )
-
-
-def has_project_environment(root: Path) -> bool:
-    """Return whether ``root`` declares a Python project or uv workspace."""
-    return _declares_project_environment(_project_metadata(root))
 
 
 def environment_root(target: EnvironmentTarget) -> Path:
