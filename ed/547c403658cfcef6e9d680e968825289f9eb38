@@ -1,0 +1,9 @@
+apps/docs/scripts/server-arguments.test.ts
+  ai_agent 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ed547c403658cfcef6e9d680e968825289f9eb38",
+  "prompts": {}
+}
