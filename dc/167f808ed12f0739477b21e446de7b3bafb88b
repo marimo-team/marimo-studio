@@ -1,0 +1,9 @@
+skills/marimo-studio/SKILL.md
+  ai_agent 783-805
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dc167f808ed12f0739477b21e446de7b3bafb88b",
+  "prompts": {}
+}
