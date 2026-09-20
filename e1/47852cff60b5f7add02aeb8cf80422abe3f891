@@ -1,0 +1,11 @@
+.github/actions/pr-validation/filters.test.mjs
+  ai_agent 52-60
+.github/filters.yml
+  ai_agent 227,243,278
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e147852cff60b5f7add02aeb8cf80422abe3f891",
+  "prompts": {}
+}
