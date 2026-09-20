@@ -1,0 +1,9 @@
+apps/e2e/playwright.config.ts
+  ai_agent 2,21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bf77286b3719c7ecd6477a506339ba18adde4368",
+  "prompts": {}
+}
