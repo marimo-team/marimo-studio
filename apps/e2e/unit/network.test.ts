@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { Agent, createServer, request, type Server } from "node:http";
-import { connect, type Socket } from "node:net";
-import { expect, test } from "vite-plus/test";
+import { connect, Server as NetServer, type Socket } from "node:net";
+import { expect, test, vi } from "vite-plus/test";
 import { z } from "zod";
 
 import { createE2ENetwork } from "../scripts/network.ts";
@@ -199,5 +199,22 @@ test("releases completed upstream connections while keeping streamed responses l
     agent.destroy();
     await network.close();
     await close(server);
+  }
+});
+
+test("reports a running proxy failure and still releases every owned listener", async () => {
+  const network = createE2ENetwork({ runId: "proxy-failure", suite: "main", workerId: "0" });
+  const listening = vi.spyOn(NetServer.prototype, "listen");
+  try {
+    await network.start();
+    const servers = listening.mock.contexts.map((server) => z.instanceof(NetServer).parse(server));
+    const cause = new Error("accept failed");
+    expect(() => servers[0]!.emit("error", cause)).not.toThrow();
+    expect(() => network.main.studio.origin).toThrow("E2E proxy");
+    await expect(network.close()).rejects.toMatchObject({ cause });
+    expect(servers.every((server) => !server.listening)).toBe(true);
+  } finally {
+    listening.mockRestore();
+    await network.close().catch(() => {});
   }
 });

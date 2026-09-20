@@ -11,10 +11,8 @@ const endpointSchema = z
     ({ origin, port }) => origin === `http://127.0.0.1:${port}`,
     "Expected owned loopback endpoint",
   );
-const networkSchema = z
-  .object({
-    origin: z.string().url(),
-    port: z.number().int().positive().max(65535),
+const networkSchema = endpointSchema
+  .safeExtend({
     fresh: endpointSchema,
     static: endpointSchema,
     run: endpointSchema,
@@ -41,7 +39,5 @@ export const createInstalledPackageNetwork = (
 export const readInstalledPackageNetwork = () => {
   const encoded = process.env[INSTALLED_NETWORK_ENV];
   if (!encoded) throw new Error("Run installed acceptance through pnpm e2e:installed");
-  const network = networkSchema.parse(JSON.parse(encoded));
-  endpointSchema.parse({ origin: network.origin, port: network.port });
-  return network;
+  return networkSchema.parse(JSON.parse(encoded));
 };

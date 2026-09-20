@@ -1,14 +1,18 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { expect, test } from "vite-plus/test";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 
 const exec = promisify(execFile);
+
+afterEach(() => vi.unstubAllEnvs());
 
 test.each([
   ["playwright.config.ts", "main", undefined],
   ["playwright.config.ts", "main", "0"],
   ["playwright.providers.config.ts", "provider", "1"],
 ])("%s keeps the %s network unstarted for worker %s", async (config, suite, workerId) => {
+  const parentRunId = "parent-run";
+  vi.stubEnv("MARIMO_STUDIO_E2E_RUN_ID", parentRunId);
   const environment = { ...process.env };
   if (workerId === undefined) delete environment.TEST_WORKER_INDEX;
   else environment.TEST_WORKER_INDEX = workerId;
@@ -31,7 +35,8 @@ test.each([
             running,
             suite: e2eNetwork.suite,
             workerId: e2eNetwork.workerId,
-            inherited: process.env.MARIMO_STUDIO_E2E_RUN_ID === e2eNetwork.runId,
+            runId: e2eNetwork.runId,
+            childEnvironmentRunId: process.env.MARIMO_STUDIO_E2E_RUN_ID,
           }));
         } finally {
           await e2eNetwork.close();
@@ -40,10 +45,13 @@ test.each([
     ],
     { env: environment, timeout: 10_000 },
   );
-  expect(JSON.parse(stdout)).toEqual({
+  const result = JSON.parse(stdout);
+  expect(result.runId).not.toBe(parentRunId);
+  expect(result).toEqual({
     running: false,
     suite,
     workerId: workerId ?? "controller",
-    inherited: true,
+    runId: expect.any(String),
+    childEnvironmentRunId: result.runId,
   });
 });

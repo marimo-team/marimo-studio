@@ -66,9 +66,11 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
   let state: NetworkState = "new";
   let starting: Promise<void> | undefined;
   let closing: Promise<void> | undefined;
+  let failure: Error | undefined;
   const owned: EndpointResource[] = [];
 
   const requireRunning = (group: keyof typeof endpointNames) => {
+    if (failure) throw failure;
     if (group !== suite) throw new Error(`${group} endpoint does not belong to ${suite} suite`);
     if (state !== "running") throw new Error(`E2E network is ${state}; await start() before use`);
   };
@@ -148,9 +150,11 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
         resource.sockets.add(socket);
         socket.once("close", () => resource.sockets.delete(socket));
       });
-      server.once("error", reject);
+      server.on("error", (cause: Error) => {
+        failure ??= new Error(`E2E proxy ${resource.hostname} failed`, { cause });
+        reject(failure);
+      });
       server.listen(0, "127.0.0.1", () => {
-        server.removeListener("error", reject);
         resource.port = listenerAddressSchema.parse(server.address()).port;
         resolve();
       });
@@ -195,6 +199,7 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
         const errors = results.flatMap((result) =>
           result.status === "rejected" ? [result.reason] : [],
         );
+        if (failure && !errors.includes(failure)) errors.push(failure);
         if (errors.length || state !== "starting") {
           state = "closing";
           try {
@@ -215,6 +220,7 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
         try {
           await starting?.catch(() => {});
           await shutdown();
+          if (failure) throw failure;
         } finally {
           state = "closed";
         }
