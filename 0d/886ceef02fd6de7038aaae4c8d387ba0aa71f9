@@ -1,0 +1,15 @@
+docs/guide/run-and-share.md
+  ai_agent 53-56
+skills/marimo-studio/SKILL.md
+  ai_agent 135
+apps/docs/scripts/server-arguments.test.ts
+  ai_agent 24-35
+docs/guide/frontend-options.md
+  ai_agent 26-39,72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0d886ceef02fd6de7038aaae4c8d387ba0aa71f9",
+  "prompts": {}
+}
