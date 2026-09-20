@@ -51,6 +51,7 @@ is unavailable or its content needs repair.
 
 ```text
 marimo-studio doctor [PROVIDER] [--json]
+marimo-studio doctor --dependencies --target notebook.py [--json]
 ```
 
 Lists installed view provider registrations, package versions, metadata,
@@ -58,6 +59,23 @@ availability, and starter IDs. A named provider exits with status `1` when it
 cannot load or reports unavailable. `doctor` does not inspect a view project or
 run a provider build. The full inventory remains available when another
 optional provider is unavailable.
+
+`--dependencies` compares active PEP 723 and owning project dependencies,
+configured provider requirements, installed versions and extras, and resolution
+of imports found in notebook source. It reports drift even when both declarations
+accept the installed version. Run it in the notebook's Python environment:
+
+```console
+uv run --project . marimo-studio doctor --dependencies --target notebook.py --json
+```
+
+The report includes the interpreter, project path, declarations, installed
+versions, import availability, and issues. Exit status is `1` when issues exist.
+This check reads metadata and resolves top-level modules without executing
+notebook cells. Conditional imports are included. Dynamic imports, package
+initialization failures, and direct-source provenance require runtime validation
+or source review. Dependency groups and optional project extras are not direct
+`project.dependencies` declarations.
 
 ## `marimo-studio starters`
 
