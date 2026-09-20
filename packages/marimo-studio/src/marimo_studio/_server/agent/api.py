@@ -50,6 +50,7 @@ from marimo_studio._workspace.ownership import (
     require_view_owner,
 )
 from marimo_studio.errors import (
+    AgentRequestError,
     CapabilityInputError,
     MarimoStudioError,
     ProtocolError,
@@ -160,22 +161,23 @@ async def activation_ack_response(
     except JSONBodyError as error:
         return json_body_error_response(error)
     schema = body.get("schema") if isinstance(body, dict) else None
-    required = {"schema", "clientId", "view", "previewUrl", "frameSelector"}
-    allowed = {*required, "catalogGeneration", "viewGeneration"}
+    required = {"schema", "clientId", "view"}
+    allowed = {
+        *required,
+        "previewUrl",
+        "frameSelector",
+        "catalogGeneration",
+        "viewGeneration",
+    }
     if (
         not isinstance(body, dict)
         or not required.issubset(body)
         or not set(body).issubset(allowed)
         or not isinstance(schema, int)
         or isinstance(schema, bool)
-        or schema != 1
         or not _nonempty(body.get("clientId"))
         or not _nonempty(body.get("view"))
     ):
-        return _invalid_payload("invalid-activation-ack")
-    try:
-        preview = parse_preview_target(body["previewUrl"], body["frameSelector"])
-    except ProtocolError:
         return _invalid_payload("invalid-activation-ack")
     has_catalog_owner = "catalogGeneration" in body
     has_view_owner = "viewGeneration" in body
@@ -192,6 +194,31 @@ async def activation_ack_response(
         assert isinstance(catalog_generation, str)
         assert isinstance(view_generation, str) or view_generation is None
         owner = observed_view_owner(catalog_generation, view_generation)
+    if schema != 2:
+        await notebook_scope.agents.reject_activation(
+            body["clientId"],
+            generation,
+            body["view"],
+            AgentRequestError(
+                "activation-protocol-mismatch",
+                "The Studio browser uses an unsupported activation protocol. "
+                "Reload Studio.",
+                status_code=409,
+            ),
+            owner=owner,
+        )
+        return JSONResponse(
+            {"schema": 1, "outcome": ActivationAckOutcome.REJECTED.value},
+            status_code=409,
+            headers=NO_STORE,
+        )
+    try:
+        preview = parse_preview_target(
+            body.get("previewUrl"), body.get("frameSelector")
+        )
+    except ProtocolError:
+        return _invalid_payload("invalid-activation-ack")
+    if owner is not None:
         acknowledged_view = body["view"]
         assert isinstance(acknowledged_view, str)
         try:

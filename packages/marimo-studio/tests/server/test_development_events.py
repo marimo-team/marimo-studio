@@ -75,7 +75,7 @@ async def _activation_acknowledgement(
 ) -> dict[str, object]:
     body = json.dumps(
         {
-            "schema": 1,
+            "schema": 2,
             "clientId": "browser-client-1234",
             "view": "executive",
             "previewUrl": "http://localhost/preview/",

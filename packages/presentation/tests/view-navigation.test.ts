@@ -220,7 +220,11 @@ test("view navigation leaves other links to the browser", () => {
 });
 
 test("unframed navigation preserves delivery mode separately from notebook query", () => {
-  for (const href of ["?region=us", "#details", "../expert/"]) {
+  for (const [href, view, region, hash] of [
+    ["?region=us", "novice", "us", ""],
+    ["#details", "novice", "eu", "#details"],
+    ["../expert/", "expert", "eu", ""],
+  ] as const) {
     const navigation = viewNavigationForUrl({
       href,
       origin: "https://example.test",
@@ -237,5 +241,8 @@ test("unframed navigation preserves delivery mode separately from notebook query
     assert.equal(url.searchParams.get("marimo_studio_unframed"), "1");
     assert.equal(url.searchParams.get("file"), "analysis.py");
     assert.equal(url.searchParams.get("runtime"), "wasm");
+    assert.equal(navigation.view, view);
+    assert.equal(url.searchParams.get("region"), region);
+    assert.equal(url.hash, hash);
   }
 });

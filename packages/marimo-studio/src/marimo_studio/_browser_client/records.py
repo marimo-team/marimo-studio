@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -17,6 +17,9 @@ class PreviewAutomationTarget:
 @dataclass(frozen=True)
 class ShowResult(PreviewAutomationTarget):
     """The connected Studio tab selected a view and activated its preview document."""
+
+    preview_url: str = field(kw_only=True)
+    frame_selector: str = field(kw_only=True)
 
     notebook: Path
     view: str

@@ -502,10 +502,16 @@ def test_run_mode_serves_the_configured_wasm_runtime_and_source(
     assert studio.notebook.read_bytes() == configured
 
 
-def test_unframed_view_preserves_document_sandbox(notebook_path: Path) -> None:
+@pytest.mark.parametrize(
+    "query",
+    ["marimo_studio_unframed=1", "marimo_studio_unframed=1&marimo_studio_unframed=0"],
+)
+def test_unframed_view_preserves_document_sandbox(
+    notebook_path: Path, query: str
+) -> None:
     studio = _configured(notebook_path)
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        response = client.get("/dashboard/?marimo_studio_unframed=1")
+        response = client.get(f"/dashboard/?{query}")
     assert response.status_code == 200
     assert "<marimo-cell" in response.text
     assert 'id="marimo-studio-presentation"' not in response.text

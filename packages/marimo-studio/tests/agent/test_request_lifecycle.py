@@ -401,8 +401,10 @@ def test_show_rejects_stale_view_ownership_before_activation(
     assert not activated
 
 
-def test_show_rejects_a_replacement_before_browser_acknowledgement(
+@pytest.mark.parametrize("failure", ["replacement", "protocol-mismatch"])
+def test_show_rejects_invalid_browser_acknowledgement(
     notebook_path: Path,
+    failure: str,
 ) -> None:
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
@@ -447,19 +449,26 @@ def test_show_rejects_a_replacement_before_browser_acknowledgement(
         await asyncio.wait_for(requested.wait(), timeout=1)
         assert activation is not None
 
-        root = studio.views["dashboard"].root
-        retired = root.with_name("retired-dashboard")
-        root.rename(retired)
-        shutil.copytree(retired, root)
+        if failure == "replacement":
+            root = studio.views["dashboard"].root
+            retired = root.with_name("retired-dashboard")
+            root.rename(retired)
+            shutil.copytree(retired, root)
 
         ack_request, _ack_messages = _request(
             f"/_marimo-studio/activations/{activation.generation}/ack",
             {
-                "schema": 1,
+                "schema": 2 if failure == "replacement" else 1,
                 "clientId": client_id,
                 "view": "dashboard",
-                "previewUrl": "http://localhost/preview/",
-                "frameSelector": "iframe[data-test-preview]",
+                **(
+                    {
+                        "previewUrl": "http://localhost/preview/",
+                        "frameSelector": "iframe[data-test-preview]",
+                    }
+                    if failure == "replacement"
+                    else {}
+                ),
                 "catalogGeneration": studio.catalog_generation,
                 "viewGeneration": studio.view_generations["dashboard"],
             },
@@ -484,7 +493,11 @@ def test_show_rejects_a_replacement_before_browser_acknowledgement(
 
     assert ack_status == 409
     assert show_status == 409
-    assert show_error == "view-generation-conflict"
+    assert show_error == (
+        "view-generation-conflict"
+        if failure == "replacement"
+        else "activation-protocol-mismatch"
+    )
     assert active_view == "executive"
 
 

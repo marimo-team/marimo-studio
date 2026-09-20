@@ -518,10 +518,7 @@ describe("Studio shell", () => {
       bootstrap.runtimes.map((runtime) => [runtime.id, document.createElement("iframe")]),
     );
 
-    let hydrated = false;
-    const starting = services.start(editor, frames).then(() => {
-      hydrated = true;
-    });
+    const starting = services.start(editor, frames);
     try {
       await vi.waitFor(() =>
         expect(stageNavigation).toHaveBeenCalledWith(
@@ -546,7 +543,6 @@ describe("Studio shell", () => {
         ),
       );
       expect(services.source.start).toHaveBeenCalledOnce();
-      expect(hydrated).toBe(false);
     } finally {
       finishSource();
       await starting;

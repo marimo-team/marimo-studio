@@ -103,7 +103,8 @@ class ActivationCoordinator:
                 target = await self._store.clients.target_for_client(client_id)
                 return (
                     ActivationAckOutcome.APPLIED
-                    if target is not None
+                    if preview == operation.preview
+                    and target is not None
                     and target.session_id == operation.activation.session_id
                     and target.binding_generation
                     == operation.activation.binding_generation

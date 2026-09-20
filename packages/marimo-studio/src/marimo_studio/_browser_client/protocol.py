@@ -204,6 +204,7 @@ def parse_preview_target(url: object, selector: object) -> PreviewAutomationTarg
         raise ProtocolError("The Studio preview target is invalid.")
     try:
         parsed = urlsplit(url)
+        _ = parsed.port
         valid_url = parsed.scheme in {"http", "https"} and bool(parsed.hostname)
     except ValueError:
         valid_url = False

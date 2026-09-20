@@ -83,6 +83,7 @@ export class PreviewController {
   private queryDiagnostic: BrowserDiagnostic | undefined;
   private queryPhase: QuerySyncStatus["phase"] = "ready";
   private activationsInProgress = 0;
+  private activationGeneration = 0;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly retrySchedule = new RetrySchedule();
   private editorSessionId: string | undefined;
@@ -259,20 +260,31 @@ export class PreviewController {
 
   activateDocument(navigation: ViewNavigationIntent, reload = false): void {
     const rendered = this.activate(navigation, undefined, reload);
+    const activationGeneration = this.activationGeneration;
     const lifecycleId = this.activeLifecycleId;
-    void rendered.catch((cause: unknown) => {
-      if (!this.activeOwner || this.activeLifecycleId !== lifecycleId) return;
-      this.admission.viewError(
-        this.lifecycleDiagnostic(
-          "preview-activation-failed",
-          "error",
-          errorMessage(cause),
-          "Reload the preview to retry.",
-        ),
-        this.admission.identity?.revision ?? null,
-        this.admissionOwner(),
-      );
-    });
+    void rendered
+      .then((ready) => {
+        if (!ready && this.admission.snapshot.view !== "failed")
+          throw new Error("The preview did not become ready before activation completed.");
+      })
+      .catch((cause: unknown) => {
+        if (
+          !this.activeOwner ||
+          this.activeLifecycleId !== lifecycleId ||
+          this.activationGeneration !== activationGeneration
+        )
+          return;
+        this.admission.viewError(
+          this.lifecycleDiagnostic(
+            "preview-activation-failed",
+            "error",
+            errorMessage(cause),
+            "Reload the preview to retry.",
+          ),
+          this.admission.identity?.revision ?? null,
+          this.admissionOwner(),
+        );
+      });
   }
 
   async activate(
@@ -283,6 +295,7 @@ export class PreviewController {
     if (signal?.aborted) {
       return false;
     }
+    this.activationGeneration += 1;
     this.activationsInProgress += 1;
     try {
       const reactivating = !this.activeOwner;

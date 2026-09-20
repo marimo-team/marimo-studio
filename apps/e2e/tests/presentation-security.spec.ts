@@ -8,6 +8,7 @@ import {
   expect,
   observeBrowserContext,
   presentationFrame,
+  PREVIEW_TIMEOUT,
   previewFrame,
   readWorkspaceFile,
   recoverRequestAbort,
@@ -538,7 +539,9 @@ test("serves an unframed preview for browser automation", async ({ page, context
         .evaluate((node) => node.textContent),
     ).toBe("Studio browser fixture");
     const follow = async (href: string) => {
-      await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+      await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready", {
+        timeout: PREVIEW_TIMEOUT,
+      });
       await preview.evaluate((destination) => {
         const anchor = document.createElement("a");
         anchor.href = destination;

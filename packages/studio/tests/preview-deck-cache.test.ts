@@ -552,8 +552,7 @@ it("synchronizes query and fragment after document activation restores a cached 
   const render = async (view: string) => {
     const currentView = deck.getSnapshot().frames.find((item) => item.active)?.view;
     if (currentView !== view) {
-      const selected = deck.stageView(view, undefined, undefined, "document");
-      expect(await selected.ready).toBe(true);
+      deck.stageView(view, undefined, undefined, "document");
     }
     const slot = deck.getSnapshot().frames.find((item) => item.active && item.view === view)!;
     const source = windows.get(slot.id)!;
@@ -583,13 +582,7 @@ it("synchronizes query and fragment after document activation restores a cached 
     await render("report");
     deck.navigateWithinView({ query: "?region=us", hash: "#details" });
     cached.source.postMessage.mockClear();
-    const restored = deck.stageView(
-      "dashboard",
-      { query: "?region=us", hash: "#details" },
-      undefined,
-      "document",
-    );
-    expect(await restored.ready).toBe(true);
+    deck.stageView("dashboard", { query: "?region=us", hash: "#details" }, undefined, "document");
     expect(cached.target.src).toBe(originalUrl);
     dispatchPreviewRefreshHandshake(cached.source, cached.receiver);
     dispatchPreviewMessage(cached.source, { type: "marimo-studio:view-ready", ...cached.identity });

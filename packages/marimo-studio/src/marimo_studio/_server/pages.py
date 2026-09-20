@@ -240,7 +240,8 @@ async def document_response(
     }
     if request.method == "HEAD":
         return Response(headers=headers)
-    unframed = request.query_params.getlist(UNFRAMED_QUERY_PARAM) == ["1"]
+    unframed_values = request.query_params.getlist(UNFRAMED_QUERY_PARAM)
+    unframed = bool(unframed_values) and unframed_values[0] == "1"
     isolated = (
         trusted_shell
         and not unframed

@@ -39,7 +39,7 @@ it("acknowledges an activation with its browser identity", async () => {
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
-        schema: 1,
+        schema: 2,
         clientId: "browser-client-1234",
         view: "report",
         ...preview,
@@ -66,7 +66,6 @@ it("binds an activation acknowledgement to its observed view owner", async () =>
       view: "report",
       owner: {
         kind: "present",
-        ...preview,
         catalogGeneration: "a".repeat(64),
         viewGeneration: "b".repeat(64),
       },
@@ -79,7 +78,7 @@ it("binds an activation acknowledgement to its observed view owner", async () =>
     expect.stringContaining("/_marimo-studio/activations/10/ack"),
     expect.objectContaining({
       body: JSON.stringify({
-        schema: 1,
+        schema: 2,
         clientId: "browser-client-1234",
         view: "report",
         ...preview,
@@ -116,7 +115,7 @@ it("acknowledges a catalog-owned absent view name", async () => {
     expect.stringContaining("/_marimo-studio/activations/11/ack"),
     expect.objectContaining({
       body: JSON.stringify({
-        schema: 1,
+        schema: 2,
         clientId: "browser-client-1234",
         view: "report",
         ...preview,

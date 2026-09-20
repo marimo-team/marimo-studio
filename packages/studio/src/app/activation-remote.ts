@@ -13,7 +13,7 @@ export type AcknowledgeViewActivation = (
 ) => Promise<void>;
 
 interface ActivationAcknowledgement extends PreviewAutomationTarget {
-  readonly schema: 1;
+  readonly schema: 2;
   readonly clientId: string;
   readonly view: string;
 }
@@ -121,7 +121,7 @@ export const createViewActivationRemote =
   async (activation, preview, signal) => {
     const owner = activation.owner;
     const acknowledgement = {
-      schema: 1,
+      schema: 2,
       clientId,
       view: activation.view,
       ...preview,

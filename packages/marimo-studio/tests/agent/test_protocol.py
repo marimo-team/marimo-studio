@@ -15,6 +15,7 @@ from marimo_studio._browser_client.protocol import (
     parse_show_result,
     parse_validation_evidence,
 )
+from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._validation.evidence import (
     BrowserDiagnostic,
     BrowserObservation,
@@ -693,6 +694,8 @@ def test_truncated_browser_diagnostics_fit_the_server_protocol() -> None:
     [
         ("preview_url", None),
         ("preview_url", "https://"),
+        ("preview_url", "http://localhost:invalid/"),
+        ("preview_url", "http://localhost:65536/"),
         ("frame_selector", None),
         ("frame_selector", 7),
     ],
@@ -709,3 +712,21 @@ def test_show_protocol_requires_browser_automation_target(
     del payload[field]
     with pytest.raises(ProtocolError):
         parse_show_result(payload, notebook, "dashboard")
+
+
+def test_show_result_preserves_positional_identity_fields(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    result = ShowResult(
+        notebook,
+        "dashboard",
+        2,
+        "s_123456",
+        "browser-client-1234",
+        preview_url="http://localhost/preview/",
+        frame_selector="iframe[data-test-preview]",
+    )
+    assert result.to_dict() == {
+        **_show_payload(notebook),
+        "generation": 2,
+        "frame_selector": "iframe[data-test-preview]",
+    }

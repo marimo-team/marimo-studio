@@ -131,6 +131,45 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize("retained", [False, True])
+def test_activation_replay_rejects_changed_preview_identity(retained: bool) -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target, _lease = await connected_target(clients)
+        activation = await agents.activate(target, "executive")
+        assert (
+            await agents.acknowledge_activation(
+                target.client_id,
+                activation.generation,
+                activation.view,
+                preview=PREVIEW_TARGET,
+            )
+            is ActivationAckOutcome.APPLIED
+        )
+        if retained:
+            assert await agents.wait_for_activation(activation, 1) == PREVIEW_TARGET
+        for changed in (
+            replace(PREVIEW_TARGET, preview_url="http://localhost/replacement/"),
+            replace(PREVIEW_TARGET, frame_selector="iframe[data-replacement]"),
+        ):
+            assert (
+                await agents.acknowledge_activation(
+                    target.client_id,
+                    activation.generation,
+                    activation.view,
+                    preview=changed,
+                )
+                is ActivationAckOutcome.REJECTED
+            )
+        if not retained:
+            assert await agents.wait_for_activation(activation, 1) == PREVIEW_TARGET
+        await agents.close()
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
 def test_activation_replay_requires_the_acknowledged_workspace_owner() -> None:
     async def exercise() -> None:
         clients = StudioClientRegistry()
