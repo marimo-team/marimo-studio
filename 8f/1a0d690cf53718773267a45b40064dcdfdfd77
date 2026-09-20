@@ -1,0 +1,57 @@
+packages/marimo-studio/tests/server/test_delivery_documents.py
+  ai_agent 505-511,514
+packages/marimo-studio/src/marimo_studio/_server/pages.py
+  ai_agent 243-244
+packages/marimo-studio/tests/agent/test_protocol.py
+  ai_agent 18,697-698,715-732
+packages/studio/tests/studio-app.test.tsx
+  ai_agent 521
+packages/marimo-studio/src/marimo_studio/_browser_client/protocol.py
+  ai_agent 207
+apps/e2e/tests/presentation-security.spec.ts
+  ai_agent 11,542-544
+packages/marimo-studio/src/marimo_studio/_server/agent/activation.py
+  ai_agent 106-107
+packages/marimo-studio/tests/agent/test_coordinator.py
+  ai_agent 134-172
+packages/studio/src/features/preview/controller.ts
+  s_1d547b3fd29c2e::t_08fcebf644a811 86,263,265-287,298
+packages/marimo-studio/src/marimo_studio/_server/agent/api.py
+  ai_agent 53,164-171,197-221
+packages/studio/tests/preview-controller.test.ts
+  s_1d547b3fd29c2e::t_08fcebf644a811 808-908
+packages/studio/tests/activation-remote.test.ts
+  ai_agent 42,81,118
+packages/studio/tests/preview-deck.test.ts
+  ai_agent 692
+packages/studio/tests/preview-deck-cache.test.ts
+  ai_agent 555,585
+packages/marimo-studio/tests/agent/test_workspace.py
+  ai_agent 793-794
+packages/marimo-studio/tests/server/test_development_events.py
+  ai_agent 78
+packages/marimo-studio/src/marimo_studio/_browser_client/records.py
+  ai_agent 5,21-22
+packages/marimo-studio/tests/agent/test_request_lifecycle.py
+  ai_agent 404-405,407,452-456,461,464-471,496-500
+packages/presentation/tests/view-navigation.test.ts
+  ai_agent 223-227,244-246
+packages/studio/src/app/activation-remote.ts
+  ai_agent 16,124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8f1a0d690cf53718773267a45b40064dcdfdfd77",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
