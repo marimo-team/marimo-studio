@@ -201,28 +201,30 @@ export class InstalledWorkspace {
       "--no-token",
     ];
     const endpoints = e2eNetwork.installed;
-    await services.start(marimoArgs("edit", [notebookPath]), endpoints.edit, "studio", {
-      readyUrl: `${endpoints.edit.origin}/_marimo-studio/status`,
-      timeout: 120_000,
-    });
-    await services.start(marimoArgs("new", []), endpoints.fresh, "studio", { timeout: 120_000 });
-    await services.start(marimoArgs("run", [notebookPath]), endpoints.run, "process", {
-      readyUrl: `${endpoints.run.origin}/_marimo-studio/status`,
-      timeout: 120_000,
-    });
-    await services.start(
-      [
-        resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
-        "0",
-        "--bind",
-        "127.0.0.1",
-        "--directory",
-        staticDirectory,
-      ],
-      endpoints.static,
-      "process",
-      { timeout: 120_000 },
-    );
+    await Promise.all([
+      services.start(marimoArgs("edit", [notebookPath]), endpoints.edit, "studio", {
+        readyUrl: `${endpoints.edit.origin}/_marimo-studio/status`,
+        timeout: 120_000,
+      }),
+      services.start(marimoArgs("new", []), endpoints.fresh, "studio", { timeout: 120_000 }),
+      services.start(marimoArgs("run", [notebookPath]), endpoints.run, "process", {
+        readyUrl: `${endpoints.run.origin}/_marimo-studio/status`,
+        timeout: 120_000,
+      }),
+      services.start(
+        [
+          resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
+          "0",
+          "--bind",
+          "127.0.0.1",
+          "--directory",
+          staticDirectory,
+        ],
+        endpoints.static,
+        "process",
+        { timeout: 120_000 },
+      ),
+    ]);
     return createInstalledPackageNetwork(endpoints);
   }
 
