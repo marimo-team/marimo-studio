@@ -1,0 +1,17 @@
+apps/e2e/unit/playwright-config.test.ts
+  ai_agent 3,7-8,14-15,38-39,48-50,54-55
+apps/e2e/unit/installed-package-network.test.ts
+  ai_agent 1-28
+apps/e2e/scripts/installed-package-network.ts
+  ai_agent 14-15,42
+apps/e2e/unit/network.test.ts
+  ai_agent 3-4,204-218
+apps/e2e/scripts/network.ts
+  ai_agent 69,73,153-156,202,223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8adb65e6994138d662ef3d8bebc8a77c7bca3b83",
+  "prompts": {}
+}
