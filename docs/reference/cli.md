@@ -62,7 +62,10 @@ optional provider is unavailable.
 
 `--dependencies` compares active PEP 723 and owning project dependencies,
 configured provider requirements, installed versions and extras, and resolution
-of imports found in notebook source. It reports drift even when both declarations
+of imports found in notebook source. Runtime checks use the combined project
+and notebook dependency environment, including transitive requirements and
+nested extras such as `marimo-studio[recommended]`. The owning project's package
+is a valid import owner. It reports drift even when both declarations
 accept the installed version. Run it in the notebook's Python environment:
 
 ```console
