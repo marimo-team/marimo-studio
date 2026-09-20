@@ -170,8 +170,11 @@ const beginShutdown = (signalGroup: boolean, force = true) => {
   childExitCode = 1;
   if (force) forceStopTimer = setTimeout(forceStop, FORCE_STOP_DELAY);
   if (signalGroup) {
-    if (process.platform === "win32") stopProcessGroup(child?.pid, "SIGTERM");
-    else process.kill(-processGroupId, "SIGTERM");
+    if (process.platform === "win32") {
+      // Windows console backends require /F. Failed startup has no bound session to drain.
+      if (port === null) forceStop();
+      else stopProcessGroup(child?.pid, "SIGTERM");
+    } else process.kill(-processGroupId, "SIGTERM");
   }
   if (!child) finish();
 };
@@ -223,6 +226,7 @@ const start = () => {
       send({
         type: "failed",
         message: `Notebook service exited unexpectedly with ${signal ?? code}`,
+        exit: { code, signal },
       });
     }
     void finishWhenPortCloses();

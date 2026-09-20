@@ -307,6 +307,8 @@ export class ServerHandle {
     const onMessage = (source: Serializable) => {
       const message = supervisorMessageSchema.safeParse(source);
       if (message.success && message.data.type === "failed") {
+        const exit = message.data.exit;
+        if (this.#closing && exit && this.#expectedExit(exit.code, exit.signal)) return;
         fail(new Error(`${message.data.message}\n${this.output()}`));
       }
     };
@@ -322,15 +324,7 @@ export class ServerHandle {
       const error = new Error(
         `Notebook service exited unexpectedly with ${signal ?? code}\n${this.output()}`,
       );
-      const expected =
-        code === 0 ||
-        [...this.#stopSignals].some(
-          (sent) =>
-            signal === sent ||
-            code === 128 + constants.signals[sent] ||
-            (process.platform === "win32" && code === 1),
-        );
-      if (!this.#closing || !expected) {
+      if (!this.#closing || !this.#expectedExit(code, signal)) {
         fail(error);
       } else {
         resolveExit(error);
@@ -347,6 +341,18 @@ export class ServerHandle {
 
   get port() {
     return this.#port;
+  }
+
+  #expectedExit(code: number | null, signal: string | null): boolean {
+    return (
+      code === 0 ||
+      [...this.#stopSignals].some(
+        (sent) =>
+          signal === sent ||
+          code === 128 + constants.signals[sent] ||
+          (process.platform === "win32" && sent === "SIGKILL" && code === 1),
+      )
+    );
   }
 
   async waitUntilReady(url = this.serverUrl, { timeout }: StopOptions = {}): Promise<void> {

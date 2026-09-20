@@ -8,7 +8,7 @@ import { expect, test, vi } from "vite-plus/test";
 
 import { createE2ENetwork } from "../scripts/network.ts";
 import { NotebookServices } from "../scripts/notebook-services.ts";
-import { portIsOpen } from "../scripts/process-group.ts";
+import * as processGroups from "../scripts/process-group.ts";
 import { ServerHandle } from "../scripts/server-process.ts";
 
 const fixtureServer = `
@@ -30,6 +30,7 @@ const fixtureServer = `
         }
         if (request.url === '/missing') response.statusCode = 503;
         response.end('ready');
+        if (request.url === '/crash') server.close(() => process.exit(1));
         if (request.url === '/output') console.log('captured output');
         if (request.url === '/exit') server.close(() => process.exit(0));
       });
@@ -76,6 +77,7 @@ test.each([
   "normal",
   "exit",
   "shutdown-crash",
+  ...(process.platform === "win32" ? ["shutdown-grace-crash"] : []),
   "forward-error",
   "held-forward-error",
   "forward-timeout",
@@ -117,6 +119,25 @@ test.each([
         await expect(service.close()).rejects.toThrow("exited unexpectedly");
       } else if (mode === "shutdown-crash") {
         await expect(service.close()).rejects.toThrow("exited unexpectedly with 1");
+      } else if (mode === "shutdown-grace-crash") {
+        const signaled = Promise.withResolvers<void>();
+        const stopProcessGroup = processGroups.stopProcessGroup;
+        const stop = vi
+          .spyOn(processGroups, "stopProcessGroup")
+          .mockImplementation((pid, signal) => {
+            stopProcessGroup(pid, signal);
+            if (signal === "SIGTERM") signaled.resolve();
+          });
+        try {
+          const closing = service.close();
+          void closing.catch(() => undefined);
+          await signaled.promise;
+          await (await fetch(`${service.serverUrl}/crash`)).body?.cancel();
+          await expect(closing).rejects.toThrow("exited unexpectedly with 1");
+          expect(stop.mock.calls.map(([, signal]) => signal)).toEqual(["SIGTERM"]);
+        } finally {
+          stop.mockRestore();
+        }
       } else if (holdOutput) {
         await (await fetch(`${service.serverUrl}/output`)).body?.cancel();
         const completeWrite = await heldWrite.promise;
@@ -159,7 +180,7 @@ test.each([
       }
       expect(forwarded.listenerCount("error")).toBe(0);
       expect((await fetch(service.serverUrl)).status).toBe(404);
-      expect(await portIsOpen(service.port)).toBe(false);
+      expect(await processGroups.portIsOpen(service.port)).toBe(false);
       expect(existsSync(resolve(root, "registry"))).toBe(false);
     } finally {
       await service.close().catch(() => undefined);

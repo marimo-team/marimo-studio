@@ -13,7 +13,11 @@ export const supervisorMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("registered") }),
   z.object({ type: z.literal("started") }),
   z.object({ type: z.literal("bound"), port: z.number().int().positive().max(65_535) }),
-  z.object({ type: z.literal("failed"), message: z.string() }),
+  z.object({
+    type: z.literal("failed"),
+    message: z.string(),
+    exit: z.object({ code: z.number().int().nullable(), signal: z.string().nullable() }).optional(),
+  }),
 ]);
 export type SupervisorMessage = z.infer<typeof supervisorMessageSchema>;
 
