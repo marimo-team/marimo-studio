@@ -143,9 +143,10 @@ test("network identity cannot escape its run namespace", () => {
   }
 });
 
-test("releases completed upstream connections while keeping streamed responses live", async () => {
+test("bounds upstream connections while keeping streamed responses live", async () => {
   const network = createE2ENetwork({ runId: "upstream-lifetime", suite: "main", workerId: "0" });
   const sockets = new Set<Socket>();
+  let connections = 0;
   const server = createServer((incoming, response) => {
     if (incoming.url === "/events") {
       response.writeHead(200, { "content-type": "text/event-stream" });
@@ -156,6 +157,7 @@ test("releases completed upstream connections while keeping streamed responses l
   });
   server.keepAliveTimeout = 60_000;
   server.on("connection", (socket) => {
+    connections += 1;
     sockets.add(socket);
     socket.once("close", () => sockets.delete(socket));
   });
@@ -165,7 +167,9 @@ test("releases completed upstream connections while keeping streamed responses l
   let streaming: ReturnType<typeof request> | undefined;
   try {
     await network.start();
-    network.main.studio.bindBackend(z.object({ port: z.number() }).parse(server.address()).port);
+    const release = network.main.studio.bindBackend(
+      z.object({ port: z.number() }).parse(server.address()).port,
+    );
     const options = { host: "127.0.0.1", port: network.main.studio.port, agent };
     const completed = () =>
       new Promise<{ status: number | undefined; body: string }>((resolve, reject) => {
@@ -178,10 +182,11 @@ test("releases completed upstream connections while keeping streamed responses l
         call.once("error", reject);
         call.end();
       });
-    for (const response of await Promise.all(Array.from({ length: 12 }, completed))) {
+    for (const response of await Promise.all(Array.from({ length: 24 }, completed))) {
       expect(response).toEqual({ status: 200, body: "complete" });
     }
-    await expect.poll(() => sockets.size, { timeout: 1000 }).toBe(0);
+    expect(connections).toBeLessThanOrEqual(8);
+    expect(sockets.size).toBeLessThanOrEqual(8);
 
     streaming = request({ ...options, path: "/events" });
     const received = once(streaming, "response");
@@ -190,10 +195,12 @@ test("releases completed upstream connections while keeping streamed responses l
     expect(response.statusCode).toBe(200);
     expect(String((await once(response, "data"))[0])).toBe("data: ready\n\n");
     expect(response.complete).toBe(false);
-    expect(sockets.size).toBe(1);
+    expect(sockets.size).toBeLessThanOrEqual(8);
+    release();
+    await expect.poll(() => sockets.size, { timeout: 1000 }).toBe(0);
+    expect(await status(network.main.studio.port)).toBe(404);
     response.destroy();
     streaming.destroy();
-    await expect.poll(() => sockets.size, { timeout: 1000 }).toBe(0);
   } finally {
     streaming?.destroy();
     agent.destroy();
