@@ -6,11 +6,10 @@ import { z } from "zod";
 import {
   createNotebookProcessOwnerNonce,
   NOTEBOOK_PROCESS_OWNER_ENV,
-  NOTEBOOK_PROCESS_PORT_ENV,
   NOTEBOOK_PROCESS_REGISTRY_ENV,
 } from "./notebook-process-registry.ts";
 
-const supervisorMessageSchema = z.discriminatedUnion("type", [
+export const supervisorMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("registered") }),
   z.object({ type: z.literal("started") }),
   z.object({ type: z.literal("bound"), port: z.number().int().positive().max(65_535) }),
@@ -30,19 +29,12 @@ export interface SupervisorOptions {
   cwd: string;
   directory: string;
   env: NodeJS.ProcessEnv;
-  port?: number | null;
   boundTimeout?: number;
   readyTimeout?: number;
   stdio?: IOType[];
 }
 
-const supervisorReadiness = (
-  child: ChildProcess,
-  timeout: number,
-  boundTimeout: number,
-  port: number | null,
-  missingProcessGroup: boolean,
-) => {
+const supervisorReadiness = (child: ChildProcess, timeout: number, boundTimeout: number) => {
   const registered = Promise.withResolvers<void>();
   const started = Promise.withResolvers<void>();
   const bound = Promise.withResolvers<number>();
@@ -73,14 +65,7 @@ const supervisorReadiness = (
     clearTimeout(timer);
     timer = setTimeout(() => fail(new Error(message)), duration);
   };
-  const onError = (error: Error) =>
-    fail(
-      missingProcessGroup
-        ? new Error("Notebook process supervisor did not expose a process group ID", {
-            cause: error,
-          })
-        : error,
-    );
+  const onError = (error: Error) => fail(error);
   const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
     const status = signal ? `signal ${signal}` : `status ${code ?? 1}`;
     fail(new Error(`Notebook process supervisor exited with ${status}`));
@@ -102,13 +87,8 @@ const supervisorReadiness = (
       startedReceived = true;
       clearTimeout(timer);
       started.resolve();
-      if (port !== null) {
-        bound.resolve(port);
-        dispose();
-      } else {
-        armTimeout("Notebook backend binding timed out", boundTimeout);
-      }
-    } else if (message.type === "bound" && startedReceived && port === null) {
+      armTimeout("Notebook backend binding timed out", boundTimeout);
+    } else if (message.type === "bound" && startedReceived) {
       bound.resolve(message.port);
       dispose();
     }
@@ -154,7 +134,6 @@ export const spawnRegisteredNotebookSupervisor = ({
   cwd,
   directory,
   env,
-  port = null,
   boundTimeout = 60_000,
   readyTimeout = READY_TIMEOUT,
   stdio = ["ignore", "pipe", "pipe"],
@@ -166,19 +145,12 @@ export const spawnRegisteredNotebookSupervisor = ({
     env: {
       ...env,
       [NOTEBOOK_PROCESS_OWNER_ENV]: ownerNonce,
-      [NOTEBOOK_PROCESS_PORT_ENV]: String(port),
       [NOTEBOOK_PROCESS_REGISTRY_ENV]: directory,
     },
     stdio: [...stdio, "ipc"],
   });
   const processGroupId = child.pid;
-  const readiness = supervisorReadiness(
-    child,
-    readyTimeout,
-    boundTimeout,
-    port,
-    processGroupId === undefined,
-  );
+  const readiness = supervisorReadiness(child, readyTimeout, boundTimeout);
   return Object.freeze({
     child,
     ownerNonce,

@@ -25,13 +25,21 @@ const runPython = (source: string) =>
 
 const importLauncher = `import sys\nsys.path.insert(0, ${JSON.stringify(compatibilityDirectory)})\nimport server`;
 
-test("rejects a different pinned Marimo version", () => {
-  const result = runPython(`${importLauncher}
-server.version = lambda name: "0.25.0"
-server.configure_editor_fixture()
-`);
+test.each([
+  [
+    "a different pinned Marimo version",
+    'server.version = lambda name: "0.25.0"\nserver.configure_editor_fixture()',
+    "expected version 0.24.2, found 0.25.0",
+  ],
+  [
+    "missing endpoint ownership",
+    'import os\nos.environ.pop("MARIMO_STUDIO_E2E_ENDPOINT_FILE", None)\nos.environ.pop("MARIMO_STUDIO_E2E_PROCESS_OWNER", None)\nserver.publish_endpoint(4321)',
+    "launch through the E2E process supervisor",
+  ],
+])("rejects %s", (_name, source, message) => {
+  const result = runPython(`${importLauncher}\n${source}\n`);
   expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain("expected version 0.24.2, found 0.25.0");
+  expect(result.stderr).toContain(message);
 });
 
 test("retains its bound socket through activation and publishes only when claimed", () => {
@@ -91,27 +99,41 @@ uvicorn.run(app, lifespan="off", log_level="error")
       kind === "uvicorn"
         ? [launcher, "python", script]
         : [resolve(appDirectory, "scripts/static-server.py"), "0", "--directory", root];
-    const child = spawn(python, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        PYTHONSAFEPATH: "1",
-        XDG_CONFIG_HOME: root,
-        MARIMO_STUDIO_E2E_ENDPOINT_FILE: receipt,
-        MARIMO_STUDIO_E2E_PROCESS_OWNER: ownerNonce,
+    const child = spawn(
+      python,
+      [
+        "-c",
+        "import os, runpy, sys; print(os.getpid(), flush=True); sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0], run_name='__main__')",
+        ...args,
+      ],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          PYTHONSAFEPATH: "1",
+          XDG_CONFIG_HOME: root,
+          MARIMO_STUDIO_E2E_ENDPOINT_FILE: receipt,
+          MARIMO_STUDIO_E2E_PROCESS_OWNER: ownerNonce,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
       },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    );
     const closed = once(child, "close");
     let output = "";
     child.stdout.on("data", (data) => (output += String(data)));
     child.stderr.on("data", (data) => (output += String(data)));
     try {
       await expect
-        .poll(() => readFile(receipt, "utf8").catch(() => ""), { timeout: 10_000 })
+        .poll(
+          () => {
+            if (child.exitCode !== null || child.signalCode !== null) throw new Error(output);
+            return readFile(receipt, "utf8").catch(() => "");
+          },
+          { timeout: 10_000 },
+        )
         .not.toBe("");
       const endpoint = JSON.parse(await readFile(receipt, "utf8"));
-      expect(endpoint).toMatchObject({ ownerNonce, pid: child.pid });
+      expect(endpoint).toMatchObject({ ownerNonce, pid: Number(output.split(/\r?\n/)[0]) });
       expect(endpoint.port).toBeGreaterThan(0);
       await expect
         .poll(
@@ -137,4 +159,5 @@ uvicorn.run(app, lifespan="off", log_level="error")
       }
     }
   },
+  20_000,
 );

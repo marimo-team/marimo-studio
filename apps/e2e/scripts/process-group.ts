@@ -4,7 +4,7 @@ import { connect } from "node:net";
 
 export type ProcessOwnerState = "foreign" | "owned" | "stopped" | "unknown";
 
-const liveProcessGroupMembers = (processGroupId: number): number[] | undefined => {
+export const liveProcessGroupMembers = (processGroupId: number): number[] | undefined => {
   const result = spawnSync("ps", ["-axo", "pid=,pgid=,stat="], {
     encoding: "utf8",
     maxBuffer: 4 * 1024 * 1024,
@@ -125,16 +125,19 @@ export const processGroupIsRunning = (processGroupId: number | undefined): boole
   }
 };
 
-export const portIsOpen = (port: number | null): Promise<boolean> =>
+export const portIsOpen = (port: number | null, connectSocket = connect): Promise<boolean> =>
   port === null
     ? Promise.resolve(false)
     : new Promise((resolveOpen) => {
-        const socket = connect({ host: "127.0.0.1", port });
+        const socket = connectSocket({ host: "127.0.0.1", port });
         const finish = (open: boolean) => {
+          clearTimeout(deadline);
           socket.destroy();
           resolveOpen(open);
         };
-        socket.setTimeout(100, () => finish(false));
+        const deadline = setTimeout(() => finish(true), 1_000);
         socket.once("connect", () => finish(true));
-        socket.once("error", () => finish(false));
+        socket.once("error", (error) =>
+          finish(!("code" in error && error.code === "ECONNREFUSED")),
+        );
       });

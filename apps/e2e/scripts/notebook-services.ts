@@ -72,7 +72,16 @@ export class NotebookServices {
       },
     });
     this.#servers.push(server);
-    await server.waitUntilReady(options.readyUrl, { timeout: options.timeout });
+    try {
+      await server.waitUntilReady(options.readyUrl, { timeout: options.timeout });
+    } catch (error) {
+      try {
+        await server.close({ timeout: options.timeout });
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Notebook startup and cleanup failed");
+      }
+      throw error;
+    }
     return server;
   }
 

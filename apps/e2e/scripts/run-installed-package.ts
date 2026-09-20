@@ -94,29 +94,27 @@ try {
   workspace = new InstalledWorkspace(temporaryRoot);
   const network = await workspace.prepare(wheel);
   const serviceExit = workspace.waitForExit();
-  await Promise.race([
-    serviceExit,
-    preparation.run(
-      "run installed-wheel Playwright acceptance",
-      process.execPath,
-      [
-        playwrightCli,
-        "test",
-        "--config",
-        "playwright.installed.config.ts",
-        ...process.argv.slice(2),
-      ],
-      {
-        cwd: appDirectory,
-        env: {
-          ...process.env,
-          [INSTALLED_NETWORK_ENV]: JSON.stringify(network),
-          MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT: temporaryRoot,
-          MARIMO_STUDIO_E2E_WHEEL: wheel,
-        },
-        stdio: "inherit",
+  const acceptance = preparation.run(
+    "run installed-wheel Playwright acceptance",
+    process.execPath,
+    [playwrightCli, "test", "--config", "playwright.installed.config.ts", ...process.argv.slice(2)],
+    {
+      cwd: appDirectory,
+      env: {
+        ...process.env,
+        [INSTALLED_NETWORK_ENV]: JSON.stringify(network),
+        MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT: temporaryRoot,
+        MARIMO_STUDIO_E2E_WHEEL: wheel,
       },
-    ),
+      stdio: "inherit",
+    },
+  );
+  await Promise.race([
+    acceptance,
+    serviceExit.catch(async (error) => {
+      await acceptance.catch(() => undefined);
+      throw error;
+    }),
   ]);
 } catch (error) {
   if (!(stopping && error instanceof PreparationCancelled)) {

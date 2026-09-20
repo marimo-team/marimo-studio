@@ -190,7 +190,16 @@ test("reports bootstrap failure after containing the registered notebook process
     createServer((_request, response) => {
       response.statusCode = 503;
       response.end("unavailable");
-    }).listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1");
+    }).listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1", function () {
+      const target = process.env.MARIMO_STUDIO_E2E_ENDPOINT_FILE;
+      if (!target) return;
+      const { writeFileSync, renameSync } = require("node:fs");
+      writeFileSync(target + ".tmp", JSON.stringify({
+        ownerNonce: process.env.MARIMO_STUDIO_E2E_PROCESS_OWNER,
+        pid: process.pid, port: this.address().port,
+      }));
+      renameSync(target + ".tmp", target);
+    });
   `;
   const registration = startRegisteredNotebookProcess({
     args: ["-e", source],
@@ -198,7 +207,6 @@ test("reports bootstrap failure after containing the registered notebook process
     cwd: process.cwd(),
     directory,
     env: { ...process.env, MARIMO_STUDIO_TEST_PORT: String(port) },
-    port,
     stdio: ["ignore", "ignore", "ignore"],
   });
   try {
@@ -252,7 +260,16 @@ test("run shutdown owns the full grace period before forcing a resistant group",
     const { createServer } = require("node:http");
     process.on("SIGTERM", () => {});
     createServer((_request, response) => response.end("ready"))
-      .listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1");
+      .listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1", function () {
+      const target = process.env.MARIMO_STUDIO_E2E_ENDPOINT_FILE;
+      if (!target) return;
+      const { writeFileSync, renameSync } = require("node:fs");
+      writeFileSync(target + ".tmp", JSON.stringify({
+        ownerNonce: process.env.MARIMO_STUDIO_E2E_PROCESS_OWNER,
+        pid: process.pid, port: this.address().port,
+      }));
+      renameSync(target + ".tmp", target);
+    });
   `;
   const registration = startRegisteredNotebookProcess({
     args: ["-e", source],
@@ -260,7 +277,6 @@ test("run shutdown owns the full grace period before forcing a resistant group",
     cwd: process.cwd(),
     directory,
     env: { ...process.env, MARIMO_STUDIO_TEST_PORT: String(port) },
-    port,
     stdio: ["ignore", "ignore", "ignore"],
   });
   try {
@@ -292,7 +308,7 @@ test("run shutdown owns the full grace period before forcing a resistant group",
   }
 }, 10_000);
 
-const delayedCooperativeKernelExit = async () => {
+const delayedCooperativeKernelExit = async (disconnect: boolean) => {
   const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-cooperative-"));
   const port = await availablePort();
   const source = `
@@ -304,7 +320,16 @@ const delayedCooperativeKernelExit = async () => {
       stopping = true;
       setTimeout(() => server.close(() => process.exit(0)), 400);
     });
-    server.listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1");
+    server.listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1", function () {
+      const target = process.env.MARIMO_STUDIO_E2E_ENDPOINT_FILE;
+      if (!target) return;
+      const { writeFileSync, renameSync } = require("node:fs");
+      writeFileSync(target + ".tmp", JSON.stringify({
+        ownerNonce: process.env.MARIMO_STUDIO_E2E_PROCESS_OWNER,
+        pid: process.pid, port: this.address().port,
+      }));
+      renameSync(target + ".tmp", target);
+    });
   `;
   const registration = startRegisteredNotebookProcess({
     args: ["-e", source],
@@ -312,39 +337,38 @@ const delayedCooperativeKernelExit = async () => {
     cwd: process.cwd(),
     directory,
     env: { ...process.env, MARIMO_STUDIO_TEST_PORT: String(port) },
-    port,
     stdio: ["ignore", "ignore", "ignore"],
   });
   try {
     await registration.ready;
     await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
-    await stopNotebookProcess(
-      {
-        child: registration.child,
-        port,
-        processGroupId: registration.processGroupId,
-        serverUrl: `http://127.0.0.1:${port}`,
-      },
-      { shutdown: "process", timeout: 1_500 },
-    );
+    if (disconnect) {
+      registration.child.disconnect();
+      await new Promise<void>((resolve) => registration.child.once("exit", () => resolve()));
+    } else {
+      await stopNotebookProcess(
+        {
+          child: registration.child,
+          port,
+          processGroupId: registration.processGroupId,
+          serverUrl: `http://127.0.0.1:${port}`,
+        },
+        { shutdown: "process", timeout: 1_500 },
+      );
+    }
 
     expect(registration.child.exitCode).toBe(0);
     expect(registration.child.signalCode).toBeNull();
     expect(processGroupIsRunning(registration.processGroupId)).toBe(false);
     expect(await portIsOpen(port)).toBe(false);
-    if (registration.processGroupId === undefined) throw new Error("Missing process group");
-    unregisterNotebookProcess(
-      { ...registration, processGroupId: registration.processGroupId },
-      { directory },
-    );
     expect(existsSync(directory)).toBe(false);
   } finally {
     stopProcessGroup(registration.processGroupId, "SIGKILL");
     rmSync(directory, { force: true, recursive: true });
   }
 };
-posixTest(
-  "run shutdown lets a delayed cooperative kernel exit inside its grace period",
+posixTest.each([false, true])(
+  "run shutdown lets a delayed cooperative kernel exit inside its grace period (disconnect=%s)",
   delayedCooperativeKernelExit,
   15_000,
 );

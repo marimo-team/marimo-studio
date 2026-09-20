@@ -1,6 +1,7 @@
-import type { ChildProcess } from "node:child_process";
+import type { ChildProcess, Serializable } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
 
+import { constants } from "node:os";
 import { finished } from "node:stream/promises";
 
 import type { E2EEndpoint } from "./network.ts";
@@ -10,6 +11,7 @@ import { unregisterNotebookProcess } from "./notebook-process-registry.ts";
 import { portIsOpen, processGroupIsRunning, stopProcessGroup } from "./process-group.ts";
 import {
   startRegisteredNotebookProcess,
+  supervisorMessageSchema,
   type SupervisorOptions,
 } from "./registered-notebook-process.ts";
 
@@ -29,8 +31,9 @@ interface OwnedProcess {
   authToken?: string;
   studioEntry?: string;
   output?: () => string;
+  onSignal?: (signal: NodeJS.Signals) => void;
 }
-export interface ServerOptions extends Omit<SupervisorOptions, "port"> {
+export interface ServerOptions extends SupervisorOptions {
   endpoint: E2EEndpoint;
   forward?: ProcessOutput;
   shutdown: "studio" | "process";
@@ -56,17 +59,60 @@ export const assertNoLeakedSemaphoreWarning = (output: string) => {
   }
 };
 
-const captureProcessOutput = (child: ChildProcess, { stdout, stderr }: ProcessOutput = {}) => {
+const captureProcessOutput = (
+  child: ChildProcess,
+  fail: (error: Error) => void,
+  { stdout, stderr }: ProcessOutput = {},
+) => {
   let output = "";
+  let pendingWrites = 0;
+  let finishing = false;
+  const drained = Promise.withResolvers<void>();
+  const destinations = new Set([stdout, stderr].filter((stream) => stream !== undefined));
+  for (const destination of destinations) destination.on("error", fail);
+  const finish = () => {
+    if (!finishing || pendingWrites !== 0) return;
+    for (const destination of destinations) destination.off("error", fail);
+    drained.resolve();
+  };
   const capture = (stream: Readable | null, forward?: Writable) => {
+    stream?.on("error", fail);
     stream?.on("data", (chunk) => {
       output += chunk.toString();
-      forward?.write(chunk);
+      if (!forward) return;
+      pendingWrites += 1;
+      let settled = false;
+      const written = (error?: Error | null) => {
+        if (settled) return;
+        settled = true;
+        if (error) fail(error);
+        // Writable emits a failed write's error after invoking its callback.
+        setImmediate(() => {
+          pendingWrites -= 1;
+          finish();
+        });
+      };
+      try {
+        forward.write(chunk, written);
+      } catch (error) {
+        written(
+          error instanceof Error
+            ? error
+            : new Error("Notebook output forwarding failed", { cause: error }),
+        );
+      }
     });
   };
   capture(child.stdout, stdout);
   capture(child.stderr, stderr);
-  return () => output;
+  return {
+    output: () => output,
+    finish: () => {
+      finishing = true;
+      finish();
+      return drained.promise;
+    },
+  };
 };
 
 export const waitForServer = async (
@@ -135,10 +181,14 @@ const childClose = async (child: ChildProcess) => {
   ]);
 };
 
-const waitForClose = async (closed: Promise<void>, timeout: number) => {
+const waitForClose = async (
+  closed: Promise<void>,
+  timeout: number,
+  message = "Notebook server stdio did not close",
+) => {
   let timer: NodeJS.Timeout | undefined;
   const timedOut = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error("Notebook server stdio did not close")), timeout);
+    timer = setTimeout(() => reject(new Error(message)), timeout);
   });
   try {
     await Promise.race([closed, timedOut]);
@@ -161,6 +211,7 @@ export const stopNotebookProcess = async (
     authToken = "",
     child,
     output = () => String(),
+    onSignal,
     port,
     processGroupId = child.pid,
     serverUrl,
@@ -204,11 +255,13 @@ export const stopNotebookProcess = async (
     await finish();
     return;
   }
+  onSignal?.(signal === "SIGINT" ? "SIGTERM" : signal);
   stopProcessGroup(target, signal);
   if (await waitForStop({ child, port, processGroupId }, timeout)) {
     await finish();
     return;
   }
+  onSignal?.("SIGKILL");
   stopProcessGroup(target, "SIGKILL");
   if (!(await waitForStop({ child, port, processGroupId }, timeout))) {
     throw new Error(
@@ -227,34 +280,61 @@ export class ServerHandle {
   readonly output: () => string;
   readonly #options: ServerOptions;
   readonly #ownerNonce: string;
+  readonly #finishOutput: () => Promise<void>;
   #port: number | null = null;
   #releaseRoute: (() => void) | undefined;
   #closing: Promise<void> | undefined;
   #failure: Error | undefined;
+  #stopSignals = new Set<NodeJS.Signals>();
 
   constructor(options: ServerOptions) {
     const origin = options.endpoint.origin;
     this.#options = options;
     this.serverUrl = options.serverUrl ?? origin;
-    const registration = startRegisteredNotebookProcess({ ...options, port: null });
+    const registration = startRegisteredNotebookProcess(options);
     this.child = registration.child;
     this.processGroupId = registration.processGroupId;
     this.#ownerNonce = registration.ownerNonce;
-    this.output = captureProcessOutput(this.child, options.forward);
-    this.exited = new Promise((resolveExit) => {
-      const fail = (error: Error) => {
-        if (!this.#closing) this.#failure ??= error;
-        this.#releaseRoute?.();
-        resolveExit(error);
-      };
-      this.child.once("error", fail);
-      this.child.once("exit", (code, signal) =>
-        fail(
-          new Error(
-            `Notebook service exited unexpectedly with ${signal ?? code}\n${this.output()}`,
-          ),
-        ),
+    const exited = Promise.withResolvers<Error>();
+    this.exited = exited.promise;
+    const resolveExit = exited.resolve;
+    const fail = (error: Error) => {
+      this.#failure ??= error;
+      resolveExit(error);
+    };
+    const capture = captureProcessOutput(this.child, fail, options.forward);
+    this.output = capture.output;
+    const onMessage = (source: Serializable) => {
+      const message = supervisorMessageSchema.safeParse(source);
+      if (message.success && message.data.type === "failed") {
+        fail(new Error(`${message.data.message}\n${this.output()}`));
+      }
+    };
+    this.#finishOutput = () => {
+      this.child.off("message", onMessage);
+      return capture.finish();
+    };
+    this.child.on("message", onMessage);
+    this.child.once("error", fail);
+    this.child.once("exit", (code, signal) => {
+      this.child.off("message", onMessage);
+      this.#releaseRoute?.();
+      const error = new Error(
+        `Notebook service exited unexpectedly with ${signal ?? code}\n${this.output()}`,
       );
+      const expected =
+        code === 0 ||
+        [...this.#stopSignals].some(
+          (sent) =>
+            signal === sent ||
+            code === 128 + constants.signals[sent] ||
+            (process.platform === "win32" && code === 1),
+        );
+      if (!this.#closing || !expected) {
+        fail(error);
+      } else {
+        resolveExit(error);
+      }
     });
     this.ready = Promise.all([registration.ready, registration.bound]).then(([, port]) => {
       this.#port = port;
@@ -282,7 +362,7 @@ export class ServerHandle {
   }
 
   async #close(options: StopOptions): Promise<void> {
-    const errors: unknown[] = this.#failure ? [this.#failure] : [];
+    const errors: unknown[] = [];
     try {
       await stopNotebookProcess(
         {
@@ -292,12 +372,22 @@ export class ServerHandle {
           processGroupId: this.processGroupId,
           serverUrl: this.serverUrl,
           output: this.output,
+          onSignal: (signal) => this.#stopSignals.add(signal),
         },
         { ...options, shutdown: this.#options.shutdown },
       );
     } catch (error) {
       errors.push(error);
     } finally {
+      try {
+        await waitForClose(
+          this.#finishOutput(),
+          options.timeout ?? 5_000,
+          "Notebook forwarded output did not finish",
+        );
+      } catch (error) {
+        errors.push(error);
+      }
       this.#releaseRoute?.();
       if (
         this.processGroupId !== undefined &&
@@ -310,6 +400,7 @@ export class ServerHandle {
         );
       }
     }
+    if (this.#failure) errors.unshift(this.#failure);
     if (errors.length === 1) throw errors[0];
     if (errors.length) throw new AggregateError(errors, "Notebook service shutdown failed");
   }

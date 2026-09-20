@@ -22,7 +22,6 @@ import {
 
 export const NOTEBOOK_PROCESS_OWNER_ENV = "MARIMO_STUDIO_E2E_PROCESS_OWNER";
 export const NOTEBOOK_PROCESS_ENDPOINT_ENV = "MARIMO_STUDIO_E2E_ENDPOINT_FILE";
-export const NOTEBOOK_PROCESS_PORT_ENV = "MARIMO_STUDIO_E2E_PROCESS_PORT";
 export const NOTEBOOK_PROCESS_REGISTRY_ENV = "MARIMO_STUDIO_E2E_PROCESS_REGISTRY";
 
 const DEFAULT_STOP_TIMEOUT = 5_000;
@@ -219,22 +218,17 @@ const waitForStopped = async (
   timeout: number,
 ) => {
   const deadline = Date.now() + timeout;
-  const blocked = [];
   let result = await pendingRecords(records, inspect, isPortOpen, directory);
-  blocked.push(...result.blocked);
-  let { pending } = result;
-  while (pending.length > 0 && Date.now() < deadline) {
+  while ((result.pending.length || result.blocked.length) && Date.now() < deadline) {
     await new Promise((resolveWait) => setTimeout(resolveWait, STOP_POLL_INTERVAL));
     result = await pendingRecords(
-      pending.map(({ record }) => record),
+      [...result.pending, ...result.blocked].map(({ record }) => record),
       inspect,
       isPortOpen,
       directory,
     );
-    blocked.push(...result.blocked);
-    pending = result.pending;
   }
-  return { blocked, pending };
+  return result;
 };
 
 export const registerNotebookProcess = (
@@ -290,8 +284,14 @@ export const stopRegisteredNotebookProcesses = async ({
   const records = readRecords(directory);
   removeDirectoryIfEmpty(directory);
   const initial = await signalOwned(records, signal, inspect, isPortOpen, stop, directory);
-  let result = await waitForStopped(initial.signaled, inspect, isPortOpen, directory, timeout);
-  const blocked = [...initial.blocked, ...result.blocked];
+  let result = await waitForStopped(
+    [...initial.signaled, ...initial.blocked.map(({ record }) => record)],
+    inspect,
+    isPortOpen,
+    directory,
+    timeout,
+  );
+  let blocked = result.blocked;
   let { pending } = result;
   if (pending.length > 0 && signal !== "SIGKILL") {
     const forced = await signalOwned(
@@ -302,18 +302,23 @@ export const stopRegisteredNotebookProcesses = async ({
       stop,
       directory,
     );
-    blocked.push(...forced.blocked);
+
     const stoppedGroups = pending
       .filter(({ state }) => state === "stopped")
       .map(({ record }) => record);
     result = await waitForStopped(
-      [...forced.signaled, ...stoppedGroups],
+      [
+        ...forced.signaled,
+        ...stoppedGroups,
+        ...blocked.map(({ record }) => record),
+        ...forced.blocked.map(({ record }) => record),
+      ],
       inspect,
       isPortOpen,
       directory,
       timeout,
     );
-    blocked.push(...result.blocked);
+    blocked = result.blocked;
     pending = result.pending;
   }
   const survived = [...blocked, ...pending];

@@ -60,7 +60,16 @@ const signalResistantServer = `
   const { createServer } = require("node:http");
   process.on("SIGTERM", () => {});
   createServer((_request, response) => response.end("ready"))
-    .listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1");
+    .listen(Number(process.env.MARIMO_STUDIO_TEST_PORT), "127.0.0.1", function () {
+      const target = process.env.MARIMO_STUDIO_E2E_ENDPOINT_FILE;
+      if (!target) return;
+      const { writeFileSync, renameSync } = require("node:fs");
+      writeFileSync(target + ".tmp", JSON.stringify({
+        ownerNonce: process.env.MARIMO_STUDIO_E2E_PROCESS_OWNER,
+        pid: process.pid, port: this.address().port,
+      }));
+      renameSync(target + ".tmp", target);
+    });
 `;
 
 const waitForSupervisor = (worker: ChildProcess) =>
@@ -84,7 +93,6 @@ const workerSource = (directory: string, port: number, start: boolean) => `
     cwd: process.cwd(),
     directory: ${JSON.stringify(directory)},
     env: { ...process.env, MARIMO_STUDIO_TEST_PORT: ${JSON.stringify(String(port))} },
-    port: ${port},
     stdio: ["ignore", "ignore", "ignore"],
   });
   await registration.${start ? "ready" : "registered"};
@@ -103,7 +111,6 @@ test.skipIf(!supportsProcessEnvironmentInspection)(
       cwd: process.cwd(),
       directory,
       env: { ...process.env, MARIMO_STUDIO_TEST_PORT: String(port) },
-      port,
       stdio: ["ignore", "ignore", "ignore"],
     });
     try {
@@ -125,7 +132,6 @@ test.skipIf(!supportsProcessEnvironmentInspection)(
 
 test("a delayed start gets a fresh readiness timeout", async () => {
   const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-e2e-processes-"));
-  const port = await availablePort();
   const readyTimeout = 2_000;
   const registration = spawnRegisteredNotebookSupervisor({
     args: ["-e", "process.exit(0)"],
@@ -133,7 +139,6 @@ test("a delayed start gets a fresh readiness timeout", async () => {
     cwd: process.cwd(),
     directory,
     env: process.env,
-    port,
     readyTimeout,
     stdio: ["ignore", "ignore", "ignore"],
   });
@@ -159,52 +164,17 @@ test("a supervisor spawn failure retains the operating system error", async () =
       cwd: missingDirectory,
       directory,
       env: process.env,
-      port: await availablePort(),
       readyTimeout: 1_000,
       stdio: ["ignore", "ignore", "ignore"],
     });
 
     await expect(registration.registered).rejects.toMatchObject({
-      cause: expect.objectContaining({ code: "ENOENT" }),
+      code: "ENOENT",
     });
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
 });
-
-test("a supervisor exits when another process keeps the registered port open", async () => {
-  const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-e2e-processes-"));
-  const server = createServer((socket) => socket.on("error", () => undefined));
-  await new Promise<void>((resolveListen, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolveListen);
-  });
-  const port = boundAddressSchema.parse(server.address()).port;
-  const registration = spawnRegisteredNotebookSupervisor({
-    args: ["-e", "process.exit(0)"],
-    command: process.execPath,
-    cwd: process.cwd(),
-    directory,
-    env: process.env,
-    port,
-    stdio: ["ignore", "ignore", "ignore"],
-  });
-  try {
-    await registration.start();
-    await Promise.race([
-      waitForExit(registration.child),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Notebook supervisor did not exit")), 7_000),
-      ),
-    ]);
-
-    expect(existsSync(directory)).toBe(false);
-  } finally {
-    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
-    registration.child.kill("SIGKILL");
-    rmSync(directory, { force: true, recursive: true });
-  }
-}, 10_000);
 
 test.skipIf(!supportsProcessEnvironmentInspection)(
   "a stale record reports a live foreign process group without signaling it",
@@ -300,9 +270,8 @@ test.skipIf(!supportsProcessEnvironmentInspection)(
       worker.kill("SIGKILL");
       await waitForExit(worker);
 
-      await expect.poll(() => responds(port)).toBe(false);
+      await expect.poll(() => responds(port), { timeout: 10_000 }).toBe(false);
       await expect.poll(() => processGroupIsRunning(processGroupId)).toBe(false);
-      await stopRegisteredNotebookProcesses({ directory, timeout: 100 });
       expect(existsSync(directory)).toBe(false);
     } finally {
       if (worker?.exitCode === null && worker.signalCode === null) worker.kill("SIGKILL");
@@ -407,7 +376,6 @@ test("an owned dynamic binding replaces its pending record and consumes the rece
     cwd: process.cwd(),
     directory,
     env: process.env,
-    port: null,
     stdio: ["ignore", "ignore", "ignore"],
   });
   try {
@@ -458,7 +426,6 @@ test.each([
       cwd: process.cwd(),
       directory,
       env: process.env,
-      port: null,
       stdio: ["ignore", "ignore", "ignore"],
     });
     try {
@@ -474,7 +441,7 @@ test.each([
 );
 
 test.each([
-  ["exits", "process.exit(0)", 1000, "exited"],
+  ["exits", "process.exit(0)", 1000, "supervisor exited with status 0"],
   ["times out", "setInterval(() => {}, 1000)", 30, "binding timed out"],
 ])(
   "rejects pending binding and closes its watcher when the backend %s",
@@ -486,7 +453,6 @@ test.each([
       cwd: process.cwd(),
       directory,
       env: process.env,
-      port: null,
       boundTimeout,
       stdio: ["ignore", "ignore", "ignore"],
     });
@@ -514,6 +480,7 @@ test("pending registrations never probe ports and cannot authorize an unverified
       stopRegisteredNotebookProcesses({
         directory,
         inspect: () => "unknown",
+        timeout: 50,
         isPortOpen,
         stop,
       }),
@@ -542,7 +509,6 @@ test("registry closure rejects a delayed start before launching its backend", as
     cwd: process.cwd(),
     directory,
     env: process.env,
-    port: null,
     stdio: ["ignore", "ignore", "ignore"],
   });
   try {
@@ -557,3 +523,24 @@ test("registry closure rejects a delayed start before launching its backend", as
     rmSync(directory, { force: true, recursive: true });
   }
 }, 5_000);
+
+test("reinspects an unknown pending owner until its exit is confirmed", async () => {
+  const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-e2e-binding-"));
+  const ownerNonce = createNotebookProcessOwnerNonce();
+  const inspect = vi
+    .fn()
+    .mockReturnValueOnce("unknown")
+    .mockReturnValueOnce("unknown")
+    .mockReturnValue("stopped");
+  const stop = vi.fn();
+  const isPortOpen = vi.fn();
+  try {
+    registerNotebookProcess({ ownerNonce, port: null, processGroupId: 123456 }, { directory });
+    await stopRegisteredNotebookProcesses({ directory, inspect, stop, isPortOpen, timeout: 1000 });
+    expect(stop).not.toHaveBeenCalled();
+    expect(isPortOpen).not.toHaveBeenCalled();
+    expect(existsSync(directory)).toBe(false);
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});

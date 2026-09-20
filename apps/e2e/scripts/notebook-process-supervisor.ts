@@ -7,32 +7,30 @@ import type { SupervisorMessage } from "./registered-notebook-process.ts";
 import {
   NOTEBOOK_PROCESS_OWNER_ENV,
   NOTEBOOK_PROCESS_ENDPOINT_ENV,
-  NOTEBOOK_PROCESS_PORT_ENV,
   NOTEBOOK_PROCESS_REGISTRY_ENV,
   registerNotebookProcess,
   notebookProcessEndpointPath,
   removeNotebookEndpointReceipt,
   unregisterNotebookProcess,
 } from "./notebook-process-registry.ts";
-import { portIsOpen, processEnvironmentContains, stopProcessGroup } from "./process-group.ts";
+import {
+  liveProcessGroupMembers,
+  portIsOpen,
+  processEnvironmentContains,
+  stopProcessGroup,
+} from "./process-group.ts";
 
-const FORCE_STOP_DELAY = 250;
+const FORCE_STOP_DELAY = 5_000;
 const PORT_CLOSE_TIMEOUT = 5_000;
 const PORT_POLL_INTERVAL = 50;
 const command = process.argv[2] ?? "";
 const args = process.argv.slice(3);
 const directory = process.env[NOTEBOOK_PROCESS_REGISTRY_ENV] ?? "";
 const ownerNonce = process.env[NOTEBOOK_PROCESS_OWNER_ENV] ?? "";
-const portValue = process.env[NOTEBOOK_PROCESS_PORT_ENV];
-let port = portValue === "null" ? null : Number(portValue);
+let port: number | null = null;
 const processGroupId = process.pid;
 
-if (
-  !command ||
-  !directory ||
-  !ownerNonce ||
-  (port !== null && (!Number.isSafeInteger(port) || port < 1 || port > 65535))
-) {
+if (!command || !directory || !ownerNonce) {
   throw new Error("Notebook process supervisor received an invalid registration");
 }
 
@@ -47,9 +45,7 @@ const endpointSchema = z
   })
   .strict();
 const childEnvironment = { ...process.env };
-if (port === null) childEnvironment[NOTEBOOK_PROCESS_ENDPOINT_ENV] = endpointPath;
-else delete childEnvironment[NOTEBOOK_PROCESS_ENDPOINT_ENV];
-delete childEnvironment[NOTEBOOK_PROCESS_PORT_ENV];
+childEnvironment[NOTEBOOK_PROCESS_ENDPOINT_ENV] = endpointPath;
 delete childEnvironment[NOTEBOOK_PROCESS_REGISTRY_ENV];
 
 let child: ChildProcess | undefined;
@@ -58,8 +54,9 @@ let finished = false;
 let forceStopTimer: NodeJS.Timeout | undefined;
 let portPollTimer: NodeJS.Timeout | undefined;
 let shuttingDown = false;
+let forcing = false;
 let endpointWatcher: FSWatcher | undefined;
-let endpointSettled = port !== null;
+let endpointSettled = false;
 
 const disposeEndpoint = () => {
   endpointSettled = true;
@@ -134,7 +131,6 @@ const finishWhenPortCloses = async (deadline = Date.now() + PORT_CLOSE_TIMEOUT) 
   if (finished) return;
   if (await portIsOpen(port)) {
     if (Date.now() >= deadline) {
-      finish();
       forceStop();
       return;
     }
@@ -145,11 +141,26 @@ const finishWhenPortCloses = async (deadline = Date.now() + PORT_CLOSE_TIMEOUT) 
 };
 
 const forceStop = () => {
+  forcing = true;
   if (process.platform === "win32") {
     stopProcessGroup(child?.pid, "SIGKILL");
     return;
   }
-  process.kill(-processGroupId, "SIGKILL");
+  const members = liveProcessGroupMembers(processGroupId);
+  if (members === undefined) throw new Error("Cannot inspect notebook process group for shutdown");
+  const backends = members.filter((pid) => pid !== processGroupId);
+  if (backends.length === 0) {
+    finish();
+    return;
+  }
+  for (const pid of backends) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+    }
+  }
+  if (child?.exitCode !== null || child?.signalCode !== null) void finishWhenPortCloses();
 };
 
 const beginShutdown = (signalGroup: boolean, force = true) => {
@@ -176,17 +187,12 @@ const start = () => {
     return;
   }
   try {
-    if (port === null) {
-      endpointWatcher = watch(directory, (_event, filename) => {
-        if (
-          filename === null ||
-          filename.toString() === `${processGroupId}-${ownerNonce}.endpoint`
-        ) {
-          inspectEndpoint();
-        }
-      });
-      endpointWatcher.once("error", failEndpoint);
-    }
+    endpointWatcher = watch(directory, (_event, filename) => {
+      if (filename === null || filename.toString() === `${processGroupId}-${ownerNonce}.endpoint`) {
+        inspectEndpoint();
+      }
+    });
+    endpointWatcher.once("error", failEndpoint);
     child = spawn(command, args, {
       cwd: process.cwd(),
       env: childEnvironment,
@@ -205,11 +211,20 @@ const start = () => {
   });
   child.once("spawn", () => {
     send({ type: "started" });
-    if (port === null) inspectEndpoint();
+    inspectEndpoint();
   });
   child.once("exit", (code, signal) => {
     disposeEndpoint();
-    childExitCode = signal ? 1 : (code ?? 1);
+    const expected =
+      (shuttingDown && (signal === "SIGTERM" || code === 143)) ||
+      (forcing && (signal === "SIGKILL" || code === 137));
+    childExitCode = expected ? 0 : (code ?? 1);
+    if (!expected && (signal !== null || code !== 0)) {
+      send({
+        type: "failed",
+        message: `Notebook service exited unexpectedly with ${signal ?? code}`,
+      });
+    }
     void finishWhenPortCloses();
   });
 };
