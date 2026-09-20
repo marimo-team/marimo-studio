@@ -15,6 +15,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from marimo_studio._compat.server.editor_session_lifetimes import _canonical_session_id
 from marimo_studio._delivery.urls import (
+    HOST_SESSION_HANDOFF_QUERY_PARAM,
     PRIVATE_QUERY_KEYS,
     QUERY_OPERATION_QUERY_PARAM,
 )
@@ -95,7 +96,12 @@ _NETWORK_SEND_DOCUMENT_TRANSACTION = (
     b"{body:t,params:n()}).then(lp))"
 )
 _NETWORK_REQUEST_FACTORY = b"n=()=>({header:t()});return{sendComponentValues:"
-_DOCUMENT_NETWORK_BOOTSTRAP = b"""
+_DOCUMENT_NETWORK_BOOTSTRAP = (
+    b"""
+let marimoStudioDocumentPageHiding=false;
+globalThis.addEventListener?.("pagehide",()=>{
+  marimoStudioDocumentPageHiding=true;
+},{once:true});
 const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   flush:()=>studioFlushDocumentChanges(),
   flushBeforeSave:()=>studioFlushBeforeDocumentSave(),
@@ -107,8 +113,15 @@ const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   waitForConnection:()=>sn(),
   params:()=>n(),
   handleResponse:result=>lp(result),
+  handoffAccepted:()=>marimoStudioDocumentPageHiding&&/^[a-f0-9]{64}$/.test(
+    new URL(globalThis.location.href).searchParams.get("""
+    + json.dumps(HOST_SESSION_HANDOFF_QUERY_PARAM).encode()
+    + b"""
+    )??""
+  ),
 });
 """
+)
 _ORDERED_NETWORK_SEND_DOCUMENT_TRANSACTION = (
     b"sendDocumentTransaction:request=>"
     b"marimoStudioDocumentRequests.sendDocumentTransaction(request)"
