@@ -1,0 +1,170 @@
+apps/e2e/tests/pyodide-assets.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 9,11
+.github/actions/pr-validation/filters.test.mjs
+  s_1d547b3fd29c2e::t_b48ec9152af84b 34,42,54-55,84
+  s_1d547b3fd29c2e::t_96b0a4755c1717 52,56-57,61-65,67
+apps/e2e/tests/fixture.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 14-18,30
+apps/e2e/unit/export-repository.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 6
+apps/e2e/tests/network-fixture.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3
+apps/e2e/tests/authoring.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 5
+apps/e2e/scripts/installed-workspace.ts
+  s_1d547b3fd29c2e::t_72317a0485992a 1,4-8,10,17-21,27-31,55,184-195,202-204,207-209,212,226,229-240,244-245
+  s_1d547b3fd29c2e::t_4b9f6d959bedd9 12,23-24,32-48,50-54,56-83,85-99,102-162,164-181,183,196-201,205,210,213-225,241-243
+apps/e2e/unit/browser.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 4
+apps/e2e/scripts/notebook-process-supervisor.ts
+  s_1d547b3fd29c2e::t_f44edbb500c13b 1-2,17,22,24-25,55,58-59,61,77,106-107,109,135,155
+  s_1d547b3fd29c2e::t_a65c739d095231 16,78,80,98,100,173,175,196,198
+apps/e2e/tests/provider-notebook.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3
+apps/e2e/unit/process-group.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3
+apps/e2e/tests/provider-reveal.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3
+apps/e2e/tests/host-session-handoff.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 7-8
+apps/e2e/tests/stale-results.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3-4
+apps/e2e/scripts/process-group.ts
+  s_1d547b3fd29c2e::t_4d05f83a21fd72 3,5,7,30-39,41-43,45,63,66-68,70,72,76-77,81,83,85,88,91-92,94,111,115-116,122-123,127-140
+apps/e2e/playwright.installed.config.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 4-5
+apps/e2e/tests/provider-fixture.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3-5
+apps/e2e/unit/playwright-config.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 18
+apps/e2e/tests/forced-interruption.spec.ts
+  s_1d547b3fd29c2e::t_3a683abf0f0481 23,33
+  s_1d547b3fd29c2e::t_7dfde4de4cba7a 18,31
+  s_1d547b3fd29c2e::t_b48ec9152af84b 9-11
+development_docs/frontend.md
+  s_1d547b3fd29c2e::t_96b0a4755c1717 84-88
+apps/e2e/playwright.providers.config.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3,6
+apps/e2e/scripts/notebook-process-registry.ts
+  s_1d547b3fd29c2e::t_f44edbb500c13b 45-46,50,53,71,81,85,94,98,113,118,121,134,149,152,241-242,268-269
+  s_1d547b3fd29c2e::t_a65c739d095231 15
+  ai_agent 16-21,37-44,47-49,56-60,62-65,138-145,158-165,187-192,214-220,272,283-288
+apps/e2e/tests/presentation-security.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3-4
+apps/e2e/scripts/check-browser.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 3
+apps/e2e/tests/view-cache-performance.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 6
+apps/e2e/scripts/preparation-process.ts
+  s_1d547b3fd29c2e::t_2a6769474f8d46 1-3,17,25-32,35,41,52-56,58,61,63-65,67,91,100,114,122,127-130,134,148,155,157,161,163,165,169,171,173,180,208,223,230,241-242,244,254,305
+  s_1d547b3fd29c2e::t_a65c739d095231 11
+  s_1d547b3fd29c2e::t_4b9f6d959bedd9 21-24,135,258-264,281-287
+.github/filters.yml
+  s_1d547b3fd29c2e::t_96b0a4755c1717 86,104-105,225,240,252-253,274
+  s_1d547b3fd29c2e::t_b48ec9152af84b 87-94,100-103,223,226,241,250-251,272,275
+apps/e2e/tests/studio-cli.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3-5
+Makefile
+  s_1d547b3fd29c2e::t_b48ec9152af84b 89
+apps/e2e/playwright.config.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3,6
+apps/e2e/tests/collaboration.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3-4
+apps/e2e/unit/network.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 7
+apps/e2e/scripts/notebook-services.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 9,11,38
+  s_1d547b3fd29c2e::t_5cc2c4156407f1 3,10,12,19-20,27,30-33,35-37,39,45-46,48,50,57-58,62-66,76-80,89,101
+  ai_agent 4,8,13-18,21-26,40-41,47,51-56,59,61,68,71,75,91,93-95,97
+apps/e2e/scripts/provider-workspace.ts
+  s_1d547b3fd29c2e::t_4b9f6d959bedd9 5-6,116-120
+  s_1d547b3fd29c2e::t_7bd50c5320a325 4,11-13,26-27,29-34,36,114,121-125,167,169-171,200,213,237-239
+  s_1d547b3fd29c2e::t_a65c739d095231 7-8,24-25,28,168
+  s_1d547b3fd29c2e::t_72317a0485992a 226
+apps/e2e/unit/preparation-process.test.ts
+  s_1d547b3fd29c2e::t_4b9f6d959bedd9 1,3,58,250
+  s_1d547b3fd29c2e::t_2a6769474f8d46 8-9,91
+apps/e2e/scripts/network.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 61
+  s_1d547b3fd29c2e::t_8046d62b76de3b 1-3,5,33,45-60,62,66-69,74,76,98,116-118,125-126,143,147,165
+apps/e2e/unit/notebook-process-registry.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 16-18,22,30,33
+apps/e2e/tests/provider-runtime.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 4
+apps/e2e/scripts/installed-package-network.ts
+  s_1d547b3fd29c2e::t_4b9f6d959bedd9 26-32
+  s_1d547b3fd29c2e::t_7bd50c5320a325 24-25
+apps/e2e/scripts/collaborative-workspace.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 4-5
+apps/e2e/scripts/tsconfig.json
+  s_1d547b3fd29c2e::t_b48ec9152af84b 1-11
+apps/e2e/scripts/server-process.ts
+  s_1d547b3fd29c2e::t_3a683abf0f0481 119
+  s_1d547b3fd29c2e::t_5cc2c4156407f1 1-2,6-32,34-46,52,59,61,73-74,98-99,101,117,121-125,127,138-139,150-152,154,168-171,173,221-254,257-265,267-286,288-293,295,297-308,310-316
+  s_1d547b3fd29c2e::t_a65c739d095231 3
+apps/e2e/scripts/main-workspace.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 4-6,18-19
+  s_1d547b3fd29c2e::t_7bd50c5320a325 35
+apps/e2e/unit/fixture-provider-package.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 6-7
+apps/e2e/scripts/browser.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 1-20
+apps/e2e/tests/lens-integration.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 9
+apps/e2e/unit/paths.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 4
+apps/e2e/unit/marimo-edit.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 8
+apps/e2e/tests/recovery-support.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 1
+apps/e2e/scripts/fixture-provider-package.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 4
+apps/e2e/tests/notebook-server.ts
+  ai_agent 9
+  s_1d547b3fd29c2e::t_3a683abf0f0481 3,10,15,36,52-56,84
+apps/e2e/scripts/prepare-pyodide.ts
+  s_1d547b3fd29c2e::t_a65c739d095231 8
+apps/e2e/scripts/registered-notebook-process.ts
+  s_1d547b3fd29c2e::t_f44edbb500c13b 27-43,45-48,56,72,76,84,92,132,157,161,192
+  s_1d547b3fd29c2e::t_a65c739d095231 11-19,24,138,142
+apps/e2e/scripts/paths.ts
+  ai_agent 4,13
+apps/e2e/unit/notebook-server.test.ts
+  s_1d547b3fd29c2e::t_3a683abf0f0481 15,235,277,282,328,334,354,393,477,518,561,594
+  s_1d547b3fd29c2e::t_7dfde4de4cba7a 392
+  ai_agent 23,237-240,284-287,336-339,473-476
+  s_1d547b3fd29c2e::t_b48ec9152af84b 11-14,16,22
+pnpm-lock.yaml
+  ai_agent 247-252
+apps/e2e/scripts/run-installed-package.ts
+  s_1d547b3fd29c2e::t_3febe0cde5a1e8 132-135
+  s_1d547b3fd29c2e::t_72317a0485992a 1,6,11-12,25,40-41,50,55,59-60,64,70,92,94-96,113,128
+  s_1d547b3fd29c2e::t_a65c739d095231 10,13
+  s_1d547b3fd29c2e::t_4b9f6d959bedd9 63,93,129-131,136-141
+apps/e2e/package.json
+  s_1d547b3fd29c2e::t_b48ec9152af84b 7,9
+apps/e2e/unit/pyodide-payload.test.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 6
+apps/e2e/installed-tests/installed-wheel.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3
+apps/e2e/scripts/graceful-shutdown.ts
+  s_1d547b3fd29c2e::t_f44edbb500c13b 8,28-29,31,33,60-61
+apps/e2e/tests/external-provider.spec.ts
+  s_1d547b3fd29c2e::t_b48ec9152af84b 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8df8feffad2252d59ec7ba3e8184d3e17d0c0510",
+  "prompts": {},
+  "sessions": {
+    "s_1d547b3fd29c2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be9f-4e00-7101-9b2c-6dd8161f3972",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
