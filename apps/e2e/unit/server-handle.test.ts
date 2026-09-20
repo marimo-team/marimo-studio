@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { Writable } from "node:stream";
 import { finished } from "node:stream/promises";
-import { expect, test } from "vite-plus/test";
+import { expect, test, vi } from "vite-plus/test";
 
 import { createE2ENetwork } from "../scripts/network.ts";
 import { NotebookServices } from "../scripts/notebook-services.ts";
@@ -134,6 +134,13 @@ test.each([
           );
           if (mode === "forward-timeout") {
             await expect(closing).rejects.toThrow("Notebook forwarded output did not finish");
+            const write = vi.spyOn(forwarded, "write");
+            try {
+              service.child.stdout?.emit("data", Buffer.from("late child output"));
+              expect(write).not.toHaveBeenCalled();
+            } finally {
+              write.mockRestore();
+            }
           }
         } finally {
           completeWrite(new Error("reporter closed"));

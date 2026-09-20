@@ -193,6 +193,7 @@ const pendingRecords = async (
   const pending = [];
   for (const record of records) {
     const state = inspect(record);
+    if (!existsSync(record.path)) continue;
     if (state === "foreign" || state === "unknown") {
       if (record.port === null || (record.port !== null && (await isPortOpen(record.port)))) {
         blocked.push({ record, state });

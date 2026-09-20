@@ -79,7 +79,7 @@ const captureProcessOutput = (
     stream?.on("error", fail);
     stream?.on("data", (chunk) => {
       output += chunk.toString();
-      if (!forward) return;
+      if (finishing || !forward) return;
       pendingWrites += 1;
       let settled = false;
       const written = (error?: Error | null) => {

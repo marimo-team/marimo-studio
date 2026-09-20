@@ -524,23 +524,36 @@ test("registry closure rejects a delayed start before launching its backend", as
   }
 }, 5_000);
 
-test("reinspects an unknown pending owner until its exit is confirmed", async () => {
-  const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-e2e-binding-"));
-  const ownerNonce = createNotebookProcessOwnerNonce();
-  const inspect = vi
-    .fn()
-    .mockReturnValueOnce("unknown")
-    .mockReturnValueOnce("unknown")
-    .mockReturnValue("stopped");
-  const stop = vi.fn();
-  const isPortOpen = vi.fn();
-  try {
-    registerNotebookProcess({ ownerNonce, port: null, processGroupId: 123456 }, { directory });
-    await stopRegisteredNotebookProcesses({ directory, inspect, stop, isPortOpen, timeout: 1000 });
-    expect(stop).not.toHaveBeenCalled();
-    expect(isPortOpen).not.toHaveBeenCalled();
-    expect(existsSync(directory)).toBe(false);
-  } finally {
-    rmSync(directory, { force: true, recursive: true });
-  }
-});
+test.each(["stopped", "unregistered"])(
+  "reinspects an unknown pending owner until %s",
+  async (terminal) => {
+    const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-e2e-binding-"));
+    const ownerNonce = createNotebookProcessOwnerNonce();
+    const inspect = vi
+      .fn()
+      .mockReturnValueOnce("unknown")
+      .mockReturnValueOnce("unknown")
+      .mockImplementation(() => {
+        if (terminal === "stopped") return "stopped";
+        unregisterNotebookProcess({ ownerNonce, processGroupId: 123456 }, { directory });
+        return "unknown";
+      });
+    const stop = vi.fn();
+    const isPortOpen = vi.fn();
+    try {
+      registerNotebookProcess({ ownerNonce, port: null, processGroupId: 123456 }, { directory });
+      await stopRegisteredNotebookProcesses({
+        directory,
+        inspect,
+        stop,
+        isPortOpen,
+        timeout: 1000,
+      });
+      expect(stop).not.toHaveBeenCalled();
+      expect(isPortOpen).not.toHaveBeenCalled();
+      expect(existsSync(directory)).toBe(false);
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  },
+);
