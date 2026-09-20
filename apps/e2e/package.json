@@ -18,6 +18,7 @@
     "@marimo-studio/protocol": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
+    "portless": "catalog:",
     "zod": "catalog:"
   }
 }

@@ -241,6 +241,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
+      portless:
+        specifier: 'catalog:'
+        version: 0.15.5
       zod:
         specifier: 'catalog:'
         version: 4.3.6

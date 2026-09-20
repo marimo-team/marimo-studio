@@ -155,7 +155,7 @@ export class ProviderWorkspace {
           [
             "python",
             resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
-            String(publication.endpoint.port),
+            "0",
             "--bind",
             "127.0.0.1",
             "--directory",
@@ -193,16 +193,14 @@ export class ProviderWorkspace {
   #runServer(notebook, endpoint) {
     return this.#services.start(
       [
+        "python",
+        resolve(repositoryDirectory, "apps/e2e/scripts/_compat/server.py"),
         "marimo",
         "run",
         notebook,
         "--no-sandbox",
         "--headless",
         "--no-token",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(endpoint.port),
       ],
       endpoint,
       "run",

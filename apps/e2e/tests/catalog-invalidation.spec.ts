@@ -21,7 +21,7 @@ test("refreshes a projected cached view after the view catalog changes", async (
   page,
 }) => {
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     2,
   );
   await page.goto(studioEntryUrl);
@@ -39,7 +39,7 @@ test("refreshes a projected cached view after the view catalog changes", async (
     throw new Error("The dashboard preview frame did not mount");
   }
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 2,

@@ -1,12 +1,16 @@
-import { spawn } from "node:child_process";
-import { cp, mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, isAbsolute, resolve } from "node:path";
 
-import { installedPackageNetwork } from "./installed-package-network.mjs";
+import {
+  createInstalledPackageNetwork,
+  INSTALLED_NETWORK_FILE_ENV,
+} from "./installed-package-network.mjs";
+import { e2eNetwork } from "./network.mjs";
 import { appDirectory, repositoryDirectory } from "./paths.mjs";
 import { PreparationProcessOwner } from "./preparation-process.mjs";
-import { captureProcessOutput, stopNotebookProcess, waitForServer } from "./server-process.mjs";
+import { startRoutedNotebookProcess } from "./routed-notebook-process.mjs";
+import { stopNotebookProcess, waitForServer } from "./server-process.mjs";
 
 const fixtureDirectory = resolve(appDirectory, "fixtures-installed");
 
@@ -31,7 +35,6 @@ const environmentExecutable = (environmentDirectory, name) =>
     process.platform === "win32" ? `${name}.exe` : name,
   );
 
-const outputs = new WeakMap();
 const preparation = new PreparationProcessOwner();
 const closures = [];
 const servers = [];
@@ -43,12 +46,9 @@ let server;
 let stopping = false;
 let temporaryRoot;
 
-const track = ({ child, ...server }) => {
-  servers.push({
-    child,
-    ...server,
-    output: () => outputs.get(child)?.() ?? "",
-  });
+const track = (server) => {
+  const { child } = server;
+  servers.push(server);
   closures.push(
     new Promise((resolveClose) => {
       child.once("error", (error) => {
@@ -62,10 +62,10 @@ const track = ({ child, ...server }) => {
           stop("SIGTERM");
         }
       });
-      child.once("close", resolveClose);
+      child.once("exit", resolveClose);
     }),
   );
-  return child;
+  return server;
 };
 
 const stop = (signal) => {
@@ -77,7 +77,8 @@ const stop = (signal) => {
       exitCode = 1;
     }),
   );
-  for (const { shutdown, timeout, ...serverProcess } of servers) {
+  for (const serverProcess of servers) {
+    const { shutdown, timeout } = serverProcess;
     shutdowns.push(
       stopNotebookProcess(serverProcess, { shutdown, signal, timeout }).catch((error) => {
         console.error(error);
@@ -93,6 +94,8 @@ process.on("SIGHUP", () => stop("SIGTERM"));
 
 try {
   const wheel = await installedWheel();
+  await e2eNetwork.start();
+  const installedPackageNetwork = createInstalledPackageNetwork(e2eNetwork.installed);
   preparation.requireActive();
   temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-studio-installed-e2e-"));
   const environmentDirectory = resolve(temporaryRoot, "environment");
@@ -109,7 +112,6 @@ try {
     "dashboard",
   );
   const python = environmentExecutable(environmentDirectory, "python");
-  const marimo = environmentExecutable(environmentDirectory, "marimo");
   const studio = environmentExecutable(environmentDirectory, "marimo-studio");
 
   await mkdir(configDirectory, { recursive: true });
@@ -247,144 +249,76 @@ try {
   );
   preparation.requireActive();
 
-  server = track({
-    child: spawn(
-      marimo,
-      [
-        "edit",
-        notebookPath,
-        "--no-sandbox",
-        "--headless",
-        "--no-token",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(installedPackageNetwork.port),
-      ],
-      {
-        cwd: workspaceDirectory,
-        detached: process.platform !== "win32",
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    ),
-    port: installedPackageNetwork.port,
-    serverUrl: installedPackageNetwork.origin,
-    shutdown: "studio",
-    timeout: 10_000,
-  });
-  outputs.set(
-    server,
-    captureProcessOutput(server, { stdout: process.stdout, stderr: process.stderr }),
-  );
-  const freshServer = track({
-    child: spawn(
-      marimo,
-      [
-        "new",
-        "--no-sandbox",
-        "--headless",
-        "--no-token",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(installedPackageNetwork.fresh.port),
-      ],
-      {
-        cwd: workspaceDirectory,
-        detached: process.platform !== "win32",
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    ),
-    port: installedPackageNetwork.fresh.port,
-    serverUrl: installedPackageNetwork.fresh.origin,
-    shutdown: "studio",
-    timeout: 10_000,
-  });
-  outputs.set(
-    freshServer,
-    captureProcessOutput(freshServer, { stdout: process.stdout, stderr: process.stderr }),
-  );
-  runServer = track({
-    child: spawn(
-      marimo,
-      [
-        "run",
-        notebookPath,
-        "--no-sandbox",
-        "--headless",
-        "--no-token",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(installedPackageNetwork.run.port),
-      ],
-      {
-        cwd: workspaceDirectory,
-        detached: process.platform !== "win32",
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    ),
-    port: installedPackageNetwork.run.port,
-    serverUrl: installedPackageNetwork.run.origin,
-    shutdown: "run",
-    timeout: 10_000,
-  });
-  outputs.set(
-    runServer,
-    captureProcessOutput(runServer, { stdout: process.stdout, stderr: process.stderr }),
-  );
-  exported = track({
-    child: spawn(
-      python,
-      [
-        resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
-        String(installedPackageNetwork.static.port),
-        "--bind",
-        "127.0.0.1",
-        "--directory",
-        staticDirectory,
-      ],
-      {
-        cwd: workspaceDirectory,
-        detached: process.platform !== "win32",
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    ),
-    port: installedPackageNetwork.static.port,
-    serverUrl: installedPackageNetwork.static.origin,
-    shutdown: "process",
-    timeout: 10_000,
-  });
-  outputs.set(
-    exported,
-    captureProcessOutput(exported, { stdout: process.stdout, stderr: process.stderr }),
+  const registryDirectory = resolve(temporaryRoot, "notebook-processes");
+  const launch = async (endpoint, args, shutdown) => {
+    preparation.requireActive();
+    const service = track(
+      Object.assign(
+        startRoutedNotebookProcess({
+          endpoint,
+          command: python,
+          args,
+          cwd: workspaceDirectory,
+          directory: registryDirectory,
+          env: environment,
+          forward: { stdout: process.stdout, stderr: process.stderr },
+        }),
+        { shutdown, timeout: 10_000 },
+      ),
+    );
+    await service.ready;
+    return service;
+  };
+  const marimoArgs = (command, target) => [
+    resolve(repositoryDirectory, "apps/e2e/scripts/_compat/server.py"),
+    "marimo",
+    command,
+    ...target,
+    "--no-sandbox",
+    "--headless",
+    "--no-token",
+  ];
+  server = await launch(e2eNetwork.installed.edit, marimoArgs("edit", [notebookPath]), "studio");
+  const freshServer = await launch(e2eNetwork.installed.fresh, marimoArgs("new", []), "studio");
+  runServer = await launch(e2eNetwork.installed.run, marimoArgs("run", [notebookPath]), "run");
+  exported = await launch(
+    e2eNetwork.installed.static,
+    [
+      resolve(repositoryDirectory, "apps/e2e/scripts/static-server.py"),
+      "0",
+      "--bind",
+      "127.0.0.1",
+      "--directory",
+      staticDirectory,
+    ],
+    "process",
   );
   await Promise.all([
-    waitForServer(freshServer, installedPackageNetwork.fresh.origin, {
-      output: outputs.get(freshServer),
+    waitForServer(freshServer.child, freshServer.serverUrl, {
+      output: freshServer.output,
       timeout: 120_000,
     }),
-    waitForServer(server, `${installedPackageNetwork.origin}/_marimo-studio/status`, {
-      output: outputs.get(server),
+    waitForServer(server.child, `${server.serverUrl}/_marimo-studio/status`, {
+      output: server.output,
       timeout: 120_000,
     }),
-    waitForServer(runServer, `${installedPackageNetwork.run.origin}/_marimo-studio/status`, {
-      output: outputs.get(runServer),
+    waitForServer(runServer.child, `${runServer.serverUrl}/_marimo-studio/status`, {
+      output: runServer.output,
       timeout: 120_000,
     }),
-    waitForServer(exported, installedPackageNetwork.static.origin, {
-      output: outputs.get(exported),
+    waitForServer(exported.child, exported.serverUrl, {
+      output: exported.output,
       timeout: 120_000,
     }),
   ]);
-  await writeFile(
-    resolve(staticDirectory, installedPackageNetwork.readiness.path.slice(1)),
-    "ready\n",
-  );
+  const networkFile = process.env[INSTALLED_NETWORK_FILE_ENV];
+  if (!networkFile || !isAbsolute(networkFile))
+    throw new Error("Installed network manifest path is required");
+  await writeFile(`${networkFile}.tmp`, JSON.stringify(installedPackageNetwork), {
+    mode: 0o600,
+    flag: "wx",
+  });
+  await rename(`${networkFile}.tmp`, networkFile);
   await Promise.all(closures);
 } catch (error) {
   if (!stopping) {
@@ -396,6 +330,7 @@ try {
 }
 
 await Promise.allSettled(shutdowns);
+await e2eNetwork.close();
 if (temporaryRoot) {
   await rm(temporaryRoot, { force: true, maxRetries: 20, recursive: true, retryDelay: 50 });
 }

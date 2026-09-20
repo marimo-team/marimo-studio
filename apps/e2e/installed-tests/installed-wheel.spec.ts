@@ -1,6 +1,8 @@
 import { expect, test as base } from "@playwright/test";
 
-import { installedPackageNetwork } from "../scripts/installed-package-network.mjs";
+import { readInstalledPackageNetwork } from "../scripts/installed-package-network.mjs";
+
+const installedPackageNetwork = readInstalledPackageNetwork();
 import { observeBrowserContext } from "../tests/browser-diagnostics.ts";
 import { installPinnedPyodideAssets } from "../tests/pyodide-assets.ts";
 

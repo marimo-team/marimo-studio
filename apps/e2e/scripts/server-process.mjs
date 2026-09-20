@@ -1,4 +1,5 @@
 import { connect } from "node:net";
+import { finished } from "node:stream/promises";
 
 import { requestStudioShutdown } from "./graceful-shutdown.mjs";
 import { processGroupIsRunning, stopProcessGroup } from "./process-group.mjs";
@@ -28,16 +29,18 @@ export const captureProcessOutput = (child, { stdout, stderr } = {}) => {
 };
 
 const portIsOpen = (port) =>
-  new Promise((resolve) => {
-    const socket = connect({ host: "127.0.0.1", port });
-    const finish = (open) => {
-      socket.destroy();
-      resolve(open);
-    };
-    socket.setTimeout(100, () => finish(false));
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-  });
+  port === null
+    ? Promise.resolve(false)
+    : new Promise((resolve) => {
+        const socket = connect({ host: "127.0.0.1", port });
+        const finish = (open) => {
+          socket.destroy();
+          resolve(open);
+        };
+        socket.setTimeout(100, () => finish(false));
+        socket.once("connect", () => finish(true));
+        socket.once("error", () => finish(false));
+      });
 
 export const waitForServer = async (
   child,
@@ -81,13 +84,20 @@ const waitForStop = async ({ child, port, processGroupId }, timeout) => {
   return false;
 };
 
-const childClose = (child) => {
+const childClose = async (child) => {
+  const exited =
+    child.exitCode !== null || child.signalCode !== null
+      ? Promise.resolve()
+      : new Promise((resolve) => child.once("exit", resolve));
   const streams = [child.stdout, child.stderr].filter(Boolean);
-  const exited = child.exitCode !== null || child.signalCode !== null;
-  if (exited && streams.every((stream) => stream.destroyed || stream.readableEnded)) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => child.once("close", resolve));
+  await Promise.all([
+    exited,
+    ...streams.map((stream) =>
+      stream.destroyed || stream.readableEnded
+        ? Promise.resolve()
+        : finished(stream, { cleanup: true, writable: false }),
+    ),
+  ]);
 };
 
 const waitForClose = async (closed, timeout) => {
@@ -107,7 +117,7 @@ export const verifyNotebookProcessOutput = async (closed, output, timeout = 5_00
   assertNoLeakedSemaphoreWarning(output());
 };
 
-export const stopNotebookProcess = async (
+const stopOwnedNotebookProcess = async (
   {
     authToken = "",
     child,
@@ -142,7 +152,7 @@ export const stopNotebookProcess = async (
     if (outputError) throw outputError;
   };
   let stopped = false;
-  if (shutdown === "studio") {
+  if (shutdown === "studio" && port !== null) {
     try {
       await requestStudioShutdown(serverUrl, authToken, timeout, studioEntry);
       stopped = await waitForStop({ child, port, processGroupId }, timeout);
@@ -166,4 +176,13 @@ export const stopNotebookProcess = async (
     );
   }
   await finish();
+};
+
+export const stopNotebookProcess = async (server, options) => {
+  server.beginClose?.();
+  try {
+    await stopOwnedNotebookProcess(server, options);
+  } finally {
+    server.releaseRoute?.();
+  }
 };

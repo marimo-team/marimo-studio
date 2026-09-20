@@ -5,9 +5,9 @@ import {
   stopRegisteredNotebookProcesses,
 } from "./notebook-process-registry.mjs";
 import { notebookProcessRegistryDirectory, repositoryDirectory } from "./paths.mjs";
-import { startRegisteredNotebookProcess } from "./registered-notebook-process.mjs";
+import { startRoutedNotebookProcess } from "./routed-notebook-process.mjs";
 import { observeServerExit } from "./server-exit.mjs";
-import { captureProcessOutput, stopNotebookProcess, waitForServer } from "./server-process.mjs";
+import { stopNotebookProcess, waitForServer } from "./server-process.mjs";
 
 export class NotebookServices {
   #servers = [];
@@ -25,12 +25,12 @@ export class NotebookServices {
   }
   async start(args, endpoint, shutdown, options = {}) {
     if (this.#closing !== undefined) throw new Error("Browser services are closing");
-    const registration = startRegisteredNotebookProcess({
+    const registration = startRoutedNotebookProcess({
+      endpoint,
       command: "uv",
       args: ["run", "--frozen", "--group", "e2e", ...args],
       cwd: repositoryDirectory,
       directory: notebookProcessRegistryDirectory,
-      port: endpoint.port,
       env: {
         ...process.env,
         ...options.environment,
@@ -38,12 +38,16 @@ export class NotebookServices {
         XDG_CONFIG_HOME: this.configDirectory,
       },
     });
-    const output = captureProcessOutput(registration.child);
+    const output = registration.output;
     const server = {
       child: registration.child,
       processGroupId: registration.processGroupId,
+      get port() {
+        return registration.port;
+      },
+      beginClose: registration.beginClose,
+      releaseRoute: registration.releaseRoute,
       output,
-      port: endpoint.port,
       serverUrl: options.serverUrl ?? endpoint.origin,
       authToken: options.authToken,
       studioEntry: options.studioEntry,

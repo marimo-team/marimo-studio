@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import runpy
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+publish_endpoint = runpy.run_path(
+    str(Path(__file__).parent / "_compat" / "endpoint.py")
+)["publish_endpoint"]
 
 
 class StaticHandler(SimpleHTTPRequestHandler):
@@ -24,6 +30,7 @@ def main() -> None:
     arguments = parser.parse_args()
     handler = partial(StaticHandler, directory=arguments.directory)
     with StaticServer((arguments.bind, arguments.port), handler) as server:
+        publish_endpoint(server.server_address[1])
         server.serve_forever()
 
 

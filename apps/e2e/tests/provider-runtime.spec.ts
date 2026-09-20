@@ -11,14 +11,14 @@ const cases = [
   {
     framework: "React",
     heading: "Gallery",
-    liveUrl: `${e2eNetwork.provider.live.origin}/gallery/`,
-    staticUrl: `${e2eNetwork.provider.gallery.origin}/`,
+    liveUrl: () => `${e2eNetwork.provider.live.origin}/gallery/`,
+    staticUrl: () => `${e2eNetwork.provider.gallery.origin}/`,
   },
   {
     framework: "Svelte",
     heading: "Story",
-    liveUrl: `${e2eNetwork.provider.live.origin}/story/`,
-    staticUrl: `${e2eNetwork.provider.story.origin}/`,
+    liveUrl: () => `${e2eNetwork.provider.live.origin}/story/`,
+    staticUrl: () => `${e2eNetwork.provider.story.origin}/`,
   },
 ] as const;
 
@@ -193,13 +193,13 @@ test.describe("built-in framework projection runtimes", () => {
       try {
         await installPinnedPyodideAssets(context);
         const serverPage = await context.newPage();
-        await exerciseRuntime(serverPage, candidate.liveUrl, candidate.heading, "Server");
+        await exerciseRuntime(serverPage, candidate.liveUrl(), candidate.heading, "Server");
         await serverPage.close();
 
         const staticPage = await context.newPage();
         await exerciseRuntime(
           staticPage,
-          candidate.staticUrl,
+          candidate.staticUrl(),
           candidate.heading,
           "static WebAssembly",
         );

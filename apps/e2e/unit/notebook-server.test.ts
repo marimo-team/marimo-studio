@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
@@ -8,6 +9,7 @@ import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 import { requestStudioShutdown } from "../scripts/graceful-shutdown.mjs";
+import { createE2ENetwork } from "../scripts/network.mjs";
 import { unregisterNotebookProcess } from "../scripts/notebook-process-registry.mjs";
 import { fixtureDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning, stopProcessGroup } from "../scripts/process-group.mjs";
@@ -344,17 +346,18 @@ posixTest(
 
 test("stops a native authenticated Marimo run server without Studio bootstrap", async () => {
   const root = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-wrapper-"));
+  const network = createE2ENetwork({ runId: randomUUID(), suite: "unit", workerId: "native" });
+  await network.start();
   try {
     const workspace = resolve(root, "workspace");
     const registryDirectory = resolve(root, "registry");
     mkdirSync(workspace);
     cpSync(resolve(fixtureDirectory, "plain.py"), resolve(workspace, "plain.py"));
-    const port = await availablePort();
     const server = startNotebookServer({
       authentication: ["--token-password", "run-access-token"],
       command: "run",
       extensions: "native",
-      port,
+      endpoint: network.main.studio,
       registryDirectory,
       target: resolve(workspace, "plain.py"),
     });
@@ -382,10 +385,11 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
         : undefined;
       expect.soft(cleanupFailure).toBeUndefined();
       expectProcessTreeRootStopped(server.process, server.processGroupId);
-      expect(await notebookServerPortIsOpen(port)).toBe(false);
+      expect(await notebookServerPortIsOpen(server.port)).toBe(false);
       expect(existsSync(registryDirectory)).toBe(false);
     }
   } finally {
+    await network.close();
     rmSync(root, { force: true, recursive: true });
   }
 }, 30_000);
@@ -457,6 +461,8 @@ const stopListeningDescendant = async () => {
     stdio: "ignore",
   });
   const server: NotebookServer = {
+    beginClose() {},
+    releaseRoute() {},
     authToken: undefined,
     output: () => "",
     port,

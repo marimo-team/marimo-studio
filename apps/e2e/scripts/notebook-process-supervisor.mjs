@@ -1,14 +1,19 @@
 import { spawn } from "node:child_process";
+import { readFileSync, watch } from "node:fs";
 import { connect } from "node:net";
+import { z } from "zod";
 
 import {
   NOTEBOOK_PROCESS_OWNER_ENV,
+  NOTEBOOK_PROCESS_ENDPOINT_ENV,
   NOTEBOOK_PROCESS_PORT_ENV,
   NOTEBOOK_PROCESS_REGISTRY_ENV,
   registerNotebookProcess,
+  notebookProcessEndpointPath,
+  removeNotebookEndpointReceipt,
   unregisterNotebookProcess,
 } from "./notebook-process-registry.mjs";
-import { stopProcessGroup } from "./process-group.mjs";
+import { processEnvironmentContains, stopProcessGroup } from "./process-group.mjs";
 
 const FORCE_STOP_DELAY = 250;
 const PORT_CLOSE_TIMEOUT = 5_000;
@@ -17,16 +22,32 @@ const command = process.argv[2];
 const args = process.argv.slice(3);
 const directory = process.env[NOTEBOOK_PROCESS_REGISTRY_ENV];
 const ownerNonce = process.env[NOTEBOOK_PROCESS_OWNER_ENV];
-const port = Number(process.env[NOTEBOOK_PROCESS_PORT_ENV]);
+const portValue = process.env[NOTEBOOK_PROCESS_PORT_ENV];
+let port = portValue === "null" ? null : Number(portValue);
 const processGroupId = process.pid;
 
-if (!command || !directory || !ownerNonce || !Number.isSafeInteger(port)) {
+if (
+  !command ||
+  !directory ||
+  !ownerNonce ||
+  (port !== null && (!Number.isSafeInteger(port) || port < 1 || port > 65535))
+) {
   throw new Error("Notebook process supervisor received an invalid registration");
 }
 
 registerNotebookProcess({ ownerNonce, port, processGroupId }, { directory });
 
+const endpointPath = notebookProcessEndpointPath(directory, processGroupId, ownerNonce);
+const endpointSchema = z
+  .object({
+    ownerNonce: z.literal(ownerNonce),
+    pid: z.number().int().positive().safe(),
+    port: z.number().int().positive().max(65_535),
+  })
+  .strict();
 const childEnvironment = { ...process.env };
+if (port === null) childEnvironment[NOTEBOOK_PROCESS_ENDPOINT_ENV] = endpointPath;
+else delete childEnvironment[NOTEBOOK_PROCESS_ENDPOINT_ENV];
 delete childEnvironment[NOTEBOOK_PROCESS_PORT_ENV];
 delete childEnvironment[NOTEBOOK_PROCESS_REGISTRY_ENV];
 
@@ -34,7 +55,52 @@ let child;
 let childExitCode = 1;
 let finished = false;
 let forceStopTimer;
+let portPollTimer;
 let shuttingDown = false;
+let endpointWatcher;
+let endpointSettled = port !== null;
+
+const disposeEndpoint = () => {
+  endpointSettled = true;
+  endpointWatcher?.close();
+  endpointWatcher = undefined;
+  removeNotebookEndpointReceipt({ ownerNonce, processGroupId }, { directory });
+};
+
+const inspectEndpoint = () => {
+  if (endpointSettled || shuttingDown || !child) return;
+  let source;
+  try {
+    source = readFileSync(endpointPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    failEndpoint(error);
+    return;
+  }
+  try {
+    const receipt = endpointSchema.parse(JSON.parse(source));
+    if (
+      receipt.pid === processGroupId ||
+      ((process.platform === "darwin" || process.platform === "linux") &&
+        processEnvironmentContains(receipt.pid, NOTEBOOK_PROCESS_OWNER_ENV, ownerNonce) !== true)
+    ) {
+      throw new Error("Notebook endpoint receipt does not identify its owned backend process");
+    }
+    process.kill(receipt.pid, 0);
+    registerNotebookProcess({ ownerNonce, port: receipt.port, processGroupId }, { directory });
+    port = receipt.port;
+    disposeEndpoint();
+    send({ type: "bound", port });
+  } catch (error) {
+    failEndpoint(error);
+  }
+};
+
+const failEndpoint = (error) => {
+  disposeEndpoint();
+  send({ type: "failed", message: `Invalid notebook endpoint receipt: ${error.message}` });
+  beginShutdown(true);
+};
 
 const send = (message) => {
   if (!process.connected || !process.send) return;
@@ -46,21 +112,25 @@ const send = (message) => {
 };
 
 const portIsOpen = () =>
-  new Promise((resolveOpen) => {
-    const socket = connect({ host: "127.0.0.1", port });
-    const finish = (open) => {
-      socket.destroy();
-      resolveOpen(open);
-    };
-    socket.setTimeout(100, () => finish(false));
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-  });
+  port === null
+    ? Promise.resolve(false)
+    : new Promise((resolveOpen) => {
+        const socket = connect({ host: "127.0.0.1", port });
+        const finish = (open) => {
+          socket.destroy();
+          resolveOpen(open);
+        };
+        socket.setTimeout(100, () => finish(false));
+        socket.once("connect", () => finish(true));
+        socket.once("error", () => finish(false));
+      });
 
 const finish = () => {
   if (finished) return;
   finished = true;
   clearTimeout(forceStopTimer);
+  clearTimeout(portPollTimer);
+  disposeEndpoint();
   unregisterNotebookProcess({ ownerNonce, processGroupId }, { directory });
   process.exitCode = childExitCode;
   if (process.connected) process.disconnect();
@@ -74,7 +144,7 @@ const finishWhenPortCloses = async (deadline = Date.now() + PORT_CLOSE_TIMEOUT) 
       forceStop();
       return;
     }
-    setTimeout(() => void finishWhenPortCloses(deadline), PORT_POLL_INTERVAL);
+    portPollTimer = setTimeout(() => void finishWhenPortCloses(deadline), PORT_POLL_INTERVAL);
     return;
   }
   finish();
@@ -91,6 +161,7 @@ const forceStop = () => {
 const beginShutdown = (signalGroup, force = true) => {
   if (shuttingDown || finished) return;
   shuttingDown = true;
+  disposeEndpoint();
   childExitCode = 1;
   if (force) forceStopTimer = setTimeout(forceStop, FORCE_STOP_DELAY);
   if (signalGroup) {
@@ -102,11 +173,33 @@ const beginShutdown = (signalGroup, force = true) => {
 
 const start = () => {
   if (child || shuttingDown || !process.connected) return;
-  child = spawn(command, args, {
-    cwd: process.cwd(),
-    env: childEnvironment,
-    stdio: ["ignore", "inherit", "inherit"],
-  });
+  try {
+    registerNotebookProcess({ ownerNonce, port, processGroupId }, { directory });
+  } catch (error) {
+    failEndpoint(error);
+    return;
+  }
+  try {
+    if (port === null) {
+      endpointWatcher = watch(directory, (_event, filename) => {
+        if (
+          filename === null ||
+          filename.toString() === `${processGroupId}-${ownerNonce}.endpoint`
+        ) {
+          inspectEndpoint();
+        }
+      });
+      endpointWatcher.once("error", failEndpoint);
+    }
+    child = spawn(command, args, {
+      cwd: process.cwd(),
+      env: childEnvironment,
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+  } catch (error) {
+    failEndpoint(error);
+    return;
+  }
   child.once("error", (error) => {
     console.error(error);
     beginShutdown(false);
@@ -114,8 +207,10 @@ const start = () => {
   });
   child.once("spawn", () => {
     send({ type: "started" });
+    if (port === null) inspectEndpoint();
   });
   child.once("exit", (code, signal) => {
+    disposeEndpoint();
     childExitCode = signal ? 1 : (code ?? 1);
     void finishWhenPortCloses();
   });

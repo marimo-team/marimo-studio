@@ -1,6 +1,9 @@
 import type { ChildProcess } from "node:child_process";
 
 import { connect } from "node:net";
+import { resolve } from "node:path";
+
+import type { e2eNetwork } from "../scripts/network.mjs";
 
 import { unregisterNotebookProcess } from "../scripts/notebook-process-registry.mjs";
 import {
@@ -9,17 +12,13 @@ import {
   repositoryDirectory,
 } from "../scripts/paths.mjs";
 import { processGroupIsRunning, stopProcessGroup } from "../scripts/process-group.mjs";
-import { startRegisteredNotebookProcess } from "../scripts/registered-notebook-process.mjs";
-import {
-  captureProcessOutput,
-  stopNotebookProcess,
-  waitForServer,
-} from "../scripts/server-process.mjs";
+import { startRoutedNotebookProcess } from "../scripts/routed-notebook-process.mjs";
+import { stopNotebookProcess, waitForServer } from "../scripts/server-process.mjs";
 
 interface NotebookServerOptions {
   command: "edit" | "run";
   target: string;
-  port: number;
+  endpoint: typeof e2eNetwork.main.studio;
   authentication: readonly string[];
   editRoot?: "marimo" | "studio";
   environment?: NodeJS.ProcessEnv;
@@ -39,7 +38,9 @@ const notebookRegistrations = new WeakMap<
 export interface NotebookServer {
   process: ChildProcess;
   processGroupId: number | undefined;
-  port: number;
+  port: number | null;
+  beginClose(): void;
+  releaseRoute(): void;
   ready: Promise<void>;
   serverUrl: string;
   studioEntry?: string;
@@ -51,7 +52,7 @@ export interface NotebookServer {
 export const startNotebookServer = ({
   command,
   target,
-  port,
+  endpoint,
   authentication,
   editRoot = "studio",
   environment: extraEnvironment = {},
@@ -73,34 +74,30 @@ export const startNotebookServer = ({
     environment.MARIMO_KERNEL_LIFESPAN_DENYLIST = "marimo-studio";
     environment.MARIMO_SERVER_ASGI_MIDDLEWARE_DENYLIST = "marimo-studio";
   }
-  const registration = startRegisteredNotebookProcess({
+  const registration = startRoutedNotebookProcess({
+    endpoint,
     command: "uv",
     args: [
       "run",
       "--frozen",
       "--group",
       "e2e",
+      "python",
+      resolve(repositoryDirectory, "apps/e2e/scripts/_compat/server.py"),
       "marimo",
       command,
       target,
       "--no-sandbox",
       "--headless",
       ...authentication,
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(port),
     ],
     cwd: repositoryDirectory,
     directory: registryDirectory,
     env: environment,
-    port,
   });
   const { child, ownerNonce, processGroupId } = registration;
-  const output = captureProcessOutput(child);
-  const ready = registration.ready.catch((error) => {
-    throw new Error(`Notebook process registration failed: ${String(error)}\n${output()}`);
-  });
+  const output = registration.output;
+  const ready = registration.ready;
   if (processGroupId !== undefined) {
     notebookRegistrations.set(child, {
       directory: registryDirectory,
@@ -112,11 +109,15 @@ export const startNotebookServer = ({
   return {
     authToken: passwordOption >= 0 ? authentication[passwordOption + 1] : undefined,
     output,
-    port,
+    get port() {
+      return registration.port;
+    },
+    beginClose: registration.beginClose,
+    releaseRoute: registration.releaseRoute,
     process: child,
     processGroupId,
     ready,
-    serverUrl: `http://127.0.0.1:${port}`,
+    serverUrl: endpoint.origin,
     studioEntry: editRoot === "marimo" ? "/studio" : "",
     shutdown: command === "run" ? "run" : "studio",
   };
@@ -127,7 +128,9 @@ export const waitForNotebookServer = async (
   url: string,
   { timeout }: NotebookServerTimeoutOptions = {},
 ): Promise<void> => {
-  await server.ready;
+  await server.ready.catch((error) => {
+    throw new Error(`Notebook process registration failed: ${String(error)}\n${server.output()}`);
+  });
   await waitForServer(server.process, url, { output: server.output, timeout });
 };
 
@@ -135,7 +138,7 @@ export const stopNotebookServer = async (
   server: NotebookServer,
   { timeout }: NotebookServerTimeoutOptions = {},
 ): Promise<void> => {
-  await server.ready.catch(() => undefined);
+  server.beginClose();
   try {
     await stopNotebookProcess(
       {
@@ -146,6 +149,8 @@ export const stopNotebookServer = async (
         processGroupId: server.processGroupId,
         serverUrl: server.serverUrl,
         studioEntry: server.studioEntry,
+        beginClose: server.beginClose,
+        releaseRoute: server.releaseRoute,
       },
       { shutdown: server.shutdown, timeout },
     );
@@ -163,17 +168,19 @@ export const stopNotebookServer = async (
   }
 };
 
-export const notebookServerPortIsOpen = (port: number): Promise<boolean> =>
-  new Promise((resolveOpen) => {
-    const socket = connect({ host: "127.0.0.1", port });
-    const finish = (open: boolean) => {
-      socket.destroy();
-      resolveOpen(open);
-    };
-    socket.setTimeout(100, () => finish(false));
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-  });
+export const notebookServerPortIsOpen = (port: number | null): Promise<boolean> =>
+  port === null
+    ? Promise.resolve(false)
+    : new Promise((resolveOpen) => {
+        const socket = connect({ host: "127.0.0.1", port });
+        const finish = (open: boolean) => {
+          socket.destroy();
+          resolveOpen(open);
+        };
+        socket.setTimeout(100, () => finish(false));
+        socket.once("connect", () => finish(true));
+        socket.once("error", () => finish(false));
+      });
 
 export interface NotebookServerCleanupFailure {
   message: string;

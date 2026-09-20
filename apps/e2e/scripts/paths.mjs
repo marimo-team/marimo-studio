@@ -10,12 +10,20 @@ export const repositoryDirectory = resolve(appDirectory, "../..");
 export const studioPackageDirectory = resolve(repositoryDirectory, "packages/marimo-studio");
 export const fixtureDirectory = resolve(appDirectory, "fixtures");
 
-export const createE2EPaths = (root, portOffset = 0, suite = "main") => {
-  if (suite !== "main" && suite !== "provider") throw new TypeError(`Unknown E2E suite ${suite}`);
-  const resultRoot = resolve(root, "test-results", suite, `offset-${portOffset}`);
+export const createE2EPaths = (root, { runId, suite, workerId }) => {
+  const resultRoot = resolve(root, "test-results", runId, suite, workerId);
   const workspaceDirectory = resolve(resultRoot, "workspace");
   const providerWorkspaceRoot = resolve(resultRoot, "workspaces");
   return Object.freeze({
+    resultRoot,
+    blobReportDirectory: resolve(root, "test-results", `blob-${suite}`, runId, workerId),
+    playwrightOutputDirectory: resolve(
+      root,
+      "test-results",
+      `playwright-${suite}`,
+      runId,
+      workerId,
+    ),
     configDirectory: resolve(resultRoot, "xdg-config"),
     workspaceDirectory,
     notebookProcessRegistryDirectory: resolve(workspaceDirectory, ".notebook-processes"),
@@ -26,12 +34,11 @@ export const createE2EPaths = (root, portOffset = 0, suite = "main") => {
   });
 };
 
-const mutable = createE2EPaths(
-  appDirectory,
-  e2eNetwork.portOffset,
-  process.env.MARIMO_STUDIO_E2E_SUITE,
-);
+const mutable = createE2EPaths(appDirectory, e2eNetwork);
 
+export const resultRoot = mutable.resultRoot;
+export const blobReportDirectory = mutable.blobReportDirectory;
+export const playwrightOutputDirectory = mutable.playwrightOutputDirectory;
 export const configDirectory = mutable.configDirectory;
 export const workspaceDirectory = mutable.workspaceDirectory;
 export const notebookProcessRegistryDirectory = mutable.notebookProcessRegistryDirectory;

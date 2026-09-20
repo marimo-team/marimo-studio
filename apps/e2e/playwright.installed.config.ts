@@ -2,7 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 import { resolve } from "node:path";
 
 import { e2eBrowserUse } from "./scripts/browser.mjs";
-import { installedPackageNetwork } from "./scripts/installed-package-network.mjs";
+import { readInstalledPackageNetwork } from "./scripts/installed-package-network.mjs";
+
+const installedPackageNetwork = readInstalledPackageNetwork();
 
 const installedWheel = process.env.MARIMO_STUDIO_E2E_WHEEL;
 const outputRoot = process.env.MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT;
@@ -42,17 +44,4 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], ...e2eBrowserUse },
     },
   ],
-  webServer: {
-    command: "node scripts/serve-installed-package.mjs",
-    env: {
-      ...process.env,
-      MARIMO_STUDIO_E2E_WHEEL: installedWheel,
-    },
-    url: installedPackageNetwork.readiness.url,
-    reuseExistingServer: false,
-    timeout: 420_000,
-    gracefulShutdown: { signal: "SIGTERM", timeout: 15_000 },
-    stdout: "pipe",
-    stderr: "pipe",
-  },
 });

@@ -1,9 +1,9 @@
-import { test as base } from "@playwright/test";
 import { resolve } from "node:path";
 
 import { withExportRepository } from "../scripts/export-repository.mjs";
 import { providerConfigDirectory } from "../scripts/paths.mjs";
 import { ProviderWorkspace } from "../scripts/provider-workspace.mjs";
+import { test as base } from "./network-fixture.ts";
 
 export const test = base.extend<
   {},
@@ -22,7 +22,7 @@ export const test = base.extend<
 >({
   providerViews: [["overview", "gallery", "story"], { scope: "worker", option: true }],
   providerWorkspace: [
-    async ({ providerViews }, use) =>
+    async ({ providerViews, network: _network }, use) =>
       withExportRepository(resolve(providerConfigDirectory, "export-repository"), async () => {
         const workspace = new ProviderWorkspace();
         const failures: unknown[] = [];

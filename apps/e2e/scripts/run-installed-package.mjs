@@ -1,26 +1,23 @@
-import { cp, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { appDirectory, repositoryDirectory } from "./paths.mjs";
+import {
+  INSTALLED_NETWORK_ENV,
+  INSTALLED_NETWORK_FILE_ENV,
+  readInstalledPackageNetwork,
+} from "./installed-package-network.mjs";
+
+process.env.MARIMO_STUDIO_E2E_SUITE = "installed";
+const { appDirectory, repositoryDirectory, blobReportDirectory, playwrightOutputDirectory } =
+  await import("./paths.mjs");
 import { PreparationCancelled, PreparationProcessOwner } from "./preparation-process.mjs";
 
 const wheelPattern = /^marimo_studio-.*\.whl$/;
 const playwrightCli = fileURLToPath(import.meta.resolve("@playwright/test/cli"));
-const outputOffset = `offset-${process.env.MARIMO_STUDIO_E2E_PORT_OFFSET ?? "0"}`;
-const installedBlobDirectory = resolve(
-  appDirectory,
-  "test-results",
-  "blob-installed",
-  outputOffset,
-);
-const installedResultsDirectory = resolve(
-  appDirectory,
-  "test-results",
-  "installed-playwright",
-  outputOffset,
-);
+const installedBlobDirectory = blobReportDirectory;
+const installedResultsDirectory = playwrightOutputDirectory;
 const signalExitCodes = Object.freeze({
   SIGHUP: 129,
   SIGINT: 130,
@@ -91,20 +88,67 @@ try {
     wheel = await builtWheel(wheelDirectory);
   }
   preparation.requireActive();
-  await preparation.run(
-    "run installed-wheel Playwright acceptance",
+  const networkFile = resolve(temporaryRoot, "network.json");
+  const services = preparation.run(
+    "serve installed-wheel acceptance",
     process.execPath,
-    [playwrightCli, "test", "--config", "playwright.installed.config.ts", ...process.argv.slice(2)],
+    [resolve(appDirectory, "scripts/serve-installed-package.mjs")],
     {
       cwd: appDirectory,
       env: {
         ...process.env,
-        MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT: temporaryRoot,
         MARIMO_STUDIO_E2E_WHEEL: wheel,
+        [INSTALLED_NETWORK_FILE_ENV]: networkFile,
       },
       stdio: "inherit",
     },
   );
+  const serviceExit = services.then(() => {
+    throw new Error("Installed services exited before acceptance completed");
+  });
+  void serviceExit.catch(() => undefined);
+  const deadline = Date.now() + 420_000;
+  let networkSource;
+  while (networkSource === undefined) {
+    preparation.requireActive();
+    try {
+      networkSource = await readFile(networkFile, "utf8");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (Date.now() >= deadline) throw new Error("Installed services did not publish their network");
+    if (networkSource === undefined) {
+      await Promise.race([
+        serviceExit,
+        new Promise((resolveReady) => setTimeout(resolveReady, 50)),
+      ]);
+    }
+  }
+  process.env[INSTALLED_NETWORK_ENV] = networkSource;
+  readInstalledPackageNetwork();
+  await Promise.race([
+    serviceExit,
+    preparation.run(
+      "run installed-wheel Playwright acceptance",
+      process.execPath,
+      [
+        playwrightCli,
+        "test",
+        "--config",
+        "playwright.installed.config.ts",
+        ...process.argv.slice(2),
+      ],
+      {
+        cwd: appDirectory,
+        env: {
+          ...process.env,
+          MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT: temporaryRoot,
+          MARIMO_STUDIO_E2E_WHEEL: wheel,
+        },
+        stdio: "inherit",
+      },
+    ),
+  ]);
 } catch (error) {
   if (!(stopping && error instanceof PreparationCancelled)) {
     console.error(error);

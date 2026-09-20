@@ -17,6 +17,7 @@ import { notebookProcessRegistryDirectory } from "./paths.mjs";
 import { processGroupOwnerState, stopProcessGroup } from "./process-group.mjs";
 
 export const NOTEBOOK_PROCESS_OWNER_ENV = "MARIMO_STUDIO_E2E_PROCESS_OWNER";
+export const NOTEBOOK_PROCESS_ENDPOINT_ENV = "MARIMO_STUDIO_E2E_ENDPOINT_FILE";
 export const NOTEBOOK_PROCESS_PORT_ENV = "MARIMO_STUDIO_E2E_PROCESS_PORT";
 export const NOTEBOOK_PROCESS_REGISTRY_ENV = "MARIMO_STUDIO_E2E_PROCESS_REGISTRY";
 
@@ -25,7 +26,7 @@ const STOP_POLL_INTERVAL = 50;
 const REGISTRY_CLOSING_FILE = ".closing";
 const recordSchema = z.object({
   ownerNonce: z.string().regex(/^[a-f\d]{64}$/),
-  port: z.number().int().positive().max(65_535),
+  port: z.number().int().positive().max(65_535).nullable(),
   processGroupId: z.number().int().positive().safe(),
 });
 
@@ -33,6 +34,25 @@ export const createNotebookProcessOwnerNonce = () => randomBytes(32).toString("h
 
 const recordPath = (directory, processGroupId, ownerNonce) =>
   resolve(directory, `${processGroupId}-${ownerNonce}.json`);
+
+export const notebookProcessEndpointPath = (directory, processGroupId, ownerNonce) =>
+  resolve(directory, `${processGroupId}-${ownerNonce}.endpoint`);
+
+export const removeNotebookEndpointReceipt = ({ ownerNonce, processGroupId }, { directory }) => {
+  const filename = `${processGroupId}-${ownerNonce}.endpoint`;
+  let names;
+  try {
+    names = readdirSync(directory);
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  for (const name of names) {
+    if (name === filename || (name.startsWith(`${filename}.`) && name.endsWith(".tmp"))) {
+      rmSync(resolve(directory, name), { force: true });
+    }
+  }
+};
 
 const closingPath = (directory) => resolve(directory, REGISTRY_CLOSING_FILE);
 
@@ -112,6 +132,7 @@ const ownerState = (record) =>
 
 const removeRecord = (record, directory) => {
   rmSync(record.path, { force: true });
+  removeNotebookEndpointReceipt(record, { directory });
   removeDirectoryIfEmpty(directory);
 };
 
@@ -121,7 +142,10 @@ const signalOwned = async (records, signal, inspect, isPortOpen, stop, directory
   for (const record of records) {
     const state = inspect(record);
     if (state !== "owned") {
-      if (await isPortOpen(record.port)) {
+      if (
+        (record.port === null && state !== "stopped") ||
+        (record.port !== null && (await isPortOpen(record.port)))
+      ) {
         blocked.push({ record, state });
         continue;
       }
@@ -140,14 +164,14 @@ const pendingRecords = async (records, inspect, isPortOpen, directory) => {
   for (const record of records) {
     const state = inspect(record);
     if (state === "foreign" || state === "unknown") {
-      if (await isPortOpen(record.port)) {
+      if (record.port === null || (record.port !== null && (await isPortOpen(record.port)))) {
         blocked.push({ record, state });
         continue;
       }
       removeRecord(record, directory);
       continue;
     }
-    if (state === "owned" || (await isPortOpen(record.port))) {
+    if (state === "owned" || (record.port !== null && (await isPortOpen(record.port)))) {
       pending.push({ record, state });
       continue;
     }
@@ -254,8 +278,8 @@ export const stopRegisteredNotebookProcesses = async ({
       `E2E notebook processes survived shutdown: ${survived
         .map(({ record, state }) =>
           state === "owned"
-            ? `${record.processGroupId} on port ${record.port}`
-            : `${state} owner at ${record.path} on live port ${record.port}`,
+            ? `${record.processGroupId} ${record.port === null ? "awaiting backend binding" : `on port ${record.port}`}`
+            : `${state} owner at ${record.path} ${record.port === null ? "awaiting backend binding" : `on live port ${record.port}`}`,
         )
         .join(", ")}`,
     );

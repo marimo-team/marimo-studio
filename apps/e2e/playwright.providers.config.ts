@@ -1,12 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
-import { resolve } from "node:path";
 
 import { e2eBrowserUse } from "./scripts/browser.mjs";
-import { appDirectory } from "./scripts/paths.mjs";
 
 process.env.MARIMO_STUDIO_E2E_SUITE = "provider";
-
-const outputOffset = `offset-${process.env.MARIMO_STUDIO_E2E_PORT_OFFSET ?? "0"}`;
+const { blobReportDirectory, playwrightOutputDirectory } = await import("./scripts/paths.mjs");
 
 export default defineConfig({
   testDir: "./tests",
@@ -21,13 +18,8 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   workers: 1,
-  reporter: process.env.CI
-    ? [
-        ["list"],
-        ["blob", { outputDir: resolve(appDirectory, "test-results/blob-provider", outputOffset) }],
-      ]
-    : "list",
-  outputDir: resolve(appDirectory, "test-results/playwright-provider", outputOffset),
+  reporter: process.env.CI ? [["list"], ["blob", { outputDir: blobReportDirectory }]] : "list",
+  outputDir: playwrightOutputDirectory,
   expect: { timeout: 65_000 },
   use: {
     screenshot: "only-on-failure",

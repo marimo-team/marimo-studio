@@ -1,80 +1,125 @@
-import { resolve, sep } from "node:path";
+import { once } from "node:events";
+import { createServer, request, type Server } from "node:http";
+import { connect } from "node:net";
 import { expect, test } from "vite-plus/test";
+import { z } from "zod";
 
-import { createE2ENetwork, workerPortOffset } from "../scripts/network.mjs";
-import { createE2EPaths } from "../scripts/paths.mjs";
+import { createE2ENetwork } from "../scripts/network.mjs";
 
-const baseNetwork = createE2ENetwork();
-const maximumOffset =
-  65_535 -
-  Math.max(
-    ...Object.values(baseNetwork.main).map(({ port }) => port),
-    ...Object.values(baseNetwork.provider).map(({ port }) => port),
+const backend = async () => {
+  const server = createServer((_request, response) => response.end("owned backend"));
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = z.object({ port: z.number() }).parse(server.address());
+  return { server, port: address.port };
+};
+
+const close = async (server: Server) => {
+  server.closeAllConnections();
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
   );
+};
 
-test("offsets every E2E endpoint without creating collisions", () => {
-  const offset = createE2ENetwork("100");
+const status = (port: number, hostname = "127.0.0.1") =>
+  new Promise<number | undefined>((resolve, reject) => {
+    const call = request({ host: "127.0.0.1", port, headers: { host: hostname } }, (response) => {
+      response.resume();
+      response.once("end", () => resolve(response.statusCode));
+    });
+    call.once("error", reject);
+    call.end();
+  });
 
-  expect(baseNetwork.portOffset).toBe(0);
-  expect(offset.portOffset).toBe(100);
-  for (const [baselineScope, movedScope] of [
-    [baseNetwork.main, offset.main],
-    [baseNetwork.provider, offset.provider],
-  ]) {
-    expect(new Set(Object.keys(movedScope))).toEqual(new Set(Object.keys(baselineScope)));
-    for (const [name, baseline] of Object.entries(baselineScope)) {
-      expect(movedScope).toHaveProperty(name, {
-        port: baseline.port + 100,
-        origin: `http://127.0.0.1:${baseline.port + 100}`,
-      });
-    }
+test("simultaneous workers own distinct listeners and bind routes only after backend readiness", async () => {
+  const first = createE2ENetwork({ runId: "parallel-run", suite: "main", workerId: "0" });
+  const second = createE2ENetwork({ runId: "parallel-run", suite: "main", workerId: "1" });
+  const service = await backend();
+  try {
+    expect(() => first.main.studio.origin).toThrow("await start()");
+    expect(() => first.main.studio.bindBackend(service.port)).toThrow("await start()");
+    await Promise.all([first.start(), first.start(), second.start()]);
+    const endpoints = [first, second].flatMap((network) => [
+      ...Object.values(network.main),
+      ...Object.values(network.provider),
+      ...Object.values(network.installed),
+    ]);
+    const ports = endpoints.map((endpoint) => endpoint.port);
+    expect(new Set(ports).size).toBe(ports.length);
+    expect(ports).not.toContain(service.port);
+    expect(first.runNamespace).not.toBe(second.runNamespace);
+    expect(first.main.studio.hostname).not.toBe(second.main.studio.hostname);
+    expect(await status(first.main.studio.port)).toBe(404);
+    const release = first.main.studio.bindBackend(service.port);
+    expect(await status(first.main.studio.port)).toBe(200);
+    expect(await status(first.main.studio.port, "localhost")).toBe(200);
+    expect(await status(first.main.studio.port, first.main.studio.hostname)).toBe(200);
+    expect(await status(second.main.studio.port)).toBe(404);
+    expect(() => first.main.studio.bindBackend(service.port)).toThrow("already bound");
+    release();
+    expect(await status(first.main.studio.port)).toBe(404);
+    const replacement = first.main.studio.bindBackend(service.port);
+    release();
+    expect(await status(first.main.studio.port)).toBe(200);
+    replacement();
+    const retiredPort = first.main.studio.port;
+    await first.close();
+    await expect(status(retiredPort)).rejects.toThrow();
+    expect(await status(service.port)).toBe(200);
+    expect(() => first.main.studio.bindBackend(service.port)).toThrow("closed");
+    await expect(first.start()).rejects.toThrow("closed");
+  } finally {
+    await Promise.all([first.close(), second.close()]);
+    await close(service.server);
   }
-  const ports = [...Object.values(baseNetwork.main), ...Object.values(baseNetwork.provider)].map(
-    ({ port }) => port,
-  );
-  expect(new Set(ports).size).toBe(ports.length);
 });
 
-test("isolates mutable paths across suites and concurrent runs", () => {
-  const root = resolve("/repo/apps/e2e");
-  const defaults = createE2EPaths(root);
-  const offset = createE2EPaths(root, 100);
-
-  expect(defaults.providerWorkspaceDirectory).not.toBe(defaults.workspaceDirectory);
-  expect(defaults.hostedWorkspaceDirectory).not.toBe(defaults.workspaceDirectory);
-  expect(new Set(Object.values(offset)).size).toBe(Object.values(offset).length);
-  const offsetRoot = resolve(root, "test-results/main/offset-100") + sep;
-  expect(Object.values(offset).every((path) => path.includes(offsetRoot))).toBe(true);
+test("closing during startup releases listeners and prevents later acquisitions", async () => {
+  const network = createE2ENetwork({ runId: "closing-run", suite: "provider", workerId: "0" });
+  const starting = network.start();
+  const closing = network.close();
+  await expect(starting).rejects.toThrow("startup did not complete");
+  await closing;
+  await network.close();
+  expect(() => network.provider.live.port).toThrow("closed");
+  await expect(network.start()).rejects.toThrow("closed");
 });
 
-test("main and provider workers own separate mutable roots at the same offset", () => {
-  const root = resolve("/repo/apps/e2e");
-  const main = createE2EPaths(root, 100, "main");
-  const provider = createE2EPaths(root, 100, "provider");
-  const mainRoot = resolve(root, "test-results/main/offset-100") + sep;
-  const providerRoot = resolve(root, "test-results/provider/offset-100") + sep;
-
-  expect(Object.values(main).every((path) => path.startsWith(mainRoot))).toBe(true);
-  expect(Object.values(provider).every((path) => path.startsWith(providerRoot))).toBe(true);
-  expect(main.notebookProcessRegistryDirectory).not.toBe(provider.notebookProcessRegistryDirectory);
+test("network teardown closes upgraded sockets without stopping the backend", async () => {
+  const network = createE2ENetwork({ runId: "upgraded-run", suite: "main", workerId: "0" });
+  const service = await backend();
+  service.server.on("upgrade", (_request, socket) => {
+    socket.on("end", () => socket.destroy());
+    socket.resume();
+    socket.write(
+      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
+    );
+  });
+  await network.start();
+  network.main.studio.bindBackend(service.port);
+  const socket = connect(network.main.studio.port, "127.0.0.1");
+  try {
+    await once(socket, "connect");
+    const response = once(socket, "data");
+    socket.write(
+      "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
+    );
+    expect(String((await response)[0])).toContain("101 Switching Protocols");
+    const disconnected = once(socket, "close");
+    await network.close();
+    await disconnected;
+    expect(await status(service.port)).toBe(200);
+  } finally {
+    socket.destroy();
+    await network.close();
+    await close(service.server);
+  }
 });
 
-test("bounds E2E port offsets to valid TCP ports", () => {
-  expect(() => createE2ENetwork("-1")).toThrow(TypeError);
-  expect(() => createE2ENetwork(String(maximumOffset + 1))).toThrow(RangeError);
-  const highest = createE2ENetwork(String(maximumOffset));
-  expect(
-    [...Object.values(highest.main), ...Object.values(highest.provider)].every(
-      ({ port }) => port <= 65_535,
-    ),
-  ).toBe(true);
-});
-
-test("isolates restarted workers above the caller's port offset", () => {
-  expect(workerPortOffset()).toBe(0);
-  expect(workerPortOffset("1000", "0")).toBe(1_100);
-  expect(workerPortOffset("1000", "1")).toBe(1_200);
-  expect(workerPortOffset("1000", "2")).toBe(1_300);
-  expect(workerPortOffset(String(maximumOffset - 300), "2")).toBe(maximumOffset);
-  expect(() => workerPortOffset(String(maximumOffset - 299), "2")).toThrow(RangeError);
+test("network identity cannot escape its run namespace", () => {
+  for (const key of ["runId", "suite", "workerId"]) {
+    expect(() =>
+      createE2ENetwork({ runId: "run", suite: "main", workerId: "0", [key]: "../other" }),
+    ).toThrow("portable identifier");
+  }
 });

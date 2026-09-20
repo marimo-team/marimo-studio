@@ -1,5 +1,5 @@
 import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -15,6 +15,7 @@ import {
   recoverWorkspaceEventStream,
   waitForPreview,
 } from "./fixture.ts";
+import { test } from "./network-fixture.ts";
 import {
   closeFailedNotebookServer,
   startNotebookServer,
@@ -35,7 +36,7 @@ for (const editRoot of ["marimo", "studio"] as const) {
       authentication: ["--no-token"],
       command: "edit",
       editRoot,
-      port: e2eNetwork.main.hostSession.port,
+      endpoint: e2eNetwork.main.hostSession,
       target: workspace,
     });
     const context = await browser.newContext();

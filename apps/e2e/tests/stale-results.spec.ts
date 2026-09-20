@@ -73,7 +73,7 @@ test("cancels one client's held old-view request without changing the peer view"
   const firstServer = startNotebookServer({
     command: "edit",
     target: collaborativeWorkspaceDirectory,
-    port: e2eNetwork.main.collaborationPeer.port,
+    endpoint: e2eNetwork.main.collaborationPeer,
     authentication: ["--no-token"],
   });
   const secondOrigin = e2eNetwork.main.collaboration.origin;
@@ -81,7 +81,7 @@ test("cancels one client's held old-view request without changing the peer view"
   const secondServer = startNotebookServer({
     command: "edit",
     target: collaborativeWorkspaceDirectory,
-    port: e2eNetwork.main.collaboration.port,
+    endpoint: e2eNetwork.main.collaboration,
     authentication: ["--no-token"],
   });
   const secondContext = await browser.newContext({ baseURL: secondOrigin });
@@ -207,7 +207,7 @@ test("cancels a held old-view request without changing current or cached view st
   studioCli,
 }) => {
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
     5,
   );
   await studioCli.addWorkspaceView(workspaceNotebookPath, "slow-report");
@@ -225,7 +225,7 @@ test("cancels a held old-view request without changing current or cached view st
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const completedHandoffs = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
     count: 5,
@@ -233,7 +233,7 @@ test("cancels a held old-view request without changing current or cached view st
     status: 204,
   });
   const supersededValueReads = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "POST",
     path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/(?:slow-report|next-report)\/values$/,
     errorText: "net::ERR_ABORTED",

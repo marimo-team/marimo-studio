@@ -19,7 +19,7 @@ import {
   waitForPreview,
 } from "./fixture.ts";
 
-const baseUrl = `${hostedOrigin}/hosted`;
+const baseUrl = () => `${hostedOrigin()}/hosted`;
 const accessToken = "studio-e2e-token";
 
 test.use({ services: ["hosted"] });
@@ -29,17 +29,17 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
   page,
 }) => {
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    `${baseUrl}/_marimo-studio/dev/events`,
+    `${baseUrl()}/_marimo-studio/dev/events`,
     1,
   );
-  await page.goto(`${baseUrl}/studio/?access_token=${accessToken}`);
+  await page.goto(`${baseUrl()}/studio/?access_token=${accessToken}`);
   await page.getByText("Add view", { exact: true }).click();
   await page.getByRole("radio", { name: /^HTML document/ }).check();
   await page.getByRole("button", { name: "Create view" }).click();
   await waitForPreview(page);
 
   const clientId = await studioClientId(page);
-  const response = await page.request.get(`${baseUrl}/_marimo-studio/views/dashboard/config`, {
+  const response = await page.request.get(`${baseUrl()}/_marimo-studio/views/dashboard/config`, {
     params: { runtime: "zero-python", marimo_studio_client: clientId },
     headers: { "Marimo-Studio-Preview-Session-Id": "s_export" },
   });
@@ -47,7 +47,7 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
   const config = runtimeConfigSchema.parse(await response.json());
   expect(config.runtime.id).toBe("zero-python");
   const manifest = await page.request.get(
-    new URL(z.string().parse(config.runtime.data.manifestUrl), baseUrl).href,
+    new URL(z.string().parse(config.runtime.data.manifestUrl), baseUrl()).href,
   );
   expect(manifest.ok(), await manifest.text()).toBe(true);
   expect(await manifest.json()).toMatchObject({
@@ -55,7 +55,7 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
     view: "dashboard",
   });
 
-  const controls = await page.request.get(`${baseUrl}/_marimo-studio/views/dashboard/controls`, {
+  const controls = await page.request.get(`${baseUrl()}/_marimo-studio/views/dashboard/controls`, {
     params: { revision: config.revision, marimo_studio_client: clientId },
     headers: { "Marimo-Session-Id": await studioEditorSessionId(page) },
   });
@@ -66,7 +66,7 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
   });
   await page.getByLabel(/preview runtime$/).click();
   const retiredManifest = browserDiagnostics.expectRequestAbort({
-    origin: hostedOrigin,
+    origin: hostedOrigin(),
     method: "GET",
     path: /^\/hosted\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/zero-python\/current$/,
     count: 1,
@@ -86,11 +86,11 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   page,
 }) => {
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    `${baseUrl}/_marimo-studio/dev/events`,
+    `${baseUrl()}/_marimo-studio/dev/events`,
     2,
   );
   const interruptedDocumentTransaction = browserDiagnostics.expectRequestFailure({
-    origin: hostedOrigin,
+    origin: hostedOrigin(),
     path: /^\/hosted\/(?:_marimo-studio\/editor\/)?api\/document\/transaction$/,
     method: "POST",
     errorText: "net::ERR_ABORTED",
@@ -110,15 +110,15 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   await expect
     .poll(
       async () =>
-        fetch(`${baseUrl}/?access_token=${accessToken}`, { redirect: "manual" })
+        fetch(`${baseUrl()}/?access_token=${accessToken}`, { redirect: "manual" })
           .then((response) => response.status)
           .catch(() => 0),
       { timeout: 30_000 },
     )
     .toBe(303);
 
-  await page.goto(`${baseUrl}/?access_token=${accessToken}`);
-  await expect(page).toHaveURL(`${baseUrl}/`);
+  await page.goto(`${baseUrl()}/?access_token=${accessToken}`);
+  await expect(page).toHaveURL(`${baseUrl()}/`);
   await expect(page.locator("[data-cell-id]").first()).toBeVisible();
   await expect(page.locator("#marimo-studio-host")).toHaveCount(0);
   await page.getByTestId("run-button").last().click();
@@ -126,8 +126,8 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   await nativeScale.press("End");
   await expect(nativeScale).toHaveAttribute("aria-valuenow", "3");
 
-  await page.goto(`${baseUrl}/studio/`);
-  await expect(page).toHaveURL(`${baseUrl}/studio/`);
+  await page.goto(`${baseUrl()}/studio/`);
+  await expect(page).toHaveURL(`${baseUrl()}/studio/`);
   await expect(page.getByText("Add view", { exact: true })).toBeVisible();
   await page.getByText("Add view", { exact: true }).click();
   await expect(page.locator('iframe[title="Marimo editor"]')).not.toHaveAttribute("inert");
@@ -146,7 +146,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   const before = await page.evaluate(async (url) => {
     const response = await fetch(url);
     return await response.json();
-  }, `${baseUrl}/_marimo-studio/status`);
+  }, `${baseUrl()}/_marimo-studio/status`);
   expect(before).toEqual({
     schema: 1,
     state: "needs-view",
@@ -156,14 +156,14 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
 
   await page.getByRole("radio", { name: /^HTML document/ }).check();
   await page.getByRole("button", { name: "Create view" }).click();
-  await expect(page).toHaveURL(`${baseUrl}/studio/dashboard/`);
+  await expect(page).toHaveURL(`${baseUrl()}/studio/dashboard/`);
   await expect(editorSlider(page, /^Hosted scale/)).toHaveAttribute("aria-valuenow", "3");
   await expect(page.getByLabel("Switch view")).toContainText("dashboard");
 
   const after = await page.evaluate(async (url) => {
     const response = await fetch(url);
     return await response.json();
-  }, `${baseUrl}/_marimo-studio/status`);
+  }, `${baseUrl()}/_marimo-studio/status`);
   expect(after).toEqual({
     schema: 1,
     state: "ready",
@@ -181,29 +181,29 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     .finally(() => previewElement.dispose());
   if (!retiringFrame) throw new Error("The hosted preview frame is unavailable.");
   const retirement = browserDiagnostics.expectFrameRetirement(retiringFrame);
-  await page.goto(`${baseUrl}/`);
+  await page.goto(`${baseUrl()}/`);
   await expect(page.locator("[data-cell-id]").first()).toBeVisible();
   retirement.recovered();
-  await page.goto(`${baseUrl}/studio/dashboard/`);
+  await page.goto(`${baseUrl()}/studio/dashboard/`);
   await expect(editorSlider(page, /^Hosted scale/)).toHaveAttribute("aria-valuenow", "3");
   const preview = await waitForPreview(page);
   const replacement = await readFile(hostedViewFixturePath, "utf8");
   const serverToken = await studioServerToken(page);
   const supersededConfigRead = browserDiagnostics.expectActiveRequestAbort({
-    origin: hostedOrigin,
+    origin: hostedOrigin(),
     method: "GET",
     path: /^\/hosted\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/config$/,
     count: 1,
   });
   const abandonedSourceWrite = browserDiagnostics.expectRequestAbort({
-    origin: hostedOrigin,
+    origin: hostedOrigin(),
     method: "PUT",
     path: /^\/hosted\/_marimo-studio\/views\/dashboard\/source\/index\.html$/,
     count: 1,
     status: 204,
   });
   const projectResponse = await page.request.get(
-    `${baseUrl}/_marimo-studio/views/dashboard/project`,
+    `${baseUrl()}/_marimo-studio/views/dashboard/project`,
   );
   expect(projectResponse.ok()).toBe(true);
   const project = viewProjectSchema.parse(await projectResponse.json());
@@ -230,7 +230,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     {
       catalogGeneration: project.catalog_generation,
       content: replacement,
-      sourceUrl: `${baseUrl}/_marimo-studio/views/dashboard/source/index.html`,
+      sourceUrl: `${baseUrl()}/_marimo-studio/views/dashboard/source/index.html`,
       token: serverToken,
       viewGeneration: project.view_generation,
     },
@@ -238,7 +238,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   expect(saved).toBe(204);
   await expect(preview.getByRole("heading", { name: "Hosted mount lifecycle" })).toBeVisible();
   const persisted = await page.request.get(
-    `${baseUrl}/_marimo-studio/views/dashboard/source/index.html`,
+    `${baseUrl()}/_marimo-studio/views/dashboard/source/index.html`,
   );
   expect(persisted.ok()).toBe(true);
   expect(await persisted.text()).toBe(replacement);

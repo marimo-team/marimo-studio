@@ -75,7 +75,7 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
   const server = startNotebookServer({
     command: "edit",
     target: workspaceDirectory,
-    port: e2eNetwork.main.recovery.port,
+    endpoint: e2eNetwork.main.recovery,
     authentication: ["--token-password", token],
     environment: { MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS: parentOrigin },
   });
@@ -152,7 +152,7 @@ test("keeps standalone navigation inside server-authored route authority", async
       { view, query, hash },
     );
   const supersededPresentation = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
     errorText: "net::ERR_ABORTED",
@@ -220,7 +220,7 @@ test("rejects an untrusted authored workspace stream before client state changes
     text: /\/_marimo-studio\/dev\/events.*blocked by CORS policy/,
   });
   const closed = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     path: /^\/_marimo-studio\/dev\/events$/,
     method: "GET",
     errorText: "net::ERR_FAILED",
@@ -452,14 +452,14 @@ test("repairs an opaque preview through its scoped event stream", async ({
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const supersededDocument = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?dashboard\/$/,
     count: 1,
     required: false,
   });
   const closedRepairStream = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/dev\/events$/,
     count: 1,
@@ -467,7 +467,7 @@ test("repairs an opaque preview through its scoped event stream", async ({
   });
   const manifest = await readWorkspaceFile(dashboardManifestPath);
   const projectRepair = browserDiagnostics.expectResponseTransition(page, {
-    origin: studioOrigin,
+    origin: studioOrigin(),
     method: "GET",
     path: /^\/_marimo-studio\/views\/dashboard\/project$/,
     failureStatus: 500,
@@ -530,7 +530,7 @@ test("serves an unframed preview for browser automation", async ({ page, context
   await waitForPreview(page);
   const preview = await context.newPage();
   try {
-    await preview.goto(`${studioOrigin}/dashboard/?file=notebook.py&marimo_studio_unframed=1`);
+    await preview.goto(`${studioOrigin()}/dashboard/?file=notebook.py&marimo_studio_unframed=1`);
     await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
     await expect(preview.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
     await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();

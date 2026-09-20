@@ -15,65 +15,85 @@ const supervisorPath = resolve(
   "notebook-process-supervisor.mjs",
 );
 
-const supervisorReadiness = (child, timeout, missingProcessGroup) => {
-  let rejectPending;
-  let resolveRegistered;
-  let resolveStarted;
-  const registered = new Promise((resolveReady, rejectReady) => {
-    resolveRegistered = resolveReady;
-    rejectPending = rejectReady;
-  });
-  const started = new Promise((resolveReady, rejectReady) => {
-    resolveStarted = resolveReady;
-    const rejectStarted = rejectReady;
-    const rejectBoth = rejectPending;
-    rejectPending = (error) => {
-      rejectBoth(error);
-      rejectStarted(error);
-    };
-  });
-  void registered.catch(() => undefined);
-  void started.catch(() => undefined);
-  let settled = false;
+const supervisorReadiness = (child, timeout, boundTimeout, port, missingProcessGroup) => {
+  /** @type {PromiseWithResolvers<void>} */
+  const registered = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<void>} */
+  const started = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<number>} */
+  const bound = Promise.withResolvers();
+  for (const pending of [registered, started, bound]) {
+    void pending.promise.catch(() => undefined);
+  }
+  let failure;
+  let registeredReceived = false;
+  let startedReceived = false;
   let startRequested = false;
   let timer;
+  const dispose = () => {
+    clearTimeout(timer);
+    child.off("error", onError);
+    child.off("exit", onExit);
+    child.off("message", onMessage);
+  };
   const fail = (error) => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(timer);
-    rejectPending(error);
+    if (failure) return;
+    failure = error;
+    dispose();
+    registered.reject(error);
+    started.reject(error);
+    bound.reject(error);
+    if (child.connected) child.disconnect();
   };
-  const armTimeout = (message) => {
+  const armTimeout = (message, duration) => {
     clearTimeout(timer);
-    timer = setTimeout(() => fail(new Error(message)), timeout);
+    timer = setTimeout(() => fail(new Error(message)), duration);
   };
-  armTimeout("Notebook process registration timed out");
-  child.once("error", (error) =>
+  const onError = (error) =>
     fail(
       missingProcessGroup
         ? new Error("Notebook process supervisor did not expose a process group ID", {
             cause: error,
           })
         : error,
-    ),
-  );
-  child.once("exit", (code, signal) => {
+    );
+  const onExit = (code, signal) => {
     const status = signal ? `signal ${signal}` : `status ${code ?? 1}`;
     fail(new Error(`Notebook process supervisor exited with ${status}`));
-  });
-  child.on("message", (message) => {
-    if (message?.type === "registered") {
+  };
+  const onMessage = (message) => {
+    if (message?.type === "failed") {
+      fail(new Error(String(message.message)));
+    } else if (message?.type === "registered" && !registeredReceived) {
+      registeredReceived = true;
       clearTimeout(timer);
-      resolveRegistered();
-    }
-    if (message?.type === "started") {
-      settled = true;
+      registered.resolve();
+    } else if (message?.type === "started" && startRequested && !startedReceived) {
+      startedReceived = true;
       clearTimeout(timer);
-      resolveStarted();
+      started.resolve();
+      if (port !== null) {
+        bound.resolve(port);
+        dispose();
+      } else {
+        armTimeout("Notebook backend binding timed out", boundTimeout);
+      }
+    } else if (message?.type === "bound" && startedReceived && port === null) {
+      if (!Number.isSafeInteger(message.port) || message.port < 1 || message.port > 65535) {
+        fail(new Error("Notebook process supervisor returned an invalid backend port"));
+        return;
+      }
+      bound.resolve(message.port);
+      dispose();
     }
-  });
+  };
+  child.once("error", onError);
+  child.once("exit", onExit);
+  child.on("message", onMessage);
+  armTimeout("Notebook process registration timed out", timeout);
   const start = async () => {
-    await registered;
+    await registered.promise;
+    if (failure) throw failure;
     if (!child.connected) {
       const error = new Error("Notebook process supervisor disconnected before start");
       fail(error);
@@ -81,7 +101,7 @@ const supervisorReadiness = (child, timeout, missingProcessGroup) => {
     }
     if (!startRequested) {
       startRequested = true;
-      armTimeout("Notebook process start timed out");
+      armTimeout("Notebook process start timed out", timeout);
       try {
         await new Promise((resolveSent, rejectSent) => {
           child.send({ type: "start" }, (error) =>
@@ -93,9 +113,9 @@ const supervisorReadiness = (child, timeout, missingProcessGroup) => {
         throw error;
       }
     }
-    await started;
+    await started.promise;
   };
-  return Object.freeze({ registered, start });
+  return Object.freeze({ registered: registered.promise, bound: bound.promise, start });
 };
 
 export const spawnRegisteredNotebookSupervisor = ({
@@ -104,7 +124,8 @@ export const spawnRegisteredNotebookSupervisor = ({
   cwd,
   directory,
   env,
-  port,
+  port = /** @type {number | null} */ (null),
+  boundTimeout = 60_000,
   readyTimeout = READY_TIMEOUT,
   stdio = ["ignore", "pipe", "pipe"],
 }) => {
@@ -122,12 +143,19 @@ export const spawnRegisteredNotebookSupervisor = ({
     stdio: [...stdio, "ipc"],
   });
   const processGroupId = child.pid;
-  const readiness = supervisorReadiness(child, readyTimeout, processGroupId === undefined);
+  const readiness = supervisorReadiness(
+    child,
+    readyTimeout,
+    boundTimeout,
+    port,
+    processGroupId === undefined,
+  );
   return Object.freeze({
     child,
     ownerNonce,
     processGroupId,
     registered: readiness.registered,
+    bound: readiness.bound,
     start: readiness.start,
   });
 };
