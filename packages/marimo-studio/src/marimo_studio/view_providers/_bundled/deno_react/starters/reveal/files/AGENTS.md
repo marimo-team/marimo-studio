@@ -78,11 +78,13 @@ objects.
 
 ## Add dependencies
 
-Run Deno's package manager from the view root so it updates `deno.json` and
-`deno.lock` together:
+Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
+environment so dependency updates and Studio builds use the same version.
+
+Run from the view root so it updates `deno.json` and `deno.lock` together:
 
 ```console
-deno add --frozen=false --save-exact npm:reveal.js@6.0.1
+uv run -- deno add --frozen=false --save-exact npm:reveal.js@6.0.1
 ```
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both

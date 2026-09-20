@@ -326,11 +326,24 @@ editing. Bundled starters use these entry points:
 | Svelte                  | `src/App.svelte`                  | `src/style.css`                  |
 | Observable Notebook Kit | `src/index.html`, `src/page.tmpl` | `src/style.css`                  |
 
-React, Svelte, and Notebook Kit use Deno configuration and a frozen
-`deno.lock`. Run dependency changes from the view root with
-`deno add --frozen=false --save-exact <package>`, preserve the project's
-minimum dependency age, and commit `deno.json` and `deno.lock` together.
-Use `view.build()` to check the selected provider's types and build inputs.
+Run dependency commands from the view root through the notebook's Python
+environment with `marimo-studio[deno]` installed. This keeps authoring and
+builds on the same Deno version. For a standalone tool environment, replace
+`uv run -- deno` with `uvx --from 'deno==<installed-deno-version>' deno`.
+Use the Deno package version installed in the notebook's Python environment.
+Pinning Studio alone does not pin Deno, because its extra allows newer versions.
+
+- React: `uv run -- deno add --frozen=false --save-exact <package>` updates
+  `deno.json` and `deno.lock`.
+- Svelte: `uv run -- deno add --package-json --frozen=false --save-exact <package>`
+  updates `package.json` and `deno.lock` for Vite's package resolution.
+- Notebook Kit: pin npm dependencies in `package.json`, then run
+  `uv run -- deno install --frozen=false --node-modules-dir=auto --no-save`
+  to regenerate `deno.lock`.
+
+Preserve the project's minimum dependency age and frozen-build policy. Commit
+the changed dependency manifest and lockfile together. Follow the selected
+starter's `AGENTS.md` for its dependency workflow, then run `view.build()`.
 
 ### Choose visual direction
 

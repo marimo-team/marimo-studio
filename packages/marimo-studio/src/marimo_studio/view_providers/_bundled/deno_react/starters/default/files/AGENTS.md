@@ -52,11 +52,13 @@ fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
 
 ## Add dependencies
 
-Run Deno's package manager from the view root so it updates `deno.json` and
-`deno.lock` together:
+Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
+environment so dependency updates and Studio builds use the same version.
+
+Run from the view root so it updates `deno.json` and `deno.lock` together:
 
 ```console
-deno add --frozen=false --save-exact \
+uv run -- deno add --frozen=false --save-exact \
   npm:d3@7 \
   npm:@observablehq/plot@0.6 \
   npm:arquero@8 \

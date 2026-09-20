@@ -53,6 +53,10 @@ that allows their origins.
 Leave `<base href>` out of the authored entry document. Studio supplies the
 delivery base when it publishes the artifact.
 
+Run Deno commands through the notebook's Python environment with
+`marimo-studio[deno]` installed so dependency changes and Studio builds use the
+same Deno version.
+
 ## React
 
 Create a typed React project with the pinned [Deno](https://docs.deno.com/)
@@ -72,7 +76,7 @@ checking before bundling.
 Add an exact dependency from the view project root:
 
 ```console
-deno add --frozen=false --save-exact npm:d3@7
+uv run -- deno add --frozen=false --save-exact npm:d3@7
 ```
 
 Commit `deno.json` and `deno.lock` after an intentional update. Normal Studio
@@ -110,7 +114,7 @@ lockfile. Its build runs `svelte-check` before Vite.
 Add an exact application dependency from the view project root:
 
 ```console
-deno add --package-json --frozen=false --save-exact npm:d3@7
+uv run -- deno add --package-json --frozen=false --save-exact npm:d3@7
 ```
 
 Commit `package.json` and `deno.lock` after the update.

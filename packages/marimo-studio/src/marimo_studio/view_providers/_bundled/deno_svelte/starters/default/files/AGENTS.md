@@ -63,12 +63,14 @@ fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
 
 ## Add dependencies
 
-Run Deno's package manager from the view root. Use `--package-json` so Vite
-resolves application dependencies through `package.json` and the installed
-`node_modules` tree:
+Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
+environment so dependency updates and Studio builds use the same version.
+
+Run from the view root. Use `--package-json` so Vite resolves application
+dependencies through `package.json` and the installed `node_modules` tree:
 
 ```console
-deno add --package-json --frozen=false --save-exact \
+uv run -- deno add --package-json --frozen=false --save-exact \
   npm:d3@7 \
   npm:@observablehq/plot@0.6 \
   npm:arquero@8 \

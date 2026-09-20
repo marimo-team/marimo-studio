@@ -53,10 +53,12 @@ Relative `FileAttachment` assets under `src/` are included in builds. Bare npm
 imports are bundled by Vite. Notebook Kit's `npm:` and `jsr:` imports use remote
 browser modules, so use bare imports for views that must work offline.
 
-Pin added npm dependencies in `package.json`, then regenerate `deno.lock` with
-`deno install --frozen=false --node-modules-dir=auto --no-save`. Source exposes
-the lockfile as read-only. Keep authored inputs in `src/` and public assets in
-`public/`. Build failure retains the last published preview.
+Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
+environment. Pin added npm dependencies in `package.json`, then regenerate
+`deno.lock` with
+`uv run -- deno install --frozen=false --node-modules-dir=auto --no-save`.
+Source exposes the lockfile as read-only. Keep authored inputs in `src/` and
+public assets in `public/`. Build failure retains the last published preview.
 
 ## Maintain project ignore rules
 
