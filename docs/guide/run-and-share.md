@@ -50,9 +50,10 @@ Each external dataset must be reachable from the visitor's browser.
 
 ## Run a live view locally
 
-Use the launch command printed by `view create`. For a notebook owned by a
-Python project, Studio composes project and existing inline dependencies,
-sources, indexes, and Python constraints. Use the emitted command to preserve
+Start with the launch command printed by `view create` and replace `marimo edit`
+with `marimo run`, keeping its environment options and sandbox flag. For a
+notebook owned by a Python project, Studio composes project and existing inline dependencies,
+sources, indexes, and Python constraints. Retaining those options preserves
 that complete environment. For a project notebook with no inline dependencies:
 
 ```console

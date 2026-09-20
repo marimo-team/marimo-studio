@@ -132,7 +132,7 @@ import marimo_studio.agent as studio_agent
 await studio_agent.current_workspace().view("dashboard").show()
 ```
 
-`show()` returns `client_id`, `preview_url`, and `frame_selector` for the
+`show()` returns `client_id`, `session_id`, `preview_url`, and `frame_selector` for the
 activated preview document. Use that exact selector for browser frame switching
 and DOM evaluation. Cached and hidden frames are outside this selector. `show()`
 commits the selected frame without waiting for notebook execution. After it returns,

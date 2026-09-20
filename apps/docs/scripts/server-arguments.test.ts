@@ -21,12 +21,18 @@ test.each(["dev", "preview"])(
   },
 );
 
-test.each([undefined, "0", "65536", "4321suffix"])(
-  "rejects an invalid assigned port %s",
-  (port) => {
-    expect(() => documentationServerArguments(["preview"], port)).toThrow("PORT");
-  },
-);
+test.each([undefined, "4321suffix"])("rejects a missing or malformed assigned port %s", (port) => {
+  expect(() => documentationServerArguments(["preview"], port)).toThrow(
+    "PORT must be assigned by Portless; run pnpm dev or pnpm preview.",
+  );
+});
+
+test.each(["0", "65536"])("rejects an assigned port outside the TCP range %s", (port) => {
+  expect(() => documentationServerArguments(["preview"], port)).toThrow(RangeError);
+  expect(() => documentationServerArguments(["preview"], port)).toThrow(
+    "PORT must be a TCP port between 1 and 65535.",
+  );
+});
 
 test("server commands cannot override Portless's assigned port", () => {
   expect(() => documentationServerArguments(["dev", "--port", "4321"], "4826")).toThrow(

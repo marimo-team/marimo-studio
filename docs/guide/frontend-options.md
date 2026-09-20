@@ -23,6 +23,20 @@ Every built-in view provider supports `marimo-cell`, `marimo-output`, and
 | `marimo-studio/svelte:default`       | Svelte applications with concise reactive browser state   |
 | `marimo-studio/notebook-kit:default` | Observable notebook HTML with reactive presentation cells |
 
+For React, Svelte, and Notebook Kit, install the Deno toolchain in the
+notebook's Python project before running dependency commands:
+
+```console
+uv add 'marimo-studio[deno]'
+```
+
+Run Deno through that environment with `uv run -- deno` so dependency changes
+and Studio builds use the same Deno version. For a standalone tool environment,
+use `uvx --from 'deno==<installed-deno-version>' deno` in place of `uv run -- deno`.
+Replace `<installed-deno-version>` with the Deno package version installed in
+the notebook's Python environment, available through
+`python -c "from importlib.metadata import version; print(version('deno'))"`.
+
 ## Vanilla HTML
 
 Create the default starter:
@@ -53,13 +67,9 @@ that allows their origins.
 Leave `<base href>` out of the authored entry document. Studio supplies the
 delivery base when it publishes the artifact.
 
-Run Deno commands through the notebook's Python environment with
-`marimo-studio[deno]` installed so dependency changes and Studio builds use the
-same Deno version.
-
 ## React
 
-Create a typed React project with the pinned [Deno](https://docs.deno.com/)
+Create a typed React project with the [Deno](https://docs.deno.com/)
 JavaScript and TypeScript toolchain:
 
 ```console
