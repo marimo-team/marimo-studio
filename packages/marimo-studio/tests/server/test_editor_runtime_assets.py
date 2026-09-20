@@ -248,6 +248,10 @@ import assert from "node:assert/strict";
 {_DOCUMENT_RUNTIME.decode()}
 const studioCreateDocumentRequests = createStudioDocumentRequests;
 globalThis.location = {{ href: "https://studio.test/" }};
+let pagehide;
+globalThis.addEventListener = (type, listener) => {{
+  if (type === "pagehide") pagehide = listener;
+}};
 let generation = 0;
 let flushFailure = false;
 let resolveBarrier;
@@ -302,11 +306,13 @@ await assert.rejects(first, /older save failed/);
 assert.deepEqual(reports, [[2, true], [1, false]]);
 assert.equal(requests.find((entry) => entry[1] === "first")[2], 1);
 assert.equal(requests.find((entry) => entry[1] === "second")[2], 2);
-globalThis.location.href =
-  "https://studio.test/?marimo_studio_handoff={"a" * 64}";
 const handoff = client.sendSave("handoff");
 while (!pending.has("handoff")) await Promise.resolve();
 pending.get("handoff").reject(new TypeError("Failed to fetch"));
+await Promise.resolve();
+globalThis.location.href =
+  "https://studio.test/?marimo_studio_handoff={"a" * 64}";
+pagehide();
 assert.equal(await handoff, undefined);
 assert.deepEqual(reports.at(-1), [2, true]);
 let resumedClient;
@@ -317,6 +323,8 @@ resumedClient = {{ {save} }};
 const staleHandoff = resumedClient.sendSave("stale handoff");
 while (!pending.has("stale handoff")) await Promise.resolve();
 pending.get("stale handoff").reject(new TypeError("Failed to fetch"));
+await Promise.resolve();
+pagehide();
 await assert.rejects(staleHandoff, /Failed to fetch/);
 assert.deepEqual(reports.at(-1), [2, false]);
 flushFailure = true;

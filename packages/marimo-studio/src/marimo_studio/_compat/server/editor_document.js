@@ -201,7 +201,7 @@ export function createStudioDocumentRequests(document, network) {
       } catch (error) {
         let handedOff = false;
         try {
-          handedOff = network.handoffAccepted?.() === true;
+          handedOff = (await network.handoffAccepted?.()) === true;
         } catch {
           // An unavailable browser location is not evidence of a completed save.
         }

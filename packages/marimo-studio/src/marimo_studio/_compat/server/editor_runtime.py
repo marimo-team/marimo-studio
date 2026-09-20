@@ -109,6 +109,14 @@ const marimoStudioHostHandoffFromLocation=()=>{
   }catch{return null}
 };
 const marimoStudioInitialHostHandoff=marimoStudioHostHandoffFromLocation();
+const marimoStudioPageHide=new Promise(resolve=>{
+  globalThis.addEventListener?.("pagehide",resolve,{once:true});
+});
+const marimoStudioHasNewHostHandoff=()=>{
+  const handoff=marimoStudioHostHandoffFromLocation();
+  return /^[a-f0-9]{64}$/.test(handoff??"")&&
+    handoff!==marimoStudioInitialHostHandoff;
+};
 const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   flush:()=>studioFlushDocumentChanges(),
   flushBeforeSave:()=>studioFlushBeforeDocumentSave(),
@@ -120,10 +128,13 @@ const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   waitForConnection:()=>sn(),
   params:()=>n(),
   handleResponse:result=>lp(result),
-  handoffAccepted:()=>{
-    const handoff=marimoStudioHostHandoffFromLocation();
-    return /^[a-f0-9]{64}$/.test(handoff??"")&&
-      handoff!==marimoStudioInitialHostHandoff;
+  handoffAccepted:async()=>{
+    if(marimoStudioHasNewHostHandoff())return true;
+    await Promise.race([
+      marimoStudioPageHide,
+      new Promise(resolve=>setTimeout(resolve,250)),
+    ]);
+    return marimoStudioHasNewHostHandoff();
   },
 });
 """
