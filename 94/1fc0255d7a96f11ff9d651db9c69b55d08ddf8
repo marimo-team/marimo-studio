@@ -1,0 +1,9 @@
+packages/marimo-studio/tests/agent/test_client_connection.py
+  ai_agent 250-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "941fc0255d7a96f11ff9d651db9c69b55d08ddf8",
+  "prompts": {}
+}
