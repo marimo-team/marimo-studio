@@ -1,0 +1,11 @@
+apps/e2e/tests/notebook-server.ts
+  ai_agent 6-7
+apps/e2e/unit/routed-notebook-process.test.ts
+  ai_agent 13-16,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "491d78318523d7cb092e494925513ea1d7254d7d",
+  "prompts": {}
+}
