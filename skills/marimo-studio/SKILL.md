@@ -29,6 +29,23 @@ its bundled resources as needed. Repeat discovery when the notebook environment
 or installed Studio version changes. Once this installed body is loaded,
 continue with the workflow.
 
+## Choose the delivery runtime
+
+Choose before designing controls or exposing data:
+
+| Runtime                     | Interaction                                                                             | Privacy boundary                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Server (`server`)           | Python computes new states using server packages and services                           | Source and credentials stay on the server. Projected outputs reach visitors.                                                 |
+| WASM (`wasm`)               | Pyodide computes new states in the visitor's browser                                    | Visitors receive notebook source and browser-accessible data. Never embed secrets.                                           |
+| Zero-Python (`zero-python`) | Visitors select finite prepared states, with browser-only interaction on published data | Python runs during preparation. Visitors receive prepared outputs and public files, including states they have not selected. |
+
+Static export defaults to Zero-Python. Choose WASM explicitly when visitors
+need unprepared states and the notebook supports Pyodide. Use Server for
+interactions that need private services or native Python packages. The editor
+can preview all three runtimes. A live `marimo run` serves Server or WASM.
+Follow [Run or export](#run-or-export) to configure, preflight, and verify the
+chosen delivery.
+
 ## Preserve notebook traceability
 
 Apply these conventions while authoring every view, even when Lens is not
@@ -291,12 +308,12 @@ defines its own page layout in a plain `<div id="app-shell"></div>`.
 Use `view.inspect()` and the project's `AGENTS.md` to choose files before
 editing. Bundled starters use these entry points:
 
-| Provider | Page source | Styles |
-| --- | --- | --- |
-| Vanilla | `index.html` | Inline CSS or linked project CSS |
-| React | `src/App.tsx` | `src/style.css` |
-| Svelte | `src/App.svelte` | `src/style.css` |
-| Observable Notebook Kit | `src/index.html`, `src/page.tmpl` | `src/style.css` |
+| Provider                | Page source                       | Styles                           |
+| ----------------------- | --------------------------------- | -------------------------------- |
+| Vanilla                 | `index.html`                      | Inline CSS or linked project CSS |
+| React                   | `src/App.tsx`                     | `src/style.css`                  |
+| Svelte                  | `src/App.svelte`                  | `src/style.css`                  |
+| Observable Notebook Kit | `src/index.html`, `src/page.tmpl` | `src/style.css`                  |
 
 React, Svelte, and Notebook Kit use Deno configuration and a frozen
 `deno.lock`. Run dependency changes from the view root with
@@ -699,11 +716,11 @@ Complete this review before handing off a view:
 
 Choose the runtime from the visitor's task:
 
-| Runtime                 | Result                                                                     |
-| ----------------------- | -------------------------------------------------------------------------- |
-| Python, `server`        | Live notebook execution with the server's packages, files, and credentials |
-| Browser, `wasm`         | New notebook states computed in the visitor's Pyodide worker               |
-| Prepared, `zero-python` | Finite precomputed states with notebook source retained on the producer    |
+| Runtime                    | Result                                                                     |
+| -------------------------- | -------------------------------------------------------------------------- |
+| Server, `server`           | Live notebook execution with the server's packages, files, and credentials |
+| WASM, `wasm`               | New notebook states computed in the visitor's Pyodide worker               |
+| Zero-Python, `zero-python` | Finite precomputed states with notebook source retained on the producer    |
 
 Run through marimo when the notebook needs Python packages, local files,
 databases, or server credentials:
@@ -734,7 +751,8 @@ must verify finite projection targets across the configured input states. Use
 WebAssembly when visitors must recompute unprepared states and the notebook can
 run through Pyodide.
 
-For Prepared controls, inspect `states.yaml` in the selected view project. Use
+For Zero-Python controls, configure `states.yaml` in the selected view project.
+An omitted state file prepares the initial notebook state. Use
 explicit state rows when valid combinations are sparse. Keep browser-only
 filtering of projected data in the view. A matrix prepares every combination
 of its input choices.
@@ -744,8 +762,11 @@ Export the verified runtime:
 ```console
 marimo-studio view export dashboard \
   --target notebook.py \
+  --runtime zero-python \
   --output dist/dashboard
 ```
+
+Use `--runtime wasm` on both commands for a WASM export.
 
 Export runs the same preflight before committing its destination. Progress is
 written to stderr, including marimo-export prepared-state reuse and cache
