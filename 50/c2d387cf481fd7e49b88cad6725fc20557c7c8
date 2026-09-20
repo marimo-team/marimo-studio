@@ -1,0 +1,9 @@
+packages/marimo-studio/src/marimo_studio/_cli/activity.py
+  ai_agent 30,41,44,52,54-55,59-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "50c2d387cf481fd7e49b88cad6725fc20557c7c8",
+  "prompts": {}
+}
