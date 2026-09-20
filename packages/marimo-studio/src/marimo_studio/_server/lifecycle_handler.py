@@ -26,7 +26,10 @@ from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session import PresentationSession
 from marimo_studio._server.records import ServerContext, ServerLocation
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
-from marimo_studio._server.security import SecurityPolicy
+from marimo_studio._server.security import (
+    SecurityPolicy,
+    extend_security_policy_from_host_head,
+)
 from marimo_studio._server.support import support_response
 from marimo_studio._server.workspace_lifecycle import (
     Invalid,
@@ -79,6 +82,10 @@ class LifecycleRouteHandler:
         send: Send,
     ) -> None:
         lifecycle = route.lifecycle
+        security_policy = extend_security_policy_from_host_head(
+            self._security_policy,
+            route.context.trusted_html_head,
+        )
         if isinstance(lifecycle, Invalid):
             response = await self._invalid_response(route)
         elif route.relative.startswith(SUPPORT_PATH):
@@ -101,7 +108,7 @@ class LifecycleRouteHandler:
                     self._runtimes.options,
                     self._adapters.session_state,
                     route.notebook_scope.session_ids,
-                    self._security_policy,
+                    security_policy,
                 )
             elif isinstance(lifecycle, Unconfigured):
                 response = initialization_response(
@@ -113,7 +120,7 @@ class LifecycleRouteHandler:
                     self._runtimes.options,
                     self._adapters.session_state,
                     route.notebook_scope.session_ids,
-                    self._security_policy,
+                    security_policy,
                 )
             else:
                 response = initialization_response(
@@ -125,7 +132,7 @@ class LifecycleRouteHandler:
                     self._runtimes.configured_options(lifecycle.definition.runtimes),
                     self._adapters.session_state,
                     route.notebook_scope.session_ids,
-                    self._security_policy,
+                    security_policy,
                 )
         elif isinstance(lifecycle, NeedsView):
             response = await self._error_response(route, lifecycle.error)
@@ -187,7 +194,10 @@ class LifecycleRouteHandler:
             ),
             lifecycle_id=request_lifecycle_id(route.request),
             runtime=route.request.query_params.get("runtime", "server"),
-            security_policy=self._security_policy,
+            security_policy=extend_security_policy_from_host_head(
+                self._security_policy,
+                route.context.trusted_html_head,
+            ),
             view_name=route.request_view,
         )
 

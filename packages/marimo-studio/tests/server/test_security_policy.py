@@ -22,6 +22,7 @@ from marimo_studio._server.pages import error_response
 from marimo_studio._server.security import (
     ALLOWED_EMBED_ORIGINS_ENV,
     SecurityPolicy,
+    extend_security_policy_from_host_head,
     parse_allowed_embed_origins,
 )
 from marimo_studio.errors import ConfigurationError
@@ -55,6 +56,20 @@ def test_empty_configuration_preserves_same_origin_framing(
     assert frame_ancestors_policy(policy) == "frame-ancestors 'self'"
     assert edit_document_headers(policy)["Content-Security-Policy"] == (
         "frame-ancestors 'self'"
+    )
+
+
+def test_trusted_host_head_extends_the_embedding_policy() -> None:
+    policy = extend_security_policy_from_host_head(
+        parse_allowed_embed_origins("https://notebooks.example.com"),
+        '<script data-parent-origin="HTTP://LOCALHOST:5175/"></script>'
+        '<script data-parent-origin="invalid"></script>'
+        '<div data-parent-origin="https://ignored.example.com"></div>',
+    )
+
+    assert _origin_values(policy) == (
+        "https://notebooks.example.com",
+        "http://localhost:5175",
     )
 
 

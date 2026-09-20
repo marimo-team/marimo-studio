@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from ipaddress import IPv6Address, ip_address
 from urllib.parse import urlsplit
 
@@ -29,6 +30,23 @@ class SecurityPolicy:
 DEFAULT_SECURITY_POLICY = SecurityPolicy()
 
 
+class _HostParentOriginParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.origins: list[str] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        if tag.casefold() != "script":
+            return
+        origin = dict(attrs).get("data-parent-origin")
+        if origin is not None:
+            self.origins.append(origin)
+
+
 def parse_allowed_embed_origins(value: str) -> SecurityPolicy:
     """Return a security policy from the configured comma-separated origins."""
     raw_origins = () if value == "" else tuple(value.split(","))
@@ -36,6 +54,41 @@ def parse_allowed_embed_origins(value: str) -> SecurityPolicy:
         raw_origins,
         encoded=value,
     )
+
+
+def extend_security_policy_from_host_head(
+    policy: SecurityPolicy,
+    html_head: str | None,
+) -> SecurityPolicy:
+    """Include bounded parent origins declared by trusted host scripts."""
+    if not html_head:
+        return policy
+    parser = _HostParentOriginParser()
+    parser.feed(html_head)
+    origins = list(policy.allowed_embed_origins)
+    seen = {origin.value for origin in origins}
+    encoded_bytes = sum(len(origin.value.encode("utf-8")) for origin in origins)
+    encoded_bytes += max(0, len(origins) - 1)
+    for raw_origin in parser.origins:
+        try:
+            origin = _canonical_origin(raw_origin)
+        except (UnicodeError, ValueError):
+            continue
+        if origin.value in seen:
+            continue
+        separator_bytes = 1 if origins else 0
+        candidate_bytes = (
+            encoded_bytes + separator_bytes + len(origin.value.encode("utf-8"))
+        )
+        if (
+            len(origins) >= _ALLOWED_EMBED_ORIGINS_MAX_ENTRIES
+            or candidate_bytes > _ALLOWED_EMBED_ORIGINS_MAX_BYTES
+        ):
+            continue
+        origins.append(origin)
+        seen.add(origin.value)
+        encoded_bytes = candidate_bytes
+    return SecurityPolicy(tuple(origins))
 
 
 def _security_policy(

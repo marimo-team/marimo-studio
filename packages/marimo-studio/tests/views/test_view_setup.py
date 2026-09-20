@@ -878,6 +878,57 @@ default = "executive"
     assert notebook.read_bytes() == original
 
 
+def test_project_configuration_uses_a_configured_view_directory(
+    notebook_path: Path,
+) -> None:
+    pyproject = notebook_path.parent / "pyproject.toml"
+    pyproject.write_text(
+        f'''\
+[project]
+name = "analysis"
+version = "0.0.1"
+dependencies = ["marimo-studio==1.2.3"]
+
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+view_root = "studio/views"
+default = "dashboard"
+''',
+        encoding="utf-8",
+    )
+
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+
+    assert studio.view_root == notebook_path.parent / "studio" / "views"
+    assert studio.views["dashboard"].root == studio.view_root / "dashboard"
+    assert not canonical_view_root(notebook_path).exists()
+
+
+@pytest.mark.parametrize(
+    "view_root",
+    ("", "/absolute/views", "../outside", "studio\\views", "studio/con"),
+)
+def test_project_configuration_rejects_invalid_view_root(
+    notebook_path: Path,
+    view_root: str,
+) -> None:
+    pyproject = notebook_path.parent / "pyproject.toml"
+    escaped = view_root.replace("\\", "\\\\")
+    pyproject.write_text(
+        f'''\
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+view_root = "{escaped}"
+default = "dashboard"
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="view_root"):
+        load_studio_definition(pyproject)
+
+
 def test_project_configuration_tracks_a_removed_default_view(
     notebook_path: Path,
 ) -> None:

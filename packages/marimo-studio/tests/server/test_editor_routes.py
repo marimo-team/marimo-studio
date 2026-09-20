@@ -238,6 +238,29 @@ def test_edit_documents_allow_configured_embed_origins(
     assert editor.headers["content-security-policy"] == expected
 
 
+def test_studio_document_preserves_trusted_host_head(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook, programmatic=True)
+    _edit_mode(app)
+    marker = (
+        '<script data-host-bridge="1" data-parent-origin="http://localhost:5175">'
+        "window.__hostBridgeLoaded = true;"
+        "</script>"
+    )
+    mounted: Any = next(route.app for route in app.routes if isinstance(route, Mount))
+    mounted.state.html_head = marker
+
+    with TestClient(app) as client:
+        workspace = client.get("/studio/")
+
+    assert workspace.status_code == 200
+    assert marker in workspace.text
+    assert workspace.text.index(marker) < workspace.text.index("</head>")
+    assert workspace.headers["content-security-policy"] == (
+        "frame-ancestors 'self' http://localhost:5175"
+    )
+
+
 def test_direct_native_editor_enables_cell_alias_sync(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

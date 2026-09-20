@@ -36,6 +36,7 @@ class ServerContext:
     handle: ServerHandle = field(repr=False)
     internal_url: str | None = None
     access_token: str | None = field(default=None, repr=False)
+    trusted_html_head: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)

@@ -267,6 +267,11 @@ def studio_document(
                     title[f"{notebook.name} · Studio"],
                     link(rel="icon", href=public_url(base_url, "/favicon.ico")),
                     link(rel="stylesheet", href=f"{support_url}/assets/studio.css"),
+                    *(
+                        (Markup(context.trusted_html_head),)
+                        if context.trusted_html_head
+                        else ()
+                    ),
                 )
             ],
             body[

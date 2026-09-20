@@ -19,6 +19,10 @@ Notebook-local views live at:
 __marimo__/studio/<notebook-stem>/<view-name>/
 ```
 
+Configuration can select a portable relative `view_root` when the embedding
+host reserves `__marimo__/` for generated runtime state. Every catalog,
+mutation, build, and publication operation then uses that resolved root.
+
 The workspace writes one `.gitignore` for `.locks/` and every view's
 `.artifacts/`.
 
