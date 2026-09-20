@@ -1,0 +1,9 @@
+packages/marimo-studio/tests/cli/test_view_show_commands.py
+  ai_agent 29,61-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "30d381c765432c9b7ed9e74b7ba9d838e8c836a9",
+  "prompts": {}
+}
