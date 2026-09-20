@@ -124,17 +124,12 @@ try {
   }
   if (!stopping) exitCode = 1;
 } finally {
-  try {
-    const results = await Promise.allSettled([preparation.stop("SIGTERM"), workspace?.close()]);
-    const errors = results
-      .filter((result) => result.status === "rejected")
-      .map((result) => result.reason);
-    if (errors.length > 0) {
-      console.error(new AggregateError(errors, "Installed acceptance shutdown failed"));
-      exitCode = 1;
-    }
-  } catch (error) {
-    console.error(error);
+  const results = await Promise.allSettled([preparation.stop("SIGTERM"), workspace?.close()]);
+  const errors = results
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason);
+  if (errors.length > 0) {
+    console.error(new AggregateError(errors, "Installed acceptance shutdown failed"));
     exitCode = 1;
   }
   try {

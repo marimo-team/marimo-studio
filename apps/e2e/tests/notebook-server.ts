@@ -84,17 +84,15 @@ export const closeFailedNotebookServer = async (
   server: ServerHandle,
   { timeout }: NotebookServerTimeoutOptions = {},
 ): Promise<NotebookServerCleanupFailure | undefined> => {
-  let firstFailure: NotebookServerCleanupFailure | undefined;
   try {
     await server.close({ timeout });
     return undefined;
   } catch (error) {
-    firstFailure = {
+    return {
       message:
         error instanceof Error
           ? (error.stack ?? error.message)
           : "Notebook server cleanup failed with a non-error value.",
     };
   }
-  return firstFailure;
 };
