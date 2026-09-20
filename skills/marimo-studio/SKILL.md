@@ -286,6 +286,24 @@ browser interaction.
 `studio-view` sets a maximum width and page padding. Mount a component that
 defines its own page layout in a plain `<div id="app-shell"></div>`.
 
+### Edit the selected provider's source
+
+Use `view.inspect()` and the project's `AGENTS.md` to choose files before
+editing. Bundled starters use these entry points:
+
+| Provider | Page source | Styles |
+| --- | --- | --- |
+| Vanilla | `index.html` | Inline CSS or linked project CSS |
+| React | `src/App.tsx` | `src/style.css` |
+| Svelte | `src/App.svelte` | `src/style.css` |
+| Observable Notebook Kit | `src/index.html`, `src/page.tmpl` | `src/style.css` |
+
+React, Svelte, and Notebook Kit use Deno configuration and a frozen
+`deno.lock`. Run dependency changes from the view root with
+`deno add --frozen=false --save-exact <package>`, preserve the project's
+minimum dependency age, and commit `deno.json` and `deno.lock` together.
+Use `view.build()` to check the selected provider's types and build inputs.
+
 ### Choose visual direction
 
 Choose visual direction in this order:
@@ -429,7 +447,7 @@ await view.write(
 
 ### Save against the version you read
 
-Read each affected file immediately before writing it:
+Read each affected file immediately before writing it. For a Vanilla view:
 
 ```python
 document = await view.read("index.html")
