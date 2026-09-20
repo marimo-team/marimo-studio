@@ -175,7 +175,6 @@ Presentation code is grouped by responsibility:
 | `values/`         | `mo-value` hosts, browser properties, events, and shared reads                                           |
 | `runtime-config/` | Fetch, validate, stage, and commit runtime configuration                                                 |
 | `runtime/`        | Runtime mount, portals, values, controls, query, and transport                                           |
-| `view-styles/`    | Scoped utility generation and foundation styles                                                          |
 
 `PresentationRevisionController` owns every artifact document and runtime
 transition. Add a transition through that controller so cancellation, staging,

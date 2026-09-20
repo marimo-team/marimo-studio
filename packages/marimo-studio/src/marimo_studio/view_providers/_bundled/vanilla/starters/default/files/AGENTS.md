@@ -47,6 +47,39 @@ needs row objects.
 
 ## Add dependencies
 
+The starter loads two pinned browser dependencies from jsDelivr:
+
+- [UnoCSS runtime](https://unocss.dev/integrations/runtime) `66.10.5` with its
+  default Wind3 preset. Use utility classes directly in authored HTML. The
+  runtime observes DOM changes and generates matching styles in the browser.
+- [Iconify Icon web component](https://iconify.design/docs/iconify-icon/)
+  `3.0.3`. Add named icons with the registered `iconify-icon` element:
+
+```html
+<button type="button" class="inline-flex items-center gap-2">
+  <iconify-icon inline icon="lucide:download" aria-hidden="true"></iconify-icon>
+  Download
+</button>
+```
+
+The scripts and Iconify API requests require browser network access and a
+hosting content security policy that admits their origins. Pin new versions in
+`index.html` when updating either dependency.
+
+Use these small defaults before adding another styling or icon dependency:
+
+- Compose ordinary layout, spacing, responsive behavior, typography, borders,
+  and states with UnoCSS utilities in the HTML.
+- Keep authored CSS for the view's tokens, projection variables, complex
+  selectors, data visualizations, keyframes, and print behavior.
+- Use Iconify for interface icons. Keep repeated SVG markup and decorative
+  Unicode characters out of controls. Keep a visible label or an accessible
+  name on interactive controls.
+
+Aim for a short stylesheet whose remaining rules express the view's own visual
+system. Avoid copying utility-equivalent declarations into large selector
+blocks.
+
 Import browser-ready ESM modules at the top of the module script. Prefer a
 versioned URL for maintained project source:
 

@@ -1,5 +1,3 @@
-@import "../view-styles/foundation.css";
-
 #marimo-runtime-root {
   display: none;
 }
@@ -11,8 +9,7 @@
 }
 
 [data-marimo-studio-diagnostic],
-[data-marimo-studio-runtime-diagnostic],
-[data-marimo-studio-style-error] {
+[data-marimo-studio-runtime-diagnostic] {
   background: Canvas;
   border: 1px solid color-mix(in srgb, #b42318 45%, transparent);
   border-radius: 4px;

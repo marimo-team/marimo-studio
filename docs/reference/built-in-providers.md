@@ -47,6 +47,12 @@ index.html
 
 Studio adds `view.toml` to the view project and Source catalog.
 
+The starter loads pinned UnoCSS runtime and Iconify Icon web component scripts
+from jsDelivr. UnoCSS utility classes are available in authored HTML, and
+`iconify-icon` elements render named icons. Serving the page requires network
+access to jsDelivr, and Iconify API icons require access to their configured API
+origin. The hosting content security policy must admit those origins.
+
 `index.html` contains one `<marimo-cell>` for each enabled notebook cell that
 static inspection determines may display output. `AGENTS.md` describes the
 view-authoring contract for a coding agent working in Source.

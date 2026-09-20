@@ -12,7 +12,6 @@ import {
   RuntimeConfigRequestError,
   setSupportUrl,
 } from "../runtime-config/index.ts";
-import { stageViewStyles, type StagedViewStyles } from "../view-styles/runtime.ts";
 import { documentBase, resolveDocumentBase } from "./base.ts";
 import { samePresentationRevision, type PresentationTarget } from "./presentation-refresh.ts";
 import { presentationRefreshUrl, presentationRenewalSupportUrl } from "./refresh-url.ts";
@@ -96,7 +95,6 @@ export class DocumentRevisionAdapter {
     };
     onTarget(target);
     let stagedStyles: StagedStyles | undefined;
-    let stagedViewStyles: StagedViewStyles | undefined;
     let stagedShell: ReturnType<typeof stageShellSwap> | undefined;
     let previousShell: HTMLElement | undefined;
     let shellMorphed = false;
@@ -213,7 +211,6 @@ export class DocumentRevisionAdapter {
           reloadDocument: true,
         };
       }
-      stagedViewStyles = await stageViewStyles(next);
       stagedStyles = await this.styles.stage(nextDocument, nextDocumentUrl, signal);
       if (shellChanged && !morphShell) {
         stagedShell = stageShellSwap(
@@ -244,7 +241,6 @@ export class DocumentRevisionAdapter {
         document.title = nextDocument.title;
         documentBase.set(nextBase);
         stagedStyles.commit();
-        stagedViewStyles.commit();
         // Commit projection owners against the new document before the controller
         // rotates the capability-bound server transport.
         flushSync(() => {
@@ -273,7 +269,6 @@ export class DocumentRevisionAdapter {
               restore(() => morphAuthoredShell(current, shell));
             }
             restore(() => stagedShell?.rollback());
-            restore(() => stagedViewStyles?.rollback());
             restore(() => stagedStyles?.rollback());
             restore(() => setSupportUrl(previousSupportUrl));
             restore(() => commitRuntimeConfig(previousConfig));
@@ -295,12 +290,10 @@ export class DocumentRevisionAdapter {
         throw error;
       }
       stagedShell?.finalize();
-      stagedViewStyles.finalize();
       stagedStyles.finalize();
       this.documentUrl = nextDocumentUrl;
       this.authoredShell = nextAuthoredShell;
       stagedStyles = undefined;
-      stagedViewStyles = undefined;
       stagedShell = undefined;
       scrollToFragment(historyUrl);
       return {
@@ -310,7 +303,6 @@ export class DocumentRevisionAdapter {
       };
     } finally {
       stagedStyles?.discard();
-      stagedViewStyles?.discard();
       stagedShell?.discard();
     }
   }

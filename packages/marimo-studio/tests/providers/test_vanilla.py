@@ -41,6 +41,22 @@ def test_vanilla_starter_exposes_its_generated_notebook_cell(tmp_path: Path) -> 
     ]
 
 
+def test_vanilla_starter_loads_provider_owned_browser_dependencies(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    source = project.root.joinpath("index.html").read_text(encoding="utf-8")
+
+    assert (
+        '<script src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/'
+        'uno.global.js"></script>' in source
+    )
+    assert (
+        '<script src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/'
+        'dist/iconify-icon.min.js"></script>' in source
+    )
+
+
 def test_vanilla_starter_builds_without_possible_output_cells(tmp_path: Path) -> None:
     tmp_path.joinpath("analysis.py").write_text(
         no_display_notebook_source(),
@@ -210,8 +226,8 @@ def test_vanilla_rejects_nested_projection_hosts(tmp_path: Path) -> None:
     source = project.root / "index.html"
     source.write_text(
         source.read_text().replace(
-            '<section class="view-results"',
-            '<section mo-value="a" class="view-results"',
+            '<section class="grid gap-6"',
+            '<section mo-value="a" class="grid gap-6"',
         ),
         encoding="utf-8",
     )

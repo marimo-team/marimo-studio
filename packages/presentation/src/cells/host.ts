@@ -1,7 +1,10 @@
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
 import { hostsInDocumentOrder } from "../projections/host-order.ts";
-import { PROJECTION_SITE_ATTRIBUTE } from "../projections/identity.ts";
+import {
+  PROJECTION_PRESERVE_ATTRIBUTE,
+  PROJECTION_SITE_ATTRIBUTE,
+} from "../projections/identity.ts";
 import { resetProjectionHostMetadata } from "../projections/instances.ts";
 
 export type CellHostState = "connecting" | "loading" | "stale" | "ready" | "missing" | "error";
@@ -22,7 +25,7 @@ const MEASURED_HEIGHT_PROPERTY = "--_marimo-cell-measured-height";
 const PRESERVED_ID_PREFIX = "marimo-studio-cell-";
 const RUNTIME_ATTRIBUTES = new Set([
   "aria-busy",
-  "data-hx-preserve",
+  PROJECTION_PRESERVE_ATTRIBUTE,
   "data-marimo-diagnostic-code",
   "data-marimo-diagnostic-hint",
   "data-marimo-diagnostic-message",
@@ -89,8 +92,8 @@ const writeMeasuredHeight = (key: string, height: number) => {
   try {
     sessionStorage.setItem(`marimo-studio:height:${key}`, String(height));
   } catch {
-    // Browser storage is optional. The in-memory value still protects HTMX
-    // remounts for the current document.
+    // Browser storage is optional. The in-memory value still protects remounts
+    // for the current document.
   }
 };
 
@@ -245,7 +248,7 @@ export const prepareCellHost = (host: Element) => {
     }
   }
   if (host.id) {
-    host.setAttribute("data-hx-preserve", "");
+    host.setAttribute(PROJECTION_PRESERVE_ATTRIBUTE, "");
   }
 };
 
@@ -277,20 +280,22 @@ export const syncProjectionHostAttributes = (live: HTMLElement, source: Element)
 };
 
 export const syncPreservedCellHosts = (source: ParentNode, live: Document): void => {
-  source.querySelectorAll<HTMLElement>("marimo-cell[data-hx-preserve][id]").forEach((host) => {
-    if (!isArtifactProjectionHost(host)) {
-      return;
-    }
-    const preserved = live.getElementById(host.id);
-    if (
-      preserved?.localName === "marimo-cell" &&
-      preserved !== host &&
-      isArtifactProjectionHost(preserved)
-    ) {
-      syncProjectionHostAttributes(preserved, host);
-      prepareCellHost(preserved);
-    }
-  });
+  source
+    .querySelectorAll<HTMLElement>(`marimo-cell[${PROJECTION_PRESERVE_ATTRIBUTE}][id]`)
+    .forEach((host) => {
+      if (!isArtifactProjectionHost(host)) {
+        return;
+      }
+      const preserved = live.getElementById(host.id);
+      if (
+        preserved?.localName === "marimo-cell" &&
+        preserved !== host &&
+        isArtifactProjectionHost(preserved)
+      ) {
+        syncProjectionHostAttributes(preserved, host);
+        prepareCellHost(preserved);
+      }
+    });
 };
 
 export const registerMarimoCellElement = () => {

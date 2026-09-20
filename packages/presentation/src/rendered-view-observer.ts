@@ -17,7 +17,6 @@ import { toBrowserDiagnostic } from "./readiness-diagnostics.ts";
 import { type ReadinessSnapshot, readiness, type RuntimeConnectionState } from "./readiness.ts";
 import { renderedViewDiagnostics, renderedViewIdentity } from "./rendered-view-state.ts";
 import { getRuntimeConfig } from "./runtime-config/index.ts";
-import { viewStyleDiagnostic } from "./view-styles/runtime.ts";
 
 interface MarimoStudioApi {
   ready: () => Promise<void>;
@@ -134,7 +133,7 @@ const publish = (snapshot: ReadinessSnapshot, previous: ReadinessSnapshot): void
 };
 
 const evaluate = (): void => {
-  readiness.setHosts([...projectionHosts.states(), ...(viewStyleDiagnostic() ? ["error"] : [])]);
+  readiness.setHosts(projectionHosts.states());
 };
 
 export const refreshRenderedView = (): void => {

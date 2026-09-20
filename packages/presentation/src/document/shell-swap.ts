@@ -1,5 +1,3 @@
-import htmx from "htmx.org";
-
 import type { StagedHostPreservation } from "../projections/host-runtime.ts";
 
 export const stageShellSwap = (
@@ -40,11 +38,6 @@ export const stageShellSwap = (
       }
       current.remove();
       committed = true;
-      try {
-        htmx.process(next);
-      } catch {
-        // The committed document remains usable when optional htmx setup fails.
-      }
     },
     rollback,
     finalize() {

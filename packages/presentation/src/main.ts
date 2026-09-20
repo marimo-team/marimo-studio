@@ -3,7 +3,6 @@ import type { RuntimeRegistry } from "@marimo-studio/runtime";
 
 import { bootstrapSession } from "@marimo-studio/marimo-frontend/session-bootstrap";
 import { publicNotebookQuery, UNFRAMED_QUERY_PARAM } from "@marimo-studio/protocol/query";
-import htmx from "htmx.org";
 
 import { documentBase } from "./document/base";
 import {
@@ -53,18 +52,15 @@ import {
   RuntimeMountCancelledError,
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator";
-import { initializeViewStyles } from "./view-styles/runtime";
 
 declare global {
   interface Window {
-    htmx: typeof htmx;
     __MARIMO_STUDIO_SESSION_ID__?: string;
     __MARIMO_STUDIO_RUNTIME_STATE__?: "booting" | "failed" | "mounted";
   }
 }
 
 const browser = window;
-browser.htmx = htmx;
 const viewBaseUrl = document.baseURI;
 // Marimo's server client points <base> at the API root during health checks.
 // Keep relative authored assets anchored to the active view directory.
@@ -257,10 +253,6 @@ const loadPresentationRuntimeConfig = async (
 
 const bootstrap = async (registry: RuntimeRegistry, signal = documentLifetime.signal) => {
   const browserSessionReplay = new BrowserSessionReplay();
-  await initializeViewStyles(undefined, signal);
-  if (signal.aborted) {
-    throw signal.reason;
-  }
   const mount = getMountConfig();
   const startup = await bootstrapPresentationSession({
     bootstrap: bootstrapSession,

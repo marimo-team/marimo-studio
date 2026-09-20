@@ -1,48 +1,52 @@
 ---
 title: Style a view
-description: Use authored CSS, scoped utility classes, theme tokens, and projection variables in a Studio view.
+description: Use authored CSS, theme tokens, and projection variables in a Studio view.
 ---
 
 # Style a view
 
-Start with authored CSS in the view project. Studio also generates scoped
-utility styles for classes under `#app-shell`, including the classes used by
-the bundled starters.
+The view project owns page layout and visual styling. Add inline styles to a
+Vanilla document or import a stylesheet from the selected provider's browser
+entry point.
 
 ```html
-<main id="app-shell" class="studio-view">
-  <p class="studio-eyebrow">Quarterly review</p>
-  <section class="studio-card p-6">
+<main id="app-shell" class="report">
+  <p class="report-kicker">Quarterly review</p>
+  <section class="summary-card">
     <marimo-output value="revenue_chart"></marimo-output>
   </section>
 </main>
 ```
 
-The built-in shortcuts are:
+```css
+.report,
+.report-kicker,
+.summary-card {
+  box-sizing: border-box;
+}
 
-| Class            | Purpose                                   |
-| ---------------- | ----------------------------------------- |
-| `studio-view`    | Responsive centered page container        |
-| `studio-card`    | Card surface with theme border and colors |
-| `studio-button`  | Accessible button treatment               |
-| `studio-eyebrow` | Small uppercase section label             |
+.report {
+  width: min(100% - 2rem, 72rem);
+  margin-inline: auto;
+  padding-block: clamp(2rem, 7vw, 6rem);
+}
 
-`studio-view` sets a maximum width and page padding. Use a plain
-`<div id="app-shell"></div>` when the component defines its own page layout.
+.report-kicker {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
 
-[Wind4](https://unocss.dev/presets/wind4) utility classes, a compact convention
-for composing CSS from class names, include `grid`, `gap-6`, `p-6`, `text-sm`,
-and `lg:grid-cols-3`. They use the same scoped generator. Studio observes class
-changes inside `#app-shell` and refreshes the generated CSS for dynamic
-content.
-
-::: warning Browser support
-View utilities require the CSS
-[`@scope`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@scope)
-rule, which limits selectors to a chosen part of the document. In a browser
-without that feature, authored CSS and notebook outputs remain available while
-Studio reports a style diagnostic.
-:::
+.summary-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+```
 
 ## Use theme variables
 
@@ -63,9 +67,36 @@ body {
 }
 ```
 
-Utilities also use `--primary`, `--accent`, `--muted`, `--ring`,
-`--heading-font`, `--monospace-font`, and `--radius`. Define project-owned CSS
-variables beside these tokens when the view needs a distinct visual system.
+The presentation theme also defines `--primary`, `--accent`, `--muted`,
+`--ring`, `--heading-font`, `--monospace-font`, and `--radius`. Define
+project-owned CSS variables beside these tokens when the view needs a distinct
+visual system.
+
+## Use Vanilla browser helpers
+
+The bundled Vanilla starter loads a pinned UnoCSS runtime and the Iconify Icon
+web component from jsDelivr. Add utility classes directly to Vanilla HTML:
+
+```html
+<section class="grid gap-6 md:grid-cols-2">
+  <article class="rounded-lg border border-[var(--border)] p-6">
+    <marimo-output value="revenue_chart"></marimo-output>
+  </article>
+</section>
+```
+
+Add a named icon with the registered web component:
+
+```html
+<button type="button" class="inline-flex items-center gap-2">
+  <iconify-icon inline icon="lucide:download" aria-hidden="true"></iconify-icon>
+  Download
+</button>
+```
+
+These scripts require network access to jsDelivr. Icon data loaded by name also
+requires access to the configured Iconify API. Admit those origins in the
+hosting content security policy.
 
 ## Style projected cells and output
 
@@ -114,22 +145,6 @@ marimo-output[value="revenue_chart"] {
 
 Set `data-skeleton="none"` on a cell or output host when an empty loading slot
 is the intended layout.
-
-## Add icons
-
-Use an [Iconify](https://iconify.design/docs/iconify-icon/) custom element,
-which renders an icon selected by collection and name, inside `#app-shell`:
-
-```html
-<button class="studio-button" type="button">
-  <iconify-icon icon="lucide:download" aria-hidden="true"></iconify-icon>
-  Export
-</button>
-```
-
-Studio loads the Iconify element when it finds an `iconify-icon`. Icon data can
-require network access, so allow the chosen icon source in the hosting content
-security policy or package the icon locally.
 
 Check the page in Preview at desktop and narrow widths. Use [Manage view
 source](manage-source.md) for project-owned CSS files and [Place notebook

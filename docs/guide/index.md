@@ -24,8 +24,8 @@ you need to do.
 
 - [Manage view source](manage-source.md) explains source documents, build
   inputs, manifests, conflicts, and recovery.
-- [Style a view](styling.md) covers authored CSS, utility classes, projected
-  Marimo output, loading states, and icons.
+- [Style a view](styling.md) covers authored CSS, theme tokens, projected
+  Marimo output, and loading states.
 - [Choose a frontend](frontend-options.md) compares Vanilla HTML, React,
   Reveal.js, Svelte, and Observable Notebook Kit starters.
 - [Author with a coding agent](coding-agents.md) gives agents the same

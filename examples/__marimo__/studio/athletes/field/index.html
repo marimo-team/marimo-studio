@@ -8,27 +8,29 @@
     />
     <meta name="theme-color" content="#060606" />
     <title>Rio 2016 athlete field</title>
+    <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/dist/iconify-icon.min.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" crossorigin="anonymous" />
     <link rel="stylesheet" href="style.css" crossorigin="anonymous" />
   </head>
   <body id="app-shell" class="shower" data-mode="roster">
     <canvas id="field-canvas" data-marimo-lens-inputs="athlete-data sport-selection" aria-hidden="true"></canvas>
 
-    <header class="topbar">
+    <header class="topbar fixed inset-x-0 top-0 z-10 grid items-center">
       <a class="artifact-title" href="#opening">Rio 2016 / The Field</a>
-      <nav class="view-nav" aria-label="Athlete views">
-        <a href="../overview/index.html">Overview</a>
-        <a href="../explorer/index.html">Explorer</a>
-        <a href="../field/index.html" aria-current="page">Field</a>
+      <nav class="view-nav flex gap-[clamp(0.8rem,2vw,1.8rem)]" aria-label="Athlete views">
+        <a class="inline-flex min-h-11 items-center gap-2" href="../overview/index.html"><iconify-icon inline icon="lucide:layout-dashboard" aria-hidden="true"></iconify-icon>Overview</a>
+        <a class="inline-flex min-h-11 items-center gap-2" href="../explorer/index.html"><iconify-icon inline icon="lucide:search" aria-hidden="true"></iconify-icon>Explorer</a>
+        <a class="inline-flex min-h-11 items-center gap-2" href="../field/index.html" aria-current="page"><iconify-icon inline icon="lucide:orbit" aria-hidden="true"></iconify-icon>Field</a>
       </nav>
       <span class="data-status" id="data-status" role="status"
         >Loading roster</span
       >
     </header>
 
-    <main class="slides">
+    <main class="slides relative z-2">
       <section class="slide" id="opening" data-mode="roster">
-        <div class="slide-copy">
+        <div class="slide-copy max-w-[38rem] max-[760px]:max-w-[34rem]">
           <p class="chapter">Rio de Janeiro · 05 August 2016</p>
           <h2>
             <strong mo-value="games_summary.athletes"></strong> arrived in Rio.
@@ -39,7 +41,7 @@
             delegations across
             <strong mo-value="games_summary.sports"></strong> sports.
           </p>
-          <ul class="facts">
+          <ul class="facts flex list-none flex-wrap gap-x-[2.4rem] gap-y-4 max-[760px]:gap-x-[1.6rem] max-[760px]:gap-y-[0.8rem]">
             <li>
               <strong mo-value="games_summary.women"></strong>
               <span>Women</span>
@@ -49,7 +51,7 @@
               <span>Men</span>
             </li>
           </ul>
-          <div class="legend" role="list" aria-label="Point color legend">
+          <div class="legend flex items-center gap-[1.2rem]" role="list" aria-label="Point color legend">
             <span role="listitem">Roster</span>
             <span class="medalist" role="listitem">Medalist</span>
           </div>
@@ -57,7 +59,7 @@
       </section>
 
       <section class="slide" id="sports" data-mode="sports">
-        <div class="slide-copy">
+        <div class="slide-copy max-w-[38rem] max-[760px]:max-w-[34rem]">
           <p class="chapter">The sporting field</p>
           <h2>
             <strong mo-value="games_summary.sports"></strong> centers of
@@ -72,7 +74,7 @@
           <div class="filter-control">
             <marimo-cell name="sport_control"></marimo-cell>
           </div>
-          <ul class="facts selection-facts" aria-label="Selected sport summary">
+          <ul class="facts selection-facts flex list-none flex-wrap gap-x-[2.4rem] gap-y-4 max-[760px]:gap-x-[1.6rem] max-[760px]:gap-y-[0.8rem]" aria-label="Selected sport summary">
             <li>
               <strong mo-value="athlete_summary.athletes"></strong>
               <span>Athletes</span>
@@ -90,7 +92,7 @@
       </section>
 
       <section class="slide" id="podium" data-mode="medals">
-        <div class="slide-copy">
+        <div class="slide-copy max-w-[38rem] max-[760px]:max-w-[34rem]">
           <p class="chapter">The podium</p>
           <h2>The field narrows <strong>fast.</strong></h2>
           <p class="lede">
@@ -102,7 +104,7 @@
             >
             of the roster.
           </p>
-          <ul class="facts">
+          <ul class="facts flex list-none flex-wrap gap-x-[2.4rem] gap-y-4 max-[760px]:gap-x-[1.6rem] max-[760px]:gap-y-[0.8rem]">
             <li>
               <strong mo-value="games_summary.medal_awards"></strong>
               <span>Athlete medal awards</span>
@@ -116,7 +118,7 @@
       </section>
 
       <section class="slide" id="profiles" data-mode="profile">
-        <div class="slide-copy">
+        <div class="slide-copy max-w-[38rem] max-[760px]:max-w-[34rem]">
           <p class="chapter">Body profiles</p>
           <h2>There is no single Olympic <strong>body.</strong></h2>
           <p class="lede">
@@ -130,7 +132,7 @@
               ><span mo-value="games_summary.median_weight"></span> kg</strong
             >.
           </p>
-          <ul class="facts">
+          <ul class="facts flex list-none flex-wrap gap-x-[2.4rem] gap-y-4 max-[760px]:gap-x-[1.6rem] max-[760px]:gap-y-[0.8rem]">
             <li>
               <strong mo-value="games_summary.profile_count"></strong>
               <span>Complete profiles</span>
@@ -158,12 +160,12 @@
       <span id="athlete-meta" data-marimo-lens-inputs="athlete-data" data-marimo-lens-label="Athlete profile"></span>
     </aside>
 
-    <footer class="controls" aria-label="Presentation controls">
+    <footer class="controls fixed inset-x-0 bottom-0 z-10 grid items-center" aria-label="Presentation controls">
       <span class="slide-count" id="slide-count">01 / 04</span>
       <span class="key-guide"
         >Arrow keys navigate · F fills screen · Esc shows all</span
       >
-      <div class="control-actions">
+      <div class="control-actions flex items-center gap-2">
         <span
           class="fullscreen-status"
           id="fullscreen-status"

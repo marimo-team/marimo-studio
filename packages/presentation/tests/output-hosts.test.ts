@@ -93,7 +93,7 @@ test("the next duplicate output host becomes refresh-preserved when its owner le
   await Promise.resolve();
 
   expect(second.id).toBe("marimo-studio-output-report");
-  expect(second.hasAttribute("data-hx-preserve")).toBe(true);
+  expect(second.hasAttribute("data-marimo-studio-preserve")).toBe(true);
 });
 
 test("output host ownership follows the composed document lifecycle", async () => {

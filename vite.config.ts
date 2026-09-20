@@ -33,7 +33,6 @@ const studioPackageRestrictedImports = [
   "../**/marimo-frontend/**",
   "../**/presentation/**",
   "../**/protocol/**",
-  "htmx.org",
 ];
 
 export default defineConfig({
@@ -128,7 +127,6 @@ export default defineConfig({
                 "@marimo-studio/studio",
                 "@marimo-studio/studio/*",
                 "@marimo-team/*",
-                "htmx.org",
                 "jotai",
                 "react",
                 "react-dom",
@@ -203,7 +201,6 @@ export default defineConfig({
                 "@marimo-team/frontend/*",
                 "@marimo-team/marimo-export",
                 "@marimo-team/marimo-export/*",
-                "htmx.org",
                 "jotai",
                 "node:*",
                 "react",

@@ -433,7 +433,7 @@ if __name__ == "__main__":
     assert "ValueError: bad input" in failure.message
 
 
-def test_runtime_check_ignores_plain_htmx_routes(
+def test_runtime_check_ignores_plain_document_routes(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -442,9 +442,7 @@ def test_runtime_check_ignores_plain_htmx_routes(
     _shell(
         studio,
         "dashboard",
-        '<button hx-get="./_marimo-studio/views/dashboard/cells/result">'
-        "Load result"
-        "</button>",
+        '<a href="./_marimo-studio/views/dashboard/cells/result">Load result</a>',
     )
     captured: dict[str, object] = {}
 

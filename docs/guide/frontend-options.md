@@ -47,7 +47,9 @@ marimo-studio view create report --target analysis.py
 
 The starter creates `index.html` and `AGENTS.md`. It populates the document
 with the notebook cells that may display output and supplies an inline
-`observeMarimoValue` adapter.
+`observeMarimoValue` adapter. The document loads pinned UnoCSS runtime and
+Iconify Icon web component scripts from jsDelivr for utility styling and named
+icons.
 
 Keep CSS and JavaScript inline for a compact page, or reference local leaf
 files directly:

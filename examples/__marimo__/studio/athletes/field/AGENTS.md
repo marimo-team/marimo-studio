@@ -12,6 +12,11 @@ browser dependencies from exact HTTPS ESM URLs and keep the
 `mo-value="athlete_facts"` host in the entry document so Studio can authorize
 the projection.
 
+The entry document loads the pinned UnoCSS runtime and Iconify web component.
+Use UnoCSS for ordinary layout and spacing that stays readable in the markup,
+and use Iconify for navigation icons. Keep `style.css` focused on the point
+field, presentation modes, visual tokens, responsive composition, and motion.
+
 The four chapters reuse the same points:
 
 1. the full roster on a sphere

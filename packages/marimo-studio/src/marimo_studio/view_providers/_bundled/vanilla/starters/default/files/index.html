@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>__NOTEBOOK_NAME_HTML__ · __VIEW_NAME_HTML__</title>
+    <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/dist/iconify-icon.min.js"></script>
     <style>
       body {
         margin: 0;
@@ -12,19 +14,27 @@
         font-family: var(--text-font);
       }
 
-      .view-results {
-        display: grid;
-        gap: 1.5rem;
+      .view-header {
+        margin-bottom: 3rem;
       }
+
+      .view-header p {
+        color: var(--muted-foreground);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
     </style>
   </head>
   <body>
-    <main id="app-shell" class="studio-view">
+    <main id="app-shell" class="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <header class="view-header">
-        <p class="studio-eyebrow">__NOTEBOOK_NAME_HTML__</p>
+        <p>__NOTEBOOK_NAME_HTML__</p>
         <h1>__VIEW_HEADING_HTML__</h1>
       </header>
-      <section class="view-results" aria-label="Notebook results">__NOTEBOOK_CELLS_HTML__</section>
+      <section class="grid gap-6" aria-label="Notebook results">__NOTEBOOK_CELLS_HTML__</section>
     </main>
     <script type="module">
       /** Subscribe an explicit `mo-value` host to current values and later updates. */
