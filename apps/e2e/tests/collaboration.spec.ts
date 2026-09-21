@@ -60,7 +60,8 @@ const holdDashboardSourceWrites = async (page: Page): Promise<() => Promise<void
     await expect.poll(() => claimed, { timeout: 65_000 }).toBe(true);
     release();
     await finished;
-    await page.unroute(sourceRoute, handler);
+    // Keep the pass-through route until the page closes: disabling interception
+    // while publication starts source reads can leave a Chromium request paused.
   };
 };
 
@@ -433,7 +434,7 @@ test("shares publication and recovery across two Studio sessions", async ({
       await recoverRequestAbort(supersededConfigReads);
     } finally {
       await secondDiagnostics.close();
-      expect(secondDiagnostics.messages, "unexpected second-client diagnostics").toEqual([]);
+      expect.soft(secondDiagnostics.messages, "unexpected second-client diagnostics").toEqual([]);
       await secondContext.close();
     }
 
