@@ -1,0 +1,107 @@
+packages/studio/src/app/workspace-event-coordinator.ts
+  s_8480d3a2433978::t_0fcd844399aa70 318
+packages/presentation/src/document/query-sync.ts
+  s_8480d3a2433978::t_3b9aa5fa35531e 47,83,87,91-92,95-97,100
+  s_8480d3a2433978::t_d02413c3abe883 98-99
+packages/presentation/tests/status.test.ts
+  s_8480d3a2433978::t_dfd1895ee764a4 3,64-86
+apps/e2e/tests/authoring-test-support.ts
+  s_8480d3a2433978::t_bd71dc62bfd7a9 2,5-8,64-104
+packages/presentation/tests/readiness.test.ts
+  s_8480d3a2433978::t_2eaf31b238315b 286-307
+packages/protocol/tests/runtime-config.test.ts
+  s_8480d3a2433978::t_346bb5d639fd75 227-228
+packages/marimo-studio/src/marimo_studio/_server/presentation/service.py
+  s_8480d3a2433978::t_bb55767f516be3 431-433,446-448,710-712,732-734,743-744
+  s_8480d3a2433978::t_bd71dc62bfd7a9 338
+packages/presentation/src/main.ts
+  s_8480d3a2433978::t_3b9aa5fa35531e 75
+packages/presentation/tests/runtime-config.test.ts
+  s_8480d3a2433978::t_3b9aa5fa35531e 24-32
+apps/e2e/installed-tests/installed-wheel.spec.ts
+  s_8480d3a2433978::t_82da0b7b433a5e 216-231,235-239
+packages/presentation/src/dev-reload.ts
+  s_8480d3a2433978::t_0fcd844399aa70 162
+packages/studio/src/features/preview/deck.ts
+  s_8480d3a2433978::t_9a72807080859e 84-87,103,196-197,294,309,411-412,438-441,473,476,485,555-560,715,729
+packages/studio/tests/admission.test.ts
+  s_8480d3a2433978::t_0fcd844399aa70 515
+  s_8480d3a2433978::t_dfd1895ee764a4 504-514,516-519
+packages/marimo-studio/tests/server/test_runtime_catalog.py
+  s_8480d3a2433978::t_346bb5d639fd75 167-168
+packages/studio/tests/preview-deck-diagnostics.test.ts
+  s_8480d3a2433978::t_d02413c3abe883 393-435
+  s_8480d3a2433978::t_2eaf31b238315b 392
+packages/presentation/src/readiness-diagnostics.ts
+  s_8480d3a2433978::t_3b9aa5fa35531e 94
+packages/marimo-studio/tests/agent/test_preview_urls.py
+  s_8480d3a2433978::t_83af07636eda53 136-137
+packages/marimo-studio/tests/server/test_preview_urls.py
+  s_8480d3a2433978::t_0fcd844399aa70 136
+  s_8480d3a2433978::t_8b02f3a9b7ed6a 127,130,135
+  s_8480d3a2433978::t_83af07636eda53 128-129,131-132,555-570,573-591
+packages/presentation/tests/rendered-view-status.test.ts
+  s_8480d3a2433978::t_346bb5d639fd75 27-29
+packages/presentation/tests/view-navigation.test.ts
+  s_8480d3a2433978::t_dfd1895ee764a4 301,303-320,322-324
+  s_8480d3a2433978::t_75c0ab99d57ac9 302,321
+  s_8480d3a2433978::t_346bb5d639fd75 253,262-265
+packages/presentation/src/diagnostics.ts
+  s_8480d3a2433978::t_3b9aa5fa35531e 10
+packages/presentation/tests/query-sync.test.ts
+  s_8480d3a2433978::t_3b9aa5fa35531e 35,46,60,71,81,92,132,147,157,172
+  s_8480d3a2433978::t_83af07636eda53 138
+  s_8480d3a2433978::t_dfd1895ee764a4 176-179,181-186,188
+  s_8480d3a2433978::t_7cca5598f2630c 180,187
+packages/marimo-studio/src/marimo_studio/_server/presentation/access.py
+  s_8480d3a2433978::t_bb55767f516be3 170-172
+packages/marimo-studio/tests/artifacts/test_build_lifecycle.py
+  s_8480d3a2433978::t_d02413c3abe883 887-889
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_8480d3a2433978::t_346bb5d639fd75 468-469
+packages/presentation/src/document/view-navigation.ts
+  s_8480d3a2433978::t_346bb5d639fd75 35
+  s_8480d3a2433978::t_75c0ab99d57ac9 33-34
+packages/presentation/src/document/status.ts
+  s_8480d3a2433978::t_3b9aa5fa35531e 21-22,57-61,66
+apps/e2e/tests/authoring.spec.ts
+  s_8480d3a2433978::t_ce5e7e85b5518a 124
+  s_8480d3a2433978::t_7cca5598f2630c 121-123,125-138,158-169
+  s_8480d3a2433978::t_d02413c3abe883 563-569
+skills/marimo-studio/SKILL.md
+  s_8480d3a2433978::t_d02413c3abe883 711-712
+packages/protocol/tests/preview-messages.test.ts
+  s_8480d3a2433978::t_dfd1895ee764a4 337-352
+packages/studio/src/features/preview/admission.ts
+  s_8480d3a2433978::t_2eaf31b238315b 321
+  s_8480d3a2433978::t_3b9aa5fa35531e 438,465
+packages/protocol/src/preview-messages.ts
+  s_8480d3a2433978::t_346bb5d639fd75 180-181
+packages/marimo-studio/tests/cli/test_preview_command.py
+  s_8480d3a2433978::t_d02413c3abe883 17-21
+  s_8480d3a2433978::t_83af07636eda53 12-15,27,34-35,50,52-53
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  s_8480d3a2433978::t_346bb5d639fd75 148-149
+packages/studio/tests/workspace-event-coordinator.test.ts
+  s_8480d3a2433978::t_6d2a0f56ff3519 402-408
+  s_8480d3a2433978::t_2eaf31b238315b 387-392,414,419-421
+  s_8480d3a2433978::t_d02413c3abe883 393-401,409-413,415-418
+apps/e2e/unit/request-abort-window.test.ts
+  s_8480d3a2433978::t_346bb5d639fd75 21,25,41,59,68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b5a193a83527505d829bb43d261fbad93c9d45f0",
+  "prompts": {},
+  "sessions": {
+    "s_8480d3a2433978": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c513-0b3d-7402-aaac-1eea70e43dcf",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
