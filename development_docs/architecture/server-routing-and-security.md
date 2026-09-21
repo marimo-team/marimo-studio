@@ -164,6 +164,9 @@ no-store, `nosniff`, and same-origin referrer policy. The native editor bridge
 and outer edit documents use one `SecurityPolicy` for `frame-ancestors`. The
 policy always includes `'self'` and may include canonical origins loaded from
 `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` during server composition.
+Trusted host scripts carried in Marimo's server-level `html_head` remain in the
+outer Studio document. Their bounded `data-parent-origin` declarations extend
+the same policy for host-managed embedding without importing host code.
 
 ## Session admission
 

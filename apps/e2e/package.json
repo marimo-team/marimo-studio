@@ -19,7 +19,6 @@
     "@marimo-studio/protocol": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
-    "portless": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "zod": "catalog:"

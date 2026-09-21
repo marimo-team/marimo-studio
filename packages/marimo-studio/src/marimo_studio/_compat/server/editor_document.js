@@ -199,7 +199,14 @@ export function createStudioDocumentRequests(document, network) {
         document.reportSave(generation, true);
         return result;
       } catch (error) {
-        document.reportSave(generation, false);
+        let handedOff = false;
+        try {
+          handedOff = (await network.handoffAccepted?.()) === true;
+        } catch {
+          // An unavailable browser location is not evidence of a completed save.
+        }
+        document.reportSave(generation, handedOff);
+        if (handedOff) return;
         throw error;
       }
     },

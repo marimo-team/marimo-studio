@@ -1,8 +1,8 @@
-import type { IncomingMessage } from "node:http";
 import type { Socket } from "node:net";
+import type { Duplex } from "node:stream";
 
 import { createHash, randomUUID } from "node:crypto";
-import { createProxyServer, type ProxyServer } from "portless";
+import { Agent, createServer, request, type IncomingMessage, type ServerResponse } from "node:http";
 import { z } from "zod";
 
 export const E2E_RUN_ID_ENV = "MARIMO_STUDIO_E2E_RUN_ID";
@@ -52,12 +52,143 @@ export interface E2EEndpoint {
 }
 interface EndpointResource {
   hostname: string;
-  server: ProxyServer | undefined;
+  server: ReturnType<typeof createServer> | undefined;
   sockets: Set<Socket>;
   port: number;
-  backend: { port: number } | undefined;
+  backend: { port: number; agent: Agent } | undefined;
 }
 type NetworkState = "new" | "starting" | "running" | "closing" | "closed";
+
+const MAX_UPSTREAM_SOCKETS = 8;
+const UPSTREAM_IDLE_TIMEOUT = 250;
+
+const responseHead = (upstream: IncomingMessage) => {
+  const headers = upstream.rawHeaders
+    .reduce<string[]>((lines, value, index, values) => {
+      if (index % 2 === 0) lines.push(`${value}: ${values[index + 1]}`);
+      return lines;
+    }, [])
+    .join("\r\n");
+  return `HTTP/1.1 ${upstream.statusCode ?? 502} ${upstream.statusMessage ?? ""}\r\n${headers}\r\n\r\n`;
+};
+
+const forwardedHeaders = (incoming: IncomingMessage) => {
+  const remoteAddress = incoming.socket.remoteAddress ?? "127.0.0.1";
+  const forwardedFor = incoming.headers["x-forwarded-for"];
+  return {
+    ...incoming.headers,
+    "x-forwarded-for": forwardedFor
+      ? `${Array.isArray(forwardedFor) ? forwardedFor.join(", ") : forwardedFor}, ${remoteAddress}`
+      : remoteAddress,
+    "x-forwarded-host": incoming.headers["x-forwarded-host"] ?? incoming.headers.host,
+    "x-forwarded-port":
+      incoming.headers["x-forwarded-port"] ?? incoming.headers.host?.split(":").at(-1),
+    "x-forwarded-proto": incoming.headers["x-forwarded-proto"] ?? "http",
+  };
+};
+
+const forwardResponse = (upstream: IncomingMessage, response: ServerResponse) => {
+  response.writeHead(upstream.statusCode ?? 502, upstream.headers);
+  upstream.on("error", () => response.destroy());
+  upstream.pipe(response);
+};
+
+const proxyRequest = (
+  resource: EndpointResource,
+  incoming: IncomingMessage,
+  response: ServerResponse,
+) => {
+  const backend = resource.backend;
+  if (backend === undefined) {
+    response.writeHead(404, { "content-type": "text/plain" });
+    response.end("No backend is bound to this endpoint.");
+    return;
+  }
+  const upstream = request(
+    {
+      agent: backend.agent,
+      headers: forwardedHeaders(incoming),
+      hostname: "127.0.0.1",
+      method: incoming.method,
+      path: incoming.url,
+      port: backend.port,
+    },
+    (upstreamResponse) => forwardResponse(upstreamResponse, response),
+  );
+  upstream.on("error", () => {
+    if (response.headersSent) response.destroy();
+    else {
+      response.writeHead(502, { "content-type": "text/plain" });
+      response.end("The endpoint backend is unavailable.");
+    }
+  });
+  response.on("close", () => {
+    if (!response.writableFinished && !upstream.destroyed) upstream.destroy();
+  });
+  incoming.on("error", () => upstream.destroy());
+  incoming.pipe(upstream);
+};
+
+const proxyUpgrade = (
+  resource: EndpointResource,
+  incoming: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+) => {
+  const backend = resource.backend;
+  if (backend === undefined) {
+    socket.destroy();
+    return;
+  }
+  const upstream = request({
+    agent: backend.agent,
+    headers: forwardedHeaders(incoming),
+    hostname: "127.0.0.1",
+    method: incoming.method,
+    path: incoming.url,
+    port: backend.port,
+  });
+  let upgraded = false;
+  let fallbackResponse: IncomingMessage | undefined;
+  const close = () => {
+    upstream.destroy();
+    socket.destroy();
+  };
+  upstream.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
+    upgraded = true;
+    socket.write(responseHead(upstreamResponse));
+    if (upstreamHead.length > 0) socket.write(upstreamHead);
+    if (head.length > 0) upstreamSocket.write(head);
+    upstreamSocket.pipe(socket);
+    socket.pipe(upstreamSocket);
+    const closeUpgrade = () => {
+      upstreamSocket.destroy();
+      socket.destroy();
+    };
+    upstreamSocket.on("error", closeUpgrade);
+    upstreamSocket.on("close", closeUpgrade);
+    upstreamSocket.on("end", closeUpgrade);
+    socket.on("close", closeUpgrade);
+    socket.on("end", closeUpgrade);
+  });
+  upstream.on("response", (upstreamResponse) => {
+    fallbackResponse = upstreamResponse;
+    socket.write(responseHead(upstreamResponse));
+    upstreamResponse.pipe(socket);
+  });
+  upstream.on("error", close);
+  socket.on("error", close);
+  const closeFallback = () => {
+    if (fallbackResponse !== undefined) {
+      fallbackResponse.destroy();
+    } else if (!upgraded) {
+      upstream.destroy();
+    }
+  };
+  socket.on("close", closeFallback);
+  socket.on("end", closeFallback);
+  upstream.end();
+};
 
 export const createE2ENetwork = (input: E2ENetworkIdentity) => {
   const { runId, suite, workerId } = networkIdentitySchema.parse(input);
@@ -101,10 +232,20 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
         }
         if (resource.backend !== undefined)
           throw new Error(`Backend already bound for ${hostname}`);
-        const binding = { port };
+        const binding = {
+          port,
+          agent: new Agent({
+            keepAlive: true,
+            maxFreeSockets: MAX_UPSTREAM_SOCKETS,
+            maxSockets: MAX_UPSTREAM_SOCKETS,
+            timeout: UPSTREAM_IDLE_TIMEOUT,
+          }),
+        };
         resource.backend = binding;
         return () => {
-          if (resource.backend === binding) resource.backend = undefined;
+          if (resource.backend !== binding) return;
+          resource.backend = undefined;
+          binding.agent.destroy();
         };
       },
     });
@@ -126,25 +267,12 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
 
   const startEndpoint = (resource: EndpointResource) =>
     new Promise<void>((resolve, reject) => {
-      // Portless uses proxyPort only in unknown-host help links. The actual owned
-      // listener address below supplies every fixture URL; no port is reserved/released.
-      const server = createProxyServer({
-        proxyPort: 0,
-        getRoutes: () =>
-          resource.backend === undefined
-            ? []
-            : [
-                { hostname: "127.0.0.1", port: resource.backend.port },
-                { hostname: "localhost", port: resource.backend.port },
-                { hostname: resource.hostname, port: resource.backend.port },
-              ],
-      });
-      // Portless opens an unpooled upstream connection for every HTTP request.
-      // Native edit servers keep idle connections indefinitely; close each
-      // upstream after its response, while leaving streams and upgrades live.
-      server.prependListener("request", (request: IncomingMessage) => {
-        request.headers.connection = "close";
-      });
+      const server = createServer((incoming, response) =>
+        proxyRequest(resource, incoming, response),
+      );
+      server.on("upgrade", (incoming, socket, head) =>
+        proxyUpgrade(resource, incoming, socket, head),
+      );
       resource.server = server;
       server.on("connection", (socket: Socket) => {
         resource.sockets.add(socket);
@@ -163,6 +291,7 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
   const shutdown = async () => {
     const results = await Promise.allSettled(
       owned.map(async (resource) => {
+        resource.backend?.agent.destroy();
         resource.backend = undefined;
         const server = resource.server;
         if (!server?.listening) return;

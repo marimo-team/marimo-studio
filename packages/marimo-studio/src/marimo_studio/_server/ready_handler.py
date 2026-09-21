@@ -42,7 +42,11 @@ from marimo_studio._server.presentation.session import PresentationSession
 from marimo_studio._server.records import ServerContext, ServerLocation
 from marimo_studio._server.routing import ArtifactAssetRoute, AuthoredViewRoute
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
-from marimo_studio._server.security import DEFAULT_SECURITY_POLICY, SecurityPolicy
+from marimo_studio._server.security import (
+    DEFAULT_SECURITY_POLICY,
+    SecurityPolicy,
+    extend_security_policy_from_host_head,
+)
 from marimo_studio._server.support import support_response
 from marimo_studio._server.workspace_lifecycle import Ready
 from marimo_studio.errors import MarimoStudioError
@@ -92,6 +96,10 @@ class ReadyWorkspaceHandler:
     ) -> None:
         presentation = route.notebook_scope.presentation
         workspace = route.lifecycle.workspace
+        security_policy = extend_security_policy_from_host_head(
+            self._security_policy,
+            route.context.trusted_html_head,
+        )
         artifact_response: Response | None = None
         try:
             redirect = (
@@ -155,7 +163,7 @@ class ReadyWorkspaceHandler:
                         self._runtimes.options_for(workspace, route.context),
                         self._adapters.session_state,
                         route.notebook_scope.session_ids,
-                        self._security_policy,
+                        security_policy,
                     )
                 elif route.selected_asset is not None:
                     response, artifact_response = await self._artifact_response(route)
@@ -201,7 +209,7 @@ class ReadyWorkspaceHandler:
                 ),
                 lifecycle_id=request_lifecycle_id(route.request),
                 runtime=route.request.query_params.get("runtime", "server"),
-                security_policy=self._security_policy,
+                security_policy=security_policy,
                 view_name=route.request_view,
             )
         if (

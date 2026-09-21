@@ -15,6 +15,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from marimo_studio._compat.server.editor_session_lifetimes import _canonical_session_id
 from marimo_studio._delivery.urls import (
+    HOST_SESSION_HANDOFF_QUERY_PARAM,
     PRIVATE_QUERY_KEYS,
     QUERY_OPERATION_QUERY_PARAM,
 )
@@ -95,7 +96,27 @@ _NETWORK_SEND_DOCUMENT_TRANSACTION = (
     b"{body:t,params:n()}).then(lp))"
 )
 _NETWORK_REQUEST_FACTORY = b"n=()=>({header:t()});return{sendComponentValues:"
-_DOCUMENT_NETWORK_BOOTSTRAP = b"""
+_HOST_HANDOFF_QUERY_JSON = json.dumps(HOST_SESSION_HANDOFF_QUERY_PARAM).encode()
+_DOCUMENT_NETWORK_BOOTSTRAP = (
+    b"""
+const marimoStudioHostHandoff="""
+    + _HOST_HANDOFF_QUERY_JSON
+    + b""";
+const marimoStudioHostHandoffFromLocation=()=>{
+  try{
+    return new URL(globalThis.location.href).searchParams
+      .get(marimoStudioHostHandoff);
+  }catch{return null}
+};
+const marimoStudioInitialHostHandoff=marimoStudioHostHandoffFromLocation();
+const marimoStudioPageHide=new Promise(resolve=>{
+  globalThis.addEventListener?.("pagehide",resolve,{once:true});
+});
+const marimoStudioHasNewHostHandoff=()=>{
+  const handoff=marimoStudioHostHandoffFromLocation();
+  return /^[a-f0-9]{64}$/.test(handoff??"")&&
+    handoff!==marimoStudioInitialHostHandoff;
+};
 const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   flush:()=>studioFlushDocumentChanges(),
   flushBeforeSave:()=>studioFlushBeforeDocumentSave(),
@@ -107,8 +128,17 @@ const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   waitForConnection:()=>sn(),
   params:()=>n(),
   handleResponse:result=>lp(result),
+  handoffAccepted:async()=>{
+    if(marimoStudioHasNewHostHandoff())return true;
+    await Promise.race([
+      marimoStudioPageHide,
+      new Promise(resolve=>setTimeout(resolve,250)),
+    ]);
+    return marimoStudioHasNewHostHandoff();
+  },
 });
 """
+)
 _ORDERED_NETWORK_SEND_DOCUMENT_TRANSACTION = (
     b"sendDocumentTransaction:request=>"
     b"marimoStudioDocumentRequests.sendDocumentTransaction(request)"

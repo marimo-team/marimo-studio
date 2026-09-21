@@ -71,6 +71,7 @@ Creating the first view can add these settings to a standalone notebook:
 | `runtimes`              | non-empty array of runtime IDs | `[runtime]` | Lists the distinct runtimes people may select. It must contain `runtime`       |
 | `preserve_session`      | boolean                        | `false`     | Reconnects an eligible Python runtime refresh to its matching notebook session |
 | `show_cell_logs`        | boolean                        | `true`      | Includes stdout and stderr in complete-cell projections                        |
+| `view_root`             | relative path                  | See below   | Stores authored view projects at a configurable location                       |
 | `cells`                 | table                          | Empty       | Stores stable aliases for existing notebook cells                              |
 | `provider_dependencies` | array of requirements          | Omitted     | Inline PEP 723 ownership record for third-party requirements that Studio added |
 
@@ -115,6 +116,7 @@ dependencies = ["marimo-studio"]
 
 [tool.marimo-studio]
 notebook = "analysis.py"
+view_root = "studio"
 default = "dashboard"
 runtime = "server"
 runtimes = ["server", "wasm"]
@@ -125,6 +127,12 @@ runtimes = ["server", "wasm"]
 configuration accepts the common fields in the notebook table and rejects
 `provider_dependencies`. Add Studio and view provider requirements through the
 project's dependency workflow.
+
+`view_root` is optional. It is a portable relative path resolved from the file
+that contains `[tool.marimo-studio]`. When omitted, Studio stores views at
+`__marimo__/studio/<notebook-stem>/` beside the notebook. Set it when the host
+or deployment treats `__marimo__/` as generated runtime state and persists
+authored project files from another workspace directory.
 
 ## Process settings
 
@@ -142,6 +150,12 @@ Marimo authentication. Allow only parent origins whose pages you trust to
 present Studio controls. See [Embed the Studio edit
 workspace](../guide/deploy.md#embed-the-studio-edit-workspace) for the deployment
 command and clickjacking boundary.
+
+Studio also preserves Marimo's trusted, server-level `html_head` content in its
+outer edit document. A host-injected script can declare its exact parent with a
+`data-parent-origin` attribute. Studio validates that HTTP or HTTPS origin and
+adds it to the edit document's framing policy. Explicit
+`MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` entries remain additive.
 
 ## Provider environments
 
@@ -173,7 +187,7 @@ provider or align those ranges before retrying.
 
 ## View projects
 
-Views for `analysis.py` live beside the notebook:
+By default, views for `analysis.py` live beside the notebook:
 
 ```text
 __marimo__/studio/analysis/
@@ -323,13 +337,17 @@ anonymous cells placed by the selected starter.
 
 ## Rename a notebook
 
-The notebook filename stem must fit one portable cross-platform filename. It
-also determines the view directory. Rename both in the same change:
+The notebook filename stem must fit one portable cross-platform filename. With
+the default view root, it also determines the view directory. Rename both in
+the same change:
 
 ```console
 mv analysis.py revenue.py
 mv __marimo__/studio/analysis __marimo__/studio/revenue
 ```
+
+When `view_root` is configured, rename the notebook and keep the configured
+view directory unchanged.
 
 For project settings, update `tool.marimo-studio.notebook` as part of that
 change.

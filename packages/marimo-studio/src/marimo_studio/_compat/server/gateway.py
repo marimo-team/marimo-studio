@@ -198,6 +198,7 @@ def location_handle(location: ServerLocation) -> _LocationHandle:
 def _server_context(location: ServerLocation) -> ServerContext:
     handle = location_handle(location)
     config_manager = handle.config_manager
+    html_head = getattr(handle.state, "html_head", None)
     return ServerContext(
         notebook=location.notebook,
         file_key=location.file_key,
@@ -211,6 +212,7 @@ def _server_context(location: ServerLocation) -> ServerContext:
         config_overrides=config_manager.get_config_overrides(),
         server_token=str(handle.session_manager.skew_protection_token),
         access_token=str(handle.session_manager.auth_token) or None,
+        trusted_html_head=html_head if isinstance(html_head, str) else None,
         handle=ServerHandle(
             _ContextHandle(
                 server=getattr(handle.state, "server", None),

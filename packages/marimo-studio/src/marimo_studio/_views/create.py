@@ -189,14 +189,14 @@ def _validate_view_creation(
         studio.default_view if studio is not None else DEFAULT_VIEW_NAME
     )
     validate_view_name(selected)
-    if (
-        fail_if_exists
-        and (canonical_view_root(notebook_path) / selected / "view.toml").is_file()
-    ):
+    view_root = (
+        studio.view_root if studio is not None else canonical_view_root(notebook_path)
+    )
+    if fail_if_exists and (view_root / selected / "view.toml").is_file():
         raise ViewExistsError(selected)
     default_view = studio.default_view if studio is not None else selected
-    view_root = canonical_view_root(notebook_path)
-    reject_mutable_symlinks(notebook_path.parent, {view_root})
+    workspace_root = studio.root if studio is not None else notebook_path.parent
+    reject_mutable_symlinks(workspace_root, {view_root})
     _reject_workspace_ignore_shape(view_root)
     view_names = tuple(dict.fromkeys((default_view, selected)))
     _reject_manifestless_view_directories(view_root, view_names)

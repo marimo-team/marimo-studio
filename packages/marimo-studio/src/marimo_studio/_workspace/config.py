@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterator, Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from marimo_studio._filesystem._secure_types import ConditionalWriteError
@@ -65,6 +65,7 @@ _COMMON_CONFIG_FIELDS = frozenset(
         "runtime",
         "runtimes",
         "show_cell_logs",
+        "view_root",
     }
 )
 _SUPPORTED_RUNTIMES = frozenset({"server", "wasm", "zero-python"})
@@ -311,6 +312,30 @@ def canonical_view_root(notebook: str | Path) -> Path:
     return path.parent / MARIMO_DIRECTORY / STUDIO_DIRECTORY / path.stem
 
 
+def _configured_view_root(
+    config_path: Path,
+    notebook: Path,
+    data: Mapping[str, Any],
+) -> Path:
+    value = data.get("view_root")
+    if value is None:
+        return canonical_view_root(notebook)
+    if not isinstance(value, str) or not value:
+        raise ConfigurationError("view_root must be a non-empty relative path")
+    relative = PurePosixPath(value)
+    if relative.is_absolute() or not relative.parts:
+        raise ConfigurationError("view_root must be a non-empty relative path")
+    for component in relative.parts:
+        try:
+            validate_portable_path_component(
+                component,
+                field="view_root component",
+            )
+        except ValueError as error:
+            raise ConfigurationError(str(error)) from error
+    return config_path.parent.joinpath(*relative.parts)
+
+
 def discover_views(
     view_root: Path,
 ) -> dict[str, ViewProject]:
@@ -355,8 +380,8 @@ def _studio_definition(
         if config_source == "pyproject"
         else config_path
     )
-    view_root = canonical_view_root(notebook)
-    reject_mutable_symlinks(notebook.parent, {view_root})
+    view_root = _configured_view_root(config_path, notebook, data)
+    reject_mutable_symlinks(config_path.parent, {view_root})
     default_view = data.get("default")
     if not isinstance(default_view, str):
         raise ConfigurationError("default must name a view")

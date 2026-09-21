@@ -144,13 +144,12 @@ for (const editRoot of ["marimo", "studio"] as const) {
       const boundary = support.pathname.indexOf("/_marimo-studio/views/");
       if (boundary < 0) throw new Error("The preview has no scoped support URL.");
       const modelPath = `${support.pathname.slice(0, boundary)}/api/kernel/set_model_value`;
-      // Reload can cancel the old document's model notification after the server
-      // acknowledges it. New presentation requests must remain outside this window.
+      // Reload can cancel the old document's model notification. The replacement
+      // preview below establishes fresh model state outside this exact old route.
       const retiringModelNotification = diagnostics.expectRequestAbort({
         origin: server.serverUrl,
         method: "POST",
         path: new RegExp(`^${RegExp.escape(modelPath)}$`),
-        status: 200,
         required: false,
       });
       await executeCodeMode(
