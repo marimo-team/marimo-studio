@@ -97,6 +97,12 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(true));
   dialog.dataset.state = "closed";
   await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(false));
+  const explorer = doc.createElement("div");
+  explorer.dataset.testid = "chrome-context-aware-panel";
+  doc.body.append(explorer);
+  await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(true));
+  explorer.remove();
+  await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(false));
   dialog.dataset.state = "open";
   await vi.waitFor(() => expect(dialogState).toHaveBeenLastCalledWith(true));
   workspace.close();

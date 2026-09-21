@@ -51,7 +51,7 @@ export const connectMarimoEditorWorkspace = (
     const discover = () => {
       onDialog(
         doc.querySelector(
-          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], dialog[open]',
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], dialog[open], [data-testid="chrome-context-aware-panel"]',
         ) !== null,
       );
       const viewport = doc.querySelector<HTMLElement>(

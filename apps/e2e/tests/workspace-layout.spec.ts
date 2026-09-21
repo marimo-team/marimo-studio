@@ -1,5 +1,14 @@
 import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
-import { selectWorkspaceMode, expect, studioEntryUrl, test, waitForPreview } from "./fixture.ts";
+import {
+  selectWorkspaceMode,
+  expect,
+  readWorkspaceFile,
+  studioEntryUrl,
+  test,
+  waitForPreview,
+  workspaceNotebookPath,
+  writeWorkspaceFile,
+} from "./fixture.ts";
 
 test("native error notifications remain clickable over Preview and release it on dismissal", async ({
   page,
@@ -34,6 +43,39 @@ test("native error notifications remain clickable over Preview and release it on
   await page.getByRole("combobox", { name: "Visible surface" }).selectOption("preview");
   await preview.getByRole("button", { name: "Widget count: 7" }).click();
   await expect(preview.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
+});
+
+test("keeps the native table Explorer above the Studio toolbar", async ({ page }) => {
+  const source = await readWorkspaceFile(workspaceNotebookPath);
+  const visibleTable = source.replace(
+    "    return (\n        alternate_summary,",
+    "    rich_table\n    return (\n        alternate_summary,",
+  );
+  expect(visibleTable).not.toBe(source);
+  await writeWorkspaceFile(workspaceNotebookPath, visibleTable);
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  await selectWorkspaceMode(page, "Notebook");
+  const editor = page.frameLocator("iframe#marimo-studio-editor");
+  const richOutputs = editor.locator('[data-cell-name="rich_outputs"]');
+  const table = richOutputs.locator("marimo-table");
+  await table.scrollIntoViewIfNeeded();
+  await table.getByText("Explore", { exact: true }).click();
+  const explorer = editor.getByTestId("chrome-context-aware-panel");
+  const toolbar = page.getByRole("banner", { name: "Studio" });
+  await expect(explorer).toBeVisible();
+  await expect(page.locator("iframe#marimo-studio-editor")).toHaveAttribute(
+    "data-native-dialog",
+    "",
+  );
+  const explorerBounds = await explorer.boundingBox();
+  const toolbarBounds = await toolbar.boundingBox();
+  expect(explorerBounds!.y).toBeLessThan(toolbarBounds!.y + toolbarBounds!.height);
+  await editor.getByRole("button", { name: "Close selection panel" }).click();
+  await expect(page.locator("iframe#marimo-studio-editor")).not.toHaveAttribute(
+    "data-native-dialog",
+    "",
+  );
 });
 
 test("opens Source in one click and retains the live preview through pane changes", async ({
