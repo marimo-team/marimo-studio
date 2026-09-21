@@ -208,12 +208,19 @@ test("provides Studio before the first save in an environment with the installed
   await add.click();
   const saveDialog = page.getByRole("dialog", { name: "Save notebook" });
   await expect(saveDialog).toBeVisible();
+  const save = saveDialog.getByText("Save as: fresh-studio.py", { exact: true });
   await expect(async () => {
     await saveDialog.getByPlaceholder("filename").fill("fresh-studio.py");
-    await saveDialog.getByText("Save as: fresh-studio.py", { exact: true }).click({
-      timeout: 1_000,
-    });
+    await expect(save).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 65_000 });
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/api/kernel/save") &&
+      response.ok(),
+  );
+  await save.click();
+  await saved;
   const editor = page.frameLocator("iframe#marimo-studio-editor");
   await expect(editor.locator("[data-cell-id]").first()).toBeVisible();
   const editorUrl = await page.locator("iframe#marimo-studio-editor").getAttribute("src");

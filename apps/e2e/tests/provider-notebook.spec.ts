@@ -98,7 +98,7 @@ for (const runtime of ["Server", "static WebAssembly", "Prepared"] as const) {
         : undefined;
       const retiringValues =
         runtime === "Server"
-          ? diagnostics.expectActiveRequestAbort({
+          ? diagnostics.expectRequestAbort({
               origin: e2eNetwork.provider.live.origin,
               method: "GET",
               path: /\/_marimo-studio\/views\/notebook\/values$/,
