@@ -1,0 +1,31 @@
+skills/marimo-studio/SKILL.md
+  s_c8d49536ea9014::t_e045677f5fd314 631
+docs/guide/coding-agents.md
+  s_c8d49536ea9014::t_e045677f5fd314 26,29,32
+apps/e2e/scripts/installed-workspace.ts
+  s_c8d49536ea9014::t_e045677f5fd314 108
+pyproject.toml
+  s_c8d49536ea9014::t_e045677f5fd314 24
+apps/e2e/fixtures/lens/notebook.py.txt
+  s_c8d49536ea9014::t_e045677f5fd314 3
+packages/marimo-studio/pyproject.toml
+  s_c8d49536ea9014::t_e045677f5fd314 27
+scripts/verify-dist.sh
+  s_c8d49536ea9014::t_e045677f5fd314 90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f3d32ae74ae5600ad3ba9d04e8567096a18b3a4f",
+  "prompts": {},
+  "sessions": {
+    "s_c8d49536ea9014": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4e4-e359-7853-b54a-71a237a1b894",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
