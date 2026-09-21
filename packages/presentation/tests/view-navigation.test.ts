@@ -250,7 +250,7 @@ test("unframed navigation preserves delivery mode separately from notebook query
 test("same-view navigation keeps its exact checkpoint and cross-view navigation clears it", () => {
   const options = {
     origin: "https://example.test",
-    publicRootUrl: "/proxy/?file=book.py",
+    publicRootUrl: "/proxy/?file=book.py&marimo_studio_revision=root-revision",
     documentRootUrl: "/proxy/",
     publicQuery: "?region=eu",
     unframed: true,
@@ -259,7 +259,10 @@ test("same-view navigation keeps its exact checkpoint and cross-view navigation 
     currentView: "novice",
     exactRevision: "committed-revision",
   };
-  const same = viewNavigationForUrl({ ...options, href: "?region=us#details" });
+  const same = viewNavigationForUrl({
+    ...options,
+    href: "?region=us&marimo_studio_revision=forged#details",
+  });
   const other = viewNavigationForUrl({
     ...options,
     href: "../expert/?marimo_studio_revision=forged",
@@ -293,5 +296,29 @@ test("standalone links keep their admitted editor binding across views and ignor
     const url = new URL(navigation!.documentUrl);
     assert.equal(url.searchParams.get("marimo_studio_client"), "current-client");
     assert.equal(url.searchParams.get("marimo_studio_editor_session"), "s_current");
+  }
+});
+
+test("navigation replaces untrusted editor parameters with only its admitted identity", () => {
+  for (const binding of [
+    {},
+    { clientId: "current-client" },
+    { clientId: "current-client", supportUrl: "/support/novice" },
+  ]) {
+    const navigation = viewNavigationForUrl({
+      href: "?region=us",
+      origin: "https://example.test",
+      publicRootUrl: "/proxy/?marimo_studio_client=stale&marimo_studio_editor_session=s_stale",
+      documentRootUrl: "/proxy/",
+      publicQuery: "",
+      trustedRuntime: { id: "server", explicit: true },
+      unframed: true,
+      views: ["novice"],
+      currentView: "novice",
+      ...binding,
+    });
+    const query = new URL(navigation!.documentUrl).searchParams;
+    assert.equal(query.get("marimo_studio_client"), binding.clientId ?? null);
+    assert.equal(query.has("marimo_studio_editor_session"), false);
   }
 });

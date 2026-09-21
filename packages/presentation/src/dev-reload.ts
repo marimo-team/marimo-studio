@@ -159,6 +159,7 @@ const observeBuild = (build: PresentationBuild): void => {
       severity: "error",
       message: `${build.build.phase === "failed" ? "Latest build failed." : "Latest publication is unavailable."} Showing the previous build.${detail ? ` ${detail.message}` : ""}`,
       hint: detail?.hint ?? "Fix the view source, then build it again.",
+      source: detail?.source ?? undefined,
       view: supportView(),
     };
     setPresentationRefreshState(buildClaim, "error", diagnostic);

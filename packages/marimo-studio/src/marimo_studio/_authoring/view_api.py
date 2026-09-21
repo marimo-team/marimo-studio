@@ -145,6 +145,8 @@ class View:
         constrained to its presentation revision. Open the URL with your browser
         after this call finishes, then inspect the rendered application.
         """
+        if access_token and server is None:
+            raise ValueError("access_token requires server")
         connection = (
             studio_server_connection(server, access_token=access_token)
             if server is not None
@@ -152,8 +154,6 @@ class View:
         )
         if connection is None:
             raise ProtocolError("Provide server= for a saved view's preview URL.")
-        if access_token and server is None:
-            raise ValueError("access_token requires server")
         return await resolve_preview_url(
             self.workspace.notebook,
             self.name,

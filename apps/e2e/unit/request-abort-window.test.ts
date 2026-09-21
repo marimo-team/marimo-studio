@@ -18,11 +18,11 @@ test("a backfilled request retains its response status and exact object identity
     /^\/_marimo-studio\/query$/,
     1,
     true,
-    204,
+    202,
   );
   const bound = queryWrite();
 
-  expect(window.recordActive(bound, 204)).toBe(true);
+  expect(window.recordActive(bound, 202)).toBe(true);
   expect(window.recordAbort(queryWrite(), "net::ERR_ABORTED")).toBe(false);
   expect(window.recordAbort(bound, "net::ERR_ABORTED")).toBe(true);
   window.seal();
@@ -38,7 +38,7 @@ test("an abort with the wrong response status fails closed", () => {
     /^\/_marimo-studio\/query$/,
     1,
     true,
-    204,
+    202,
   );
   const conflict = queryWrite();
   window.recordActive(conflict, 409);
@@ -56,7 +56,7 @@ test("a sealed window becomes ready when abort and status arrive after user comp
     /^\/_marimo-studio\/query$/,
     1,
     true,
-    204,
+    202,
   );
   const pending = request("POST", "/_marimo-studio/query");
   window.recordStart(pending);
@@ -65,7 +65,7 @@ test("a sealed window becomes ready when abort and status arrive after user comp
 
   window.recordAbort(pending, "net::ERR_ABORTED");
   expect(window.readyToRecover()).toBe(false);
-  window.recordResponse(pending, 204);
+  window.recordResponse(pending, 202);
   expect(window.readyToRecover()).toBe(true);
   expect(window.recover()).toBe(true);
   expect(window.diagnostics()).toEqual([]);

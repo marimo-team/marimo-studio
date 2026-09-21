@@ -177,6 +177,8 @@ export const previewMessageSchema = previewMessageInputSchema.superRefine((messa
     message.type === "marimo-studio:view-error"
   ) {
     diagnostics = [message.diagnostic];
+  } else if (message.type === "marimo-studio:presentation-refresh" && message.diagnostic) {
+    diagnostics = [message.diagnostic];
   }
   if ("view" in message && diagnostics.some((diagnostic) => diagnostic.view !== message.view)) {
     context.addIssue({

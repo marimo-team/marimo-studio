@@ -55,18 +55,11 @@ def test_display_recovers_after_retained_artifact_files_are_removed(
             else:
                 retained.artifact.root.joinpath("style.css").unlink()
         missing = client.get(url)
-        if missing.status_code == 200:
-            assert (
-                client.get(
-                    urljoin(_artifact_base(missing.text), "style.css")
-                ).status_code
-                == 200
-            )
-        else:
-            assert missing.status_code == 409
-            assert "artifact" in missing.text.lower()
-        with build_view_project_sync(project):
-            pass
+        assert missing.status_code == 200, missing.text
+        assert (
+            client.get(urljoin(_artifact_base(missing.text), "style.css")).status_code
+            == 200
+        )
         recovered = client.get(url)
         assert recovered.status_code == 200
         stylesheet = client.get(urljoin(_artifact_base(recovered.text), "style.css"))
@@ -210,3 +203,58 @@ def test_cancelled_cache_restore_keeps_current_exact_preview(
         assert after.text == accepted.text
         document = client.get(accepted.text)
     assert document.status_code == 200
+
+
+def test_display_adopts_a_successor_when_its_cached_snapshot_is_replaced_during_read(
+    notebook_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+
+    configured(notebook_path)
+    project = load_studio(notebook_path).views["dashboard"]
+    development = DevelopmentCoordinator()
+    presentation = NotebookPresentation(notebook_path, development=development)
+    entered = threading.Event()
+    release = threading.Event()
+
+    async def exercise() -> None:
+        pending = None
+        try:
+            first = await presentation.display_snapshot_async("dashboard")
+            cache_usable = presentation._cached_snapshot_is_usable
+
+            def held(snapshot):
+                if snapshot is first:
+                    entered.set()
+                    assert release.wait(timeout=10)
+                return cache_usable(snapshot)
+
+            monkeypatch.setattr(presentation, "_cached_snapshot_is_usable", held)
+            pending = asyncio.create_task(
+                presentation.display_snapshot_async("dashboard")
+            )
+            assert await asyncio.to_thread(entered.wait, 10)
+            project.manifest.write_text(
+                project.manifest.read_text() + "\n# New inputs\n"
+            )
+            with await asyncio.to_thread(build_view_project_sync, project):
+                pass
+            successor = await presentation.current_published_snapshot_async("dashboard")
+            assert successor.revision == first.revision
+            assert (
+                successor.artifact.project_revision != first.artifact.project_revision
+            )
+            release.set()
+            displayed = await pending
+            assert (
+                displayed.artifact.project_revision
+                == successor.artifact.project_revision
+            )
+        finally:
+            release.set()
+            if pending is not None:
+                await asyncio.gather(pending, return_exceptions=True)
+            await asyncio.to_thread(presentation.close)
+            await development.close()
+
+    asyncio.run(exercise())

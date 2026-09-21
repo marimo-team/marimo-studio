@@ -1,6 +1,10 @@
 import { studioBootstrapSchema } from "@marimo-studio/protocol/studio-bootstrap";
-import { expect, type FrameLocator, type Page } from "@playwright/test";
+import { expect, type Frame, type FrameLocator, type Page, type Request } from "@playwright/test";
 import { z } from "zod";
+
+import type { BrowserDiagnostics, BrowserResponseRecovery } from "./browser-diagnostics.ts";
+
+import { projectionReadRequestKind } from "./projection-read-window.ts";
 
 export const saveShortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
 // Marimo also supports Ctrl+Enter on macOS.
@@ -56,4 +60,46 @@ export const executeCodeMode = async (
   );
   expect(result.ok, result.text).toBe(true);
   expect(result.text).toContain('"success": true');
+};
+
+export const captureRetiringProjectionReads = (
+  frame: Frame,
+  revision: string,
+  diagnostics: BrowserDiagnostics,
+): BrowserResponseRecovery & { seal(): void } => {
+  const page = frame.page();
+  const origin = new URL(frame.url()).origin;
+  const responses: BrowserResponseRecovery[] = [];
+  const record = (request: Request) => {
+    const url = new URL(request.url());
+    if (!projectionReadRequestKind(request) || request.frame() !== frame || url.origin !== origin)
+      return;
+    let body: ReturnType<typeof viewRevisionSchema.safeParse>;
+    try {
+      body = viewRevisionSchema.safeParse(request.postDataJSON());
+    } catch {
+      return;
+    }
+    if (!body.success || body.data.revision !== revision) return;
+    responses.push(
+      diagnostics.expectResponse({
+        status: 409,
+        path: new RegExp(`^${RegExp.escape(url.pathname)}$`),
+        required: false,
+      }),
+    );
+  };
+  const seal = () => {
+    page.off("request", record);
+    page.off("close", seal);
+  };
+  page.on("request", record);
+  page.once("close", seal);
+  return {
+    seal,
+    recovered: () => {
+      seal();
+      responses.forEach((response) => response.recovered());
+    },
+  };
 };

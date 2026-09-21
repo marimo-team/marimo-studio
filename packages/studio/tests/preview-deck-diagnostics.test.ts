@@ -389,3 +389,47 @@ it("retains a cleared preview diagnostic in runtime history", () => {
   expect(report.transitions[2]?.diagnostics[0]?.code).toBe("value-stale");
   server.dispose();
 });
+
+it.each([false, true])(
+  "retains a build failure before attachment and clears it on repair (%s)",
+  (repaired) => {
+    const preview = frame("complete");
+    const previewWindow = { postMessage: vi.fn() };
+    Object.defineProperty(preview, "contentWindow", { configurable: true, value: previewWindow });
+    const deck = previewDeck();
+    const failure = {
+      ...projectionDiagnostic,
+      scope: "presentation",
+      code: "view-build-failed",
+      message: "Latest build failed. Showing the previous build.",
+    };
+    deck.presentationBuildCompleted("dashboard", "revision-1", undefined, failure);
+    if (repaired) deck.presentationBuildCompleted("dashboard", "revision-1");
+    deck.attach(frame("complete"), new Map([["server", preview]]));
+    // Messages sent before the new document mounts cannot be observed by it.
+    previewWindow.postMessage.mockClear();
+    const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
+    dispatchPreviewMessage(previewWindow, {
+      type: "marimo-studio:receiver-ready",
+      runtime: "server",
+      lifecycleId,
+      view: "dashboard",
+      revision: "revision-1",
+    });
+    dispatchPreviewMessage(previewWindow, {
+      type: "marimo-studio:view-ready",
+      runtime: "server",
+      lifecycleId,
+      view: "dashboard",
+      revision: "revision-1",
+    });
+    const failedRefresh = expect.objectContaining({
+      type: "marimo-studio:presentation-refresh",
+      phase: "settled",
+      diagnostic: failure,
+    });
+    if (repaired) expect(previewWindow.postMessage).not.toHaveBeenCalledWith(failedRefresh, "*");
+    else expect(previewWindow.postMessage).toHaveBeenCalledWith(failedRefresh, "*");
+    deck.dispose();
+  },
+);

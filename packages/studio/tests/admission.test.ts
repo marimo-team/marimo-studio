@@ -501,3 +501,19 @@ it("forwards a failed build to its retained frame and clears it on the next succ
     phase: "settled",
   });
 });
+
+it("starts the document transition before releasing a completed build's loading state", () => {
+  const { admission, effects } = admitted();
+  admission.buildStarted("active");
+  effects.postMessage.mockClear();
+  admission.buildCompleted("revision-2", "active");
+  expect(effects.postMessage.mock.calls.map(([message]) => message)).toEqual([
+    { type: "marimo-studio:presentation-change" },
+    { type: "marimo-studio:presentation-refresh", phase: "settled" },
+  ]);
+  expect(admission.isReady).toBe(false);
+  admission.receiverUnready();
+  admission.receiverReady("revision-2", "current", "active");
+  admission.viewReady("revision-2", "s_123456", "active");
+  expect(admission.isReady).toBe(true);
+});

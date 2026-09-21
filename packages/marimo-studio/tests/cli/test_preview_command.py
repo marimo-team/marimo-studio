@@ -9,22 +9,30 @@ from click.testing import CliRunner
 from marimo_studio._cli import cli
 
 
-@pytest.mark.parametrize("json_output", [False, True])
+@pytest.mark.parametrize(
+    "runtime, exact, json_output",
+    [("server", False, False), ("wasm", True, True)],
+)
 def test_preview_prints_only_the_url(
-    notebook_path: Path, monkeypatch: pytest.MonkeyPatch, json_output: bool
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: str,
+    exact: bool,
+    json_output: bool,
 ) -> None:
-    url = (
-        "https://studio.example/base/dashboard/?runtime=wasm&marimo_studio_revision="
-        + "a" * 64
-    )
+    url = f"https://studio.example/base/dashboard/?runtime={runtime}"
+    if exact:
+        url += "&marimo_studio_revision=" + "a" * 64
+
+    expected_runtime, expected_exact = runtime, exact
 
     async def preview(notebook, view, connection, *, runtime, exact):
         assert notebook == notebook_path
         assert view == "dashboard"
         assert connection.server_url == "https://studio.example/base"
         assert connection.auth_token == "secret"
-        assert runtime == "wasm"
-        assert exact is True
+        assert runtime == expected_runtime
+        assert exact is expected_exact
         return url
 
     monkeypatch.setattr(
@@ -39,9 +47,10 @@ def test_preview_prints_only_the_url(
         "--server",
         "https://studio.example/base",
         "--runtime",
-        "wasm",
-        "--exact",
+        runtime,
     ]
+    if exact:
+        arguments.append("--exact")
     if json_output:
         arguments.append("--json")
     result = CliRunner().invoke(

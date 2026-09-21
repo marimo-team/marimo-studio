@@ -708,6 +708,8 @@ waits through an external tool or interpreter. Waiting synchronously inside
 code mode can block the notebook work being awaited. The URL renders a separate top-level
 presentation with the server's authentication and document sandbox. Keep the
 notebook session open on an edit-mode server.
+Authenticate the chosen browser through Marimo's normal login. An API access
+token authorizes URL lookup; it is never embedded in the returned URL.
 
 Outside code mode, supply the running server URL:
 

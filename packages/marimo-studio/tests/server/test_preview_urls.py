@@ -17,6 +17,7 @@ from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.revisions import capture_source_snapshot
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.metadata import update_notebook_config
+from marimo_studio.errors import ViewProjectError
 
 from ..app_helpers import configured, edit_mode, marimo_app, session_manager
 from .app_test_support import _editor_mount_value, _view_support_url
@@ -123,8 +124,16 @@ def test_preview_requires_normal_notebook_authentication(notebook_path: Path) ->
             params={"runtime": "server"},
             headers={"Authorization": "Bearer secret"},
         )
+        client.cookies.clear()
+        browser_without_login = client.get(
+            authenticated.text,
+            headers={"Accept": "text/html"},
+            follow_redirects=False,
+        )
     assert missing.status_code == 401
     assert authenticated.status_code == 200
+    assert browser_without_login.status_code == 303
+    assert browser_without_login.headers["location"].startswith("/auth/login")
     assert "secret" not in authenticated.text
 
 
@@ -543,3 +552,40 @@ def test_exact_document_rejects_changed_source_without_retrying(
     assert "setTimeout" not in response.text
     assert "location.reload" not in response.text
     assert "retry-after" not in response.headers
+
+
+def test_stable_preview_renews_the_retained_document_after_a_failed_edit(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    _enable_wasm(notebook_path)
+    project = load_studio(notebook_path).views["dashboard"]
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+    with TestClient(app) as client:
+        url = client.get(ENDPOINT, params={"runtime": "wasm"}).text
+        initial = client.get(url)
+        assert initial.status_code == 200
+        original = project.root.joinpath("index.html").read_text()
+        project.root.joinpath("index.html").write_text("<marimo-cell></marimo-cell>")
+        with pytest.raises(ViewProjectError):
+            build_view_project_sync(project)
+        retained = client.get(url)
+        assert retained.status_code == 200, retained.text
+        revision = retained.headers["Marimo-Studio-Revision"]
+        assert revision == initial.headers["Marimo-Studio-Revision"]
+        renewal = _editor_mount_value(retained.text, "renewalToken")
+        session = _editor_mount_value(retained.text, "sessionId")
+        config = client.get(
+            f"/_marimo-studio/presentation/{renewal}/_marimo-studio/views/dashboard/config",
+            params={"runtime": "wasm", "revision": revision},
+            headers={"Marimo-Studio-Preview-Session-Id": session},
+        )
+        assert config.status_code == 200, config.text
+        assert config.json()["revision"] == revision
+        project.root.joinpath("index.html").write_text(original + "<!-- repaired -->")
+        with build_view_project_sync(project):
+            pass
+        repaired = client.get(url)
+        assert repaired.status_code == 200
+        assert repaired.headers["Marimo-Studio-Revision"] != revision

@@ -167,7 +167,9 @@ class PresentationCapabilityHandler:
             }:
                 assert isinstance(connection, Request)
                 await _send_response(
-                    _stale_projection_capability(),
+                    _capability_preflight(connection, route)
+                    if method == "OPTIONS"
+                    else _stale_projection_capability(),
                     scope,
                     receive,
                     send,

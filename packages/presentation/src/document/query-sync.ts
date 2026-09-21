@@ -44,7 +44,7 @@ export const bindRuntimeQueryHistory = (
   };
 };
 
-export const startQuerySync = (): void => {
+export const startQuerySync = (): (() => void) => {
   const physicallyFramed = globalThis.parent !== globalThis.window;
   const notify = () => {
     queryListeners.forEach((listener) => listener());
@@ -80,14 +80,22 @@ export const startQuerySync = (): void => {
 
   // Marimo applies mo.query_params() updates through same-document history
   // writes, which do not emit popstate events.
-  globalThis.history.pushState = (...arguments_) => {
+  const wrappedPush: History["pushState"] = (...arguments_) => {
     pushState(arguments_[0], arguments_[1], preserveExactRevision(arguments_[2]));
     notify();
   };
-  globalThis.history.replaceState = (...arguments_) => {
+  const wrappedReplace: History["replaceState"] = (...arguments_) => {
     replaceState(arguments_[0], arguments_[1], preserveExactRevision(arguments_[2]));
     notify();
   };
+  globalThis.history.pushState = wrappedPush;
+  globalThis.history.replaceState = wrappedReplace;
   globalThis.addEventListener("popstate", notify);
   notify();
+  return () => {
+    globalThis.removeEventListener("popstate", notify);
+    if (globalThis.history.pushState === wrappedPush) globalThis.history.pushState = pushState;
+    if (globalThis.history.replaceState === wrappedReplace)
+      globalThis.history.replaceState = replaceState;
+  };
 };

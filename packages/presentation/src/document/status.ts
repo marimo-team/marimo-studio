@@ -18,6 +18,8 @@ import { documentLifecycleEnvelope } from "./document-lifecycle-id.ts";
 import { postToStudioParent } from "./parent-bridge.ts";
 import { studioOwned } from "./studio-ownership.ts";
 
+const publishedDiagnostics = new WeakMap<HTMLElement, string>();
+
 const runtimeId = (): string =>
   hasRuntimeConfig() ? getRuntimeConfig().runtime.id : getMountConfig().runtime;
 
@@ -52,11 +54,16 @@ export const showDiagnostic = (
     diagnostic: toBrowserDiagnostic(detail),
     view: detail.view,
   };
-  postToStudioParent(message);
+  const serialized = JSON.stringify(message);
+  if (publishedDiagnostics.get(host) !== serialized) {
+    publishedDiagnostics.set(host, serialized);
+    postToStudioParent(message);
+  }
 };
 
 export const clearDiagnostic = (): void => {
   const host = diagnosticHost();
+  publishedDiagnostics.delete(host);
   host.hidden = true;
   delete host.dataset.state;
   host.removeAttribute("title");

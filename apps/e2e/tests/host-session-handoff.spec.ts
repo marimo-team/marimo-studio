@@ -9,6 +9,8 @@ import { fixtureDirectory } from "../scripts/paths.ts";
 import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import {
+  captureProjectionRefresh,
+  recoverProjectionRefresh,
   editorFrame,
   previewFrame,
   recoverRequestAbort,
@@ -167,6 +169,7 @@ shown.to_dict()
       await waitForPreview(page);
       await recoverRequestAbort(retiringModelNotification);
 
+      const refreshedProjections = await captureProjectionRefresh(page, diagnostics);
       await writeFile(
         resolve(workspace, "__marimo__/studio/host-save/dashboard/index.html"),
         `<!doctype html><html><head><title>Projections</title></head><body>
@@ -179,6 +182,7 @@ shown.to_dict()
       await expect(presentation.locator('h1[mo-value="a"]')).toHaveText("42");
       await expect(presentation.locator("marimo-cell")).toContainText("42");
       await expect(presentation.locator("marimo-output")).toContainText("42");
+      await recoverProjectionRefresh(refreshedProjections, page);
 
       const openedAgain = context.waitForEvent("page");
       await launcher.getByRole("link", { name: "Create a new notebook" }).click();

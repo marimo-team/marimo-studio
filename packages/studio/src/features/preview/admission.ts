@@ -318,6 +318,7 @@ export class PreviewAdmission {
       this.refresh = "current";
     }
     this.reconcile(owner);
+    if (this.build === "settled" && this.buildDiagnostic) this.settleGate(true);
   }
 
   viewSyncPending(diagnostic: BrowserDiagnostic): void {
@@ -425,7 +426,6 @@ export class PreviewAdmission {
     if (this.receiver.phase !== "ready" || this.build === "pending") {
       return;
     }
-    this.settleGate();
     const refreshNeedsBaseline = this.refresh === "required" && this.baseline.phase === "unknown";
     const baselineDiffers =
       this.baseline.phase === "known" && this.baseline.revision !== this.receiver.revision;
@@ -435,6 +435,7 @@ export class PreviewAdmission {
       }
       return;
     }
+    this.settleGate();
     const fatalWithoutCandidate =
       this.view === "failed" && this.failure === "fatal" && this.candidate === null;
     const retryFatal = fatalWithoutCandidate && this.refresh === "required" && isActive(owner);
@@ -461,7 +462,7 @@ export class PreviewAdmission {
     this.effects.postMessage({ type: "marimo-studio:presentation-change" });
     this.admittedRevision = null;
     this.candidate = null;
-    this.gate = "settled";
+    this.settleGate();
     this.refresh = "requested";
     this.requirement = "required";
     this.view = "waiting";

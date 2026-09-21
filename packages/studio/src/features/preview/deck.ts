@@ -81,7 +81,10 @@ export class PreviewDeck {
   private editorBindingGeneration = 0;
   private editorSessionId: string | undefined;
   private readonly notebookMutations: NotebookMutationCoordinator;
-  private readonly presentationRevisions = new Map<string, string | null>();
+  private readonly presentations = new Map<
+    string,
+    { revision: string | null; diagnostic?: BrowserDiagnostic }
+  >();
   private readonly presentationBuilds = new Set<string>();
   private readonly navigationTransaction = new PreviewNavigation();
   private viewSwitch: {
@@ -97,7 +100,7 @@ export class PreviewDeck {
     this.frames = new PreviewFrames(options.runtimes, options.viewUrl, (view) => {
       if (view !== this.view) {
         this.presentationBuilds.delete(view);
-        this.presentationRevisions.delete(view);
+        this.presentations.delete(view);
       }
     });
     this.notebookMutations = new NotebookMutationCoordinator({
@@ -190,8 +193,8 @@ export class PreviewDeck {
     if (this.presentationBuilds.has(this.view)) {
       controller?.presentationBuildStarted();
     }
-    if (this.presentationRevisions.has(this.view)) {
-      controller?.presentationBaseline(this.presentationRevisions.get(this.view)!);
+    if (this.presentations.has(this.view)) {
+      controller?.presentationBaseline(this.presentations.get(this.view)!.revision);
     }
     const ready = controller?.activate(this.navigation, undefined, reload);
     this.viewSwitch = { view: this.view, runtime, ready };
@@ -288,7 +291,7 @@ export class PreviewDeck {
 
   releaseView(view: string): void {
     this.presentationBuilds.delete(view);
-    this.presentationRevisions.delete(view);
+    this.presentations.delete(view);
     let released = false;
     for (const slot of this.frames.slots) {
       if (slot.view === view && !this.isActive(slot)) {
@@ -303,7 +306,7 @@ export class PreviewDeck {
 
   replaceView(view: string): void {
     this.presentationBuilds.delete(view);
-    this.presentationRevisions.delete(view);
+    this.presentations.delete(view);
     let changed = false;
     for (const slot of this.frames.slots) {
       if (slot.view !== view) {
@@ -405,6 +408,8 @@ export class PreviewDeck {
 
   presentationBuildStarted(view: string, _notebookMutationGeneration?: number): void {
     this.presentationBuilds.add(view);
+    const previous = this.presentations.get(view);
+    if (previous) this.presentations.set(view, { revision: previous.revision });
     const active = this.frames.find(this.runtime, view);
     if (view === this.view && !active?.controller) {
       const selected = active ?? this.frames.select(this.runtime, view, this.navigation);
@@ -430,9 +435,10 @@ export class PreviewDeck {
     this.presentationBuilds.delete(view);
     this.notebookMutations.buildCompleted(notebookMutationGeneration, () => {
       let interactivityChanged = false;
-      if (revision !== null) {
-        this.presentationRevisions.set(view, revision);
-      }
+      this.presentations.set(view, {
+        revision: revision ?? this.presentations.get(view)?.revision ?? null,
+        diagnostic,
+      });
       for (const slot of this.frames.slots) {
         if (slot.view === view) {
           if (
@@ -464,10 +470,10 @@ export class PreviewDeck {
   }
 
   presentationChanged(view: string, revision: string): void {
-    if (this.presentationRevisions.get(view) === revision) {
+    if (this.presentations.get(view)?.revision === revision) {
       return;
     }
-    this.presentationRevisions.set(view, revision);
+    this.presentations.set(view, { ...this.presentations.get(view), revision });
     for (const slot of this.frames.slots) {
       if (slot.view === view) {
         slot.controller?.presentationChanged(revision);
@@ -476,7 +482,7 @@ export class PreviewDeck {
   }
 
   presentationBaseline(view: string, revision: string | null): void {
-    this.presentationRevisions.set(view, revision);
+    this.presentations.set(view, { ...this.presentations.get(view), revision });
     for (const slot of this.frames.slots) {
       if (slot.view === view) {
         slot.controller?.presentationBaseline(revision);
@@ -546,8 +552,12 @@ export class PreviewDeck {
     if (this.presentationBuilds.has(view)) {
       controller.presentationBuildStarted();
     }
-    if (this.presentationRevisions.has(view) && this.isActive(slot)) {
-      controller.presentationBaseline(this.presentationRevisions.get(view)!);
+    if (this.presentations.has(view) && this.isActive(slot)) {
+      controller.presentationBaseline(this.presentations.get(view)!.revision);
+    }
+    const diagnostic = this.presentations.get(view)?.diagnostic;
+    if (diagnostic) {
+      controller.presentationBuildCompleted(this.presentations.get(view)!.revision, diagnostic);
     }
     return controller;
   }
@@ -702,7 +712,7 @@ export class PreviewDeck {
         slot.controller.presentationBaseline(null);
         if (slot.view !== undefined) {
           this.presentationBuilds.delete(slot.view);
-          this.presentationRevisions.delete(slot.view);
+          this.presentations.delete(slot.view);
         }
       } else {
         this.invalidateNotebookSlot(slot);
@@ -716,7 +726,7 @@ export class PreviewDeck {
     this.frames.release(slot);
     if (view !== undefined) {
       this.presentationBuilds.delete(view);
-      this.presentationRevisions.delete(view);
+      this.presentations.delete(view);
     }
   }
 

@@ -21,6 +21,15 @@ import { serverRuntimeDataSchema } from "../src/runtime/server-config.ts";
 import { wasmRuntimeDataSchema } from "../src/runtime/wasm-config.ts";
 import { symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
+globalThis.__MARIMO_MOUNT_CONFIG__ = {
+  supportUrl: "/_marimo-studio/views/dashboard",
+  version: "test-version",
+  revision: "presentation-revision",
+  runtime: "wasm",
+  runtimeExplicit: true,
+  replay: false,
+};
+
 const baseRuntimeConfig = {
   schema: 1,
   revision: "presentation-revision",
@@ -126,14 +135,6 @@ test("bootstrap uses the server-minted mount runtime before config loads", async
   const lifetime = new AbortController();
   let requestedRuntime: string | null = null;
   let requestSignal: AbortSignal | null | undefined;
-  globalThis.__MARIMO_MOUNT_CONFIG__ = {
-    supportUrl: "/_marimo-studio/views/dashboard",
-    version: "test-version",
-    revision: "presentation-revision",
-    runtime: "wasm",
-    runtimeExplicit: true,
-    replay: false,
-  };
   globalThis.history.replaceState({}, "", "/dashboard/?runtime=server");
   globalThis.fetch = (input, init) => {
     requestedRuntime = new URL(requestUrl(input)).searchParams.get("runtime");

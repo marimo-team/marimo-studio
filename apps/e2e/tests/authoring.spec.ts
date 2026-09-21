@@ -1,11 +1,10 @@
-import type { Request } from "@playwright/test";
-
 import { projectionDiagnosticSchema } from "@marimo-studio/protocol/runtime-config";
 import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { workspaceDirectory } from "../scripts/paths.ts";
 import {
+  captureRetiringProjectionReads,
   readViewRevision,
   runCellShortcut,
   saveShortcut,
@@ -119,6 +118,24 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
 
   const initialCss = await readWorkspaceFile(dashboardCssPath);
   const externalCss = `${initialCss}\nbody { --e2e-marker: ready; }\n`;
+  const initialPresentation = await preview
+    .locator("html")
+    .getAttribute("data-marimo-studio-revision");
+  expect(initialPresentation).toBeTruthy();
+  const readinessChanges = await preview.locator("html").evaluateHandle((root) => {
+    const readings: { state: string | undefined; revision: string | undefined }[] = [];
+    const observer = new MutationObserver(() => {
+      readings.push({
+        state: root.dataset.marimoStudioState,
+        revision: root.dataset.marimoStudioRevision,
+      });
+    });
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-marimo-studio-state", "data-marimo-studio-revision"],
+    });
+    return { readings, stop: () => observer.disconnect() };
+  });
   await writeWorkspaceFile(dashboardCssPath, externalCss);
   await expect
     .poll(() =>
@@ -138,6 +155,18 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
     ),
   ).toBe(true);
   await waitForPreview(page);
+  const readings = await readinessChanges.evaluate(({ readings, stop }) => {
+    stop();
+    return readings;
+  });
+  await readinessChanges.dispose();
+  const pending = readings.findIndex(({ state }) => state === "loading");
+  expect(pending).toBeGreaterThanOrEqual(0);
+  expect(
+    readings
+      .slice(pending)
+      .filter(({ state, revision }) => state === "ready" && revision === initialPresentation),
+  ).toEqual([]);
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("42");
   await expect(preview.locator("#rich-summary-output h3")).toHaveText("Current total: 42");
   await selectWorkspaceMode(page, "Notebook");
@@ -527,16 +556,17 @@ test("shows an agent-requested page and records its rendered revision", async ({
     "src",
     refreshed.preview_url,
   );
-  const refreshedElement = await page.locator(refreshed.frame_selector).elementHandle();
-  const refreshedDocument = await refreshedElement?.contentFrame();
-  if (!refreshedDocument) throw new Error("The selected preview has no browser frame");
   const expectedLifecycle = new URL(refreshed.preview_url).searchParams.get(
     "marimo_studio_lifecycle",
   );
   expect(expectedLifecycle).toBeTruthy();
-  await refreshedDocument.waitForURL(
-    (url) => url.searchParams.get("marimo_studio_lifecycle") === expectedLifecycle,
-  );
+  await expect
+    .poll(async () => {
+      const element = await page.locator(refreshed.frame_selector).elementHandle();
+      const document = await element?.contentFrame();
+      return document ? new URL(document.url()).searchParams.get("marimo_studio_lifecycle") : null;
+    })
+    .toBe(expectedLifecycle);
   await expect(page.frameLocator(refreshed.frame_selector).locator("html")).toHaveAttribute(
     "data-marimo-studio-state",
     "ready",
@@ -698,14 +728,6 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
     const liveEvents = live.waitForRequest((request) =>
       new URL(request.url()).pathname.endsWith("/_marimo-studio/views/checkpoint-view/dev/events"),
     );
-    const initialOutputs = [live, exact].map((target) =>
-      target.waitForRequest(
-        (request) =>
-          request.method() === "POST" &&
-          request.frame() === target.mainFrame() &&
-          new URL(request.url()).pathname.endsWith("/_marimo-studio/views/checkpoint-view/outputs"),
-      ),
-    );
     await live.goto(liveUrl);
     await exact.goto(exactUrl);
     for (const target of [live, exact]) {
@@ -725,29 +747,10 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
       path: new RegExp(`^${RegExp.escape(new URL(liveStream.url()).pathname)}$`),
       status: 200,
     });
-    const outputRequests = await Promise.all(initialOutputs);
-    const recoverStaleOutputs: (() => void)[] = [];
-    for (const [index, target] of [live, exact].entries()) {
-      const initial = new URL(outputRequests[index]!.url());
-      const onRequest = (request: Request): void => {
-        const url = new URL(request.url());
-        if (
-          request.method() !== "POST" ||
-          request.frame() !== target.mainFrame() ||
-          url.origin !== initial.origin ||
-          url.pathname !== initial.pathname
-        )
-          return;
-        const response = browserDiagnostics.expectResponse({
-          status: 409,
-          path: new RegExp(`^${RegExp.escape(initial.pathname)}$`),
-          required: false,
-        });
-        recoverStaleOutputs.push(() => response.recovered());
-      };
-      target.on("request", onRequest);
-      stopOutputTransitions.push(() => target.off("request", onRequest));
-    }
+    const staleOutputs = [live, exact].map((target) =>
+      captureRetiringProjectionReads(target.mainFrame(), checkpoint!, browserDiagnostics),
+    );
+    stopOutputTransitions.push(...staleOutputs.map((capture) => capture.seal));
     const staleRefresh = browserDiagnostics.expectResponse({
       status: 409,
       path: exactPath,
@@ -794,7 +797,7 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
       "data-marimo-studio-revision",
       new URL(refreshedUrl).searchParams.get("marimo_studio_revision")!,
     );
-    recoverStaleOutputs.forEach((recover) => recover());
+    staleOutputs.forEach((capture) => capture.recovered());
   } finally {
     stopOutputTransitions.forEach((stop) => stop());
     await live.close();

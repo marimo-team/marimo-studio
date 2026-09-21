@@ -384,3 +384,38 @@ it("ignores callbacks from a replaced stream", async () => {
   expect(model.refreshInventory).not.toHaveBeenCalled();
   coordinator.dispose();
 });
+
+it("forwards build source locations to the presentation diagnostic", () => {
+  const { coordinator, preview } = setup();
+  const stream = EventSourceStub.instances[0]!;
+  stream.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
+  const source = { path: "src/App.tsx", line: 12, column: 4 };
+  stream.emit(
+    "change",
+    JSON.stringify({
+      kind: "build",
+      phase: "complete",
+      revision: "v1",
+      build: {
+        phase: "failed",
+        diagnostics: [
+          {
+            severity: "error",
+            code: "invalid-source",
+            message: "Parse failed",
+            hint: "Fix the source.",
+            source,
+          },
+        ],
+      },
+      files: [],
+    }),
+  );
+  expect(preview.presentationBuildCompleted).toHaveBeenLastCalledWith(
+    "dashboard",
+    "v1",
+    undefined,
+    expect.objectContaining({ source }),
+  );
+  coordinator.dispose();
+});

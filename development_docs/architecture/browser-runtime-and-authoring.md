@@ -465,8 +465,8 @@ The `change` event has four kinds:
 - `views` refreshes the view inventory.
 
 The initial `ready` event refreshes inventory, reconciles Source, and gives
-Preview its presentation baseline. Separate `activate`, `observe`, and
-`session` events carry agent requests and editor session bindings.
+Preview its presentation baseline. Separate `activate` and `session` events
+carry agent activation requests and editor session bindings.
 
 The event URL carries a client-scoped capability signed for the notebook, base
 URL, edit mode, and server instance. The server validates the capability,

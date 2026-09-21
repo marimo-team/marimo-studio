@@ -24,6 +24,9 @@ globalThis.__MARIMO_MOUNT_CONFIG__ = {
 afterEach(() => {
   stopRenderedViewObserver();
   document.body.replaceChildren();
+  for (const name of document.documentElement.getAttributeNames()) {
+    if (name.startsWith("data-marimo-studio-")) document.documentElement.removeAttribute(name);
+  }
   globalThis.history.replaceState({}, "", "/");
   globalThis.__MARIMO_STUDIO_SESSION_ID__ = undefined;
   vi.restoreAllMocks();

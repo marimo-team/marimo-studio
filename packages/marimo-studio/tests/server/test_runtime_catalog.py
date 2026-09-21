@@ -164,7 +164,8 @@ def test_server_runtime_instance_stays_stable_across_binding_generations(
     )
 
     class Sessions:
-        async def live_cells(self, *_args: object, **_kwargs: object):
+        async def live_cells(self, *_args: object, **kwargs: object):
+            assert kwargs["include_dependency_closures"] is False
             return next(captures)
 
     monkeypatch.setattr(

@@ -72,7 +72,7 @@ documentBase.start(viewBaseUrl);
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
 const documentLifetime = new AbortController();
 onFinalPageHide(() => documentLifetime.abort(new PresentationDocumentRetiredError()));
-startQuerySync();
+onFinalPageHide(startQuerySync());
 globalThis.addEventListener("pagehide", () => documentBase.stop());
 globalThis.addEventListener("pageshow", () => documentBase.start());
 

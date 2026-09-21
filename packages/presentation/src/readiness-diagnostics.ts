@@ -91,7 +91,7 @@ export const toBrowserDiagnostic = (diagnostic: StudioDiagnostic): BrowserDiagno
   if ("target" in diagnostic) {
     browserDiagnostic.target = diagnostic.target;
   }
-  if ("source" in diagnostic) {
+  if ("source" in diagnostic && diagnostic.source !== undefined) {
     browserDiagnostic.source = {
       ...diagnostic.source,
       line: Math.max(0, diagnostic.source.line),

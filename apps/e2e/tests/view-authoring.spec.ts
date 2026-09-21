@@ -9,6 +9,8 @@ import {
   studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
+  captureProjectionRefresh,
+  recoverProjectionRefresh,
   dashboardHtmlPath,
   editorFrame,
   expect,
@@ -122,10 +124,12 @@ shown.to_dict()
     "</header>",
     '  <p id="papers"><span mo-value="summary.papers"></span> papers</p>\n      </header>',
   );
+  const refreshedProjections = await captureProjectionRefresh(page, browserDiagnostics);
   await writeViewSource(page, "dashboard", "index.html", projectedSource, "plain.py");
 
   await waitForPreview(page);
   await expect(preview.locator("#papers")).toHaveText("3877 papers", { timeout: 65_000 });
+  await recoverProjectionRefresh(refreshedProjections, page);
   await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   supersededConfig.recovered();
 });

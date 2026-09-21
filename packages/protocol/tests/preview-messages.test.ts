@@ -334,3 +334,19 @@ test("ordinary preview messages retain the browser message budget", () => {
   assert.notEqual(parsePreviewMessage(normal), undefined);
   assert.equal(parsePreviewMessage(oversized), undefined);
 });
+
+test("a presentation refresh diagnostic belongs to its target view", () => {
+  const refresh = {
+    type: "marimo-studio:presentation-refresh",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+    phase: "settled",
+    diagnostic: pendingDiagnostic,
+  };
+  assert.notEqual(parsePreviewMessage(refresh), undefined);
+  assert.equal(
+    parsePreviewMessage({ ...refresh, diagnostic: { ...pendingDiagnostic, view: "other" } }),
+    undefined,
+  );
+});

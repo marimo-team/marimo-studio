@@ -884,7 +884,9 @@ def test_stale_prepared_build_preserves_newer_publication_receipt(
         current_revision = current.artifact.project_revision
         assert current_revision != input_id
     accepted = _profile_path(project).read_bytes()
-    with pytest.raises(ViewProjectError):
+    with pytest.raises(
+        ViewProjectError, match="changed before the prepared build started"
+    ):
         publish_artifact_lease(
             project, "development", inspection=inspection, input_id=input_id
         )

@@ -335,7 +335,7 @@ class NotebookPresentation:
                 )
                 is not snapshot
             ):
-                return False
+                lease = None
         if lease is not None:
             try:
                 lease.verify_membership()
@@ -363,12 +363,22 @@ class NotebookPresentation:
     def _require_cached_snapshot(
         self, snapshot: PresentationSnapshot
     ) -> PresentationSnapshot:
-        if not self._cached_snapshot_is_usable(snapshot):
-            raise RuntimeSyncError(
-                "The retained view artifact is unavailable. Rebuild the view "
-                "or retry after its publication completes."
+        if self._cached_snapshot_is_usable(snapshot):
+            return snapshot
+        with self._lock:
+            successor = self._snapshots.get(
+                (snapshot.view_name, snapshot.artifact.profile)
             )
-        return snapshot
+        if (
+            successor is not None
+            and successor is not snapshot
+            and self._cached_snapshot_is_usable(successor)
+        ):
+            return successor
+        raise RuntimeSyncError(
+            "The retained view artifact is unavailable. Rebuild the view "
+            "or retry after its publication completes."
+        )
 
     def _coordination_lock(self, view_name: str) -> RLock:
         with self._lock:
@@ -418,9 +428,9 @@ class NotebookPresentation:
             )
             if cached is not None and cached_generation == catalog.generation:
                 if cached_stamps == current_stamps:
-                    return await asyncio.to_thread(
-                        self._require_cached_snapshot, cached
-                    )
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    continue
                 await development.refresh(selected)
                 catalog = await development.project_catalog(studio, selected)
                 current_stamps = await asyncio.to_thread(
@@ -433,9 +443,9 @@ class NotebookPresentation:
                     cached_generation == catalog.generation
                     and cached_stamps == current_stamps
                 ):
-                    return await asyncio.to_thread(
-                        self._require_cached_snapshot, cached
-                    )
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    continue
             prepared = PreparedViewProject(catalog.inspection, catalog.input_id)
             await development.publish(
                 selected,
@@ -697,9 +707,9 @@ class NotebookPresentation:
             cached_stamps = (cached_stamp, cached_documents, cached_publication)
             if cached is not None and cached_generation == catalog.generation:
                 if cached_stamps == current_stamps:
-                    return await asyncio.to_thread(
-                        self._require_cached_snapshot, cached
-                    )
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    return await self.snapshot_async(view_name, profile=profile)
                 await development.refresh(view_name)
                 try:
                     catalog = await development.project_catalog(studio, view_name)
@@ -719,9 +729,9 @@ class NotebookPresentation:
                     cached_generation == catalog.generation
                     and cached_stamps == current_stamps
                 ):
-                    return await asyncio.to_thread(
-                        self._require_cached_snapshot, cached
-                    )
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    return await self.snapshot_async(view_name, profile=profile)
             published = await asyncio.to_thread(
                 self._resolve_snapshot,
                 view_name,
@@ -730,9 +740,9 @@ class NotebookPresentation:
             )
             if published is None:
                 if cached is not None:
-                    return await asyncio.to_thread(
-                        self._require_cached_snapshot, cached
-                    )
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    return await self.snapshot_async(view_name, profile=profile)
                 return await self.snapshot_async(view_name, profile=profile)
             current = await development.project_catalog(studio, view_name)
             if current.generation != catalog.generation:

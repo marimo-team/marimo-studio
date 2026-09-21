@@ -30,12 +30,14 @@ export const setTrustedRuntimeQuery = (url: URL, selection: TrustedRuntimeSelect
 };
 
 export const setEditorBindingQuery = (url: URL, clientId?: string, supportUrl?: string): void => {
+  if (clientId) url.searchParams.set(STUDIO_CLIENT_QUERY_PARAM, clientId);
+  else url.searchParams.delete(STUDIO_CLIENT_QUERY_PARAM);
+  url.searchParams.delete(EDITOR_SESSION_QUERY_PARAM);
   if (!clientId || !supportUrl) {
     return;
   }
   const session = new URL(supportUrl, url).searchParams.get(EDITOR_SESSION_QUERY_PARAM);
   if (session) {
-    url.searchParams.set(STUDIO_CLIENT_QUERY_PARAM, clientId);
     url.searchParams.set(EDITOR_SESSION_QUERY_PARAM, session);
   }
 };

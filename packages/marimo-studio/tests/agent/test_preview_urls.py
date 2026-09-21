@@ -133,6 +133,8 @@ def test_saved_view_needs_an_explicit_server(notebook_path: Path) -> None:
     view = asyncio.run(workspace.create_view("dashboard"))
     with pytest.raises(ProtocolError, match="Provide server"):
         asyncio.run(view.preview_url(runtime="wasm"))
+    with pytest.raises(ValueError, match="access_token requires server"):
+        asyncio.run(view.preview_url(runtime="wasm", access_token="secret"))
 
 
 def test_fresh_view_captures_its_owner_before_contacting_the_server(

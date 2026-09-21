@@ -30,11 +30,9 @@ test("pre-config query messages use the server-minted mount runtime", () => {
     "/?runtime=server&marimo_studio_client=studio-client&marimo_studio_lifecycle=7",
   );
   const postMessage = vi.spyOn(globalThis.parent, "postMessage");
-  const pushState = globalThis.history.pushState;
-  const replaceState = globalThis.history.replaceState;
   setActiveDocumentLifecycleId(7);
 
-  startQuerySync();
+  const dispose = startQuerySync();
 
   expect(postMessage).toHaveBeenCalledWith(
     {
@@ -45,8 +43,7 @@ test("pre-config query messages use the server-minted mount runtime", () => {
     },
     globalThis.location.origin,
   );
-  globalThis.history.pushState = pushState;
-  globalThis.history.replaceState = replaceState;
+  dispose();
 });
 
 test("query changes carry the current document switch", () => {
@@ -58,11 +55,9 @@ test("query changes carry the current document switch", () => {
   );
   vi.stubGlobal("frameElement", null);
   const postMessage = vi.spyOn(globalThis.parent, "postMessage");
-  const pushState = globalThis.history.pushState;
-  const replaceState = globalThis.history.replaceState;
   setActiveDocumentLifecycleId(7);
 
-  startQuerySync();
+  const dispose = startQuerySync();
 
   expect(postMessage).toHaveBeenCalledWith(
     {
@@ -73,8 +68,7 @@ test("query changes carry the current document switch", () => {
     },
     globalThis.location.origin,
   );
-  globalThis.history.pushState = pushState;
-  globalThis.history.replaceState = replaceState;
+  dispose();
 });
 
 test("an isolated direct view reports public query changes to its wrapper", () => {
@@ -82,11 +76,9 @@ test("an isolated direct view reports public query changes to its wrapper", () =
   globalThis.history.replaceState({}, "", "/?file=notebook.py&region=emea");
   const parent = { postMessage: vi.fn() };
   vi.stubGlobal("parent", parent);
-  const pushState = globalThis.history.pushState;
-  const replaceState = globalThis.history.replaceState;
   setActiveDocumentLifecycleId(9);
 
-  startQuerySync();
+  const dispose = startQuerySync();
 
   expect(parent.postMessage).toHaveBeenCalledWith(
     {
@@ -97,8 +89,7 @@ test("an isolated direct view reports public query changes to its wrapper", () =
     },
     globalThis.location.origin,
   );
-  globalThis.history.pushState = pushState;
-  globalThis.history.replaceState = replaceState;
+  dispose();
 });
 
 test("static browser history restores the public WebAssembly query", async () => {
@@ -138,15 +129,13 @@ test("notebook query writes preserve the current exact checkpoint without export
     "",
     "/dashboard/?marimo_studio_revision=checkpoint&region=eu",
   );
-  const pushState = globalThis.history.pushState;
-  const replaceState = globalThis.history.replaceState;
-  startQuerySync();
+  const dispose = startQuerySync();
   try {
     globalThis.history.pushState({}, "", "?region=us");
     expect(new URL(globalThis.location.href).searchParams.get("marimo_studio_revision")).toBe(
       "checkpoint",
     );
-    globalThis.history.replaceState({}, "", "?region=apac");
+    globalThis.history.replaceState({}, "", "?region=apac&marimo_studio_revision=forged");
     expect(new URL(globalThis.location.href).searchParams.get("marimo_studio_revision")).toBe(
       "checkpoint",
     );
@@ -155,8 +144,7 @@ test("notebook query writes preserve the current exact checkpoint without export
       false,
     );
   } finally {
-    globalThis.history.pushState = pushState;
-    globalThis.history.replaceState = replaceState;
+    dispose();
   }
 });
 
@@ -164,11 +152,9 @@ test("notebook history writes retain admitted editor routing without sending it 
   const originalSupport = getSupportUrl();
   setSupportUrl("/support/dashboard?marimo_studio_editor_session=s_current");
   globalThis.history.replaceState({}, "", "/dashboard/?region=eu");
-  const pushState = globalThis.history.pushState;
-  const replaceState = globalThis.history.replaceState;
   const parent = { postMessage: vi.fn() };
   vi.stubGlobal("parent", parent);
-  startQuerySync();
+  const dispose = startQuerySync();
   try {
     globalThis.history.pushState(
       {},
@@ -183,8 +169,20 @@ test("notebook history writes retain admitted editor routing without sending it 
       globalThis.location.origin,
     );
   } finally {
-    globalThis.history.pushState = pushState;
-    globalThis.history.replaceState = replaceState;
+    dispose();
     setSupportUrl(originalSupport);
   }
+});
+
+test("query synchronization releases its listener and history hooks on disposal", () => {
+  const parent = { postMessage: vi.fn() };
+  vi.stubGlobal("parent", parent);
+  globalThis.history.replaceState({}, "", "/dashboard/?marimo_studio_revision=checkpoint");
+  const dispose = startQuerySync();
+  dispose();
+  parent.postMessage.mockClear();
+  globalThis.dispatchEvent(new PopStateEvent("popstate"));
+  globalThis.history.pushState({}, "", "?region=eu");
+  expect(parent.postMessage).not.toHaveBeenCalled();
+  expect(new URL(globalThis.location.href).searchParams.has("marimo_studio_revision")).toBe(false);
 });
