@@ -98,7 +98,7 @@ for (const runtime of ["Server", "static WebAssembly", "Prepared"] as const) {
         : undefined;
       const retiringValues =
         runtime === "Server"
-          ? diagnostics.expectRequestAbort({
+          ? diagnostics.expectActiveRequestAbort({
               origin: e2eNetwork.provider.live.origin,
               method: "GET",
               path: /\/_marimo-studio\/views\/notebook\/values$/,
@@ -112,6 +112,9 @@ for (const runtime of ["Server", "static WebAssembly", "Prepared"] as const) {
       projectionFailure.recovered();
       if (runtime === "Prepared") expect(pythonRequests).toEqual([]);
       expect(remoteTemplateRequests).toEqual([]);
+      const pageRetirement = diagnostics.expectPageRetirement(page);
+      await page.close();
+      pageRetirement.recovered();
     } finally {
       await diagnostics.close();
       expect(diagnostics.messages).toEqual([]);
