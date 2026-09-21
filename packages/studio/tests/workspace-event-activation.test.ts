@@ -1,5 +1,3 @@
-import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
-
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 import { ViewActivationAcknowledgementError } from "../src/app/activation-remote.ts";
@@ -303,7 +301,6 @@ it("cancels an older selection before a newer unavailable activation settles", a
         previewUrl: "http://localhost/preview/",
         frameSelector: "iframe[data-test-preview]",
       })),
-      requestObservation: vi.fn(),
       editorSessionChanged: vi.fn(),
       reload: vi.fn(),
       presentationBaseline: vi.fn(),
@@ -337,52 +334,6 @@ it("cancels an older selection before a newer unavailable activation settles", a
   expect(cancelPendingSelection).toHaveBeenCalledTimes(2);
   expect(current).toBe("dashboard");
   expect(acknowledge).not.toHaveBeenCalled();
-  coordinator.dispose();
-});
-
-it("ignores observations that are not bound to an active view generation", async () => {
-  const { coordinator, model, preview } = setup();
-  const request: ObserveViewRequest = {
-    schema: 1,
-    requestId: "request-report",
-    view: "report",
-    runtime: "server",
-    runtimeInstance: "runtime-instance",
-    revision: "revision-report",
-  };
-
-  EventSourceStub.instances[0]?.emit("observe", JSON.stringify(request));
-
-  await Promise.resolve();
-
-  expect(preview.requestObservation).not.toHaveBeenCalled();
-  expect(model.choose).not.toHaveBeenCalled();
-  coordinator.dispose();
-});
-
-it("forwards focused observations only while their view is active", async () => {
-  const { coordinator, model, preview } = setup();
-  const request: ObserveViewRequest = {
-    schema: 1,
-    requestId: "request-dashboard",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-instance",
-    revision: "revision-dashboard",
-    activeViewGeneration: 4,
-  };
-  const events = EventSourceStub.instances[0];
-
-  events?.emit("observe", JSON.stringify(request));
-  await vi.waitFor(() => expect(preview.requestObservation).toHaveBeenCalledWith(request));
-  events?.emit(
-    "observe",
-    JSON.stringify({ ...request, requestId: "request-report", view: "report" }),
-  );
-  await Promise.resolve();
-
-  expect(preview.requestObservation).toHaveBeenCalledOnce();
-  expect(model.choose).not.toHaveBeenCalled();
   coordinator.dispose();
 });
 

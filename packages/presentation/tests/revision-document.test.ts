@@ -199,6 +199,7 @@ test("a failed history push restores document, styles, runtime, and URL identity
   expect(document.title).toBe("Old title");
   expect(getSupportUrl()).toBe("/support/old");
   expect(getRuntimeConfig().revision).toBe("revision-old");
+  expect(document.documentElement.dataset.marimoStudioRevision).toBe("revision-old");
   expect(globalThis.location.href).toBe(previousUrl);
   expect(globalThis.history.length).toBe(previousHistoryLength);
   expect(pushState).toHaveBeenCalledOnce();
@@ -540,6 +541,7 @@ test("a superseded candidate revision is rejected before runtime commit", async 
   });
 
   expect(getRuntimeConfig().revision).toBe("revision-old");
+  expect(document.documentElement.dataset.marimoStudioRevision).toBe("revision-old");
   expect(getSupportUrl()).toBe("/support/old");
   expect(document.querySelector("#app-shell")?.textContent).toBe("Current shell");
 });
@@ -583,6 +585,7 @@ test("a structural shell edit reloads an unchanged authored script", async () =>
   expect(result.reloadDocument).toBe(true);
   expect(document.querySelector("button")?.id).toBe("run");
   expect(getRuntimeConfig().revision).toBe("revision-old");
+  expect(document.documentElement.dataset.marimoStudioRevision).toBe("revision-old");
 });
 
 test("a stylesheet-only revision keeps the authored shell and rendered projection mounted", async () => {
@@ -732,4 +735,56 @@ test("failed document refresh preserves error context in browser diagnostics", a
   } finally {
     revisions.dispose();
   }
+});
+
+test("an exact refresh rejects another revision before replacing its retained presentation", async () => {
+  const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
+  document.body.innerHTML = '<main id="app-shell">Retained report</main>';
+  commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
+  const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
+  const fetch = vi.fn(
+    async () =>
+      new Response("new report", {
+        headers: { "Marimo-Studio-Revision": "revision-new" },
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  await expect(
+    adapter.replace(
+      "/dashboard/?marimo_studio_revision=revision-old",
+      "/support/new",
+      new AbortController().signal,
+      vi.fn(),
+    ),
+  ).rejects.toMatchObject({
+    code: "presentation-revision-mismatch",
+    transient: false,
+  });
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(document.querySelector("#app-shell")?.textContent).toBe("Retained report");
+  expect(document.documentElement.dataset.marimoStudioRevision).toBe("revision-old");
+});
+
+test("standalone renewal retains its admitted editor without claiming a workspace frame lifecycle", () => {
+  const url = new URL(
+    presentationRefreshUrl(
+      {
+        view: "dashboard",
+        presentationSessionId: "s_preview",
+        supportUrl:
+          "/_marimo-studio/presentation/r.token/_marimo-studio/views/dashboard?marimo_studio_editor_session=s_editor",
+      },
+      "http://studio.test/dashboard/?marimo_studio_client=forged",
+      "s_editor",
+      {
+        clientId: "current-client",
+        renewalToken: "d.token",
+        runtime: "server",
+        runtimeSessionId: "s_editor",
+      },
+    ),
+  );
+  expect(url.searchParams.get("marimo_studio_client")).toBe("current-client");
+  expect(url.searchParams.get("marimo_studio_editor_session")).toBe("s_editor");
+  expect(url.searchParams.has("marimo_studio_lifecycle")).toBe(false);
 });

@@ -1,19 +1,9 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
-import type { RecordBrowserObservation } from "../src/features/preview/observation-remote.ts";
-
 import { PreviewControlController } from "../src/features/preview/control-controller.ts";
 import { PreviewController } from "../src/features/preview/controller.ts";
-import { PreviewObservationController } from "../src/features/preview/observation-controller.ts";
-import { emptyProjectionEvidence } from "./fixtures.ts";
 import { installFrameBridge } from "./frame-bridge-test-support.ts";
-import {
-  controller,
-  dispatchPreviewMessage,
-  dispatchPreviewRefreshHandshake,
-  frame,
-  previewDeck,
-} from "./preview-test-support.ts";
+import { controller, dispatchPreviewMessage, frame, previewDeck } from "./preview-test-support.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -31,14 +21,13 @@ const projectionDiagnostic = {
   target: "user_note",
 };
 
-const observationHarness = () => {
+const interactiveHarness = () => {
   const preview = frame("complete");
   const previewWindow = { postMessage: vi.fn() };
   Object.defineProperty(preview, "contentWindow", {
     configurable: true,
     value: previewWindow,
   });
-  const record = vi.fn<RecordBrowserObservation>(async () => undefined);
   const server = new PreviewController(
     "dashboard",
     "server",
@@ -50,7 +39,6 @@ const observationHarness = () => {
     vi.fn(async () => "accepted" as const),
     vi.fn(),
     vi.fn(),
-    record,
   );
   dispatchPreviewMessage(previewWindow, {
     type: "marimo-studio:receiver-ready",
@@ -66,62 +54,8 @@ const observationHarness = () => {
     view: "dashboard",
     revision: "revision-1",
   });
-  return { preview, previewWindow, record, server };
+  return { preview, previewWindow, server };
 };
-
-it.each(["ready", "error"] as const)(
-  "accepts a same-request loading observation followed by terminal %s evidence",
-  async (terminal) => {
-    const { previewWindow, record, server } = observationHarness();
-    const stopControls = vi.spyOn(PreviewControlController.prototype, "stop");
-    const request = {
-      schema: 1 as const,
-      requestId: `request-${terminal}`,
-      view: "dashboard",
-      runtime: "server",
-      runtimeInstance: "runtime-instance",
-      revision: "revision-1",
-    };
-    server.requestObservation(request);
-    dispatchPreviewMessage(previewWindow, {
-      type: "marimo-studio:view-observation",
-      lifecycleId: 1,
-      requestId: request.requestId,
-      view: request.view,
-      runtime: request.runtime,
-      runtimeInstance: request.runtimeInstance,
-      revision: request.revision,
-      state: "loading",
-      diagnostics: [],
-      sessionId: "s_123456",
-      query: "",
-      ...emptyProjectionEvidence,
-    });
-    expect(server.runtimeStatus().current.phase).toBe("synchronizing");
-
-    dispatchPreviewMessage(previewWindow, {
-      type: "marimo-studio:view-observation",
-      lifecycleId: 1,
-      requestId: request.requestId,
-      view: request.view,
-      runtime: request.runtime,
-      runtimeInstance: request.runtimeInstance,
-      revision: request.revision,
-      state: terminal,
-      diagnostics: terminal === "error" ? [projectionDiagnostic] : [],
-      sessionId: "s_123456",
-      query: "",
-      ...emptyProjectionEvidence,
-    });
-
-    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2));
-    expect(server.runtimeStatus().current.phase).toBe(terminal === "ready" ? "ready" : "failed");
-    expect(server.readyForInteraction()).toBe(true);
-    expect(stopControls).not.toHaveBeenCalled();
-    server.dispose();
-    stopControls.mockRestore();
-  },
-);
 
 it("keeps an exact projection failure interactive while a runtime failure blocks the frame", () => {
   const preview = frame("complete");
@@ -241,7 +175,7 @@ it("admits a session-bearing projection error after its delayed build completes"
 });
 
 it("defers an inactive localized commit until activation owns its controls", async () => {
-  const { preview, previewWindow, server } = observationHarness();
+  const { preview, previewWindow, server } = interactiveHarness();
   server.presentationBuildStarted();
   dispatchPreviewMessage(previewWindow, {
     type: "marimo-studio:receiver-ready",
@@ -254,7 +188,6 @@ it("defers an inactive localized commit until activation owns its controls", asy
   const beginControls = vi
     .spyOn(PreviewControlController.prototype, "begin")
     .mockImplementation(() => undefined);
-  const postObservations = vi.spyOn(PreviewObservationController.prototype, "post");
   dispatchPreviewMessage(previewWindow, {
     type: "marimo-studio:view-error",
     runtime: "server",
@@ -267,7 +200,6 @@ it("defers an inactive localized commit until activation owns its controls", asy
   server.presentationBuildCompleted("revision-2");
 
   expect(beginControls).not.toHaveBeenCalled();
-  expect(postObservations).not.toHaveBeenCalled();
   installFrameBridge(preview, previewWindow, {
     lifecycleId: 1,
     revision: "revision-2",
@@ -280,16 +212,14 @@ it("defers an inactive localized commit until activation owns its controls", asy
 
   expect(beginControls).toHaveBeenCalledOnce();
   expect(beginControls).toHaveBeenCalledWith("revision-2", "s_error2", undefined);
-  expect(postObservations).toHaveBeenCalledOnce();
   expect(preview.dataset.sessionId).toBe("s_error2");
   expect(server.runtimeStatus().current.phase).toBe("failed");
-  postObservations.mockRestore();
   beginControls.mockRestore();
   server.dispose();
 });
 
 it("reactivates a warm projection failure and restarts its controls", async () => {
-  const { preview, previewWindow, server } = observationHarness();
+  const { preview, previewWindow, server } = interactiveHarness();
   server.presentationBaseline("revision-1");
   dispatchPreviewMessage(previewWindow, {
     type: "marimo-studio:view-error",
@@ -325,27 +255,12 @@ it("reactivates a warm projection failure and restarts its controls", async () =
     "*",
   );
   expect(beginControls).toHaveBeenCalledWith("revision-1", undefined, undefined);
-  server.requestObservation({
-    schema: 1,
-    requestId: "localized-retry",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-instance",
-    revision: "revision-1",
-  });
-  expect(previewWindow.postMessage).toHaveBeenCalledWith(
-    expect.objectContaining({
-      type: "marimo-studio:observe-view",
-      requestId: "localized-retry",
-    }),
-    "*",
-  );
   beginControls.mockRestore();
   server.dispose();
 });
 
 it("refreshes a warm fatal failure before reactivation completes", async () => {
-  const { preview, previewWindow, server } = observationHarness();
+  const { preview, previewWindow, server } = interactiveHarness();
   server.presentationBaseline("revision-1");
   dispatchPreviewMessage(previewWindow, {
     type: "marimo-studio:view-error",
@@ -405,27 +320,6 @@ it("refreshes a warm fatal failure before reactivation completes", async () => {
 
   await expect(activating).resolves.toBe(true);
   expect(server.readyForInteraction()).toBe(true);
-  server.dispose();
-});
-
-it("ignores observation requests while its cached controller is inactive", () => {
-  const { previewWindow, server } = observationHarness();
-  server.deactivate();
-  previewWindow.postMessage.mockClear();
-
-  server.requestObservation({
-    schema: 1,
-    requestId: "inactive-observation",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-instance",
-    revision: "revision-1",
-  });
-
-  expect(previewWindow.postMessage).not.toHaveBeenCalledWith(
-    expect.objectContaining({ type: "marimo-studio:observe-view" }),
-    "*",
-  );
   server.dispose();
 });
 
@@ -496,232 +390,46 @@ it("retains a cleared preview diagnostic in runtime history", () => {
   server.dispose();
 });
 
-it("ignores superseded observation replies before updating runtime identity", () => {
-  const editor = frame("complete");
-  const preview = frame("complete");
-  const previewWindow = { postMessage: vi.fn() };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const report = vi.fn();
-  const record = vi.fn<RecordBrowserObservation>(async () => undefined);
-  const server = new PreviewController(
-    "dashboard",
-    "server",
-    editor,
-    preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
-    (view) => `/support/${view}`,
-    vi.fn(),
-    vi.fn(async () => "accepted" as const),
-    vi.fn(),
-    report,
-    record,
-  );
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:receiver-ready",
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-1",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-1",
-  });
-  server.requestObservation({
-    schema: 1,
-    requestId: "stale-request",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "stale-instance",
-    revision: "revision-1",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:receiver-ready",
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-2",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-2",
-  });
-  server.requestObservation({
-    schema: 1,
-    requestId: "current-request",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "current-instance",
-    revision: "revision-2",
-  });
-  report.mockClear();
-
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-observation",
-    lifecycleId: 1,
-    requestId: "stale-request",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "stale-instance",
-    revision: "revision-1",
-    state: "ready",
-    diagnostics: [],
-    sessionId: "s_stale1",
-    query: "",
-    ...emptyProjectionEvidence,
-  });
-
-  expect(report).not.toHaveBeenCalled();
-  expect(preview.dataset.sessionId).toBeUndefined();
-  expect(server.runtimeStatus()).toMatchObject({
-    revision: "revision-2",
-    sessionId: null,
-    current: { phase: "ready" },
-  });
-
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-observation",
-    lifecycleId: 1,
-    requestId: "current-request",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "current-instance",
-    revision: "revision-2",
-    state: "ready",
-    diagnostics: [],
-    sessionId: "s_current2",
-    query: "",
-    ...emptyProjectionEvidence,
-  });
-
-  expect(preview.dataset.sessionId).toBe("s_current2");
-  expect(server.runtimeStatus()).toMatchObject({
-    revision: "revision-2",
-    sessionId: "s_current2",
-    current: { phase: "ready" },
-  });
-  expect(record).toHaveBeenCalledTimes(1);
-  expect(record).toHaveBeenCalledWith(expect.objectContaining({ requestId: "current-request" }));
-  server.dispose();
-});
-
-it("rejects an old observation after a new presentation build starts", () => {
-  const editor = frame("complete");
-  const preview = frame("complete");
-  const previewWindow = { postMessage: vi.fn() };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const record = vi.fn<RecordBrowserObservation>(async () => undefined);
-  const server = new PreviewController(
-    "dashboard",
-    "server",
-    editor,
-    preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
-    (view) => `/support/${view}`,
-    vi.fn(),
-    vi.fn(async () => "accepted" as const),
-    vi.fn(),
-    vi.fn(),
-    record,
-  );
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:receiver-ready",
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-old",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-old",
-  });
-  server.requestObservation({
-    schema: 1,
-    requestId: "old-observation",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-old",
-    revision: "revision-old",
-  });
-
-  server.presentationBuildStarted();
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-observation",
-    lifecycleId: 1,
-    requestId: "old-observation",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-old",
-    revision: "revision-old",
-    state: "ready",
-    diagnostics: [],
-    sessionId: "s_old123",
-    query: "",
-    ...emptyProjectionEvidence,
-  });
-
-  expect(server.runtimeStatus().current.phase).toBe("synchronizing");
-  expect(record).not.toHaveBeenCalled();
-
-  server.presentationBuildCompleted("revision-new");
-  dispatchPreviewRefreshHandshake(previewWindow, {
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-new",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    lifecycleId: 1,
-    view: "dashboard",
-    revision: "revision-new",
-  });
-  server.requestObservation({
-    schema: 1,
-    requestId: "new-observation",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-new",
-    revision: "revision-new",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-observation",
-    lifecycleId: 1,
-    requestId: "new-observation",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-new",
-    revision: "revision-new",
-    state: "ready",
-    diagnostics: [],
-    sessionId: "s_new123",
-    query: "",
-    ...emptyProjectionEvidence,
-  });
-
-  expect(server.runtimeStatus()).toMatchObject({
-    revision: "revision-new",
-    current: { phase: "ready" },
-  });
-  expect(record).toHaveBeenCalledOnce();
-  expect(record).toHaveBeenCalledWith(
-    expect.objectContaining({ requestId: "new-observation", revision: "revision-new" }),
-  );
-  server.dispose();
-});
+it.each([false, true])(
+  "retains a build failure before attachment and clears it on repair (%s)",
+  (repaired) => {
+    const preview = frame("complete");
+    const previewWindow = { postMessage: vi.fn() };
+    Object.defineProperty(preview, "contentWindow", { configurable: true, value: previewWindow });
+    const deck = previewDeck();
+    const failure = {
+      ...projectionDiagnostic,
+      scope: "presentation",
+      code: "view-build-failed",
+      message: "Latest build failed. Showing the previous build.",
+    };
+    deck.presentationBuildCompleted("dashboard", "revision-1", undefined, failure);
+    if (repaired) deck.presentationBuildCompleted("dashboard", "revision-1");
+    deck.attach(frame("complete"), new Map([["server", preview]]));
+    // Messages sent before the new document mounts cannot be observed by it.
+    previewWindow.postMessage.mockClear();
+    const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
+    dispatchPreviewMessage(previewWindow, {
+      type: "marimo-studio:receiver-ready",
+      runtime: "server",
+      lifecycleId,
+      view: "dashboard",
+      revision: "revision-1",
+    });
+    dispatchPreviewMessage(previewWindow, {
+      type: "marimo-studio:view-ready",
+      runtime: "server",
+      lifecycleId,
+      view: "dashboard",
+      revision: "revision-1",
+    });
+    const failedRefresh = expect.objectContaining({
+      type: "marimo-studio:presentation-refresh",
+      phase: "settled",
+      diagnostic: failure,
+    });
+    if (repaired) expect(previewWindow.postMessage).not.toHaveBeenCalledWith(failedRefresh, "*");
+    else expect(previewWindow.postMessage).toHaveBeenCalledWith(failedRefresh, "*");
+    deck.dispose();
+  },
+);

@@ -9,7 +9,6 @@ from marimo_studio._authoring.workspace import create_view as create_view_operat
 from marimo_studio._authoring.workspace_api import Workspace as SavedWorkspace
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
-from marimo_studio._validation.limits import DEFAULT_BROWSER_TIMEOUT
 from marimo_studio._validation.records import ValidationLevel, ValidationReport
 from marimo_studio._views.records import Starter
 from marimo_studio._workspace.ownership import (
@@ -35,7 +34,6 @@ class View(SavedView):
         self,
         *,
         level: ValidationLevel = "static",
-        browser_timeout: float = DEFAULT_BROWSER_TIMEOUT,
         runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     ) -> ValidationReport:
         """Validate this view at the selected evidence level."""
@@ -43,8 +41,6 @@ class View(SavedView):
             self.workspace.notebook,
             level=level,
             view=self.name,
-            connection=self.workspace._connection() if level == "browser" else None,
-            browser_timeout=browser_timeout,
             runtime_timeout=runtime_timeout,
             expected_catalog_generation=self.catalog_generation,
             expected_generation=self.generation,

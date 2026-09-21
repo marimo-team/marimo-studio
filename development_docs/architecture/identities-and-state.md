@@ -1,8 +1,8 @@
 # Identities and state
 
-Studio accepts a mutation or browser observation only when it still names the
-state that produced it. Use the narrowest identity in this page and revalidate
-it immediately before commit.
+Studio accepts a mutation only when it still names the state that produced it.
+Use the narrowest identity in this page and revalidate it immediately before
+commit.
 
 See the [canonical ownership map](../architecture.md#ownership) for package
 responsibilities.
@@ -55,8 +55,7 @@ latest build attempt, and provider provenance.
 | Runtime session ID           | Runtime and Marimo session adapters   | One Server runtime session used by a presentation                 |
 | Runtime instance             | Runtime catalog                       | One mounted runtime incarnation                                   |
 | Document lifecycle ID        | Presentation document                 | One loaded presentation document                                  |
-| Request ID                   | Agent observation owner               | One activation, observation, or query operation                   |
-| Observation sequence         | Browser observer                      | Increasing evidence within one request                            |
+| Request ID                   | Operation owner                       | One activation or query operation                                 |
 | Notebook mutation generation | Native editor and Preview             | One editor document transaction in the current editor incarnation |
 
 A `PeerTarget` captures browser client, native session, binding generation,
@@ -123,19 +122,19 @@ remains.
 
 Readiness has several owners:
 
-| State                     | Owner                            | Complete when                                                                 |
-| ------------------------- | -------------------------------- | ----------------------------------------------------------------------------- |
-| Artifact published        | Artifact repository              | A validated candidate and profile receipt commit atomically                   |
-| Presentation committed    | Presentation revision controller | Document, runtime configuration, base, and styles share one revision          |
-| Runtime mounted           | Runtime session                  | `mount()` resolves for the selected runtime instance                          |
-| Projection ready          | Projection host                  | The mounted instance has resolved and rendered its selected result            |
-| Receiver admitted         | Preview admission                | The exact document revision completes the build and refresh barriers          |
-| Browser observation ready | Browser observer                 | Every projection instance is ready and runtime status matches the observation |
+| State                  | Owner                            | Complete when                                                        |
+| ---------------------- | -------------------------------- | -------------------------------------------------------------------- |
+| Artifact published     | Artifact repository              | A validated candidate and profile receipt commit atomically          |
+| Presentation committed | Presentation revision controller | Document, runtime configuration, base, and styles share one revision |
+| Runtime mounted        | Runtime session                  | `mount()` resolves for the selected runtime instance                 |
+| Projection ready       | Projection host                  | The mounted instance has resolved and rendered its selected result   |
+| Receiver admitted      | Preview admission                | The exact document revision completes the build and refresh barriers |
 
 Use the state that protects the caller. Runtime mount does not prove projection
-readiness. Presentation commit does not prove Preview admission. A browser
-observation is evidence for one request and cannot establish a durable
-publication.
+readiness. Presentation commit does not prove Preview admission. The document's
+`data-marimo-studio-revision` exposes its committed presentation revision.
+`data-marimo-studio-state` covers Studio runtime and projection readiness.
+Application behavior requires its own browser assertions.
 
 ## Mutation rule
 
@@ -162,8 +161,7 @@ owners.
   save loses its comparison.
 - Mark a candidate superseded when project inputs change before publication.
 - Ask a presentation to refresh when its projection revision is stale.
-- Reject browser evidence when any request, client, binding, view, runtime,
-  session, presentation, or sequence identity differs.
+- Reject exact preview navigation when the requested presentation revision differs.
 
 ## Contract tests
 
@@ -174,7 +172,6 @@ Protect identities through the boundary that consumes them:
 - Change a build input before publication and retain the current artifact.
 - Retarget and remove projection hosts while checking resource ownership.
 - Replace an event stream and ignore callbacks from its earlier generation.
-- Rebind an editor session and reject earlier activation, query, and
-  observation work.
+- Rebind an editor session and reject earlier activation and query work.
 - Reload the editor and restart notebook mutation generations from a fresh
   namespace.

@@ -7,6 +7,7 @@ export interface PresentationDiagnostic {
   hint: string;
   view: string;
   scope: "presentation";
+  source?: ProjectionDiagnostic["source"];
   details?: Record<string, JsonValue>;
 }
 

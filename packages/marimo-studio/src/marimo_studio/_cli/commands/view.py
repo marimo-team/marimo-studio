@@ -3,7 +3,13 @@
 import click
 
 from marimo_studio._cli.commands.view_create import create, remove
-from marimo_studio._cli.commands.view_delivery import build, export, preflight, show
+from marimo_studio._cli.commands.view_delivery import (
+    build,
+    export,
+    preflight,
+    preview,
+    show,
+)
 from marimo_studio._cli.commands.view_publication import hold, release
 from marimo_studio._cli.commands.view_source import inspect, read, write
 from marimo_studio._cli.help import ColoredGroup
@@ -22,6 +28,7 @@ view.add_command(hold)
 view.add_command(release)
 view.add_command(build)
 view.add_command(show)
+view.add_command(preview)
 view.add_command(export)
 view.add_command(preflight)
 view.add_command(remove)

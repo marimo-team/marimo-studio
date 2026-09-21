@@ -66,20 +66,29 @@ afterEach(() => {
 test("closed development streams ignore late events", () => {
   const ready = vi.fn();
   const changed = vi.fn();
+  const disconnected = vi.fn();
   const events = new DevelopmentEvents();
-  events.connect("/first", ready, changed);
+  events.connect("/first", ready, changed, undefined, disconnected);
   const first = EventSourceStub.instances[0];
 
-  events.connect("/second", ready, changed);
+  events.connect("/second", ready, changed, undefined, disconnected);
   const second = EventSourceStub.instances[1];
   first?.emit("ready");
+  first?.emit("error");
+  expect(disconnected).not.toHaveBeenCalled();
   first?.emit("change", JSON.stringify({ kind: "project" }));
 
   assert.equal(first?.closed, true);
   assert.equal(ready.mock.calls.length, 0);
   assert.equal(changed.mock.calls.length, 0);
 
-  second?.emit("ready");
+  second?.emit("error");
+  expect(disconnected).toHaveBeenCalledOnce();
+  second?.emit(
+    "ready",
+    JSON.stringify({ schema: 1, view: "dashboard", revision: "revision-next" }),
+  );
+  expect(ready).toHaveBeenLastCalledWith("revision-next");
   second?.emit("change", JSON.stringify({ kind: "presentation" }));
   assert.equal(ready.mock.calls.length, 1);
   assert.deepEqual(changed.mock.calls, [[]]);
@@ -371,7 +380,27 @@ test("presentation refresh events target the current document lifecycle", async 
     view: "dashboard",
     phase: "settled",
   });
-  expect(refresh.mock.calls).toEqual([["pending"], ["settled"]]);
+  expect(refresh.mock.calls).toEqual([
+    ["pending", undefined],
+    ["settled", undefined],
+  ]);
+  const diagnostic = {
+    scope: "presentation",
+    severity: "error",
+    code: "view-build-failed",
+    message: "Latest build failed. Showing the previous build.",
+    hint: "Fix the source.",
+    view: "dashboard",
+  };
+  dispatch({
+    type: "marimo-studio:presentation-refresh",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+    phase: "settled",
+    diagnostic,
+  });
+  expect(refresh).toHaveBeenLastCalledWith("settled", diagnostic);
   const channel = new MessageChannel();
   const port = channel.port1;
   dispatch(

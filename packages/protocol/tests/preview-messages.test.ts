@@ -4,7 +4,6 @@ import { test } from "vite-plus/test";
 import type { JsonValue } from "../src/runtime-config.ts";
 
 import { parsePreviewMessage, previewMessageFitsBudget } from "../src/preview-messages.ts";
-import { emptyProjectionEvidence } from "./fixtures.ts";
 
 const pendingDiagnostic = {
   code: "notebook-updating",
@@ -24,38 +23,6 @@ const diagnostic = (textSize: number) => ({
 const encodedLength = (value: JsonValue): number =>
   new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
-const observation = ({
-  diagnosticCount = 0,
-  diagnosticSize = 0,
-  projectionCount = 1,
-  targetSize = 1,
-}: {
-  diagnosticCount?: number;
-  diagnosticSize?: number;
-  projectionCount?: number;
-  targetSize?: number;
-}) => ({
-  type: "marimo-studio:view-observation",
-  runtime: "server",
-  lifecycleId: 7,
-  view: "dashboard",
-  revision: "presentation-v2",
-  state: "loading",
-  diagnostics: Array.from({ length: diagnosticCount }, () => diagnostic(diagnosticSize)),
-  runtimeInstance: "runtime-instance",
-  sessionId: "s_123456",
-  requestId: "request-dashboard",
-  query: "",
-  projectionInstances: Array.from({ length: projectionCount }, (_, index) => ({
-    mountId: `mount-${index}`,
-    instanceId: `instance-${index}`,
-    target: "x".repeat(targetSize),
-    runtimeCellId: `cell-${index}`,
-    phase: "loading",
-    error: null,
-  })),
-});
-
 const viewIdentityMessages = (view: string) => [
   {
     type: "marimo-studio:switch-view",
@@ -71,20 +38,6 @@ const viewIdentityMessages = (view: string) => [
     lifecycleId: 7,
     view,
     revision: "presentation-v2",
-  },
-  {
-    type: "marimo-studio:view-observation",
-    runtime: "server",
-    lifecycleId: 7,
-    view,
-    revision: "presentation-v2",
-    state: "loading",
-    diagnostics: [],
-    runtimeInstance: "runtime-instance",
-    sessionId: "s_123456",
-    requestId: "request-view",
-    query: "",
-    projectionInstances: [],
   },
 ];
 
@@ -155,39 +108,6 @@ test("preview messages decode every supported discriminant", () => {
       lifecycleId: 7,
       view: "report",
       revision: "presentation-v1",
-    },
-    {
-      type: "marimo-studio:view-observation",
-      runtime: "server",
-      lifecycleId: 7,
-      view: "dashboard",
-      revision: "presentation-v2",
-      state: "error",
-      diagnostics: [
-        {
-          code: "missing-variable",
-          severity: "error",
-          message: "summary is unavailable.",
-          hint: "Restore summary in the notebook.",
-          view: "dashboard",
-          scope: "host",
-          target: "summary",
-        },
-      ],
-      runtimeInstance: "runtime-instance",
-      sessionId: "s_123456",
-      requestId: "request-dashboard",
-      query: "region=emea",
-      ...emptyProjectionEvidence,
-    },
-    {
-      type: "marimo-studio:observe-view",
-      runtime: "server",
-      lifecycleId: 7,
-      view: "dashboard",
-      revision: "presentation-v2",
-      runtimeInstance: "runtime-instance",
-      requestId: "request-dashboard",
     },
     {
       type: "marimo-studio:view-sync-pending",
@@ -393,24 +313,6 @@ test("preview mutation messages reject oversized domain fields", () => {
       revision: "presentation-v2",
       sessionId: "s".repeat(257),
     },
-    {
-      type: "marimo-studio:observe-view",
-      runtime: "server",
-      lifecycleId: 7,
-      view: "dashboard",
-      revision: "presentation-v2",
-      runtimeInstance: "r".repeat(257),
-      requestId: "request-dashboard",
-    },
-    {
-      type: "marimo-studio:observe-view",
-      runtime: "server",
-      lifecycleId: 7,
-      view: "dashboard",
-      revision: "presentation-v2",
-      runtimeInstance: "runtime-instance",
-      requestId: "q".repeat(257),
-    },
   ];
 
   oversized.forEach((message) => assert.equal(parsePreviewMessage(message), undefined));
@@ -433,21 +335,18 @@ test("ordinary preview messages retain the browser message budget", () => {
   assert.equal(parsePreviewMessage(oversized), undefined);
 });
 
-test("preview observations reserve the larger evidence budget", () => {
-  const normal = observation({});
-  const large = observation({ projectionCount: 512, targetSize: 1_024 });
-  const overLimit = observation({
-    diagnosticCount: 200,
-    diagnosticSize: 6_000,
-    projectionCount: 512,
-    targetSize: 4_096,
-  });
-
-  assert.ok(encodedLength(normal) < 256 * 1_024);
-  assert.ok(encodedLength(large) > 256 * 1_024);
-  assert.ok(encodedLength(large) < 4 * 1_024 * 1_024);
-  assert.ok(encodedLength(overLimit) > 4 * 1_024 * 1_024);
-  assert.notEqual(parsePreviewMessage(normal), undefined);
-  assert.notEqual(parsePreviewMessage(large), undefined);
-  assert.equal(parsePreviewMessage(overLimit), undefined);
+test("a presentation refresh diagnostic belongs to its target view", () => {
+  const refresh = {
+    type: "marimo-studio:presentation-refresh",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+    phase: "settled",
+    diagnostic: pendingDiagnostic,
+  };
+  assert.notEqual(parsePreviewMessage(refresh), undefined);
+  assert.equal(
+    parsePreviewMessage({ ...refresh, diagnostic: { ...pendingDiagnostic, view: "other" } }),
+    undefined,
+  );
 });

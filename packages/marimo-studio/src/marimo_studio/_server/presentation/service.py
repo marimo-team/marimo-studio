@@ -3,7 +3,7 @@
 A presentation snapshot binds saved notebook source, Studio configuration,
 the notebook symbol graph, provider-declared mounts, and one leased immutable
 artifact into one presentation revision. Page rendering, runtime configuration,
-projection routes, and browser evidence all resolve against that same captured
+projection routes, and browser documents resolve against that same captured
 state. Validation independently checks the corresponding published
 presentation revisions.
 
@@ -30,17 +30,22 @@ from marimo_studio._artifacts.paths import artifact_root
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.repository import read_build_state
 from marimo_studio._artifacts.retention import ArtifactLease
-from marimo_studio._processes.provider_operation import raise_process_cleanup
+from marimo_studio._processes.provider_operation import (
+    raise_process_cleanup,
+    run_provider_operation,
+)
 from marimo_studio._projections.resolved import ResolvedStudio
 from marimo_studio._projections.symbol_graph import NotebookSymbolGraph
+from marimo_studio._views.inspection import view_project_state
 from marimo_studio._views.presentation_publication import publish_presentation
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._views.revisions import (
     PreparedViewProject,
     capture_presentations,
     capture_published_presentations,
+    capture_source_snapshot,
 )
-from marimo_studio._workspace import discover_studio
+from marimo_studio._workspace import discover_studio, load_studio
 from marimo_studio._workspace.config import (
     discover_studio_definition,
     materialize_studio_workspace,
@@ -51,6 +56,7 @@ from marimo_studio._workspace.models import (
     StudioWorkspace,
 )
 from marimo_studio.errors import (
+    AgentRequestError,
     ConfigurationError,
     MarimoStudioError,
     ViewProjectError,
@@ -233,7 +239,12 @@ class NotebookPresentation:
                     if self._closed:
                         raise RuntimeError("Notebook presentation is closed")
                     cached = self._snapshots.get(key)
-                if cached is not None and cached.revision == revision:
+                if (
+                    cached is not None
+                    and cached.revision == revision
+                    and cached.artifact == before.artifacts[selected]
+                    and self._cached_snapshot_is_usable(cached)
+                ):
                     return cached
                 candidate_lease = before.take_lease(selected)
         except OSError as error:
@@ -311,6 +322,64 @@ class NotebookPresentation:
             if candidate_lease is not None:
                 candidate_lease.close()
 
+    def _cached_snapshot_is_usable(self, snapshot: PresentationSnapshot) -> bool:
+        """Verify retained files without holding the presentation mutation lock."""
+        key = (snapshot.view_name, snapshot.artifact.profile)
+        with self._lock:
+            lease = self._snapshot_leases.get(snapshot.view_name, {}).get(
+                snapshot.revision
+            )
+            if (
+                self._snapshot_history.get(snapshot.view_name, {}).get(
+                    snapshot.revision
+                )
+                is not snapshot
+            ):
+                lease = None
+        if lease is not None:
+            try:
+                lease.verify_membership()
+                return True
+            except (ConfigurationError, OSError, RuntimeError):
+                pass
+        released = []
+        with self._lock:
+            if self._snapshots.get(key) is snapshot:
+                self._snapshots.pop(key)
+                self._snapshot_generations.pop(key, None)
+                self._snapshot_notebook_stamps.pop(key, None)
+                self._snapshot_document_stamps.pop(key, None)
+                self._snapshot_publication_stamps.pop(key, None)
+            history = self._snapshot_history.get(snapshot.view_name, {})
+            leases = self._snapshot_leases.get(snapshot.view_name, {})
+            if history.get(snapshot.revision) is snapshot:
+                history.pop(snapshot.revision)
+                retained = leases.pop(snapshot.revision, None)
+                if retained is not None:
+                    released.append(retained)
+        self._close_leases(released)
+        return False
+
+    def _require_cached_snapshot(
+        self, snapshot: PresentationSnapshot
+    ) -> PresentationSnapshot:
+        if self._cached_snapshot_is_usable(snapshot):
+            return snapshot
+        with self._lock:
+            successor = self._snapshots.get(
+                (snapshot.view_name, snapshot.artifact.profile)
+            )
+        if (
+            successor is not None
+            and successor is not snapshot
+            and self._cached_snapshot_is_usable(successor)
+        ):
+            return successor
+        raise RuntimeSyncError(
+            "The retained view artifact is unavailable. Rebuild the view "
+            "or retry after its publication completes."
+        )
+
     def _coordination_lock(self, view_name: str) -> RLock:
         with self._lock:
             self._ensure_open_locked()
@@ -359,7 +428,9 @@ class NotebookPresentation:
             )
             if cached is not None and cached_generation == catalog.generation:
                 if cached_stamps == current_stamps:
-                    return cached
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    continue
                 await development.refresh(selected)
                 catalog = await development.project_catalog(studio, selected)
                 current_stamps = await asyncio.to_thread(
@@ -372,7 +443,9 @@ class NotebookPresentation:
                     cached_generation == catalog.generation
                     and cached_stamps == current_stamps
                 ):
-                    return cached
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    continue
             prepared = PreparedViewProject(catalog.inspection, catalog.input_id)
             await development.publish(
                 selected,
@@ -495,6 +568,82 @@ class NotebookPresentation:
             return None
         return state.st_mtime_ns, state.st_ctime_ns, state.st_size, state.st_ino
 
+    async def current_published_snapshot_async(
+        self,
+        view: str,
+        *,
+        profile: BuildProfile = "development",
+    ) -> PresentationSnapshot:
+        """Require source and publication to stay coherent during an exact read."""
+        studio = await asyncio.to_thread(load_studio, self.notebook)
+        project = studio.view(view)
+        source = await run_provider_operation(
+            partial(capture_source_snapshot, studio, (view,))
+        )
+        prepared = source.projects[view]
+        state = await run_provider_operation(
+            partial(
+                view_project_state,
+                project,
+                prepared.inspection,
+                profile=profile,
+                input_id=prepared.input_id,
+            )
+        )
+        if (
+            state.build.phase not in {"published", "building"}
+            or state.artifact is None
+            or state.artifact.project_revision != state.project_revision
+        ):
+            raise AgentRequestError(
+                "preview-source-not-current",
+                "Build the current view source before requesting an exact preview.",
+                status_code=409,
+                details={"build": state.build.to_dict()},
+            )
+        snapshot = await self.published_snapshot_async(view, profile=profile)
+        confirmed = await run_provider_operation(
+            partial(capture_source_snapshot, studio, (view,))
+        )
+        prepared = confirmed.projects[view]
+        latest = await run_provider_operation(
+            partial(
+                view_project_state,
+                project,
+                prepared.inspection,
+                profile=profile,
+                input_id=prepared.input_id,
+            )
+        )
+        if (
+            snapshot.artifact.project_revision != state.project_revision
+            or confirmed.revisions != source.revisions
+            or latest.build.phase not in {"published", "building"}
+            or latest.artifact is None
+            or latest.artifact.project_revision != latest.project_revision
+            or latest.artifact.artifact_revision != snapshot.artifact.artifact_revision
+        ):
+            raise AgentRequestError(
+                "preview-source-changed",
+                "The view source changed while resolving its preview. Build and retry.",
+                status_code=409,
+            )
+        return snapshot
+
+    async def published_snapshot_async(
+        self,
+        view_name: str,
+        *,
+        profile: BuildProfile = "development",
+    ) -> PresentationSnapshot:
+        """Capture an existing publication without building changed source."""
+        snapshot = await run_provider_operation(
+            partial(self._resolve_snapshot, view_name, published=True, profile=profile)
+        )
+        if snapshot is None:
+            raise RuntimeSyncError("Build the view before requesting an exact preview.")
+        return snapshot
+
     async def display_snapshot_async(
         self,
         view_name: str,
@@ -512,7 +661,7 @@ class NotebookPresentation:
             cached_publication = self._snapshot_publication_stamps.get(key)
         if development is None:
             return (
-                cached
+                await asyncio.to_thread(self._require_cached_snapshot, cached)
                 if cached is not None
                 else await asyncio.to_thread(
                     self.display_snapshot,
@@ -538,7 +687,9 @@ class NotebookPresentation:
                 if _attempt + 1 < _SNAPSHOT_RECONCILIATION_LIMIT:
                     continue
                 if cached is not None:
-                    return cached
+                    return await asyncio.to_thread(
+                        self._require_cached_snapshot, cached
+                    )
                 raise
             try:
                 current_stamps = await asyncio.to_thread(
@@ -549,12 +700,16 @@ class NotebookPresentation:
                 )
             except RuntimeSyncError:
                 if cached is not None:
-                    return cached
+                    return await asyncio.to_thread(
+                        self._require_cached_snapshot, cached
+                    )
                 raise
             cached_stamps = (cached_stamp, cached_documents, cached_publication)
             if cached is not None and cached_generation == catalog.generation:
                 if cached_stamps == current_stamps:
-                    return cached
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    return await self.snapshot_async(view_name, profile=profile)
                 await development.refresh(view_name)
                 try:
                     catalog = await development.project_catalog(studio, view_name)
@@ -567,12 +722,16 @@ class NotebookPresentation:
                 except MarimoStudioError:
                     if _attempt + 1 < _SNAPSHOT_RECONCILIATION_LIMIT:
                         continue
-                    return cached
+                    return await asyncio.to_thread(
+                        self._require_cached_snapshot, cached
+                    )
                 if (
                     cached_generation == catalog.generation
                     and cached_stamps == current_stamps
                 ):
-                    return cached
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    return await self.snapshot_async(view_name, profile=profile)
             published = await asyncio.to_thread(
                 self._resolve_snapshot,
                 view_name,
@@ -581,7 +740,9 @@ class NotebookPresentation:
             )
             if published is None:
                 if cached is not None:
-                    return cached
+                    if await asyncio.to_thread(self._cached_snapshot_is_usable, cached):
+                        return cached
+                    return await self.snapshot_async(view_name, profile=profile)
                 return await self.snapshot_async(view_name, profile=profile)
             current = await development.project_catalog(studio, view_name)
             if current.generation != catalog.generation:
@@ -595,7 +756,9 @@ class NotebookPresentation:
                 )
             except RuntimeSyncError:
                 if cached is not None:
-                    return cached
+                    return await asyncio.to_thread(
+                        self._require_cached_snapshot, cached
+                    )
                 raise
             with self._lock:
                 self._snapshot_generations[key] = current.generation
@@ -604,7 +767,7 @@ class NotebookPresentation:
                 self._snapshot_publication_stamps[key] = accepted_stamps[2]
             return published
         if cached is not None:
-            return cached
+            return await asyncio.to_thread(self._require_cached_snapshot, cached)
         raise RuntimeSyncError(
             "The published view kept changing during presentation capture. "
             "Studio will retry shortly."
@@ -620,7 +783,9 @@ class NotebookPresentation:
         with self._lock:
             cached = self._snapshots.get((view_name, profile))
         return (
-            cached if cached is not None else self.snapshot(view_name, profile=profile)
+            self._require_cached_snapshot(cached)
+            if cached is not None
+            else self.snapshot(view_name, profile=profile)
         )
 
     async def latest_snapshot_async(
@@ -633,7 +798,7 @@ class NotebookPresentation:
         with self._lock:
             cached = self._snapshots.get((view_name, profile))
         return (
-            cached
+            await asyncio.to_thread(self._require_cached_snapshot, cached)
             if cached is not None
             else await self.snapshot_async(view_name, profile=profile)
         )

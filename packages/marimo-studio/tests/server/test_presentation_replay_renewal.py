@@ -413,6 +413,14 @@ def test_document_renewal_replaces_obsolete_revision_authority(
                 "Marimo-Studio-Preview-Session-Id": session_id,
             },
         )
+        obsolete_preflight = client.options(
+            _view_support_url(first_payload, "outputs"),
+            headers={
+                "Origin": "null",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Marimo-Session-Id,Content-Type",
+            },
+        )
         obsolete_outputs = client.post(
             _view_support_url(first_payload, "outputs"),
             headers={"Marimo-Session-Id": session_id},
@@ -443,6 +451,8 @@ def test_document_renewal_replaces_obsolete_revision_authority(
     assert refreshed.headers["Marimo-Studio-Revision"] != first.json()["revision"]
     assert obsolete.status_code == 403
     assert obsolete.json()["error"] == "presentation-capability-forbidden"
+    assert obsolete_preflight.status_code == 204
+    assert obsolete_preflight.headers["Access-Control-Allow-Origin"] == "null"
     assert obsolete_outputs.status_code == 409
     assert obsolete_outputs.json()["error"] == "stale-projection-binding"
     assert obsolete_outputs.json()["transient"] is True

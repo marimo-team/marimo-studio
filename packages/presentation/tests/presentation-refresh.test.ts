@@ -60,6 +60,7 @@ test("stream baselines reconcile after runtime configuration", () => {
   const configured = new BaselineReconciler(true);
 
   assert.deepEqual(configured.ready(), false);
+  assert.deepEqual(configured.ready(true), true);
   assert.deepEqual(configured.configure(), false);
 });
 

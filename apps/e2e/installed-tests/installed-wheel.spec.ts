@@ -3,6 +3,7 @@ import { expect, test as base } from "@playwright/test";
 import { readInstalledPackageNetwork } from "../scripts/installed-package-network.ts";
 
 const installedPackageNetwork = readInstalledPackageNetwork();
+import { expectFirstSaveRetirement } from "../tests/authoring-test-support.ts";
 import { observeBrowserContext } from "../tests/browser-diagnostics.ts";
 import { installPinnedPyodideAssets } from "../tests/pyodide-assets.ts";
 
@@ -213,18 +214,18 @@ test("provides Studio before the first save in an environment with the installed
     await saveDialog.getByPlaceholder("filename").fill("fresh-studio.py");
     await expect(save).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 65_000 });
-  const saved = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname.endsWith("/api/kernel/save") &&
-      response.ok(),
-  );
-  await save.click();
-  await saved;
+  // First save navigates into Studio and may retire the original POST response.
+  // The saved document and preserved session are the completion evidence.
+  const retiredSave = expectFirstSaveRetirement(diagnostics, installedPackageNetwork.fresh.origin);
+  const saved = page.waitForURL((url) => url.searchParams.get("file") === "fresh-studio.py");
+  await Promise.all([save.click(), saved]);
   const editor = page.frameLocator("iframe#marimo-studio-editor");
   await expect(editor.locator("[data-cell-id]").first()).toBeVisible();
   const editorUrl = await page.locator("iframe#marimo-studio-editor").getAttribute("src");
-  expect(new URL(editorUrl!, page.url()).searchParams.get("session_id")).toBe(initialSession);
+  const savedEditor = new URL(editorUrl!, page.url());
+  expect(savedEditor.searchParams.get("file")).toBe("fresh-studio.py");
+  expect(savedEditor.searchParams.get("session_id")).toBe(initialSession);
+  retiredSave.recovered();
   await page.getByText("Add view", { exact: true }).click();
   await page.getByRole("radio", { name: /^HTML document/ }).check();
   const replaced = diagnostics.expectWorkspaceEventStreamReplacement(

@@ -530,7 +530,9 @@ def test_prepared_cache_rechecks_source_before_reporting_success(
     )
     _change_document(project, "changed before prepared cache reuse")
 
-    with pytest.raises(ViewProjectError, match="changed while its artifact was built"):
+    with pytest.raises(
+        ViewProjectError, match="changed before the prepared build started"
+    ):
         publish_artifact_lease(
             project,
             "development",
@@ -542,8 +544,9 @@ def test_prepared_cache_rechecks_source_before_reporting_success(
     assert retained is not None
     assert retained.artifact_revision == published.artifact_revision
     state = read_build_state(project, "development")
-    assert state.phase == "failed"
-    assert [item.code for item in state.diagnostics] == ["project-changed-during-build"]
+    assert state.phase == "published"
+    assert state.project_revision == published.project_revision
+    assert state.diagnostics == ()
 
 
 def test_prepared_build_uses_snapshot_mount_declarations(tmp_path: Path) -> None:
@@ -680,7 +683,9 @@ def test_publication_rejects_added_build_inputs(
     retained = read_published_artifact(project, "development")
     assert retained is not None
     assert retained.artifact_revision == published.artifact_revision
-    assert read_build_state(project, "development").phase == "failed"
+    assert read_build_state(project, "development").phase == (
+        "published" if cached else "failed"
+    )
 
 
 def test_publication_rechecks_the_view_owner_inside_its_receipt_transaction(
@@ -853,3 +858,39 @@ def test_failed_build_preserves_the_latest_profile_publication(
     assert retained.artifact_revision == second.artifact_revision
     assert read_build_state(project, "development").phase == "failed"
     first_pin.close()
+
+
+@pytest.mark.parametrize("old_inspection_failed", [False, True])
+def test_stale_prepared_build_preserves_newer_publication_receipt(
+    tmp_path: Path, old_inspection_failed: bool
+) -> None:
+    project = _project(tmp_path)
+    provider = provider_registry().get(project.provider)
+    inspection = provider.inspect(inspection_request(project))
+    input_id = project_revision(project, inspection, provider.provenance(inspection))
+    if old_inspection_failed:
+        inspection = replace(
+            inspection,
+            diagnostics=(
+                ProjectDiagnostic(
+                    code="provider-analysis-failed",
+                    severity="error",
+                    message="The previous source could not be analyzed.",
+                ),
+            ),
+        )
+    _change_document(project, "newer successfully published source")
+    with publish_artifact_lease(project, "development") as current:
+        current_revision = current.artifact.project_revision
+        assert current_revision != input_id
+    accepted = _profile_path(project).read_bytes()
+    with pytest.raises(
+        ViewProjectError, match="changed before the prepared build started"
+    ):
+        publish_artifact_lease(
+            project, "development", inspection=inspection, input_id=input_id
+        )
+    state = read_build_state(project, "development")
+    assert state.phase == "published"
+    assert state.project_revision == current_revision
+    assert _profile_path(project).read_bytes() == accepted

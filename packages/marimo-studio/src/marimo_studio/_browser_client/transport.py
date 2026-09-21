@@ -170,7 +170,7 @@ class _HttpExchange:
                     self._connection = None
 
 
-async def request_json(
+async def _request(
     connection: StudioServerConnection,
     path: str,
     *,
@@ -178,11 +178,12 @@ async def request_json(
     query: tuple[tuple[str, str], ...] = (),
     body: dict[str, object] | None = None,
     timeout: float = 15.0,
-) -> dict[str, Any]:
+    accept: str = "application/json",
+) -> bytes:
     parameters = (*connection.routing_query, *query)
     suffix = f"?{urlencode(parameters)}" if parameters else ""
     url = f"{connection.server_url.rstrip('/')}{path}{suffix}"
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": accept}
     data = None
     if body is not None:
         headers["Content-Type"] = "application/json"
@@ -208,6 +209,21 @@ async def request_json(
         exchange.cancel()
         future.cancel()
         raise
+    return raw
+
+
+async def request_json(
+    connection: StudioServerConnection,
+    path: str,
+    *,
+    method: str = "GET",
+    query: tuple[tuple[str, str], ...] = (),
+    body: dict[str, object] | None = None,
+    timeout: float = 15.0,
+) -> dict[str, Any]:
+    raw = await _request(
+        connection, path, method=method, query=query, body=body, timeout=timeout
+    )
     try:
         payload = json.loads(raw)
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
@@ -215,6 +231,23 @@ async def request_json(
     if not isinstance(payload, dict):
         raise ProtocolError("The Studio server returned an invalid response.")
     return payload
+
+
+async def request_text(
+    connection: StudioServerConnection,
+    path: str,
+    *,
+    query: tuple[tuple[str, str], ...] = (),
+    timeout: float = 15.0,
+) -> str:
+    """Read a bounded UTF-8 resource through the same authenticated transport."""
+    raw = await _request(
+        connection, path, query=query, timeout=timeout, accept="text/plain"
+    )
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ProtocolError("The Studio server returned invalid text.") from error
 
 
 def _start_exchange(

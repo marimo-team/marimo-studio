@@ -73,13 +73,21 @@ uv run --with marimo-studio marimo run analysis.py \
 The default view opens at `http://127.0.0.1:8000/`. A view named `report`
 opens at `http://127.0.0.1:8000/report/`.
 
-For browser automation, append `?marimo_studio_unframed=1` to the public view
-URL, such as `/report/?marimo_studio_unframed=1`. Keep any `file` and `runtime`
-parameters. The view renders directly in the top-level document, so screenshots
-and DOM evaluation need no Studio frame switch. Wait for
-`html[data-marimo-studio-state="ready"]` after navigation before interacting.
-Authentication and the document
-sandbox still apply. This is a separate presentation from the editor preview.
+For browser automation, obtain the view's top-level URL:
+
+```console
+marimo-studio view preview report --target analysis.py \
+  --runtime server --server http://127.0.0.1:8000
+```
+
+Open the URL with your preferred browser tool. Wait for
+`html[data-marimo-studio-state="ready"]`, then assert the expected content and
+interactions. Check console errors, failed requests, and screenshots. The HTML
+attribute `data-marimo-studio-revision` identifies the committed presentation.
+Use `--exact` for a checkpoint that returns HTTP 409 if the revision changes
+or current view source is unbuilt or failed.
+
+Authentication and the document sandbox apply to this separate presentation.
 Keep the notebook session open when testing an edit-mode server.
 
 Run `marimo-studio status --target analysis.py --json` when a project uses

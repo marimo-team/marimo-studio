@@ -2,47 +2,38 @@
 
 Validation captures the selected views' source revisions, inspects their
 notebook mounts, runs static checks, and optionally executes the complete
-notebook in an isolated runtime. Live-development validation first publishes
-the presentation revisions being checked.
+notebook in an isolated runtime.
 
 Source identity is checked again after each later stage. A concurrent edit
 becomes an explicit stale-source result instead of mixing static evidence from
 one revision with runtime evidence from another. CLI and agent workflows share
-these check results, while browser validation adds rendered observations on top.
+these check results.
 """
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._processes.provider_operation import (
     raise_process_cleanup,
     run_provider_operation,
 )
-from marimo_studio._validation.ownership import require_validation_owner
 from marimo_studio._validation.ports import RuntimeChecker
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._validation.static import CheckReport, check_studio
-from marimo_studio._views.presentation_publication import publish_presentation
 from marimo_studio._views.revisions import (
     PreparedViewProject,
     SourceRevisionSnapshot,
     capture_presentations,
-    capture_published_presentations,
     capture_source_snapshot,
 )
-from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError, ViewNotFoundError
-
-if TYPE_CHECKING:
-    from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 
 ValidationStage = Literal["static", "runtime"]
 
@@ -56,16 +47,6 @@ class ValidationPreparation:
     revisions: dict[str, str]
     source_revisions: dict[str, str]
     static: CheckReport
-    dynamic_browser_required: bool
-    source_stable: bool
-
-
-@dataclass(frozen=True)
-class RuntimeValidation:
-    """Runtime checks and the reason they were skipped, when applicable."""
-
-    checks: tuple[CheckResult, ...]
-    skipped: str | None
 
 
 @dataclass(frozen=True)
@@ -98,17 +79,6 @@ def _presentation_revisions(
         prepared=prepared,
         expected_generations=expected_generations,
     ) as snapshot:
-        return {view: snapshot.revisions[view] for view in views}
-
-
-def _published_presentation_revisions(
-    studio: StudioWorkspace,
-    views: tuple[str, ...],
-) -> dict[str, str]:
-    snapshot = capture_published_presentations(studio, views)
-    if snapshot is None:
-        raise RuntimeError("Validation presentation publication is unavailable")
-    with snapshot:
         return {view: snapshot.revisions[view] for view in views}
 
 
@@ -158,7 +128,6 @@ def source_revision_check(
 def _prepare_validation(
     studio: StudioWorkspace,
     view_name: str | None,
-    revisions: dict[str, str] | None = None,
     expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationPreparation:
     selected = _views(studio, view_name)
@@ -180,15 +149,11 @@ def _prepare_validation(
         _published_mounts=mounts,
     )
     try:
-        revisions = (
-            _presentation_revisions(
-                studio,
-                selected,
-                expected_generations,
-                prepared=snapshot.projects if snapshot is not None else None,
-            )
-            if revisions is None
-            else revisions
+        revisions = _presentation_revisions(
+            studio,
+            selected,
+            expected_generations,
+            prepared=snapshot.projects if snapshot is not None else None,
         )
     except (KeyError, OSError, MarimoStudioError) as error:
         raise_process_cleanup(error)
@@ -235,17 +200,12 @@ def _prepare_validation(
             )
         )
     source_revisions = after or before or {view: "unavailable" for view in selected}
-    dynamic_browser_required = mounts is not None and any(
-        site.allowed_targets is None for sites in mounts.values() for site in sites
-    )
     return ValidationPreparation(
         views=selected,
         view_name=view_name,
         revisions=revisions,
         source_revisions=source_revisions,
         static=static,
-        dynamic_browser_required=dynamic_browser_required,
-        source_stable=source_stable,
     )
 
 
@@ -253,69 +213,17 @@ async def prepare_validation(
     studio: StudioWorkspace,
     *,
     view_name: str | None,
-    development: DevelopmentCoordinator | None = None,
-    expected_catalog_generation: str | None = None,
     expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationPreparation:
     """Capture source identity and run the canonical static stage."""
-    revisions = (
-        None
-        if development is None
-        else await _publish_validation_presentations(
-            studio,
-            view_name,
-            development,
-            expected_catalog_generation=expected_catalog_generation,
-            expected_generations=expected_generations,
-        )
-    )
     return await run_provider_operation(
         partial(
             _prepare_validation,
             studio,
             view_name,
-            revisions,
-            expected_generations,
+            expected_generations=expected_generations,
         )
     )
-
-
-async def _publish_validation_presentations(
-    studio: StudioWorkspace,
-    view_name: str | None,
-    development: DevelopmentCoordinator,
-    *,
-    expected_catalog_generation: str | None = None,
-    expected_generations: Mapping[str, str] | None = None,
-) -> dict[str, str]:
-    views = _views(studio, view_name)
-    for view in views:
-        catalog = await development.project_catalog(studio, view)
-        prepared = PreparedViewProject(catalog.inspection, catalog.input_id)
-        await development.publish(
-            view,
-            catalog.generation,
-            partial(
-                publish_presentation,
-                studio,
-                view,
-                prepared,
-                expected_catalog_generation=expected_catalog_generation,
-                expected_generation=(
-                    expected_generations.get(view)
-                    if expected_generations is not None
-                    else None
-                ),
-            ),
-        )
-        if expected_catalog_generation is not None or expected_generations is not None:
-            current = await asyncio.to_thread(load_studio, studio.config_path)
-            require_validation_owner(
-                current,
-                expected_catalog_generation=expected_catalog_generation,
-                expected_generations=expected_generations,
-            )
-    return await asyncio.to_thread(_published_presentation_revisions, studio, views)
 
 
 async def verify_source_revisions(
@@ -353,13 +261,10 @@ async def run_runtime_validation(
     *,
     runtime_timeout: float,
     runtime_checker: RuntimeChecker,
-) -> RuntimeValidation:
+) -> tuple[CheckResult, ...]:
     """Run the isolated runtime stage against the accepted source revision."""
     if not preparation.static.ok:
-        return RuntimeValidation(
-            (),
-            "Static validation failed. Fix those errors first.",
-        )
+        return ()
     checks = await runtime_checker(
         studio,
         view_name=preparation.view_name,
@@ -375,7 +280,7 @@ async def run_runtime_validation(
         check.code == source_check.code for check in checks
     ):
         checks = (*checks, source_check)
-    return RuntimeValidation(checks, None)
+    return checks
 
 
 async def validate_studio(
@@ -385,16 +290,12 @@ async def validate_studio(
     view_name: str | None = None,
     runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     runtime_checker: RuntimeChecker,
-    development: DevelopmentCoordinator | None = None,
-    expected_catalog_generation: str | None = None,
     expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationRun:
     """Run revision-coherent static and optional runtime validation."""
     preparation = await prepare_validation(
         studio,
         view_name=view_name,
-        development=development,
-        expected_catalog_generation=expected_catalog_generation,
         expected_generations=expected_generations,
     )
     runtime = (
@@ -405,14 +306,14 @@ async def validate_studio(
             runtime_checker=runtime_checker,
         )
         if level == "runtime"
-        else RuntimeValidation((), None)
+        else ()
     )
     return ValidationRun(
         report=ValidationReport.from_checks(
             preparation.static,
             level=level,
-            runtime=runtime.checks,
+            runtime=runtime,
         ),
         static=preparation.static,
-        runtime=runtime.checks,
+        runtime=runtime,
     )

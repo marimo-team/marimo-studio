@@ -16,9 +16,6 @@ import marimo_studio.authoring as studio_authoring
 from marimo_studio._browser_client.protocol import ViewShowRequest
 from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._cli import cli, main
-from marimo_studio._validation.evidence import ValidationEvidence
-from marimo_studio._validation.progressive import ValidationOptions
-from marimo_studio._validation.results import CheckResult
 from marimo_studio._workspace.ownership import PresentViewOwner
 from marimo_studio.agent import ShowResult
 from marimo_studio.errors import AgentRequestError
@@ -181,104 +178,6 @@ def test_static_validation_matches(notebook_path) -> None:
         str(notebook_path),
     )
 
-    assert command == python
-
-
-def test_validation_adapters_use_the_same_options(
-    notebook_path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    workspace = _workspace(notebook_path)
-    asyncio.run(workspace.create_view("dashboard"))
-    report = ValidationEvidence(
-        notebook=notebook_path.resolve(),
-        views=("dashboard",),
-        runtime="server",
-        revisions={"dashboard": "revision-1"},
-        static_checks=(CheckResult("static", "pass", "Sources are valid"),),
-        runtime_checks=(CheckResult("runtime", "pass", "Runtime is valid"),),
-        runtime_skipped=None,
-        browser_observations=(),
-        browser_required=False,
-        issues=(),
-    )
-    code_connection = StudioServerConnection(
-        "http://localhost:2718",
-        session_id="s_123456",
-    )
-    cli_connection = StudioServerConnection("http://localhost:2718")
-    python_options: list[ValidationOptions] = []
-    cli_options: list[ValidationOptions] = []
-
-    async def request_browser_validation(_connection, _notebook, request):
-        python_options.append(request.options)
-        return report
-
-    async def validate_progressively(_workspace, options, **_kwargs):
-        cli_options.append(options)
-        return report
-
-    monkeypatch.setattr(
-        "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(
-            active_notebook=lambda: notebook_path.resolve(),
-            connection=lambda: code_connection,
-        ),
-    )
-    monkeypatch.setattr(
-        "marimo_studio._authoring.validation.request_browser_validation",
-        request_browser_validation,
-    )
-    monkeypatch.setattr(
-        "marimo_studio._authoring.validation.validate_progressively",
-        validate_progressively,
-    )
-    monkeypatch.setattr(
-        "marimo_studio._cli.commands.validate.should_reenter",
-        lambda *_args: False,
-    )
-
-    monkeypatch.setattr(
-        "marimo_studio._cli.commands.validate.studio_server_connection",
-        lambda *_args, **_kwargs: cli_connection,
-    )
-
-    python = asyncio.run(
-        studio_agent.current_workspace()
-        .view("dashboard")
-        .validate(
-            level="browser",
-            browser_timeout=20,
-            runtime_timeout=75,
-        )
-    ).to_dict()
-    command = _json_command(
-        "validate",
-        "dashboard",
-        "--target",
-        str(notebook_path),
-        "--level",
-        "browser",
-        "--server",
-        "http://localhost:2718",
-        "--browser-timeout",
-        "20",
-        "--runtime-timeout",
-        "75",
-    )
-
-    assert (
-        python_options
-        == cli_options
-        == [
-            ValidationOptions(
-                view="dashboard",
-                browser_timeout=20,
-                runtime_timeout=75,
-                require_browser=True,
-            )
-        ]
-    )
     assert command == python
 
 

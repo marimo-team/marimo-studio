@@ -120,8 +120,8 @@ transport ownership and UI behavior.
 Runtime failures retain their code, message, hint, and additional JSON context
 through both HTTP errors and terminal stream packets. Browser diagnostics carry
 that context in `details`, including upstream error codes and authored source
-locations when available. Agent observations retain the same details in current
-status and transition history.
+locations when available. Runtime status retains those details in its current
+snapshot and transition history.
 
 The preview panel and runtime menu show the explanation and recovery hint, with
 expandable technical details and a copy action. A failed update retains the
@@ -160,9 +160,9 @@ one current phase:
 - `failed`
 
 `ready` carries no diagnostics. `degraded` and `failed` carry at least one.
-The latest transition must match the current snapshot. A browser observation
-must carry the same runtime, view, presentation revision, session, and current
-diagnostics as its runtime status report.
+The latest transition must match the current snapshot. The presentation exposes
+its Studio readiness and committed revision on the document element. Application
+errors remain visible through the page, console, and network diagnostics.
 
 ## Validation issues
 
@@ -170,7 +170,7 @@ Validation converts failures into `CheckResult` records. A result owns stage,
 status, stable code, message, and optional source, view, projection, producer,
 dependency closure, declaration, and hint details.
 
-Static, runtime, and browser validation remain cumulative. A later stage may
+Static and runtime validation remain cumulative. A later stage may
 add evidence but cannot rewrite an earlier failure into another code. Source
 revisions are checked before and after contained runtime work so evidence from
 moving source is rejected.
@@ -199,5 +199,5 @@ specific upstream code with a generic wrapper.
   notebook or view project.
 - Reject provider diagnostics that name undeclared documents.
 - Retain a published artifact while surfacing a later build failure.
-- Reject browser observations whose identity or runtime status disagrees.
+- Preserve the committed document revision when a replacement fails.
 - Bound extension output, diagnostic counts, messages, and histories.

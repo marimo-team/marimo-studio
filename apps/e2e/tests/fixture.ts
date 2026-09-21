@@ -28,6 +28,7 @@ import {
   noDisplayStaticExportDirectory,
   workspaceDirectory,
 } from "../scripts/paths.ts";
+import { captureRetiringProjectionReads } from "./authoring-test-support.ts";
 import {
   observeBrowserContext,
   type BrowserDiagnostics,
@@ -128,6 +129,7 @@ const copyFixtureFile = async (relativePath: string) => {
 
 export const restoreWorkspace = async () => {
   await copyFixtureProviderPackage(workspaceDirectory);
+  await removeTree(resolve(workspaceDirectory, "__marimo__/session"));
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/notebook"));
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/no-display"));
   await copyFixtureFile("notebook.py");
@@ -255,6 +257,7 @@ export const waitForViewPreview = async (
 interface ProjectionRefreshScope {
   readonly capture: ProjectionRefreshCapture;
   readonly initialRevision: string;
+  readonly staleReads: ReturnType<typeof captureRetiringProjectionReads>;
 }
 
 const projectionRevision = (preview: FrameLocator): Promise<string> =>
@@ -272,10 +275,12 @@ export const captureProjectionRefresh = async (
   if (frame === null || frame === undefined) {
     throw new Error("The server preview frame is unavailable.");
   }
-  const initialRevision = await projectionRevision(preview);
+  const identity = await preview.locator("html").evaluate(() => globalThis.marimoStudio.identity());
+  const initialRevision = identity.projectionRevision;
   return {
     capture: diagnostics.expectProjectionRefresh(frame, initialRevision),
     initialRevision,
+    staleReads: captureRetiringProjectionReads(frame, identity.revision, diagnostics),
   };
 };
 
@@ -288,6 +293,7 @@ export const recoverProjectionRefresh = async (
     .poll(() => projectionRevision(preview), { timeout: 65_000 })
     .not.toBe(scope.initialRevision);
   scope.capture.seal();
+  scope.staleReads.seal();
   let currentProjectionRevision = scope.initialRevision;
   await expect
     .poll(
@@ -302,6 +308,7 @@ export const recoverProjectionRefresh = async (
     throw new Error("The projection refresh changed while recovery was committing.");
   }
   scope.capture.dispose();
+  scope.staleReads.recovered();
 };
 
 export const recoverRequestAbort = async (capture: RequestAbortCapture): Promise<void> => {

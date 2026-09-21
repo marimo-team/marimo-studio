@@ -4,14 +4,13 @@ import { resolve } from "node:path";
 
 import { workspaceDirectory } from "../scripts/paths.ts";
 import {
-  changedObservationSourceSchema,
-  readBrowserValidation,
-  readRequestedObservation,
+  captureRetiringProjectionReads,
   readViewRevision,
   runCellShortcut,
   saveShortcut,
   selectAllShortcut,
   studioClientId,
+  studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
   selectWorkspaceMode,
@@ -28,7 +27,6 @@ import {
   recoverProjectionRefresh,
   studioEntryUrl,
   studioOrigin,
-  studioServerToken,
   test,
   waitForPreview,
   workspaceCreatedViewHtmlPath,
@@ -120,6 +118,24 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
 
   const initialCss = await readWorkspaceFile(dashboardCssPath);
   const externalCss = `${initialCss}\nbody { --e2e-marker: ready; }\n`;
+  const initialPresentation = await preview
+    .locator("html")
+    .getAttribute("data-marimo-studio-revision");
+  expect(initialPresentation).toBeTruthy();
+  const readinessChanges = await preview.locator("html").evaluateHandle((root) => {
+    const readings: { state: string | undefined; revision: string | undefined }[] = [];
+    const observer = new MutationObserver(() => {
+      readings.push({
+        state: root.dataset.marimoStudioState,
+        revision: root.dataset.marimoStudioRevision,
+      });
+    });
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-marimo-studio-state", "data-marimo-studio-revision"],
+    });
+    return { readings, stop: () => observer.disconnect() };
+  });
   await writeWorkspaceFile(dashboardCssPath, externalCss);
   await expect
     .poll(() =>
@@ -139,6 +155,18 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
     ),
   ).toBe(true);
   await waitForPreview(page);
+  const readings = await readinessChanges.evaluate(({ readings, stop }) => {
+    stop();
+    return readings;
+  });
+  await readinessChanges.dispose();
+  const pending = readings.findIndex(({ state }) => state === "loading");
+  expect(pending).toBeGreaterThanOrEqual(0);
+  expect(
+    readings
+      .slice(pending)
+      .filter(({ state, revision }) => state === "ready" && revision === initialPresentation),
+  ).toEqual([]);
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("42");
   await expect(preview.locator("#rich-summary-output h3")).toHaveText("Current total: 42");
   await selectWorkspaceMode(page, "Notebook");
@@ -494,7 +522,6 @@ test("shows an agent-requested page and records its rendered revision", async ({
   ).toBeVisible();
 
   const sessionId = (await sessionRequest).headers()["marimo-session-id"];
-  const serverToken = await studioServerToken(page);
   const clientId = await studioClientId(page);
   const replacedEventStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin()).href,
@@ -529,6 +556,17 @@ test("shows an agent-requested page and records its rendered revision", async ({
     "src",
     refreshed.preview_url,
   );
+  const expectedLifecycle = new URL(refreshed.preview_url).searchParams.get(
+    "marimo_studio_lifecycle",
+  );
+  expect(expectedLifecycle).toBeTruthy();
+  await expect
+    .poll(async () => {
+      const element = await page.locator(refreshed.frame_selector).elementHandle();
+      const document = await element?.contentFrame();
+      return document ? new URL(document.url()).searchParams.get("marimo_studio_lifecycle") : null;
+    })
+    .toBe(expectedLifecycle);
   await expect(page.frameLocator(refreshed.frame_selector).locator("html")).toHaveAttribute(
     "data-marimo-studio-state",
     "ready",
@@ -536,63 +574,34 @@ test("shows an agent-requested page and records its rendered revision", async ({
   await expect(
     page.frameLocator(refreshed.frame_selector).getByRole("heading", { name: "Qa View" }),
   ).toBeVisible();
-  const abandonedObservation = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin(),
-    method: "PUT",
-    path: /^\/_marimo-studio\/views\/qa-view\/observation$/,
-    count: 1,
-    status: 204,
-  });
-
-  const readObservation = async () => {
-    const configured = await page.request.get(
-      "/_marimo-studio/views/qa-view/config?file=notebook.py&runtime=server",
-    );
-    expect(configured.ok()).toBe(true);
-    const revision = readViewRevision(await configured.text());
-    const response = await page.request.post("/_marimo-studio/observations?file=notebook.py", {
-      headers: { "Marimo-Server-Token": serverToken },
-      data: {
-        schema: 1,
-        views: ["qa-view"],
-        revisions: { "qa-view": revision },
-        runtime: "server",
-        timeout: 10,
-        browserClient: clientId,
-      },
-    });
-    const body = await response.text();
-    if (
-      response.status() === 409 &&
-      changedObservationSourceSchema.safeParse(JSON.parse(body)).success
-    ) {
-      return undefined;
-    }
-    expect(response.ok(), body).toBe(true);
-    return readRequestedObservation(body);
-  };
-  let first: ReturnType<typeof readRequestedObservation> | undefined;
-  await expect
-    .poll(async () => {
-      first = await readObservation();
-      return first?.state;
-    })
-    .toBe("ready");
-  if (!first) {
-    throw new Error("The active view did not produce a ready observation");
+  const active = page.frameLocator(refreshed.frame_selector);
+  const mountedRevision = await active.locator("html").getAttribute("data-marimo-studio-revision");
+  expect(mountedRevision).toBeTruthy();
+  const targets = ["controls", "metric", "slow_metric", "counter_widget"];
+  for (const name of targets) {
+    const host = active.locator(`marimo-cell[name="${name}"]`);
+    await expect(host).toHaveAttribute("data-state", "ready");
+    await expect(host).not.toHaveAttribute("aria-busy", "true");
   }
-  const firstObservation = first;
-  expect(firstObservation.view).toBe("qa-view");
-  expect(firstObservation.diagnostics).toEqual([]);
-  expect(
-    firstObservation.projection_instances.map(({ phase, target }) => ({ phase, target })),
-  ).toEqual([
-    { phase: "ready", target: "controls" },
-    { phase: "ready", target: "metric" },
-    { phase: "ready", target: "slow_metric" },
-    { phase: "ready", target: "counter_widget" },
-  ]);
-  await recoverRequestAbort(abandonedObservation);
+
+  const direct = await page.context().newPage();
+  try {
+    const url = await studioCli.previewWorkspaceView("qa-view", "server", true);
+    const checkpoint = new URL(url).searchParams.get("marimo_studio_revision");
+    expect(checkpoint).toBe(mountedRevision);
+    const response = await direct.goto(url);
+    expect(response?.ok()).toBe(true);
+    expect(response?.headers()["marimo-studio-revision"]).toBe(checkpoint);
+    await expect(direct.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+    await expect(direct.locator("html")).toHaveAttribute(
+      "data-marimo-studio-revision",
+      mountedRevision!,
+    );
+    await expect(direct.getByRole("heading", { name: "Qa View" })).toBeVisible();
+    await expect(direct.locator("iframe#marimo-studio-presentation")).toHaveCount(0);
+  } finally {
+    await direct.close();
+  }
 });
 
 test("keeps a slow activation open until the selected view is acknowledged", async ({
@@ -666,45 +675,14 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
   replacedEventStream.recovered();
 });
 
-test("retains agent validation after the native editor reconnects", async ({
-  browserDiagnostics,
-  page,
-}) => {
+test("retains mounted browser evidence after the native editor reconnects", async ({ page }) => {
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const clientId = await studioClientId(page);
-  const analyze = async () => {
-    const response = await page.request.post("/_marimo-studio/validate?file=notebook.py", {
-      headers: { "Marimo-Server-Token": await studioServerToken(page) },
-      data: {
-        schema: 1,
-        view: "dashboard",
-        browser_timeout: 10,
-        require_browser: true,
-        browser_client: clientId,
-      },
-    });
-    expect(response.ok()).toBe(true);
-    return readBrowserValidation(await response.text());
-  };
-  const abandonedObservations = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin(),
-    method: "PUT",
-    path: /^\/_marimo-studio\/views\/dashboard\/observation$/,
-    count: 2,
-    status: 204,
-  });
-  const initialReport = await analyze();
-  expect(initialReport.ok).toBe(true);
-  const initialObservation = initialReport.stages.browser.observations[0];
-  if (!initialObservation) {
-    throw new Error("Initial browser validation did not return an observation");
-  }
-  expect(initialObservation).toMatchObject({
-    client_id: clientId,
-    session_id: expect.stringMatching(/^s_[\da-z]{6}$/),
-    state: "ready",
-  });
+  const sessionId = await studioEditorSessionId(page);
+  const root = preview.locator("html");
+  await expect(root).toHaveAttribute("data-marimo-studio-state", "ready");
+  const revision = await root.getAttribute("data-marimo-studio-revision");
+  expect(revision).toBeTruthy();
   await editorSlider(page).press("End");
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
   const reloadedSession = page.waitForRequest(
@@ -715,39 +693,114 @@ test("retains agent validation after the native editor reconnects", async ({
   await page
     .locator('iframe[title="Marimo editor"]')
     .evaluate((editor: HTMLIFrameElement) => editor.contentWindow?.location.reload());
-  expect((await reloadedSession).headers()["marimo-session-id"]).toBe(
-    initialObservation.session_id,
-  );
-  let reconnectedObservation: typeof initialObservation | undefined;
-  await expect
-    .poll(
-      async () => {
-        const report = await analyze();
-        const observation = report.stages.browser.observations[0];
-        reconnectedObservation =
-          report.ok &&
-          observation !== undefined &&
-          observation.session_id === initialObservation.session_id
-            ? observation
-            : undefined;
-        return reconnectedObservation?.state;
-      },
-      { timeout: 30_000 },
-    )
-    .toBe("ready");
-  if (!reconnectedObservation) {
-    throw new Error("Agent validation did not retain the reloaded editor session");
-  }
+  expect((await reloadedSession).headers()["marimo-session-id"]).toBe(sessionId);
   await waitForPreview(page);
+  await expect(root).toHaveAttribute("data-marimo-studio-state", "ready");
+  await expect(root).toHaveAttribute("data-marimo-studio-revision", revision!);
   await editorSlider(page).press("End");
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
+  await editorSlider(page).press("Home");
+  await expect(preview.locator('[mo-value="metric"]')).toHaveText("21");
+});
 
-  expect(reconnectedObservation).toMatchObject({
-    client_id: clientId,
-    session_id: expect.stringMatching(/^s_[\da-z]{6}$/),
-    state: "ready",
-  });
-  expect(reconnectedObservation.runtime_instance).toBeTruthy();
-  expect(reconnectedObservation.projection_instances.length).toBeGreaterThan(0);
-  await recoverRequestAbort(abandonedObservations);
+test("advances a live preview while an exact checkpoint stays visibly stale", async ({
+  browserDiagnostics,
+  page,
+  studioCli,
+}) => {
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "checkpoint-view");
+  const sourcePath = workspaceCreatedViewHtmlPath("checkpoint-view");
+  const source =
+    "<!doctype html><html><head><title>Checkpoint</title></head><body><main id='app-shell'><h1>Checkpoint one</h1></main></body></html>";
+  await writeWorkspaceFile(sourcePath, source);
+  await studioCli.buildWorkspaceView("checkpoint-view", workspaceNotebookPath);
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+
+  const live = await page.context().newPage();
+  const exact = await page.context().newPage();
+  const stopOutputTransitions: (() => void)[] = [];
+  try {
+    const liveUrl = await studioCli.previewWorkspaceView("checkpoint-view", "server");
+    const exactUrl = await studioCli.previewWorkspaceView("checkpoint-view", "server", true);
+    const checkpoint = new URL(exactUrl).searchParams.get("marimo_studio_revision");
+    expect(checkpoint).toBeTruthy();
+    const liveEvents = live.waitForRequest((request) =>
+      new URL(request.url()).pathname.endsWith("/_marimo-studio/views/checkpoint-view/dev/events"),
+    );
+    await live.goto(liveUrl);
+    await exact.goto(exactUrl);
+    for (const target of [live, exact]) {
+      await expect(target.getByRole("heading", { name: "Checkpoint one" })).toBeVisible();
+      await expect(target.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+      await expect(target.locator("html")).toHaveAttribute(
+        "data-marimo-studio-revision",
+        checkpoint!,
+      );
+    }
+
+    const exactPath = new RegExp(`^${RegExp.escape(new URL(exact.url()).pathname)}$`);
+    const liveStream = await liveEvents;
+    const retiredLiveStream = browserDiagnostics.expectActiveRequestAbort({
+      origin: studioOrigin(),
+      method: "GET",
+      path: new RegExp(`^${RegExp.escape(new URL(liveStream.url()).pathname)}$`),
+      status: 200,
+    });
+    const staleOutputs = [live, exact].map((target) =>
+      captureRetiringProjectionReads(target.mainFrame(), checkpoint!, browserDiagnostics),
+    );
+    stopOutputTransitions.push(...staleOutputs.map((capture) => capture.seal));
+    const staleRefresh = browserDiagnostics.expectResponse({
+      status: 409,
+      path: exactPath,
+      error: "presentation-revision-mismatch",
+    });
+    const staleConsole = browserDiagnostics.expectConsole({
+      type: "error",
+      text: /marimo-studio presentation refresh error.*exact preview is stale/i,
+    });
+    await writeWorkspaceFile(sourcePath, source.replace("Checkpoint one", "Checkpoint two"));
+    await expect(live.getByRole("heading", { name: "Checkpoint two" })).toBeVisible({
+      timeout: 65_000,
+    });
+    await expect(live.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+    await expect(live.locator("html")).not.toHaveAttribute(
+      "data-marimo-studio-revision",
+      checkpoint!,
+    );
+    await expect(exact.getByRole("heading", { name: "Checkpoint one" })).toBeVisible();
+    await expect(exact.locator("html")).toHaveAttribute("data-marimo-studio-state", "error");
+    await expect(exact.locator("html")).toHaveAttribute("data-marimo-studio-revision", checkpoint!);
+    await expect(exact.getByRole("alert")).toContainText("This exact preview is stale");
+    await recoverRequestAbort(retiredLiveStream);
+    staleRefresh.recovered();
+    staleConsole.recovered();
+
+    const staleNavigation = browserDiagnostics.expectResponse({
+      status: 409,
+      path: exactPath,
+    });
+    const response = await exact.reload();
+    expect(response?.status()).toBe(409);
+    await expect(exact.getByText(/This exact preview is stale/)).toBeVisible();
+    await expect(exact.locator("html")).toHaveAttribute("data-marimo-studio-state", "error");
+    await expect(exact.locator("html")).not.toHaveAttribute("data-marimo-studio-revision");
+    staleNavigation.recovered();
+    stopOutputTransitions.forEach((stop) => stop());
+
+    const refreshedUrl = await studioCli.previewWorkspaceView("checkpoint-view", "server", true);
+    await exact.goto(refreshedUrl);
+    await expect(exact.getByRole("heading", { name: "Checkpoint two" })).toBeVisible();
+    await expect(exact.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+    await expect(exact.locator("html")).toHaveAttribute(
+      "data-marimo-studio-revision",
+      new URL(refreshedUrl).searchParams.get("marimo_studio_revision")!,
+    );
+    staleOutputs.forEach((capture) => capture.recovered());
+  } finally {
+    stopOutputTransitions.forEach((stop) => stop());
+    await live.close();
+    await exact.close();
+  }
 });

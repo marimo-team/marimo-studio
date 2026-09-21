@@ -4,11 +4,14 @@ import { resolve } from "node:path";
 
 import {
   executeCodeMode,
+  expectFirstSaveRetirement,
   saveShortcut,
   selectAllShortcut,
   studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
+  captureProjectionRefresh,
+  recoverProjectionRefresh,
   dashboardHtmlPath,
   editorFrame,
   expect,
@@ -122,10 +125,12 @@ shown.to_dict()
     "</header>",
     '  <p id="papers"><span mo-value="summary.papers"></span> papers</p>\n      </header>',
   );
+  const refreshedProjections = await captureProjectionRefresh(page, browserDiagnostics);
   await writeViewSource(page, "dashboard", "index.html", projectedSource, "plain.py");
 
   await waitForPreview(page);
   await expect(preview.locator("#papers")).toHaveText("3877 papers", { timeout: 65_000 });
+  await recoverProjectionRefresh(refreshedProjections, page);
   await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   supersededConfig.recovered();
 });
@@ -216,6 +221,7 @@ test("offers Studio on a fresh notebook and preserves its session through first-
   const filename = page.getByPlaceholder("filename");
   await filename.click();
   await filename.fill("first-save.py");
+  const retiredSave = expectFirstSaveRetirement(browserDiagnostics, studioOrigin());
   await page.getByText("Save as: first-save.py", { exact: true }).click();
 
   await expect(page.locator("#marimo-studio-host")).toBeAttached();
@@ -236,6 +242,7 @@ test("offers Studio on a fresh notebook and preserves its session through first-
   await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
   expect(await studioEditorSessionId(page)).toBe(sessionId);
+  retiredSave.recovered();
   await expect(editorFrame(page).locator(".cm-content").first()).toContainText("saved = True");
   await waitForPreview(page);
   replacedWorkspaceStream.recovered();
@@ -360,6 +367,11 @@ test("publishes a framework edit and retains the last good view across a failed 
     .not.toBe(initialRevision);
   await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
 
+  const publishedRevision = await preview
+    .locator("html")
+    .getAttribute("data-marimo-studio-revision");
+  expect(publishedRevision).toBeTruthy();
+
   const invalidSource = goodSource.replace(
     "export const App = () => (",
     "export const App = () => (BROKEN",
@@ -370,9 +382,20 @@ test("publishes a framework edit and retains the last good view across a failed 
   await editor.press(saveShortcut);
 
   await expect(page.getByLabel("View build details, Build failed")).toBeVisible();
-  const diagnostic = page.getByRole("alert").filter({ hasText: "React provider" });
+  const diagnostic = page
+    .getByRole("region", { name: "Source", exact: true })
+    .getByRole("alert")
+    .filter({ hasText: "React provider" });
   await expect(diagnostic).toContainText("Expected");
   await expect(diagnostic).toContainText("src/App.tsx");
+  await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "error");
+  await expect(preview.locator("html")).toHaveAttribute(
+    "data-marimo-studio-revision",
+    publishedRevision!,
+  );
+  await expect(preview.getByRole("alert")).toContainText(
+    "Latest build failed. Showing the previous build.",
+  );
   await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
 
   await editor.focus();
@@ -382,6 +405,11 @@ test("publishes a framework edit and retains the last good view across a failed 
   await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
   await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
   await expect(diagnostic).toHaveCount(0);
+  await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+  await expect(preview.locator("html")).toHaveAttribute(
+    "data-marimo-studio-revision",
+    publishedRevision!,
+  );
 
   await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
   await editorModelRecovery.ready(page);
@@ -491,7 +519,7 @@ test("keeps relative navigation public across direct view reloads", async ({
           documentChanged,
           state: html.dataset.marimoStudioState,
           diagnostics: globalThis.marimoStudio?.diagnostics() ?? [],
-          projections: globalThis.marimoStudio?.projections() ?? [],
+          revision: html.dataset.marimoStudioRevision,
         }),
         previousDocument === undefined || documentUrl !== previousDocument,
       );

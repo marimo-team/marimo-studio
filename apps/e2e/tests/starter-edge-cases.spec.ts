@@ -41,7 +41,7 @@ const expectEmptyPreview = async (page: Page, candidate: typeof noDisplayView) =
     .poll(() =>
       preview.locator("html").evaluate(() => ({
         diagnostics: globalThis.marimoStudio.diagnostics().length,
-        projections: globalThis.marimoStudio.projections().length,
+        projections: document.querySelectorAll("[data-marimo-studio-instance]").length,
       })),
     )
     .toEqual({ diagnostics: 0, projections: 0 });

@@ -220,7 +220,12 @@ test("mount configuration validates injected document data", () => {
   assert.deepEqual(parseMountConfig(owned), owned);
   assert.throws(() => parseMountConfig({ ...mount, lifecycleId: 0 }));
   assert.throws(() => parseMountConfig({ ...mount, runtimeSessionId: "forged" }));
-  assert.throws(() => parseMountConfig({ ...mount, clientId: "client-123456789" }));
+  assert.equal(
+    parseMountConfig({ ...mount, clientId: "client-123456789" }).clientId,
+    "client-123456789",
+  );
+  assert.throws(() => parseMountConfig({ ...mount, clientId: "short" }));
+  assert.throws(() => parseMountConfig({ ...mount, clientId: "client invalid!!" }));
   assert.throws(() => parseMountConfig({ ...mount, lifecycleId: 7 }));
   assert.throws(() =>
     parseMountConfig({ ...mount, runtime: "wasm", runtimeSessionId: "s_abc123" }),

@@ -18,11 +18,6 @@ import marimo_studio.agent as studio_agent
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._processes.cancellation import current_provider_cancellation
-from marimo_studio._validation.evidence import (
-    BrowserObservation,
-    ValidationEvidence,
-)
-from marimo_studio._validation.progressive import ValidationRequest
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._views import revisions as revisions_module
 from marimo_studio._workspace import load_studio
@@ -30,7 +25,6 @@ from marimo_studio.agent import ShowResult
 from marimo_studio.errors import (
     CapabilityInputError,
     ConfigurationError,
-    ProtocolError,
     SourceConflictError,
     SourceValidationError,
     ViewGenerationConflictError,
@@ -38,8 +32,6 @@ from marimo_studio.errors import (
     WorkspaceGenerationConflictError,
 )
 from marimo_studio.view_providers._host import provider_registry
-
-from ..helpers import ready_runtime_status
 
 
 def _workspace(notebook: Path) -> studio_authoring.Workspace:
@@ -432,6 +424,29 @@ def test_view_validate_rejects_a_replacement_before_artifact_publication(
     assert not root.joinpath(".artifacts").exists()
 
 
+def test_view_validate_rechecks_ownership_after_runtime_execution(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace(notebook_path)
+    view = asyncio.run(workspace.create_view("dashboard"))
+    root = load_studio(notebook_path).views["dashboard"].root
+    retired = root.with_name("retired-dashboard")
+
+    async def replace_during_runtime(*_args: object, **_kwargs: object):
+        root.rename(retired)
+        shutil.copytree(retired, root)
+        return (CheckResult("runtime", "pass", "Notebook executed"),)
+
+    monkeypatch.setattr(
+        "marimo_studio._authoring.validation.check_runtime_studio_isolated",
+        replace_during_runtime,
+    )
+
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(view.validate(level="runtime"))
+
+
 def test_workspace_handle_cannot_create_in_a_newer_catalog(
     notebook_path: Path,
 ) -> None:
@@ -658,90 +673,6 @@ def test_workspace_validates_notebook_and_binding_inputs(notebook_path: Path) ->
     for selector in (-1, True):
         with pytest.raises(CapabilityInputError, match="Unknown cell selector"):
             asyncio.run(workspace.bind("summary", cast(Any, selector)))
-
-
-def test_view_analysis_uses_the_attached_studio_server(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    asyncio.run(_workspace(notebook_path).create_view("dashboard"))
-    connection = StudioServerConnection(
-        "http://localhost:2718",
-        session_id="s_123456",
-    )
-    monkeypatch.setattr(
-        "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(
-            active_notebook=lambda: notebook_path.resolve(),
-            connection=lambda: connection,
-        ),
-    )
-    workspace = studio_agent.current_workspace()
-    view = workspace.view("dashboard")
-
-    async def analyze(_connection, notebook, request):
-        assert request == ValidationRequest(
-            view="dashboard",
-            catalog_generation=view.catalog_generation,
-            view_generation=view.generation,
-        )
-        return ValidationEvidence(
-            notebook=notebook,
-            views=("dashboard",),
-            runtime="server",
-            revisions={"dashboard": "revision-1"},
-            static_checks=(CheckResult("static", "pass", "Sources are valid"),),
-            runtime_checks=(CheckResult("runtime", "pass", "Notebook run completed"),),
-            runtime_skipped=None,
-            browser_observations=(
-                BrowserObservation(
-                    view="dashboard",
-                    runtime="server",
-                    revision="revision-1",
-                    state="ready",
-                    client_id="browser-client-1234",
-                    runtime_instance="runtime-instance",
-                    session_id="s_123456",
-                    request_id="request-1",
-                    sequence=1,
-                    runtime_status=ready_runtime_status("dashboard", "revision-1"),
-                ),
-            ),
-            browser_required=True,
-            issues=(),
-        )
-
-    monkeypatch.setattr(
-        "marimo_studio._authoring.validation.request_browser_validation", analyze
-    )
-
-    report = asyncio.run(view.validate(level="browser"))
-
-    assert report.level == "browser"
-    assert report.ok is True
-    assert report.evidence["browser"]
-
-
-def test_view_analysis_requires_the_attached_server(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    asyncio.run(_workspace(notebook_path).create_view("dashboard"))
-
-    def unavailable() -> StudioServerConnection:
-        raise ProtocolError("Studio metadata is unavailable.")
-
-    monkeypatch.setattr(
-        "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(
-            active_notebook=lambda: notebook_path.resolve(),
-            connection=unavailable,
-        ),
-    )
-    view = studio_agent.current_workspace().view("dashboard")
-
-    with pytest.raises(ProtocolError, match="Studio metadata is unavailable"):
-        asyncio.run(view.validate(level="browser"))
 
 
 def test_view_show_targets_the_attached_browser(

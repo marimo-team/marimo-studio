@@ -180,7 +180,7 @@ Host adapters participate in:
 - Mount and disconnect
 - Preservation across document swaps
 - Readiness contribution
-- Projection-instance observations
+- Projection-instance lifecycle
 
 Read [Symbolic projections](symbolic-projections.md) for authorization,
 resolution, duplicate ownership, quotas, and evidence.
@@ -190,15 +190,14 @@ resolution, duplicate ownership, quotas, and evidence.
 `packages/protocol` owns serialization. Each lane has one producer and one
 consumer boundary:
 
-| Lane               | Records                                                                           | Owner transition                                     |
-| ------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Server bootstrap   | `StudioBootstrap`, `RuntimeConfig`, `MountConfig`                                 | Python delivery to the presentation document         |
-| View project       | `ViewProject`, `SourceDocument`, `ViewBuildState`                                 | Python Source services to Studio controllers         |
-| Development events | Project, build, presentation, views, session, activation, and observation records | Server event coordinator to Studio features          |
-| Preview messages   | Revision, readiness, navigation, query, diagnostic, and observation messages      | Presentation document and Preview controller         |
-| Frame bridge       | Control, query, resize, and acknowledgement records                               | Studio workspace and the selected presentation frame |
-| Projection reads   | Value and output requests and responses                                           | Presentation hosts and revision-bound server routes  |
-| Browser evidence   | `BrowserObservation` and `RuntimeStatusReport`                                    | Presentation observer to agent coordination          |
+| Lane               | Records                                                              | Owner transition                                     |
+| ------------------ | -------------------------------------------------------------------- | ---------------------------------------------------- |
+| Server bootstrap   | `StudioBootstrap`, `RuntimeConfig`, `MountConfig`                    | Python delivery to the presentation document         |
+| View project       | `ViewProject`, `SourceDocument`, `ViewBuildState`                    | Python Source services to Studio controllers         |
+| Development events | Project, build, presentation, views, session, and activation records | Server event coordinator to Studio features          |
+| Preview messages   | Revision, readiness, navigation, query, and diagnostic messages      | Presentation document and Preview controller         |
+| Frame bridge       | Control, query, resize, and acknowledgement records                  | Studio workspace and the selected presentation frame |
+| Projection reads   | Value and output requests and responses                              | Presentation hosts and revision-bound server routes  |
 
 Zod schemas parse browser input at the receiving boundary. Python producers
 emit schema 1 records with the same field meanings. Add malformed, stale, and
@@ -466,8 +465,8 @@ The `change` event has four kinds:
 - `views` refreshes the view inventory.
 
 The initial `ready` event refreshes inventory, reconciles Source, and gives
-Preview its presentation baseline. Separate `activate`, `observe`, and
-`session` events carry agent requests and editor session bindings.
+Preview its presentation baseline. Separate `activate` and `session` events
+carry agent activation requests and editor session bindings.
 
 The event URL carries a client-scoped capability signed for the notebook, base
 URL, edit mode, and server instance. The server validates the capability,
@@ -504,10 +503,9 @@ The deck also coordinates:
 - Editor session binding
 - Presentation build and revision baseline
 - Query and control synchronization
-- Browser observation requests
 
 Inactive controllers keep reconciling revision state while active side effects,
-controls, query writes, retries, and observations stay with the selected slot.
+controls, query writes, and retries stay with the selected slot.
 
 ## Query synchronization
 
@@ -571,7 +569,10 @@ Presentation readiness combines:
 
 A presentation reaches ready when the current revision has committed and each
 mounted projection instance is healthy. Runtime failures describe mounted
-instances.
+instances. `data-marimo-studio-state` exposes this Studio lifecycle on `<html>`.
+`data-marimo-studio-revision` exposes the presentation revision at commit, and
+retains that revision when a replacement fails. Application rendering uses its
+framework lifecycle and separate semantic browser assertions.
 
 Diagnostics include view, runtime, revision, scope, source location, target,
 and recovery hint where available.

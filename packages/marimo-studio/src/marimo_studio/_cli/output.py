@@ -380,22 +380,6 @@ def render_validation(report: ValidationReport) -> None:
         if isinstance(checks, list):
             for check in checks:
                 _render_check(check)
-    browser = report.evidence.get("browser")
-    if isinstance(browser, dict):
-        observations = browser.get("observations")
-        if isinstance(observations, list):
-            for observation in observations:
-                if not isinstance(observation, dict):
-                    continue
-                state_name = observation.get("state")
-                view = observation.get("view")
-                if not isinstance(state_name, str) or not isinstance(view, str):
-                    continue
-                style = green if state_name == "ready" else red
-                echo(f"{style(state_name.upper()):<4} browser:{view}")
-                message = observation.get("message")
-                if isinstance(message, str) and message:
-                    echo(f"     {message}")
     if report.issues:
         echo(f"\n{light_blue('Repair queue')}")
         for issue in report.issues:

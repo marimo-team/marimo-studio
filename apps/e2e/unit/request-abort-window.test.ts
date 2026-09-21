@@ -9,21 +9,21 @@ const request = (method: string, path: string) => ({
   url: () => `http://127.0.0.1:4321${path}`,
 });
 
-const observation = () => request("PUT", "/_marimo-studio/views/dashboard/observation");
+const queryWrite = () => request("POST", "/_marimo-studio/query");
 
 test("a backfilled request retains its response status and exact object identity", () => {
   const window = new ExactRequestAbortWindow(
-    "PUT",
+    "POST",
     "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/views\/dashboard\/observation$/,
+    /^\/_marimo-studio\/query$/,
     1,
     true,
-    204,
+    202,
   );
-  const bound = observation();
+  const bound = queryWrite();
 
-  expect(window.recordActive(bound, 204)).toBe(true);
-  expect(window.recordAbort(observation(), "net::ERR_ABORTED")).toBe(false);
+  expect(window.recordActive(bound, 202)).toBe(true);
+  expect(window.recordAbort(queryWrite(), "net::ERR_ABORTED")).toBe(false);
   expect(window.recordAbort(bound, "net::ERR_ABORTED")).toBe(true);
   window.seal();
   expect(window.readyToRecover()).toBe(true);
@@ -33,14 +33,14 @@ test("a backfilled request retains its response status and exact object identity
 
 test("an abort with the wrong response status fails closed", () => {
   const window = new ExactRequestAbortWindow(
-    "PUT",
+    "POST",
     "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/views\/dashboard\/observation$/,
+    /^\/_marimo-studio\/query$/,
     1,
     true,
-    204,
+    202,
   );
-  const conflict = observation();
+  const conflict = queryWrite();
   window.recordActive(conflict, 409);
   window.recordAbort(conflict, "net::ERR_ABORTED");
   window.seal();
@@ -51,21 +51,21 @@ test("an abort with the wrong response status fails closed", () => {
 
 test("a sealed window becomes ready when abort and status arrive after user completion", () => {
   const window = new ExactRequestAbortWindow(
-    "PUT",
+    "POST",
     "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/views\/qa-view\/observation$/,
+    /^\/_marimo-studio\/query$/,
     1,
     true,
-    204,
+    202,
   );
-  const pending = request("PUT", "/_marimo-studio/views/qa-view/observation");
+  const pending = request("POST", "/_marimo-studio/query");
   window.recordStart(pending);
   window.seal();
   expect(window.readyToRecover()).toBe(false);
 
   window.recordAbort(pending, "net::ERR_ABORTED");
   expect(window.readyToRecover()).toBe(false);
-  window.recordResponse(pending, 204);
+  window.recordResponse(pending, 202);
   expect(window.readyToRecover()).toBe(true);
   expect(window.recover()).toBe(true);
   expect(window.diagnostics()).toEqual([]);
@@ -73,13 +73,13 @@ test("a sealed window becomes ready when abort and status arrive after user comp
 
 test("recovery before a required request starts fails closed", () => {
   const window = new ExactRequestAbortWindow(
-    "PUT",
+    "POST",
     "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/views\/qa-view\/observation$/,
+    /^\/_marimo-studio\/query$/,
   );
 
   expect(window.recover()).toBe(false);
-  const late = request("PUT", "/_marimo-studio/views/qa-view/observation");
+  const late = request("POST", "/_marimo-studio/query");
   expect(window.recordStart(late)).toBe(false);
 });
 
@@ -104,12 +104,12 @@ test("a required window ignores a successful retry after its exact abort", () =>
 
 test("a required window rejects an abort beyond its cardinality", () => {
   const window = new ExactRequestAbortWindow(
-    "PUT",
+    "POST",
     "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/views\/dashboard\/observation$/,
+    /^\/_marimo-studio\/query$/,
   );
-  const first = observation();
-  const extra = observation();
+  const first = queryWrite();
+  const extra = queryWrite();
   window.recordStart(first);
   window.recordAbort(first, "net::ERR_ABORTED");
   window.recordStart(extra);

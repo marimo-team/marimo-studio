@@ -23,6 +23,7 @@ PARITY = (
     (studio_authoring.View, "hold_publication", ("view", "hold")),
     (studio_authoring.View, "release_publication", ("view", "release")),
     (studio_authoring.View, "build", ("view", "build")),
+    (studio_authoring.View, "preview_url", ("view", "preview")),
     (studio_agent.View, "show", ("view", "show")),
     (studio_authoring.View, "validate", ("validate",)),
     (studio_authoring.View, "export", ("view", "export")),

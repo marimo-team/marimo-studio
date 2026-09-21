@@ -98,8 +98,9 @@ Studio reports the affected path and repair action.
 Inspection separates `project_revision`, the observed build inputs, from
 `published_project_revision`, the inputs behind the retained artifact.
 `latest_build` reports the latest attempt, including a failure, while `build`
-identifies the retained successful artifact. Use browser validation to confirm
-what a particular Studio tab has rendered.
+identifies the retained successful artifact. Open `view.preview_url(runtime="server")`
+with your browser and check the committed `data-marimo-studio-revision` on the
+HTML document before asserting the rendered result.
 
 ### Coordinate a multi-file change
 

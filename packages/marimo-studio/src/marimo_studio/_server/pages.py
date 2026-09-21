@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 from collections.abc import Sequence
 from pathlib import Path
@@ -22,8 +23,10 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_LIFECYCLE_QUERY_PARAM,
     DOCUMENT_REPLAY_QUERY_PARAM,
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+    EDITOR_SESSION_QUERY_PARAM,
     HOST_SESSION_HANDOFF_QUERY_PARAM,
     PRESENTATION_RENEWAL_QUERY_PARAM,
+    PRESENTATION_REVISION_QUERY_PARAM,
     PRIVATE_QUERY_KEYS,
     SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
@@ -76,7 +79,7 @@ from marimo_studio._server.studio.session_handoff import (
     host_session_handoff_capability_matches,
 )
 from marimo_studio._workspace.models import DEFAULT_VIEW_NAME, StudioWorkspace
-from marimo_studio.errors import MarimoStudioError
+from marimo_studio.errors import AgentRequestError, MarimoStudioError
 
 
 def authentication_redirect(request: Request, base_url: str) -> Response:
@@ -165,9 +168,41 @@ async def document_response(
     """Render one custom view document against the active Marimo server."""
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
+    expected_revisions = request.query_params.getlist(PRESENTATION_REVISION_QUERY_PARAM)
+    if expected_revisions and (
+        len(expected_revisions) != 1
+        or re.fullmatch(r"[0-9a-f]{64}", expected_revisions[0]) is None
+    ):
+        raise AgentRequestError(
+            "invalid-presentation-revision",
+            "Specify one presentation revision from an exact preview URL.",
+            status_code=400,
+        )
     client_id: str | None = None
+    selected = None if context.mode == "run" and relative in {"", "/"} else view_name
+    if expected_revisions:
+        snapshot = await presentation.current_published_snapshot_async(
+            view_name, profile="development" if context.mode == "edit" else "production"
+        )
+    elif context.mode == "edit":
+        snapshot = await presentation.display_snapshot_async(view_name)
+    else:
+        snapshot = await presentation.snapshot_async(selected, profile="production")
+    runtime, _ = runtimes.select(
+        snapshot.resolved.workspace,
+        context,
+        request.query_params.get("runtime"),
+    )
+    runtime_explicit = request.query_params.get("runtime") is not None
+    if expected_revisions and snapshot.revision != expected_revisions[0]:
+        raise AgentRequestError(
+            "presentation-revision-mismatch",
+            "This exact preview is stale. "
+            "Open a new preview URL for the current build.",
+            status_code=409,
+        )
     if context.mode == "edit":
-        if not sessions.has_notebook_session(context):
+        if runtime.id == "server" and not sessions.has_notebook_session(context):
             return _waiting_response(
                 request,
                 context,
@@ -178,6 +213,15 @@ async def document_response(
         client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
         if client_id is not None:
             session_id = await clients.session_for_client(client_id)
+            expected_sessions = request.query_params.getlist(EDITOR_SESSION_QUERY_PARAM)
+            if expected_sessions and (
+                len(expected_sessions) != 1 or session_id != expected_sessions[0]
+            ):
+                raise AgentRequestError(
+                    "preview-session-changed",
+                    "The notebook session changed. Open a new preview URL.",
+                    status_code=409,
+                )
             if (
                 session_id is None
                 or not sessions.exists(context, session_id)
@@ -190,18 +234,6 @@ async def document_response(
                     presentation_session,
                     head=request.method == "HEAD",
                 )
-    selected = None if context.mode == "run" and relative in {"", "/"} else view_name
-    snapshot = (
-        await presentation.display_snapshot_async(view_name)
-        if context.mode == "edit"
-        else await presentation.snapshot_async(selected, profile="production")
-    )
-    runtime, _ = runtimes.select(
-        snapshot.resolved.workspace,
-        context,
-        request.query_params.get("runtime"),
-    )
-    runtime_explicit = request.query_params.get("runtime") is not None
     frame_identity = studio_frame_identity(request) if context.mode == "edit" else None
     if frame_identity is not None and frame_identity[0] != client_id:
         frame_identity = None
@@ -236,6 +268,7 @@ async def document_response(
             snapshot,
             presentation_session.session_id,
             presentation_session.runtime_session_id,
+            editor_session_id=request.query_params.get(EDITOR_SESSION_QUERY_PARAM),
         ),
     }
     if request.method == "HEAD":
@@ -303,7 +336,14 @@ async def document_response(
             renewal_token=presentation_session.renewal_token,
             session_id=presentation_session.session_id,
             runtime_session_id=presentation_session.runtime_session_id,
-            client_id=frame_identity[0] if frame_identity is not None else None,
+            client_id=(
+                frame_identity[0]
+                if frame_identity is not None
+                else client_id
+                if unframed and request.query_params.get(EDITOR_SESSION_QUERY_PARAM)
+                else None
+            ),
+            editor_session_id=request.query_params.get(EDITOR_SESSION_QUERY_PARAM),
             lifecycle_id=frame_identity[1] if frame_identity is not None else None,
         ),
         headers=runtime_headers,
@@ -515,7 +555,14 @@ def error_response(
         )
     if structured:
         return JSONResponse(payload, status_code=status_code, headers=headers)
-    if dev:
+    terminal_preview = code in {
+        "invalid-presentation-revision",
+        "presentation-revision-mismatch",
+        "preview-session-changed",
+        "preview-source-changed",
+        "preview-source-not-current",
+    }
+    if dev or terminal_preview:
         return HTMLResponse(
             repair_document(
                 message,
@@ -535,6 +582,7 @@ def error_response(
                 lifecycle_id=lifecycle_id,
                 runtime=runtime,
                 view=view_name,
+                recoverable=not terminal_preview,
             ),
             status_code=status_code,
             headers=headers,

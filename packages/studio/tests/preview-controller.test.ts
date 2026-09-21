@@ -1,4 +1,4 @@
-import type { BrowserDiagnostic } from "@marimo-studio/protocol/browser-observations";
+import type { BrowserDiagnostic } from "@marimo-studio/protocol/runtime-status";
 
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
@@ -6,7 +6,6 @@ import type { ControlEndpoint, ControlUpdate } from "../src/features/preview/con
 import type { EditorQuerySyncResult } from "../src/features/preview/query-remote.ts";
 
 import { PreviewController } from "../src/features/preview/controller.ts";
-import { emptyProjectionEvidence } from "./fixtures.ts";
 import {
   createFrameBridgeSource,
   installFrameBridge,
@@ -134,7 +133,6 @@ it("preserves document identity through same-view navigation", () => {
     syncEditorQuery,
     vi.fn(),
     report,
-    undefined,
     undefined,
     { query: "?region=emea", hash: "" },
     undefined,
@@ -266,7 +264,6 @@ it("starts WASM control synchronization from an active rendered-view session", a
     vi.fn(async () => "accepted" as const),
     vi.fn(),
     vi.fn(),
-    undefined,
     connect,
   );
   wasm.editorSessionChanged("s_editor1", false);
@@ -326,7 +323,6 @@ it("suspends hidden WASM ownership and reactivates the same document", async () 
     .mockReturnValueOnce(reactivated);
   const syncQuery = vi.fn();
   const syncEditorQuery = vi.fn(async () => "accepted" as const);
-  const recordObservation = vi.fn(async () => undefined);
   const wasm = new PreviewController(
     "dashboard",
     "wasm",
@@ -338,7 +334,6 @@ it("suspends hidden WASM ownership and reactivates the same document", async () 
     syncEditorQuery,
     vi.fn(),
     vi.fn(),
-    recordObservation,
     connect,
     { query: "?canonical=1", hash: "" },
   );
@@ -358,14 +353,6 @@ it("suspends hidden WASM ownership and reactivates the same document", async () 
     revision: "revision-1",
   });
   await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce());
-  wasm.requestObservation({
-    schema: 1,
-    requestId: "hidden-observation",
-    view: "dashboard",
-    runtime: "wasm",
-    runtimeInstance: "wasm-instance",
-    revision: "revision-1",
-  });
   const documentSource = preview.src;
   const lifecycleId = preview.dataset.previewLifecycleId;
 
@@ -380,26 +367,11 @@ it("suspends hidden WASM ownership and reactivates the same document", async () 
     lifecycleId: 1,
     query: "?hidden=1",
   });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-observation",
-    lifecycleId: 1,
-    requestId: "hidden-observation",
-    view: "dashboard",
-    runtime: "wasm",
-    runtimeInstance: "wasm-instance",
-    revision: "revision-1",
-    state: "ready",
-    diagnostics: [],
-    sessionId: null,
-    query: "?hidden=1",
-    ...emptyProjectionEvidence,
-  });
   await Promise.resolve();
 
   expect(hiddenEditorApply).not.toHaveBeenCalled();
   expect(syncQuery).not.toHaveBeenCalled();
   expect(syncEditorQuery).not.toHaveBeenCalled();
-  expect(recordObservation).not.toHaveBeenCalled();
   expect(hidden.dispose).toHaveBeenCalledOnce();
 
   const warmActivation = wasm.activate({ query: "?canonical=1", hash: "" });
@@ -499,7 +471,6 @@ it("reports a live control failure and clears it after retry", async () => {
     vi.fn(async () => "accepted" as const),
     vi.fn(),
     report,
-    undefined,
     connect,
   );
   wasm.editorSessionChanged("s_editor1", false);
@@ -632,7 +603,6 @@ it("restores the committed query after an editor-session reload interrupts dispa
     syncEditorQuery,
     vi.fn(),
     vi.fn(),
-    undefined,
     undefined,
     { query: "?region=emea", hash: "" },
   );

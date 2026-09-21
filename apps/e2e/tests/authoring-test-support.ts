@@ -1,71 +1,20 @@
 import { studioBootstrapSchema } from "@marimo-studio/protocol/studio-bootstrap";
-import { expect, type FrameLocator, type Page } from "@playwright/test";
+import { expect, type Frame, type FrameLocator, type Page, type Request } from "@playwright/test";
 import { z } from "zod";
+
+import type { BrowserDiagnostics, BrowserResponseRecovery } from "./browser-diagnostics.ts";
+
+import { projectionReadRequestKind } from "./projection-read-window.ts";
 
 export const saveShortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
 // Marimo also supports Ctrl+Enter on macOS.
 export const runCellShortcut = "Control+Enter";
 export const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a";
 
-export const observationStateSchema = z.enum([
-  "error",
-  "loading",
-  "not-observed",
-  "ready",
-  "stale",
-]);
-export const projectionInstanceSchema = z.object({
-  mount_id: z.string().min(1),
-  instance_id: z.string().min(1),
-  target: z.string(),
-  runtime_cell_id: z.string().min(1),
-  phase: z.literal("ready"),
-  error: z.null(),
-});
-export const projectionEvidenceFields = {
-  projection_instances: z.array(projectionInstanceSchema).default([]),
-};
-export const viewRevisionSchema = z.object({ revision: z.string() });
-export const requestedObservationsSchema = z.object({
-  observations: z
-    .array(
-      z.object({
-        diagnostics: z.array(z.record(z.string(), z.json())),
-        revision: z.string().optional(),
-        state: observationStateSchema,
-        view: z.string(),
-        ...projectionEvidenceFields,
-      }),
-    )
-    .min(1),
-});
-export const changedObservationSourceSchema = z.object({
-  error: z.literal("validation-source-changed"),
-});
-export const browserValidationSchema = z.object({
-  ok: z.boolean(),
-  stages: z.object({
-    browser: z.object({
-      observations: z
-        .array(
-          z.object({
-            client_id: z.string().optional(),
-            runtime_instance: z.string().optional(),
-            session_id: z.string().optional(),
-            state: observationStateSchema,
-            ...projectionEvidenceFields,
-          }),
-        )
-        .min(1),
-    }),
-  }),
-});
+const viewRevisionSchema = z.object({ revision: z.string() });
+
 export const readViewRevision = (source: string): string => {
   return viewRevisionSchema.parse(JSON.parse(source)).revision;
-};
-
-export const readRequestedObservation = (source: string) => {
-  return requestedObservationsSchema.parse(JSON.parse(source)).observations[0];
 };
 
 export const readStudioBootstrap = async (page: Page) => {
@@ -113,6 +62,70 @@ export const executeCodeMode = async (
   expect(result.text).toContain('"success": true');
 };
 
-export const readBrowserValidation = (source: string) => {
-  return browserValidationSchema.parse(JSON.parse(source));
+export const captureRetiringProjectionReads = (
+  frame: Frame,
+  revision: string,
+  diagnostics: BrowserDiagnostics,
+): BrowserResponseRecovery & { seal(): void } => {
+  const page = frame.page();
+  const origin = new URL(frame.url()).origin;
+  const responses: BrowserResponseRecovery[] = [];
+  const record = (request: Request) => {
+    const url = new URL(request.url());
+    if (!projectionReadRequestKind(request) || request.frame() !== frame || url.origin !== origin)
+      return;
+    let body: ReturnType<typeof viewRevisionSchema.safeParse>;
+    try {
+      body = viewRevisionSchema.safeParse(request.postDataJSON());
+    } catch {
+      return;
+    }
+    if (!body.success || body.data.revision !== revision) return;
+    responses.push(
+      diagnostics.expectResponse({
+        status: 409,
+        path: new RegExp(`^${RegExp.escape(url.pathname)}$`),
+        required: false,
+      }),
+    );
+  };
+  const seal = () => {
+    page.off("request", record);
+    page.off("close", seal);
+  };
+  page.on("request", record);
+  page.once("close", seal);
+  return {
+    seal,
+    recovered: () => {
+      seal();
+      responses.forEach((response) => response.recovered());
+    },
+  };
+};
+
+// The unsaved native page can retire its save response during navigation.
+// Recover only after the saved file and original session have been verified.
+export const expectFirstSaveRetirement = (
+  diagnostics: BrowserDiagnostics,
+  origin: string,
+): BrowserResponseRecovery => {
+  const request = diagnostics.expectRequestFailure({
+    origin,
+    method: "POST",
+    path: /^\/api\/kernel\/save$/,
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
+  const error = diagnostics.expectConsole({
+    type: "error",
+    text: /^Failed to handle request: sendSave TypeError: Failed to fetch(?:\n|$)/,
+    required: false,
+  });
+  return {
+    recovered: () => {
+      request.recovered();
+      error.recovered();
+    },
+  };
 };

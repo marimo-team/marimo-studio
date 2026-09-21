@@ -4,7 +4,6 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
 
 import { PreviewDeck } from "../features/preview/deck.ts";
-import { createBrowserObservationRemote } from "../features/preview/observation-remote.ts";
 import { syncEditorQuery } from "../features/preview/query-remote.ts";
 import { initialPreviewRuntime } from "../features/preview/runtime.ts";
 import { SourceController } from "../features/source-editor/controller.ts";
@@ -77,11 +76,6 @@ export const createStudioServices = (
       ),
     navigate: async (view, navigation) =>
       (await views?.choose(view, "preserve", navigation)) ?? false,
-    recordObservation: createBrowserObservationRemote(
-      routes.support,
-      bootstrap.serverToken,
-      bootstrap.clientId,
-    ),
     connectControlFrame,
   });
   const transition = new ViewTransition(bootstrap.selectedView, {

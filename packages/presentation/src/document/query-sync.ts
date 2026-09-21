@@ -1,11 +1,20 @@
 import type { QueryChangeMessage } from "@marimo-studio/protocol/preview-messages";
 
-import { publicNotebookQuery } from "@marimo-studio/protocol/query";
+import {
+  PRESENTATION_REVISION_QUERY_PARAM,
+  publicNotebookQuery,
+} from "@marimo-studio/protocol/query";
 
-import { getMountConfig, getRuntimeConfig, hasRuntimeConfig } from "../runtime-config";
+import {
+  getMountConfig,
+  getRuntimeConfig,
+  getSupportUrl,
+  hasRuntimeConfig,
+} from "../runtime-config";
 import { documentLifecycleEnvelope } from "./document-lifecycle-id.ts";
 import { postToStudioParent } from "./parent-bridge.ts";
 import { studioOwned } from "./studio-ownership.ts";
+import { setEditorBindingQuery } from "./view-navigation.ts";
 
 const queryListeners = new Set<() => void>();
 
@@ -35,7 +44,7 @@ export const bindRuntimeQueryHistory = (
   };
 };
 
-export const startQuerySync = (): void => {
+export const startQuerySync = (): (() => void) => {
   const physicallyFramed = globalThis.parent !== globalThis.window;
   const notify = () => {
     queryListeners.forEach((listener) => listener());
@@ -53,16 +62,40 @@ export const startQuerySync = (): void => {
   const pushState = globalThis.history.pushState.bind(globalThis.history);
   const replaceState = globalThis.history.replaceState.bind(globalThis.history);
 
+  const preserveExactRevision = (url: string | URL | null | undefined) => {
+    if (url == null) {
+      return url;
+    }
+    const current = new URL(globalThis.location.href);
+    const target = new URL(url, current);
+    const revision = current.searchParams.get(PRESENTATION_REVISION_QUERY_PARAM);
+    if (target.origin === current.origin && target.pathname === current.pathname) {
+      if (revision) {
+        target.searchParams.set(PRESENTATION_REVISION_QUERY_PARAM, revision);
+      }
+      setEditorBindingQuery(target, getMountConfig().clientId, getSupportUrl());
+    }
+    return target.href;
+  };
+
   // Marimo applies mo.query_params() updates through same-document history
   // writes, which do not emit popstate events.
-  globalThis.history.pushState = (...arguments_) => {
-    pushState(...arguments_);
+  const wrappedPush: History["pushState"] = (...arguments_) => {
+    pushState(arguments_[0], arguments_[1], preserveExactRevision(arguments_[2]));
     notify();
   };
-  globalThis.history.replaceState = (...arguments_) => {
-    replaceState(...arguments_);
+  const wrappedReplace: History["replaceState"] = (...arguments_) => {
+    replaceState(arguments_[0], arguments_[1], preserveExactRevision(arguments_[2]));
     notify();
   };
+  globalThis.history.pushState = wrappedPush;
+  globalThis.history.replaceState = wrappedReplace;
   globalThis.addEventListener("popstate", notify);
   notify();
+  return () => {
+    globalThis.removeEventListener("popstate", notify);
+    if (globalThis.history.pushState === wrappedPush) globalThis.history.pushState = pushState;
+    if (globalThis.history.replaceState === wrappedReplace)
+      globalThis.history.replaceState = replaceState;
+  };
 };

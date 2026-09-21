@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from marimo_studio._delivery.browser_ports import BrowserRuntimeProjector
 from marimo_studio._notebook.cell_refs import safe_cell_ref_matches
-from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
+from marimo_studio._notebook.records import CellRef
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.capability import (
     presentation_revision_capability,
@@ -49,12 +49,6 @@ class RuntimeProjection:
     cell_refs: dict[str, str]
 
 
-@dataclass(frozen=True)
-class RuntimeEvidenceProjection(RuntimeProjection):
-    current_cell_refs: dict[str, str]
-    dependency_closures: dict[str, tuple[str, ...]]
-
-
 class RuntimeProvider(Protocol):
     id: str
     label: str
@@ -74,18 +68,6 @@ class RuntimeProvider(Protocol):
         progress: RuntimeProgressSink | None = None,
     ) -> RuntimeProjection: ...
 
-    async def project_evidence(
-        self,
-        snapshot: PresentationSnapshot,
-        context: ServerContext,
-        session_id: str | None,
-        binding_id: str | None = None,
-        presentation_session_id: str | None = None,
-        runtime_session_id: str | None = None,
-        *,
-        client_id: str | None = None,
-    ) -> RuntimeEvidenceProjection: ...
-
 
 def _digest(*values: str) -> str:
     digest = hashlib.sha256()
@@ -93,24 +75,6 @@ def _digest(*values: str) -> str:
         digest.update(value.encode("utf-8"))
         digest.update(b"\0")
     return digest.hexdigest()
-
-
-def _static_dependency_closures(
-    snapshot: PresentationSnapshot,
-    bindings: dict[str, str],
-) -> dict[str, tuple[str, ...]]:
-    closures: dict[str, tuple[str, ...]] = {}
-    for producer in snapshot.symbols.cells:
-        runtime_id = bindings.get(str(producer))
-        if runtime_id is None:
-            continue
-        closure = tuple(
-            bindings[str(reference)]
-            for reference in snapshot.symbols.dependency_closure(producer)
-            if str(reference) in bindings
-        )
-        closures[runtime_id] = closure
-    return closures
 
 
 class ServerRuntime:
@@ -143,11 +107,10 @@ class ServerRuntime:
         self._require_open()
         if progress is not None:
             progress(RuntimeProgress("Connecting to the Python runtime"))
-        bindings, _cells = await self._runtime_bindings(
+        bindings = await self._runtime_bindings(
             snapshot,
             context,
             session_id,
-            include_dependency_closures=False,
         )
         self._require_open()
         return self._projection(
@@ -159,71 +122,16 @@ class ServerRuntime:
             runtime_session_id,
         )
 
-    async def project_evidence(
-        self,
-        snapshot: PresentationSnapshot,
-        context: ServerContext,
-        session_id: str | None,
-        binding_id: str | None = None,
-        presentation_session_id: str | None = None,
-        runtime_session_id: str | None = None,
-        *,
-        client_id: str | None = None,
-    ) -> RuntimeEvidenceProjection:
-        self._require_open()
-        bindings, cells = await self._runtime_bindings(
-            snapshot,
-            context,
-            session_id,
-            include_dependency_closures=True,
-        )
-        self._require_open()
-        projection = self._projection(
-            snapshot,
-            context,
-            bindings,
-            binding_id,
-            presentation_session_id,
-            runtime_session_id,
-        )
-        return RuntimeEvidenceProjection(
-            runtime_id=projection.runtime_id,
-            instance=projection.instance,
-            data=projection.data,
-            cell_refs=projection.cell_refs,
-            current_cell_refs=(
-                {
-                    cell.runtime_id: str(cell.ref)
-                    for cell in snapshot.resolved.notebook.cells
-                }
-                if cells is None
-                else {
-                    runtime_id: str(ref)
-                    for runtime_id, ref in cells.current_refs.items()
-                }
-            ),
-            dependency_closures=(
-                _static_dependency_closures(snapshot, bindings)
-                if cells is None
-                else dict(cells.dependency_closures)
-            ),
-        )
-
     async def _runtime_bindings(
         self,
         snapshot: PresentationSnapshot,
         context: ServerContext,
         session_id: str | None,
-        *,
-        include_dependency_closures: bool,
-    ) -> tuple[
-        dict[str, str],
-        LiveCellSnapshot | None,
-    ]:
+    ) -> dict[str, str]:
         cells = await self._sessions.live_cells(
             context,
             session_id,
-            include_dependency_closures=include_dependency_closures,
+            include_dependency_closures=False,
         )
         bindings = snapshot.resolved.runtime_cell_refs(cells)
         current_matches = (
@@ -251,7 +159,7 @@ class ServerRuntime:
             raise RuntimeSyncError(
                 "Run the changed notebook cells to update the Python runtime preview."
             )
-        return bindings, cells
+        return bindings
 
     def _projection(
         self,
@@ -344,42 +252,6 @@ class WasmRuntime:
             cell_refs=bindings,
         )
 
-    async def project_evidence(
-        self,
-        snapshot: PresentationSnapshot,
-        context: ServerContext,
-        session_id: str | None,
-        binding_id: str | None = None,
-        presentation_session_id: str | None = None,
-        runtime_session_id: str | None = None,
-        *,
-        client_id: str | None = None,
-    ) -> RuntimeEvidenceProjection:
-        projection = await self.project(
-            snapshot,
-            context,
-            session_id,
-            binding_id,
-            presentation_session_id,
-            runtime_session_id,
-            client_id=client_id,
-        )
-        bindings = projection.cell_refs
-        return RuntimeEvidenceProjection(
-            runtime_id=projection.runtime_id,
-            instance=projection.instance,
-            data=projection.data,
-            cell_refs=bindings,
-            current_cell_refs={
-                cell.runtime_id: str(cell.ref)
-                for cell in snapshot.resolved.notebook.cells
-            },
-            dependency_closures=_static_dependency_closures(
-                snapshot,
-                bindings,
-            ),
-        )
-
 
 class ZeroPythonRuntime:
     id = "zero-python"
@@ -431,39 +303,6 @@ class ZeroPythonRuntime:
             instance=prepared.instance,
             data=prepared.data,
             cell_refs=snapshot.resolved.runtime_cell_refs(None),
-        )
-
-    async def project_evidence(
-        self,
-        snapshot: PresentationSnapshot,
-        context: ServerContext,
-        session_id: str | None,
-        binding_id: str | None = None,
-        presentation_session_id: str | None = None,
-        runtime_session_id: str | None = None,
-        *,
-        client_id: str | None = None,
-    ) -> RuntimeEvidenceProjection:
-        projection = await self.project(
-            snapshot,
-            context,
-            session_id,
-            binding_id,
-            presentation_session_id,
-            runtime_session_id,
-            client_id=client_id,
-        )
-        bindings = projection.cell_refs
-        return RuntimeEvidenceProjection(
-            runtime_id=projection.runtime_id,
-            instance=projection.instance,
-            data=projection.data,
-            cell_refs=bindings,
-            current_cell_refs={
-                cell.runtime_id: str(cell.ref)
-                for cell in snapshot.resolved.notebook.cells
-            },
-            dependency_closures=_static_dependency_closures(snapshot, bindings),
         )
 
 
@@ -581,37 +420,6 @@ class RuntimeRegistry:
             runtime_session_id,
             client_id=client_id,
             progress=progress,
-        )
-        self._require_open()
-        return projection
-
-    async def project_evidence(
-        self,
-        snapshot: PresentationSnapshot,
-        context: ServerContext,
-        requested: str | None,
-        session_id: str | None,
-        binding_id: str | None = None,
-        presentation_session_id: str | None = None,
-        runtime_session_id: str | None = None,
-        *,
-        client_id: str | None = None,
-    ) -> RuntimeEvidenceProjection:
-        """Capture server evidence on its owner and offload browser compilation."""
-        self._require_open()
-        provider, _available = self.select(
-            snapshot.resolved.workspace,
-            context,
-            requested,
-        )
-        projection = await provider.project_evidence(
-            snapshot,
-            context,
-            session_id,
-            binding_id,
-            presentation_session_id,
-            runtime_session_id,
-            client_id=client_id,
         )
         self._require_open()
         return projection

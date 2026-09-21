@@ -6,6 +6,7 @@ import {
 } from "@marimo-studio/protocol/query";
 
 import { getMountConfig } from "../runtime-config/index.ts";
+import { setEditorBindingQuery } from "./view-navigation.ts";
 
 export const presentationRefreshUrl = (
   config: Pick<RuntimeConfig, "presentationSessionId" | "supportUrl" | "view">,
@@ -63,6 +64,7 @@ export const presentationRefreshUrl = (
       target.searchParams.set(key, value);
     }
   });
+  setEditorBindingQuery(target, mount.clientId, config.supportUrl);
   target.hash = current.hash;
   return target.href;
 };

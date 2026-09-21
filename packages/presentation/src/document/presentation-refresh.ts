@@ -40,11 +40,11 @@ export class BaselineReconciler {
     this.#configured = configured;
   }
 
-  ready(): boolean {
+  ready(refreshRequired = false): boolean {
     if (!this.#configured) {
       this.#pending = true;
     }
-    return false;
+    return this.#configured && refreshRequired;
   }
 
   configure(): boolean {

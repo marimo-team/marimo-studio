@@ -1,10 +1,9 @@
+import type { RuntimeProgress } from "@marimo-studio/protocol/runtime-progress";
 import type {
   BrowserDiagnostic,
   RuntimeStatusPhase,
   RuntimeStatusReport,
-} from "@marimo-studio/protocol/browser-observations";
-import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
-import type { RuntimeProgress } from "@marimo-studio/protocol/runtime-progress";
+} from "@marimo-studio/protocol/runtime-status";
 
 import {
   parsePreviewMessage,
@@ -12,7 +11,6 @@ import {
   type SwitchViewMessage,
   type ViewNavigationIntent,
   type ViewDiagnostic,
-  type ViewObservationMessage,
   type ViewPreviewMessage,
 } from "@marimo-studio/protocol/preview-messages";
 import {
@@ -22,7 +20,6 @@ import {
 
 import type { PreviewAdmissionMessage, PreviewIdentity } from "./admission.ts";
 import type { ControlFrameConnector, ControlSyncStatus } from "./control-sync.ts";
-import type { RecordBrowserObservation } from "./observation-remote.ts";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
@@ -32,7 +29,6 @@ import { PreviewControlController } from "./control-controller.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
 import { releaseFrameBridge, resizeFrame } from "./frame-bridge.ts";
 import { PreviewMutationBarriers } from "./mutation-barriers.ts";
-import { PreviewObservationController } from "./observation-controller.ts";
 import { PreviewQueryController, type QuerySyncStatus } from "./query-controller.ts";
 import { RetrySchedule } from "./retry-schedule.ts";
 import { RuntimeDiagnostics } from "./runtime-diagnostics.ts";
@@ -95,7 +91,6 @@ export class PreviewController {
   private readonly mutationBarriers: PreviewMutationBarriers;
   private readonly runtimeDiagnostics: RuntimeDiagnostics;
   private readonly controls: PreviewControlController;
-  private readonly observations: PreviewObservationController;
   private readonly queries: PreviewQueryController;
 
   constructor(
@@ -118,7 +113,6 @@ export class PreviewController {
     ) => Promise<EditorQuerySyncResult>,
     private readonly navigate: (view: string, intent: ViewNavigationIntent) => Promise<boolean>,
     private readonly report: (state: PreviewFrameState) => void,
-    recordObservation?: RecordBrowserObservation,
     connectControlFrame?: ControlFrameConnector,
     initialNavigation: ViewNavigationIntent = {
       query: globalThis.location.search,
@@ -159,12 +153,6 @@ export class PreviewController {
       status: (status, revision, sessionId) =>
         this.controlStatusChanged(status, revision, sessionId),
     });
-    this.observations = new PreviewObservationController(
-      runtime,
-      preview,
-      (message) => this.acceptObservation(message),
-      recordObservation,
-    );
     this.queries = new PreviewQueryController(
       runtime,
       preview,
@@ -180,7 +168,6 @@ export class PreviewController {
       (status) => this.queryStatusChanged(status),
     );
     this.admission = new PreviewAdmission({
-      clearObservations: () => this.observations.clear(),
       clearSession: () => delete this.preview.dataset.sessionId,
       failView: () => this.completeViewSwitch(false, this.activeLifecycleId),
       localizedInteractive: (identity) => {
@@ -193,26 +180,12 @@ export class PreviewController {
             identity.sessionId ?? undefined,
             this.editorSessionId,
           );
-          this.observations.post();
         }
         this.report(this.state);
       },
       postMessage: (message) => this.postAdmissionMessage(message),
-      postObservations: () => this.observations.post(),
       postSwitch: () => this.postSwitch(),
       ready: (identity) => this.commitReadyIdentity(identity),
-      observation: (phase, diagnostics, identity) => {
-        this.setPreviewSession(identity);
-        this.diagnostics = [...diagnostics];
-        if (phase === "ready") {
-          this.showReadyStatus();
-        } else {
-          this.setRuntimeStatus(phase, diagnostics, {
-            revision: identity.revision,
-            sessionId: identity.sessionId,
-          });
-        }
-      },
       status: (phase, diagnostics, identity) => this.setRuntimeStatus(phase, diagnostics, identity),
       stopControls: () => this.controls.stop(),
       viewFailed: (diagnostic, revision) => {
@@ -327,7 +300,6 @@ export class PreviewController {
           identity.sessionId ?? undefined,
           this.editorSessionId,
         );
-        this.observations.post();
       }
       return true;
     } finally {
@@ -350,7 +322,6 @@ export class PreviewController {
     this.queries.cancel();
     this.queryDiagnostic = undefined;
     this.queryPhase = "ready";
-    this.observations.clear();
   }
 
   navigateWithinView(navigation: ViewNavigationIntent): void {
@@ -380,12 +351,6 @@ export class PreviewController {
     resizeFrame(this.preview);
   }
 
-  requestObservation(request: ObserveViewRequest): void {
-    if (this.activeOwner && this.admission.canObserve(request.revision)) {
-      this.observations.request(request, this.activeLifecycleId);
-    }
-  }
-
   runtimeStatus(): RuntimeStatusReport {
     return this.runtimeDiagnostics.report();
   }
@@ -413,8 +378,8 @@ export class PreviewController {
     this.admission.buildStarted(this.admissionOwner());
   }
 
-  presentationBuildCompleted(revision: string | null): void {
-    this.admission.buildCompleted(revision, this.admissionOwner());
+  presentationBuildCompleted(revision: string | null, diagnostic?: BrowserDiagnostic): void {
+    this.admission.buildCompleted(revision, this.admissionOwner(), diagnostic);
   }
 
   notebookMutationPending(generation: number, enterAdmission: boolean): Promise<() => boolean> {
@@ -509,7 +474,6 @@ export class PreviewController {
     }
     this.completeViewSwitch(true, this.activeLifecycleId);
     this.controls.begin(identity.revision, identity.sessionId ?? undefined, this.editorSessionId);
-    this.observations.post();
   }
 
   private setPreviewSession(identity: PreviewIdentity): void {
@@ -535,7 +499,6 @@ export class PreviewController {
     this.controls.stop();
     this.controlDiagnostic = undefined;
     this.queries.cancel();
-    this.observations.clear();
     releaseFrameBridge(this.preview);
     this.editor.removeEventListener("load", this.startFromEditor);
     this.preview.removeEventListener("load", this.previewLoaded);
@@ -575,7 +538,6 @@ export class PreviewController {
       message.type === "marimo-studio:replay-document" ||
       message.type === "marimo-studio:restore-fragment" ||
       message.type === "marimo-studio:receiver-admitted" ||
-      message.type === "marimo-studio:observe-view" ||
       message.runtime !== this.runtime
     ) {
       return;
@@ -586,8 +548,7 @@ export class PreviewController {
     if (
       !this.activeOwner &&
       (message.type === "marimo-studio:navigate-view" ||
-        message.type === "marimo-studio:query-change" ||
-        message.type === "marimo-studio:view-observation")
+        message.type === "marimo-studio:query-change")
     ) {
       return;
     }
@@ -652,7 +613,6 @@ export class PreviewController {
       case "marimo-studio:view-sync-pending":
       case "marimo-studio:view-diagnostics":
       case "marimo-studio:view-error":
-      case "marimo-studio:view-observation":
         if (message.view === this.view) {
           this.receiveView(message);
         }
@@ -688,9 +648,6 @@ export class PreviewController {
           message.sessionId,
         );
         return;
-      case "marimo-studio:view-observation":
-        this.observations.receive(message);
-        return;
       default:
         assertNever(message);
     }
@@ -700,20 +657,6 @@ export class PreviewController {
     if (this.activeOwner) {
       this.queries.previewChanged(query);
     }
-  }
-
-  private acceptObservation(message: ViewObservationMessage): RuntimeStatusReport {
-    if (!this.activeOwner) {
-      return this.runtimeDiagnostics.report();
-    }
-    this.diagnostics = message.diagnostics;
-    this.admission.observation(
-      message.state,
-      message.diagnostics,
-      message.revision,
-      message.sessionId,
-    );
-    return this.runtimeDiagnostics.report();
   }
 
   private postSwitch(): void {

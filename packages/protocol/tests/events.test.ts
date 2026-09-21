@@ -7,7 +7,6 @@ import {
   parseActiveViewRequest,
   parseEditorDocumentMutation,
   parseEditorSessionBinding,
-  parseObserveViewRequest,
   parsePresentationBuild,
   parsePresentationChange,
   parsePresentationRefreshBarrierResult,
@@ -35,7 +34,8 @@ type DevelopmentEventsFixture = {
         build: {
           schema: 1;
           profile: "development";
-          phase: "ready" | "failed";
+          phase: "published" | "failed";
+          diagnostics: [];
         };
         revision: string | null;
         files: [];
@@ -60,15 +60,6 @@ type DevelopmentEventsFixture = {
     sessionId: string;
     replaced: boolean;
   }>;
-  observationRequests: Array<{
-    schema: 1;
-    requestId: string;
-    view: string;
-    runtime: "server" | "wasm";
-    runtimeInstance: string;
-    revision: string;
-    activeViewGeneration?: number;
-  }>;
 };
 
 // SAFETY: The Python producer test owns this repository fixture, and each
@@ -90,7 +81,11 @@ test("development event parsers accept the Python producer fixture", () => {
     const expected =
       "phase" in payload
         ? { phase: "building" }
-        : { phase: "complete", revision: payload.revision };
+        : {
+            phase: "complete",
+            revision: payload.revision,
+            build: { phase: payload.build.phase, diagnostics: payload.build.diagnostics },
+          };
     const source = JSON.stringify(payload);
     assert.deepEqual(parsePresentationBuild(source), expected);
     assert.equal(parseWorkspaceChange(source), payload.kind);
@@ -111,9 +106,6 @@ test("development event parsers accept the Python producer fixture", () => {
   }
   for (const payload of fixture.editorSessionBindings) {
     assert.deepEqual(parseEditorSessionBinding(JSON.stringify(payload)), payload);
-  }
-  for (const payload of fixture.observationRequests) {
-    assert.deepEqual(parseObserveViewRequest(JSON.stringify(payload)), payload);
   }
 });
 
@@ -143,16 +135,6 @@ test("development event parsers reject malformed browser contracts", () => {
     undefined,
   );
 
-  const observation = fixture.observationRequests[0];
-  assert.ok(observation);
-  assert.equal(
-    parseObserveViewRequest(JSON.stringify({ ...observation, runtimeInstance: "" })),
-    undefined,
-  );
-  assert.equal(
-    parseObserveViewRequest(JSON.stringify({ ...observation, activeViewGeneration: -1 })),
-    undefined,
-  );
   assert.deepEqual(
     parseSourceChanges(
       JSON.stringify({

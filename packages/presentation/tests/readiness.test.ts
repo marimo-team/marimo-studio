@@ -283,3 +283,25 @@ test("value cell phases follow the defining Marimo cell", () => {
   );
   assert.deepEqual(valueCellPhase(valueCell({ version: 2 })), "ready");
 });
+
+test("an unrelated loading owner does not erase an unresolved disconnect diagnostic", () => {
+  const controller = new ReadinessController();
+  controller.setRuntime("ready");
+  const development = controller.beginPresentation("development");
+  const diagnostic = {
+    scope: "presentation" as const,
+    severity: "warning" as const,
+    code: "development-disconnected",
+    message: "Live updates disconnected.",
+    hint: "Reconnect the server.",
+    view: "dashboard",
+  };
+  controller.setPresentation(development, "loading", diagnostic);
+  const document = controller.beginPresentation("document");
+  assert.equal(controller.snapshot().presentationDiagnostic, diagnostic);
+  controller.setPresentation(development, "ready");
+  assert.equal(controller.snapshot().page, "loading");
+  assert.equal(controller.snapshot().presentationDiagnostic, undefined);
+  controller.setPresentation(document, "ready");
+  assert.equal(controller.snapshot().page, "ready");
+});

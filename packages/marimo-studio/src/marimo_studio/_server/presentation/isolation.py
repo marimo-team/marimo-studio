@@ -2,9 +2,8 @@
 
 The outer Studio document places the authored artifact in a sandboxed iframe
 with an opaque browser origin. The parent owns allowed view navigation, public
-query and fragment history, replay admission, readiness, errors, and agent
-observation messages without giving the child access to Studio credentials or
-same-origin server data.
+query and fragment history, replay admission, readiness, and errors without
+giving the child access to Studio credentials or same-origin server data.
 
 Parent and child exchange a small set of validated messages. The shell keeps
 browser back and reload behavior aligned with the selected view, preserves an
@@ -90,13 +89,11 @@ _BRIDGE = r"""(() => {
     "marimo-studio:view-progress",
     "marimo-studio:view-diagnostics",
     "marimo-studio:view-error",
-    "marimo-studio:view-observation",
   ]);
   const parentMessages = new Set([
     "marimo-studio:switch-view",
     "marimo-studio:presentation-change",
     "marimo-studio:receiver-admitted",
-    "marimo-studio:observe-view",
   ]);
   const messageType = (value) =>
     value && typeof value === "object" && typeof value.type === "string"

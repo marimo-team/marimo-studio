@@ -5,118 +5,23 @@ import json
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
-from starlette.testclient import TestClient
 
 import marimo_studio._authoring.validation as authoring_validation
 import marimo_studio._cli.commands.validate as validate_command
-import marimo_studio._validation.progressive as analysis_module
 import marimo_studio._validation.service as validation_service
 import marimo_studio._validation.static as checks_module
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
-from marimo_studio._processes.supervisor import ProcessCleanupError
-from marimo_studio._server.agent import api as agent_api
 from marimo_studio._validation.ports import RuntimeChecker
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.view_providers import BuildRequest
 from marimo_studio.view_providers._host import provider_registry
-
-from ..app_helpers import edit_mode, marimo_app, session_manager
-from ..async_test_support import wait_for_event
-
-
-def test_validation_sibling_cleanup_failure_survives_primary_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    browser_started = asyncio.Event()
-
-    async def fail_runtime(*_args: object, **_kwargs: object) -> object:
-        await wait_for_event(browser_started)
-        raise RuntimeError("runtime validation failed")
-
-    async def observe_browser(*_args: object) -> tuple[()]:
-        browser_started.set()
-        try:
-            await asyncio.Future()
-        except asyncio.CancelledError as cancellation:
-            raise ProcessCleanupError(
-                "browser provider process survived"
-            ) from cancellation
-        return ()
-
-    monkeypatch.setattr(analysis_module, "run_runtime_validation", fail_runtime)
-    preparation: Any = SimpleNamespace(
-        views=("dashboard",),
-        revisions={"dashboard": "revision"},
-    )
-
-    async def exercise() -> None:
-        with pytest.raises(
-            ProcessCleanupError,
-            match="browser provider process survived",
-        ) as captured:
-            await analysis_module._runtime_and_browser(
-                cast(StudioWorkspace, SimpleNamespace()),
-                preparation,
-                observe_browser=observe_browser,
-                runtime_checker=None,
-                runtime_timeout=1,
-            )
-        assert isinstance(captured.value.__cause__, RuntimeError)
-
-    asyncio.run(exercise())
-
-
-def test_runtime_cleanup_failure_survives_browser_primary_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runtime_started = asyncio.Event()
-
-    async def cleanup_runtime(*_args: object, **_kwargs: object) -> object:
-        runtime_started.set()
-        try:
-            await asyncio.Future()
-        except asyncio.CancelledError as cancellation:
-            raise ProcessCleanupError(
-                "runtime provider process survived"
-            ) from cancellation
-
-    async def fail_browser(*_args: object) -> tuple[()]:
-        await wait_for_event(runtime_started)
-        raise RuntimeError("browser validation failed")
-
-    monkeypatch.setattr(
-        analysis_module,
-        "run_runtime_validation",
-        cleanup_runtime,
-    )
-    preparation: Any = SimpleNamespace(
-        views=("dashboard",),
-        revisions={"dashboard": "revision"},
-    )
-
-    async def exercise() -> None:
-        with pytest.raises(
-            ProcessCleanupError,
-            match="runtime provider process survived",
-        ) as captured:
-            await analysis_module._runtime_and_browser(
-                cast(StudioWorkspace, SimpleNamespace()),
-                preparation,
-                observe_browser=fail_browser,
-                runtime_checker=None,
-                runtime_timeout=1,
-            )
-        assert isinstance(captured.value.__cause__, RuntimeError)
-
-    asyncio.run(exercise())
 
 
 def test_python_runtime_validation_uses_the_supervised_process_boundary(
@@ -289,7 +194,7 @@ def _validation_entry_reports(
     checker: RuntimeChecker,
     *,
     restore: Callable[[], None] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     notebook = workspace.notebook
     monkeypatch.setattr(
         authoring_validation,
@@ -297,7 +202,6 @@ def _validation_entry_reports(
         checker,
     )
     monkeypatch.setattr(validate_command, "should_reenter", lambda *_args: False)
-    monkeypatch.setattr(agent_api, "check_runtime_studio_isolated", checker)
 
     python_report = asyncio.run(
         workspace.validate(
@@ -327,27 +231,10 @@ def _validation_entry_reports(
     if restore is not None:
         restore()
 
-    app = marimo_app(notebook)
-    edit_mode(app)
-    headers = {"Marimo-Server-Token": str(session_manager(app).skew_protection_token)}
-    with TestClient(app) as client:
-        response = client.post(
-            "/_marimo-studio/validate",
-            headers=headers,
-            json={
-                "schema": 1,
-                "view": "dashboard",
-                "runtime_timeout": 7,
-                "require_browser": False,
-            },
-        )
-    if restore is not None:
-        restore()
-    assert response.status_code == 200
-    return python_report, cli_report, response.json()
+    return python_report, cli_report
 
 
-def test_runtime_failure_is_identical_through_python_cli_and_server_validation(
+def test_runtime_failure_is_identical_through_python_and_cli_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -378,16 +265,14 @@ def test_runtime_failure_is_identical_through_python_cli_and_server_validation(
         calls.append(expected_revisions)
         return (failure,)
 
-    python_report, cli_report, server_report = _validation_entry_reports(
+    python_report, cli_report = _validation_entry_reports(
         workspace,
         monkeypatch,
         isolated,
     )
 
     assert cli_report == python_report
-    assert server_report["stages"]["runtime"]["checks"] == [failure.to_dict()]
-    assert server_report["issues"] == python_report["issues"]
-    assert len(calls) == 3
+    assert len(calls) == 2
     assert all(
         revisions is not None and set(revisions) == {"dashboard"} for revisions in calls
     )
@@ -408,7 +293,7 @@ def test_runtime_failure_is_identical_through_python_cli_and_server_validation(
         ),
     ),
 )
-def test_source_revision_failures_match_python_cli_and_server_validation(
+def test_source_revision_failures_match_python_and_cli_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     outcome: str,
@@ -442,7 +327,7 @@ def test_source_revision_failures_match_python_cli_and_server_validation(
         source.write_text(original, encoding="utf-8")
         notebook_path.write_text(notebook_source, encoding="utf-8")
 
-    python_report, cli_report, server_report = _validation_entry_reports(
+    python_report, cli_report = _validation_entry_reports(
         workspace,
         monkeypatch,
         isolated,
@@ -453,22 +338,21 @@ def test_source_revision_failures_match_python_cli_and_server_validation(
     checks = (
         python_report["evidence"]["runtime"]["checks"],
         cli_report["evidence"]["runtime"]["checks"],
-        server_report["stages"]["runtime"]["checks"],
     )
     source_checks = [
         next(check for check in stage if check.get("code") == code) for stage in checks
     ]
-    assert source_checks[0] == source_checks[1] == source_checks[2]
+    assert source_checks[0] == source_checks[1]
     assert source_checks[0]["name"] == "validation-source-revision"
     source_issues = [
         next(issue for issue in report["issues"] if issue["code"] == code)
-        for report in (python_report, cli_report, server_report)
+        for report in (python_report, cli_report)
     ]
-    assert source_issues[0] == source_issues[1] == source_issues[2]
+    assert source_issues[0] == source_issues[1]
     assert source_issues[0]["advice"] == advice
 
 
-def test_invalid_static_source_matches_python_cli_and_server_validation(
+def test_invalid_static_source_matches_python_and_cli_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -512,7 +396,7 @@ def test_invalid_static_source_matches_python_cli_and_server_validation(
         source.write_text(original, encoding="utf-8")
 
     monkeypatch.setattr(validation_service, "check_studio", invalidate_after_static)
-    python_report, cli_report, server_report = _validation_entry_reports(
+    python_report, cli_report = _validation_entry_reports(
         workspace,
         monkeypatch,
         runtime,
@@ -524,7 +408,6 @@ def test_invalid_static_source_matches_python_cli_and_server_validation(
     checks = (
         python_report["evidence"]["static"]["checks"],
         cli_report["evidence"]["static"]["checks"],
-        server_report["stages"]["static"]["checks"],
     )
     source_checks = [
         next(
@@ -532,13 +415,13 @@ def test_invalid_static_source_matches_python_cli_and_server_validation(
         )
         for stage in checks
     ]
-    assert source_checks[0] == source_checks[1] == source_checks[2]
+    assert source_checks[0] == source_checks[1]
     source_issues = [
         next(
             issue
             for issue in report["issues"]
             if issue["code"] == "validation-source-changed"
         )
-        for report in (python_report, cli_report, server_report)
+        for report in (python_report, cli_report)
     ]
-    assert source_issues[0] == source_issues[1] == source_issues[2]
+    assert source_issues[0] == source_issues[1]

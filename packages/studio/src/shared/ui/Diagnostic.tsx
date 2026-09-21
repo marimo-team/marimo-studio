@@ -1,4 +1,4 @@
-import type { BrowserDiagnostic } from "@marimo-studio/protocol/browser-observations";
+import type { BrowserDiagnostic } from "@marimo-studio/protocol/runtime-status";
 
 import { useState } from "react";
 

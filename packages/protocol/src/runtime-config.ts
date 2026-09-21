@@ -120,10 +120,10 @@ export const mountConfigSchema = z
   })
   .strict()
   .superRefine((config, context) => {
-    if ((config.clientId === undefined) !== (config.lifecycleId === undefined)) {
+    if (config.lifecycleId !== undefined && config.clientId === undefined) {
       context.addIssue({
         code: "custom",
-        message: "Client and lifecycle identity must appear together",
+        message: "A framed document lifecycle requires its client identity",
       });
     }
     if (config.runtime !== "server" && config.runtimeSessionId !== undefined) {

@@ -1,6 +1,6 @@
 ---
 title: Author with a coding agent
-description: Edit notebook and view source through Studio or filesystem tools, show the result, and validate the rendered view.
+description: Edit notebook and view source through Studio or filesystem tools, show the result, and inspect the rendered view with browser tools.
 ---
 
 # Author with a coding agent
@@ -207,26 +207,56 @@ same Studio tab.
 
 ## Verify the rendered view
 
-Run browser validation after the relevant interactions settle:
+Open a top-level preview URL with your preferred browser tool:
 
 ```python
 import marimo_studio.agent as studio_agent
 
-report = await studio_agent.current_workspace().view("dashboard").validate(
-    level="browser"
-)
-if not report.ok:
-    for issue in report.issues:
-        print(issue.message, issue.advice)
+workspace = studio_agent.current_workspace()
+view = workspace.view("dashboard")
+url = await view.preview_url(runtime="server")
+print(url)
 ```
 
-The report belongs to the current saved notebook, source revisions, runtime,
-Studio tab, and presentation. A concurrent source edit invalidates that evidence.
-Read the current source and repeat validation after it settles.
+Finish this code-mode execution before the browser waits for notebook output.
+Run browser interactions and waits through an external tool or interpreter
+when they need the notebook kernel to execute. A synchronous wait inside code
+mode can block the work being awaited.
 
-Browser validation checks runtime and projection readiness. Inspect the rendered
-page at desktop and narrow widths for spacing, overflow, and interaction. Repair
-each issue, then repeat build, show, interaction, and validation.
+A view build compiles frontend source. After editing notebook Python, execute
+the changed cells in the live notebook before inspecting their projected
+results. Use Marimo's **Run all** action when the change needs the complete
+notebook. Isolated runtime validation checks a separate process and leaves the
+live notebook session unchanged.
+
+Use ordinary browser waits for `html[data-marimo-studio-state="ready"]`, then
+assert the application's expected content and behavior. Studio readiness covers
+its runtime and mounted projections. Framework rendering, charts, slides, and
+remote requests also need application assertions. A non-busy region can still
+display an error.
+
+Read `document.documentElement.dataset.marimoStudioRevision` for the committed
+presentation revision. Request `preview_url(runtime="server", exact=True)` when
+a check must use the current revision. A different revision or unbuilt or failed
+view source produces HTTP 409, including when a previous artifact is retained. Use the stable URL and reload after builds during normal iteration.
+
+Check `view.inspect()` for source and build freshness, since a failed build
+retains the previous working artifact. Run `view.validate(level="static")` for
+source checks or `level="runtime"` to execute the saved notebook in an isolated
+process.
+
+After changing a control, wait for its dependent metric, text, or chart to
+update. The control's selected value alone does not prove reactive completion.
+If readiness stalls, read the visible status or error and inspect console and
+network failures before retrying. Follow a request to execute changed cells in
+the live notebook.
+
+Wait for application transitions to settle before capturing wide and narrow
+screenshots. Inspect the images with the agent's image-capable tool and use
+visual findings for the next edit. At narrow widths, check readable text and
+usable controls as well as overflow. Saving a path alone does not check layout.
+Exercise the relevant controls and navigation. Repeat edit, build, reload,
+interaction, and assertions until the expected result passes.
 
 ## Verify the delivery visitors will use
 

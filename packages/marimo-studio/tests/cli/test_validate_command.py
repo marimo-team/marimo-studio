@@ -36,163 +36,16 @@ def test_validate_emits_structured_diagnostics(
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     events = [json.loads(line) for line in result.stderr.splitlines()]
-    assert events == []
+    assert all(
+        event["code"] == "heartbeat" and event["severity"] == "info" for event in events
+    )
     assert all(
         check["status"] == "pass" for check in payload["evidence"]["static"]["checks"]
     )
 
 
-@pytest.mark.native_process
-def test_browser_validation_requires_a_server_before_loading_the_target(
-    tmp_path: Path,
-    runtime_assets: Path,
-) -> None:
-    result = _run_cli(
-        runtime_assets,
-        "validate",
-        "--target",
-        str(tmp_path / "missing.py"),
-        "--level",
-        "browser",
-        "--json",
-    )
-
-    assert result.returncode == 2
-    assert result.stdout == ""
-    event = json.loads(result.stderr)
-    assert event["code"] == "usage-error"
-    assert event["exit_code"] == 2
-    assert "--server" in event["message"]
-
-
-@pytest.mark.native_process
-def test_validate_rejects_malformed_server_urls_as_usage_errors(
-    notebook_path: Path,
-    runtime_assets: Path,
-) -> None:
-    prepare_view(notebook_path)
-
-    result = _run_cli(
-        runtime_assets,
-        "validate",
-        "dashboard",
-        "--target",
-        str(notebook_path),
-        "--level",
-        "browser",
-        "--server",
-        "ftp://localhost:2718",
-        "--json",
-    )
-
-    assert result.returncode == 2
-    assert result.stdout == ""
-    event = json.loads(result.stderr)
-    assert event["code"] == "usage-error"
-    assert event["exit_code"] == 2
-    assert "--server" in event["message"]
-
-
-def test_validate_rejects_browser_selection_without_a_server() -> None:
-    result = CliRunner().invoke(
-        cli,
-        ["validate", "--browser-client", "browser-client-1234"],
-    )
-
-    assert result.exit_code == 2
-    assert "--browser-client" in result.output
-    assert "--server" in result.output
-
-
-def test_browser_validation_requires_a_named_view_before_connecting(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    prepare_view(notebook_path)
-    monkeypatch.setattr(
-        "marimo_studio._cli.commands.validate.provider_bootstrap_required",
-        lambda _target: False,
-    )
-    monkeypatch.setattr(
-        "marimo_studio._cli.commands.validate.should_reenter",
-        lambda *_args: False,
-    )
-    monkeypatch.setattr(
-        "marimo_studio._cli.commands.validate.studio_server_connection",
-        lambda *_args, **_kwargs: pytest.fail("browser connection was constructed"),
-    )
-
-    result = CliRunner().invoke(
-        cli,
-        [
-            "validate",
-            "--target",
-            str(notebook_path),
-            "--level",
-            "browser",
-            "--server",
-            "http://localhost:2718",
-        ],
-    )
-
-    assert result.exit_code == 2
-    assert "VIEW" in result.output
-
-
-def test_validate_flags_override_connection_environment(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    prepare_view(notebook_path)
-    captured: dict[str, str] = {}
-
-    def connection(server_url: str, *, access_token: str, browser_client: str):
-        captured.update(
-            server_url=server_url,
-            access_token=access_token,
-            browser_client=browser_client,
-        )
-        raise RuntimeError("connection captured")
-
-    monkeypatch.setattr(
-        "marimo_studio._cli.commands.validate.should_reenter",
-        lambda *_args: False,
-    )
-    monkeypatch.setattr(
-        "marimo_studio._cli.commands.validate.studio_server_connection",
-        connection,
-    )
-    result = CliRunner().invoke(
-        cli,
-        [
-            "validate",
-            "dashboard",
-            "--target",
-            str(notebook_path),
-            "--level",
-            "browser",
-            "--server",
-            "https://explicit.example.test:2718",
-            "--browser-client",
-            "explicit-client",
-        ],
-        env={
-            "MARIMO_STUDIO_SERVER_URL": "https://environment.example.test:2718",
-            "MARIMO_STUDIO_BROWSER_CLIENT": "environment-client",
-            "MARIMO_STUDIO_ACCESS_TOKEN": "access-token",
-        },
-    )
-
-    assert isinstance(result.exception, RuntimeError)
-    assert captured == {
-        "server_url": "https://explicit.example.test:2718",
-        "access_token": "access-token",
-        "browser_client": "explicit-client",
-    }
-
-
 def test_server_commands_keep_access_tokens_out_of_arguments() -> None:
-    for arguments in (["validate", "--help"], ["view", "show", "--help"]):
+    for arguments in (["view", "show", "--help"],):
         result = CliRunner().invoke(cli, arguments)
 
         assert result.exit_code == 0, arguments
@@ -206,7 +59,7 @@ def test_server_commands_keep_access_tokens_out_of_arguments() -> None:
 def test_runtime_timeout_must_be_finite() -> None:
     result = CliRunner().invoke(
         cli,
-        ["validate", "--level", "browser", "--runtime-timeout", "nan"],
+        ["validate", "--level", "runtime", "--runtime-timeout", "nan"],
     )
 
     assert result.exit_code == 2

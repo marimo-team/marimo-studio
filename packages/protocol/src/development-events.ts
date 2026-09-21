@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 import type { BrowserMessageInput } from "./frame-bridge.ts";
+import type { JsonValue } from "./runtime-config";
 
 import { jsonCodec } from "./json.ts";
-import { type JsonValue, runtimeIdSchema } from "./runtime-config";
+import { viewBuildStateSchema } from "./view-project.ts";
 import { viewNameSchema } from "./views.ts";
 
 export const workspaceChangeKindSchema = z.enum(["project", "build", "presentation", "views"]);
@@ -45,7 +46,7 @@ const presentationBuildSchema = z.union([
   }),
   z.object({
     kind: z.literal("build"),
-    build: z.object({}),
+    build: viewBuildStateSchema.pick({ phase: true, diagnostics: true }).strip(),
     revision: z.string().min(1).nullable(),
   }),
 ]);
@@ -53,7 +54,11 @@ const presentationBuildCodec = jsonCodec(presentationBuildSchema);
 
 export type PresentationBuild =
   | { readonly phase: "building" }
-  | { readonly phase: "complete"; readonly revision: string | null };
+  | {
+      readonly phase: "complete";
+      readonly revision: string | null;
+      readonly build: Pick<z.infer<typeof viewBuildStateSchema>, "phase" | "diagnostics">;
+    };
 
 export const parsePresentationBuild = (source: string): PresentationBuild | undefined => {
   const result = presentationBuildCodec.safeDecode(source);
@@ -62,7 +67,7 @@ export const parsePresentationBuild = (source: string): PresentationBuild | unde
   }
   return "phase" in result.data
     ? { phase: "building" }
-    : { phase: "complete", revision: result.data.revision };
+    : { phase: "complete", revision: result.data.revision, build: result.data.build };
 };
 
 const presentationChangeSchema = z.object({
@@ -253,25 +258,5 @@ export const parsePresentationRefreshBarrierResult = (
   payload: BrowserMessageInput,
 ): PresentationRefreshBarrierResult | undefined => {
   const result = presentationRefreshBarrierResultSchema.safeParse(payload);
-  return result.success ? result.data : undefined;
-};
-
-const observeViewSchema = z
-  .object({
-    schema: z.literal(1),
-    requestId: z.string().min(1),
-    view: viewNameSchema,
-    runtime: runtimeIdSchema,
-    runtimeInstance: z.string().min(1),
-    revision: z.string().min(1),
-    activeViewGeneration: z.int().nonnegative().optional(),
-  })
-  .strict();
-const observeViewCodec = jsonCodec(observeViewSchema);
-
-export type ObserveViewRequest = z.infer<typeof observeViewSchema>;
-
-export const parseObserveViewRequest = (source: string): ObserveViewRequest | undefined => {
-  const result = observeViewCodec.safeDecode(source);
   return result.success ? result.data : undefined;
 };

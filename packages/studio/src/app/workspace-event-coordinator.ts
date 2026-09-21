@@ -1,13 +1,13 @@
+import type { BrowserDiagnostic } from "@marimo-studio/protocol/runtime-status";
+
 import {
   parseActiveViewRequest,
   parseEditorSessionBinding,
-  parseObserveViewRequest,
   parsePresentationBuild,
   parsePresentationChange,
   parseWorkspaceChange,
   type EditorSessionBinding,
   type ActiveViewRequest,
-  type ObserveViewRequest,
   type PreviewAutomationTarget,
 } from "@marimo-studio/protocol/development-events";
 import { WORKSPACE_STREAM_QUERY_PARAM } from "@marimo-studio/protocol/query";
@@ -40,7 +40,6 @@ interface WorkspaceViewPort {
 }
 
 interface WorkspacePreviewPort {
-  requestObservation(request: ObserveViewRequest): void;
   editorSessionChanged(binding: EditorSessionBinding): void;
   reload(): void;
   automationTarget(view: string, reload: boolean, signal: AbortSignal): PreviewAutomationTarget;
@@ -50,6 +49,7 @@ interface WorkspacePreviewPort {
     view: string,
     revision: string | null,
     notebookMutationGeneration?: number,
+    diagnostic?: BrowserDiagnostic,
   ): void;
   presentationStreamAbandoned(view: string): void;
   presentationChanged(view: string, revision: string): void;
@@ -254,14 +254,6 @@ export class WorkspaceEventCoordinator {
         }
       }),
     );
-    events.addEventListener("observe", (event) =>
-      current(() => {
-        const request = parseObserveViewRequest(this.data(event));
-        if (request) {
-          this.observe(request);
-        }
-      }),
-    );
     events.addEventListener("session", (event) =>
       current(() => {
         const binding = parseEditorSessionBinding(this.data(event));
@@ -307,7 +299,27 @@ export class WorkspaceEventCoordinator {
           this.options.preview.presentationBuildStarted(view, notebookMutationGeneration);
         }
       } else if (build?.phase === "complete") {
-        if (notebookMutationGeneration === undefined) {
+        if (build.revision === null || build.build.phase === "failed") {
+          const detail = build.build.diagnostics.find(({ severity }) => severity === "error");
+          this.options.preview.presentationBuildCompleted(
+            view,
+            build.revision,
+            notebookMutationGeneration,
+            {
+              scope: "presentation",
+              code:
+                detail?.code ??
+                (build.build.phase === "failed"
+                  ? "view-build-failed"
+                  : "view-publication-unavailable"),
+              severity: "error",
+              message: `${build.build.phase === "failed" ? "Latest build failed." : "Latest publication is unavailable."} Showing the previous build.${detail ? ` ${detail.message}` : ""}`,
+              hint: detail?.hint ?? "Fix the view source, then build it again.",
+              source: detail?.source ?? undefined,
+              view,
+            },
+          );
+        } else if (notebookMutationGeneration === undefined) {
           this.options.preview.presentationBuildCompleted(view, build.revision);
         } else {
           this.options.preview.presentationBuildCompleted(
@@ -472,16 +484,6 @@ export class WorkspaceEventCoordinator {
 
   private isCurrentActivation(generation: number, signal: AbortSignal): boolean {
     return !this.disposed && !signal.aborted && generation === this.latestActivation;
-  }
-
-  private observe(request: ObserveViewRequest): void {
-    if (
-      request.activeViewGeneration !== undefined &&
-      !this.disposed &&
-      this.options.views.getSnapshot().current === request.view
-    ) {
-      this.options.preview.requestObservation(request);
-    }
   }
 
   private data(event: Event): string {

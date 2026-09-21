@@ -5,7 +5,7 @@ description: Canonical product terms, stable names, revisions, generations, runt
 
 # Identities and state
 
-Studio attaches every mutation, build, presentation, and browser observation to
+Studio attaches every mutation, build, and presentation to
 the state it observed. Names identify durable product objects. Revisions identify
 content. Generations identify replaceable owners and incarnations.
 
@@ -81,19 +81,19 @@ the incarnation they observed.
 
 ## Runtime and browser identities
 
-| Identity                | Scope                                                                                                                                  |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Runtime instance        | One mounted notebook runtime configuration                                                                                             |
-| Runtime session ID      | One Python runtime session. Browser runtime observations have no server session ID                                                     |
-| Browser client ID       | One connected Studio tab                                                                                                               |
-| Presentation session    | One browser admission to a presentation revision                                                                                       |
-| Projection instance ID  | One active element in the browser [DOM](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model) at one projection site |
-| Request ID and sequence | One browser evidence request and its ordered observation                                                                               |
+| Identity               | Scope                                                                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime instance       | One mounted notebook runtime configuration                                                                                             |
+| Runtime session ID     | One Python runtime session. Browser runtimes have no server session ID                                                                 |
+| Browser client ID      | One connected Studio tab                                                                                                               |
+| Presentation session   | One browser admission to a presentation revision                                                                                       |
+| Projection instance ID | One active element in the browser [DOM](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model) at one projection site |
 
-Browser validation accepts evidence when these identities still match the
-selected view, view generation, runtime, runtime instance, session,
-presentation revision, request, and active projection instances. A stale
-observation cannot validate a newer presentation.
+The browser document exposes its committed presentation revision as
+`data-marimo-studio-revision` on `<html>`. Read it alongside
+`data-marimo-studio-state` and assert the application's intended content and
+behavior. An exact preview URL rejects a different presentation revision or
+unbuilt or failed view source, including when a previous artifact is retained.
 
 ## Workspace state
 
@@ -135,6 +135,5 @@ Validation levels are cumulative:
 | --------- | ---------------------------------------------------------------------------------- |
 | `static`  | Saved notebook, configuration, view source, build contract, and projection targets |
 | `runtime` | Static evidence plus one complete supervised notebook execution                    |
-| `browser` | Runtime evidence plus a current rendered observation for one view                  |
 
 See [Errors and JSON](errors-and-json.md) for conflict codes and machine output.
