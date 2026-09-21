@@ -1,0 +1,28 @@
+packages/marimo-frontend/src/editor-workspace.ts
+  s_d57424fb4ea65c::t_e7f33098b0dbe0 54
+packages/marimo-frontend/tests/editor-workspace.test.ts
+  s_d57424fb4ea65c::t_e7f33098b0dbe0 100-105
+apps/e2e/tests/workspace-layout.spec.ts
+  s_d57424fb4ea65c::t_e2f5e3f8419122 48,56-57,59,64-70,74-80
+  s_d57424fb4ea65c::t_acf6c956231628 61-63
+  s_d57424fb4ea65c::t_ab6c11ef49cfef 71-73
+  s_d57424fb4ea65c::t_ccc14ac5a1d13a 2-11,49-55
+  s_d57424fb4ea65c::t_44bfdeec8313a1 60
+  s_d57424fb4ea65c::t_5804588945a36c 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5d611aeda21ae27e65eeb63c2d4d451944f3bbc6",
+  "prompts": {},
+  "sessions": {
+    "s_d57424fb4ea65c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c3b2-e5da-7261-9462-e8f9b0866fe9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
