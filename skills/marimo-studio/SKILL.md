@@ -628,7 +628,7 @@ combining it with an already-needed inspection call when possible. Routine view
 authoring follows the conventions directly, without Lens setup prompts or
 additional discovery calls.
 
-To enable feedback, install `marimo-studio[lens]` (or `marimo-lens>=0.1.2`) in
+To enable feedback, install `marimo-studio[lens]` (or `marimo-lens>=0.2`) in
 the notebook environment. Development previews reuse the notebook's Lens or mount
 one when installed. Reuse that instance without adding a Lens cell or projection.
 For an explicitly authored Lens in another Server view, define one value:
