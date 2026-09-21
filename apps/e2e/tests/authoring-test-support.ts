@@ -103,3 +103,29 @@ export const captureRetiringProjectionReads = (
     },
   };
 };
+
+// The unsaved native page can retire its save response during navigation.
+// Recover only after the saved file and original session have been verified.
+export const expectFirstSaveRetirement = (
+  diagnostics: BrowserDiagnostics,
+  origin: string,
+): BrowserResponseRecovery => {
+  const request = diagnostics.expectRequestFailure({
+    origin,
+    method: "POST",
+    path: /^\/api\/kernel\/save$/,
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
+  const error = diagnostics.expectConsole({
+    type: "error",
+    text: /^Failed to handle request: sendSave TypeError: Failed to fetch(?:\n|$)/,
+    required: false,
+  });
+  return {
+    recovered: () => {
+      request.recovered();
+      error.recovered();
+    },
+  };
+};

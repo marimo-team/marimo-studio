@@ -3,6 +3,7 @@ import { expect, test as base } from "@playwright/test";
 import { readInstalledPackageNetwork } from "../scripts/installed-package-network.ts";
 
 const installedPackageNetwork = readInstalledPackageNetwork();
+import { expectFirstSaveRetirement } from "../tests/authoring-test-support.ts";
 import { observeBrowserContext } from "../tests/browser-diagnostics.ts";
 import { installPinnedPyodideAssets } from "../tests/pyodide-assets.ts";
 
@@ -215,18 +216,7 @@ test("provides Studio before the first save in an environment with the installed
   }).toPass({ timeout: 65_000 });
   // First save navigates into Studio and may retire the original POST response.
   // The saved document and preserved session are the completion evidence.
-  const retiredSave = diagnostics.expectRequestFailure({
-    origin: installedPackageNetwork.fresh.origin,
-    method: "POST",
-    path: /^\/api\/kernel\/save$/,
-    errorText: "net::ERR_ABORTED",
-    required: false,
-  });
-  const retiredSaveError = diagnostics.expectConsole({
-    type: "error",
-    text: /^Failed to handle request: sendSave TypeError: Failed to fetch(?:\n|$)/,
-    required: false,
-  });
+  const retiredSave = expectFirstSaveRetirement(diagnostics, installedPackageNetwork.fresh.origin);
   const saved = page.waitForURL((url) => url.searchParams.get("file") === "fresh-studio.py");
   await Promise.all([save.click(), saved]);
   const editor = page.frameLocator("iframe#marimo-studio-editor");
@@ -236,7 +226,6 @@ test("provides Studio before the first save in an environment with the installed
   expect(savedEditor.searchParams.get("file")).toBe("fresh-studio.py");
   expect(savedEditor.searchParams.get("session_id")).toBe(initialSession);
   retiredSave.recovered();
-  retiredSaveError.recovered();
   await page.getByText("Add view", { exact: true }).click();
   await page.getByRole("radio", { name: /^HTML document/ }).check();
   const replaced = diagnostics.expectWorkspaceEventStreamReplacement(

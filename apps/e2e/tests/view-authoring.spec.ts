@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import {
   executeCodeMode,
+  expectFirstSaveRetirement,
   saveShortcut,
   selectAllShortcut,
   studioEditorSessionId,
@@ -220,6 +221,7 @@ test("offers Studio on a fresh notebook and preserves its session through first-
   const filename = page.getByPlaceholder("filename");
   await filename.click();
   await filename.fill("first-save.py");
+  const retiredSave = expectFirstSaveRetirement(browserDiagnostics, studioOrigin());
   await page.getByText("Save as: first-save.py", { exact: true }).click();
 
   await expect(page.locator("#marimo-studio-host")).toBeAttached();
@@ -240,6 +242,7 @@ test("offers Studio on a fresh notebook and preserves its session through first-
   await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
   expect(await studioEditorSessionId(page)).toBe(sessionId);
+  retiredSave.recovered();
   await expect(editorFrame(page).locator(".cm-content").first()).toContainText("saved = True");
   await waitForPreview(page);
   replacedWorkspaceStream.recovered();

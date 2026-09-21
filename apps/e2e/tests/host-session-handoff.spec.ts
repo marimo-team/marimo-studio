@@ -6,7 +6,11 @@ import { resolve } from "node:path";
 
 import { e2eNetwork } from "../scripts/network.ts";
 import { fixtureDirectory } from "../scripts/paths.ts";
-import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
+import {
+  executeCodeMode,
+  expectFirstSaveRetirement,
+  studioEditorSessionId,
+} from "./authoring-test-support.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import {
   captureProjectionRefresh,
@@ -85,6 +89,7 @@ for (const editRoot of ["marimo", "studio"] as const) {
       await cell.hover();
       await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
       await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
+      const retiredSave = expectFirstSaveRetirement(diagnostics, server.serverUrl);
       if (editRoot === "studio") {
         await page.locator("#filename-input input").fill("host-save.py");
         await page.locator("#filename-input input").press("Enter");
@@ -115,6 +120,7 @@ for (const editRoot of ["marimo", "studio"] as const) {
         await executeCodeMode(page, "host-save.py", sessionId, 'saved.append("kept")');
         await page.goto(`${server.serverUrl}/studio/?file=host-save.py`);
       }
+      retiredSave.recovered();
       await expect(page.getByText("Add view", { exact: true })).toBeVisible();
       await page.getByText("Add view", { exact: true }).click();
       await page.getByRole("radio", { name: /^HTML document/ }).check();
