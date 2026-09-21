@@ -15,10 +15,15 @@ exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
 agent-plugins = false
+gistwidget = false
+jupyter-book-marimo = false
 marimo = false
 marimo-export = false
+marimo-jupyter-extension = false
 marimo-lens = false
 marimo-studio = false
+mkdocs-marimo = false
+moutils = false
 
 [manifest]
 members = [
@@ -33,7 +38,7 @@ dev = [
     { name = "deno", specifier = "==2.9.5" },
     { name = "httpx2", specifier = ">=2.9" },
     { name = "marimo", extras = ["recommended"], specifier = "==0.24.2" },
-    { name = "marimo-lens", specifier = ">=0.1.2" },
+    { name = "marimo-lens", specifier = ">=0.2" },
     { name = "pandas", specifier = ">=2.2.2" },
     { name = "pandas", marker = "python_full_version >= '3.13'", specifier = ">=2.2.3" },
     { name = "pandas", marker = "python_full_version >= '3.14'", specifier = ">=2.3.3" },
@@ -86,14 +91,14 @@ test-deno = [
 
 [[package]]
 name = "agent-plugins"
-version = "0.2.1"
+version = "0.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/ec/ced994524f6c4c5d9d2b57c0f44108677a2ec303f1081f47cb6e10ac05ec/agent_plugins-0.2.1.tar.gz", hash = "sha256:2e0036c1d65b197daf5c78607c1df040a1c09473f07471ca04ebebf68f68e5b2", size = 33401, upload-time = "2026-09-07T16:52:27.001Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/a7/f0a0f42623958323c466f8208793d500642e3653440cc43676a021f97c94/agent_plugins-0.2.4.tar.gz", hash = "sha256:cde29a40ba26dfa0fe7a978d18abb2cb724168efefb03423fcae93b06258c4bf", size = 40913, upload-time = "2026-09-20T18:59:06.636Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/c5/7377640c6003d4fc7ecdc82f4c7cc5442acf7372620d1be717d245222592/agent_plugins-0.2.1-py3-none-any.whl", hash = "sha256:4b86d06af9ab0d7ed277d7c0288b455cdb420e6c1801b222ded2474fc8226b06", size = 49691, upload-time = "2026-09-07T16:52:26.032Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/e0/fce035140da2730aaf0816dd49b6660d9feb91c6fe5cad7485517c80affd/agent_plugins-0.2.4-py3-none-any.whl", hash = "sha256:67f5255df2229823f22f2b0eb5e16f7f5828c6d72968eadebb6b3d1099a0ebc8", size = 61017, upload-time = "2026-09-20T18:59:05.125Z" },
 ]
 
 [[package]]
@@ -1234,7 +1239,7 @@ wheels = [
 
 [[package]]
 name = "marimo-lens"
-version = "0.1.2"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-plugins" },
@@ -1244,9 +1249,9 @@ dependencies = [
     { name = "traitlets" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/88/fd/d3d6423e2f3c0547dbc0cc2960398407cc76be2026e8acc3b95270dd4a7c/marimo_lens-0.1.2.tar.gz", hash = "sha256:9e01a3b24520211de55d811dd751f662118cc74451caac25bbbe31f886fb7cd2", size = 209318, upload-time = "2026-09-18T09:56:54.826Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/51/c32fdb2275ea2028d15dcccb404ed218838ec30144fc16261da88040b8d6/marimo_lens-0.2.0.tar.gz", hash = "sha256:ed462d3c60478519de7f428818dca98c3e1034e23dfc2ecef474500c31b47d58", size = 220155, upload-time = "2026-09-21T16:44:16.906Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/40/a3be3826bb7ac6ecbac5d350c2c7245694b7a8d0f5c57e06ea19af0bbb7b/marimo_lens-0.1.2-py3-none-any.whl", hash = "sha256:dd29ba8774229b41b45a8e288c0e3cbfdc40f303460bd2c522953dcf3c05c5de", size = 223662, upload-time = "2026-09-18T09:56:53.744Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/ad/742f912bffa9c178602f593ece92bd51c7ae36d3fddcb56e6544f27bc5d1/marimo_lens-0.2.0-py3-none-any.whl", hash = "sha256:cbfdc3d683b192b5ae913b6ae285a6d1a724eaa11dfeb0b9eba9d2045a4572e8", size = 236480, upload-time = "2026-09-21T16:44:15.547Z" },
 ]
 
 [[package]]
@@ -1288,7 +1293,7 @@ requires-dist = [
     { name = "htpy", specifier = ">=26.5.1" },
     { name = "marimo", specifier = "==0.24.2" },
     { name = "marimo-export", specifier = ">=0.0.8" },
-    { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.1.2" },
+    { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.2" },
     { name = "marimo-studio", extras = ["deno", "lens"], marker = "extra == 'recommended'", editable = "packages/marimo-studio" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
