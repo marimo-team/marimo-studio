@@ -121,14 +121,7 @@ async def _activation_acknowledgement(
     return cast(dict[str, object], json.loads(bytes(response.body)))
 
 
-async def _browser_event_payloads(
-    monkeypatch: pytest.MonkeyPatch,
-) -> dict[str, list[dict[str, object]]]:
-    request_ids = iter(("request-dashboard", "request-dashboard-with-generation"))
-    monkeypatch.setattr(
-        "marimo_studio._server.agent.observation.secrets.token_urlsafe",
-        lambda _length: next(request_ids),
-    )
+async def _browser_event_payloads() -> dict[str, list[dict[str, object]]]:
     clients = StudioClientRegistry()
     agents = AgentCoordinator(clients)
     producer = WorkspaceClientEventProducer(
@@ -163,28 +156,6 @@ async def _browser_event_payloads(
         )
         await agents.wait_for_activation(activation, timeout=1)
 
-        target = await clients.select_target(client_id="browser-client-1234")
-        observation = await agents.request_observation(
-            target,
-            "executive",
-            "server",
-            "server-instance",
-            "presentation-revision",
-        )
-        without_generation = payload("observe", await producer.poll())
-        await agents.wait_for_observation(observation, timeout=0)
-
-        observation = await agents.request_observation(
-            target,
-            "executive",
-            "server",
-            "server-instance",
-            "presentation-revision",
-            active_view_generation=target.active_view_generation,
-        )
-        with_generation = payload("observe", await producer.poll())
-        await agents.wait_for_observation(observation, timeout=0)
-
         await bind_native_session(
             clients,
             "s_123456",
@@ -195,7 +166,6 @@ async def _browser_event_payloads(
         return {
             "activeViewRequests": [active_view],
             "editorSessionBindings": [initial_binding, replacement_binding],
-            "observationRequests": [without_generation, with_generation],
         }
     finally:
         await producer.close()
@@ -267,7 +237,12 @@ def test_control_events_preempt_a_blocked_presentation_build(
             await self.release_build.wait()
             self.build_finished.set()
             return (
-                {"schema": 1, "profile": "development", "phase": "ready"},
+                {
+                    "schema": 1,
+                    "profile": "development",
+                    "phase": "published",
+                    "diagnostics": [],
+                },
                 "presentation-after-build",
                 "artifact-after-build",
             )
@@ -384,13 +359,23 @@ def test_python_development_events_match_the_browser_protocol_fixture(
         assert view_name == "dashboard"
         if generation == 4:
             return (
-                {"schema": 1, "profile": "development", "phase": "ready"},
+                {
+                    "schema": 1,
+                    "profile": "development",
+                    "phase": "published",
+                    "diagnostics": [],
+                },
                 "presentation-revision",
                 "artifact-revision",
             )
         assert generation == 5
         return (
-            {"schema": 1, "profile": "development", "phase": "failed"},
+            {
+                "schema": 1,
+                "profile": "development",
+                "phase": "failed",
+                "diagnostics": [],
+            },
             None,
             None,
         )
@@ -422,7 +407,7 @@ def test_python_development_events_match_the_browser_protocol_fixture(
         ]
         ready = await presentation_events(4)
         failed = await presentation_events(5)
-        browser = await _browser_event_payloads(monkeypatch)
+        browser = await _browser_event_payloads()
         acknowledgements = [
             await _activation_acknowledgement(outcome)
             for outcome in ActivationAckOutcome
@@ -466,7 +451,12 @@ def test_catalog_failure_keeps_the_presentation_stream_repairable(
             return operation()
 
     fallback: tuple[dict[str, object], None, None] = (
-        {"schema": 1, "profile": "development", "phase": "ready"},
+        {
+            "schema": 1,
+            "profile": "development",
+            "phase": "published",
+            "diagnostics": [],
+        },
         None,
         None,
     )

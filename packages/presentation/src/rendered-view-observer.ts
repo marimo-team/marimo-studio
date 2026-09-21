@@ -3,16 +3,15 @@ import type {
   ViewReadyMessage,
   ViewSyncPendingMessage,
 } from "@marimo-studio/protocol/preview-messages";
-import type { ObservedProjectionInstance } from "@marimo-studio/protocol/projections";
 
 import type { RuntimeDiagnostic, StudioDiagnostic } from "./diagnostics.ts";
 import type { RuntimeStateApi } from "./runtime-state.ts";
 
 import { documentLifecycleEnvelope } from "./document/document-lifecycle-id.ts";
 import { postToStudioParent } from "./document/parent-bridge.ts";
+import { clearDiagnostic, showDiagnostic } from "./document/status.ts";
 import { studioOwned } from "./document/studio-ownership.ts";
 import { projectionHosts } from "./projections/host-runtime.ts";
-import { renderedProjectionInstances } from "./projections/instances.ts";
 import { toBrowserDiagnostic } from "./readiness-diagnostics.ts";
 import { type ReadinessSnapshot, readiness, type RuntimeConnectionState } from "./readiness.ts";
 import { renderedViewDiagnostics, renderedViewIdentity } from "./rendered-view-state.ts";
@@ -22,7 +21,6 @@ interface MarimoStudioApi {
   ready: () => Promise<void>;
   diagnostics: () => readonly StudioDiagnostic[];
   identity: () => { readonly projectionRevision: string; readonly revision: string };
-  projections: () => readonly ObservedProjectionInstance[];
   updateQuery: (query: string) => Promise<void>;
   state?: RuntimeStateApi;
 }
@@ -112,8 +110,15 @@ const publishCommittedViewError = (): void => {
 };
 
 const publish = (snapshot: ReadinessSnapshot, previous: ReadinessSnapshot): void => {
-  document.documentElement.dataset.marimoStudioState = snapshot.page;
   publishRuntimeDiagnostic(snapshot.runtimeDiagnostic);
+  if (snapshot.presentationDiagnostic) {
+    showDiagnostic(
+      snapshot.presentationDiagnostic,
+      snapshot.presentation === "loading" ? "waiting" : "error",
+    );
+  } else {
+    clearDiagnostic();
+  }
   if (snapshot.settled && !previous.settled) {
     document.dispatchEvent(
       new CustomEvent("marimo-studio:idle", { detail: { state: snapshot.page } }),
@@ -205,7 +210,6 @@ export const startRenderedViewObserver = (updateQuery: (query: string) => Promis
         revision: config.revision,
       };
     },
-    projections: renderedProjectionInstances,
     updateQuery,
   };
   stopReadinessChanges = readiness.subscribe(publish);

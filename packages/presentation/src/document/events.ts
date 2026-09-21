@@ -11,7 +11,12 @@ import {
   type PresentationRefreshMessage,
   type SwitchViewMessage,
 } from "@marimo-studio/protocol/preview-messages";
-import { publicNotebookQuery, UNFRAMED_QUERY_PARAM } from "@marimo-studio/protocol/query";
+import {
+  publicNotebookQuery,
+  PRESENTATION_REVISION_QUERY_PARAM,
+  UNFRAMED_QUERY_PARAM,
+} from "@marimo-studio/protocol/query";
+import { parsePresentationBaseline } from "@marimo-studio/protocol/source-events";
 
 import { getMountConfig, getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
 import {
@@ -76,9 +81,10 @@ export class DevelopmentEvents {
 
   connect(
     url: string,
-    onReady: () => void,
+    onReady: (revision?: string | null) => void,
     onPresentation: () => void,
     onBuild: (build: PresentationBuild) => void = () => {},
+    onDisconnected: () => void = () => {},
   ): void {
     this.close();
     const source = new EventSource(url);
@@ -88,7 +94,12 @@ export class DevelopmentEvents {
         operation();
       }
     };
-    source.addEventListener("ready", () => current(onReady));
+    source.addEventListener("ready", (event) => {
+      const baseline =
+        event instanceof MessageEvent ? parsePresentationBaseline(event.data) : undefined;
+      current(() => onReady(baseline?.revision));
+    });
+    source.addEventListener("error", () => current(onDisconnected));
     source.addEventListener("change", (event) => {
       if (!(event instanceof MessageEvent)) {
         return;
@@ -132,7 +143,10 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
 
 interface PresentationEventCallbacks {
   readonly changed: () => void;
-  readonly refresh: (phase: PresentationRefreshMessage["phase"]) => void;
+  readonly refresh: (
+    phase: PresentationRefreshMessage["phase"],
+    diagnostic?: PresentationRefreshMessage["diagnostic"],
+  ) => void;
   readonly barrier?: (
     port: MessagePort,
     generation: number,
@@ -207,7 +221,7 @@ export const bindPresentationEvents = (callbacks: PresentationEventCallbacks): (
           }
         }
       } else {
-        callbacks.refresh(request.phase);
+        callbacks.refresh(request.phase, request.diagnostic);
       }
     }
   };
@@ -258,6 +272,11 @@ export const bindViewNavigation = (
       unframed: new URLSearchParams(globalThis.location.search).get(UNFRAMED_QUERY_PARAM) === "1",
       views: config.views,
       currentView: config.view,
+      clientId: getMountConfig().clientId,
+      supportUrl: config.supportUrl,
+      exactRevision: new URLSearchParams(globalThis.location.search).get(
+        PRESENTATION_REVISION_QUERY_PARAM,
+      ),
     });
     if (!navigation) {
       return;

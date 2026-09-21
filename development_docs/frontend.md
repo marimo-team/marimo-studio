@@ -148,16 +148,15 @@ producer and consumer.
 
 Authoring uses these protocol areas:
 
-| Record area           | Contents                                                                          |
-| --------------------- | --------------------------------------------------------------------------------- |
-| View project          | View, provider, documents, diagnostics, artifact state                            |
-| Source document       | Relative path, language, access, label, and content revision                      |
-| Projection targets    | Target names, ready producers, dependency closures, and ambiguity                 |
-| Mount declarations    | Mount ID, source location, kind, and allowed targets                              |
-| Mounted results       | Instance ID, target, phase, runtime cell, and error                               |
-| Runtime configuration | Presentation, runtime, projection targets, mounts, and cell bindings              |
-| Development events    | Project, build, presentation, views, ready, activate, observe, and session events |
-| Browser observations  | Revision-bound readiness, diagnostics, and mounted-result facts                   |
+| Record area           | Contents                                                                 |
+| --------------------- | ------------------------------------------------------------------------ |
+| View project          | View, provider, documents, diagnostics, artifact state                   |
+| Source document       | Relative path, language, access, label, and content revision             |
+| Projection targets    | Target names, ready producers, dependency closures, and ambiguity        |
+| Mount declarations    | Mount ID, source location, kind, and allowed targets                     |
+| Mounted results       | Instance ID, target, phase, runtime cell, and error                      |
+| Runtime configuration | Presentation, runtime, projection targets, mounts, and cell bindings     |
+| Development events    | Project, build, presentation, views, ready, activate, and session events |
 
 Avoid duplicating validation constants across producers and consumers. Let the
 Python model own server policy and the Zod schema own browser parsing.
@@ -246,7 +245,7 @@ the feature that owns it:
 - `presentation` changes to Source and Preview
 - `views` changes to the view inventory
 - The initial ready baseline to inventory, Source, and Preview
-- Activation and observation requests to the agent coordination path
+- Activation requests to the agent coordination path
 - Editor session events to Preview
 
 Events carry generation and revision identity where ordering affects behavior.
@@ -256,13 +255,13 @@ Controllers discard stale events after a view or runtime switch.
 
 Studio controllers expose snapshots through React external stores:
 
-| Feature       | Controller responsibility                                                                  |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| Navigation    | Map user actions to layout, runtime, view, and Source calls                                |
-| Workspace     | Pane tree, modes, placement, geometry, resizing, compact state, and per-view storage       |
-| Source editor | Project documents, buffers, autosave, revisions, conflicts, and active tab                 |
-| Views         | Inventory, selection, creation, removal, and transition cancellation                       |
-| Preview       | Stable frames, runtime status, queries, controls, observations, and editor session changes |
+| Feature       | Controller responsibility                                                            |
+| ------------- | ------------------------------------------------------------------------------------ |
+| Navigation    | Map user actions to layout, runtime, view, and Source calls                          |
+| Workspace     | Pane tree, modes, placement, geometry, resizing, compact state, and per-view storage |
+| Source editor | Project documents, buffers, autosave, revisions, conflicts, and active tab           |
+| Views         | Inventory, selection, creation, removal, and transition cancellation                 |
+| Preview       | Stable frames, runtime status, queries, controls, and editor session changes         |
 
 Visible changes require browser inspection at desktop and narrow widths. Check
 keyboard operation, focus, overflow, pane resizing, hidden frames, runtime
@@ -381,21 +380,21 @@ change and browser evidence for the capability that needs it.
 Package tests protect local behavior. Add `apps/e2e` coverage when a failure
 requires several owners to reproduce.
 
-| Seam                  | Representative evidence                                                                  |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| Artifact and document | A new build publishes one coherent document and asset tree                               |
-| Failed build          | Source reports the diagnostic while the last artifact stays mounted                      |
-| Dynamic source        | Mixed-language tabs, read-only locks, conflicts, and new files converge                  |
-| Dynamic projections   | React `map` and Svelte `each` instances resolve and release targets                      |
-| Runtime frames        | Server, WebAssembly, and Prepared remain mounted across workspace modes                  |
-| Prepared startup      | Real capture progress reaches Preview and gives way to native readiness                  |
-| Prepared state        | Failed replacement preserves committed values, models, and hosts                         |
-| Resource ownership    | A projected control or output survives until its final owner leaves                      |
-| Runtime isolation     | Anywidget state stays with its owning runtime                                            |
-| View transition       | Source flush, route and preview commit, then target Source hydration                     |
-| Session identity      | Preview reattaches after editor reconnect                                                |
-| Agent evidence        | Activation and observation match view, artifact, revision, runtime, session, and request |
-| Responsive workspace  | Source tabs and authored content remain operable at narrow width                         |
+| Seam                  | Representative evidence                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| Artifact and document | A new build publishes one coherent document and asset tree                                         |
+| Failed build          | Source reports the diagnostic while the last artifact stays mounted                                |
+| Dynamic source        | Mixed-language tabs, read-only locks, conflicts, and new files converge                            |
+| Dynamic projections   | React `map` and Svelte `each` instances resolve and release targets                                |
+| Runtime frames        | Server, WebAssembly, and Prepared remain mounted across workspace modes                            |
+| Prepared startup      | Real capture progress reaches Preview and gives way to native readiness                            |
+| Prepared state        | Failed replacement preserves committed values, models, and hosts                                   |
+| Resource ownership    | A projected control or output survives until its final owner leaves                                |
+| Runtime isolation     | Anywidget state stays with its owning runtime                                                      |
+| View transition       | Source flush, route and preview commit, then target Source hydration                               |
+| Session identity      | Preview reattaches after editor reconnect                                                          |
+| Agent evidence        | Activation matches the current client and session. Browser assertions check the committed revision |
+| Responsive workspace  | Source tabs and authored content remain operable at narrow width                                   |
 
 Keep generic output-load cancellation and export-state selection cases in
 marimo-export. Studio tests protect view admission, projection adaptation,

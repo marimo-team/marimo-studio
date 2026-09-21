@@ -154,7 +154,7 @@ for presentation controls. The browser requires a user gesture to enter fullscre
 
 The child receives no Studio credential or same-origin authority. A validated
 message bridge carries navigation, public query, fragment, readiness, replay,
-diagnostic, and observation messages. The wrapper accepts child messages from
+and diagnostic messages. The wrapper accepts child messages from
 the iframe window with origin `null` and parent messages from the same-origin
 Studio window.
 

@@ -9,7 +9,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from marimo_studio._delivery.runtime_config import encode_runtime_config
-from marimo_studio._delivery.urls import STUDIO_CLIENT_QUERY_PARAM
+from marimo_studio._delivery.urls import (
+    EDITOR_SESSION_QUERY_PARAM,
+    STUDIO_CLIENT_QUERY_PARAM,
+)
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.auth import (
     error_response,
@@ -171,6 +174,20 @@ async def runtime_config_response(
         snapshot = current
     if client_id is not None:
         lookup_session_id = await clients.session_for_client(client_id)
+        expected_sessions = request.query_params.getlist(EDITOR_SESSION_QUERY_PARAM)
+        if expected_sessions and (
+            len(expected_sessions) != 1 or lookup_session_id != expected_sessions[0]
+        ):
+            return JSONResponse(
+                {
+                    "error": "preview-session-changed",
+                    "message": (
+                        "The notebook session changed. Open a new preview URL."
+                    ),
+                },
+                status_code=409,
+                headers=NO_STORE,
+            )
         if lookup_session_id is None:
             return _session_pending()
         if not sessions.exists(context, lookup_session_id):
@@ -201,6 +218,21 @@ async def runtime_config_response(
         except RuntimeConfigTooLargeError as error:
             return error_response(error)
         if client_id is not None:
+            if (
+                lookup_session_id is None
+                or await clients.session_for_client(client_id) != lookup_session_id
+                or not sessions.exists(context, lookup_session_id)
+            ):
+                return JSONResponse(
+                    {
+                        "error": "preview-session-changed",
+                        "message": (
+                            "The notebook session changed. Open a new preview URL."
+                        ),
+                    },
+                    status_code=409,
+                    headers=NO_STORE,
+                )
             assert preview_session_id is not None
             runtime = payload.get("runtime")
             if (

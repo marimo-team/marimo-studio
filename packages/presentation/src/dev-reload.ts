@@ -1,3 +1,4 @@
+import type { PresentationBuild } from "@marimo-studio/protocol/development-events";
 import type {
   ReceiverReadyMessage,
   ReceiverUnreadyMessage,
@@ -48,6 +49,12 @@ import { StylesheetRefreshError } from "./document/styles.ts";
 import { errorMessage } from "./errors.ts";
 import { projectionReadGate } from "./projections/read-gate.ts";
 import { bindProjectionBindingStale, projectionBindingIsStale } from "./projections/staleness.ts";
+import {
+  beginPresentationRefresh,
+  setPresentationRefreshState,
+  readiness,
+  type PresentationRefreshClaim,
+} from "./readiness.ts";
 import { announceRenderedViewReady } from "./rendered-view-observer.ts";
 import {
   getMountConfig,
@@ -72,6 +79,9 @@ let presentationRevisions: PresentationRevisionController;
 let viewTransitions: DevelopmentViewTransition;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let announcedReceiverRevision: string | undefined;
+let buildClaim: PresentationRefreshClaim | undefined;
+let pendingBuildRevision: string | undefined;
+let developmentClaim: PresentationRefreshClaim | undefined;
 const externalRefreshGate = new ExternalRefreshGate(projectionReadGate, {
   begin: beginProjectedOutputFunctionTransition,
   cancel: cancelProjectedOutputFunctionTransition,
@@ -130,6 +140,44 @@ const refreshDiagnostic = (
   };
 };
 
+const observeBuild = (build: PresentationBuild): void => {
+  if (build.phase === "building") {
+    buildClaim = beginPresentationRefresh("build");
+    pendingBuildRevision = undefined;
+    externalRefreshGate.refresh("pending");
+    return;
+  }
+  buildClaim ??= beginPresentationRefresh("build");
+  if (build.revision === null || build.build.phase === "failed") {
+    externalRefreshGate.refresh("settled");
+    const detail = build.build.diagnostics.find(({ severity }) => severity === "error");
+    const diagnostic: PresentationDiagnostic = {
+      scope: "presentation",
+      code:
+        detail?.code ??
+        (build.build.phase === "failed" ? "view-build-failed" : "view-publication-unavailable"),
+      severity: "error",
+      message: `${build.build.phase === "failed" ? "Latest build failed." : "Latest publication is unavailable."} Showing the previous build.${detail ? ` ${detail.message}` : ""}`,
+      hint: detail?.hint ?? "Fix the view source, then build it again.",
+      view: supportView(),
+    };
+    setPresentationRefreshState(buildClaim, "error", diagnostic);
+    console.error("marimo-studio build error", diagnostic.message);
+    return;
+  }
+  pendingBuildRevision = build.revision;
+  settleBuild();
+};
+
+const settleBuild = (): void => {
+  if (buildClaim && pendingBuildRevision === getRuntimeConfig().revision) {
+    setPresentationRefreshState(buildClaim, "ready");
+    buildClaim = undefined;
+    pendingBuildRevision = undefined;
+    externalRefreshGate.refresh("settled");
+  }
+};
+
 const connectEvents = (): void => {
   developmentEvents.connect(
     appendUrlPath(getSupportUrl(), "dev/events", globalThis.location.href),
@@ -142,16 +190,17 @@ const connectEvents = (): void => {
       }
       presentationChanged();
     },
-    (build) => {
-      if (build.phase === "building") {
-        externalRefreshGate.refresh("pending");
-      } else if (
-        build.revision === null ||
-        !hasRuntimeConfig() ||
-        build.revision === getRuntimeConfig().revision
-      ) {
-        externalRefreshGate.refresh("settled");
-      }
+    observeBuild,
+    () => {
+      developmentClaim ??= beginPresentationRefresh("development");
+      setPresentationRefreshState(developmentClaim, "loading", {
+        scope: "presentation",
+        severity: "warning",
+        code: "development-disconnected",
+        message: "Live updates disconnected. Reconnecting…",
+        hint: "Check that the Studio server is available.",
+        view: supportView(),
+      });
     },
   );
 };
@@ -184,7 +233,9 @@ const revisionPolicy: PresentationRevisionPolicy = {
     console.error("marimo-studio presentation refresh error", error);
   },
   onReady: (operation) => {
-    clearDiagnostic();
+    if (!readiness.snapshot().presentationDiagnostic) {
+      clearDiagnostic();
+    }
     presentationRefreshState.complete(operation.target);
     if (hasRuntimeConfig()) {
       const projectionRevision = getRuntimeConfig().projectionRevision;
@@ -226,8 +277,17 @@ const reload = (resetBackoff = true): void => {
     .catch(() => {});
 };
 
-function reconcileBaseline(): void {
-  if (baselineReconciler.ready()) {
+function reconcileBaseline(revision?: string | null): void {
+  const reconnecting = developmentClaim !== undefined;
+  if (developmentClaim) {
+    setPresentationRefreshState(developmentClaim, "ready");
+    developmentClaim = undefined;
+  }
+  if (
+    baselineReconciler.ready(
+      reconnecting || (revision !== undefined && revision !== getRuntimeConfig().revision),
+    )
+  ) {
     reload();
   }
 }
@@ -285,6 +345,7 @@ const startDevelopmentReload = async (): Promise<void> => {
       presentationRevisions.transition(documentUrl, supportUrl, "view", revisionPolicy),
   });
   subscribeRuntimeConfig(() => {
+    settleBuild();
     notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
     if (baselineReconciler.configure()) {
       reload();
@@ -302,7 +363,27 @@ const startDevelopmentReload = async (): Promise<void> => {
   });
   const unbindPresentationEvents = bindPresentationEvents({
     changed: presentationChanged,
-    refresh: (phase) => externalRefreshGate.refresh(phase),
+    refresh: (phase, diagnostic) => {
+      externalRefreshGate.refresh(phase);
+      if (phase === "pending") {
+        buildClaim = beginPresentationRefresh("build");
+      } else if (buildClaim || diagnostic) {
+        buildClaim ??= beginPresentationRefresh("build");
+        setPresentationRefreshState(
+          buildClaim,
+          diagnostic ? "error" : "ready",
+          diagnostic
+            ? {
+                ...diagnostic,
+                scope: "presentation",
+              }
+            : undefined,
+        );
+        if (!diagnostic) {
+          buildClaim = undefined;
+        }
+      }
+    },
     barrier: (port, generation, signal, result) => {
       const lease = externalRefreshGate.acquire("mutation");
       void coordinatePresentationMutationBarrier({

@@ -93,9 +93,9 @@ People and coding agents use the same visible loop:
 inspect -> edit -> build -> show -> verify
 ```
 
-Browser validation is tied to the active notebook, view, runtime, and
-presentation. The rendered result stays connected to the analytical program
-and frontend artifact that produced it.
+Agents open a view URL with their preferred browser tools, inspect its committed
+revision, and exercise the page as a web application. The rendered result stays
+connected to the analytical program and frontend artifact that produced it.
 
 Continue with [What is Studio?](what-is-studio.md) for the product nouns or
 [Create your first view](guide/getting-started.md) to build one.

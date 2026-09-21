@@ -1,4 +1,4 @@
-"""Mutable records owned by agent activation and observation operations."""
+"""Mutable records owned by agent activation operations."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ from typing import TypeAlias
 
 from marimo_studio._browser_client.records import PreviewAutomationTarget
 from marimo_studio._server.agent.clients import StudioClientRegistry
-from marimo_studio._server.agent.events import ObservationRequest, ViewActivation
-from marimo_studio._validation.evidence import BrowserObservation
+from marimo_studio._server.agent.events import ViewActivation
 from marimo_studio.errors import AgentRequestError, MarimoStudioError
 
 
@@ -65,11 +64,6 @@ class AgentOperationStore:
     clients: StudioClientRegistry
     condition: asyncio.Condition = field(default_factory=asyncio.Condition)
     activation_operations: dict[str, ActivationOperation] = field(default_factory=dict)
-    observation_requests: dict[str, dict[str, ObservationRequest]] = field(
-        default_factory=dict
-    )
-    observations: dict[str, BrowserObservation] = field(default_factory=dict)
-    observation_sequences: dict[str, int] = field(default_factory=dict)
     generation: int = 0
     closed: bool = False
 
@@ -86,7 +80,4 @@ class AgentOperationStore:
         return isinstance(
             self.activation_operations.get(client_id),
             (PendingActivation, AcknowledgedActivation, RejectedActivation),
-        ) or bool(self.observation_requests.get(client_id))
-
-    def requests_for(self, client_id: str) -> dict[str, ObservationRequest]:
-        return self.observation_requests.setdefault(client_id, {})
+        )

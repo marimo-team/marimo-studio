@@ -2,7 +2,7 @@ import type { PresentationDiagnostic, RuntimeDiagnostic } from "./diagnostics.ts
 
 export type RuntimeConnectionState = "connecting" | "ready" | "error";
 export type PresentationRefreshState = "ready" | "loading" | "error";
-export type PresentationRefreshOwner = "document" | "runtime";
+export type PresentationRefreshOwner = "document" | "runtime" | "build" | "development";
 export type PageReadinessState = "connecting" | "loading" | "ready" | "error";
 
 export interface PresentationRefreshClaim {
@@ -168,7 +168,9 @@ export class ReadinessController {
     }
     if (owners.some(({ state }) => state === "loading")) {
       this.presentation = "loading";
-      this.presentationDiagnostic = undefined;
+      this.presentationDiagnostic = owners.find(
+        ({ state, diagnostic }) => state === "loading" && diagnostic !== undefined,
+      )?.diagnostic;
       return;
     }
     this.presentation = "ready";
@@ -196,6 +198,7 @@ export class ReadinessController {
       presentationDiagnostic: this.presentationDiagnostic,
     };
     if (hasDocument(globalThis)) {
+      globalThis.document.documentElement.dataset.marimoStudioState = page;
       globalThis.document.documentElement.dataset.marimoStudioConnectionState = this.connection;
       globalThis.document.documentElement.dataset.marimoStudioPresentationState = this.presentation;
       globalThis.document.documentElement.dataset.marimoStudioPresentationOwners = [

@@ -116,16 +116,33 @@ Studio caps the complete Browser runtime configuration at 16 MiB of UTF-8 JSON.
 Notebook source and broad projection declarations are common contributors. Use
 finite projection targets or reduce saved notebook source before retrying.
 
-## A coding agent cannot show or validate a view
+## A coding agent cannot inspect a view
 
 `marimo_studio.agent.current_workspace()` requires a code-mode execution bound
-to the current notebook and Studio tab. Run `view.show()` in its own execution,
-wait for the selected view to render, then request browser validation in a new
-execution.
+to the current notebook and Studio tab. Run `view.show()` in its own execution
+to activate the view. For direct browser inspection, get
+`await view.preview_url(runtime="server")`, finish the execution, and open the
+returned URL with a browser tool. Keep the edit-mode notebook session open.
 
-For terminal automation, pass a running Studio URL to `marimo-studio view show`
-or browser validation. Select the intended browser client when several Studio
-tabs are connected.
+For terminal automation, use `marimo-studio view preview dashboard --runtime
+server --server http://127.0.0.1:8000 --target analysis.py`. Wait for
+`html[data-marimo-studio-state="ready"]` in the browser, then check the expected
+content. If readiness stalls, read the visible status or error and inspect
+console errors and failed requests before repeating the wait or restarting.
+Controls that recompute notebook output
+need browser automation controlled outside that notebook kernel. Waiting
+synchronously inside code mode can block those computations.
+
+If the preview asks you to run changed notebook cells, execute those cells in
+the live notebook or use Marimo's **Run all** action, then retry the preview.
+Building the view, checking notebook syntax, and isolated runtime validation
+leave the live notebook's execution state unchanged.
+
+If the page works but shows an earlier edit, inspect source and build freshness
+with `view inspect`. A failed build retains the previous successful artifact.
+An exact preview URL returns HTTP 409 when its presentation revision changes
+or view source is unbuilt or failed. Repair and build current source, then
+request a fresh URL.
 
 ## A static export fails
 

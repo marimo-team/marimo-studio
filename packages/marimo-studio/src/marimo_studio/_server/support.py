@@ -27,11 +27,6 @@ from marimo_studio._server.agent.api import (
     active_view_handoff_response,
     agent_connection_response,
     show_view_response,
-    validate_views_response,
-)
-from marimo_studio._server.agent.browser import (
-    browser_observation_response,
-    browser_observations_response,
 )
 from marimo_studio._server.auth import (
     authentication_required_response,
@@ -55,6 +50,7 @@ from marimo_studio._server.presentation.capability import (
     presentation_capability_url,
 )
 from marimo_studio._server.presentation.ports import KernelProjectionHost
+from marimo_studio._server.presentation.preview import preview_url_response
 from marimo_studio._server.presentation.projection_routes import (
     outputs_response,
     values_response,
@@ -229,24 +225,6 @@ async def support_response(
     assert workspace is not None
     if support_path == "/agent/connection":
         return agent_connection_response(request, context, workspace)
-    if support_path == "/validate":
-        return await validate_views_response(
-            request,
-            context,
-            workspace,
-            notebook_scope,
-            session_state,
-            runtimes,
-        )
-    if support_path == "/observations":
-        return await browser_observations_response(
-            request,
-            context,
-            workspace,
-            notebook_scope,
-            session_state,
-            runtimes,
-        )
     if support_path.startswith("/activations/") and support_path.endswith("/ack"):
         raw_generation = support_path.removeprefix("/activations/").removesuffix("/ack")
         if not raw_generation.isdecimal():
@@ -444,6 +422,16 @@ async def _view_response(
         )
     if view_name not in studio.views:
         return Response(status_code=404)
+    if route == "preview":
+        return await preview_url_response(
+            request,
+            context,
+            studio,
+            view_name,
+            notebook_scope,
+            runtimes,
+            session_state,
+        )
     if route == "dev/events" and request.method == "GET" and context.dev:
         return events_response(
             request,
@@ -452,14 +440,6 @@ async def _view_response(
             notebook_scope=notebook_scope,
             view_name=view_name,
             server=server,
-        )
-    if route == "observation":
-        return await browser_observation_response(
-            request,
-            context,
-            view_name,
-            notebook_scope,
-            runtimes,
         )
     if route == "project":
         return await project_response(

@@ -20,12 +20,15 @@ def repair_document(
     lifecycle_id: int | None = None,
     runtime: str = "server",
     view: str = "",
+    recoverable: bool = True,
 ) -> str:
-    """Return a development page that reloads when its source is repaired."""
+    """Show a view error, following source repairs when recovery is possible."""
+    heading = "View needs repair" if recoverable else "Preview unavailable"
     events = json.dumps(events_url).replace("<", "\\u003c")
     node = html(
         lang="en",
         data_marimo_studio_preview_state="error",
+        data_marimo_studio_state="error",
     )[
         node_list(
             head[
@@ -35,7 +38,7 @@ def repair_document(
                         name="viewport",
                         content="width=device-width, initial-scale=1",
                     ),
-                    title["View needs repair"],
+                    title[heading],
                     style[
                         Markup(
                             """
@@ -60,14 +63,14 @@ def repair_document(
                 node_list(
                     main(
                         {
-                            "role": "status",
+                            "role": "status" if recoverable else "alert",
                             "data-marimo-studio-repair": True,
                             "data-marimo-studio-message": message,
                             "data-marimo-studio-hint": hint,
                         }
                     )[
                         node_list(
-                            h1["View needs repair"],
+                            h1[heading],
                             p[message],
                             hint and p[hint],
                         )
@@ -97,11 +100,15 @@ def repair_document(
                                 if lifecycle_id is not None and view
                                 else ""
                             )
-                            + "const events=new EventSource("
-                            f"{events});"
-                            "events.addEventListener('change',()=>location.reload());"
-                            "addEventListener('pagehide',()=>events.close(),{once:true});"
-                            "setTimeout(()=>location.reload(),3000);"
+                            + (
+                                "const events=new EventSource("
+                                f"{events});"
+                                "events.addEventListener('change',()=>location.reload());"
+                                "addEventListener('pagehide',()=>events.close(),{once:true});"
+                                "setTimeout(()=>location.reload(),3000);"
+                                if recoverable
+                                else ""
+                            )
                         )
                     ],
                 )

@@ -2,7 +2,11 @@ import type { ReplayDocumentMessage } from "@marimo-studio/protocol/preview-mess
 import type { RuntimeRegistry } from "@marimo-studio/runtime";
 
 import { bootstrapSession } from "@marimo-studio/marimo-frontend/session-bootstrap";
-import { publicNotebookQuery, UNFRAMED_QUERY_PARAM } from "@marimo-studio/protocol/query";
+import {
+  publicNotebookQuery,
+  PRESENTATION_REVISION_QUERY_PARAM,
+  UNFRAMED_QUERY_PARAM,
+} from "@marimo-studio/protocol/query";
 
 import { documentBase } from "./document/base";
 import {
@@ -36,7 +40,7 @@ import { beginPresentationRefresh, setPresentationRefreshState } from "./readine
 import { setRuntimeConnectionState } from "./rendered-view-observer";
 import {
   commitRuntimeConfig,
-  fetchCurrentRuntimeConfig,
+  fetchRuntimeConfigForRevision,
   getRuntimeConfig,
   getMountConfig,
   getSupportUrl,
@@ -139,6 +143,11 @@ const bindRuntimeNavigation = (
       unframed: new URLSearchParams(globalThis.location.search).get(UNFRAMED_QUERY_PARAM) === "1",
       views: config.views,
       currentView: config.view,
+      clientId: getMountConfig().clientId,
+      supportUrl: config.supportUrl,
+      exactRevision: new URLSearchParams(globalThis.location.search).get(
+        PRESENTATION_REVISION_QUERY_PARAM,
+      ),
       mountedDocumentUrl: presentationRevisions.url,
     });
     if (!historyNavigation) {
@@ -227,26 +236,14 @@ const loadPresentationRuntimeConfig = async (
     runtimeSessionId,
   );
   const renewalSupportUrl = presentationRenewalSupportUrl(documentUrl, mount.supportUrl);
-  if (renewalSupportUrl === new URL(mount.supportUrl, globalThis.location.href).href) {
-    try {
-      return await loadRuntimeConfig(runtimeSessionId, signal);
-    } catch (cause) {
-      if (
-        !(cause instanceof RuntimeConfigRequestError) ||
-        cause.code !== "presentation-revision-unavailable"
-      ) {
-        throw cause;
-      }
-    }
-  }
   return commitRuntimeConfig(
-    await fetchCurrentRuntimeConfig(
-      documentUrl,
+    await fetchRuntimeConfigForRevision(
       renewalSupportUrl,
+      mount.revision,
+      signal,
       mount.runtime,
       mount.sessionId,
       runtimeSessionId,
-      signal,
     ),
   );
 };
@@ -386,7 +383,10 @@ const start = (registry: RuntimeRegistry) => {
         hint: cause.hint || "Wait for the notebook session to settle.",
         details: cause.details,
       });
-      if (cause.code === "presentation-revision-mismatch") {
+      if (
+        cause.code === "presentation-revision-mismatch" ||
+        cause.code === "presentation-revision-unavailable"
+      ) {
         setTimeout(() => {
           if (!signal.aborted) {
             globalThis.location.reload();

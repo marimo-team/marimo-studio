@@ -1,5 +1,5 @@
-import type { BrowserDiagnostic } from "@marimo-studio/protocol/browser-observations";
 import type { ProjectionDiagnostic } from "@marimo-studio/protocol/runtime-config";
+import type { BrowserDiagnostic } from "@marimo-studio/protocol/runtime-status";
 
 import type {
   HostDiagnostic,

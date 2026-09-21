@@ -285,9 +285,11 @@ def test_cancellation_before_receipt_commit_preserves_last_good(
     assert retained is not None
     assert retained.artifact_revision == first.artifact_revision
     state = read_build_state(project, "development")
-    assert state.phase == "failed"
+    assert state.phase == ("published" if cache_hit else "failed")
     assert state.artifact_revision == first.artifact_revision
-    assert [item.code for item in state.diagnostics] == ["build-cancelled"]
+    assert [item.code for item in state.diagnostics] == (
+        [] if cache_hit else ["build-cancelled"]
+    )
     revisions = artifact_root(project) / "revisions"
     assert {path.name for path in revisions.iterdir()} == {
         first.artifact_revision.removeprefix("sha256:")

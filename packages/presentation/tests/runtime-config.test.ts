@@ -3,7 +3,6 @@ import { test } from "vite-plus/test";
 
 import {
   commitRuntimeConfig,
-  fetchCurrentRuntimeConfig,
   fetchRuntimeConfig,
   fetchRuntimeConfigForRevision,
   fetchRuntimeConfigWithRetry,
@@ -205,57 +204,24 @@ test("revision refresh keeps the trusted runtime across mutable history", async 
   assert.equal(requestedRuntime, "server");
 });
 
-test("renewal config retries the complete document and config transaction", async () => {
+test("startup cannot commit newer config against the document's original revision", async () => {
   const originalFetch = globalThis.fetch;
-  const lifetime = new AbortController();
-  const revisions = ["revision-old", "revision-current"];
-  const requested = new Array<string>();
-  const requestSignals = new Array<AbortSignal | null | undefined>();
-  globalThis.fetch = (input, init) => {
-    requestSignals.push(init?.signal);
-    const url = requestUrl(input);
-    if (init?.method === "HEAD") {
-      const revision = revisions.shift() ?? "revision-current";
-      return Promise.resolve(
-        new Response(null, { headers: { "Marimo-Studio-Revision": revision } }),
-      );
-    }
-    const revision = new URL(url).searchParams.get("revision") ?? "";
-    requested.push(revision);
-    return Promise.resolve(
-      Response.json(
-        revision === "revision-old"
-          ? {
-              error: "presentation-revision-unavailable",
-              message: "The requested presentation revision is no longer available.",
-              transient: true,
-            }
-          : runtimeConfig("revision-current"),
-        { status: revision === "revision-old" ? 409 : 200 },
-      ),
+  const committed = document.documentElement.dataset.marimoStudioRevision;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      Response.json({
+        ...wasmRuntimeConfig(),
+        revision: "newer-than-document",
+      }),
     );
-  };
-
   try {
-    const config = await fetchCurrentRuntimeConfig(
-      "http://localhost/_marimo-studio/presentation/d.token/dashboard/",
-      "http://localhost/_marimo-studio/presentation/d.token/_marimo-studio/views/dashboard",
-      "server",
-      "s_view01",
-      "s_runtime",
-      lifetime.signal,
-    );
-    assert.equal(config.revision, "revision-current");
+    const failure = await loadRuntimeConfig().catch((cause: unknown) => cause);
+    assert.ok(failure instanceof RuntimeConfigRequestError);
+    assert.equal(failure.code, "presentation-revision-mismatch");
+    assert.equal(document.documentElement.dataset.marimoStudioRevision, committed);
   } finally {
     globalThis.fetch = originalFetch;
   }
-
-  assert.deepEqual(requested, ["revision-old", "revision-current"]);
-  assert.equal(requestSignals.length, 4);
-  assert.equal(
-    requestSignals.every((signal) => signal === lifetime.signal),
-    true,
-  );
 });
 
 test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
@@ -471,6 +437,7 @@ test("presentation commits advance current config while projection consumers fol
   });
 
   assert.equal(getRuntimeConfig().revision, "presentation-revision-2");
+  assert.equal(document.documentElement.dataset.marimoStudioRevision, "presentation-revision-2");
   assert.strictEqual(getRuntimeProjectionConfig(), initialProjectionConfig);
   assert.strictEqual(getRuntimeCellRefs(), initial);
   assert.strictEqual(getRuntimeConfig().projectionTargets, initialTargets);

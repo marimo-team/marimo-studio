@@ -1,7 +1,4 @@
-import type {
-  BrowserDiagnostic,
-  RuntimeStatusPhase,
-} from "@marimo-studio/protocol/browser-observations";
+import type { BrowserDiagnostic, RuntimeStatusPhase } from "@marimo-studio/protocol/runtime-status";
 
 export interface PreviewIdentity {
   readonly revision: string;
@@ -13,6 +10,7 @@ export type PreviewAdmissionMessage =
   | {
       readonly type: "marimo-studio:presentation-refresh";
       readonly phase: "pending" | "settled";
+      readonly diagnostic?: BrowserDiagnostic;
     }
   | { readonly type: "marimo-studio:receiver-admitted"; readonly revision: string };
 
@@ -22,19 +20,12 @@ interface RuntimeIdentity {
 }
 
 export interface PreviewAdmissionEffects {
-  clearObservations(): void;
   clearSession(): void;
   failView(): void;
   localizedInteractive(identity: PreviewIdentity): void;
   postMessage(message: PreviewAdmissionMessage): void;
-  postObservations(): void;
   postSwitch(): void;
   ready(identity: PreviewIdentity): void;
-  observation(
-    phase: "failed" | "ready" | "synchronizing",
-    diagnostics: readonly BrowserDiagnostic[],
-    identity: PreviewIdentity,
-  ): void;
   status(
     phase: Exclude<RuntimeStatusPhase, "degraded" | "ready">,
     diagnostics: readonly BrowserDiagnostic[],
@@ -87,6 +78,7 @@ export class PreviewAdmission {
   private gatedMutationCandidate: PreviewIdentity | undefined;
   private failure: Failure = "none";
   private localizedCommitPending = false;
+  private buildDiagnostic: BrowserDiagnostic | undefined;
 
   constructor(private readonly effects: PreviewAdmissionEffects) {}
 
@@ -147,10 +139,6 @@ export class PreviewAdmission {
     };
   }
 
-  canObserve(revision: string): boolean {
-    return this.isInteractive && this.readyIdentity?.revision === revision;
-  }
-
   resetDocument(): void {
     this.gatedMutationCandidate = undefined;
     this.failure = "none";
@@ -161,7 +149,6 @@ export class PreviewAdmission {
     this.receiver = { phase: "unready" };
     this.view = "waiting";
     this.effects.clearSession();
-    this.effects.clearObservations();
   }
 
   requireReady(): void {
@@ -181,6 +168,7 @@ export class PreviewAdmission {
     const wasAdmitted = this.isInteractive;
     this.clearLocalizedFailure();
     this.localizedCommitPending = false;
+    this.buildDiagnostic = undefined;
     this.build = "pending";
     this.gate = "pending";
     this.admittedRevision = null;
@@ -195,14 +183,17 @@ export class PreviewAdmission {
       }
     }
     this.effects.stopControls();
-    this.effects.clearObservations();
     this.requirement = "required";
     if (notifyPresentation) {
       this.effects.postMessage({ type: "marimo-studio:presentation-refresh", phase: "pending" });
     }
   }
 
-  buildCompleted(revision: string | null, owner: Owner): void {
+  buildCompleted(revision: string | null, owner: Owner, diagnostic?: BrowserDiagnostic): void {
+    this.buildDiagnostic = diagnostic;
+    if (diagnostic) {
+      this.settleGate(true);
+    }
     this.gatedMutationCandidate = undefined;
     this.build = "settled";
     if (revision !== null) {
@@ -265,7 +256,6 @@ export class PreviewAdmission {
     this.refresh =
       this.refresh === "requested" || this.refresh === "acknowledged" ? "acknowledged" : "required";
     this.effects.stopControls();
-    this.effects.clearObservations();
     this.effects.clearSession();
     this.effects.status("connecting", [], { revision: null, sessionId: null });
   }
@@ -303,9 +293,6 @@ export class PreviewAdmission {
       if (isActive(owner)) {
         this.effects.postSwitch();
       }
-    }
-    if (isActive(owner)) {
-      this.effects.postObservations();
     }
   }
 
@@ -392,7 +379,6 @@ export class PreviewAdmission {
     this.localizedCommitPending = localized && (!wasInteractive || identityChanged);
     if (!localized) {
       this.admittedRevision = null;
-      this.effects.clearObservations();
       this.effects.stopControls();
     }
     this.candidate = null;
@@ -427,62 +413,12 @@ export class PreviewAdmission {
     this.effects.failView();
   }
 
-  observation(
-    state: "error" | "loading" | "ready",
-    diagnostics: readonly BrowserDiagnostic[],
-    revision: string,
-    sessionId: string | null,
-  ): void {
-    if (!this.observationMatches(revision)) {
-      return;
-    }
-    const identity = { revision, sessionId };
-    this.readyIdentity = identity;
-    if (state === "ready") {
-      this.failure = "none";
-      this.localizedCommitPending = false;
-      this.view = "ready";
-      this.effects.observation("ready", diagnostics, identity);
-    } else if (state === "loading") {
-      this.clearLocalizedFailure();
-      this.view = "waiting";
-      this.effects.observation("synchronizing", diagnostics, identity);
-    } else {
-      const localized =
-        this.failure !== "fatal" &&
-        diagnostics.length > 0 &&
-        diagnostics.every(isLocalizedDiagnostic);
-      this.failure = localized ? "localized" : "fatal";
-      if (!localized) {
-        this.localizedCommitPending = false;
-        this.admittedRevision = null;
-        this.effects.clearObservations();
-        this.effects.stopControls();
-      }
-      this.view = "failed";
-      this.effects.observation("failed", diagnostics, identity);
-      if (!localized) {
-        this.effects.failView();
-      }
-    }
-  }
-
   dispose(): void {
     this.gatedMutationCandidate = undefined;
     this.failure = "none";
     this.localizedCommitPending = false;
     this.build = "settled";
     this.settleGate();
-  }
-
-  private observationMatches(revision: string): boolean {
-    return (
-      this.build === "settled" &&
-      this.receiver.phase === "ready" &&
-      this.readyIdentity?.revision === revision &&
-      this.receiver.revision === revision &&
-      this.admittedRevision === revision
-    );
   }
 
   private reconcile(owner: Owner): void {
@@ -519,7 +455,6 @@ export class PreviewAdmission {
   }
 
   private requestPresentationChange(): void {
-    this.effects.clearObservations();
     this.clearLocalizedFailure();
     this.localizedCommitPending = false;
     this.effects.status("synchronizing", []);
@@ -560,12 +495,18 @@ export class PreviewAdmission {
     }
   }
 
-  private settleGate(): void {
-    if (this.gate === "settled") {
+  private settleGate(force = false): void {
+    if (this.gate === "settled" && !force) {
       return;
     }
     this.gate = "settled";
-    this.effects.postMessage({ type: "marimo-studio:presentation-refresh", phase: "settled" });
+    const message = {
+      type: "marimo-studio:presentation-refresh",
+      phase: "settled",
+    } as const;
+    this.effects.postMessage(
+      this.buildDiagnostic ? { ...message, diagnostic: this.buildDiagnostic } : message,
+    );
   }
 
   private commitLocalizedInteractive(owner: Owner): void {

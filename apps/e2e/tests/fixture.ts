@@ -128,6 +128,7 @@ const copyFixtureFile = async (relativePath: string) => {
 
 export const restoreWorkspace = async () => {
   await copyFixtureProviderPackage(workspaceDirectory);
+  await removeTree(resolve(workspaceDirectory, "__marimo__/session"));
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/notebook"));
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/no-display"));
   await copyFixtureFile("notebook.py");

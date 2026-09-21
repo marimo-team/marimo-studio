@@ -3,7 +3,7 @@ name: marimo-studio
 description: >-
   Turn a Marimo notebook into focused web views. Use when an agent needs to
   inspect notebook and view source, edit a view safely, build it, show it in
-  Studio, validate the rendered result, run it, or export it.
+  Studio, inspect its URL with browser tools, run it, or export it.
 ---
 
 # Author Marimo Studio views
@@ -28,6 +28,12 @@ traversable Python object. Follow that version-matched skill body and traverse
 its bundled resources as needed. Repeat discovery when the notebook environment
 or installed Studio version changes. Once this installed body is loaded,
 continue with the workflow.
+
+Use `marimo_studio.agent.current_workspace()` inside notebook code mode. From a
+terminal, use `marimo_studio.authoring.open_workspace("notebook.py")` or the
+CLI with `--target notebook.py`. Preview URL requests outside code mode also
+need the running `server` URL or `--server`. Let code-mode execution finish
+before browser interactions that need the same notebook kernel.
 
 ## Choose the delivery runtime
 
@@ -93,18 +99,18 @@ declare every kernel input:
 
 ## Activate the first view immediately
 
-When the user requests their first view and Studio has no configured views or
-active preview, make visible activation the first milestone. Create a view
-named for the request, build its starter, and call `show()` in the immediately
-following code-mode execution. The user should see Studio open with their new
-view while the rest of the work develops.
+When the user requests their first view, make a visible result the first
+milestone. In code mode, create a view named for the request, build its starter,
+and call `show()` in the next execution. From a terminal, create and build the
+view through the CLI or saved workspace, then open its preview URL. The user
+should see the view while the rest of the work develops.
 
 Do substantial data exploration, analysis expansion, custom layout, and styling
 after that first visible result. Refine in small visible steps through edit,
-build, show, and verification. Keep each authoring call bounded to a coherent
+build, reload, and verification. Keep each authoring call bounded to a coherent
 source change.
 
-Inspect configured views before creating one:
+Inspect configured views before creating one. In code mode:
 
 ```python
 import marimo_studio.agent as studio_agent
@@ -132,21 +138,9 @@ import marimo_studio.agent as studio_agent
 await studio_agent.current_workspace().view("dashboard").show()
 ```
 
-`show()` returns `client_id`, `session_id`, `preview_url`, and `frame_selector` for the
-activated preview document. Use that exact selector for browser frame switching
-and DOM evaluation. Cached and hidden frames are outside this selector. `show()`
-commits the selected frame without waiting for notebook execution. After it returns,
-wait inside that frame for `html[data-marimo-studio-state="ready"]` before
-inspecting outputs or interacting. The kernel can then finish the preview work.
-For a standalone browser test, open the public view URL with
-`?marimo_studio_unframed=1`, preserving `file` and `runtime` when present
-(for example `/dashboard/?file=notebook.py&marimo_studio_unframed=1`). This
-renders the view in the top-level document for screenshots and DOM evaluation.
-After navigation, wait for `html[data-marimo-studio-state="ready"]` before
-inspecting outputs or following links.
-It creates a separate presentation, retains the document sandbox, and requires
-the server's usual authentication. In edit mode, keep the notebook session open. Call
-`show()` again after changing the view, runtime, or browser session.
+`show()` activates the view in the user's Studio tab. Continue with
+[Build, show, and verify](#build-show-and-verify) to inspect the view URL using
+the environment's preferred browser tool.
 
 Reimport `marimo_studio.agent` and reacquire the workspace and view in each
 code-mode execution. Scratch imports and handles from a preceding execution
@@ -514,8 +508,8 @@ again, incorporate both changes, and save against the current revision.
 `view.inspect()` reads current disk content. Build and validation also inspect
 current source. After external edits, inspect again and read the diagnostics,
 `files_complete`, `project_revision`, `published_project_revision`, and
-`latest_build`. `build` is the retained successful artifact. Use browser
-validation to verify the presentation in a particular tab.
+`latest_build`. `build` is the retained successful artifact. Compare the
+browser document's committed revision with the revision you intend to inspect.
 
 Compare complete inventories with `after.changes_since(before)` for added,
 modified, and deleted source and build-input paths. Incomplete provider or
@@ -681,46 +675,81 @@ then build, show, and validate that view before resolving the selection.
 
 ## Build, show, and verify
 
-Build after editing view source:
+After editing view source, build and inspect freshness:
 
 ```python
 build = await view.build()
-print(build.revision)
+inspection = await view.inspect()
+print(build.revision, inspection.freshness)
 ```
 
-A failed build leaves the last successful view available. Repair the reported
-source issue and build again. Call `view.inspect()` after a failure and read the
-diagnostic `message`, `hint`, and source location before editing.
+`inspect()` reports development build freshness. A failed build retains the
+previous successful artifact, so a working page can still show earlier source.
+Repair the inspection diagnostic before continuing. For a run-mode server,
+build with `profile="production"`.
 
-Show the view in the next code-mode execution:
+Building view source does not execute modified notebook cells. After editing
+notebook Python, run the changed cells in the live notebook, using Marimo's
+**Run all** action when appropriate. Static checks and isolated runtime
+validation do not update the live notebook session.
+
+Obtain its URL in code mode:
 
 ```python
 import marimo_studio.agent as studio_agent
 
-await studio_agent.current_workspace().view("dashboard").show()
+view = studio_agent.current_workspace().view("dashboard")
+print(await view.preview_url(runtime="server"))
 ```
 
-Use the environment's browser tool to exercise the affected controls,
-navigation, conditional content, and dynamic results in the same Studio tab.
+Choose the intended runtime explicitly. Finish the execution, then open the URL
+with the chosen browser tool. Run kernel-dependent browser interactions and
+waits through an external tool or interpreter. Waiting synchronously inside
+code mode can block the notebook work being awaited. The URL renders a separate top-level
+presentation with the server's authentication and document sandbox. Keep the
+notebook session open on an edit-mode server.
 
-Validate in another code-mode execution after the view settles:
+Outside code mode, supply the running server URL:
 
-```python
-import marimo_studio.agent as studio_agent
-
-report = await studio_agent.current_workspace().view("dashboard").validate(level="browser")
-for issue in report.issues:
-    print(issue.severity, issue.message, issue.advice)
+```console
+marimo-studio view preview dashboard --target notebook.py \
+  --runtime server --server http://127.0.0.1:8000
 ```
 
-Repeat edit, build, show, interaction, and validation until `report.ok` is true.
-Inspect visible changes at wide and narrow widths.
+`show()` activates the user's Studio tab. To inspect that frame, wait for its
+requested navigation before checking readiness: its previous document may
+still be visible. Once the standalone page is open,
+iterate by building and reloading its stable URL. For a checkpoint,
+request `exact=True` or `--exact` after building the served profile. Opening an
+exact URL returns HTTP 409 if its revision differs or current view source is
+unbuilt or failed, even while the previous artifact remains available.
 
-Browser validation proves that the current presentation revision and projection
-hosts reached their expected lifecycle states. It does not prove spacing,
-sizing, responsive layout, scroll choreography, or visual polish. Capture and
-inspect the rendered browser page for visual work. Report the visual check as
-blocked when the environment cannot capture or inspect it.
+Wait with the browser's native selector or predicate tools for
+`html[data-marimo-studio-state="ready"]`. Read
+`document.documentElement.dataset.marimoStudioRevision` for the committed
+presentation revision, which differs from the artifact's `build.revision`.
+Studio readiness covers its runtime and mounted projections. Assert the
+application's intended result separately. After changing a control, wait for
+the dependent metric, text, and custom chart to update. The selected control
+value alone does not prove reactive completion.
+
+If readiness stalls, read the visible status or error and inspect console and
+network failures before retrying or restarting. Follow a request to run changed
+notebook cells by executing them in the live notebook. Use normal framework
+lifecycles and accessible loading and error states for application rendering.
+`aria-busy="false"` means work settled, including failed work.
+
+After navigation or reactive updates, wait for the application's chart, slide,
+and layout transitions to settle before capturing wide and narrow screenshots.
+Inspect the images with an image-capable tool and use findings to guide the
+next edit. At narrow widths, check readable text and usable controls as well as
+overflow. A scaled desktop layout can fit while becoming unusable. Saving an
+image path alone does not check layout. Repeat edit, build, freshness check,
+reload, and assertions until the intended result passes. Report visual checks
+as blocked if the environment cannot capture or inspect images.
+
+Use `view.validate(level="static")` for saved source and projection declarations,
+or `level="runtime"` to execute the saved notebook in an isolated process.
 
 ## Review list before handoff
 
@@ -738,8 +767,8 @@ Complete this review before handing off a view:
   available.
 - Check the view against the chosen design source and record durable design
   decisions in the project's `AGENTS.md`.
-- Build, show, and pass browser validation for the final revision. Inspect it
-  at wide and narrow widths and exercise the affected controls and navigation.
+- Verify the final built revision in the browser and leave the view visible.
+  Inspect wide and narrow images and exercise the affected controls and navigation.
 
 ## Run or export
 
@@ -857,5 +886,5 @@ their own runtime evidence.
 ## Report completion
 
 Report the notebook, view, changed source files, artifact revision, and the
-static, runtime, and browser validation performed. Leave the notebook and view
-runnable.
+static and runtime validation and browser checks performed. Leave the notebook
+and view runnable.

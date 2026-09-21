@@ -184,7 +184,7 @@ it("routes project, build, presentation, and view events to their owners", async
     "change",
     JSON.stringify({
       kind: "build",
-      build: { phase: "ready" },
+      build: { phase: "published", diagnostics: [] },
       revision: "presentation-v2",
       files: [],
     }),
@@ -230,7 +230,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
     "change",
     JSON.stringify({
       kind: "build",
-      build: { phase: "ready" },
+      build: { phase: "published", diagnostics: [] },
       revision: "presentation-v1",
       files: [],
     }),
@@ -253,7 +253,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
     "change",
     JSON.stringify({
       kind: "build",
-      build: { phase: "ready" },
+      build: { phase: "published", diagnostics: [] },
       revision: "presentation-report",
       files: [],
     }),
@@ -282,7 +282,7 @@ it("consumes a stream mutation tag after its first completed build", () => {
     "change",
     JSON.stringify({
       kind: "build",
-      build: { phase: "ready" },
+      build: { phase: "published", diagnostics: [] },
       revision: "v1",
       files: [],
     }),
@@ -301,7 +301,7 @@ it("consumes a stream mutation tag after its first completed build", () => {
     "change",
     JSON.stringify({
       kind: "build",
-      build: { phase: "ready" },
+      build: { phase: "published", diagnostics: [] },
       revision: "v2",
       files: [],
     }),
@@ -333,7 +333,7 @@ it("replaces a tagged mutation stream with an ordinary editor-reload reconciliat
     "change",
     JSON.stringify({
       kind: "build",
-      build: { phase: "ready" },
+      build: { phase: "published", diagnostics: [] },
       revision: "stale",
       files: [],
     }),
@@ -346,7 +346,7 @@ it("replaces a tagged mutation stream with an ordinary editor-reload reconciliat
     "change",
     JSON.stringify({
       kind: "build",
-      build: { phase: "ready" },
+      build: { phase: "published", diagnostics: [] },
       revision: "repaired",
       files: [],
     }),

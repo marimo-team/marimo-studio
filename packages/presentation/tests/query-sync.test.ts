@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { setActiveDocumentLifecycleId } from "../src/document/document-lifecycle-id.ts";
 import { bindRuntimeQueryHistory, startQuerySync } from "../src/document/query-sync.ts";
-import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
+import { commitRuntimeConfig, getSupportUrl, setSupportUrl } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
@@ -130,4 +130,61 @@ test("static browser history reloads when query synchronization fails", async ()
 
   await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
   dispose();
+});
+
+test("notebook query writes preserve the current exact checkpoint without exporting it to other views", () => {
+  globalThis.history.replaceState(
+    {},
+    "",
+    "/dashboard/?marimo_studio_revision=checkpoint&region=eu",
+  );
+  const pushState = globalThis.history.pushState;
+  const replaceState = globalThis.history.replaceState;
+  startQuerySync();
+  try {
+    globalThis.history.pushState({}, "", "?region=us");
+    expect(new URL(globalThis.location.href).searchParams.get("marimo_studio_revision")).toBe(
+      "checkpoint",
+    );
+    globalThis.history.replaceState({}, "", "?region=apac");
+    expect(new URL(globalThis.location.href).searchParams.get("marimo_studio_revision")).toBe(
+      "checkpoint",
+    );
+    globalThis.history.pushState({}, "", "/report/?region=apac");
+    expect(new URL(globalThis.location.href).searchParams.has("marimo_studio_revision")).toBe(
+      false,
+    );
+  } finally {
+    globalThis.history.pushState = pushState;
+    globalThis.history.replaceState = replaceState;
+  }
+});
+
+test("notebook history writes retain admitted editor routing without sending it as public query state", () => {
+  const originalSupport = getSupportUrl();
+  setSupportUrl("/support/dashboard?marimo_studio_editor_session=s_current");
+  globalThis.history.replaceState({}, "", "/dashboard/?region=eu");
+  const pushState = globalThis.history.pushState;
+  const replaceState = globalThis.history.replaceState;
+  const parent = { postMessage: vi.fn() };
+  vi.stubGlobal("parent", parent);
+  startQuerySync();
+  try {
+    globalThis.history.pushState(
+      {},
+      "",
+      "?region=us&marimo_studio_client=forged&marimo_studio_editor_session=s_forged",
+    );
+    const parameters = new URL(globalThis.location.href).searchParams;
+    expect(parameters.get("marimo_studio_client")).toBe("client-123456789");
+    expect(parameters.get("marimo_studio_editor_session")).toBe("s_current");
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ query: "?region=us" }),
+      globalThis.location.origin,
+    );
+  } finally {
+    globalThis.history.pushState = pushState;
+    globalThis.history.replaceState = replaceState;
+    setSupportUrl(originalSupport);
+  }
 });

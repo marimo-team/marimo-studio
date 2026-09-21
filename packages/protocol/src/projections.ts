@@ -125,44 +125,6 @@ export const selectorPathStepSchema = z
   })
   .strict();
 
-export const observedProjectionInstanceSchema = z
-  .object({
-    mountId: z.string().min(1).nullable(),
-    instanceId: z.string().min(1),
-    target: z.string(),
-    runtimeCellId: z.string().min(1).nullable(),
-    phase: z.enum(["connecting", "loading", "stale", "ready", "missing", "error"]),
-    error: z
-      .object({ code: z.string().min(1), message: z.string() })
-      .strict()
-      .nullable(),
-  })
-  .strict()
-  .superRefine((instance, context) => {
-    const resolved = instance.mountId !== null && instance.runtimeCellId !== null;
-    if (instance.phase === "ready" && (!resolved || instance.error !== null)) {
-      context.addIssue({
-        code: "custom",
-        message: "Ready projection instances require resolved source metadata and no error",
-      });
-    }
-    if ((instance.phase === "error" || instance.phase === "missing") && instance.error === null) {
-      context.addIssue({
-        code: "custom",
-        path: ["error"],
-        message: "Failed projection instances require an error",
-      });
-    }
-    if (instance.error !== null && instance.phase !== "error" && instance.phase !== "missing") {
-      context.addIssue({
-        code: "custom",
-        path: ["error"],
-        message: "Projection errors require an error or missing state",
-      });
-    }
-  });
-
-export type ObservedProjectionInstance = z.infer<typeof observedProjectionInstanceSchema>;
 export type MountDeclaration = z.infer<typeof mountDeclarationSchema>;
 export type ProjectionKind = z.infer<typeof projectionKindSchema>;
 export type ProjectionPolicy = z.infer<typeof projectionPolicySchema>;
@@ -172,9 +134,3 @@ export type ProjectionTargets = z.infer<typeof projectionTargetsSchema>;
 export type RuntimeBindings = z.infer<typeof runtimeBindingsSchema>;
 export type SelectorPathStep = z.infer<typeof selectorPathStepSchema>;
 export type SourceLocation = z.infer<typeof sourceLocationSchema>;
-
-export const projectionInstanceIsReady = (instance: ObservedProjectionInstance): boolean =>
-  instance.phase === "ready" &&
-  instance.mountId !== null &&
-  instance.runtimeCellId !== null &&
-  instance.error === null;

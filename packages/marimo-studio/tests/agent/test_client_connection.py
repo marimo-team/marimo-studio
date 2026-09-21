@@ -60,42 +60,31 @@ def test_external_connection_negotiates_the_server_token(
         return {
             "schema": 1,
             "notebook": str(notebook),
-            "observations": [
-                {
-                    "view": "dashboard",
-                    "runtime": "server",
-                    "revision": "revision-1",
-                    "state": "ready",
-                    "diagnostics": [],
-                    "client_id": "browser-client-1234",
-                    "runtime_instance": "runtime-instance",
-                    "session_id": "s_123456",
-                    "request_id": "request-dashboard",
-                    "sequence": 2,
-                    "query": "",
-                }
-            ],
+            "view": "dashboard",
+            "generation": 1,
+            "client_id": "browser-client-1234",
+            "session_id": "s_123456",
+            "preview_url": "http://localhost:2718/dashboard/",
+            "frame_selector": "iframe[data-test-preview]",
         }
 
     monkeypatch.setattr(browser_client, "request_json", request)
 
-    observations = asyncio.run(
-        browser_client.observe_browser_views(
+    result = asyncio.run(
+        browser_client.request_view_show(
             browser_transport.StudioServerConnection(
                 "http://localhost:2718",
                 auth_token="access-token",
             ),
             notebook,
-            ("dashboard",),
-            revisions={"dashboard": "revision-1"},
-            runtime="server",
+            ViewShowRequest(view="dashboard"),
         )
     )
 
-    assert observations[0].state == "ready"
+    assert result.view == "dashboard"
     assert [path for _, path in requests] == [
         "/_marimo-studio/agent/connection",
-        "/_marimo-studio/observations",
+        "/_marimo-studio/views/dashboard/show",
     ]
     assert requests[1][0].server_token == "server-token"
 

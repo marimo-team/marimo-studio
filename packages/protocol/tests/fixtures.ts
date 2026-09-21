@@ -12,10 +12,6 @@ export const projectionRequest = (
   target,
 });
 
-export const emptyProjectionEvidence = {
-  projectionInstances: [],
-};
-
 export const starter: Starter = {
   schema: 1,
   id: "marimo-studio/vanilla:default",

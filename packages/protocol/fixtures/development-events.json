@@ -51,7 +51,8 @@
       "build": {
         "schema": 1,
         "profile": "development",
-        "phase": "ready"
+        "phase": "published",
+        "diagnostics": []
       },
       "revision": "presentation-revision",
       "files": []
@@ -63,7 +64,8 @@
       "build": {
         "schema": 1,
         "profile": "development",
-        "phase": "failed"
+        "phase": "failed",
+        "diagnostics": []
       },
       "revision": null,
       "files": []
@@ -112,25 +114,6 @@
       "generation": 2,
       "sessionId": "s_123456",
       "replaced": true
-    }
-  ],
-  "observationRequests": [
-    {
-      "schema": 1,
-      "requestId": "request-dashboard",
-      "view": "executive",
-      "runtime": "server",
-      "runtimeInstance": "server-instance",
-      "revision": "presentation-revision"
-    },
-    {
-      "schema": 1,
-      "requestId": "request-dashboard-with-generation",
-      "view": "executive",
-      "runtime": "server",
-      "runtimeInstance": "server-instance",
-      "revision": "presentation-revision",
-      "activeViewGeneration": 2
     }
   ]
 }

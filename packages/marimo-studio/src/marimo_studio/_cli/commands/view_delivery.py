@@ -10,6 +10,7 @@ from typing import cast
 
 import click
 
+from marimo_studio._authoring.preview import preview_url
 from marimo_studio._authoring.view import (
     build_view,
     export_view,
@@ -150,6 +151,50 @@ def show(
         echo_json(result.to_dict())
         return
     render_view_show(result)
+
+
+@click.command("preview", cls=ColoredCommand)
+@view_name_argument
+@target_option
+@server_option(required=True)
+@click.option(
+    "--runtime", type=click.Choice(("server", "wasm", "zero-python")), required=True
+)
+@click.option(
+    "--exact",
+    is_flag=True,
+    help="Constrain the URL to the current built presentation revision.",
+)
+@json_option
+def preview(
+    view_name: str,
+    target: Path | None,
+    server_url: str,
+    runtime: str,
+    exact: bool,
+    json_output: bool,
+) -> None:
+    """Print a standalone view URL to open with your preferred browser."""
+    try:
+        connection = studio_server_connection(
+            server_url,
+            access_token=os.environ.get("MARIMO_STUDIO_ACCESS_TOKEN", ""),
+        )
+    except ProtocolError as error:
+        raise click.BadParameter(str(error), param_hint="--server") from error
+    result = asyncio.run(
+        preview_url(
+            resolve_notebook(target),
+            view_name,
+            connection,
+            runtime=runtime,
+            exact=exact,
+        )
+    )
+    if json_output:
+        echo_json(result)
+    else:
+        click.echo(result)
 
 
 @click.command("export", cls=ColoredCommand)

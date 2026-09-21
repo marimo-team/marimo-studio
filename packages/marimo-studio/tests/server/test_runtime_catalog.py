@@ -19,7 +19,6 @@ from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.service import PresentationSnapshot
 from marimo_studio._server.records import ServerContext, ServerHandle
 from marimo_studio._server.runtime.catalog import (
-    RuntimeEvidenceProjection,
     RuntimeProjection,
     RuntimeProvider,
     RuntimeRegistry,
@@ -107,74 +106,10 @@ class _BlockingBrowser:
         )
 
 
-def test_runtime_config_skips_evidence_dependency_closures(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    flags: list[bool] = []
-    closure_builds = 0
-
-    class RecordingSessions:
-        async def live_cells(
-            self,
-            _context: ServerContext,
-            _session_id: str | None,
-            *,
-            include_dependency_closures: bool,
-        ) -> LiveCellSnapshot | None:
-            flags.append(include_dependency_closures)
-            return None
-
-    original = catalog_module._static_dependency_closures
-
-    def count_closures(
-        snapshot: PresentationSnapshot,
-        bindings: dict[str, str],
-    ) -> dict[str, tuple[str, ...]]:
-        nonlocal closure_builds
-        closure_builds += 1
-        return original(snapshot, bindings)
-
-    monkeypatch.setattr(catalog_module, "_static_dependency_closures", count_closures)
-    monkeypatch.setattr(
-        catalog_module,
-        "presentation_revision_url",
-        lambda *_args, **_kwargs: "/",
-    )
-    monkeypatch.setattr(
-        catalog_module,
-        "presentation_revision_capability",
-        lambda *_args: "capability",
-    )
-    runtime = ServerRuntime(cast(SessionState, RecordingSessions()))
-    snapshot = _snapshot(tmp_path)
-    context = _context(tmp_path)
-
-    asyncio.run(
-        runtime.project(snapshot, context, None, None, "presentation", "runtime")
-    )
-    assert flags == [False]
-    assert closure_builds == 0
-
-    asyncio.run(
-        runtime.project_evidence(
-            snapshot,
-            context,
-            None,
-            None,
-            "presentation",
-            "runtime",
-        )
-    )
-    assert flags == [False, True]
-    assert closure_builds == 1
-
-
 def test_runtime_registry_runs_provider_on_the_event_loop_owner(
     tmp_path: Path,
 ) -> None:
     projection_threads: list[int] = []
-    evidence_threads: list[int] = []
 
     class RecordingProvider:
         id = "server"
@@ -186,14 +121,6 @@ def test_runtime_registry_runs_provider_on_the_event_loop_owner(
             projection_threads.append(threading.get_ident())
             return RuntimeProjection("server", "instance", {}, {})
 
-        async def project_evidence(
-            self,
-            *_args: object,
-            client_id: str | None = None,
-        ) -> RuntimeEvidenceProjection:
-            evidence_threads.append(threading.get_ident())
-            return RuntimeEvidenceProjection("server", "instance", {}, {}, {}, {})
-
     provider = RecordingProvider()
     registry = RuntimeRegistry((cast(RuntimeProvider, provider),))
     snapshot = _snapshot(tmp_path)
@@ -202,15 +129,12 @@ def test_runtime_registry_runs_provider_on_the_event_loop_owner(
     async def exercise() -> int:
         event_loop_thread = threading.get_ident()
         await registry.project(snapshot, context, None, None)
-        await registry.project_evidence(snapshot, context, None, None)
         return event_loop_thread
 
     event_loop_thread = asyncio.run(exercise())
 
     assert len(projection_threads) == 1
-    assert len(evidence_threads) == 1
     assert projection_threads[0] == event_loop_thread
-    assert evidence_threads[0] == event_loop_thread
 
 
 def test_server_runtime_instance_stays_stable_across_binding_generations(

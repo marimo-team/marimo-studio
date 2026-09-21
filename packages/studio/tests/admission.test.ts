@@ -1,4 +1,4 @@
-import type { BrowserDiagnostic } from "@marimo-studio/protocol/browser-observations";
+import type { BrowserDiagnostic } from "@marimo-studio/protocol/runtime-status";
 
 import { expect, it, vi } from "vite-plus/test";
 
@@ -29,15 +29,12 @@ const projectionDiagnostic: BrowserDiagnostic = {
 
 const createAdmission = () => {
   const effects = {
-    clearObservations: vi.fn(),
     clearSession: vi.fn(),
     failView: vi.fn(),
     localizedInteractive: vi.fn(),
     postMessage: vi.fn(),
-    postObservations: vi.fn(),
     postSwitch: vi.fn(),
     ready: vi.fn(),
-    observation: vi.fn(),
     status: vi.fn(),
     stopControls: vi.fn(),
     viewFailed: vi.fn(),
@@ -229,17 +226,14 @@ it("preserves failed and connecting views across unchanged transactions", () => 
   const failed = admitted();
   failed.admission.viewError(diagnostic, "revision-1", "active");
   failed.effects.stopControls.mockClear();
-  failed.effects.clearObservations.mockClear();
   failed.admission.buildStarted("active");
   expect(failed.effects.stopControls).toHaveBeenCalledOnce();
-  expect(failed.effects.clearObservations).toHaveBeenCalledOnce();
   failed.admission.buildUnchanged("active");
   expect(failed.admission.snapshot.view).toBe("failed");
 
   const connecting = createAdmission();
   connecting.admission.buildStarted("active");
   expect(connecting.effects.stopControls).toHaveBeenCalledOnce();
-  expect(connecting.effects.clearObservations).toHaveBeenCalledOnce();
   connecting.admission.buildUnchanged("active");
   expect(connecting.admission.snapshot).toMatchObject({
     receiver: { phase: "unready" },
@@ -314,40 +308,6 @@ it("settles a stream-owned build barrier when its stream is abandoned", () => {
     type: "marimo-studio:presentation-refresh",
     phase: "settled",
   });
-});
-
-it("accepts terminal ready after loading for the same admitted observation", () => {
-  const { admission, effects } = admitted();
-  effects.observation.mockClear();
-
-  admission.observation("loading", [diagnostic], "revision-1", "s_123456");
-  expect(admission.viewIsReady).toBe(false);
-  admission.observation("ready", [], "revision-1", "s_123456");
-
-  expect(admission.viewIsReady).toBe(true);
-  expect(effects.observation.mock.calls.map(([phase]) => phase)).toEqual([
-    "synchronizing",
-    "ready",
-  ]);
-});
-
-it("retains view admission after a localized observation error", () => {
-  const { admission, effects } = admitted();
-  effects.observation.mockClear();
-
-  admission.observation("loading", [], "revision-1", "s_123456");
-  admission.observation("error", [projectionDiagnostic], "revision-1", "s_123456");
-
-  expect(admission.snapshot.view).toBe("failed");
-  expect(admission.isReady).toBe(false);
-  expect(admission.isInteractive).toBe(true);
-  expect(effects.observation.mock.calls.map(([phase]) => phase)).toEqual([
-    "synchronizing",
-    "failed",
-  ]);
-
-  admission.viewError(diagnostic, "revision-1", "active");
-  expect(admission.isInteractive).toBe(false);
 });
 
 it("keeps an exact projection view error interactive", () => {
@@ -466,43 +426,16 @@ it("does not let a localized failure supersede a fatal view error", () => {
   expect(effects.postMessage).toHaveBeenCalledWith({
     type: "marimo-studio:presentation-change",
   });
-  effects.observation.mockClear();
 
   admission.viewError(projectionDiagnostic, "revision-1", "active");
-  admission.observation("error", [projectionDiagnostic], "revision-1", "s_123456");
 
   expect(admission.isInteractive).toBe(false);
-  expect(effects.observation).not.toHaveBeenCalled();
 
   admission.receiverUnready();
   admission.receiverReady("revision-1", "current", "active");
   admission.viewReady("revision-1", "s_123456", "active");
   expect(admission.isReady).toBe(true);
   expect(admission.isInteractive).toBe(true);
-});
-
-it("does not let a localized view error supersede a fatal observation", () => {
-  const { admission, effects } = admitted();
-  effects.stopControls.mockClear();
-  admission.observation(
-    "error",
-    [{ ...diagnostic, severity: "error", scope: "runtime" }],
-    "revision-1",
-    "s_123456",
-  );
-  expect(admission.isInteractive).toBe(false);
-  expect(effects.clearObservations).toHaveBeenCalled();
-  expect(effects.stopControls).toHaveBeenCalledOnce();
-  effects.postMessage.mockClear();
-  admission.presentationBaseline("revision-1", "active");
-  admission.reactivate("active");
-  expect(effects.postMessage).toHaveBeenCalledWith({
-    type: "marimo-studio:presentation-change",
-  });
-
-  admission.viewError(projectionDiagnostic, "revision-1", "active");
-
-  expect(admission.isInteractive).toBe(false);
 });
 
 it("settles a completed build without re-admitting its fatal view", () => {
@@ -525,16 +458,6 @@ it("settles a completed build without re-admitting its fatal view", () => {
   expect(admission.isReady).toBe(true);
 });
 
-it("rejects observation evidence after build revokes admission", () => {
-  const { admission, effects } = admitted();
-  effects.observation.mockClear();
-  admission.buildStarted("active");
-
-  admission.observation("ready", [], "revision-1", "s_123456");
-
-  expect(effects.observation).not.toHaveBeenCalled();
-});
-
 it("resets document ownership and records terminal failure explicitly", () => {
   const { admission, effects } = admitted();
   admission.resetDocument();
@@ -553,4 +476,28 @@ it("resets document ownership and records terminal failure explicitly", () => {
 
   admission.dispose();
   expect(admission.snapshot.presentation.build).toBe("settled");
+});
+
+it("forwards a failed build to its retained frame and clears it on the next successful build", () => {
+  const { admission, effects } = admitted();
+  const failure: BrowserDiagnostic = {
+    ...diagnostic,
+    severity: "error",
+    code: "view-build-failed",
+    message: "Latest build failed. Showing the previous build.",
+  };
+  admission.buildStarted("active");
+  admission.buildCompleted(null, "active", failure);
+  expect(effects.postMessage).toHaveBeenCalledWith({
+    type: "marimo-studio:presentation-refresh",
+    phase: "settled",
+    diagnostic: failure,
+  });
+  admission.buildStarted("active");
+  effects.postMessage.mockClear();
+  admission.buildCompleted("revision-1", "active");
+  expect(effects.postMessage).toHaveBeenCalledWith({
+    type: "marimo-studio:presentation-refresh",
+    phase: "settled",
+  });
 });

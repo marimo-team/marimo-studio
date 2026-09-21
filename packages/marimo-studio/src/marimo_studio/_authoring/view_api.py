@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, TypeVar
 
 from marimo_studio._authoring.ports import WorkspaceHandle
+from marimo_studio._authoring.preview import preview_url as resolve_preview_url
 from marimo_studio._authoring.validation import validate as validate_workspace
 from marimo_studio._authoring.view import (
     build_view,
@@ -20,6 +21,7 @@ from marimo_studio._authoring.view import (
     remove_view,
     write_document,
 )
+from marimo_studio._browser_client.transport import studio_server_connection
 from marimo_studio._delivery.export import (
     DEFAULT_STATIC_RUNTIME,
     StaticExportResult,
@@ -36,7 +38,7 @@ from marimo_studio._views.publication_hold import (
 )
 from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
 from marimo_studio._workspace.ownership import ObservedViewOwner, PresentViewOwner
-from marimo_studio.errors import WorkspaceGenerationConflictError
+from marimo_studio.errors import ProtocolError, WorkspaceGenerationConflictError
 from marimo_studio.view_providers import BuildProfile
 
 _View = TypeVar("_View", bound="View")
@@ -126,6 +128,39 @@ class View:
             profile=profile,
             expected_catalog_generation=self.catalog_generation,
             expected_generation=self.generation,
+        )
+
+    async def preview_url(
+        self,
+        *,
+        runtime: str,
+        exact: bool = False,
+        server: str | None = None,
+        access_token: str = "",
+    ) -> str:
+        """Return a standalone view URL for the selected runtime.
+
+        Current-code-mode views infer their server. Saved views require
+        ``server``. ``exact=True`` requires a current build and returns a URL
+        constrained to its presentation revision. Open the URL with your browser
+        after this call finishes, then inspect the rendered application.
+        """
+        connection = (
+            studio_server_connection(server, access_token=access_token)
+            if server is not None
+            else self.workspace._connection()
+        )
+        if connection is None:
+            raise ProtocolError("Provide server= for a saved view's preview URL.")
+        if access_token and server is None:
+            raise ValueError("access_token requires server")
+        return await resolve_preview_url(
+            self.workspace.notebook,
+            self.name,
+            connection,
+            runtime=runtime,
+            exact=exact,
+            owner=self._owner,
         )
 
     async def hold_publication(

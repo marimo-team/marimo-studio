@@ -1,4 +1,10 @@
-import { publicNotebookQuery, UNFRAMED_QUERY_PARAM } from "@marimo-studio/protocol/query";
+import {
+  publicNotebookQuery,
+  EDITOR_SESSION_QUERY_PARAM,
+  STUDIO_CLIENT_QUERY_PARAM,
+  PRESENTATION_REVISION_QUERY_PARAM,
+  UNFRAMED_QUERY_PARAM,
+} from "@marimo-studio/protocol/query";
 
 export interface ViewNavigation {
   view: string;
@@ -23,6 +29,17 @@ export const setTrustedRuntimeQuery = (url: URL, selection: TrustedRuntimeSelect
   }
 };
 
+export const setEditorBindingQuery = (url: URL, clientId?: string, supportUrl?: string): void => {
+  if (!clientId || !supportUrl) {
+    return;
+  }
+  const session = new URL(supportUrl, url).searchParams.get(EDITOR_SESSION_QUERY_PARAM);
+  if (session) {
+    url.searchParams.set(STUDIO_CLIENT_QUERY_PARAM, clientId);
+    url.searchParams.set(EDITOR_SESSION_QUERY_PARAM, session);
+  }
+};
+
 const publicViewUrl = (root: URL, view: string, query: string): URL => {
   const url = new URL(`${encodeURIComponent(view)}/`, root);
   url.search = root.search;
@@ -42,6 +59,9 @@ export const viewNavigationForUrl = ({
   unframed,
   views,
   currentView,
+  exactRevision,
+  clientId,
+  supportUrl,
 }: {
   href: string;
   origin: string;
@@ -52,6 +72,9 @@ export const viewNavigationForUrl = ({
   unframed: boolean;
   views: readonly string[];
   currentView: string;
+  exactRevision?: string | null;
+  clientId?: string;
+  supportUrl?: string;
 }): ViewNavigation | undefined => {
   const publicRoot = new URL(publicRootUrl, origin);
   const candidate = new URL(href, publicViewUrl(publicRoot, currentView, publicQuery));
@@ -73,7 +96,12 @@ export const viewNavigationForUrl = ({
   }
   const viewQuery = candidate.search ? publicNotebookQuery(candidate.search) : publicQuery;
   const documentUrl = publicViewUrl(publicRoot, directView, viewQuery);
+  documentUrl.searchParams.delete(PRESENTATION_REVISION_QUERY_PARAM);
+  if (directView === currentView && exactRevision) {
+    documentUrl.searchParams.set(PRESENTATION_REVISION_QUERY_PARAM, exactRevision);
+  }
   setTrustedRuntimeQuery(documentUrl, trustedRuntime);
+  setEditorBindingQuery(documentUrl, clientId, supportUrl);
   if (unframed) {
     documentUrl.searchParams.set(UNFRAMED_QUERY_PARAM, "1");
   }

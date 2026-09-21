@@ -89,26 +89,22 @@ The browser worker receives the notebook data it needs for local resolution.
 The server runtime resolves against the saved notebook and revalidates the live
 kernel graph.
 
-## Evidence
+## Rendered evidence
 
-Browser observations report mount ID, instance ID, target, phase, runtime cell,
-and error. Server-side analysis derives source locations, symbolic producers,
-selectors, closures, and policy diagnostics.
+Projection hosts expose their lifecycle through DOM attributes and events.
+Server-side analysis derives source locations, symbolic producers, selectors,
+closures, and policy diagnostics. Browser tools inspect the actual hosts and
+assert the application's rendered results.
 
-Evidence is accepted only for the pending request ID and its browser client,
-binding and runtime sessions, active-view generation, view, runtime, runtime
-instance, and presentation revision. Observation sequences must increase. The
-record also captures the public query and projection-instance evidence, and a
-ready observation requires every projected instance to be ready. A view,
-binding, runtime, or source revision change invalidates pending focused
-evidence.
+The document exposes Studio readiness and its committed presentation revision.
+A dynamic projection's lifecycle belongs to its current DOM instance and target.
+Retargeting and removal release the previous instance's runtime ownership.
 
 ## Failure behavior
 
 - Missing literal targets are static diagnostics.
 - Unbounded expressions without explicit wildcard access are source diagnostics.
 - Disabled or errored producers are runtime diagnostics.
-- Stale browser evidence is rejected.
 - A removed host releases its final runtime owner.
 
 Protect literal, finite-set, explicit-wildcard, retarget, move, removal,

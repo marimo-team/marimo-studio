@@ -115,7 +115,6 @@ class WorkspaceClientEventProducer:
             active_view,
         )
         self._delivered_activation: int | None = None
-        self._delivered_observation: str | None = None
         self._delivered_binding: int | None = None
 
     async def reserve(self) -> bool:
@@ -140,7 +139,6 @@ class WorkspaceClientEventProducer:
         operations = await self._agents.pending_operations(
             target,
             self._delivered_activation,
-            self._delivered_observation,
         )
         emitted: list[WorkspaceClientEvent] = []
         if operations.activation is not None:
@@ -161,30 +159,6 @@ class WorkspaceClientEventProducer:
                                 "viewGeneration": activation.owner.view_generation,
                             }
                             if activation.owner is not None
-                            else {}
-                        ),
-                    },
-                )
-            )
-        for observation in operations.observations:
-            self._delivered_observation = observation.request_id
-            emitted.append(
-                WorkspaceClientEvent(
-                    "observe",
-                    {
-                        "schema": 1,
-                        "requestId": observation.request_id,
-                        "view": observation.view,
-                        "runtime": observation.runtime,
-                        "runtimeInstance": observation.runtime_instance,
-                        "revision": observation.revision,
-                        **(
-                            {
-                                "activeViewGeneration": (
-                                    observation.active_view_generation
-                                )
-                            }
-                            if observation.active_view_generation is not None
                             else {}
                         ),
                     },

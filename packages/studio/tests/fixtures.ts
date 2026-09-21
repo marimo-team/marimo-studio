@@ -3,10 +3,6 @@ import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import type { ViewBuildState } from "@marimo-studio/protocol/view-project";
 import type { ViewList } from "@marimo-studio/protocol/views";
 
-export const emptyProjectionEvidence = {
-  projectionInstances: [],
-};
-
 export const unbuiltView: ViewBuildState = {
   schema: 1,
   profile: "development",

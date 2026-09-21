@@ -161,7 +161,7 @@ state. `files_complete` reports whether source and build-input discovery
 completed. `project_revision` identifies current inputs, while
 `published_project_revision` identifies the retained artifact's inputs.
 `latest_build` reports the latest attempt separately from the retained
-successful `build`. Browser validation confirms a tab's rendered presentation.
+successful `build`. Open the `view preview` URL to inspect the rendered presentation.
 [Identities and state](identities.md#build-freshness) defines the freshness
 values.
 
@@ -290,6 +290,35 @@ Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
 `127.0.0.1` and `localhost`. Pass access tokens through
 `MARIMO_STUDIO_ACCESS_TOKEN`, not through the URL.
 
+## `marimo-studio view preview`
+
+```text
+marimo-studio view preview VIEW
+  --runtime server|wasm|zero-python
+  --server URL [--exact] [--target PATH] [--json]
+```
+
+Returns a URL string for the view in a top-level browser document. `--json`
+returns a JSON string. Open it with your preferred browser tool. The server
+must expose the requested runtime. Edit-mode Server previews require an open
+notebook session. Use `MARIMO_STUDIO_SERVER_URL` to supply the server URL and
+`MARIMO_STUDIO_ACCESS_TOKEN` to authenticate the request when needed. The browser
+requires its own normal server authentication.
+
+Use the stable URL while iterating and reload after builds. `--exact` requires
+a current build for the served profile (development in edit mode, production
+in run mode), then pins its presentation revision. Opening it returns HTTP 409
+when the revision differs or view source is unbuilt or failed, even if the
+previous artifact is retained. The HTML attribute `data-marimo-studio-revision`
+identifies the committed presentation. It differs from the artifact revision returned by
+`view build`.
+
+Wait for `html[data-marimo-studio-state="ready"]`, then assert application
+content and behavior, inspect console and network failures, and capture
+screenshots. Studio readiness covers the runtime and mounted projections.
+Check `view inspect` for build freshness when a previous successful artifact
+remains visible after a failed build.
+
 ## `marimo-studio view preflight`
 
 ```text
@@ -383,7 +412,7 @@ one view. The JSON result includes the updated `catalog_generation`.
 ## `marimo-studio validate`
 
 ```text
-marimo-studio validate [VIEW] [--target PATH] [--level static|runtime|browser] [--server URL] [--browser-client ID] [--browser-timeout SECONDS] [--runtime-timeout SECONDS] [--json]
+marimo-studio validate [VIEW] [--target PATH] [--level static|runtime] [--runtime-timeout SECONDS] [--json]
 ```
 
 Validation grows with the selected level:
@@ -392,18 +421,14 @@ Validation grows with the selected level:
 | --------- | --------------------------------------------------------------------- |
 | `static`  | Saved notebook, view source, configuration, and notebook-result names |
 | `runtime` | Static evidence plus complete supervised notebook execution           |
-| `browser` | Runtime evidence plus the selected rendered Studio view               |
 
 Runtime validation executes notebook code with the current user's filesystem,
 environment, and network authority. The child process owns lifecycle and
 cleanup. It is not a security sandbox. Validate trusted notebooks.
 
-The default level is `static`. Omit `VIEW` to validate every configured view at
-the static or runtime level. Browser validation requires one view and a running
-Studio server. Studio selects the connected tab when there is one. With several
-tabs, pass the intended ID through `--browser-client` or
-`MARIMO_STUDIO_BROWSER_CLIENT`. `--runtime-timeout` bounds supervised notebook
-execution. `--browser-timeout` bounds the wait for current rendered evidence.
+The default level is `static`. Omit `VIEW` to validate every configured view.
+`--runtime-timeout` bounds supervised notebook execution. Use `view preview`
+and your browser's assertions to check rendered behavior.
 
 ## Exit status
 

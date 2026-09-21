@@ -82,7 +82,7 @@ async def _activate_connected(
     )
     browser = await notebook_scope.clients.select_target(client_id=target.client_id)
     for _attempt in range(100):
-        pending = await notebook_scope.agents.pending_operations(browser, None, None)
+        pending = await notebook_scope.agents.pending_operations(browser, None)
         if pending.activation is not None:
             await notebook_scope.agents.acknowledge_activation(
                 browser.client_id,

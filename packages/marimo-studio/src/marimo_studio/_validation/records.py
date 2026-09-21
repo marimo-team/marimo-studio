@@ -1,4 +1,4 @@
-"""Return one validation shape across static, runtime, and browser evidence."""
+"""Return one validation shape across static and runtime evidence."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from marimo_studio._validation.evidence import ValidationEvidence, ValidationIssue
+from marimo_studio._validation.evidence import ValidationIssue
 from marimo_studio._validation.issues import check_issues
 from marimo_studio._validation.results import CheckResult
 
 if TYPE_CHECKING:
     from marimo_studio._validation.static import CheckReport
 
-ValidationLevel = Literal["static", "runtime", "browser"]
+ValidationLevel = Literal["static", "runtime"]
 
 
 @dataclass(frozen=True)
@@ -68,22 +68,4 @@ class ValidationReport:
             ok=not any(issue.severity == "error" for issue in issues),
             issues=issues,
             evidence=evidence,
-        )
-
-    @classmethod
-    def from_evidence(cls, report: ValidationEvidence) -> ValidationReport:
-        payload = report.to_dict()
-        stages = payload["stages"]
-        assert isinstance(stages, dict)
-        return cls(
-            notebook=report.notebook,
-            view=report.views[0] if len(report.views) == 1 else None,
-            level="browser",
-            ok=report.ok,
-            issues=report.issues,
-            evidence={
-                **stages,
-                "revisions": report.revisions.copy(),
-                "runtime_id": report.runtime,
-            },
         )

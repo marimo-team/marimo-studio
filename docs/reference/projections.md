@@ -183,7 +183,7 @@ expression intentionally selects its target at runtime:
 An unbounded expression without that literal wildcard produces
 `projection-target-unbounded`. Any other `data-marimo-allow` value produces
 `projection-wildcard-invalid`. Static validation checks finite targets. Browser
-validation verifies the active instances of a dynamic site.
+assertions verify the rendered results of a dynamic site.
 
 Changing `name`, `value`, or `mo-value` releases the prior target and resolves
 the same DOM instance against the new target. Removing the host releases its
@@ -191,10 +191,17 @@ projection ownership.
 
 ## Presentation readiness
 
-`marimo-studio:runtime-ready` fires on `document` when the selected notebook
-runtime has reached its ready boundary. `marimo-studio:idle` fires after the
-rendered page reaches a settled observation state. Projection host state remains
-the exact contract for one mounted result.
+Wait for `html[data-marimo-studio-state="ready"]` before asserting the
+application's expected result. This state covers Studio's runtime and mounted
+projections. Custom chart, framework, and remote-request completion need their
+own application assertions. Read `data-marimo-studio-revision` on `<html>` for
+the committed presentation revision.
+
+Projection host state is the lifecycle contract for one mounted result.
+`marimo-studio:runtime-ready` fires on `document` when the notebook runtime
+reaches its ready boundary. `marimo-studio:idle` fires when Studio's presentation
+reaches a settled state. Inspect the current DOM state when attaching after
+those events.
 
 Use [`STUDIO_RESULT_SELECTOR`](python-api.md#studio-result-selector) to locate
 connected cell, output, and value hosts in browser automation.

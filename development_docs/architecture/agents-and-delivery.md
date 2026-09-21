@@ -19,12 +19,13 @@ view = await workspace.create_view(
 inspection = await view.inspect()
 build = await view.build()
 await view.show()
-report = await view.validate(level="browser")
+url = await view.preview_url(runtime="server")
 ```
 
 `agent` exports the notebook-bound `Workspace` and `View` interfaces.
-`_authoring` owns their operations. `_browser_client` owns page selection,
-observation, protocol decoding, and bounded HTTP transport.
+`_authoring` owns their operations. `_browser_client` owns Studio page selection,
+protocol decoding, and bounded HTTP transport. Browser tools open the public
+preview URL and own their waits, assertions, and captured evidence.
 
 Agents edit source through native filesystem tools or conditionally replace
 catalog documents through `View.read()` and `View.write()`. The expected source
@@ -57,8 +58,8 @@ The CLI uses the same application services:
 status
 notebook inspect/bind
 starters
-view create/inspect/read/write/hold/release/build/show/preflight/export/remove
-validate --level static|runtime|browser
+view create/inspect/read/write/hold/release/build/show/preview/preflight/export/remove
+validate --level static|runtime
 doctor
 ```
 
@@ -75,9 +76,8 @@ HTTP translation, browser diagnostics, and validation issues.
 ## Browser clients
 
 The server assigns each Studio browser a client identity and a native editor
-session. A client-scoped capability signs that exact pair. Activation and
-observation requests select one browser. When selection is ambiguous, the
-caller supplies a client ID.
+session. A client-scoped capability signs that exact pair. Activation requests
+select one browser. When selection is ambiguous, the caller supplies a client ID.
 
 `StudioClientRegistry` owns presence, promoted workspace streams, editor-session
 binding leases, active-view identity, and handoffs. It retains one live session
@@ -101,10 +101,8 @@ availability. Completed, rolled-back, and abandoned operation IDs remain as a
 bounded per-client terminal tombstone set. Late acquisition and release retries
 remain idempotent while that client record owns them.
 
-The agent coordinator owns pending activation and observation operations. An
-activation records client, session, binding generation, active-view generation,
-and requested view. An observation also records runtime, runtime instance,
-presentation revision, request ID, and expected active-view generation.
+The agent coordinator owns pending activation operations. An activation records
+client, session, binding generation, active-view generation, and requested view.
 
 One browser handles one agent operation at a time. Request cancellation clears
 the pending operation and releases its waiter. Active-view handoff cancellation
@@ -117,7 +115,6 @@ Validation is cumulative:
 - Static reads saved notebook and view source.
 - Runtime starts the complete reactive notebook in an isolated process, then
   checks the selected projected results.
-- Browser observes the active rendered presentation.
 
 Static validation captures source revisions with their provider inspections,
 uses those inspections for mount checks and build preparation, then compares
@@ -126,10 +123,27 @@ inspect their immutable snapshots before producing candidates. A concurrent
 notebook or view edit returns a stale-source issue at every validation level.
 
 A validation issue includes stage, severity, stable code, message, advice, and
-available view, target, or source evidence. Browser facts are accepted only for
-the requested client, binding and runtime sessions, view, runtime, runtime
-instance, presentation revision, request ID, increasing sequence, and validated
-projection instances.
+available view, target, or source evidence.
+
+## Browser inspection
+
+`View.preview_url(runtime=..., exact=False)` returns the public unframed view
+URL. Saved-workspace calls provide `server`. Code-mode calls can infer it from
+the current Studio connection. Runtime selection is explicit. Exact URLs carry
+the current presentation revision. Resolving and navigating an exact URL both
+require a current published build, and navigation rejects a different revision.
+
+The presentation document exposes `data-marimo-studio-state` for Studio's
+runtime and projection lifecycle, and `data-marimo-studio-revision` for the
+committed presentation. Revision changes at the presentation commit boundary.
+A failed replacement retains the previous committed revision. These values
+serve ordinary DOM queries and browser predicates.
+
+Agents finish code-mode execution before waiting on the browser, so notebook
+execution can proceed. Browser tools own tab selection, waits, screenshots,
+console and network inspection, and application assertions. Application code
+uses normal framework lifecycles and accessible loading and error states.
+Source freshness remains in `View.inspect()`.
 
 ## Server delivery
 

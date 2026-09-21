@@ -246,3 +246,52 @@ test("unframed navigation preserves delivery mode separately from notebook query
     assert.equal(url.hash, hash);
   }
 });
+
+test("same-view navigation keeps its exact checkpoint and cross-view navigation clears it", () => {
+  const options = {
+    origin: "https://example.test",
+    publicRootUrl: "/proxy/?file=book.py",
+    documentRootUrl: "/proxy/",
+    publicQuery: "?region=eu",
+    unframed: true,
+    trustedRuntime: { id: "wasm", explicit: true },
+    views: ["novice", "expert"],
+    currentView: "novice",
+    exactRevision: "committed-revision",
+  };
+  const same = viewNavigationForUrl({ ...options, href: "?region=us#details" });
+  const other = viewNavigationForUrl({
+    ...options,
+    href: "../expert/?marimo_studio_revision=forged",
+  });
+  assert.equal(
+    new URL(same!.documentUrl).searchParams.get("marimo_studio_revision"),
+    "committed-revision",
+  );
+  assert.equal(new URL(same!.documentUrl).searchParams.get("region"), "us");
+  assert.equal(new URL(other!.documentUrl).searchParams.has("marimo_studio_revision"), false);
+});
+
+test("standalone links keep their admitted editor binding across views and ignore authored binding overrides", () => {
+  const options = {
+    origin: "https://example.test",
+    publicRootUrl: "/proxy/?file=book.py",
+    documentRootUrl: "/proxy/",
+    publicQuery: "?region=eu",
+    unframed: true,
+    trustedRuntime: { id: "server", explicit: true },
+    views: ["novice", "expert"],
+    currentView: "novice",
+    clientId: "current-client",
+    supportUrl: "/support/novice?marimo_studio_editor_session=s_current",
+  };
+  for (const href of [
+    "?region=us",
+    "../expert/?marimo_studio_client=forged&marimo_studio_editor_session=s_forged",
+  ]) {
+    const navigation = viewNavigationForUrl({ ...options, href });
+    const url = new URL(navigation!.documentUrl);
+    assert.equal(url.searchParams.get("marimo_studio_client"), "current-client");
+    assert.equal(url.searchParams.get("marimo_studio_editor_session"), "s_current");
+  }
+});

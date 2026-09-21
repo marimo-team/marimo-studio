@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./browser-observations": "./src/browser-observations.ts",
+    "./runtime-status": "./src/runtime-status.ts",
     "./development-events": "./src/development-events.ts",
     "./errors": "./src/errors.ts",
     "./frame-bridge": "./src/frame-bridge.ts",

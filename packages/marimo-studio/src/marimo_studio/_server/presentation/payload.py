@@ -10,6 +10,7 @@ from marimo_studio._delivery.runtime_config import (
     runtime_projection_revision,
 )
 from marimo_studio._delivery.urls import (
+    EDITOR_SESSION_QUERY_PARAM,
     SERVER_INSTANCE_QUERY_PARAM,
     SUPPORT_PATH,
     artifact_document_root_url,
@@ -38,6 +39,8 @@ def presentation_support_url(
     snapshot: PresentationSnapshot,
     session_id: str,
     runtime_session_id: str,
+    *,
+    editor_session_id: str | None = None,
 ) -> str:
     """Return revision-bound support authority for one presentation session."""
     return with_query(
@@ -51,6 +54,11 @@ def presentation_support_url(
         (
             *context.routing_query,
             (SERVER_INSTANCE_QUERY_PARAM, server_instance_id(context.server_token)),
+            *(
+                ((EDITOR_SESSION_QUERY_PARAM, editor_session_id),)
+                if editor_session_id is not None
+                else ()
+            ),
         ),
     )
 
@@ -68,6 +76,7 @@ def render_presentation_document(
     runtime_session_id: str,
     client_id: str | None = None,
     lifecycle_id: int | None = None,
+    editor_session_id: str | None = None,
 ) -> str:
     view_name = snapshot.view_name
     root_url = presentation_revision_url(
@@ -87,6 +96,7 @@ def render_presentation_document(
         snapshot,
         session_id,
         runtime_session_id,
+        editor_session_id=editor_session_id,
     )
     return runtime_document(
         snapshot.document,
@@ -189,6 +199,7 @@ async def build_runtime_config(
             snapshot,
             capability_session_id,
             runtime_authority_session_id,
+            editor_session_id=session_id if client_id is not None else None,
         ),
         projection_revision=projection_revision,
         show_cell_logs=resolved.workspace.show_cell_logs,

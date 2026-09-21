@@ -1,7 +1,7 @@
 import type {
   BrowserDiagnostic,
   RuntimeStatusSnapshot,
-} from "@marimo-studio/protocol/browser-observations";
+} from "@marimo-studio/protocol/runtime-status";
 
 export interface PreviewStatus {
   diagnostics: readonly BrowserDiagnostic[];

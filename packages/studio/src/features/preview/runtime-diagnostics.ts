@@ -2,7 +2,7 @@ import type {
   BrowserDiagnostic,
   RuntimeStatusPhase,
   RuntimeStatusReport,
-} from "@marimo-studio/protocol/browser-observations";
+} from "@marimo-studio/protocol/runtime-status";
 
 const MAX_TRANSITIONS = 32;
 const MAX_TRANSITION_DIAGNOSTICS = 20;

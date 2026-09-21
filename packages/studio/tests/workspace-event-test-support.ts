@@ -101,7 +101,6 @@ export const setup = (
       previewUrl: "http://localhost/preview/",
       frameSelector: "iframe[data-test-preview]",
     })),
-    requestObservation: vi.fn(),
     editorSessionChanged: vi.fn(),
     reload: vi.fn(),
     presentationBaseline: vi.fn(),

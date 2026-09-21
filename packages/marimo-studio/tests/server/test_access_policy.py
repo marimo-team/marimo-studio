@@ -77,18 +77,10 @@ def test_edit_workspace_mutations_require_the_current_server_token(
             "/_marimo-studio/views/executive",
             headers={"Marimo-Server-Token": "stale-token"},
         )
-        missing_analysis = client.post(
-            "/_marimo-studio/validate",
-            json={"schema": 1, "view": "dashboard"},
-        )
         invalid_activation = client.patch(
             "/_marimo-studio/views/dashboard/show",
             headers={"Marimo-Server-Token": "stale-token"},
             json={"schema": 1, "browser_client": None},
-        )
-        missing_observation = client.put(
-            "/_marimo-studio/views/dashboard/observation",
-            json={},
         )
 
     assert missing.status_code == 401
@@ -98,9 +90,7 @@ def test_edit_workspace_mutations_require_the_current_server_token(
     assert valid.status_code == 204
     assert missing_delete.status_code == 401
     assert invalid_delete.status_code == 401
-    assert missing_analysis.status_code == 401
     assert invalid_activation.status_code == 401
-    assert missing_observation.status_code == 401
 
 
 def test_run_mode_keeps_studio_source_mutations_read_only(
@@ -130,38 +120,15 @@ def test_run_mode_keeps_studio_source_mutations_read_only(
             "/_marimo-studio/views/executive",
             headers=headers,
         )
-        analysis = client.post(
-            "/_marimo-studio/validate",
-            json={"schema": 1, "view": "dashboard"},
-            headers=headers,
-        )
-        observations = client.post(
-            "/_marimo-studio/observations",
-            headers=headers,
-            json={
-                "schema": 1,
-                "views": ["dashboard"],
-                "revisions": {"dashboard": config["revision"]},
-                "runtime": None,
-                "timeout": 10,
-                "browserClient": None,
-            },
-        )
         activation = client.patch(
             "/_marimo-studio/views/dashboard/show",
             headers=headers,
             json={"schema": 1, "browser_client": None},
         )
-        observation = client.put(
-            "/_marimo-studio/views/dashboard/observation",
-            json={},
-            headers=headers,
-        )
 
-    for response in (loaded, project, write, delete, activation, observation):
+    for response in (loaded, project, write, delete, activation):
         assert response.status_code == 403
-    for response in (create, analysis, observations):
-        assert response.status_code == 401
+    assert create.status_code == 401
     assert loaded.json()["error"] == "edit-access-required"
 
 

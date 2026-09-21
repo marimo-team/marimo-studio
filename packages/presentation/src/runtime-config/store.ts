@@ -82,6 +82,9 @@ export const commitRuntimeConfig = (config: RuntimeConfig): RuntimeConfig => {
   if (projectionChanged) {
     projectionConfig = current;
   }
+  if ("document" in globalThis) {
+    document.documentElement.dataset.marimoStudioRevision = current.revision;
+  }
   listeners.forEach((listener) => listener());
   if (projectionChanged) {
     projectionListeners.forEach((listener) => listener());

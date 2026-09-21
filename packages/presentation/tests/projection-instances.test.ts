@@ -1,15 +1,15 @@
 import { afterEach, expect, test } from "vite-plus/test";
 
 import {
-  renderedProjectionInstances,
+  mountedResolvedProjections,
   resetProjectionHostMetadata,
 } from "../src/projections/instances.ts";
-import { resolveProjection } from "../src/projections/resolution.ts";
+import { createProjectionInventory, resolveProjection } from "../src/projections/resolution.ts";
 import {
   bindProjectionBindingStale,
   clearProjectionBindingStale,
 } from "../src/projections/staleness.ts";
-import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
+import { commitRuntimeConfig, getRuntimeConfig } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
 const dynamicConfig = () =>
@@ -72,33 +72,30 @@ test("reports mount identity and labels through target changes", () => {
   `;
 
   const first = document.querySelector<HTMLElement>("#first")!;
-  const initial = renderedProjectionInstances();
+  const initial = mountedResolvedProjections(getRuntimeConfig());
   expect(initial).toEqual([
     expect.objectContaining({
-      mountId: "site:dynamic-cell",
-      target: "overview",
+      site: expect.objectContaining({ id: "site:dynamic-cell" }),
+      request: expect.objectContaining({ target: "overview" }),
       runtimeCellId: "runtime-overview",
-      phase: "connecting",
     }),
     expect.objectContaining({
-      mountId: "site:dynamic-value",
-      target: "metric",
+      site: expect.objectContaining({ id: "site:dynamic-value" }),
+      request: expect.objectContaining({ target: "metric" }),
       runtimeCellId: "runtime-overview",
-      phase: "connecting",
     }),
   ]);
   expect(first.dataset.marimoLensLabel).toBe("overview");
-  const instanceId = initial[0]?.instanceId;
+  const instanceId = initial[0]?.request.instanceId;
   first.setAttribute("name", "details");
-  expect(renderedProjectionInstances()[0]).toMatchObject({
-    instanceId,
-    target: "details",
+  expect(mountedResolvedProjections(getRuntimeConfig())[0]).toMatchObject({
+    request: expect.objectContaining({ instanceId, target: "details" }),
     runtimeCellId: "runtime-details",
   });
   expect(first.dataset.marimoProducerRef).toBe("cell:v1:details");
   expect(first.dataset.marimoLensLabel).toBe("details");
   first.setAttribute("name", "missing");
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(first.hasAttribute("data-marimo-lens-label")).toBe(false);
 });
 
@@ -108,7 +105,7 @@ test("publishes client-independent Lens sources and preserves authored descripti
     <strong id="metric" data-marimo-studio-site="site:dynamic-value" mo-value="metric" data-marimo-lens-label="Revenue"></strong>
   `;
   const host = document.getElementById("metric")!;
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.dataset.marimoLensCellId).toBe("runtime-overview");
   expect(host.dataset.marimoLensSelector).toBe("metric");
   expect(host.dataset.marimoLensLabel).toBe("Revenue");
@@ -119,23 +116,23 @@ test("publishes client-independent Lens sources and preserves authored descripti
     column: 7,
   });
   host.removeAttribute("data-marimo-lens-label");
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.dataset.marimoLensLabel).toBe("metric");
 
   host.dataset.marimoLensLabel = "Revenue";
   const authoredSource = { path: "src/cards.ts", symbol: "revenue" };
   host.dataset.marimoLensRenderSource = JSON.stringify(authoredSource);
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   resetProjectionHostMetadata(host);
   expect(host.hasAttribute("data-marimo-lens-cell-id")).toBe(false);
   expect(host.hasAttribute("data-marimo-lens-selector")).toBe(false);
   expect(host.dataset.marimoLensLabel).toBe("Revenue");
   expect(JSON.parse(host.dataset.marimoLensRenderSource!)).toEqual(authoredSource);
 
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.dataset.marimoLensDetail).toBe("Value · overview");
   host.setAttribute("mo-value", "missing");
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.hasAttribute("data-marimo-lens-detail")).toBe(false);
   expect(host.dataset.marimoLensLabel).toBe("Revenue");
   expect(JSON.parse(host.dataset.marimoLensRenderSource!)).toEqual(authoredSource);
@@ -146,11 +143,11 @@ test("keeps renderer cell metadata with its producer during rebinding", () => {
   commitRuntimeConfig(config);
   document.body.innerHTML = `<strong id="metric" data-marimo-studio-site="site:dynamic-value" mo-value="metric"></strong>`;
   const host = document.getElementById("metric")!;
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.dataset.marimoLensCellId).toBe("runtime-overview");
   const unbound = { ...config, runtimeBindings: { cellRefs: {} } };
   commitRuntimeConfig(unbound);
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.dataset.marimoLensCellId).toBe("runtime-overview");
   const rebound = {
     ...unbound,
@@ -167,14 +164,14 @@ test("keeps renderer cell metadata with its producer during rebinding", () => {
     },
   };
   commitRuntimeConfig(rebound);
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.hasAttribute("data-marimo-lens-cell-id")).toBe(false);
   expect(host.hasAttribute("data-runtime-cell-id")).toBe(false);
   commitRuntimeConfig({
     ...rebound,
     runtimeBindings: { cellRefs: { "cell:v1:details": "runtime-details" } },
   });
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
   expect(host.dataset.marimoLensCellId).toBe("runtime-details");
   expect(host.dataset.marimoLensSelector).toBe("metric");
 });
@@ -193,9 +190,12 @@ test("runtime policy failures remain visible on mounted hosts", () => {
     <marimo-cell data-marimo-studio-site="site:dynamic-cell" name="details"></marimo-cell>
   `;
 
-  const instances = renderedProjectionInstances();
-  expect(instances[0]?.error).toBeNull();
-  expect(instances[1]?.error?.code).toBe("projection-instance-limit");
+  const inventory = createProjectionInventory(getRuntimeConfig(), document);
+  expect(inventory.resolve(inventory.hosts[0]!).resolution.ok).toBe(true);
+  expect(inventory.resolve(inventory.hosts[1]!).resolution).toMatchObject({
+    ok: false,
+    error: { code: "projection-instance-limit" },
+  });
 });
 
 test("unresolved hosts do not consume the unique target quota", () => {
@@ -212,20 +212,18 @@ test("unresolved hosts do not consume the unique target quota", () => {
     <span data-marimo-studio-site="site:dynamic-value" mo-value="metric"></span>
   `;
 
-  const instances = renderedProjectionInstances();
-
-  expect(instances[0]).toMatchObject({
-    target: "missing",
+  const inventory = createProjectionInventory(getRuntimeConfig(), document);
+  expect(inventory.resolve(inventory.hosts[0]!).resolution).toMatchObject({
+    ok: false,
     error: { code: "projection-value-variable-not-found" },
   });
-  expect(instances[1]).toMatchObject({
-    target: "metric",
-    runtimeCellId: "runtime-overview",
-    error: null,
+  expect(inventory.resolve(inventory.hosts[1]!).resolution).toMatchObject({
+    ok: true,
+    value: { request: { target: "metric" }, runtimeCellId: "runtime-overview" },
   });
 });
 
-test("browser evidence excludes projection-like native output descendants", () => {
+test("mounted projections exclude projection-like native output descendants", () => {
   const config = dynamicConfig();
   commitRuntimeConfig({
     ...config,
@@ -240,10 +238,10 @@ test("browser evidence excludes projection-like native output descendants", () =
     </div>
   `;
 
-  const instances = renderedProjectionInstances();
+  const instances = mountedResolvedProjections(getRuntimeConfig());
 
   expect(instances).toHaveLength(1);
-  expect(instances[0]).toMatchObject({ target: "overview", error: null });
+  expect(instances[0]?.request.target).toBe("overview");
 });
 
 test("mount declarations authorize targets before notebook resolution", () => {
@@ -297,7 +295,7 @@ test("a local stale closure requests refreshed runtime bindings", () => {
     <marimo-cell data-marimo-studio-site="site:dynamic-cell" name="details"></marimo-cell>
   `;
 
-  renderedProjectionInstances();
+  mountedResolvedProjections(getRuntimeConfig());
 
   expect(refreshes).toBe(1);
   clearProjectionBindingStale(revision);

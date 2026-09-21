@@ -1,25 +1,14 @@
 import { z } from "zod";
 
-import { browserDiagnosticSchema, type BrowserDiagnostic } from "./browser-observations";
 import {
   FRAME_BRIDGE_MESSAGE_BOUNDS,
   isBoundedBrowserMessage,
   type BrowserMessageInput,
 } from "./frame-bridge.ts";
-import {
-  MAX_ACTIVE_PROJECTION_INSTANCES,
-  observedProjectionInstanceSchema,
-  projectionInstanceIsReady,
-} from "./projections";
 import { runtimeIdSchema } from "./runtime-config";
 import { runtimeProgressSchema } from "./runtime-progress.ts";
+import { browserDiagnosticSchema, type BrowserDiagnostic } from "./runtime-status";
 import { viewNameSchema } from "./views.ts";
-
-const OBSERVATION_MESSAGE_BOUNDS = {
-  maxDepth: 32,
-  maxNodes: 50_000,
-  maxTextBytes: 4 * 1_024 * 1_024,
-};
 
 const utf8 = new TextEncoder();
 const boundedUtf8String = (maximum: number) =>
@@ -27,8 +16,6 @@ const boundedUtf8String = (maximum: number) =>
 
 const revisionSchema = z.string().min(1).max(256);
 const sessionIdSchema = z.string().min(1).max(256);
-const requestIdSchema = z.string().min(1).max(256);
-const runtimeInstanceSchema = z.string().min(1).max(256);
 const querySchema = z.string().max(16_384);
 const hashSchema = boundedUtf8String(8_192);
 const documentUrlSchema = boundedUtf8String(32 * 1_024).min(1);
@@ -49,19 +36,6 @@ export const viewDiagnosticSchema = browserDiagnosticSchema.safeExtend({
   scope: z.string().min(1).max(128),
   target: projectionTargetSchema.optional(),
   source: diagnosticSourceSchema.optional(),
-});
-
-const projectionInstanceSchema = observedProjectionInstanceSchema.safeExtend({
-  mountId: z.string().min(1).max(128).nullable(),
-  instanceId: z.string().min(1).max(256),
-  target: projectionTargetSchema,
-  runtimeCellId: z.string().min(1).max(256).nullable(),
-  error: z
-    .strictObject({
-      code: z.string().min(1).max(128),
-      message: diagnosticTextSchema,
-    })
-    .nullable(),
 });
 
 const runtimeField = { runtime: runtimeIdSchema.max(128) };
@@ -145,6 +119,7 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     ...documentLifecycleField,
     view: viewNameSchema,
     phase: z.enum(["pending", "settled"]),
+    diagnostic: viewDiagnosticSchema.optional(),
   }),
   z.strictObject({
     type: z.literal("marimo-studio:presentation-refresh-barrier"),
@@ -191,37 +166,11 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     sessionId: sessionIdSchema.nullable().optional(),
     diagnostic: viewDiagnosticSchema,
   }),
-  z.strictObject({
-    type: z.literal("marimo-studio:view-observation"),
-    ...runtimeField,
-    ...documentLifecycleField,
-    view: viewNameSchema,
-    revision: revisionSchema,
-    state: z.enum(["ready", "loading", "error"]),
-    diagnostics: z.array(viewDiagnosticSchema).max(200),
-    runtimeInstance: runtimeInstanceSchema,
-    sessionId: sessionIdSchema.nullable(),
-    requestId: requestIdSchema,
-    query: querySchema,
-    projectionInstances: z.array(projectionInstanceSchema).max(MAX_ACTIVE_PROJECTION_INSTANCES + 1),
-  }),
-  z.strictObject({
-    type: z.literal("marimo-studio:observe-view"),
-    ...runtimeField,
-    ...documentLifecycleField,
-    view: viewNameSchema,
-    revision: revisionSchema,
-    runtimeInstance: runtimeInstanceSchema,
-    requestId: requestIdSchema,
-  }),
 ]);
 
 export const previewMessageSchema = previewMessageInputSchema.superRefine((message, context) => {
   let diagnostics: readonly BrowserDiagnostic[] = [];
-  if (
-    message.type === "marimo-studio:view-diagnostics" ||
-    message.type === "marimo-studio:view-observation"
-  ) {
+  if (message.type === "marimo-studio:view-diagnostics") {
     diagnostics = message.diagnostics;
   } else if (
     message.type === "marimo-studio:view-sync-pending" ||
@@ -235,26 +184,6 @@ export const previewMessageSchema = previewMessageInputSchema.superRefine((messa
       message: "Preview diagnostics must target the message view",
       path: ["view"],
     });
-  }
-  if (message.type === "marimo-studio:view-observation") {
-    const instanceIds = message.projectionInstances.map((instance) => instance.instanceId);
-    if (new Set(instanceIds).size !== instanceIds.length) {
-      context.addIssue({
-        code: "custom",
-        message: "Projection observation evidence is internally inconsistent",
-        path: ["projectionInstances"],
-      });
-    }
-    if (
-      message.state === "ready" &&
-      !message.projectionInstances.every(projectionInstanceIsReady)
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "Ready view observations require every projection instance to be ready",
-        path: ["projectionInstances"],
-      });
-    }
   }
 });
 
@@ -311,17 +240,11 @@ export type ViewDiagnosticsMessage = Extract<
   { type: "marimo-studio:view-diagnostics" }
 >;
 export type ViewErrorMessage = Extract<PreviewMessage, { type: "marimo-studio:view-error" }>;
-export type ViewObservationMessage = Extract<
-  PreviewMessage,
-  { type: "marimo-studio:view-observation" }
->;
-export type ObserveViewMessage = Extract<PreviewMessage, { type: "marimo-studio:observe-view" }>;
 export type ViewPreviewMessage =
   | ViewReadyMessage
   | ViewSyncPendingMessage
   | ViewDiagnosticsMessage
-  | ViewErrorMessage
-  | ViewObservationMessage;
+  | ViewErrorMessage;
 export type PresentationToStudioMessage =
   | ViewProgressMessage
   | NavigateViewMessage
@@ -337,23 +260,10 @@ export type StudioToPresentationMessage =
   | PresentationChangeMessage
   | PresentationRefreshMessage
   | PresentationRefreshBarrierMessage
-  | ReceiverAdmittedMessage
-  | ObserveViewMessage;
+  | ReceiverAdmittedMessage;
 
-const previewMessageDiscriminantSchema = z.object({
-  type: z.string().max(64),
-});
-
-export const previewMessageFitsBudget = (value: BrowserMessageInput): boolean => {
-  if (isBoundedBrowserMessage(value, FRAME_BRIDGE_MESSAGE_BOUNDS)) {
-    return true;
-  }
-  if (!isBoundedBrowserMessage(value, OBSERVATION_MESSAGE_BOUNDS)) {
-    return false;
-  }
-  const discriminant = previewMessageDiscriminantSchema.safeParse(value);
-  return discriminant.success && discriminant.data.type === "marimo-studio:view-observation";
-};
+export const previewMessageFitsBudget = (value: BrowserMessageInput): boolean =>
+  isBoundedBrowserMessage(value, FRAME_BRIDGE_MESSAGE_BOUNDS);
 
 export const parsePreviewMessage = (value: BrowserMessageInput): PreviewMessage | undefined => {
   if (!previewMessageFitsBudget(value)) {

@@ -1,3 +1,4 @@
+import { PRESENTATION_REVISION_QUERY_PARAM } from "@marimo-studio/protocol/query";
 import { flushSync } from "react-dom";
 
 import { projectionHosts } from "../projections/host-runtime.ts";
@@ -135,6 +136,17 @@ export class DocumentRevisionAdapter {
           "presentation-revision-missing",
           true,
           "Wait for the current view sources to settle.",
+        );
+      }
+      const expectedRevision = new URL(nextDocumentUrl, globalThis.location.href).searchParams.get(
+        PRESENTATION_REVISION_QUERY_PARAM,
+      );
+      if (expectedRevision && expectedRevision !== revision) {
+        throw new RuntimeConfigRequestError(
+          "This exact preview is stale. Showing the previous revision.",
+          "presentation-revision-mismatch",
+          false,
+          "Open a new exact preview URL to inspect the latest revision.",
         );
       }
       const nextConfig = await fetchRuntimeConfigForRevision(

@@ -7,19 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlsplit
 
-from marimo_studio._browser_client.browser_protocol import (
-    decode_browser_observation as decode_browser_observation,
-)
-from marimo_studio._browser_client.browser_protocol import (
-    parse_browser_observation as parse_browser_observation,
-)
-from marimo_studio._browser_client.browser_protocol import (
-    parse_observation_response as parse_observation_response,
-)
 from marimo_studio._browser_client.records import PreviewAutomationTarget, ShowResult
-from marimo_studio._browser_client.validation_protocol import (
-    parse_validation_evidence as parse_validation_evidence,
-)
 from marimo_studio._workspace.ownership import (
     ObservedViewOwner,
     observed_view_owner,

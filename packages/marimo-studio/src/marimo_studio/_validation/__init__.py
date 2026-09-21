@@ -1,15 +1,10 @@
-"""Assess a view from saved source through the page a browser rendered.
+"""Validate saved source and isolated notebook execution.
 
-Validation advances in stages. Static checks inspect notebook and frontend
-source first. Runtime checks start the complete reactive notebook in an
-isolated process and inspect the selected cells, outputs, and values. Browser
-checks confirm that the intended page, runtime, and mounted results reached a
-ready or failed state in the selected Studio browser while recording the public
-query state that browser observed.
+Static checks inspect notebook and view source. Runtime checks execute the
+complete reactive notebook in an isolated process and inspect its projected
+cells, outputs, and values. Each stage rechecks source identity so concurrent
+edits produce an explicit stale-source failure.
 
-The validation sequence captures source and page revisions, rechecks source
-stability, and requires browser evidence to match the captured page. Concurrent
-edits therefore become an explicit stale-source failure. Reports use common
-check codes and actionable issues. A successful result always describes the
-requested source, runtime, and browser evidence.
+Browser rendering and interaction are inspected independently at the view URL
+with the developer's browser tools.
 """

@@ -155,8 +155,14 @@ def record_build_failure(
             duration_ms=round((time.monotonic() - started) * 1_000),
         )
         write_profile_state(project, profile_state(profile, published, build))
-    diagnostic = diagnostics[0]
-    raise ViewProjectError(
+    raise project_build_error(project, diagnostics[0])
+
+
+def project_build_error(
+    project: ViewProject, diagnostic: ProjectDiagnostic
+) -> ViewProjectError:
+    """Return a build rejection without changing publication state."""
+    return ViewProjectError(
         diagnostic.message,
         source=(
             project.root / diagnostic.source.path

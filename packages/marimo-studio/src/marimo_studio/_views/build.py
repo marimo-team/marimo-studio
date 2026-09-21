@@ -34,6 +34,7 @@ from marimo_studio._artifacts.publication import (
     capture_artifact_candidate,
     prepare_artifact_build,
     prepare_artifact_publication,
+    project_build_error,
     publish_artifact_candidate,
     record_build_failure,
     record_build_started,
@@ -293,6 +294,8 @@ def _stable_artifact_commit(
     expected_state: ProjectInputState,
     started: float,
     expected_generation: str | None,
+    *,
+    build_started: bool,
 ) -> Iterator[Callable[[], ProjectDiagnostic | None]]:
     """Keep Studio source writes out of the final identity and receipt transaction."""
     with view_mutation_lock(project.root.parent, project.name):
@@ -309,6 +312,8 @@ def _stable_artifact_commit(
         try:
             yield confirm_current
         except ArtifactCommitRejected as rejection:
+            if not build_started:
+                raise project_build_error(project, rejection.diagnostic) from rejection
             record_build_failure(
                 project,
                 profile,
@@ -402,6 +407,25 @@ def _publish_locked(
     started = time.monotonic()
     control = current_provider_operation() or ProviderOperationControl()
     cancellation = control.cancellation
+    if inspection is not None:
+        assert input_id is not None
+        try:
+            current = project_revision_snapshot(
+                project, inspection, provider.provenance(inspection)
+            )
+        except (ConfigurationError, OSError) as error:
+            raise_process_cleanup(error)
+            raise ViewProjectError(
+                "View inputs changed before the prepared build started.",
+                source=project.manifest,
+                hint="Inspect the current source, then build the view again.",
+            ) from error
+        if current.revision != input_id:
+            raise ViewProjectError(
+                "View inputs changed before the prepared build started.",
+                source=project.manifest,
+                hint="Inspect the current source, then build the view again.",
+            )
     failures = _inspection_failures(inspection) if inspection is not None else ()
     if failures:
         prepare_artifact_build(project, profile)
@@ -440,6 +464,7 @@ def _publish_locked(
             commit_state,
             started,
             expected_generation,
+            build_started=False,
         ) as confirm_current:
             cached = restore_cached_artifact(
                 project,
@@ -509,6 +534,7 @@ def _publish_locked(
                     commit_state,
                     started,
                     expected_generation,
+                    build_started=False,
                 ) as confirm_current:
                     cached = restore_cached_artifact(
                         project,
@@ -613,6 +639,7 @@ def _publish_locked(
                 commit_state,
                 started,
                 expected_generation,
+                build_started=True,
             ) as confirm_current:
                 held = _publication_hold_diagnostic(project)
                 if held is not None:

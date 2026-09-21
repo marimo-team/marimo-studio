@@ -1,23 +1,8 @@
-import type { ObservedProjectionInstance } from "@marimo-studio/protocol/projections";
-
 import type { RuntimeConfig } from "../runtime-config";
 import type { ProjectionResolution, ResolvedProjection } from "./resolution";
 
-import { getRuntimeConfig, hasRuntimeConfig } from "../runtime-config";
 import { createProjectionInventory } from "./resolution";
 import { notifyProjectionResolutionStale } from "./staleness.ts";
-
-const STATES: readonly ObservedProjectionInstance["phase"][] = [
-  "connecting",
-  "loading",
-  "stale",
-  "ready",
-  "missing",
-  "error",
-];
-
-const isProjectionState = (value: string): value is ObservedProjectionInstance["phase"] =>
-  STATES.some((state) => state === value);
 
 const SYMBOLIC_METADATA = [
   "data-marimo-producer-ref",
@@ -94,14 +79,6 @@ export const resetProjectionHostMetadata = (host: HTMLElement): void => {
   clearAttributes(host, RUNTIME_METADATA);
 };
 
-const hostState = (host: Element, failed: boolean): ObservedProjectionInstance["phase"] => {
-  if (failed) {
-    return "error";
-  }
-  const state = host instanceof HTMLElement ? host.dataset.state : undefined;
-  return state !== undefined && isProjectionState(state) ? state : "connecting";
-};
-
 export const mountedResolvedProjections = (
   config: RuntimeConfig,
   root: ParentNode = document,
@@ -152,50 +129,4 @@ export const applyProjectionMetadata = (
   } else {
     host.dataset.marimoProjectionVariable = resolution.value.variable;
   }
-};
-
-export const renderedProjectionInstances = (
-  root: ParentNode = document,
-): readonly ObservedProjectionInstance[] => {
-  if (!hasRuntimeConfig()) {
-    return [];
-  }
-  const config = getRuntimeConfig();
-  const inventory = createProjectionInventory(config, root);
-  const hosts = inventory.hosts.slice(0, config.projectionPolicy.maxActiveInstances + 1);
-  return hosts.map((host) => {
-    const { request, resolution } = inventory.resolve(host);
-    const target = request.target;
-    applyProjectionMetadata(host, resolution, config.projectionRevision);
-    if (!resolution.ok) {
-      return {
-        mountId: request.siteId || null,
-        instanceId: request.instanceId,
-        target,
-        runtimeCellId: null,
-        phase: hostState(host, true),
-        error: {
-          code: resolution.error.code,
-          message: resolution.error.message,
-        },
-      } satisfies ObservedProjectionInstance;
-    }
-    const phase = hostState(host, false);
-    const metadata = host instanceof HTMLElement ? host.dataset : undefined;
-    const error =
-      phase === "error" || phase === "missing"
-        ? {
-            code: metadata?.marimoDiagnosticCode ?? "projection-host-failed",
-            message: metadata?.marimoDiagnosticMessage ?? "The mounted projection host failed.",
-          }
-        : null;
-    return {
-      mountId: resolution.value.site.id,
-      instanceId: request.instanceId,
-      target,
-      runtimeCellId: resolution.value.runtimeCellId ?? null,
-      phase,
-      error,
-    } satisfies ObservedProjectionInstance;
-  });
 };

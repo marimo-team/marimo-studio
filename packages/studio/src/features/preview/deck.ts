@@ -1,16 +1,14 @@
 import type {
-  BrowserDiagnostic,
-  RuntimeStatusReport,
-} from "@marimo-studio/protocol/browser-observations";
-import type {
   EditorSessionBinding,
-  ObserveViewRequest,
   PreviewAutomationTarget,
 } from "@marimo-studio/protocol/development-events";
 import type { ViewNavigationIntent } from "@marimo-studio/protocol/preview-messages";
+import type {
+  BrowserDiagnostic,
+  RuntimeStatusReport,
+} from "@marimo-studio/protocol/runtime-status";
 
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
-import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
 import type { ControlFrameConnector } from "./control-sync.ts";
 import type {
@@ -19,7 +17,6 @@ import type {
   StagedPreviewView,
 } from "./navigation.ts";
 import type { NotebookMutationCompletion } from "./notebook-mutation-coordinator.ts";
-import type { RecordBrowserObservation } from "./observation-remote.ts";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import {
@@ -49,7 +46,6 @@ interface PreviewDeckOptions {
     signal: AbortSignal,
   ) => Promise<EditorQuerySyncResult>;
   navigate: (view: string, intent: ViewNavigationIntent) => Promise<boolean>;
-  recordObservation?: RecordBrowserObservation;
   connectControlFrame?: ControlFrameConnector;
 }
 
@@ -165,28 +161,6 @@ export class PreviewDeck {
   }
 
   readonly getSnapshot = (): PreviewDeckSnapshot => this.snapshot;
-
-  private readonly recordObservation: RecordBrowserObservation = async (observation) => {
-    if (!this.options.recordObservation) {
-      return;
-    }
-    const sessionId =
-      observation.runtime === DEFAULT_RUNTIME_ID
-        ? (this.editorSessionId ?? null)
-        : observation.sessionId;
-    await this.options.recordObservation({
-      ...observation,
-      sessionId,
-      runtimeStatus: {
-        ...observation.runtimeStatus,
-        sessionId,
-        transitions: observation.runtimeStatus.transitions.map((transition) => ({
-          ...transition,
-          sessionId,
-        })),
-      },
-    });
-  };
 
   attach(editor: HTMLIFrameElement, frames: ReadonlyMap<string, HTMLIFrameElement>): void {
     if (this.editor) {
@@ -376,30 +350,6 @@ export class PreviewDeck {
     this.frames.slots.forEach(({ controller }) => controller?.requestResize());
   }
 
-  requestObservation(request: ObserveViewRequest): void {
-    const slot = this.frames.find(request.runtime, request.view);
-    if (
-      !slot ||
-      request.view !== this.view ||
-      request.runtime !== this.runtime ||
-      !this.isActive(slot)
-    ) {
-      return;
-    }
-    const controller = this.ensure(request.runtime, request.view);
-    if (!controller) {
-      return;
-    }
-    if (slot.stale) {
-      slot.stale = false;
-      void controller
-        .activate(this.navigation, undefined, true)
-        .then((ready) => ready && controller.requestObservation(request));
-      return;
-    }
-    controller.requestObservation(request);
-  }
-
   reload(): void {
     const active = this.frames.find(this.runtime, this.view);
     const controller = this.ensure(this.runtime, this.view);
@@ -472,6 +422,7 @@ export class PreviewDeck {
     view: string,
     revision: string | null,
     notebookMutationGeneration?: number,
+    diagnostic?: BrowserDiagnostic,
   ): void {
     const active = view === this.view ? this.frames.find(this.runtime, view) : undefined;
     const activeController = active?.controller;
@@ -494,7 +445,7 @@ export class PreviewDeck {
             slot.stale = false;
             interactivityChanged = true;
           }
-          slot.controller?.presentationBuildCompleted(revision);
+          slot.controller?.presentationBuildCompleted(revision, diagnostic);
         }
       }
       if (interactivityChanged) {
@@ -580,7 +531,6 @@ export class PreviewDeck {
       (next, intent) =>
         this.isActive(slot) ? this.options.navigate(next, intent) : Promise.resolve(false),
       (state) => this.receive(slot, state),
-      this.recordObservation,
       this.options.connectControlFrame,
       slot.navigation!,
       (query) => {

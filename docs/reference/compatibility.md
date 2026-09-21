@@ -43,7 +43,7 @@ Update command and Python callers with these replacements:
 | `marimo-studio view list TARGET`                                               | `marimo-studio status --target TARGET`                                                 |
 | `marimo-studio view remove TARGET --name report`                               | `marimo-studio view remove report --target TARGET`                                     |
 | `marimo-studio check TARGET --view report --runtime`                           | `marimo-studio validate report --target TARGET --level runtime`                        |
-| `marimo-studio analyze TARGET --view report --server URL`                      | `marimo-studio validate report --target TARGET --level browser --server URL`           |
+| `marimo-studio analyze TARGET --view report --server URL`                      | `marimo-studio view preview report --target TARGET --runtime server --server URL`      |
 | `marimo-studio export TARGET --view report --output dist/report`               | `marimo-studio view export report --target TARGET --output dist/report --runtime wasm` |
 | `--format json --diagnostics jsonl`                                            | `--json`                                                                               |
 | Functions in `marimo_studio.agents`                                            | `marimo_studio.agent.current_workspace()` and its `Workspace` or `View` methods        |
@@ -121,7 +121,7 @@ Provider-authored pages run inside a sandboxed
 an embedded browser document, with an opaque origin. The sandbox permits
 scripts, forms, downloads, modals, pointer lock, and popups. It withholds
 same-origin access and top-level navigation. Studio validates navigation,
-query, replay, readiness, and observation messages at the parent boundary.
+query, replay, and readiness messages at the parent boundary.
 
 ## Third-party view providers
 

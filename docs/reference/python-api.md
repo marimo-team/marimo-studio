@@ -172,6 +172,13 @@ await view.inspect() -> ViewInspection
 await view.read(path) -> ViewDocument
 await view.write(path, content, *, expected_revision) -> ViewDocument
 await view.build(*, profile="development") -> ViewBuild
+await view.preview_url(
+    *,
+    runtime: str,
+    exact: bool = False,
+    server: str | None = None,
+    access_token: str = "",
+) -> str
 await view.hold_publication(*, owner: str, ttl: float = 300.0) -> PublicationHold
 await view.release_publication(token: str) -> PublicationHold | None
 await view.validate(
@@ -229,6 +236,27 @@ exception raised by the callback cancels static destination publication.
 `build()` returns the artifact revision produced by the selected development or
 production build. The profiles maintain independent publications. A failed
 build leaves the last successful artifact for that profile available.
+
+#### `preview_url()`
+
+Returns the running view's URL in a top-level browser document. Choose
+`runtime="server"`, `"wasm"`, or `"zero-python"` explicitly. The server must
+expose that runtime. Saved-workspace callers supply `server`, while a live
+code-mode view can infer it. `access_token` authenticates the server request.
+Pass `access_token` together with `server`. The browser still needs the server's
+normal authentication.
+
+The default URL follows the current presentation when opened or reloaded.
+`exact=True` requires current source to be built for the served profile
+(development in edit mode, production in run mode), then pins its presentation
+revision. Opening that URL returns HTTP 409 when the revision differs or view
+source is unbuilt or failed, even if the previous artifact is retained. This
+method returns an address and does not open or select a browser tab.
+
+Finish code-mode execution before waiting for output in the browser. Wait for
+`html[data-marimo-studio-state="ready"]`, then assert the application's
+content and behavior. The document's `data-marimo-studio-revision` records the
+committed presentation revision. Use `inspect()` for source and build freshness.
 
 ### `View.hold_publication` and `View.release_publication`
 
@@ -296,8 +324,8 @@ Contains current filesystem and development publication evidence:
 
 Provider or manifest failure returns diagnostics and an incomplete inventory.
 Repair `view.toml` through its manifest path, then inspect again. Artifact
-metadata describes disk publication. Browser validation provides evidence for
-one rendered Studio presentation. See [Identities and
+metadata describes disk publication. Browser assertions check one rendered
+presentation. See [Identities and
 state](identities.md#build-freshness) for freshness values.
 
 ```text
@@ -405,7 +433,7 @@ exposes the cleanup path through `diagnostic_details()`.
 ValidationReport(
     notebook: Path,
     view: str | None,
-    level: Literal["static", "runtime", "browser"],
+    level: Literal["static", "runtime"],
     ok: bool,
     issues: tuple[ValidationIssue, ...],
     evidence: Mapping[str, object],
@@ -413,14 +441,13 @@ ValidationReport(
 ```
 
 `ok` answers whether the requested validation completed against one coherent
-source and runtime state. Browser validation also requires current evidence from
-the selected rendered view.
+source and runtime state.
 
 ### `ValidationIssue`
 
 ```text
 ValidationIssue(
-    stage: Literal["validation", "static", "runtime", "browser"],
+    stage: Literal["validation", "static", "runtime"],
     severity: Literal["warning", "error"],
     code: str,
     message: str,
@@ -512,23 +539,17 @@ validation.
 
 ### `View`
 
-The live view adds the browser operations:
+The live view supports `preview_url()` with the current server inferred from
+code mode. It also supports activation in the user's Studio tab:
 
 ```text
 await view.show() -> ShowResult
-await view.validate(
-    *,
-    level: Literal["static", "runtime", "browser"] = "static",
-    browser_timeout: float = 10.0,
-    runtime_timeout: float = 60.0,
-) -> ValidationReport
 ```
 
 `show()` selects the view in the current Studio tab. Run it in a separate
-code-mode execution before browser validation so the view can finish rendering.
-
-Browser validation requires one view. Exercise relevant view interactions
-before requesting the report.
+code-mode execution so the notebook can finish rendering. Open the URL returned
+by `preview_url(runtime="server")` with your preferred browser tool for direct
+page inspection.
 
 ### `ShowResult`
 
@@ -539,12 +560,17 @@ ShowResult(
     generation: int,
     session_id: str,
     client_id: str,
+    *,
+    preview_url: str,
+    frame_selector: str,
 )
 ```
 
 Confirms that the intended Studio tab accepted the view selection.
 `generation` is the tab's monotonically increasing activation generation. It
 is distinct from the 64-character view generation used for mutation ownership.
+`preview_url` and `frame_selector` address the activated document in that Studio
+tab. `View.preview_url()` returns a separate top-level presentation URL.
 
 ### `PublicationHold`
 
@@ -740,14 +766,13 @@ requested rendered output selectors.
 
 ### Validation and browser records
 
-| Record             | Fields                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| `ValidationReport` | `notebook`, `view`, `level`, `ok`, `issues`, `evidence`                               |
-| `ValidationIssue`  | `stage`, `severity`, `code`, `message`, `advice`, optional `view`, `target`, `source` |
-| `ShowResult`       | `notebook`, `view`, `generation`, `session_id`, `client_id`                           |
+| Record             | Fields                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `ValidationReport` | `notebook`, `view`, `level`, `ok`, `issues`, `evidence`                                      |
+| `ValidationIssue`  | `stage`, `severity`, `code`, `message`, `advice`, optional `view`, `target`, `source`        |
+| `ShowResult`       | `notebook`, `view`, `generation`, `session_id`, `client_id`, `preview_url`, `frame_selector` |
 
-Static and runtime evidence contain named check records. Browser evidence adds
-presentation revisions, runtime identity, browser observations, runtime status,
-and projection instance state. [Identities and
-state](identities.md#runtime-and-browser-identities) defines the identity
-relationships.
+Static and runtime evidence contain named check records. Browser checks use
+the actual document's readiness and committed revision together with
+application assertions. [Identities and state](identities.md#runtime-and-browser-identities)
+defines presentation and runtime identities.

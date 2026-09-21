@@ -360,6 +360,11 @@ test("publishes a framework edit and retains the last good view across a failed 
     .not.toBe(initialRevision);
   await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
 
+  const publishedRevision = await preview
+    .locator("html")
+    .getAttribute("data-marimo-studio-revision");
+  expect(publishedRevision).toBeTruthy();
+
   const invalidSource = goodSource.replace(
     "export const App = () => (",
     "export const App = () => (BROKEN",
@@ -370,9 +375,20 @@ test("publishes a framework edit and retains the last good view across a failed 
   await editor.press(saveShortcut);
 
   await expect(page.getByLabel("View build details, Build failed")).toBeVisible();
-  const diagnostic = page.getByRole("alert").filter({ hasText: "React provider" });
+  const diagnostic = page
+    .getByRole("region", { name: "Source", exact: true })
+    .getByRole("alert")
+    .filter({ hasText: "React provider" });
   await expect(diagnostic).toContainText("Expected");
   await expect(diagnostic).toContainText("src/App.tsx");
+  await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "error");
+  await expect(preview.locator("html")).toHaveAttribute(
+    "data-marimo-studio-revision",
+    publishedRevision!,
+  );
+  await expect(preview.getByRole("alert")).toContainText(
+    "Latest build failed. Showing the previous build.",
+  );
   await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
 
   await editor.focus();
@@ -382,6 +398,11 @@ test("publishes a framework edit and retains the last good view across a failed 
   await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
   await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
   await expect(diagnostic).toHaveCount(0);
+  await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+  await expect(preview.locator("html")).toHaveAttribute(
+    "data-marimo-studio-revision",
+    publishedRevision!,
+  );
 
   await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
   await editorModelRecovery.ready(page);
@@ -491,7 +512,7 @@ test("keeps relative navigation public across direct view reloads", async ({
           documentChanged,
           state: html.dataset.marimoStudioState,
           diagnostics: globalThis.marimoStudio?.diagnostics() ?? [],
-          projections: globalThis.marimoStudio?.projections() ?? [],
+          revision: html.dataset.marimoStudioRevision,
         }),
         previousDocument === undefined || documentUrl !== previousDocument,
       );

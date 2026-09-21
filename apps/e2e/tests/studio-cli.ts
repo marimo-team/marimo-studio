@@ -87,6 +87,27 @@ export class StudioCli {
     return workspaceShowSchema.parse(JSON.parse(stdout));
   }
 
+  async previewWorkspaceView(
+    view: string,
+    runtime: "server" | "wasm" | "zero-python",
+    exact = false,
+  ) {
+    const { stdout } = await this.#run([
+      "view",
+      "preview",
+      view,
+      "--target",
+      notebookPath,
+      "--server",
+      `${e2eNetwork.main.studio.origin}?file=notebook.py`,
+      "--runtime",
+      runtime,
+      ...(exact ? ["--exact"] : []),
+      "--json",
+    ]);
+    return z.string().url().parse(JSON.parse(stdout));
+  }
+
   async checkWorkspace(): Promise<boolean> {
     const { stdout } = await this.#run(["validate", "--target", notebookPath, "--json"]);
     return workspaceCheckSchema.parse(JSON.parse(stdout)).ok;
