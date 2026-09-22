@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Lock
 from typing import Any
+from weakref import WeakKeyDictionary
 
 from marimo._messaging.notebook.changes import CreateCell, DeleteCell, SetCode
 from marimo._messaging.notification import (
+    CellNotification,
     NotebookDocumentTransactionNotification,
     NotificationMessage,
 )
 from marimo._session.state.session_view import SessionView
+from marimo._types.ids import CellId_t
 from starlette.types import Scope
 
 from marimo_studio._browser_client.transport import StudioServerConnection
@@ -23,21 +27,35 @@ from marimo_studio._compat.patch import CallbackCloseHandle, ReversiblePatch
 
 
 def _record_kernel_source(native: Any) -> Any:
+    pending_by_view: WeakKeyDictionary[SessionView, dict[CellId_t, str]] = (
+        WeakKeyDictionary()
+    )
+    lock = Lock()
+
     def add_notification(view: SessionView, notification: NotificationMessage) -> None:
         native(view, notification)
-        if (
-            not isinstance(notification, NotebookDocumentTransactionNotification)
-            or notification.transaction.source != "code-mode"
-        ):
-            return
-        # Code mode registers source directly in the kernel before broadcasting
-        # this transaction, bypassing the commands SessionView normally records.
-        # Like SyncGraphCommand, this is graph-source evidence, not run completion.
-        for change in notification.transaction.changes:
-            if isinstance(change, (CreateCell, SetCode)):
-                view.last_executed_code[change.cell_id] = change.code
-            elif isinstance(change, DeleteCell):
-                view.last_executed_code.pop(change.cell_id, None)
+        with lock:
+            pending = pending_by_view.setdefault(view, {})
+            if isinstance(notification, NotebookDocumentTransactionNotification):
+                for change in notification.transaction.changes:
+                    if isinstance(change, (CreateCell, SetCode)):
+                        if notification.transaction.source == "code-mode":
+                            pending[change.cell_id] = change.code
+                        else:
+                            pending.pop(change.cell_id, None)
+                    elif isinstance(change, DeleteCell):
+                        pending.pop(change.cell_id, None)
+                        if notification.transaction.source == "code-mode":
+                            view.last_executed_code.pop(change.cell_id, None)
+            elif (
+                isinstance(notification, CellNotification)
+                and notification.status == "queued"
+                and (code := pending.pop(notification.cell_id, None)) is not None
+            ):
+                view.last_executed_code[notification.cell_id] = code
+
+            if not pending:
+                pending_by_view.pop(view, None)
 
     return add_notification
 
