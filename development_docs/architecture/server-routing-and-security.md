@@ -115,7 +115,7 @@ Provider-authored pages receive two signed capability forms:
 
 | Capability | Bound identity                                                                 | Allowed work                                                                            |
 | ---------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Renewal    | Notebook file key, mode, base URL, view, presentation session, runtime session | Fetch the current document and runtime configuration                                    |
+| Renewal    | Notebook file key, mode, base URL, view, presentation session, runtime session | Fetch the current document, runtime configuration, and the view's development events    |
 | Revision   | Renewal identity plus presentation revision and artifact revision              | Read exact assets, values, outputs, runtime support, and admitted native session routes |
 
 The handler validates the signature, target, method, scope type, view,
@@ -123,6 +123,10 @@ presentation session header, runtime mode, and runtime-session assignment.
 Revision-bound value and output requests receive a transient
 `stale-projection-binding` response when the page needs refreshed bindings.
 Other stale or invalid capabilities fail closed.
+
+Standalone previews subscribe to development events through renewal authority.
+The subscription survives publication changes so a delayed or reconnecting tab
+can receive the current revision and refresh its document.
 
 The capability target allowlist admits immutable artifact files, runtime
 assets, configuration, projection reads, development events, selected native
