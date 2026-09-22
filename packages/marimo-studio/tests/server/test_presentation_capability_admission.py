@@ -18,6 +18,7 @@ from marimo_studio._server.presentation import access as presentation_access
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._views.build import build_view_project_sync
 
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
@@ -30,6 +31,78 @@ from .app_test_support import (
     _presentation_frame_url,
     _view_support_url,
 )
+
+
+def test_preview_event_subscription_survives_publication_with_renewal_authority(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    live_session = _live_test_session(())
+    _session_manager(app).get_session_by_file_key = lambda _file_key: live_session
+    subscribed: list[str | None] = []
+
+    async def scoped_events(
+        _studio: object,
+        view_name: str | None = None,
+        **_options: object,
+    ) -> Any:
+        subscribed.append(view_name)
+        yield b"event: ready\ndata: {}\n\n"
+
+    monkeypatch.setattr("marimo_studio._server.support.change_events", scoped_events)
+    with TestClient(app) as client:
+        shell = client.get("/dashboard/")
+        presentation = client.get(_presentation_frame_url(shell.text))
+        renewal = _editor_mount_value(presentation.text, "renewalToken")
+        root = f"/_marimo-studio/presentation/{renewal}/"
+        instance = server_instance_id(str(_session_manager(app).skew_protection_token))
+        events = (
+            f"{root}_marimo-studio/views/dashboard/dev/events"
+            f"?marimo_studio_server={instance}"
+        )
+        assert client.get(events).status_code == 200
+
+        document = studio.views["dashboard"].root / "index.html"
+        document.write_text(
+            document.read_text(encoding="utf-8").replace(
+                "</body>", "<p>New revision</p></body>"
+            ),
+            encoding="utf-8",
+        )
+        with build_view_project_sync(studio.views["dashboard"]):
+            pass
+        refreshed = client.get(f"{root}dashboard/")
+        assert refreshed.status_code == 200
+        assert (
+            refreshed.headers["Marimo-Studio-Revision"]
+            != presentation.headers["Marimo-Studio-Revision"]
+        )
+        assert client.get(events).status_code == 200
+        assert subscribed == ["dashboard", "dashboard"]
+
+        for target in (
+            "_marimo-studio/dev/events",
+            "_marimo-studio/views/executive/dev/events",
+            "_marimo-studio/views/dashboard/source/index.html",
+        ):
+            assert client.get(f"{root}{target}").status_code == 403
+        assert client.post(events).status_code == 403
+        assert (
+            client.post(
+                f"{root}_marimo-studio/views/dashboard/outputs", json={}
+            ).status_code
+            == 403
+        )
+        assert (
+            client.get(
+                events,
+                headers={"Marimo-Studio-Preview-Session-Id": "s_other1"},
+            ).status_code
+            == 403
+        )
 
 
 def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(

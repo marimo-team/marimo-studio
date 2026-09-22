@@ -308,7 +308,7 @@ def presentation_target_allowed(
                 _DOCUMENT_PATTERN.fullmatch(route.target) is not None
                 or (
                     (match := _VIEW_SUPPORT_PATTERN.fullmatch(route.target)) is not None
-                    and match.group("route") == "config"
+                    and match.group("route") in {"config", "dev/events"}
                 )
             )
         )

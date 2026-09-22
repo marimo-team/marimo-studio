@@ -37,6 +37,7 @@ import {
   StaleBindingRefresh,
 } from "./document/presentation-refresh.ts";
 import { ReceiverRefreshHandshake } from "./document/receiver-refresh.ts";
+import { presentationRenewalSupportUrl } from "./document/refresh-url.ts";
 import { waitForPresentationRevisions } from "./document/revision-runtime.ts";
 import {
   clearDiagnostic,
@@ -180,8 +181,9 @@ const settleBuild = (): void => {
 };
 
 const connectEvents = (): void => {
+  const supportUrl = presentationRenewalSupportUrl(presentationRevisions.url, getSupportUrl());
   developmentEvents.connect(
-    appendUrlPath(getSupportUrl(), "dev/events", globalThis.location.href),
+    appendUrlPath(supportUrl, "dev/events", globalThis.location.href),
     reconcileBaseline,
     () => {
       if (globalThis.__MARIMO_STUDIO_RUNTIME_STATE__ === "failed") {
