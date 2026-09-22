@@ -1,0 +1,34 @@
+packages/marimo-studio/tests/server/test_presentation_capability_admission.py
+  s_7083b3dfa60a85::t_7f21708ddb9c6c 36-60,66-68,77-93,97-106
+  s_7083b3dfa60a85::t_6676eafafab689 61-65
+  s_7083b3dfa60a85::t_e15e965f61789b 21,75-76
+  s_7083b3dfa60a85::t_5d85968f43e971 69-74,94-96
+apps/e2e/tests/preview-freshness.spec.ts
+  s_7083b3dfa60a85::t_3b68f22dcc8920 1-4,6-17,19-27,30-32,34-39,58-69,78-86,89-93
+  s_7083b3dfa60a85::t_3b35cf383c35ad 28-29,33,41-51,88
+  s_7083b3dfa60a85::t_5d85968f43e971 52,71-77,87
+  s_7083b3dfa60a85::t_6676eafafab689 5,18,53-57,70
+  s_7083b3dfa60a85::t_16dd694bb39fee 40
+packages/presentation/src/dev-reload.ts
+  s_7083b3dfa60a85::t_16dd694bb39fee 40,184,186
+packages/marimo-studio/src/marimo_studio/_server/presentation/capability.py
+  s_7083b3dfa60a85::t_16dd694bb39fee 311
+development_docs/architecture/server-routing-and-security.md
+  s_7083b3dfa60a85::t_e15e965f61789b 118,127-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4fc4f9cf36c0eb6fe4a8376aaa47b34fa28ef539",
+  "prompts": {},
+  "sessions": {
+    "s_7083b3dfa60a85": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c9de-4ab8-7d52-92b3-cebfeb2deac3",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
