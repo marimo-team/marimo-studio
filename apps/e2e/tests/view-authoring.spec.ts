@@ -166,6 +166,35 @@ assert first.preview_url and second.preview_url
   await recoverWorkspaceEventStream(replacements);
 });
 
+test("refreshes Python projections after code-mode cell edits and creation", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  await page.goto(studioEntryUrl);
+  const preview = await waitForPreview(page);
+  const sessionId = await studioEditorSessionId(page);
+  const refresh = await captureProjectionRefresh(page, browserDiagnostics);
+  await executeCodeMode(
+    editorFrame(page),
+    "notebook.py",
+    sessionId,
+    `
+import marimo._code_mode as cm
+async with cm.get_context() as ctx:
+    ctx.cells["metric"].code
+    factor = ctx.create_cell("agent_factor = 30", before="metric")
+    ctx.edit_cell("metric", code='metric = scale.value * agent_factor\\nresponsive_value = "responsive" * 80\\nmetric')
+    ctx.run_cell(factor)
+    ctx.run_cell("metric")
+`,
+  );
+  await expect(preview.locator('strong[mo-value="metric"]')).toHaveText("60", {
+    timeout: 65_000,
+  });
+  await recoverProjectionRefresh(refresh, page);
+  await expect(page.getByText("Preparing preview", { exact: true })).toHaveCount(0);
+});
+
 test("offers Studio on a fresh notebook and preserves its session through first-view creation", async ({
   browserDiagnostics,
   page,
