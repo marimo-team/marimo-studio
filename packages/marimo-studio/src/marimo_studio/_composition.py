@@ -135,6 +135,7 @@ def create_server_adapters() -> ServerAdapters:
     peer_commands = PrivatePeerCommandRelay()
     session_cache = PrivateSessionCachePublication()
     usage = PrivateUsageRoute()
+    code_mode = PrivateCodeModeBridge()
     return ServerAdapters(
         server=PrivateServerGateway(),
         editor_runtime=PrivateEditorRuntimeBootstrap(),
@@ -146,7 +147,7 @@ def create_server_adapters() -> ServerAdapters:
         projections=PrivateKernelProjectionHost(),
         peer_commands=peer_commands,
         browser=create_browser_runtime_projector(),
-        code_mode=PrivateCodeModeBridge(),
+        code_mode=code_mode,
         lifecycle=_PrivateAdapterLifecycle(
             (
                 sessions,
@@ -155,6 +156,7 @@ def create_server_adapters() -> ServerAdapters:
                 peer_commands,
                 session_cache,
                 usage,
+                code_mode,
             )
         ),
     )
