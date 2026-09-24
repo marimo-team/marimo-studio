@@ -63,6 +63,18 @@ for (const editRoot of ["marimo", "studio"] as const) {
       text: /^Failed to handle request: getUsageStats TypeError: Failed to fetch$/,
       required: false,
     });
+    const closedSandboxStatus = diagnostics.expectConsole({
+      type: "error",
+      text: /^Failed to handle request: getSandbox TypeError: Failed to fetch(?:\n|$)/,
+      required: false,
+    });
+    const closedSandboxRequest = diagnostics.expectRequestFailure({
+      origin: server.serverUrl,
+      method: "POST",
+      path: /^(?:\/_marimo-studio\/editor)?\/api\/packages\/sandbox$/,
+      errorText: "net::ERR_ABORTED",
+      required: false,
+    });
     const workspaceStream = diagnostics.expectWorkspaceEventStreamReplacement(
       `${server.serverUrl}/_marimo-studio/dev/events`,
     );
@@ -238,6 +250,8 @@ shown.to_dict()
       dialogDescription.recovered();
       closedLspHealth.recovered();
       closedUsageStats.recovered();
+      closedSandboxStatus.recovered();
+      closedSandboxRequest.recovered();
       await diagnostics.close();
       diagnosticsClosed = true;
       expect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);

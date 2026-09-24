@@ -11,8 +11,8 @@ dependencies = [
   "agent-plugins>=0.2",
   "click>=8.2",
   "htpy>=26.5.1",
-  "marimo==0.24.2",
-  "marimo-export>=0.0.8",
+  "marimo==0.25.0",
+  "marimo-export>=0.1.0",
   "markupsafe>=3",
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",
@@ -24,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 deno = ["deno>=2.9.5"]
-lens = ["marimo-lens>=0.2"]
+lens = ["marimo-lens>=0.2.2"]
 recommended = ["marimo-studio[deno,lens]"]
 
 [project.urls]

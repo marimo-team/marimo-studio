@@ -3,26 +3,18 @@ import type { Plugin } from "vite";
 import { join } from "node:path";
 
 const normalizeLineEndings = (source: string): string => source.replaceAll("\r\n", "\n");
-const saveWorkerSource = `new Worker(
-      // oxlint-disable-next-line unicorn/relative-url-style
-      new URL("./worker/save-worker.ts", import.meta.url),
+const saveWorkerSource = `createModuleWorker(
+      new URL(saveWorkerUrl, import.meta.url),
       {
-        type: "module",
-        // Pass the version (and optional capability suffix) to the worker
-        /* @vite-ignore */
+        // Pass the optional custom-controller capability to the worker.
         name: getWasmWorkerName(),
       },
     )`;
-const mainWorkerSource = `new Worker(
-      // oxlint-disable-next-line unicorn/relative-url-style
-      new URL("./worker/worker.ts", import.meta.url),
-      {
-        type: "module",
-        // Pass the version (and optional capability suffix) to the worker
-        /* @vite-ignore */
-        name: getWasmWorkerName(),
-      },
-    )`;
+const mainWorkerUrlImport = 'import workerUrl from "./worker/worker.ts?worker&url";\n';
+const mainWorkerSource = `createModuleWorker(new URL(workerUrl, import.meta.url), {
+      // Pass the optional custom-controller capability to the worker.
+      name: getWasmWorkerName(),
+    })`;
 const forcedReadModeInstantiation = `auto_instantiate:
             getInitialAppMode() === "read"
               ? true
@@ -61,6 +53,7 @@ export const isolateWasmWorker = (
 ): string => {
   const normalized = normalizeLineEndings(source);
   if (
+    normalized.split(mainWorkerUrlImport).length !== 2 ||
     !normalized.includes(mainWorkerSource) ||
     !normalized.includes(saveWorkerSource) ||
     normalized.split(defaultMainWorkerRpc).length !== 2 ||
@@ -77,6 +70,8 @@ import { ownPresentationWasmWorker, startPresentationWasmSession } from ${JSON.s
   return (
     imports +
     normalized
+      // The inline worker replaces the URL-loaded bundle.
+      .replace(mainWorkerUrlImport, "")
       .replace(
         mainWorkerSource,
         "ownPresentationWasmWorker(new MarimoStudioMainWorker({ name: getWasmWorkerName() }))",

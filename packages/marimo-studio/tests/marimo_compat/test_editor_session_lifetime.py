@@ -74,8 +74,12 @@ class _SessionManager:
         return self.session if str(session_id) == "s_native" else None
 
     def close_session(self, session_id: object) -> None:
-        if str(session_id) == "s_native":
-            self.session = None
+        # Marimo removes the session before it emits the closed event.
+        if str(session_id) == "s_native" and self.session is not None:
+            session, self.session = self.session, None
+            asyncio.get_running_loop().create_task(
+                self._event_bus.emit_session_closed(cast(Any, session))
+            )
 
 
 def _accepted_admission(
@@ -103,7 +107,18 @@ def _accepted_admission(
     return admission
 
 
-def test_websocket_safe_close_is_terminal_after_client_disconnect() -> None:
+@pytest.mark.parametrize(
+    ("application_state", "client_state"),
+    (
+        (WebSocketState.CONNECTED, WebSocketState.DISCONNECTED),
+        (WebSocketState.DISCONNECTED, WebSocketState.CONNECTED),
+    ),
+    ids=("client", "application"),
+)
+def test_websocket_safe_close_is_terminal_after_disconnect(
+    application_state: WebSocketState,
+    client_state: WebSocketState,
+) -> None:
     close_calls = 0
 
     async def close(_code: int, _reason: str) -> None:
@@ -114,8 +129,8 @@ def test_websocket_safe_close_is_terminal_after_client_disconnect() -> None:
         Any,
         SimpleNamespace(
             websocket=SimpleNamespace(
-                application_state=WebSocketState.CONNECTED,
-                client_state=WebSocketState.DISCONNECTED,
+                application_state=application_state,
+                client_state=client_state,
                 close=close,
             )
         ),
@@ -171,6 +186,7 @@ def test_editor_disconnect_follows_native_session_ttl(
                 mode=SessionMode.EDIT,
                 status=ConnectionState.OPEN,
                 cancel_close_handle=None,
+                _session=session,
                 **{
                     (
                         "websocket" if handler_type is WebSocketHandler else "request"
@@ -180,13 +196,8 @@ def test_editor_disconnect_follows_native_session_ttl(
                 },
             ),
         )
-        cleaned: list[object] = []
         try:
-            handler_type._on_disconnect(
-                handler,
-                RuntimeError("closed"),
-                lambda: cleaned.append(session),
-            )
+            handler_type._on_disconnect(handler)
             if ttl is None:
                 barrier = asyncio.Event()
                 asyncio.get_running_loop().call_soon(barrier.set)
@@ -196,7 +207,6 @@ def test_editor_disconnect_follows_native_session_ttl(
             else:
                 await asyncio.wait_for(closed.wait(), timeout=1)
                 assert manager.session is None
-            assert cleaned == [session]
         finally:
             handle.close()
         assert closed.is_set()

@@ -789,7 +789,8 @@ test("mounts the exported Marimo runtime facade", async () => {
     expect(handle.sessionId).toBe(sessionId);
     expect(view.sessionId).toBe(sessionId);
     expect(view.initialization).toEqual({ state: "ready" });
-    expect(view.connection).toEqual({ state: "OPEN" });
+    // Marimo opens a session on kernel-ready, which the static fixture transport never sends.
+    expect(view.connection).toEqual({ state: "CONNECTING" });
     expect(view.cells).toEqual([]);
     expect(target.textContent).toBe(sessionId);
     expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBe(sessionId);

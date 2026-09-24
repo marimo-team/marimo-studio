@@ -311,6 +311,18 @@ anonymous outputs created by Marimo's auto-mount hook. Otherwise, when Lens is
 installed, it owns one instance with `STUDIO_RESULT_SELECTOR`. Borrowed
 instances keep their configured selector and notebook ownership.
 
+Lens gives each document its own interaction owner, so the notebook dock and
+the preview dock drive one Lens model. Lens 0.2.1 and newer bounds its notebook
+UI to Marimo's `#App` pane, which Studio places inside the Notebook pane.
+
+Marimo mounts its Lens after the cell that imports marimo runs, unless an
+earlier cell output already holds one. That cell usually runs before a cell that
+constructs a Lens, so a notebook that authors its own Lens would hold two. The
+kernel lifespan replaces the post-execution hook with `LensMountPolicy`, which
+skips the automatic mount when a Studio notebook imports the `Lens` widget or
+the `marimo_lens` module.
+Other notebooks keep Marimo's mount.
+
 The native renderer mounts overlays outside the artifact shell, suppressing
 widgets already projected in the view. Widget model IDs and native virtual
 files retain their authenticated kernel scope across development view

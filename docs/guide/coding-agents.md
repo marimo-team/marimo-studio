@@ -23,18 +23,19 @@ inspect -> edit -> build -> show -> verify
 [Marimo Lens](https://marimo-team.github.io/marimo-lens/) is an optional companion
 for selecting a rendered result, adding a note, and giving a coding agent its
 producing notebook context and image. For feedback in a Server view, install
-version 0.2 or newer in the notebook's Python environment:
+version 0.2.2 or newer in the notebook's Python environment:
 
 ```sh
-uv pip install "marimo-lens>=0.2"
+uv pip install "marimo-lens>=0.2.2"
 ```
 
-For sandboxed notebooks, also declare `marimo-lens>=0.2` in the script's
+For sandboxed notebooks, also declare `marimo-lens>=0.2.2` in the script's
 dependencies. Restart a running notebook after installing or upgrading Lens.
 
-Development previews reuse the notebook's Lens, including an automatically
-mounted instance, or mount one when Lens is installed. No Lens cell or projection
-is needed for this workflow.
+When the notebook imports no Lens of its own, Marimo mounts one in the notebook.
+The development preview reuses that same Lens, so the Notebook pane and the
+preview each show a dock, and selections from either one reach the agent
+together. No Lens cell or projection is needed for this workflow.
 
 To project an explicitly authored Lens into another Server view, define one value:
 
@@ -53,7 +54,8 @@ Project it into the view:
 ```
 
 The final `None` keeps the notebook cell's output empty so the dock appears on
-the projected view. Select mode shows the cell or value source beside the
+the projected view. Studio skips Marimo's automatic Lens in a notebook that
+imports Lens, so `studio_lens` is the notebook's only Lens. Select mode shows the cell or value source beside the
 pointed result. An agent can inspect the selection through Lens in the same
 live kernel, edit through Studio, verify the result, and resolve the note.
 

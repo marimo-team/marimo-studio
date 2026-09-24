@@ -7,10 +7,16 @@ import { z } from "zod";
 import type { StudioCli } from "./studio-cli.ts";
 
 import { fixtureDirectory, workspaceDirectory } from "../scripts/paths.ts";
+import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
 import {
+  editorFrame,
   expect,
+  expectSupersededRenewalConfig,
   labeledSlider,
+  recoverWorkspaceEventStream,
+  studioOrigin,
   test,
+  waitForPreview,
   waitForViewPreview,
   workspaceCreatedViewHtmlPath,
   workspaceNotebookPath,
@@ -118,6 +124,110 @@ async function openView(
   return view;
 }
 
+test("a notebook's first view shares Marimo's automatic Lens with the preview", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const supersededConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
+  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
+    1,
+  );
+  const notebook = resolve(workspaceDirectory, "lens-onboarding.py");
+  await writeWorkspaceFile(
+    notebook,
+    [
+      "import marimo",
+      "",
+      "app = marimo.App()",
+      "",
+      "",
+      "@app.cell",
+      "def imports():",
+      "    import marimo as mo",
+      "    return (mo,)",
+      "",
+      "",
+      "@app.cell",
+      "def controls(mo):",
+      '    scale = mo.ui.slider(1, 3, value=2, label="Scale")',
+      "    scale",
+      "    return (scale,)",
+      "",
+      "",
+      "@app.cell",
+      "def metric(scale):",
+      "    metric = scale.value * 21",
+      "    metric",
+      "    return (metric,)",
+      "",
+      "",
+      'if __name__ == "__main__":',
+      "    app.run()",
+      "",
+    ].join("\n"),
+  );
+  const instantiated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
+      response.ok(),
+  );
+  await page.goto("/?file=lens-onboarding.py");
+  const sessionId = (await instantiated).request().headers()["marimo-session-id"];
+  expect(sessionId).toBeTruthy();
+  await editorFrame(page).getByTestId("run-button").last().click();
+  await expect(labeledSlider(editorFrame(page), /^Scale/)).toBeVisible();
+  const notebookLens = editorFrame(page).getByRole("button", {
+    name: "Select a target",
+    exact: true,
+  });
+  await expect(notebookLens).toHaveCount(1);
+
+  await executeCodeMode(
+    editorFrame(page),
+    "lens-onboarding.py",
+    sessionId,
+    `
+import marimo_studio.agent as studio_agent
+
+view = await studio_agent.current_workspace().create_view("dashboard")
+shown = await view.show()
+shown.to_dict()
+`,
+  );
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=lens-onboarding\.py$/);
+  expect(await studioEditorSessionId(page)).toBe(sessionId);
+  const preview = await waitForPreview(page);
+  await expect(preview.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(
+    1,
+  );
+  await expect(notebookLens).toHaveCount(1);
+
+  // Lens bounds its notebook dock to Marimo's pane, which Studio keeps beside the preview.
+  const dock = await editorFrame(page)
+    .locator("[data-marimo-lens-portal]")
+    .evaluate((portal) => {
+      const box = portal.shadowRoot?.querySelector("[data-marimo-lens-dock]");
+      return box?.getBoundingClientRect().right ?? Number.POSITIVE_INFINITY;
+    });
+  const previewBox = await page
+    .locator('iframe[data-preview-runtime-frame="server"]')
+    .boundingBox();
+  expect(dock).toBeLessThanOrEqual(previewBox!.x);
+
+  await select(
+    editorFrame(page),
+    editorFrame(page).locator('[data-cell-name="metric"]').getByText("42", { exact: true }),
+    "Explain the metric",
+  );
+  await expect(
+    preview.getByRole("button", { name: "Open selections, 1 open, 0 in history" }),
+  ).toBeVisible();
+  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
+  supersededConfig.recovered();
+});
+
 for (const mount of ["notebook", "installed", "anonymous"] as const) {
   test(`Development preview mounts ${mount} Lens and preserves feedback through rebuild`, async ({
     page,
@@ -125,6 +235,11 @@ for (const mount of ["notebook", "installed", "anonymous"] as const) {
   }, testInfo) => {
     const view = await openView(page, studioCli, "vanilla", mount);
     await expect(view.locator("[data-marimo-lens-view-conflict]")).toHaveCount(0);
+    // The imports cell has run, so Marimo's automatic Lens has had its chance to mount.
+    await expect(labeledSlider(editorFrame(page), /^Scale/)).toBeVisible();
+    await expect(
+      editorFrame(page).getByRole("button", { name: "Select a target", exact: true }),
+    ).toHaveCount(mount === "notebook" ? 0 : 1);
     await select(view, view.locator("#scalar"), "Preview feedback");
     expect((await inspect(view)).references.selections).toMatchObject([
       { note: "Preview feedback" },

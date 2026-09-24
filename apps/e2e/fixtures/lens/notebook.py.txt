@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["marimo-studio", "marimo-lens>=0.2"]
+# dependencies = ["marimo-studio", "marimo-lens>=0.2.2"]
 #
 # [tool.marimo-studio]
 # default = "lens"

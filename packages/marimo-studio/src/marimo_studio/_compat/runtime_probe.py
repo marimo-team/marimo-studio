@@ -146,13 +146,21 @@ async def probe_runtime_in_worker(
     session: Any | None = None
     try:
         with probe_selector_lease(path, variables, allowed_outputs) as query_params:
-            session = manager.create_session(
-                session_id,
-                consumer,
-                query_params=query_params,
-                file_key=str(path),
-                auto_instantiate=True,
-            )
+            try:
+                session = await asyncio.wait_for(
+                    manager.create_session(
+                        session_id,
+                        consumer,
+                        query_params=query_params,
+                        file_key=str(path),
+                        auto_instantiate=True,
+                    ),
+                    timeout=max(0, deadline - loop.time()),
+                )
+            except asyncio.TimeoutError as error:
+                raise RuntimeTimeoutError(
+                    f"Notebook runtime did not start within {timeout:g} seconds"
+                ) from error
             if session is None:
                 raise ProtocolError("Marimo session creation returned no session")
             session.instantiate(
@@ -253,6 +261,8 @@ async def probe_runtime_in_worker(
             )
     finally:
         try:
+            # A startup timeout can leave a completed launch without its waiter.
+            session = session or manager.get_session(session_id)
             if session is not None:
                 manager.close_session(session_id)
                 shutdown_deadline = min(
@@ -266,7 +276,7 @@ async def probe_runtime_in_worker(
                     await asyncio.sleep(0.01)
         finally:
             try:
-                manager.shutdown()
+                await manager.shutdown()
             finally:
                 # The in-process Marimo kernel installs its own main module
                 # for notebook pickling. Return ownership to the caller after

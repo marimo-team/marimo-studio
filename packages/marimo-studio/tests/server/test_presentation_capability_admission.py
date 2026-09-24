@@ -536,12 +536,11 @@ def test_claim_inserted_after_authorize_remains_a_fresh_connector_expectation(
         websocket_url = (
             f"{root.path.rstrip('/')}/ws?session_id={config['presentationSessionId']}"
         )
-        with (
-            pytest.raises(WebSocketDisconnect),
-            client.websocket_connect(websocket_url),
-        ):
-            pass
+        with client.websocket_connect(websocket_url) as websocket:
+            closed = websocket.receive()
 
+    assert closed["type"] == "websocket.close"
+    assert closed["reason"] == "MARIMO_NO_SESSION"
     assert runtime_session_id in claimed
     assert cancelled == [runtime_session_id]
 

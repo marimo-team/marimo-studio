@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from pathlib import Path
 from threading import RLock
 from typing import Any, cast
 from weakref import WeakKeyDictionary, ref
 
+from marimo._environments.script_metadata import notebook_file_lock
 from marimo._schemas.serialization import NotebookSerializationV1
 from marimo._server.session_manager import SessionManager
 from marimo._session.events import SessionEventBus, SessionEventListener
@@ -61,14 +63,19 @@ class _SourceTransformExtension(EventAwareExtension):
                 persist: bool,
                 previous_path: Path | None = None,
             ) -> str:
-                with manager._save_lock:
-                    if previous_path is not None:
+                if previous_path is not None:
+                    with manager._save_lock:
                         return original_save_file(
                             path,
                             notebook=notebook,
                             persist=persist,
                             previous_path=previous_path,
                         )
+                # Hold Marimo's cross-process notebook lock from the header read
+                # through the write so manifest edits cannot be overwritten.
+                # The native persisting save takes the same non-reentrant lock.
+                file_lock = notebook_file_lock(str(path)) if persist else nullcontext()
+                with manager._save_lock, file_lock:
                     source = original_save_file(
                         path,
                         notebook=notebook,

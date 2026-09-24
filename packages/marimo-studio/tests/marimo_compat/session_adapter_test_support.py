@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from threading import Event, RLock
 from types import SimpleNamespace
@@ -51,6 +52,7 @@ class Manager:
         self.fallback: object | None = None
         self.fallback_calls = 0
         self.skew_protection_token = "token"
+        self._connection_locks: dict[str, asyncio.Lock] = {}
 
     def get_session(self, session_id: object) -> Session | None:
         key = str(session_id)
@@ -69,6 +71,12 @@ class Manager:
     def get_session_by_file_key(self, _file_key: str) -> object | None:
         self.fallback_calls += 1
         return self.fallback
+
+    def connection_lock(self, session_id: object, file_key: str) -> asyncio.Lock:
+        return self._connection_locks.setdefault(file_key, asyncio.Lock())
+
+    def is_session_starting(self, session_id: object, file_key: str) -> bool:
+        return False
 
     def close_session(self, session_id: object) -> None:
         self.sessions.pop(str(session_id), None)

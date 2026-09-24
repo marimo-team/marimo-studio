@@ -160,6 +160,74 @@ index c721bfeb5..6b633b9f9 100644
  Slider.displayName = SliderPrimitive.Root.displayName;
  
  export { Slider };
+diff --git a/frontend/src/core/websocket/__tests__/useWebSocket.test.ts b/frontend/src/core/websocket/__tests__/useWebSocket.test.ts
+index 2065cec5a..39ad56d78 100644
+--- a/frontend/src/core/websocket/__tests__/useWebSocket.test.ts
++++ b/frontend/src/core/websocket/__tests__/useWebSocket.test.ts
+@@ -1,10 +1,14 @@
+ /* Copyright 2026 Marimo. All rights reserved. */
+ 
++import { renderHook } from "@testing-library/react";
+ import { afterEach, describe, expect, it, vi } from "vitest";
+ import { BasicTransport } from "../transports/basic";
+ import { SseTransport } from "../transports/sse";
+ import { WsTransport } from "../transports/ws";
+-import { createConnectionTransport } from "../useWebSocket";
++import {
++  createConnectionTransport,
++  useConnectionTransport,
++} from "../useWebSocket";
+ 
+ vi.mock("../../wasm/utils", () => ({
+   isWasm: () => false,
+@@ -47,3 +51,28 @@ describe("createConnectionTransport", () => {
+     expect(transport).toBeInstanceOf(SseTransport);
+   });
+ });
++
++describe("useConnectionTransport", () => {
++  it("does not handle its own close after unmounting", async () => {
++    const onClose = vi.fn();
++    const { result, unmount } = renderHook(() =>
++      useConnectionTransport({
++        url: () => "http://localhost/ws",
++        headers: () => ({}),
++        static: true,
++        transportType: "websocket",
++        waitToConnect: () => Promise.resolve(),
++        onOpen: vi.fn(),
++        onMessage: vi.fn(),
++        onClose,
++        onError: vi.fn(),
++      }),
++    );
++    const close = vi.spyOn(result.current, "close");
++
++    unmount();
++
++    expect(close).toHaveBeenCalledOnce();
++    expect(onClose).not.toHaveBeenCalled();
++  });
++});
+diff --git a/frontend/src/core/websocket/useWebSocket.tsx b/frontend/src/core/websocket/useWebSocket.tsx
+index 48e12823f..1dac3efb6 100644
+--- a/frontend/src/core/websocket/useWebSocket.tsx
++++ b/frontend/src/core/websocket/useWebSocket.tsx
+@@ -75,11 +75,13 @@ export function useConnectionTransport(options: UseConnectionTransportOptions) {
+       Logger.warn(
+         "useConnectionTransport is unmounting. This likely means there is a bug.",
+       );
+-      transport.close();
++      // Transports can dispatch close synchronously. Detach first so an
++      // unmounted connection never handles or retries its own close.
+       transport.removeEventListener("open", onOpen);
+       transport.removeEventListener("close", onClose);
+       transport.removeEventListener("error", onError);
+       transport.removeEventListener("message", onMessage);
++      transport.close();
+     };
+     // oxlint-disable-next-line react-hooks/exhaustive-deps
+   }, [transport]);
 diff --git a/frontend/src/plugins/core/__test__/registerReactComponent.test.ts b/frontend/src/plugins/core/__test__/registerReactComponent.test.ts
 index a285a7229..a870bb3db 100644
 --- a/frontend/src/plugins/core/__test__/registerReactComponent.test.ts
@@ -188,10 +256,10 @@ index a285a7229..a870bb3db 100644
      const tag = uniqueTag("in-div");
      registerReactComponent(makePlugin(tag));
 diff --git a/frontend/src/plugins/core/registerReactComponent.tsx b/frontend/src/plugins/core/registerReactComponent.tsx
-index 60af78236..5a17ca0d4 100644
+index c65c8a9b0..c469610a4 100644
 --- a/frontend/src/plugins/core/registerReactComponent.tsx
 +++ b/frontend/src/plugins/core/registerReactComponent.tsx
-@@ -384,6 +384,10 @@ export function registerReactComponent<T>(plugin: IPlugin<T, unknown>): void {
+@@ -383,6 +383,10 @@ export function registerReactComponent<T>(plugin: IPlugin<T, unknown>): void {
        });
      }
  
@@ -203,7 +271,7 @@ index 60af78236..5a17ca0d4 100644
        this.observer.disconnect();
        this.root?.unmount();
 diff --git a/frontend/src/plugins/impl/SliderPlugin.tsx b/frontend/src/plugins/impl/SliderPlugin.tsx
-index 08ecebc6e..13ceab124 100644
+index c337ebb47..b041e2a87 100644
 --- a/frontend/src/plugins/impl/SliderPlugin.tsx
 +++ b/frontend/src/plugins/impl/SliderPlugin.tsx
 @@ -3,6 +3,7 @@ import { type JSX, useEffect, useId, useMemo, useState } from "react";
@@ -254,7 +322,7 @@ index 08ecebc6e..13ceab124 100644
    const { locale } = useLocale();
  
    // Hold internal value
-@@ -222,6 +231,7 @@ const SliderComponent = ({
+@@ -224,6 +233,7 @@ const SliderComponent = ({
    const sliderElement = (
      <Labeled
        label={label}
@@ -262,7 +330,7 @@ index 08ecebc6e..13ceab124 100644
        id={id}
        align={orientation === "horizontal" ? "left" : "top"}
        fullWidth={fullWidth}
-@@ -236,6 +246,8 @@ const SliderComponent = ({
+@@ -238,6 +248,8 @@ const SliderComponent = ({
        >
          <Slider
            id={id}
