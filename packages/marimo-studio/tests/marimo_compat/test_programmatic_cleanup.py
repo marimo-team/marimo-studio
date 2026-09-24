@@ -33,7 +33,10 @@ def _start_kernel(client: TestClient, manager: Any) -> Thread:
     websocket_url = (
         f"{root.path.rstrip('/')}/ws?session_id={config['presentationSessionId']}"
     )
-    with client.websocket_connect(websocket_url):
+    with client.websocket_connect(websocket_url) as websocket:
+        # Marimo starts the session before it announces kernel readiness.
+        while websocket.receive_json()["op"] != "kernel-ready":
+            pass
         session = next(iter(manager.sessions.values()))
         task = cast(Any, session)._kernel_manager.kernel_task
         assert isinstance(task, Thread)
@@ -60,9 +63,9 @@ def test_late_kernel_publication_restores_the_host_main_module(
             raise RuntimeError("Kernel module publication was not released")
         native_patch(module)
 
-    def shutdown_manager() -> None:
+    async def shutdown_manager() -> None:
         allow_publish.set()
-        native_shutdown()
+        await native_shutdown()
 
     monkeypatch.setattr(marimo_patches, "patch_sys_module", delayed_patch)
     monkeypatch.setattr(manager, "shutdown", shutdown_manager)

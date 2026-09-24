@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
@@ -13,7 +12,6 @@ from threading import Lock, RLock
 from typing import Any, cast
 from weakref import WeakKeyDictionary, ref
 
-from marimo._server.api.endpoints.ws.session_handler import SessionHandler
 from marimo._server.api.endpoints.ws.ws_session_connector import SessionConnector
 from marimo._server.api.endpoints.ws_endpoint import WebSocketHandler
 from starlette.websockets import WebSocketDisconnect, WebSocketState
@@ -27,7 +25,6 @@ from marimo_studio._compat.server.editor_session_lifetimes import (
     _accept_studio_session,
     _close_manager_session_lifetimes,
     _close_studio_session_lifetimes,
-    _notify_closed_studio_session,
     _open_studio_session_lifetimes,
     _track_manager_session_lifetimes,
     session_is_owned,
@@ -54,10 +51,6 @@ _MAX_ROUTES = 100
 # The browser permits a 30-second initial handshake. Retain its route across
 # that attempt and the reconnect scheduling that follows a transport timeout.
 _PREVIEW_CONNECT_GRACE = 60.0
-
-
-class _StudioSessionRejected(WebSocketDisconnect):
-    pass
 
 
 @dataclass
@@ -176,7 +169,7 @@ def _session_connect_replacement(native_connect: Any) -> Any:
     from marimo._session.model import SessionMode
 
     @wraps(native_connect)
-    def connect_current_server(connector: SessionConnector) -> Any:
+    async def connect_current_server(connector: SessionConnector) -> Any:
         admission = _native_session_admission(connector)
         query = connector.connection.query_params
         client_id = query.get(STUDIO_CLIENT_QUERY_PARAM)
@@ -186,7 +179,7 @@ def _session_connect_replacement(native_connect: Any) -> Any:
                 instance_id
                 != server_instance_id(str(connector.manager.skew_protection_token))
             ):
-                raise _StudioSessionRejected(
+                raise WebSocketDisconnect(
                     WebSocketCodes.NORMAL_CLOSE,
                     WebSocketCloseReason.NO_SESSION,
                 )
@@ -223,9 +216,9 @@ def _session_connect_replacement(native_connect: Any) -> Any:
                 # A launcher link can retain its original untitled file key after
                 # a save. Only the consumer session may resume an untitled kernel;
                 # the launcher's reusable key must never select another notebook.
-                connected = connector._create_new_session()
+                connected = await connector._create_new_session()
             else:
-                connected = native_connect(connector)
+                connected = await native_connect(connector)
         except BaseException:
             _settle_native_admission(admission, accepted=False)
             raise
@@ -238,7 +231,7 @@ def _session_connect_replacement(native_connect: Any) -> Any:
             created=connected[1] is ConnectionType.NEW,
             consumer=connector.handler,
         ):
-            raise _StudioSessionRejected(
+            raise WebSocketDisconnect(
                 WebSocketCodes.NORMAL_CLOSE,
                 WebSocketCloseReason.NO_SESSION,
             )
@@ -275,7 +268,7 @@ def _verify_native_admission(connector: SessionConnector) -> None:
     if valid:
         return
     _settle_native_admission(admission, accepted=False)
-    raise _StudioSessionRejected(
+    raise WebSocketDisconnect(
         WebSocketCodes.NORMAL_CLOSE,
         WebSocketCloseReason.NO_SESSION,
     )
@@ -311,17 +304,26 @@ def _settle_native_admission(
     admission.settled = True
     admission.rejected = not accepted
     if accepted and native_claim is not None:
+        # Native session startup awaits between verification and settlement.
+        current = (
+            admission.binding_current is None or admission.binding_current()
+        ) and (admission.mode != "current" or native_claim is admission.expected_claim)
         admission.expected_claim = native_claim
         if (
-            admission.on_close is not None
-            and manager is not None
+            manager is not None
             and session_id is not None
-            and not _accept_studio_session(
-                manager,
-                session_id,
-                native_claim,
-                admission.on_close,
-                admission.lifetime_owner,
+            and (
+                not current
+                or (
+                    admission.on_close is not None
+                    and not _accept_studio_session(
+                        manager,
+                        session_id,
+                        native_claim,
+                        admission.on_close,
+                        admission.lifetime_owner,
+                    )
+                )
             )
         ):
             admission.rejected = True
@@ -352,45 +354,6 @@ def _settle_native_admission(
     return accepted
 
 
-def _disconnect_replacement(native_disconnect: Any) -> Any:
-    @wraps(native_disconnect)
-    def disconnect(
-        handler: SessionHandler,
-        error: Exception,
-        cleanup: Callable[[], Any],
-    ) -> None:
-        connection = getattr(handler, "websocket", None) or getattr(
-            handler, "request", None
-        )
-        admission = _scope_native_session_admission(getattr(connection, "scope", {}))
-        session = (
-            admission.expected_claim
-            if admission is not None
-            and admission.on_close is not None
-            and admission.settled
-            and not admission.rejected
-            else None
-        )
-
-        def cleanup_and_notify() -> None:
-            try:
-                cleanup()
-            finally:
-                if session is not None:
-                    asyncio.get_running_loop().call_soon(
-                        _notify_closed_studio_session,
-                        session,
-                    )
-
-        native_disconnect(
-            handler,
-            error,
-            cleanup_and_notify if session is not None else cleanup,
-        )
-
-    return disconnect
-
-
 def _connect_kiosk_replacement(native_connect: Any) -> Any:
     from marimo._server.api.endpoints.ws.ws_session_connector import ConnectionType
     from marimo._server.codes import WebSocketCloseReason, WebSocketCodes
@@ -403,7 +366,7 @@ def _connect_kiosk_replacement(native_connect: Any) -> Any:
         if not connector.params.kiosk:
             return native_connect(connector)
         if connector.manager.mode is not SessionMode.EDIT:
-            raise _StudioSessionRejected(
+            raise WebSocketDisconnect(
                 WebSocketCodes.FORBIDDEN,
                 WebSocketCloseReason.KIOSK_NOT_ALLOWED,
             )
@@ -413,7 +376,7 @@ def _connect_kiosk_replacement(native_connect: Any) -> Any:
             router = _ROUTERS.get(connector.manager)
         session = router.resolve(connector.params.session_id) if router else None
         if session is None:
-            raise _StudioSessionRejected(
+            raise WebSocketDisconnect(
                 WebSocketCodes.NORMAL_CLOSE,
                 WebSocketCloseReason.NO_SESSION,
             )
@@ -423,30 +386,14 @@ def _connect_kiosk_replacement(native_connect: Any) -> Any:
     return connect_existing
 
 
-def _start_replacement(native_start: Any) -> Any:
-    @wraps(native_start)
-    async def start(handler: WebSocketHandler) -> None:
-        try:
-            await native_start(handler)
-        except _StudioSessionRejected as error:
-            await handler._safe_close(error.code, error.reason or "")
-
-    return start
-
-
 def _safe_close_replacement(native_close: Any) -> Any:
     @wraps(native_close)
     async def safe_close(handler: WebSocketHandler, code: int, reason: str) -> None:
-        websocket = handler.websocket
-        if (
-            websocket.client_state is WebSocketState.DISCONNECTED
-            or websocket.application_state is WebSocketState.DISCONNECTED
-        ):
+        # A rejected consumer can detach and close its transport before the
+        # native start path reports the same rejection.
+        if handler.websocket.application_state is WebSocketState.DISCONNECTED:
             return
-        try:
-            await native_close(handler, code, reason)
-        except WebSocketDisconnect:
-            return
+        await native_close(handler, code, reason)
 
     return safe_close
 
@@ -454,7 +401,7 @@ def _safe_close_replacement(native_close: Any) -> Any:
 _SESSION_CONNECT_PATCH = ReversiblePatch(
     "server-instance-routing",
     SessionConnector,
-    "connect",
+    "_connect",
     _session_connect_replacement,
 )
 _KIOSK_CONNECT_PATCH = ReversiblePatch(
@@ -462,18 +409,6 @@ _KIOSK_CONNECT_PATCH = ReversiblePatch(
     SessionConnector,
     "_connect_kiosk",
     _connect_kiosk_replacement,
-)
-_START_PATCH = ReversiblePatch(
-    "existing-session-rejection",
-    WebSocketHandler,
-    "start",
-    _start_replacement,
-)
-_DISCONNECT_PATCH = ReversiblePatch(
-    "studio-editor-session-lifetime",
-    SessionHandler,
-    "_on_disconnect",
-    _disconnect_replacement,
 )
 _SAFE_CLOSE_PATCH = ReversiblePatch(
     "websocket-close-disconnect",
@@ -504,8 +439,6 @@ class PrivateExistingSessionAttachment:
             for patch in (
                 _SESSION_CONNECT_PATCH,
                 _KIOSK_CONNECT_PATCH,
-                _START_PATCH,
-                _DISCONNECT_PATCH,
                 _SAFE_CLOSE_PATCH,
             ):
                 patches.append(patch.open())

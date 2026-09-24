@@ -17,7 +17,7 @@ publish_endpoint = runpy.run_path(str(Path(__file__).with_name("endpoint.py")))[
     "publish_endpoint"
 ]
 
-EXPECTED_MARIMO_VERSION = "0.24.2"
+EXPECTED_MARIMO_VERSION = "0.25.0"
 
 
 def configure_editor_fixture() -> None:

@@ -206,6 +206,9 @@ test("provides Studio before the first save in an environment with the installed
   const add = page.getByRole("button", { name: "+ Add view", exact: true });
   await expect(add).toBeVisible();
   await expect(page.locator("[data-cell-id]").first()).toBeVisible();
+  // A new notebook focuses its first cell after the initial run. Opening the
+  // save dialog before that focus change would clear the typed filename.
+  await expect(page.locator("[data-cell-id] .cm-content").first()).toBeFocused();
   await add.click();
   const saveDialog = page.getByRole("dialog", { name: "Save notebook" });
   await expect(saveDialog).toBeVisible();

@@ -101,6 +101,20 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     text: /^Failed to handle request: sendDocumentTransaction TypeError: Failed to fetch/,
     required: false,
   });
+  // Marimo mounts the installed Lens in the native editor. Leaving that page
+  // can abort the widget's pending event.
+  const interruptedLensEvent = browserDiagnostics.expectRequestFailure({
+    origin: hostedOrigin(),
+    path: /^\/hosted\/api\/kernel\/set_model_value$/,
+    method: "POST",
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
+  const interruptedLensEventLog = browserDiagnostics.expectConsole({
+    type: "error",
+    text: /^Failed to handle request: sendModelValue TypeError: Failed to fetch/,
+    required: false,
+  });
   const unusedNativeImages = browserDiagnostics.expectConsole({
     type: "warning",
     text: /^The resource http:\/\/127\.0\.0\.1:\d+\/hosted\/assets\/(?:gradient|noise)-[^/\s]+\.png was preloaded using link preload but not used/,
@@ -270,5 +284,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   await recoverRequestAbort(abandonedSourceWrite);
   interruptedDocumentTransaction.recovered();
   interruptedDocumentTransactionLog.recovered();
+  interruptedLensEvent.recovered();
+  interruptedLensEventLog.recovered();
   replacedWorkspaceStream.recovered();
 });

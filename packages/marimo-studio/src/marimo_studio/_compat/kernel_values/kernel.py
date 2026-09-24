@@ -27,7 +27,10 @@ from marimo_studio._compat.kernel_values.authorization import (
 from marimo_studio._compat.kernel_values.dependencies import (
     current_dependency_closure,
 )
-from marimo_studio._compat.kernel_values.lens import LensOverlay
+from marimo_studio._compat.kernel_values.lens import (
+    LensMountPolicy,
+    LensOverlay,
+)
 from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
@@ -260,11 +263,21 @@ def _kernel_filename(context: Any) -> Path | None:
     return Path(filename).resolve() if filename is not None else None
 
 
+def _is_studio_notebook(filename: Path | None) -> bool:
+    if filename is None:
+        return False
+    try:
+        return discover_studio_definition(filename) is not None
+    except (OSError, UnicodeError, ConfigurationError):
+        return False
+
+
 class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
         self._lens: LensOverlay | None = None
+        self._lens_mount: LensMountPolicy | None = None
         self._value_encoder: ValueEncoder | None = None
         self._query_generations: dict[str, tuple[int, int]] = {}
         self._query_operations: dict[tuple[str, str], tuple[str, tuple[int, int]]] = {}
@@ -284,10 +297,7 @@ class _KernelBridgeLifespan:
         filename = _kernel_filename(context) or filename
         if is_owned_session() or filename is None:
             return False
-        try:
-            configured = discover_studio_definition(filename) is not None
-        except (OSError, UnicodeError, ConfigurationError):
-            configured = False
+        configured = _is_studio_notebook(filename)
         if inspection is None and not configured:
             return False
         from marimo._session.model import SessionMode
@@ -392,6 +402,13 @@ class _KernelBridgeLifespan:
         from marimo._messaging.notification_utils import broadcast_notification
 
         filename = filename or _kernel_filename(context)
+        if self._lens_mount is None and not is_owned_session():
+            lens_mount = LensMountPolicy(
+                context,
+                lambda: _is_studio_notebook(_kernel_filename(context)),
+            )
+            lens_mount.open()
+            self._lens_mount = lens_mount
         inspection = (
             _claim_probe_selector_lease(context, filename)
             if filename is not None
@@ -695,11 +712,19 @@ class _KernelBridgeLifespan:
 
     def _close(self) -> None:
         failure: BaseException | None = None
+        if self._lens_mount is not None:
+            try:
+                self._lens_mount.close()
+            except BaseException as error:
+                failure = error
+            else:
+                self._lens_mount = None
         if self._lens is not None:
             try:
                 self._lens.close()
             except BaseException as error:
-                failure = error
+                if failure is None:
+                    failure = error
             else:
                 self._lens = None
         if self._value_encoder is not None:

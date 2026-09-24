@@ -410,11 +410,11 @@ class _ProgrammaticApp:
             first_failure: BaseException | None = None
             retry_failure: BaseException | None = None
             try:
-                manager.shutdown()
+                await manager.shutdown()
             except BaseException as error:
                 first_failure = error
                 try:
-                    manager.shutdown()
+                    await manager.shutdown()
                 except BaseException as retry_error:
                     retry_failure = retry_error
             threads.update(_kernel_threads(sessions))

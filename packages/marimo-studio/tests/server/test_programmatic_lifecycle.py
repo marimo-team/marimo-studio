@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import multiprocessing
 import sys
-from collections.abc import Callable, MutableMapping
+from collections.abc import Awaitable, Callable, MutableMapping
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from threading import Thread
@@ -56,7 +56,10 @@ def _start_kernel(client: TestClient, manager: Any) -> Thread:
     websocket_url = (
         f"{root.path.rstrip('/')}/ws?session_id={config['presentationSessionId']}"
     )
-    with client.websocket_connect(websocket_url):
+    with client.websocket_connect(websocket_url) as websocket:
+        # Marimo starts the session before it announces kernel readiness.
+        while websocket.receive_json()["op"] != "kernel-ready":
+            pass
         session = next(iter(manager.sessions.values()))
         task = cast(Any, session)._kernel_manager.kernel_task
         assert isinstance(task, Thread)
@@ -95,13 +98,13 @@ def test_programmatic_apps_own_each_notebook_lifespan(
     first_shutdown = first_manager.shutdown
     second_shutdown = second_manager.shutdown
 
-    def shutdown_first() -> None:
+    async def shutdown_first() -> None:
         shutdown.append(first_manager)
-        first_shutdown()
+        await first_shutdown()
 
-    def shutdown_second() -> None:
+    async def shutdown_second() -> None:
         shutdown.append(second_manager)
-        second_shutdown()
+        await second_shutdown()
 
     monkeypatch.setattr(first_manager, "shutdown", shutdown_first)
     monkeypatch.setattr(second_manager, "shutdown", shutdown_second)
@@ -153,10 +156,10 @@ def test_programmatic_lifespan_cancellation_drains_owned_resources(
     shutdown = 0
     native_shutdown = manager.shutdown
 
-    def shutdown_manager() -> None:
+    async def shutdown_manager() -> None:
         nonlocal shutdown
         shutdown += 1
-        native_shutdown()
+        await native_shutdown()
 
     monkeypatch.setattr(manager, "shutdown", shutdown_manager)
 
@@ -246,12 +249,12 @@ def test_programmatic_startup_failure_closes_siblings_and_session_managers(
     for manager in managers:
         native_shutdown = manager.shutdown
 
-        def shutdown_manager(
+        async def shutdown_manager(
             manager: object = manager,
-            native_shutdown: Callable[[], None] = native_shutdown,
+            native_shutdown: Callable[[], Awaitable[None]] = native_shutdown,
         ) -> None:
             shutdown.append(manager)
-            native_shutdown()
+            await native_shutdown()
 
         monkeypatch.setattr(manager, "shutdown", shutdown_manager)
     owned = own_programmatic_lifespans(app)
@@ -282,14 +285,14 @@ def test_programmatic_shutdown_retries_and_preserves_the_first_failure(
     retry_failure = RuntimeError("retry shutdown failed")
     attempts = 0
 
-    def shutdown_manager() -> None:
+    async def shutdown_manager() -> None:
         nonlocal attempts
         attempts += 1
         if attempts == 1:
             raise first_failure
         if retry_fails:
             raise retry_failure
-        native_shutdown()
+        await native_shutdown()
 
     monkeypatch.setattr(manager, "shutdown", shutdown_manager)
 

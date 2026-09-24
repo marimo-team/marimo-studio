@@ -17,18 +17,18 @@ pytestmark = pytest.mark.requires_node
 def _cells_module() -> bytes:
     assets = Path(marimo.__file__).parent / "_static" / "assets"
     cells = next(assets.glob("cells-*.js")).read_bytes()
-    start = cells.index(b"var $H=[],eU=[]")
-    end = cells.index(b"function hU(", start)
+    start = cells.index(b"var wj=[],Tj=[]")
+    end = cells.index(b"function Bj(", start)
     source = (
-        b"const QH=value=>value;"
-        b"const $s=operation=>{operation.cancel=()=>{};return operation};"
-        b"const rd=()=>globalThis.__documentClient;"
-        b"class af{constructor(){this.promise=new Promise(resolve=>{"
+        b"const Cj=value=>value;"
+        b"const I=operation=>{operation.cancel=()=>{};return operation};"
+        b"const Vr=()=>globalThis.__documentClient;"
+        b"class li{constructor(){this.promise=new Promise(resolve=>{"
         b"this.resolve=resolve})}}"
-        b"const RB=0,zo=0;"
+        b"const ak=0;"
         + cells[start:end]
-        + b"const queueChange=change=>$H.push(change);"
-        b"export {queueChange,mU as withDocumentSave,zo,RB as zt};"
+        + b"const queueChange=change=>wj.push(change);"
+        b"export {queueChange,zj as withDocumentSave,ak as zt};"
     )
     return _serialize_document_transactions(source)
 
@@ -122,17 +122,17 @@ def test_rewritten_network_module_requires_exact_changed_header(
     cells = tmp_path / "cells-test.js"
     cells.write_bytes(_cells_module())
     source = (
-        b'import {zo as $e}from"./cells-test.js";'
-        b"const sn=async()=>{};const lp=async value=>value;"
+        b'import {zt as tn}from"./cells-test.js";'
+        b"const br=async()=>{};const Qk=async value=>value;"
         b"function createNetwork(post){let e=()=>({POST:post}),t=()=>({}),"
         b"n=()=>({header:t()});return{sendComponentValues:()=>{},"
         b"sendSave:t=>e().POST(`/api/kernel/save`,{body:t,parseAs:`text`,params:n()})"
-        b".then(lp),"
-        b"sendDocumentTransaction:async t=>(await sn(),e().POST("
+        b".then(Qk),"
+        b"sendDocumentTransaction:async t=>(await br(),e().POST("
         b"`/api/document/transaction`,"
-        b"{body:t,params:n()}).then(lp)),"
-        b"sendRun:async t=>(await sn(),e().POST(`/api/kernel/run`,{body:t,params:n()})"
-        b".then(lp))}};export {createNetwork};"
+        b"{body:t,params:n()}).then(Qk)),"
+        b"sendRun:async t=>(await br(),e().POST(`/api/kernel/run`,{body:t,params:n()})"
+        b".then(Qk))}};export {createNetwork};"
     )
 
     index = tmp_path / "index-test.js"

@@ -90,7 +90,7 @@ _SYMBOLS = {
         _source_contract(
             "marimo._server.session_manager",
             "SessionManager.__init__",
-            "6f65ddd08428c50b8fb7a440bca3de708e2d87a20a6eb39f458d694238280179",
+            "31b1b282bf11f160460da26768b06fc4237faa778ae5734516308e726cf42bec",
         ),
         SymbolContract(
             "marimo._server.session_manager",
@@ -117,7 +117,7 @@ _SYMBOLS = {
                 ("self", "POSITIONAL_OR_KEYWORD", False),
                 ("session_id", "POSITIONAL_OR_KEYWORD", False),
             ),
-            "5d674124e696138fa8e7e1bcad672fdb8d1b7a36c79deef704ccee43d6019d6a",
+            "d888a14630aa9e6762221d5f57e7abdcdf57e403c9600b72bfc7846d2074ac10",
         ),
     ),
     "programmatic-main-module": (
@@ -137,7 +137,7 @@ _SYMBOLS = {
         _source_contract(
             "marimo._session.managers.ipc",
             "IPCKernelManagerImpl.__init__",
-            "3ac3132fb01fcbe1367b300061faecf7a8a48047c4819a536318a700d5cf655c",
+            "406097cedbf70cbff9091e9fb0dea0bcc83d23c25d7dc273975a3846ca908c5b",
         ),
         _source_contract(
             "marimo._session.managers.app_host",
@@ -155,7 +155,13 @@ _SYMBOLS = {
             "marimo._server.api.endpoints.ws.ws_session_connector",
             "SessionConnector.connect",
             _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
-            "b6fad2c2767fc3dcb2856d18ea6a434630251c413dd53ec1e0581622da7bf4d4",
+            "11d7816287c90e455c383c44d825a66f59b29306a3bfd89dc157326e9f9e2d68",
+        ),
+        SymbolContract(
+            "marimo._server.api.endpoints.ws.ws_session_connector",
+            "SessionConnector._connect",
+            _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
+            "898a4def2b274ff61ac880983e33d5575c33d8a1dde6d284a39dbfdb6305d5cc",
         ),
         SymbolContract(
             "marimo._server.api.endpoints.ws.ws_session_connector",
@@ -167,13 +173,13 @@ _SYMBOLS = {
             "marimo._server.api.endpoints.ws.ws_session_connector",
             "SessionConnector._create_new_session",
             _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
-            "34d2ba947825a2719de541d92927a1718f9905d73e54ef906f96577e360685d7",
+            "f226aecbc9b1f4505dab482fe3a90385d7e1449aea21928acc8427651d86c3ba",
         ),
         SymbolContract(
             "marimo._server.api.endpoints.ws_endpoint",
             "WebSocketHandler.start",
             _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
-            "1e5dc8b41351444c8926cd84fcd66b0bd0ecea2e3bb49c18bdda99cfcc61f98a",
+            "ec2c3c51e63f1d892cde29065e382342c51aba848aea30a3a2174a98405e3200",
         ),
         SymbolContract(
             "marimo._server.api.endpoints.ws_endpoint",
@@ -183,24 +189,20 @@ _SYMBOLS = {
                 ("code", "POSITIONAL_OR_KEYWORD", False),
                 ("reason", "POSITIONAL_OR_KEYWORD", False),
             ),
-            "30d6ac8d47c223e0c4c22c8b48186fdbf8e043baec34bda52d1107b3c783fe29",
+            "b24dff35c179d5e027c513b3ba76e622ee8560abf842ed3d6a00cd832982e95b",
         ),
         SymbolContract(
             "marimo._server.api.endpoints.ws.session_handler",
             "SessionHandler._on_disconnect",
-            _parameters(
-                ("self", "POSITIONAL_OR_KEYWORD", False),
-                ("e", "POSITIONAL_OR_KEYWORD", False),
-                ("cleanup_fn", "POSITIONAL_OR_KEYWORD", False),
-            ),
-            "d552fc5aa3b3724d429e2fedd8363ef5d5b426a69349e403fc3a59d5112173e5",
+            _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
+            "cc7de12f46c884da4582d1b5072e94042a641dc7ddd7a8dd65130458ddb04a03",
         ),
     ),
     "session-replay": (
         _source_contract(
             "marimo._server.api.endpoints.ws.session_handler",
             "SessionHandler._reconnect_session",
-            "4b17dd1f3137dad2ddf62d20ba819150a2210b8b613cc3d09c462adb0e6f7546",
+            "6f29d58798f375ed92654a81a8e4c9af50d2709a9f0a2ce7f2e1384758cb47ea",
         ),
         SymbolContract(
             "marimo._server.api.endpoints.ws.ws_session_connector",
@@ -236,7 +238,13 @@ _SYMBOLS = {
                 ("persist", "KEYWORD_ONLY", False),
                 ("previous_path", "KEYWORD_ONLY", True),
             ),
-            "5de4d099725d669ccef2a111501a7160922179a9337b60d02486a67c4daa649b",
+            "178c04d53ba6bc80e034080a14c8ae4183286c211e9e65d1a4e0b7d6c7822698",
+        ),
+        SymbolContract(
+            "marimo._environments.script_metadata",
+            "notebook_file_lock",
+            _parameters(("path", "POSITIONAL_OR_KEYWORD", False)),
+            "e782d586d9f6098dd1e4a3a23dec79ab83ae697165a6aab4a00c411bce0fd2b9",
         ),
     ),
     "document-transaction-evidence": (
@@ -297,7 +305,34 @@ _SYMBOLS = {
         _source_contract(
             "marimo._session.session",
             "SessionImpl.__init__",
-            "a7a8e3ce7df349424cd2fb8ee67d0d8bc5cddb0c9dbc2777dd3b0f8e299fcf86",
+            "6473a9377a00158029d74303b69bf5217f75d94c62d3b798f04dab181b6d5ac7",
+        ),
+    ),
+    "lens-mount-policy": (
+        SymbolContract(
+            "marimo._runtime.runner.hooks_lens",
+            "mount_lens",
+            _parameters(
+                ("cell", "POSITIONAL_OR_KEYWORD", False),
+                ("ctx", "POSITIONAL_OR_KEYWORD", False),
+                ("result", "POSITIONAL_OR_KEYWORD", False),
+            ),
+            "7dfc24c0a1c4ff767c3888e33ce59448da9b2e11b9e763af987aca053d0bf5b9",
+        ),
+        _source_contract(
+            "marimo._runtime.runner.hooks",
+            "_HookList.add",
+            "f512376cc0d128c6529b9a2f6db6d884fdfda5347cf3a6871020eb975ba4bb84",
+        ),
+        _source_contract(
+            "marimo._runtime.runner.hooks",
+            "_HookList.sorted_hooks.fget",
+            "9714abce2444ff496860c1f8a4b275dee2f02d2bff8d2704c1ed64bd4a07440b",
+        ),
+        _source_contract(
+            "marimo._runtime.runner.hooks",
+            "NotebookCellHooks.copy",
+            "7a21d82d77b4a7f6ad0d4d5637b40c3c105477f8f4d54b7da448f43a9ff1e446",
         ),
     ),
     "zero-python-state-ledger": (
@@ -403,7 +438,7 @@ _SYMBOLS = {
                 ("file_key", "POSITIONAL_OR_KEYWORD", False),
                 ("auto_instantiate", "POSITIONAL_OR_KEYWORD", False),
             ),
-            "b71d489d5b086b560ff1de533bab394ccc110461b32725b7ac5a21e3dfe5d73f",
+            "3b32697185bf7c654232db4f3c570be8f74792ace851f3076ab38e4e168d40a9",
         ),
         SymbolContract(
             "marimo._session.session",

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from marimo._server.api.endpoints.ws.session_handler import SessionHandler
 from marimo._server.api.endpoints.ws.ws_session_connector import ConnectionType
 from starlette.datastructures import QueryParams
 from starlette.websockets import WebSocketDisconnect
@@ -39,7 +39,6 @@ from .session_adapter_test_support import open_adapter as _open
 
 def test_session_lifetime_cleanup_is_isolated_between_adapter_owners() -> None:
     async def exercise() -> None:
-        original = SessionHandler._on_disconnect
         first_manager = _Manager()
         second_manager = _Manager()
         first_manager.ttl_seconds = None
@@ -53,7 +52,6 @@ def test_session_lifetime_cleanup_is_isolated_between_adapter_owners() -> None:
         first_adapter, first_handle = _open(first_manager)
         first_owner = first_adapter.claim_editor_lifetime(_context(first_manager))
         assert first_owner is not None
-        patched = SessionHandler._on_disconnect
         second_adapter, second_handle = _open(second_manager)
         second_owner = second_adapter.claim_editor_lifetime(_context(second_manager))
         assert second_owner is not None
@@ -75,13 +73,11 @@ def test_session_lifetime_cleanup_is_isolated_between_adapter_owners() -> None:
         first_handle.close()
         assert first_manager.get_session("s_first1") is None
         assert second_manager.get_session("s_second") is second_session
-        assert SessionHandler._on_disconnect is patched
         assert first_session not in lifetime_module._STUDIO_SESSION_LIFETIMES
         assert second_session in lifetime_module._STUDIO_SESSION_LIFETIMES
 
         second_handle.close()
         assert second_manager.get_session("s_second") is None
-        assert SessionHandler._on_disconnect is original
         assert not lifetime_module._STUDIO_SESSION_LIFETIMES
 
     asyncio.run(exercise())
@@ -369,7 +365,6 @@ def test_session_lifetime_close_retries_after_manager_failure() -> None:
             super().close_session(session_id)
 
     async def exercise() -> None:
-        original = SessionHandler._on_disconnect
         manager = Manager()
         manager.ttl_seconds = None
         session = _Session()
@@ -377,7 +372,6 @@ def test_session_lifetime_close_retries_after_manager_failure() -> None:
         manager.sessions["s_target"] = session
         callbacks: list[object] = []
         adapter, handle = _open(manager)
-        patched = SessionHandler._on_disconnect
         owner = adapter.claim_editor_lifetime(_context(manager))
         assert owner is not None
         lifetime_module._accept_studio_session(
@@ -393,14 +387,12 @@ def test_session_lifetime_close_retries_after_manager_failure() -> None:
         assert manager.get_session("s_target") is session
         assert session in lifetime_module._STUDIO_SESSION_LIFETIMES
         assert callbacks == []
-        assert SessionHandler._on_disconnect is patched
 
         manager.fail_close = False
         handle.close()
         assert manager.get_session("s_target") is None
         assert session not in lifetime_module._STUDIO_SESSION_LIFETIMES
         assert callbacks == [session]
-        assert SessionHandler._on_disconnect is original
 
     asyncio.run(exercise())
 
@@ -541,7 +533,7 @@ def test_native_connector_rejects_a_lost_lifetime_owner(created: bool) -> None:
             ),
         )
 
-        def connect(_connector: object) -> tuple[object, object]:
+        async def connect(_connector: object) -> tuple[object, object]:
             if created:
                 manager.sessions["s_target"] = session
             session.room.consumers["s_target"] = consumer
@@ -550,7 +542,7 @@ def test_native_connector_rejects_a_lost_lifetime_owner(created: bool) -> None:
         guarded = existing_session_module._session_connect_replacement(connect)
 
         with pytest.raises(WebSocketDisconnect):
-            guarded(connector)
+            await guarded(connector)
 
         assert manager.get_session("s_target") is None
         if not created:
@@ -559,6 +551,66 @@ def test_native_connector_rejects_a_lost_lifetime_owner(created: bool) -> None:
         assert await clients.binding_for_client("browser-client-1234") is None
         assert admission.rejected
         await clients.close()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("created", [True, False])
+def test_native_connector_rejects_a_binding_lost_during_startup(created: bool) -> None:
+    class Session(_Session):
+        def disconnect_consumer(self, consumer: Any) -> None:
+            self.room.consumers.pop(consumer.consumer_id, None)
+
+    async def exercise() -> None:
+        manager = _Manager()
+        session = Session()
+        consumer = SimpleNamespace(consumer_id="s_target")
+        if not created:
+            manager.sessions["s_target"] = session
+        binding = {"current": True}
+        rejected: list[bool] = []
+        admission = NativeSessionAdmission(
+            expected_claim=None if created else session,
+            file_key="notebook.py",
+            mode="fresh" if created else "current",
+            notebook=str(Path("notebook.py").resolve()),
+            runtime_session_id="s_target",
+            binding_current=lambda: binding["current"],
+            on_reject=lambda: rejected.append(True),
+        )
+        connector = cast(
+            Any,
+            SimpleNamespace(
+                manager=manager,
+                handler=consumer,
+                params=SimpleNamespace(
+                    session_id="s_target",
+                    file_key="notebook.py",
+                    kiosk=False,
+                ),
+                connection=SimpleNamespace(
+                    query_params=QueryParams(),
+                    scope={NATIVE_SESSION_ADMISSION_SCOPE_KEY: admission},
+                ),
+            ),
+        )
+
+        async def connect(_connector: object) -> tuple[object, object]:
+            await asyncio.sleep(0)
+            binding["current"] = False
+            manager.sessions["s_target"] = session
+            session.room.consumers["s_target"] = consumer
+            return session, ConnectionType.NEW if created else ConnectionType.RECONNECT
+
+        guarded = existing_session_module._session_connect_replacement(connect)
+
+        with pytest.raises(WebSocketDisconnect):
+            await guarded(connector)
+
+        assert admission.rejected
+        assert rejected == [True]
+        assert "s_target" not in session.room.consumers
+        assert (manager.get_session("s_target") is None) is created
 
     asyncio.run(exercise())
 

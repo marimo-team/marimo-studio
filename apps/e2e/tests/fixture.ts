@@ -137,6 +137,8 @@ export const restoreWorkspace = async () => {
   await removeTree(noDisplayStaticExportDirectory);
   await copyFixtureFile("plain.py");
   await rm(resolve(workspaceDirectory, "first-save.py"), { force: true });
+  await rm(resolve(workspaceDirectory, "lens-onboarding.py"), { force: true });
+  await removeTree(resolve(workspaceDirectory, "__marimo__/studio/lens-onboarding"));
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/view.toml");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/index.html");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/app.css");

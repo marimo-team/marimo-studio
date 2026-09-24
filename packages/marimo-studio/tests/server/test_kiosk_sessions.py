@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
@@ -136,7 +137,7 @@ def test_studio_connection_joins_the_native_notebook_session() -> None:
     )
     _adapter, handle = _open(manager)
     try:
-        assert connector.connect() == (session, ConnectionType.KIOSK)
+        assert asyncio.run(connector.connect()) == (session, ConnectionType.KIOSK)
         assert connected == [session]
     finally:
         handle.close()
@@ -187,7 +188,7 @@ def test_fresh_admission_rejects_a_connector_time_preclaim(
             barrier.set()
             claimed.result()
             with pytest.raises(WebSocketDisconnect):
-                connector.connect()
+                asyncio.run(connector.connect())
     finally:
         handle.close()
 
@@ -305,11 +306,13 @@ def test_current_admission_selects_the_reconnect_snapshot_contract(
         ),
     )
 
-    def native_connect(active: SessionConnector) -> tuple[object, ConnectionType]:
+    async def native_connect(
+        active: SessionConnector,
+    ) -> tuple[object, ConnectionType]:
         return active._reconnect_session(cast(Any, session))
 
-    assert existing_session_module._session_connect_replacement(native_connect)(
-        connector
+    assert asyncio.run(
+        existing_session_module._session_connect_replacement(native_connect)(connector)
     ) == (session, ConnectionType.RECONNECT)
     assert session.disconnects == 1
     assert replays == [expected_replay]
@@ -382,7 +385,7 @@ def test_secondary_reconnect_preserves_the_native_editor(rtc_enabled: bool) -> N
     _adapter, handle = _open(manager)
     try:
         expected = ConnectionType.RTC_EXISTING if rtc_enabled else ConnectionType.KIOSK
-        assert connector.connect() == (session, expected)
+        assert asyncio.run(connector.connect()) == (session, expected)
         assert connected == [(session, expected)]
         assert session.room.main_consumer is primary
     finally:
@@ -560,29 +563,25 @@ def test_expired_unclaimed_routes_release_capacity() -> None:
 
 
 def test_final_lifecycle_close_restores_private_patches() -> None:
-    original_session_connect = SessionConnector.connect
+    original_session_connect = SessionConnector._connect
     original_connector = SessionConnector._connect_kiosk
-    original_start = WebSocketHandler.start
     original_safe_close = WebSocketHandler._safe_close
     first = PrivateExistingSessionAttachment()
     second = PrivateExistingSessionAttachment()
     first_handle = first.open()
-    replacement_session_connect = SessionConnector.connect
+    replacement_session_connect = SessionConnector._connect
     replacement_connector = SessionConnector._connect_kiosk
-    replacement_start = WebSocketHandler.start
     replacement_safe_close = WebSocketHandler._safe_close
     second_handle = second.open()
 
     first_handle.close()
-    assert SessionConnector.connect is replacement_session_connect
+    assert SessionConnector._connect is replacement_session_connect
     assert SessionConnector._connect_kiosk is replacement_connector
-    assert WebSocketHandler.start is replacement_start
     assert WebSocketHandler._safe_close is replacement_safe_close
 
     second_handle.close()
-    assert SessionConnector.connect is original_session_connect
+    assert SessionConnector._connect is original_session_connect
     assert SessionConnector._connect_kiosk is original_connector
-    assert WebSocketHandler.start is original_start
     assert WebSocketHandler._safe_close is original_safe_close
 
 

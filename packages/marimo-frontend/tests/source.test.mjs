@@ -340,6 +340,9 @@ test("opaque presentations execute through one owned inline WebAssembly worker",
       this.startSession();
     });`;
   const source = `
+import workerUrl from "./worker/worker.ts?worker&url";
+const saveWorkerUrl = "./worker/save-worker.ts";
+const createModuleWorker = (url, options) => new Worker(url, { ...options, type: "module" });
 const getWasmWorkerName = () => "presentation";
 const getInitialAppMode = () => "read";
 const userConfig = { runtime: { auto_instantiate: false } };
@@ -352,23 +355,14 @@ export class Bridge {
   startCalls = 0;
   startSession() { this.startCalls += 1; }
   mount() {
-const main = new Worker(
-      // oxlint-disable-next-line unicorn/relative-url-style
-      new URL("./worker/worker.ts", import.meta.url),
+const main = createModuleWorker(new URL(workerUrl, import.meta.url), {
+      // Pass the optional custom-controller capability to the worker.
+      name: getWasmWorkerName(),
+    });
+const save = createModuleWorker(
+      new URL(saveWorkerUrl, import.meta.url),
       {
-        type: "module",
-        // Pass the version (and optional capability suffix) to the worker
-        /* @vite-ignore */
-        name: getWasmWorkerName(),
-      },
-    );
-const save = new Worker(
-      // oxlint-disable-next-line unicorn/relative-url-style
-      new URL("./worker/save-worker.ts", import.meta.url),
-      {
-        type: "module",
-        // Pass the version (and optional capability suffix) to the worker
-        /* @vite-ignore */
+        // Pass the optional custom-controller capability to the worker.
         name: getWasmWorkerName(),
       },
     );

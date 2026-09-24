@@ -20,10 +20,14 @@ def test_runtime_probe_preserves_session_creation_failures(
         shutdown_called = False
 
         @staticmethod
-        def create_session(*_: object, **__: object) -> object:
+        async def create_session(*_: object, **__: object) -> object:
             raise RuntimeError("session startup failed")
 
-        def shutdown(self) -> None:
+        @staticmethod
+        def get_session(_session_id: object) -> None:
+            return None
+
+        async def shutdown(self) -> None:
             self.shutdown_called = True
 
     manager = FailingManager()
