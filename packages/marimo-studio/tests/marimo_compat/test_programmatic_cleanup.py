@@ -34,9 +34,8 @@ def _start_kernel(client: TestClient, manager: Any) -> Thread:
         f"{root.path.rstrip('/')}/ws?session_id={config['presentationSessionId']}"
     )
     with client.websocket_connect(websocket_url) as websocket:
-        # Marimo starts the session before it announces kernel readiness.
-        while websocket.receive_json()["op"] != "kernel-ready":
-            pass
+        # Marimo registers the session before it announces kernel readiness.
+        assert websocket.receive_json()["op"] == "kernel-ready"
         session = next(iter(manager.sessions.values()))
         task = cast(Any, session)._kernel_manager.kernel_task
         assert isinstance(task, Thread)

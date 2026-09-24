@@ -52,9 +52,13 @@ class LensOverlay:
 
 
 def _imports_lens(graph: Any) -> bool:
+    # A module import such as `import marimo_lens as ml` reaches `ml.Lens`.
     return any(
         imported.namespace == "marimo_lens"
-        and (imported.imported_symbol or "").rpartition(".")[2] == "Lens"
+        and (
+            imported.imported_symbol is None
+            or imported.imported_symbol.rpartition(".")[2] == "Lens"
+        )
         for cell in graph.cells.values()
         for imported in cell.imports
     )

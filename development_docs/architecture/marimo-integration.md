@@ -319,7 +319,8 @@ Marimo mounts its Lens after the cell that imports marimo runs, unless an
 earlier cell output already holds one. That cell usually runs before a cell that
 constructs a Lens, so a notebook that authors its own Lens would hold two. The
 kernel lifespan replaces the post-execution hook with `LensMountPolicy`, which
-skips the automatic mount when a Studio notebook imports the `Lens` widget.
+skips the automatic mount when a Studio notebook imports the `Lens` widget or
+the `marimo_lens` module.
 Other notebooks keep Marimo's mount.
 
 The native renderer mounts overlays outside the artifact shell, suppressing
