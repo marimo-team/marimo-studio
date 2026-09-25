@@ -85,12 +85,12 @@ def _enter_delivery_environment(
     notebook: Path,
     runtime: StaticRuntime,
 ) -> None:
-    """Run Zero-Python preparation where the notebook's Python dependencies live."""
-    _bootstrap_provider_environment(target, notebook)
-    if runtime == "zero-python":
-        studio = load_studio_target(target)
-        if should_reenter(studio, None):
-            raise click.exceptions.Exit(run_in_environment(studio, sys.argv[1:]))
+    """Rerun where provider requirements and Prepared notebook dependencies live."""
+    environment = resolve_environment_target(target, notebook)
+    if provider_bootstrap_required(environment) or (
+        runtime == "zero-python" and should_reenter(environment, None)
+    ):
+        raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
 
 
 @click.command("build", cls=ColoredCommand)

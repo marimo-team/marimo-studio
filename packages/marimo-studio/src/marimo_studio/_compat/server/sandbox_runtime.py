@@ -12,46 +12,28 @@ from marimo._session.managers import ipc
 
 from marimo_studio._compat.patch import CompositeCloseHandle, ReversiblePatch
 from marimo_studio._server.ports import CloseHandle
-from marimo_studio._workspace.installation import (
-    STUDIO_DISTRIBUTION,
-    local_studio_source,
-)
+from marimo_studio._workspace.installation import invoking_studio
 
 _DENO_DISTRIBUTION = "deno"
-
-
-def studio_runtime_requirement() -> str:
-    """Return the requirement that installs the Studio running this process.
-
-    A sandboxed kernel loads Studio's kernel lifespan from its own environment,
-    so it must import the same Studio as the server, just as Marimo binds the
-    kernel to the running Marimo. An editable checkout layers as `-e <path>`, a
-    local wheel or directory by its file URL, and an index install by version.
-    """
-    source = local_studio_source()
-    if source is None:
-        return f"{STUDIO_DISTRIBUTION}=={distribution(STUDIO_DISTRIBUTION).version}"
-    if source.editable:
-        return f"-e {source.path}"
-    return f"{STUDIO_DISTRIBUTION} @ {source.url}"
 
 
 def studio_runtime_requirements() -> tuple[str, ...]:
     """Return the Studio and Deno a sandboxed process needs to match the server.
 
-    Code mode authors views inside the kernel, so framework providers there
-    build with the same pinned Deno that the server's Studio uses. A Studio
-    without installed metadata has no requirement to layer.
+    A sandboxed kernel loads Studio's kernel lifespan from its own environment,
+    so it imports the Studio the server runs, just as Marimo binds the kernel
+    to the running Marimo. Code mode authors views inside the kernel, so
+    framework providers there build with the server's pinned Deno. A Studio
+    without installed metadata has nothing to layer.
     """
-    try:
-        studio = studio_runtime_requirement()
-    except PackageNotFoundError:
+    studio = invoking_studio()
+    if studio is None:
         return ()
     try:
         deno = distribution(_DENO_DISTRIBUTION)
     except PackageNotFoundError:
-        return (studio,)
-    return (studio, f"{_DENO_DISTRIBUTION}=={deno.version}")
+        return (studio.requirement,)
+    return (studio.requirement, f"{_DENO_DISTRIBUTION}=={deno.version}")
 
 
 def _layer_studio(native: Any) -> Any:

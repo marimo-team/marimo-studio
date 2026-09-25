@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
+import sys
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
@@ -204,21 +207,22 @@ def test_prepared_delivery_reruns_in_the_notebook_environment(
     arguments: list[str],
 ) -> None:
     prepare_view(notebook_path)
-    module = "marimo_studio._cli.commands.view_delivery"
-    targets: list[Path] = []
+    invocation = [*arguments, "--target", str(notebook_path)]
+    commands: list[list[str]] = []
 
-    def reenter(target, _requested) -> bool:
-        targets.append(target.notebook)
-        return True
+    def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(returncode=23)
 
-    monkeypatch.setattr(f"{module}.provider_bootstrap_required", lambda _target: False)
-    monkeypatch.setattr(f"{module}.should_reenter", reenter)
-    monkeypatch.setattr(f"{module}.run_in_environment", lambda _target, _args: 23)
+    monkeypatch.setattr(sys, "argv", ["marimo-studio", *invocation])
+    monkeypatch.setattr(environment_module.subprocess, "run", run)
 
-    result = CliRunner().invoke(cli, [*arguments, "--target", str(notebook_path)])
+    result = CliRunner().invoke(cli, invocation)
 
     assert result.exit_code == 23, result.output
-    assert targets == [notebook_path.resolve()]
+    [command] = commands
+    assert command[:2] == [shutil.which("uv"), "run"]
+    assert command[command.index("--") + 1 :] == ["marimo-studio", *invocation]
 
 
 def test_browser_runtime_export_runs_where_it_was_invoked(
@@ -226,21 +230,21 @@ def test_browser_runtime_export_runs_where_it_was_invoked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     prepare_view(notebook_path)
-    module = "marimo_studio._cli.commands.view_delivery"
     exported: list[str] = []
 
     async def export_view(_notebook, _view, _output, **options):
         exported.append(options["runtime"])
-        raise SystemExit(0)
 
-    monkeypatch.setattr(f"{module}.provider_bootstrap_required", lambda _target: False)
     monkeypatch.setattr(
-        f"{module}.should_reenter",
-        lambda _target, _requested: pytest.fail("WebAssembly export re-entered"),
+        environment_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("Browser export reran through uv"),
     )
-    monkeypatch.setattr(f"{module}.export_view", export_view)
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view_delivery.export_view", export_view
+    )
 
-    result = CliRunner().invoke(
+    CliRunner().invoke(
         cli,
         [
             "view",
@@ -255,5 +259,4 @@ def test_browser_runtime_export_runs_where_it_was_invoked(
         ],
     )
 
-    assert result.exit_code == 0, result.output
     assert exported == ["wasm"]

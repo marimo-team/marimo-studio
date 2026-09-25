@@ -40,10 +40,7 @@ from marimo_studio._workspace.environment_requirements import (
     studio_dependency_constraint,
     uses_dependency_source,
 )
-from marimo_studio._workspace.installation import (
-    STUDIO_DISTRIBUTION,
-    local_studio_source,
-)
+from marimo_studio._workspace.installation import invoking_studio
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.models import NotebookEnvironment, StudioWorkspace
 from marimo_studio._workspace.python_project import (
@@ -595,15 +592,21 @@ def environment_command(
 
 
 def _invoking_studio_source(source_root: Path | None) -> list[str]:
-    """Return uv flags that install the local source of the invoking Studio."""
+    """Return uv flags that install the direct source of the invoking Studio.
+
+    An index install needs no flag because the launch requirements already pin
+    its version.
+    """
     if source_root is not None:
         return ["--with-editable", str(source_root)]
-    source = local_studio_source()
-    if source is None:
+    studio = invoking_studio()
+    if studio is None:
         return []
-    if source.editable:
-        return ["--with-editable", str(source.path)]
-    return ["--with", f"{STUDIO_DISTRIBUTION} @ {source.url}"]
+    if studio.editable is not None:
+        return ["--with-editable", str(studio.editable)]
+    if studio.url is not None:
+        return ["--with", studio.requirement]
+    return []
 
 
 def _target_provider_ids(target: EnvironmentTarget) -> tuple[str, ...]:

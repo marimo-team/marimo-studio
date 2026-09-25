@@ -15,7 +15,6 @@ from marimo._session.managers import ipc
 from marimo_studio._compat.server import sandbox_runtime
 from marimo_studio._compat.server.sandbox_runtime import (
     PrivateSandboxRuntime,
-    studio_runtime_requirement,
     studio_runtime_requirements,
 )
 from marimo_studio._workspace import installation
@@ -42,52 +41,6 @@ def _installed(
 
     monkeypatch.setattr(sandbox_runtime, "distribution", installed)
     monkeypatch.setattr(installation, "distribution", installed)
-
-
-def test_editable_checkout_layers_its_source_directory(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _installed(
-        monkeypatch,
-        {"url": tmp_path.as_uri(), "dir_info": {"editable": True}},
-    )
-
-    assert studio_runtime_requirement() == f"-e {tmp_path}"
-
-
-def test_local_wheel_layers_the_installed_file(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    wheel = tmp_path / "marimo_studio-0.1.6-py3-none-any.whl"
-    wheel.write_bytes(b"wheel")
-    _installed(
-        monkeypatch,
-        {"url": wheel.as_uri(), "archive_info": {}},
-    )
-
-    assert studio_runtime_requirement() == f"marimo-studio @ {wheel.as_uri()}"
-
-
-def test_index_install_without_deno_layers_its_exact_version_alone(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _installed(monkeypatch, None)
-
-    assert studio_runtime_requirements() == ("marimo-studio==0.1.6",)
-
-
-def test_missing_local_wheel_layers_its_exact_version(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _installed(
-        monkeypatch,
-        {"url": (tmp_path / "removed.whl").as_uri(), "archive_info": {}},
-    )
-
-    assert studio_runtime_requirement() == "marimo-studio==0.1.6"
 
 
 def test_sandboxed_kernel_launch_includes_the_running_studio(
@@ -135,12 +88,22 @@ def test_closed_adapter_restores_marimo_overlay(
     assert pool.runtime_overlay().requirements == native
 
 
+@pytest.mark.parametrize(
+    ("deno", "requirements"),
+    (
+        ("2.9.5", ("marimo-studio==0.1.6", "deno==2.9.5")),
+        (None, ("marimo-studio==0.1.6",)),
+    ),
+    ids=("with-deno", "without-deno"),
+)
 def test_sandboxed_processes_build_with_the_server_deno(
     monkeypatch: pytest.MonkeyPatch,
+    deno: str | None,
+    requirements: tuple[str, ...],
 ) -> None:
-    _installed(monkeypatch, None, deno="2.9.5")
+    _installed(monkeypatch, None, deno=deno)
 
-    assert studio_runtime_requirements() == ("marimo-studio==0.1.6", "deno==2.9.5")
+    assert studio_runtime_requirements() == requirements
 
 
 def test_uninstalled_studio_layers_nothing(monkeypatch: pytest.MonkeyPatch) -> None:

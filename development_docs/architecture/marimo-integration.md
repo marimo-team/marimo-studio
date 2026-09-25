@@ -274,18 +274,23 @@ not match the selected presentation.
 
 ### Sandboxed kernels
 
-`marimo edit --sandbox` and `marimo run --sandbox` start each kernel or app
-host in an environment built from the notebook's PEP 723 manifest. Studio's
-kernel half loads through the `marimo.kernel.lifespan` entry point, so that
-environment must contain the Studio the server runs. `PrivateSandboxRuntime` layers
-it through Marimo's `RuntimeOverlay`, the same mechanism that binds the kernel
-to the running Marimo. It appends one requirement for the lifespan of the
-server adapters: `-e <path>` for an editable checkout, the file URL of a local
-wheel or directory, or `marimo-studio==<version>` for an index install. When
-the server has Deno, the overlay also pins `deno==<version>`, because code mode
+`marimo edit --sandbox` starts each kernel, and `marimo run --sandbox` on a
+directory starts each app host, in an environment built from the notebook's
+PEP 723 manifest. Studio's kernel half loads through the `marimo.kernel.lifespan`
+entry point, so that environment must contain the Studio the server runs.
+`PrivateSandboxRuntime` layers it through Marimo's `RuntimeOverlay`, the same
+mechanism that binds the kernel to the running Marimo. For the lifespan of the
+server adapters it appends `invoking_studio().requirement`: `-e <path>` for an
+editable checkout, a direct reference for a local or remote archive, directory,
+or VCS commit, or `marimo-studio==<version>` for an index install. When the
+server has Deno, the overlay also pins `deno==<version>`, because code mode
 authors and builds framework views inside the kernel. An overlay entry takes
 precedence over the manifest's own requirement, and the manifest is never
 edited.
+
+`marimo run --sandbox notebook.py` relaunches the whole server inside the
+notebook environment before Studio's lifespan starts, so that server runs the
+Studio the manifest declares.
 
 ## Kernel projection host
 
