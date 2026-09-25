@@ -93,7 +93,7 @@ export const useMarimoValue = <T = MarimoValue>(selector: string) => {
 
     const sync = () => {
       setValue(host.marimoValue);
-      setError(false);
+      setError(host.dataset.marimoError !== undefined);
     };
     const fail = () => setError(true);
 

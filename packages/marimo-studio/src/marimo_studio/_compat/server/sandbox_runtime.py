@@ -40,13 +40,18 @@ def studio_runtime_requirements() -> tuple[str, ...]:
     """Return the Studio and Deno a sandboxed process needs to match the server.
 
     Code mode authors views inside the kernel, so framework providers there
-    build with the same pinned Deno that the server's Studio uses.
+    build with the same pinned Deno that the server's Studio uses. A Studio
+    without installed metadata has no requirement to layer.
     """
+    try:
+        studio = studio_runtime_requirement()
+    except PackageNotFoundError:
+        return ()
     try:
         deno = distribution(_DENO_DISTRIBUTION)
     except PackageNotFoundError:
-        return (studio_runtime_requirement(),)
-    return (studio_runtime_requirement(), f"{_DENO_DISTRIBUTION}=={deno.version}")
+        return (studio,)
+    return (studio, f"{_DENO_DISTRIBUTION}=={deno.version}")
 
 
 def _layer_studio(native: Any) -> Any:

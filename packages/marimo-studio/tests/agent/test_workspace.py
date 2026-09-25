@@ -100,7 +100,7 @@ def test_agent_module_help_contains_the_installed_core_briefing() -> None:
 
 def test_packaged_skill_references_resolve_from_the_installed_skill() -> None:
     skill = studio_agent.skill()
-    references = set(re.findall(r"references/[\w-]+\.md", skill.source))
+    references = set(re.findall(r"\]\((references/[\w-]+\.md)", skill.source))
 
     assert references
     for reference in references:

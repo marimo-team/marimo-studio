@@ -245,7 +245,7 @@ if __name__ == "__main__":
     ("filename", "app", "label"),
     (
         (
-            "quadratic_program.py",
+            "example.py",
             'marimo.App(app_title="Quadratic Program")',
             "Quadratic Program",
         ),

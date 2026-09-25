@@ -140,7 +140,7 @@ index c721bfeb5..18144c29c 100644
 +              >
 +                <span
 +                  aria-hidden="true"
-+                  className="block h-4 w-4 rounded-full shadow-xs-solid border border-primary dark:bg-accent bg-white group-hover:bg-muted group-focus:bg-muted transition-colors"
++                  className="block h-4 w-4 rounded-full shadow-xs-solid border border-primary dark:bg-accent bg-white group-hover:bg-primary group-focus:bg-primary transition-colors"
 +                />
 +              </SliderPrimitive.Thumb>
 +            </TooltipTrigger>

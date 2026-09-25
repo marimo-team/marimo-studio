@@ -69,7 +69,13 @@ Keep named HTML value hosts independent of the Observable cells consuming them.
 Link custom results to every host they consume, and give each region a readable
 label and rendering-source reference to `src/index.html` or its owning module.
 Follow the installed Studio skill's `references/projections.md` for the shared
-contract, available through `marimo_studio.agent.skill().file(...)`.
+contract:
+
+```python
+import marimo_studio.agent
+
+print(marimo_studio.agent.skill().file("references/projections.md").read_text())
+```
 
 ## Maintain project ignore rules
 

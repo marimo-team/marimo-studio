@@ -141,3 +141,13 @@ def test_sandboxed_processes_build_with_the_server_deno(
     _installed(monkeypatch, None, deno="2.9.5")
 
     assert studio_runtime_requirements() == ("marimo-studio==0.1.6", "deno==2.9.5")
+
+
+def test_uninstalled_studio_layers_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing(name: str) -> SimpleNamespace:
+        raise PackageNotFoundError(name)
+
+    monkeypatch.setattr(sandbox_runtime, "distribution", missing)
+    monkeypatch.setattr(installation, "distribution", missing)
+
+    assert studio_runtime_requirements() == ()

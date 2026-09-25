@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from importlib.metadata import distribution
+from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
@@ -28,7 +28,10 @@ def local_studio_source() -> LocalStudioSource | None:
     or a sandboxed kernel, install this source because a published release with
     the same version number can carry different code and dependency pins.
     """
-    recorded = distribution(STUDIO_DISTRIBUTION).read_text("direct_url.json")
+    try:
+        recorded = distribution(STUDIO_DISTRIBUTION).read_text("direct_url.json")
+    except PackageNotFoundError:
+        return None
     if recorded is None:
         return None
     direct_url = json.loads(recorded)
@@ -36,7 +39,11 @@ def local_studio_source() -> LocalStudioSource | None:
     parsed = urlparse(url)
     if parsed.scheme != "file":
         return None
-    path = Path(url2pathname(parsed.path))
+    # A network share keeps its host in the URL authority.
+    share = parsed.netloc not in ("", "localhost")
+    path = Path(
+        url2pathname(f"//{parsed.netloc}{parsed.path}" if share else parsed.path)
+    )
     editable = bool(direct_url.get("dir_info", {}).get("editable"))
     if not (path.is_dir() if editable else path.exists()):
         return None

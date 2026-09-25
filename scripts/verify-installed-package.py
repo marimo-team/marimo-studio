@@ -256,7 +256,7 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
     )
     if documentation_index not in briefing:
         raise AssertionError("Studio agent briefing omits its documentation index")
-    references = set(re.findall(r"references/[\w-]+\.md", skill.source))
+    references = set(re.findall(r"\]\((references/[\w-]+\.md)", skill.source))
     if not references:
         raise AssertionError("Studio agent skill has no task references")
     for reference in references:

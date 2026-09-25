@@ -52,7 +52,9 @@
         const fail = (event) => onError(event.detail);
         host.addEventListener("marimo-value-updated", sync);
         host.addEventListener("marimo-value-error", fail);
-        if (host.marimoValue !== undefined) {
+        if (host.dataset.marimoError !== undefined) {
+          onError({ code: host.dataset.marimoErrorCode, message: host.dataset.marimoError });
+        } else if (host.marimoValue !== undefined) {
           onValue(host.marimoValue);
         }
         return () => {

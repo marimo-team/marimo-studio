@@ -162,11 +162,13 @@ it("shows the folder where a new view's files are created", async () => {
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
   await screen.findByRole("radio", { name: /HTML/ });
-  await user.type(screen.getByLabelText("New view"), "briefing");
   await user.click(screen.getByText("Files created"));
+  const files = screen.getByText("Files created").closest("details");
+  await user.type(screen.getByLabelText("New view"), "Briefing");
+  expect(files).toHaveTextContent("__marimo__/studio/analysis/…/");
+  await user.clear(screen.getByLabelText("New view"));
+  await user.type(screen.getByLabelText("New view"), "briefing");
 
-  expect(screen.getByText("Files created").closest("details")).toHaveTextContent(
-    "__marimo__/studio/analysis/briefing/",
-  );
+  expect(files).toHaveTextContent("__marimo__/studio/analysis/briefing/");
   controller.dispose();
 });
