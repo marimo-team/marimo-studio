@@ -1,0 +1,35 @@
+packages/marimo-frontend/patches/marimo-frontend.patch
+  s_aaf82c54e7a7ef::t_236c4946d3744a 23,114,143
+packages/presentation/src/static.ts
+  s_aaf82c54e7a7ef::t_1191fedf5b7da6 16
+packages/presentation/src/runtime/style.css
+  s_aaf82c54e7a7ef::t_b7c7a3e23d12bf 121
+  s_aaf82c54e7a7ef::t_aeb3952a7e0673 158-159
+  s_aaf82c54e7a7ef::t_c8c4e282b1cc7a 138-141,144-148
+  s_aaf82c54e7a7ef::t_8d1ee4ff9ac2b2 118-120,122,173,175
+  s_aaf82c54e7a7ef::t_d1dd81a37a9819 193
+packages/marimo-frontend/patches/marimo-frontend.json
+  s_aaf82c54e7a7ef::t_236c4946d3744a 4
+packages/marimo-studio/src/marimo_studio/_compat/release.json
+  s_aaf82c54e7a7ef::t_236c4946d3744a 4
+docs/guide/styling.md
+  s_aaf82c54e7a7ef::t_396307aaf38bfe 134-138
+  s_aaf82c54e7a7ef::t_c96558ece1b14c 128-132
+  s_aaf82c54e7a7ef::t_248c8a261b27bd 126-127,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4de05a11c4a2cc46a557a3a1cedad79c977cd563",
+  "prompts": {},
+  "sessions": {
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
