@@ -1,0 +1,23 @@
+Makefile
+  s_aaf82c54e7a7ef::t_dd263c6abaf94f 17,106
+apps/docs/scripts/capture-thumbnails.ts
+  s_aaf82c54e7a7ef::t_dd263c6abaf94f 70-71
+apps/docs/package.json
+  s_aaf82c54e7a7ef::t_dd263c6abaf94f 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a99e1c4b88ea365b22248b1a1a5d6accd3639bf4",
+  "prompts": {},
+  "sessions": {
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
