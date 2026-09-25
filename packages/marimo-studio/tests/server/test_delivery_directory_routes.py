@@ -93,6 +93,7 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     assert views["schema"] == 1
     assert views["default_view"] == "dashboard"
     assert views["default_starter"] == "marimo-studio/vanilla:default"
+    assert views["view_root"] == f"__marimo__/studio/{notebook_path.stem}"
     assert [item["name"] for item in views["views"]] == [
         "dashboard",
         "executive",

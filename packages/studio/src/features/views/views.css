@@ -382,10 +382,20 @@
   width: max-content;
 }
 
+.studio-starter-details > code,
 .studio-starter-details > span {
   display: block;
   overflow-wrap: anywhere;
   padding-block-start: 0.35rem;
+}
+
+.studio-starter-details > code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95em;
+}
+
+.studio-starter-details > code + span {
+  padding-block-start: 0.15rem;
 }
 
 .studio-form-message[data-state="warning"] {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -52,6 +53,7 @@ from marimo_studio._views.sources import (
     write_view_manifest,
 )
 from marimo_studio._workspace.config import (
+    canonical_view_root,
     load_studio,
     materialize_studio_workspace_after_conflict,
     validate_view_name,
@@ -260,6 +262,12 @@ async def delete_view_response(
     )
 
 
+def _view_root_label(notebook: Path, view_root: Path) -> str:
+    """Return where view projects live, relative to the notebook's folder."""
+    folder = notebook.resolve().parent
+    return Path(os.path.relpath(view_root.resolve(), folder)).as_posix()
+
+
 def view_inventory_payload(
     definition: StudioDefinition,
     workspace: StudioWorkspace | None,
@@ -276,6 +284,7 @@ def view_inventory_payload(
         ),
         "default_view": definition.default_view,
         "default_starter": DEFAULT_STARTER_ID,
+        "view_root": _view_root_label(definition.notebook, definition.view_root),
         "views": (
             [
                 {
@@ -306,6 +315,7 @@ def unconfigured_view_inventory_payload(
         "generation": unconfigured_catalog_generation(notebook),
         "default_view": DEFAULT_VIEW_NAME,
         "default_starter": DEFAULT_STARTER_ID,
+        "view_root": _view_root_label(notebook, canonical_view_root(notebook)),
         "views": [],
         "starters": (
             list(starter_records)

@@ -358,6 +358,7 @@ export const StudioHost = ({
             starter,
             starterCatalog: catalogSnapshot.state,
             starters: catalogSnapshot.starters,
+            viewRoot: catalogSnapshot.viewRoot,
             onNameChange: setName,
             onRetryStarters: () => void catalog.ensure(),
             onStarterChange: setStarter,

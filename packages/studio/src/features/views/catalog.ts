@@ -16,6 +16,7 @@ export interface StarterCatalogSnapshot {
   generation: string;
   starters: readonly Starter[];
   defaultStarter: string;
+  viewRoot: string;
 }
 
 type Listener = () => void;
@@ -38,6 +39,7 @@ export class StarterCatalogController {
       generation: initialGeneration,
       starters: initialStarters,
       defaultStarter: initialDefaultStarter,
+      viewRoot: "",
     };
   }
 
@@ -74,7 +76,9 @@ export class StarterCatalogController {
     return request;
   }
 
-  accept(inventory: Pick<ViewList, "default_starter" | "generation" | "starters">): void {
+  accept(
+    inventory: Pick<ViewList, "default_starter" | "generation" | "starters" | "view_root">,
+  ): void {
     if (this.disposed) {
       return;
     }
@@ -84,6 +88,7 @@ export class StarterCatalogController {
       generation: inventory.generation,
       starters: inventory.starters,
       defaultStarter: inventory.default_starter,
+      viewRoot: inventory.view_root,
     });
   }
 
@@ -111,6 +116,7 @@ export class StarterCatalogController {
         generation: inventory.generation,
         starters: inventory.starters,
         defaultStarter: inventory.default_starter,
+        viewRoot: inventory.view_root,
       });
       return inventory;
     } catch (cause) {

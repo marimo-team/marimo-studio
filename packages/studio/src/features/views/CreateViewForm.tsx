@@ -64,6 +64,7 @@ export interface CreateViewFormProps {
   starter: string;
   starterCatalog: StarterCatalogState;
   starters: readonly Starter[];
+  viewRoot: string;
   onCancel: () => void;
   onNameChange: (name: string) => void;
   onRetryStarters: () => void;
@@ -80,6 +81,7 @@ export const CreateViewForm = ({
   starter,
   starterCatalog,
   starters,
+  viewRoot,
   onCancel,
   onNameChange,
   onRetryStarters,
@@ -143,6 +145,7 @@ export const CreateViewForm = ({
       {selected ? (
         <details className="studio-starter-details">
           <summary>Files created</summary>
+          {viewRoot ? <code>{`${viewRoot}/${name || "…"}/`}</code> : null}
           <span>{selected.documents.join(", ")}</span>
         </details>
       ) : null}

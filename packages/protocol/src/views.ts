@@ -80,6 +80,7 @@ const viewListFields = {
   generation: ownerGenerationSchema,
   default_view: viewNameSchema,
   default_starter: starterIdSchema,
+  view_root: z.string().min(1),
   views: z.array(viewSummarySchema),
   starters: z.array(starterSchema),
 };
