@@ -1,0 +1,19 @@
+apps/e2e/tests/host-session-handoff.spec.ts
+  s_aaf82c54e7a7ef::t_400220e0cf8c83 153-179,195,210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d6a81333e17285aaa68916df18d3ae105ce508f8",
+  "prompts": {},
+  "sessions": {
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
