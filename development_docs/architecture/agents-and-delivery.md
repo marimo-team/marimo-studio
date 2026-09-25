@@ -8,6 +8,13 @@ responsibilities.
 
 ## Agent API
 
+`agent_plugins.read("marimo-studio")` owns the installed briefing. Lazy module
+help delegates to that reader. `marimo_studio.agent.skill()` returns the core
+skill and task references, and `plugin()` returns the complete installed bundle.
+These discovery operations are passive. The core skill owns the cross-provider
+authoring workflow, references own conditional detail, and each view's
+`AGENTS.md` owns its provider and project conventions.
+
 ```python
 import marimo_studio.agent as studio_agent
 
@@ -18,9 +25,22 @@ view = await workspace.create_view(
 )
 inspection = await view.inspect()
 build = await view.build()
+```
+
+Acquire workspace and view handles again in each code-mode execution. After
+building, use a separate execution to show the view and get its browser URL:
+
+```python
+import marimo_studio.agent as studio_agent
+
+view = studio_agent.current_workspace().view("dashboard")
 await view.show()
 url = await view.preview_url(runtime="server")
 ```
+
+Saved-source inspection, isolated runtime inspection, live kernel values, and
+browser presentation are distinct evidence. Inheriting the saved workspace API
+does not make `inspect_notebook()` a live-kernel snapshot.
 
 `agent` exports the notebook-bound `Workspace` and `View` interfaces.
 `_authoring` owns their operations. `_browser_client` owns Studio page selection,

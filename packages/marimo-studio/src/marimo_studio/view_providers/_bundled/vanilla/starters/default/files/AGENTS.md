@@ -47,13 +47,13 @@ needs row objects.
 
 ## Add dependencies
 
-The starter loads two pinned browser dependencies from jsDelivr:
+`index.html` loads two pinned browser dependencies from jsDelivr:
 
-- [UnoCSS runtime](https://unocss.dev/integrations/runtime) `66.10.5` with its
-  default Wind3 preset. Use utility classes directly in authored HTML. The
+- [UnoCSS runtime](https://unocss.dev/integrations/runtime) with its default
+  Wind3 preset. Use utility classes directly in authored HTML. The
   runtime observes DOM changes and generates matching styles in the browser.
-- [Iconify Icon web component](https://iconify.design/docs/iconify-icon/)
-  `3.0.3`. Add named icons with the registered `iconify-icon` element:
+- [Iconify Icon web component](https://iconify.design/docs/iconify-icon/).
+  Add named icons with the registered `iconify-icon` element:
 
 ```html
 <button type="button" class="inline-flex items-center gap-2">
@@ -144,34 +144,19 @@ Studio publishes the entry document and its declared local sources after
 validating the HTML and projection hosts. Treat the built artifact as the
 acceptance boundary for the page.
 
-## Preserve notebook traceability
+## Link custom results to notebook inputs
 
-Prefer `mo-value` for values, `marimo-output` for rich values, and `marimo-cell`
-for native cell output. Keep analytical computation in the notebook. When custom
-JavaScript rendering is necessary, every result must declare its kernel inputs:
+Keep projection hosts explicit in authored source. Custom regions need every
+kernel input, a readable label, and a rendering-source reference such as
+`{"path":"index.html"}`. Keep these attributes on authored elements outside
+native output subtrees. Follow the installed Studio skill's
+`references/projections.md` for the shared contract:
 
-- Place hidden `mo-value` hosts directly inside the result, or use
-  `data-marimo-lens-inputs="rows-data summary-data"` to reference projection hosts
-  by unique, stable HTML IDs in the same document. Include every input,
-  including shared inputs used through JS transforms. References must point
-  directly to mounted `mo-value`, `marimo-output`, or `marimo-cell` hosts.
-  Missing or duplicate IDs make the result unavailable to Lens. Never fabricate
-  runtime metadata.
-- Annotate individual metrics, rows, charts, and report pages. Prefer narrow
-  selectors such as `summary.events`. Bind dynamic selectors and source IDs to
-  the state that renders the result. Use `data-marimo-allow="*"` for selectors
-  the provider cannot bound at build time. Unbounded selectors require Python or
-  Browser runtime (`--runtime wasm` for export). Prepared exports need finite
-  authored targets.
-- Link browser-only aggregates to their actual kernel inputs and label the
-  browser calculation. Canvas and PDF picking is limited to the chart or page
-  unless the renderer supplies finer DOM targets.
-- Set `aria-busy="true"` during asynchronous rendering and clear it on
-  completion. Verify selection and producer context after data updates. These
-  links declare dependencies, not automatic JS dataflow or historical values.
-- Studio supplies native projection labels. Give custom regions a
-  `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
-  supplements the source links that connect results to the analytical graph.
+```python
+import marimo_studio.agent
+
+print(marimo_studio.agent.skill().file("references/projections.md").read_text())
+```
 
 ## Maintain project ignore rules
 

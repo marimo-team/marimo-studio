@@ -62,17 +62,25 @@ def provider_starters(catalog: StarterCatalog) -> tuple[ProviderStarter, ...]:
     return tuple(starter.info for starter in catalog.values())
 
 
+def notebook_label(context: StarterContext) -> str:
+    """Return the notebook's app title, or a readable form of its filename."""
+    configured = context.notebook.app_config.get("app_title")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    words = context.notebook_name.replace("_", " ").replace("-", " ").split()
+    return " ".join(words).title()
+
+
 def _replacements(
     context: StarterContext,
     additions: Mapping[str, str],
 ) -> dict[str, str]:
     heading = context.view_name.replace("-", " ").title()
+    label = notebook_label(context)
     replacements = {
-        "__NOTEBOOK_NAME_HTML__": html.escape(context.notebook_name),
-        "__VIEW_NAME_HTML__": html.escape(context.view_name),
+        "__NOTEBOOK_LABEL_HTML__": html.escape(label),
         "__VIEW_HEADING_HTML__": html.escape(heading),
-        "__NOTEBOOK_NAME_JSON__": json.dumps(context.notebook_name),
-        "__VIEW_NAME_JSON__": json.dumps(context.view_name),
+        "__NOTEBOOK_LABEL_JSON__": json.dumps(label),
         "__VIEW_HEADING_JSON__": json.dumps(heading),
     }
     for marker, value in additions.items():

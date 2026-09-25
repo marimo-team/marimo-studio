@@ -1,6 +1,6 @@
 /// <reference path="./marimo-studio.d.ts" />
 
-const NOTEBOOK_LABEL = __NOTEBOOK_NAME_JSON__;
+const NOTEBOOK_LABEL = __NOTEBOOK_LABEL_JSON__;
 const VIEW_HEADING = __VIEW_HEADING_JSON__;
 
 export const App = () => (

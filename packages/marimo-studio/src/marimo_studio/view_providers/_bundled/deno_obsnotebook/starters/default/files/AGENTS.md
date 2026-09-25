@@ -1,5 +1,8 @@
 # Observable Notebook Kit view
 
+Follow the Marimo Studio skill for notebook ownership, projections, and
+verification. This file owns Notebook Kit presentation and dataflow conventions.
+
 Edit `src/index.html` using Notebook Kit's `<notebook>` and `<script>` cell
 format. Studio builds it with the project's locked Deno and Vite dependencies.
 `src/page.tmpl` supplies the page shell and `src/style.css` supplies styling.
@@ -59,6 +62,14 @@ environment. Pin added npm dependencies in `package.json`, then regenerate
 `uv run -- deno install --frozen=false --node-modules-dir=auto --no-save`.
 Source exposes the lockfile as read-only. Keep authored inputs in `src/` and
 public assets in `public/`. Build failure retains the last published preview.
+
+## Link custom results to notebook inputs
+
+Keep named HTML value hosts independent of the Observable cells consuming them.
+Link custom results to every host they consume, and give each region a readable
+label and rendering-source reference to `src/index.html` or its owning module.
+Follow the installed Studio skill's `references/projections.md` for the shared
+contract, available through `marimo_studio.agent.skill().file(...)`.
 
 ## Maintain project ignore rules
 

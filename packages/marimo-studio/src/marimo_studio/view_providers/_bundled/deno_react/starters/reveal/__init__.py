@@ -152,13 +152,13 @@ def _render(context: StarterContext) -> StarterRendering:
     cells = tuple(item for item in starter_cells(context) if item[0].may_display_output)
     hosts = (
         "{"
-        + _typescript_slides(cells, indent="    ")
+        + _typescript_slides(cells, indent="      ")
         + ".map(({ target, title, showTitle }) => (\n"
-        + "      <Slide key={target}>\n"
-        + "        {showTitle ? <h2>{title}</h2> : null}\n"
-        + "        <marimo-cell name={target} />\n"
-        + "      </Slide>\n"
-        + "    ))}"
+        + "        <Slide key={target}>\n"
+        + "          {showTitle ? <h2>{title}</h2> : null}\n"
+        + "          <marimo-cell name={target} />\n"
+        + "        </Slide>\n"
+        + "      ))}"
         if cells
         else ""
     )
@@ -178,10 +178,7 @@ starter = BundledStarter(
     info=ProviderStarter(
         key="reveal",
         title="Reveal.js slides",
-        summary=(
-            "A React slide deck populated with one enabled notebook cell that may "
-            "display output per slide."
-        ),
+        summary="A React slide deck with one slide for each notebook output.",
         documents=_DOCUMENTS,
     ),
     package=__name__,

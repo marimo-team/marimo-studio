@@ -39,9 +39,8 @@ starter = BundledStarter(
         key="default",
         title="HTML document",
         summary=(
-            "One editable HTML file populated with notebook cells that may display "
-            "output, pinned browser styling and icon helpers, and an inline "
-            "live-value adapter."
+            "A single HTML file with every notebook output in place, utility "
+            "CSS, icons, and a helper that reads live notebook values."
         ),
         documents=(PurePosixPath("index.html"), PurePosixPath("AGENTS.md")),
     ),

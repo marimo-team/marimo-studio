@@ -52,8 +52,8 @@ starter = BundledStarter(
         key="default",
         title="React",
         summary=(
-            "A typed React application populated with notebook cells that may "
-            "display output and a live-value hook."
+            "A TypeScript React app with every notebook output in place, plus a "
+            "hook that reads live notebook values."
         ),
         documents=_DOCUMENTS,
     ),

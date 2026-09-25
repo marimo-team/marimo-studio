@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from marimo_studio import agent as agent
 from marimo_studio._delivery.records import ASGIApp
 from marimo_studio._notebook.records import NotebookSpec
 from marimo_studio._projections import (
@@ -46,6 +47,7 @@ __all__ = [
     "STUDIO_RESULT_SELECTOR",
     "ASGIApp",
     "NotebookSpec",
+    "agent",
     "create_asgi_app",
     "inspect_notebook",
 ]

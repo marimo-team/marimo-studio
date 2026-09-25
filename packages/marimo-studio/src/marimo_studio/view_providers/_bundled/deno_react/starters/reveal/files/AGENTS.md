@@ -84,11 +84,27 @@ environment so dependency updates and Studio builds use the same version.
 Run from the view root so it updates `deno.json` and `deno.lock` together:
 
 ```console
-uv run -- deno add --frozen=false --save-exact npm:reveal.js@6.0.1
+uv run -- deno add --frozen=false --save-exact npm:reveal.js
 ```
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
 files after an intentional dependency update.
+
+## Size notebook results on slides
+
+Reveal scales each slide as one canvas. Notebook Markdown follows the deck's
+text size through `--marimo-cell-font-size` in `src/style.css`. Native controls
+and rich outputs keep their page size, so set CSS `zoom` on their host when a
+slide needs them larger:
+
+```css
+.slide-control {
+  zoom: 1.5;
+}
+```
+
+`useSettledLayout()` in `src/App.tsx` centers slides again when Studio reports
+`marimo-studio:idle`, after projected results reach their final size.
 
 ## Validate the presentation
 
@@ -97,34 +113,27 @@ keyboard and control navigation, slide scaling, fragments, notebook results,
 speaker-facing content, and narrow viewport behavior. The Studio build verifies
 types and packages the deck before publishing it.
 
-## Preserve notebook traceability
+## Load remote font stylesheets
 
-Prefer `mo-value` for values, `marimo-output` for rich values, and `marimo-cell`
-for native cell output. Keep analytical computation in the notebook. When custom
-JavaScript rendering is necessary, every result must declare its kernel inputs:
+Link remote font stylesheets from `src/index.html` with
+`<link rel="stylesheet">`. The Deno CSS bundler cannot load Google Fonts through
+CSS `@import`. Linked stylesheets require browser network access and a hosting
+policy that permits the stylesheet and font origins. Keep a fallback font in the
+view's CSS.
 
-- Place hidden `mo-value` hosts directly inside the result, or use
-  `data-marimo-lens-inputs="rows-data summary-data"` to reference projection
-  hosts by unique, stable HTML IDs in the same document. Include every input,
-  including shared inputs used through JS transforms. References must point
-  directly to mounted `mo-value`, `marimo-output`, or `marimo-cell` hosts.
-  Missing or duplicate IDs make the result unavailable to Lens. Never fabricate
-  runtime metadata.
-- Annotate individual metrics, rows, charts, and report pages. Prefer narrow
-  selectors such as `summary.events`. Bind dynamic selectors and source IDs to
-  the state that renders the result. Use `data-marimo-allow="*"` for selectors
-  the provider cannot bound at build time. Unbounded selectors require Python or
-  Browser runtime (`--runtime wasm` for export). Prepared exports need finite
-  authored targets.
-- Link browser-only aggregates to their actual kernel inputs and label the
-  browser calculation. Canvas and PDF picking is limited to the chart or page
-  unless the renderer supplies finer DOM targets.
-- Set `aria-busy="true"` during asynchronous rendering and clear it on
-  completion. Verify selection and producer context after data updates. These
-  links declare dependencies, not automatic JS dataflow or historical values.
-- Studio supplies native projection labels. Give custom regions a
-  `data-marimo-lens-label` and optional `data-marimo-lens-detail`. Display text
-  supplements the source links that connect results to the analytical graph.
+## Link custom results to notebook inputs
+
+Keep projection hosts explicit in authored source. Custom regions need every
+kernel input, a readable label, and a rendering-source reference such as
+`{"path":"src/App.tsx"}`. Keep these attributes on authored elements outside
+native output subtrees. Follow the installed Studio skill's
+`references/projections.md` for the shared contract:
+
+```python
+import marimo_studio.agent
+
+print(marimo_studio.agent.skill().file("references/projections.md").read_text())
+```
 
 ## Maintain project ignore rules
 

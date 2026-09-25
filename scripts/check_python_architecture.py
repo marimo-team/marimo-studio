@@ -194,6 +194,8 @@ def violations() -> tuple[str, ...]:
         if not any(_under(item, facade) for facade in PUBLIC_AUTHORING_FACADES)
     ):
         for dependency in sorted(graph[module]):
+            if module == "marimo_studio" and dependency == "marimo_studio.agent":
+                continue
             if any(_under(dependency, facade) for facade in PUBLIC_AUTHORING_FACADES):
                 failures.append(f"forbidden dependency: {module} -> {dependency}")
     contract_modules = sorted(
