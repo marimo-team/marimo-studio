@@ -129,7 +129,8 @@ text color and links keep Marimo's link color. Borders, muted surfaces, and
 secondary text mix from `--marimo-cell-foreground`, so unselected controls keep
 neutral outlines beside the accent. Set `--marimo-cell-border-color`,
 `--marimo-cell-muted`, or `--marimo-cell-muted-foreground` to choose them
-directly.
+directly. Tooltips, dropdown menus, and date pickers open outside the projected
+cell, so they keep Marimo's theme.
 
 Use `--marimo-cell-content-width` and `--marimo-cell-font-size` for rendered
 Markdown and `--marimo-cell-error` for cell error treatment. Markdown keeps

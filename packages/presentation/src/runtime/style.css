@@ -115,11 +115,12 @@
   min-block-size: 0;
 }
 
-/* Marimo redeclares its theme on the `.marimo` root inside each UI element's
-   shadow tree, which receives this stylesheet. Map the same tokens there so
-   native controls follow the view. */
+/* Each UI element's shadow tree receives this stylesheet and redeclares
+   Marimo's theme on `.marimo` and on its `.light` or `.dark` child. Map the
+   same tokens on both so native controls follow the view. */
 :where(marimo-cell, marimo-output) > [data-marimo-cell-output],
-:host > .marimo {
+:host > .marimo,
+:host > .marimo > :is(.light, .dark) {
   --text-font: var(--marimo-cell-font, inherit);
   --heading-font: var(--marimo-cell-heading-font, var(--text-font));
   --monospace-font: var(
