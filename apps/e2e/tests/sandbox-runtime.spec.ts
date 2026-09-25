@@ -37,18 +37,20 @@ test("previews a first view from a sandboxed notebook that does not declare Stud
 }, testInfo) => {
   test.setTimeout(SANDBOX_TIMEOUT + 60_000);
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-sandbox-"));
-  const notebook = resolve(root, "notebook.py");
-  await writeFile(notebook, NOTEBOOK, "utf-8");
-  const server = startNotebookServer({
-    authentication: ["--no-token"],
-    command: "edit",
-    endpoint: e2eNetwork.main.sandbox,
-    sandbox: true,
-    target: notebook,
-  });
-  const context = await browser.newContext();
+  let server: ReturnType<typeof startNotebookServer> | undefined;
+  let context: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let closed = false;
   try {
+    const notebook = resolve(root, "notebook.py");
+    await writeFile(notebook, NOTEBOOK, "utf-8");
+    server = startNotebookServer({
+      authentication: ["--no-token"],
+      command: "edit",
+      endpoint: e2eNetwork.main.sandbox,
+      sandbox: true,
+      target: notebook,
+    });
+    context = await browser.newContext();
     await server.waitUntilReady(`${server.serverUrl}/`, { timeout: SANDBOX_TIMEOUT });
     const page = await context.newPage();
     await page.goto(`${server.serverUrl}/`, { waitUntil: "domcontentloaded" });
@@ -61,8 +63,8 @@ test("previews a first view from a sandboxed notebook that does not declare Stud
     await server.close();
     closed = true;
   } finally {
-    await context.close();
-    if (!closed) {
+    await context?.close();
+    if (server && !closed) {
       const failure = await closeFailedNotebookServer(server);
       if (failure) await testInfo.attach("server cleanup", { body: failure.message });
     }

@@ -147,10 +147,12 @@ test("view publication recovers an exact value read at the same wire revision", 
   expect(window.diagnostics()).toEqual([]);
 });
 
-test("an empty values read carries no recovery obligation", () => {
+test.each([
+  ["values", valueProjectionRequestAt([], "revision-a")],
+  ["outputs", outputProjectionRequest([], "revision-a")],
+] as const)("an empty %s read carries no recovery obligation", (_kind, empty) => {
   const owner = { id: 1 };
   const window = new ProjectionReadRequestWindow(owner, "projection-a");
-  const empty = valueProjectionRequestAt([], "revision-a");
   expect(window.recordStart(empty, owner, 1)).toBe(true);
   expect(window.recordAbort(empty)).toBe(true);
   window.seal();
