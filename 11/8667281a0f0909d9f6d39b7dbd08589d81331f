@@ -1,0 +1,36 @@
+packages/marimo-studio/tests/cli/test_provider_bootstrap_commands.py
+  s_aaf82c54e7a7ef::t_3b02e0693d770c 4-5,8,210-211,213-215,217-218,220,223-225,239-244,247
+packages/marimo-studio/src/marimo_studio/_workspace/installation.py
+  s_aaf82c54e7a7ef::t_b24987838bb9fd 1,6,10,16,19-21,27-44,46,49-50,52-65,68-83,85-88
+packages/marimo-studio/tests/marimo_compat/test_environment_reentry.py
+  s_aaf82c54e7a7ef::t_937d0f3e4e6896 5,19,247-248,259-261
+packages/marimo-studio/src/marimo_studio/_cli/environment.py
+  s_aaf82c54e7a7ef::t_5870de26a034f9 43
+  s_aaf82c54e7a7ef::t_72974f36a28c69 595-599,602-603,605-609
+packages/marimo-studio/tests/marimo_compat/test_sandbox_runtime.py
+  s_aaf82c54e7a7ef::t_45bf9f1892f769 91-98,101-102,104,106
+packages/marimo-studio/src/marimo_studio/_compat/server/sandbox_runtime.py
+  s_aaf82c54e7a7ef::t_72974f36a28c69 15,23-27,29-30,35-36
+packages/marimo-studio/tests/views/test_studio_installation.py
+  s_aaf82c54e7a7ef::t_45bf9f1892f769 1-115
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_delivery.py
+  s_aaf82c54e7a7ef::t_a22da710f1fdc5 88-93
+development_docs/architecture/marimo-integration.md
+  s_aaf82c54e7a7ef::t_86c2c99512526e 277-286,291-293
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "118667281a0f0909d9f6d39b7dbd08589d81331f",
+  "prompts": {},
+  "sessions": {
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
