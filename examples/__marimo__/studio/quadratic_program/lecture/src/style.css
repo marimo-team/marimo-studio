@@ -1,0 +1,248 @@
+:root {
+  --paper: #faf9f6;
+  --ink: #1b1d22;
+  --muted: #6b6f76;
+  --rule: #e5e2dc;
+  --region: #eef0f3;
+  --level: #a3a8b0;
+  --accent: #b33a2e;
+  --text-font: "Inter Variable", system-ui, sans-serif;
+  --heading-font: "Newsreader Variable", Georgia, serif;
+  color-scheme: light;
+}
+
+html,
+body,
+#app-shell {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+}
+
+#app-shell {
+  min-height: 100%;
+}
+
+.reveal.studio-deck {
+  --r-background-color: var(--paper);
+  --r-main-color: var(--ink);
+  --r-heading-color: var(--ink);
+  --r-link-color: var(--accent);
+  --r-link-color-hover: var(--ink);
+  --r-selection-background-color: #f1dcd8;
+  --r-main-font: var(--text-font);
+  --r-heading-font: var(--heading-font);
+  --r-heading-font-weight: 400;
+  --r-heading-letter-spacing: -0.015em;
+  color: var(--ink);
+  font-family: var(--text-font);
+  font-size: 30px;
+}
+
+.reveal.studio-deck .slides {
+  text-align: left;
+}
+
+.reveal.studio-deck .slides section {
+  box-sizing: border-box;
+  padding: 3.5rem 4.5rem;
+}
+
+.reveal.studio-deck h1,
+.reveal.studio-deck h2 {
+  font-family: var(--heading-font);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+  margin: 0 0 1.5rem;
+  text-transform: none;
+}
+
+.reveal.studio-deck h1 {
+  font-size: 3.4em;
+}
+
+.reveal.studio-deck h2 {
+  /* Match the notebook's Markdown headings at the deck's text size. */
+  font-size: 1.275em;
+}
+
+.reveal.studio-deck marimo-cell {
+  --marimo-cell-font: var(--text-font);
+  --marimo-cell-heading-font: var(--heading-font);
+  --marimo-cell-foreground: var(--ink);
+  --marimo-cell-accent: var(--accent);
+  --marimo-cell-background: transparent;
+  --marimo-cell-content-width: 34em;
+  --marimo-cell-font-size: 0.85em;
+  display: block;
+  min-width: 0;
+}
+
+.title-slide .figure {
+  max-height: 560px;
+  max-width: 560px;
+}
+
+.deck-kicker {
+  color: var(--muted);
+  font-size: 0.5em;
+  letter-spacing: 0.16em;
+  margin: 0 0 1.5rem;
+  text-transform: uppercase;
+}
+
+.deck-lede {
+  color: var(--muted);
+  font-family: var(--heading-font);
+  font-size: 1.25em;
+  font-style: italic;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.split {
+  display: grid !important;
+  align-items: center;
+  gap: 3.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* Zoomed native controls need the wider column to keep their labels on one line. */
+.split.explore {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+}
+
+.stack {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.figure {
+  aspect-ratio: 1;
+  justify-self: center;
+  margin: 0;
+  max-height: 480px;
+  max-width: 480px;
+  width: 100%;
+}
+
+.problem-figure {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.problem-figure .region {
+  fill: var(--region);
+}
+
+.problem-figure :is(.wall, .level, .contact) {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.problem-figure .wall {
+  stroke: var(--level);
+  stroke-width: 1.25px;
+}
+
+.problem-figure .wall.active {
+  stroke: var(--accent);
+}
+
+.problem-figure .level {
+  stroke: var(--level);
+  stroke-width: 1px;
+}
+
+.problem-figure .contact {
+  stroke: var(--accent);
+  stroke-width: 2px;
+}
+
+.problem-figure .center {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.25px;
+  vector-effect: non-scaling-stroke;
+}
+
+.problem-figure .optimum {
+  fill: var(--accent);
+}
+
+.problem-figure .label {
+  fill: var(--ink);
+  font-family: var(--heading-font);
+  font-size: 0.3px;
+  font-style: italic;
+}
+
+.problem-figure :is(.walls, .levels, .answer, .label, .region) {
+  transition:
+    opacity 400ms ease,
+    fill 200ms ease,
+    stroke 200ms ease;
+}
+
+.duals {
+  display: grid;
+  font-variant-numeric: tabular-nums;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.duals li {
+  align-items: center;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem;
+}
+
+.dual-name {
+  font-family: var(--heading-font);
+  font-style: italic;
+}
+
+.dual-bar {
+  background: var(--level);
+  block-size: 0.35em;
+  min-inline-size: 1px;
+  transition: inline-size 300ms ease;
+}
+
+.dual-value {
+  text-align: right;
+}
+
+.duals li[data-active="true"] {
+  color: var(--accent);
+}
+
+.duals li[data-active="true"] .dual-bar {
+  background: var(--accent);
+}
+
+/* Native controls and figures keep their page size inside a scaled slide. */
+.slide-scale {
+  zoom: 1.5;
+}
+
+.reveal.studio-deck .controls,
+.reveal.studio-deck .progress {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .problem-figure :is(.walls, .levels, .answer, .label, .region),
+  .dual-bar {
+    transition: none;
+  }
+}

@@ -104,7 +104,7 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
       <div className="briefing-slide catalog-slide">
         <header className="slide-header">
           <p className="deck-kicker">03 · From record to evidence</p>
-          <h2>A catalog is a measurement lens.</h2>
+          <h2>A catalog reflects its selection rules.</h2>
           <p className="slide-intro">
             Before interpreting a pattern, separate the published feed, the
             numerical rule, and the question the learner will answer.

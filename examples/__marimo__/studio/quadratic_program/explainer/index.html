@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quadratic Programming · A Visual Explainer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/newsreader@5/index.css">
+    <style>
+      :root {
+        --paper: #faf9f6;
+        --ink: #1b1d22;
+        --muted: #6b6f76;
+        --rule: #e5e2dc;
+        --accent: #b33a2e;
+        --text-font: "Inter Variable", system-ui, sans-serif;
+        --heading-font: "Newsreader Variable", Georgia, serif;
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 400 1rem/1.6 var(--text-font);
+      }
+
+      marimo-cell {
+        --marimo-cell-font: var(--text-font);
+        --marimo-cell-heading-font: var(--heading-font);
+        --marimo-cell-foreground: var(--ink);
+        --marimo-cell-accent: var(--accent);
+        --marimo-cell-background: transparent;
+        --marimo-cell-padding: 0;
+        --marimo-cell-content-width: 100%;
+      }
+
+      #app-shell {
+        box-sizing: border-box;
+        margin: 0 auto;
+        max-width: 76rem;
+        padding: 5rem 2rem 6rem;
+      }
+
+      .masthead {
+        margin-bottom: 4.5rem;
+        max-width: 46rem;
+      }
+
+      .kicker {
+        color: var(--muted);
+        font-size: 0.75rem;
+        letter-spacing: 0.14em;
+        margin: 0 0 1.25rem;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font: 400 clamp(2.5rem, 5vw, 3.75rem) / 1.04 var(--heading-font);
+        letter-spacing: -0.015em;
+        margin: 0 0 1.5rem;
+        text-wrap: balance;
+      }
+
+      .lede {
+        color: var(--muted);
+        font-size: 1.1875rem;
+        line-height: 1.55;
+        margin: 0;
+        max-width: 40rem;
+      }
+
+      .explainer {
+        align-items: start;
+        display: grid;
+        gap: 5rem;
+        grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
+      }
+
+      .reading {
+        display: grid;
+        gap: 3rem;
+      }
+
+      .workbench {
+        display: grid;
+        gap: 1.75rem;
+        position: sticky;
+        top: 2rem;
+      }
+
+      .controls {
+        border-bottom: 1px solid var(--rule);
+        display: grid;
+        gap: 0.75rem;
+        padding-bottom: 1.5rem;
+      }
+
+      .figure {
+        margin: 0;
+        max-width: 34rem;
+      }
+
+      .duals {
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+        max-width: 34rem;
+        width: 100%;
+      }
+
+      .duals caption {
+        color: var(--muted);
+        font-size: 0.75rem;
+        letter-spacing: 0.14em;
+        padding-bottom: 0.75rem;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      .duals th,
+      .duals td {
+        border-top: 1px solid var(--rule);
+        padding: 0.5rem 0;
+        text-align: left;
+      }
+
+      .duals th {
+        color: var(--muted);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+
+      .duals :is(th, td):nth-child(2) {
+        text-align: right;
+        width: 6rem;
+      }
+
+      .duals :is(th, td):last-child {
+        padding-left: 2rem;
+      }
+
+      .duals tr[data-active="true"] td {
+        color: var(--accent);
+      }
+
+      .sensitivity {
+        border-top: 1px solid var(--rule);
+        display: grid;
+        gap: 2rem;
+        margin-top: 7rem;
+        max-width: 50rem;
+        padding-top: 3.5rem;
+      }
+
+      .closing {
+        border-top: 1px solid var(--rule);
+        margin-top: 5rem;
+        max-width: 50rem;
+        padding-top: 3.5rem;
+      }
+
+      @media (max-width: 960px) {
+        #app-shell {
+          padding: 3rem 1.25rem 4rem;
+        }
+
+        .explainer {
+          gap: 3rem;
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .workbench {
+          order: -1;
+          position: static;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app-shell">
+      <header class="masthead">
+        <p class="kicker">Convex optimization</p>
+        <h1>Quadratic programming</h1>
+        <p class="lede">
+          A quadratic program minimizes a convex quadratic objective subject to
+          linear constraints. Adjust the shape of <em>P</em> and the direction of
+          <em>q</em> to see how the solution and its active constraints change.
+        </p>
+      </header>
+
+      <div class="explainer">
+        <article class="reading">
+          <marimo-cell name="standard_form"></marimo-cell>
+          <marimo-cell name="example_context"></marimo-cell>
+          <marimo-cell name="objective_context"></marimo-cell>
+          <marimo-cell name="plot_reading"></marimo-cell>
+          <marimo-cell name="duality"></marimo-cell>
+          <marimo-cell name="exploration_prompt"></marimo-cell>
+        </article>
+
+        <aside class="workbench" aria-label="Interactive problem">
+          <div class="controls">
+            <marimo-cell name="curvature"></marimo-cell>
+            <marimo-cell name="pull_direction"></marimo-cell>
+          </div>
+          <figure class="figure">
+            <marimo-cell name="level_curves"></marimo-cell>
+          </figure>
+          <marimo-cell name="solution_summary"></marimo-cell>
+          <table
+            class="duals"
+            data-marimo-lens-inputs="solution-data"
+            data-marimo-lens-label="Dual values"
+            data-marimo-lens-render-source='{"path":"index.html"}'
+          >
+            <caption>Dual values</caption>
+            <thead>
+              <tr>
+                <th scope="col">Wall</th>
+                <th scope="col">λ*</th>
+                <th scope="col">At the solution</th>
+              </tr>
+            </thead>
+            <tbody id="duals"></tbody>
+          </table>
+          <span id="solution-data" hidden mo-value="solution"></span>
+        </aside>
+      </div>
+
+      <section class="sensitivity">
+        <marimo-cell name="sensitivity_context"></marimo-cell>
+        <marimo-cell name="sensitivity_plot"></marimo-cell>
+      </section>
+
+      <section class="closing">
+        <marimo-cell name="takeaways"></marimo-cell>
+      </section>
+    </main>
+    <script type="module">
+      /** Subscribe an explicit `mo-value` host to current values and later updates. */
+      const observeMarimoValue = (host, { onValue, onError = () => {} }) => {
+        const sync = (event) => onValue(event.detail.value);
+        const fail = (event) => onError(event.detail);
+        host.addEventListener("marimo-value-updated", sync);
+        host.addEventListener("marimo-value-error", fail);
+        if (host.marimoValue !== undefined) {
+          onValue(host.marimoValue);
+        }
+        return () => {
+          host.removeEventListener("marimo-value-updated", sync);
+          host.removeEventListener("marimo-value-error", fail);
+        };
+      };
+
+      const cell = (...content) => {
+        const element = document.createElement("td");
+        element.append(...content);
+        return element;
+      };
+
+      const wallLabel = (index) => {
+        const subscript = document.createElement("sub");
+        subscript.textContent = String(index + 1);
+        return [document.createTextNode("g"), subscript];
+      };
+
+      const renderDuals = (solution) => {
+        const rows = solution.duals.map((dual, index) => {
+          const row = document.createElement("tr");
+          row.dataset.active = String(solution.active[index]);
+          row.append(
+            cell(...wallLabel(index)),
+            cell(dual.toFixed(3)),
+            cell(solution.active[index] ? "Active" : "Inactive"),
+          );
+          return row;
+        });
+        document.querySelector("#duals").replaceChildren(...rows);
+      };
+
+      const stop = observeMarimoValue(document.querySelector("#solution-data"), {
+        onValue: renderDuals,
+      });
+      window.addEventListener("pagehide", stop, { once: true });
+      document.querySelector("#app-shell").setAttribute("data-ready", "");
+    </script>
+  </body>
+</html>
