@@ -150,28 +150,33 @@ for (const editRoot of ["marimo", "studio"] as const) {
       }
       await recoverWorkspaceEventStream(workspaceStream);
       await waitForPreview(page);
-      const mount = mountConfigSchema.parse(
-        await previewFrame(page)
-          .locator("html")
-          .evaluate(() => {
-            if (!("__MARIMO_MOUNT_CONFIG__" in globalThis)) {
-              throw new Error("The preview mount configuration is unavailable.");
-            }
-            return globalThis.__MARIMO_MOUNT_CONFIG__;
-          }),
-      );
-      const support = new URL(mount.supportUrl, server.serverUrl);
-      const boundary = support.pathname.indexOf("/_marimo-studio/views/");
-      if (boundary < 0) throw new Error("The preview has no scoped support URL.");
-      const modelPath = `${support.pathname.slice(0, boundary)}/api/kernel/set_model_value`;
-      // Reload can cancel the old document's model notification. The replacement
-      // preview below establishes fresh model state outside this exact old route.
-      const retiringModelNotification = diagnostics.expectRequestAbort({
-        origin: server.serverUrl,
-        method: "POST",
-        path: new RegExp(`^${RegExp.escape(modelPath)}$`),
-        required: false,
-      });
+      // Replacing a preview document can cancel the retiring document's model
+      // notification. The replacement establishes fresh model state on its own
+      // route, so each expectation names only the document being replaced.
+      const expectRetiringModelNotification = async () => {
+        const mount = mountConfigSchema.parse(
+          await previewFrame(page)
+            .locator("html")
+            .evaluate(() => {
+              if (!("__MARIMO_MOUNT_CONFIG__" in globalThis)) {
+                throw new Error("The preview mount configuration is unavailable.");
+              }
+              return globalThis.__MARIMO_MOUNT_CONFIG__;
+            }),
+        );
+        const support = new URL(mount.supportUrl, server.serverUrl);
+        const boundary = support.pathname.indexOf("/_marimo-studio/views/");
+        if (boundary < 0) throw new Error("The preview has no scoped support URL.");
+        return diagnostics.expectRequestAbort({
+          origin: server.serverUrl,
+          method: "POST",
+          path: new RegExp(
+            `^${RegExp.escape(support.pathname.slice(0, boundary))}/api/kernel/set_model_value$`,
+          ),
+          required: false,
+        });
+      };
+      const retiringModelNotification = await expectRetiringModelNotification();
       await executeCodeMode(
         editorFrame(page),
         "host-save.py",
@@ -187,6 +192,7 @@ shown.to_dict()
       await waitForPreview(page);
       await recoverRequestAbort(retiringModelNotification);
 
+      const replacedModelNotification = await expectRetiringModelNotification();
       const refreshedProjections = await captureProjectionRefresh(page, diagnostics);
       await writeFile(
         resolve(workspace, "__marimo__/studio/host-save/dashboard/index.html"),
@@ -201,6 +207,7 @@ shown.to_dict()
       await expect(presentation.locator("marimo-cell")).toContainText("42");
       await expect(presentation.locator("marimo-output")).toContainText("42");
       await recoverProjectionRefresh(refreshedProjections, page);
+      await recoverRequestAbort(replacedModelNotification);
 
       const openedAgain = context.waitForEvent("page");
       await launcher.getByRole("link", { name: "Create a new notebook" }).click();
