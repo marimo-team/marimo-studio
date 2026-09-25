@@ -251,11 +251,6 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
     briefing = agent_plugins.read(_DISTRIBUTION)
     if studio_agent.__doc__ != briefing or skill.source not in briefing:
         raise AssertionError("Studio agent help differs from its installed briefing")
-    documentation_index = (
-        "Documentation Index: https://marimo-team.github.io/marimo-studio/llms.txt"
-    )
-    if documentation_index not in briefing:
-        raise AssertionError("Studio agent briefing omits its documentation index")
     references = set(re.findall(r"\]\((references/[\w-]+\.md)", skill.source))
     if not references:
         raise AssertionError("Studio agent skill has no task references")

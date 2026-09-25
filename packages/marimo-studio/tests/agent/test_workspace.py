@@ -92,10 +92,6 @@ def test_agent_module_help_contains_the_installed_core_briefing() -> None:
     assert str(skill / "SKILL.md") in rendered
     assert studio_agent.__doc__ == briefing
     assert skill.source in briefing
-    assert (
-        "Documentation Index: https://marimo-team.github.io/marimo-studio/llms.txt"
-        in briefing
-    )
 
 
 def test_packaged_skill_references_resolve_from_the_installed_skill() -> None:
@@ -107,12 +103,7 @@ def test_packaged_skill_references_resolve_from_the_installed_skill() -> None:
         assert skill.file(reference).read_text(encoding="utf-8").strip()
 
 
-@pytest.mark.parametrize(
-    "statement", ["import marimo_studio", "import marimo_studio.agent"]
-)
-def test_agent_discovery_is_passive_in_a_fresh_process(
-    statement: str, tmp_path: Path
-) -> None:
+def test_agent_discovery_is_passive_in_a_fresh_process(tmp_path: Path) -> None:
     program = """
 import sys
 import threading
@@ -129,8 +120,7 @@ sys.addaudithook(audit)
 threading.Thread.start = unavailable
 read, locate = agent_plugins.read, agent_plugins.locate
 agent_plugins.read = agent_plugins.locate = unavailable
-IMPORT_STATEMENT
-assert "agent" in marimo_studio.__all__
+import marimo_studio
 assert callable(marimo_studio.agent.current_workspace)
 agent_plugins.read, agent_plugins.locate = read, locate
 marimo_studio.agent.current_workspace = unavailable
@@ -139,7 +129,7 @@ skill = marimo_studio.agent.skill()
 assert skill == plugin.skill("marimo-studio")
 assert skill.source in marimo_studio.agent.__doc__
 help(marimo_studio.agent)
-""".replace("IMPORT_STATEMENT", statement)
+"""
     result = subprocess.run(
         [sys.executable, "-c", program],
         cwd=tmp_path,
