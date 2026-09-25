@@ -1,0 +1,45 @@
+packages/marimo-studio/tests/server/test_view_mutations.py
+  s_aaf82c54e7a7ef::t_22947d152ca812 182
+packages/studio/src/features/views/ViewMenu.tsx
+  s_aaf82c54e7a7ef::t_55e4f6251157ca 31
+packages/studio/src/app/StudioHost.tsx
+  s_aaf82c54e7a7ef::t_55e4f6251157ca 361
+packages/marimo-studio/tests/server/test_delivery_directory_routes.py
+  s_aaf82c54e7a7ef::t_22947d152ca812 96
+packages/studio/src/features/views/controller.ts
+  s_aaf82c54e7a7ef::t_55e4f6251157ca 27,88,603
+packages/protocol/tests/responses.test.ts
+  s_aaf82c54e7a7ef::t_22947d152ca812 30
+packages/protocol/src/views.ts
+  s_aaf82c54e7a7ef::t_5ff645b51dcaca 83
+packages/studio/src/features/views/views.css
+  s_aaf82c54e7a7ef::t_d4370f8aa51c6f 392-396
+  s_aaf82c54e7a7ef::t_b1ecc3ff0191b5 385,397-398
+packages/studio/src/features/views/catalog.ts
+  s_aaf82c54e7a7ef::t_55e4f6251157ca 19,42,79-81,91,119
+packages/studio/tests/view-starter-catalog.test.tsx
+  s_aaf82c54e7a7ef::t_12a2edab849f97 144-172
+packages/studio/src/features/views/CreateViewForm.tsx
+  s_aaf82c54e7a7ef::t_55e4f6251157ca 67,84,148
+packages/studio/tests/fixtures.ts
+  s_aaf82c54e7a7ef::t_22947d152ca812 52
+packages/marimo-studio/src/marimo_studio/_server/studio/routes.py
+  s_aaf82c54e7a7ef::t_da093e99ad5123 267-268
+  s_aaf82c54e7a7ef::t_5ff645b51dcaca 6,56,265-266,269-270,287,318
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3a04df98a3da89e7b07b647436f7178dc8eb5f5c",
+  "prompts": {},
+  "sessions": {
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
