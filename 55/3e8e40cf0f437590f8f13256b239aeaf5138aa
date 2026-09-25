@@ -1,0 +1,187 @@
+development_docs/architecture/marimo-integration.md
+  s_aaf82c54e7a7ef::t_5a5ca045a0d678 329-331
+apps/docs/.vitepress/theme/components/StudioViewStack.vue
+  s_30e19f0fe4063c::t_72773f5d9e3c3d 1-57,61-69,71-93,95,97-99,106-191,193-231,233-319,321-323,325-326,336-422,424-427,429,432-434,437-452
+  s_aaf82c54e7a7ef::t_82ca5a1ec25c37 423
+  s_30e19f0fe4063c::t_08d8e71f736235 232,320,324,329,333
+  s_30e19f0fe4063c::t_339a1e4afd4bfb 94,96,100-105
+  s_aaf82c54e7a7ef::t_b4ed60657beec9 58-60,70,192
+  s_aaf82c54e7a7ef::t_8c8306c4ecbb93 428,430-431,435-436
+  s_30e19f0fe4063c::t_a34e4ccb6a72c7 327-328,330-332,334-335
+Makefile
+  s_30e19f0fe4063c::t_369a382cb0f9a1 21,105-106
+  s_aaf82c54e7a7ef::t_22df1cf0455fed 15-17,112,115
+apps/docs/.vitepress/routes.ts
+  s_aaf82c54e7a7ef::t_d7473d6afca24e 7,46
+  s_59305f5a2ee336::t_e0942dfebb1021 52
+  s_4bfadafab14be9::t_b8190c04c98bcc 55,58
+  s_59305f5a2ee336::t_823a3f829de988 57
+apps/docs/.vitepress/theme/custom.css
+  s_59305f5a2ee336::t_b54b309bf328a8 2-7,15-20,48-133
+  s_30e19f0fe4063c::t_10b58c2d5323fc 201,203-205,246,253-259,261
+apps/docs/scripts/example-selection.test.ts
+  s_aaf82c54e7a7ef::t_30c45c6b28b455 11-12
+docs/reference/index.md
+  s_4bfadafab14be9::t_dac4b61f5513ea 31-32
+apps/docs/scripts/verify-build.ts
+  s_59305f5a2ee336::t_44db85ff70ce48 177-179,190-200
+  s_30e19f0fe4063c::t_4364535426136c 124
+  s_30e19f0fe4063c::t_369a382cb0f9a1 123,125-126
+  s_aaf82c54e7a7ef::t_8403915787a4ed 180-185
+  s_aaf82c54e7a7ef::t_007aa50d89b2aa 186-189
+docs/examples/earthquakes.md
+  s_4bfadafab14be9::t_4a24e5ccfd94a4 22,26
+apps/docs/scripts/capture-thumbnails.ts
+  s_30e19f0fe4063c::t_4364535426136c 1,31-34,55,133-138,177,183
+  s_30e19f0fe4063c::t_e5e8fd30b3611a 58-63,139,142
+  s_30e19f0fe4063c::t_42f51ad8b80431 150-151
+  s_30e19f0fe4063c::t_ffea8fae51fcf3 302,328
+  s_30e19f0fe4063c::t_e6846d8d0af5de 49-52
+  s_30e19f0fe4063c::t_8a367704e39707 14-15,18-30,35-48,53-54,56-57,64,68-69,71-73,79-85,92-103,105,140-141,143-144,149,156,159,162,175-176,178-182,184-189,191-195,198,200-201,257-274,276-293,298-300,304-314,358,361,403
+  s_30e19f0fe4063c::t_18999d1bb9f328 2-13,16-17,65-67,70,74-78,86-91,104,106-132,145-148,152-155,157-158,160-161,163-174,190,196-197,199,202-256,275,294-297,301,303,315-327,329-357,359-360,362-402,404-413
+packages/marimo-studio/tests/cli/test_documentation_examples.py
+  s_59305f5a2ee336::t_5d57163c1298f5 61-79
+  s_4bfadafab14be9::t_f3453f77ea1643 167
+apps/docs/.vitepress/theme/components/StudioExample.vue
+  s_4bfadafab14be9::t_0ee42cebac64a8 2,11,39,42-45,47,100,108-126,128,133,135,161-172,174-181,189-190,192-194,197-199,201-202,205-208,210-211,214-215,218-222,224-226,228-231,235-236,239-241,244,246-249,252-258,263,267-269,272-274,276,284-286,303,305,310-313,315-316,319-323,326-327,331-332,337-339,347,353-354,357-360
+  s_4bfadafab14be9::t_d604593cc355e7 146
+  s_30e19f0fe4063c::t_a2e4696dffd55c 4
+  s_4bfadafab14be9::t_621845a4ce56de 342-343,346,348-350
+  s_30e19f0fe4063c::t_df3a6493177c44 81-88
+  s_4bfadafab14be9::t_d74194340bc56a 132
+  s_aaf82c54e7a7ef::t_d7473d6afca24e 40-41,46
+docs/guide/index.md
+  s_4bfadafab14be9::t_b8190c04c98bcc 17,22
+  s_59305f5a2ee336::t_7fb4f3ec1a940f 3,8-9,18,31-32
+  s_59305f5a2ee336::t_e0942dfebb1021 13-16,19-20,24-29
+apps/docs/.vitepress/config.mts
+  s_aaf82c54e7a7ef::t_007aa50d89b2aa 37
+  s_59305f5a2ee336::t_44db85ff70ce48 38,118
+docs/examples/quadratic-programs.md
+  s_aaf82c54e7a7ef::t_6136d5739bd7b7 38-39
+  s_aaf82c54e7a7ef::t_270b93f55b78c9 1-37,40-65
+docs/index.md
+  s_59305f5a2ee336::t_2923ef923d0890 5,9,37,41,45-46,53,63,65-79
+  s_aaf82c54e7a7ef::t_a8d2a66185c3d3 57,59-60
+  s_4bfadafab14be9::t_b8190c04c98bcc 8,44,52,64
+  s_aaf82c54e7a7ef::t_ac9b6d99c16848 61
+  s_30e19f0fe4063c::t_6de2da61195819 62
+docs/guide/run-and-share.md
+  s_4bfadafab14be9::t_b8190c04c98bcc 252
+apps/docs/.vitepress/theme/index.ts
+  s_30e19f0fe4063c::t_6de2da61195819 7,15
+  s_30e19f0fe4063c::t_10b58c2d5323fc 6,14
+docs/guide/coding-agents.md
+  s_4bfadafab14be9::t_b8190c04c98bcc 109
+  s_59305f5a2ee336::t_7fb4f3ec1a940f 3,8-10,12,14,16-17,19,22,25,30,32-33,36-38,40-44,46,48-52,54-58,60-63,71,74-76,78,81,83-85,88-90,92-97,99-101,106,111-114,116,118,129,131-135
+  s_aaf82c54e7a7ef::t_7f1665657fc825 117,120-121
+  s_66971d10bde8d7::t_ceb00e74a192fa 27
+README.md
+  s_59305f5a2ee336::t_2923ef923d0890 16-18,22,24,26,28-30,32-35,37-38,40-42,46-47,55-56,58,60,63,66,68-69,74-77,80-81,83,85-86,88,90-93,97
+  s_4bfadafab14be9::t_b8190c04c98bcc 44,79
+  s_66971d10bde8d7::t_ceb00e74a192fa 71
+  s_59305f5a2ee336::t_e0942dfebb1021 49-53
+  s_59305f5a2ee336::t_823a3f829de988 82
+docs/examples/occupancy.md
+  s_4bfadafab14be9::t_4a24e5ccfd94a4 22,27,33
+apps/docs/package.json
+  s_30e19f0fe4063c::t_8b249efafe82ca 19
+apps/docs/examples.ts
+  s_aaf82c54e7a7ef::t_d7473d6afca24e 101-121
+  s_4bfadafab14be9::t_4a24e5ccfd94a4 134,139,163,168,184,192,197
+docs/examples/index.md
+  s_aaf82c54e7a7ef::t_a8d2a66185c3d3 3,12-14,28,31-32
+  s_30e19f0fe4063c::t_10b58c2d5323fc 16-20
+  s_4bfadafab14be9::t_b8190c04c98bcc 10
+docs/examples/athletes.md
+  s_4bfadafab14be9::t_4a24e5ccfd94a4 25,29,54-55
+docs/guide/notebook-results.md
+  s_4bfadafab14be9::t_b8190c04c98bcc 118
+docs/reference/projections.md
+  s_4bfadafab14be9::t_b8190c04c98bcc 212,277,334-335,351-353
+  s_59305f5a2ee336::t_b442c839052af3 297-333,336-350,354-356
+docs/guide/views.md
+  s_59305f5a2ee336::t_b442c839052af3 14-17
+  s_4bfadafab14be9::t_b8190c04c98bcc 2-3,6
+  s_aaf82c54e7a7ef::t_d0fb4082356cea 12
+development_docs/documentation.md
+  s_30e19f0fe4063c::t_261a9b4dcb2cdf 69-73,75-97
+  s_30e19f0fe4063c::t_369a382cb0f9a1 20,98-100,104-111,114,130-131,135-137,143-145,228
+  s_30e19f0fe4063c::t_b21b139dd6c948 101-103,112-113,115-117,119,124-125,127-129,132-134,138-142
+  s_30e19f0fe4063c::t_e6846d8d0af5de 118,120-123,126
+  s_aaf82c54e7a7ef::t_887229930f106d 10-19,21
+  s_aaf82c54e7a7ef::t_2f300602cc60e8 167-171
+  s_aaf82c54e7a7ef::t_8c8306c4ecbb93 74
+docs/guide/getting-started.md
+  s_59305f5a2ee336::t_a77e3cd4e8af70 21,25,32
+  s_4bfadafab14be9::t_b8190c04c98bcc 27,58
+  s_59305f5a2ee336::t_7fb4f3ec1a940f 3,8-9,18-20,22,24,29-30,44-46,49-57,59-78,81-83,87,93-94,97-98
+docs/guide/manage-source.md
+  s_4bfadafab14be9::t_b8190c04c98bcc 52
+apps/docs/.vitepress/theme/components/StudioExampleCard.vue
+  s_30e19f0fe4063c::t_4364535426136c 33,330-331
+  s_30e19f0fe4063c::t_95229a49c86809 1-32,34-220,228-232,234-239,248-275,281-287,289-291,294-296,298,300-329,332-335
+  s_30e19f0fe4063c::t_bdbac9c97565c9 233,240-247,276-280
+  s_30e19f0fe4063c::t_45096b30b63858 221-227,292-293,297,299
+  s_30e19f0fe4063c::t_b074ed619261c1 288
+docs/guide/work-in-studio.md
+  s_4bfadafab14be9::t_dac4b61f5513ea 8-10,59,75-76
+  s_4bfadafab14be9::t_b8190c04c98bcc 12,74
+docs/what-is-studio.md
+  s_aaf82c54e7a7ef::t_d0fb4082356cea 12
+  s_59305f5a2ee336::t_e0942dfebb1021 41-46
+  s_59305f5a2ee336::t_7fb4f3ec1a940f 3,8-10,15-16,20-27,29-32,36-40,49,53,61-64,68-70,72-74
+  s_4bfadafab14be9::t_b8190c04c98bcc 18,34,51,66
+packages/marimo-studio/README.md
+  s_59305f5a2ee336::t_2923ef923d0890 3-5,10,16-24,26,28,31,34-38,40-45,48-50,52-53,55,57-61,63-65
+  s_66971d10bde8d7::t_ceb00e74a192fa 39
+  s_4bfadafab14be9::t_b8190c04c98bcc 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "553e8e40cf0f437590f8f13256b239aeaf5138aa",
+  "prompts": {},
+  "sessions": {
+    "s_30e19f0fe4063c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8384615c-26ad-40d8-ad55-7da13119cdfb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_4bfadafab14be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e19e6fa1-5ceb-4ac1-8dc6-a7914f6e2d5f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_59305f5a2ee336": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca4d-0102-7303-9584-667f0ec02624",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_66971d10bde8d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2db9750-b9d4-4dc4-a013-4bce226201e5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
