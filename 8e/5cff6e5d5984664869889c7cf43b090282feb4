@@ -1,0 +1,65 @@
+packages/marimo-studio/src/marimo_studio/_workspace/installation.py
+  s_aaf82c54e7a7ef::t_21d8ab5d5ac23d 1-43
+packages/marimo-studio/tests/marimo_compat/test_sandbox_runtime.py
+  s_aaf82c54e7a7ef::t_782ac851210249 101-103,105-106,110,112,115-119,121-128,130-135
+  s_aaf82c54e7a7ef::t_e26f79ecb82010 104
+  s_aaf82c54e7a7ef::t_b7af9f3aef0f3e 21
+  s_aaf82c54e7a7ef::t_cdb6beb27c5aac 44
+  s_aaf82c54e7a7ef::t_a7867b7d0e7833 1-5,7-18,20,22-26,29-30,34-35,42,47-72,74-77,79-100,107-109,111,113-114,120,129
+  s_aaf82c54e7a7ef::t_a0a648aa467c30 6,19,27-28,31-33,36-41,43,45-46,136-143
+  s_aaf82c54e7a7ef::t_d652efa3205c63 73,78
+apps/e2e/scripts/_compat/server.py
+  s_aaf82c54e7a7ef::t_b0f05da20f0877 86-91
+packages/marimo-studio/tests/delivery/test_export_cli.py
+  s_aaf82c54e7a7ef::t_c334789870c3bf 12,24,26
+packages/marimo-studio/src/marimo_studio/_workspace/environment_requirements.py
+  s_aaf82c54e7a7ef::t_5bc199f1db58ae 313
+packages/marimo-studio/tests/cli/test_provider_commands.py
+  s_aaf82c54e7a7ef::t_937c511349c9f3 130,136,154
+apps/e2e/tests/notebook-server.ts
+  s_aaf82c54e7a7ef::t_de6d543f27c5aa 21,37,71
+packages/marimo-studio/src/marimo_studio/_compat/server/sandbox_runtime.py
+  s_aaf82c54e7a7ef::t_e7a3fe51ac52e0 1-5,7-14,19,21-30,37-38,52,54-56,58-90
+  s_aaf82c54e7a7ef::t_a0a648aa467c30 6,20,39-51,53,57
+  s_aaf82c54e7a7ef::t_e29fca00876031 15-18,31-36
+development_docs/architecture/marimo-integration.md
+  s_aaf82c54e7a7ef::t_b72e0f07936571 275-283,289
+  s_aaf82c54e7a7ef::t_f33ff2a92b9f0d 284-288
+apps/e2e/scripts/network.ts
+  s_aaf82c54e7a7ef::t_de6d543f27c5aa 21
+apps/e2e/tests/sandbox-runtime.spec.ts
+  s_aaf82c54e7a7ef::t_de6d543f27c5aa 1-71
+packages/marimo-studio/tests/marimo_compat/test_environment_reentry.py
+  s_aaf82c54e7a7ef::t_a6ba0571a9a730 18,233-259
+packages/marimo-studio/src/marimo_studio/_cli/environment.py
+  s_aaf82c54e7a7ef::t_5bc199f1db58ae 43-46
+  s_aaf82c54e7a7ef::t_e29fca00876031 586-587,592,597-606
+docs/reference/cli.md
+  s_aaf82c54e7a7ef::t_0fb336d0346eea 46-51
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/runtime.py
+  s_aaf82c54e7a7ef::t_96d8cad974acbd 34-36
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_delivery.py
+  s_aaf82c54e7a7ef::t_cfec78d390a607 23,83-95,267,331
+packages/marimo-studio/tests/cli/test_provider_bootstrap_commands.py
+  s_aaf82c54e7a7ef::t_cfec78d390a607 191-259
+packages/marimo-studio/src/marimo_studio/_compat/layout.py
+  s_aaf82c54e7a7ef::t_770b7ca51acc85 338-368
+packages/marimo-studio/src/marimo_studio/_composition.py
+  s_aaf82c54e7a7ef::t_1f491896d41063 125,139,161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8e5cff6e5d5984664869889c7cf43b090282feb4",
+  "prompts": {},
+  "sessions": {
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
