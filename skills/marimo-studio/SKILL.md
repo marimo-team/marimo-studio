@@ -249,11 +249,11 @@ narrow screenshots with an image-capable tool for legible text, usable controls,
 and overflow. Report unavailable visual checks accurately. Leave the requested
 view visible after verification.
 
-Before delivery, choose [the runtime](references/delivery.md). Server keeps
+Before delivery, choose [the runtime](references/delivery.md). The Python runtime keeps
 source and credentials on the server while sending projected outputs to
-visitors. WASM sends notebook source and browser-accessible data to visitors.
-Zero-Python sends prepared outputs and public files, including unselected
-states. Keep secrets out of browser delivery. A live preview does not prove
+visitors. The Browser runtime sends notebook source and browser-accessible data
+to visitors. The Prepared runtime sends prepared outputs and public files,
+including unselected states. Keep secrets out of browser delivery. A live preview does not prove
 an exported site's behavior. Verify the actual export over HTTP.
 
 Report the notebook, view, changed source, artifact revision, and checks

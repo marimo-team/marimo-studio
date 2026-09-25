@@ -27,8 +27,10 @@ const notebookTab = {
 
 const selectedKey = ref(example.views[0].key);
 const loaded = ref(false);
-const frameKey = ref(0);
 const frame = ref<HTMLIFrameElement>();
+// Only a tab choice changes the frame source. Navigation inside the frame
+// updates the tab without reloading the document or resetting its URL state.
+const frameSrc = ref<string>();
 const tabs = [notebookTab, ...example.views];
 
 const selected = computed(() =>
@@ -36,7 +38,9 @@ const selected = computed(() =>
     ? notebookTab
     : (example.views.find(({ key }) => key === selectedKey.value) ?? example.views[0]),
 );
-const href = computed(() => withBase(`/examples/${example.slug}/${selected.value.key}/index.html`));
+const documentHref = (key: string): string =>
+  withBase(`/examples/${example.slug}/${key}/index.html`);
+const href = computed(() => documentHref(selected.value.key));
 // Studio stores view projects under a directory named after the notebook file.
 const viewProjects = example.notebook.replace(/^.*\//, "").replace(/\.py$/, "");
 const sourceHref = computed(() => {
@@ -54,7 +58,7 @@ const select = (key: string): void => {
   }
   selectedKey.value = key;
   loaded.value = false;
-  frameKey.value += 1;
+  frameSrc.value = documentHref(key);
 };
 
 const selectFromKeyboard = (event: KeyboardEvent, key: string): void => {
@@ -78,12 +82,14 @@ const selectFromKeyboard = (event: KeyboardEvent, key: string): void => {
   requestAnimationFrame(() => document.getElementById(tabId(next.key))?.focus());
 };
 
-// Gallery cards link to the view they were showing through `?view=KEY`.
+// Gallery cards link to the view they were showing through `?view=KEY`. The
+// frame loads after mount so a requested view is the first document fetched.
 onMounted(() => {
   const requested = new URLSearchParams(window.location.search).get("view");
   if (requested && example.views.some(({ key }) => key === requested)) {
-    select(requested);
+    selectedKey.value = requested;
   }
+  frameSrc.value = documentHref(selectedKey.value);
 });
 
 const markLoaded = (): void => {
@@ -145,9 +151,9 @@ const markLoaded = (): void => {
     >
       <div v-if="!loaded" class="studio-example__loading" role="status">Loading…</div>
       <iframe
-        :key="frameKey"
+        v-if="frameSrc"
         ref="frame"
-        :src="href"
+        :src="frameSrc"
         :title="`${example.title}: ${selected.label}`"
         allow="clipboard-write; fullscreen"
         allowfullscreen

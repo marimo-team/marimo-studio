@@ -209,7 +209,7 @@ connected cell, output, and value hosts in browser automation.
 ## Trace custom JavaScript rendering
 
 For point-and-note feedback with producer context, follow
-[Select results with Marimo Lens](../guide/coding-agents.md#point-to-a-result-with-marimo-lens).
+[Select results with Marimo Lens](../guide/coding-agents.md#select-results-with-marimo-lens).
 
 Prefer `mo-value`, `marimo-output`, and `marimo-cell` when they can render the
 result directly. For a custom chart or component, retain its connection to the

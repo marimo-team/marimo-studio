@@ -121,7 +121,7 @@ for (const family of documentationExampleFamilies) {
     const noJekyll = join(root, ".nojekyll");
 
     check(
-      await isFile(join(distDir, "thumbnails", "card", family.slug, `${view.key}.webp`)),
+      await isFile(join(distDir, "thumbnails", family.slug, `${view.key}.webp`)),
       `Missing example thumbnail: ${family.slug}/${view.key}`,
     );
     if (!(await isFile(entrypoint))) {

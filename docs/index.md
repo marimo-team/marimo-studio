@@ -69,7 +69,9 @@ Ask your coding agent to turn an existing notebook into a view for your audience
 > Python, add a way to explore them, and check the view on a narrow screen.
 
 Studio ships the instructions and API your agent needs with the Python package.
-Read its installed briefing from a terminal:
+Read its installed briefing from a terminal with
+[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
+instructions a Python package ships for coding agents:
 
 ```console
 uvx --with marimo-studio agent-plugins read marimo-studio

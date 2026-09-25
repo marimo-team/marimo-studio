@@ -2,16 +2,16 @@
 
 Choose before designing controls or exposing data:
 
-| Runtime                     | Interaction                                                                             | Privacy boundary                                                                                                             |
-| --------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Server (`server`)           | Python computes new states using server packages and services                           | Source and credentials stay on the server. Projected outputs reach visitors.                                                 |
-| WASM (`wasm`)               | Pyodide computes new states in the visitor's browser                                    | Visitors receive notebook source and browser-accessible data. Never embed secrets.                                           |
-| Zero-Python (`zero-python`) | Visitors select finite prepared states, with browser-only interaction on published data | Python runs during preparation. Visitors receive prepared outputs and public files, including states they have not selected. |
+| Runtime                  | Interaction                                                                             | Privacy boundary                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Python (`server`)        | Python computes new states using server packages and services                           | Source and credentials stay on the server. Projected outputs reach visitors.                                                 |
+| Browser (`wasm`)         | Pyodide computes new states in the visitor's browser                                    | Visitors receive notebook source and browser-accessible data. Never embed secrets.                                           |
+| Prepared (`zero-python`) | Visitors select finite prepared states, with browser-only interaction on published data | Python runs during preparation. Visitors receive prepared outputs and public files, including states they have not selected. |
 
-Static export defaults to Zero-Python. Choose WASM explicitly when visitors
-need unprepared states and the notebook supports Pyodide. Use Server for
+Static export defaults to Prepared. Choose Browser explicitly when visitors
+need unprepared states and the notebook supports Pyodide. Use Python for
 interactions that need private services or native Python packages. The editor
-can preview all three runtimes. A live `marimo run` serves Server or WASM.
+can preview all three runtimes. A live `marimo run` serves the Python or Browser runtime.
 
 ## Prepare the delivery
 
@@ -31,7 +31,7 @@ Pass every exact requirement through the environment tool. A standalone
 notebook whose only provider is the default Vanilla provider runs with:
 
 ```console
-uv run --with marimo-studio marimo run notebook.py --sandbox
+uvx --with marimo-studio marimo run notebook.py --sandbox
 ```
 
 Preflight the intended static runtime before publishing:
@@ -43,12 +43,12 @@ marimo-studio view preflight dashboard \
   --json
 ```
 
-Read every projection portability record and delivery diagnostic. Zero-Python
+Read every projection portability record and delivery diagnostic. Prepared
 must verify finite projection targets across the configured input states. Use
 WebAssembly when visitors must recompute unprepared states and the notebook can
 run through Pyodide.
 
-For Zero-Python controls, configure `states.yaml` in the selected view project.
+For Prepared controls, configure `states.yaml` in the selected view project.
 An omitted state file prepares the initial notebook state. Keep presentation-only
 copy in view source. A Python label edit changes notebook publication identity
 and requires another state walk, even if native cell caching avoids recomputation.
@@ -106,7 +106,7 @@ marimo-studio view export dashboard \
   --output dist/dashboard
 ```
 
-Use `--runtime wasm` on both commands for a WASM export.
+Use `--runtime wasm` on both commands for a Browser export.
 
 Export runs the same preflight before committing its destination. Progress is
 written to stderr, including marimo-export prepared-state reuse and cache
@@ -117,7 +117,7 @@ re-entry. Five-second heartbeats report the phase, state, elapsed time, and
 latest cache evidence. Unavailable state, cache, or active-cell evidence is
 `null`.
 
-Zero-Python keeps Python source on the build machine and publishes prepared
+Prepared keeps Python source on the build machine and publishes prepared
 outputs. WebAssembly includes saved notebook source for browser execution.
 Review public files, data URLs, authored browser code, and remote dependencies
 before publishing.

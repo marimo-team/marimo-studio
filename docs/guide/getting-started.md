@@ -22,14 +22,16 @@ Click **Add view** in the Studio toolbar. Name the view `dashboard`, choose
 save it when prompted so the view has a stable location beside the notebook.
 
 Notebook and Preview open side by side. The source action opens the view's
-files beneath Preview. The starter places notebook cells that may display output in a working page.
+files beneath Preview. The starter page already shows every notebook cell that
+displays output.
 
 ## Place a notebook result
 
 You can [ask a coding agent](coding-agents.md) to shape the view around your
 audience and task, or edit its source directly.
 
-For a first manual change, add a named cell to the saved notebook source:
+For a first manual change, add a cell named `sales_summary` in the notebook
+editor. In the saved notebook file, it reads:
 
 ```python
 @app.cell

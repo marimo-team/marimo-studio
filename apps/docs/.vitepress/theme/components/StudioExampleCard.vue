@@ -30,7 +30,7 @@ const cycling = computed(() => autoplay.value && !reducedMotion.value);
 const playing = computed(() => cycling.value && visible.value && !hovered.value);
 const pageHref = withBase(`/examples/${example.slug}`);
 const viewHref = computed(() => `${pageHref}?view=${selected.value.key}`);
-const thumbnail = (key: string): string => withBase(`/thumbnails/card/${example.slug}/${key}.webp`);
+const thumbnail = (key: string): string => withBase(`/thumbnails/${example.slug}/${key}.webp`);
 const tabId = (key: string): string => `studio-example-card-${example.slug}-${key}-tab`;
 const panelId = `studio-example-card-${example.slug}-panel`;
 // Start each card part-way through its first cycle so the gallery does not
@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
 
     <footer>
       <p><slot /></p>
-      <small aria-label="Technologies used">
+      <small>
         {{ selected.technologies.map(({ name }) => name).join(" · ") }}
       </small>
     </footer>
@@ -310,7 +310,7 @@ footer {
 }
 
 small {
-  color: var(--vp-c-text-3);
+  color: var(--vp-c-text-2);
   font-size: 12px;
   line-height: 18px;
 }

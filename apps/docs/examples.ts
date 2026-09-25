@@ -126,17 +126,17 @@ export const documentationExampleFamilies = [
     views: [
       {
         key: "overview",
-        label: "Report",
+        label: "Overview",
         technologies: [documentationTechnologies.vanillaHtml],
       },
       {
         key: "explorer",
-        label: "Dashboard",
+        label: "Explorer",
         technologies: [documentationTechnologies.svelte, documentationTechnologies.mosaic],
       },
       {
         key: "field",
-        label: "Slides",
+        label: "Field",
         technologies: [
           documentationTechnologies.vanillaHtml,
           documentationTechnologies.shower,
@@ -160,12 +160,12 @@ export const documentationExampleFamilies = [
       },
       {
         key: "operations",
-        label: "Map",
+        label: "Operations",
         technologies: [documentationTechnologies.react, documentationTechnologies.mapLibre],
       },
       {
         key: "briefing",
-        label: "Slides",
+        label: "Briefing",
         technologies: [
           documentationTechnologies.react,
           documentationTechnologies.revealJs,
@@ -181,7 +181,7 @@ export const documentationExampleFamilies = [
     views: [
       {
         key: "monitor",
-        label: "Dashboard",
+        label: "Monitor",
         technologies: [
           documentationTechnologies.notebookKit,
           documentationTechnologies.observablePlot,
@@ -189,12 +189,12 @@ export const documentationExampleFamilies = [
       },
       {
         key: "model-review",
-        label: "Report",
+        label: "Model review",
         technologies: [documentationTechnologies.react, documentationTechnologies.recharts],
       },
       {
         key: "pdf-report",
-        label: "PDF",
+        label: "PDF report",
         technologies: [documentationTechnologies.react, documentationTechnologies.reactPdf],
       },
     ],

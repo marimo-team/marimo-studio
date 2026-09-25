@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import { withBase } from "vitepress";
-import { computed, ref, useId } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId } from "vue";
 
 import { documentationExampleFamilies } from "../../../examples.ts";
 import { externalLinkIcon } from "./studio-icons.ts";
@@ -9,41 +9,29 @@ import { externalLinkIcon } from "./studio-icons.ts";
 /** One framed document: a notebook export or a view entrypoint. */
 interface Layer {
   label: string;
-  /** Site-relative paths receive the deployment base. Absolute URLs load as given. */
+  /** Site-relative path that receives the deployment base. */
   src: string;
 }
 
 const props = defineProps<{
-  /** Resolve the notebook and views from the documentation example catalog. */
-  family?: string;
-  notebook?: Layer;
-  views?: readonly Layer[];
+  /** Documentation example family whose notebook and views the stack frames. */
+  family: string;
 }>();
 
-const catalog = props.family
-  ? documentationExampleFamilies.find(({ slug }) => slug === props.family)
-  : undefined;
-if (props.family && !catalog) {
+const catalog = documentationExampleFamilies.find(({ slug }) => slug === props.family);
+if (!catalog) {
   throw new Error(`Unknown documentation example family: ${props.family}`);
 }
-const notebook: Layer | undefined =
-  props.notebook ??
-  (catalog && {
-    label: catalog.notebook.replace(/^.*\//, ""),
-    src: `/examples/${catalog.slug}/notebook/index.html`,
-  });
-const views: readonly Layer[] =
-  props.views ??
-  catalog?.views.map(({ key, label }) => ({
-    label,
-    src: `/examples/${catalog.slug}/${key}/index.html`,
-  })) ??
-  [];
-if (!notebook || views.length === 0) {
-  throw new Error("StudioViewStack needs a family, or a notebook and at least one view.");
-}
+const notebook: Layer = {
+  label: catalog.notebook.replace(/^.*\//, ""),
+  src: `/examples/${catalog.slug}/notebook/index.html`,
+};
+const views: readonly Layer[] = catalog.views.map(({ key, label }) => ({
+  label,
+  src: `/examples/${catalog.slug}/${key}/index.html`,
+}));
 
-const href = (src: string): string => (src.startsWith("/") ? withBase(src) : src);
+const href = (src: string): string => withBase(src);
 const id = useId();
 const tabId = (index: number): string => `${id}-tab-${index}`;
 const panelId = `${id}-panel`;
@@ -58,6 +46,26 @@ const viewFrame = ref<HTMLIFrameElement>();
 // Only a tab choice reloads the frame. Navigation inside the frame updates
 // the labels without resetting the view's own URL state.
 const viewSrc = ref(href(views[0].src));
+// Both documents load only once the stack approaches the viewport, so a page
+// that places the stack below the fold opens without them.
+const stack = ref<HTMLElement>();
+const near = ref(false);
+let observer: IntersectionObserver | undefined;
+onMounted(() => {
+  observer = new IntersectionObserver(
+    ([entry]) => {
+      if (entry?.isIntersecting) {
+        near.value = true;
+        observer?.disconnect();
+      }
+    },
+    { rootMargin: "200px" },
+  );
+  if (stack.value) {
+    observer.observe(stack.value);
+  }
+});
+onBeforeUnmount(() => observer?.disconnect());
 
 const front = computed(() => (selectedIndex.value === 0 ? "notebook" : "view"));
 const view = computed(() => views[lastView.value - 1] ?? views[0]);
@@ -114,7 +122,7 @@ const markViewLoaded = (): void => {
 </script>
 
 <template>
-  <figure class="studio-view-stack" :aria-label="`${notebook.label} and its views`">
+  <figure ref="stack" class="studio-view-stack" :aria-label="`${notebook.label} and its views`">
     <nav role="tablist" aria-label="Choose the document in front">
       <template v-for="(tab, index) in tabs" :key="tab.src">
         <span v-if="index === 1" class="studio-view-stack__rule" aria-hidden="true" />
@@ -156,9 +164,9 @@ const markViewLoaded = (): void => {
         <div class="studio-view-stack__body" :inert="front !== 'notebook'">
           <div v-if="!notebookLoaded" class="studio-view-stack__loading">Loading…</div>
           <iframe
+            v-if="near"
             :src="href(notebook.src)"
             :title="notebook.label"
-            loading="lazy"
             referrerpolicy="strict-origin-when-cross-origin"
             @load="notebookLoaded = true"
           />
@@ -189,12 +197,12 @@ const markViewLoaded = (): void => {
         <div class="studio-view-stack__body" :inert="front !== 'view'">
           <div v-if="!viewLoaded" class="studio-view-stack__loading">Loading…</div>
           <iframe
+            v-if="near"
             ref="viewFrame"
             :src="viewSrc"
             :title="view.label"
             allow="clipboard-write; fullscreen"
             allowfullscreen
-            loading="lazy"
             referrerpolicy="strict-origin-when-cross-origin"
             @load="markViewLoaded"
           />

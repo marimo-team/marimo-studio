@@ -11,31 +11,17 @@ with the package, so the agent works from your installed version.
 
 ## Give the agent its briefing
 
-In the notebook's Python environment, the agent reads:
-
-```python
-import agent_plugins as ap
-
-print(ap.read("marimo-studio"))
-```
-
-Python help includes the same briefing alongside the API:
-
-```python
-import marimo_studio.agent
-
-help(marimo_studio.agent)
-```
-
-For a terminal agent, start with:
+A terminal agent reads Studio's installed briefing with
+[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
+instructions a Python package ships for coding agents:
 
 ```console
 uvx --with marimo-studio agent-plugins read marimo-studio
 ```
 
-That command reads an isolated installation. When the agent connects to a live
-notebook, it reads the briefing from the notebook's environment. Reading the
-briefing is passive. It leaves notebook execution and the selected view alone.
+From the notebook's Python environment, `help(marimo_studio.agent)` prints the
+same briefing with the Python API, matching the Studio version the notebook
+runs.
 
 ## Ask for a view
 
@@ -67,8 +53,10 @@ import marimo_studio.agent as studio_agent
 
 workspace = studio_agent.current_workspace()
 notebook = await workspace.inspect_notebook()
-print(notebook.notebook.named_cells())
-print(await workspace.starters())
+for cell in notebook.cells:
+    print(cell.name, cell.definitions, cell.has_output_expression)
+for starter in await workspace.starters():
+    print(starter.id, starter.title)
 ```
 
 `inspect_notebook()` reads saved source. Its optional runtime inspection runs a
@@ -106,7 +94,7 @@ import marimo_studio.agent as studio_agent
 print(studio_agent.skill().file("references/verification.md").read_text())
 ```
 
-## Select results with Marimo Lens {#point-to-a-result-with-marimo-lens}
+## Select results with Marimo Lens
 
 [Marimo Lens](https://marimo-team.github.io/marimo-lens/) lets you select a
 rendered result and attach a note. The agent receives the image and the
@@ -117,7 +105,7 @@ environment:
 uv pip install "marimo-studio[lens]"
 ```
 
-The `lens` extra selects a Lens release that matches the installed Studio. For
+The `lens` extra installs a Lens release compatible with the installed Studio. For
 sandboxed notebooks, also declare `marimo-studio[lens]` in the script's
 dependencies. Restart a running notebook after installing or upgrading Lens.
 

@@ -1,6 +1,6 @@
 ---
 title: Building occupancy
-description: Compare a dashboard, a model report, and a printable PDF backed by one room-sensor notebook.
+description: Compare a room monitor, a model review, and a printable PDF report backed by one room-sensor notebook.
 sidebar: false
 aside: false
 outline: false
@@ -19,18 +19,18 @@ threshold sweep.
 
 <StudioExample family="occupancy" />
 
-In **Dashboard**, choose an observation scope and signal. The controls resolve 12
+In **Monitor**, choose an observation scope and signal. The controls resolve 12
 prepared combinations. [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
 connects those results to [Observable Plot](https://observablehq.com/plot/) charts
 in a field-notebook layout, updating the signal, baseline, anomalies, and summary together.
 
-In **Report**, choose one of three prepared scopes and move the threshold
+In **Model review**, choose one of three prepared scopes and move the threshold
 across 17 notebook-computed operating points. Threshold changes update
 accuracy, precision, recall, the curve marker, confusion counts, and error
 evidence in the browser. [Recharts](https://recharts.org/) renders the threshold
 curve as a React component.
 
-In **PDF**, choose one of the three prepared scopes. The React view
+In **PDF report**, choose one of the three prepared scopes. The React view
 composes the notebook-owned room profile and model evidence into an A4 report,
 then generates the downloadable PDF in the browser.
 
@@ -54,9 +54,9 @@ browser, and its Python packages on an uncached run.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/occupancy.py)
-- [Dashboard view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/monitor)
-- [Report view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
-- [PDF view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
+- [Monitor](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/monitor)
+- [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
+- [PDF report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
 
 All three deployed views use prepared states and run without a Python kernel.
 They keep statistical definitions in the notebook. Their presentation

@@ -68,80 +68,41 @@ rebuild them through the documentation command.
 
 ## Notebook and view stack
 
-`StudioViewStack` frames a notebook export behind one of its views. The tab
-rail chooses the document in front, and a click on the back layer brings it
-forward. Both layers are live, scrollable iframes. Containers narrower than
-36rem show one flat layer at a time.
-
-Resolve the notebook and views from `documentationExampleFamilies`:
+`StudioViewStack` frames an example family's notebook export behind one of its
+views. The tab rail chooses the document in front, and a click on the back layer
+brings it forward. Both layers are live, scrollable iframes that load once the
+stack nears the viewport. Containers narrower than 36rem show one flat layer at
+a time.
 
 ```md
 <StudioViewStack family="quadratic-programs" />
 ```
 
-Or pass any notebook export and view entrypoints. Paths that start with `/`
-receive the deployment base. Absolute URLs load as given:
-
-```md
-<StudioViewStack
-  :notebook="{ label: 'earthquakes.py', src: '/examples/earthquakes/notebook/index.html' }"
-  :views="[
-    { label: 'Map', src: '/examples/earthquakes/operations/index.html' },
-    { label: 'Slides', src: '/examples/earthquakes/briefing/index.html' },
-  ]"
-/>
-```
-
-Explicit `notebook` and `views` props take precedence over `family`. The
-component throws during render when it resolves no notebook or no view.
-
 ## Example thumbnails
 
 The Examples page renders one `StudioExampleCard` per family. Each card cycles
-through `apps/docs/public/thumbnails/card/FAMILY/VIEW.webp` for the views listed
-in `documentationExampleFamilies`. Thumbnails are committed assets. Recapture
-them after a visible view change or when a view joins the catalog:
+through `apps/docs/public/thumbnails/FAMILY/VIEW.webp` for the views listed in
+`documentationExampleFamilies`. Thumbnails are committed assets. Recapture them
+after a visible view change or when a view joins the catalog:
 
 ```console
-make docs-examples
 make docs-thumbnails
 ```
 
-`thumbnails` serves `apps/docs/public` locally, opens each exported view in
-headless Chromium, waits for network idle, loaded fonts, and a settle delay,
-then encodes the capture into `apps/docs/public/thumbnails/PRESET`. A preset
-sets every capture and output option:
-
-| Preset | Capture                                             | Output                |
-| ------ | --------------------------------------------------- | --------------------- |
-| `card` | 1440x900 viewport at device scale 2                 | 1600px wide WebP, q86 |
-| `tall` | 1280px wide, full page up to 2400px, device scale 2 | 1600px wide WebP, q90 |
-
-`card` produces the gallery thumbnails. `tall` produces portrait tiles for
-layouts that show many views side by side. Each tile keeps the view's natural
-height up to the 2400px cap, so tiles range from about 1600x1125 to 1600x3000
-and long pages show their opening section. A
-full-page capture first grows the viewport when a main panel scrolls inside it,
-such as the PDF report preview, then scrolls the document once so lazy and
-scroll-revealed sections render. Slide decks and maps fill one viewport.
-
-Flags override single preset values:
+The target exports the examples when `apps/docs/public/examples` is missing and
+installs Chromium. The script serves `apps/docs/public` locally, opens each
+exported view at 1440x900 and device scale 2, waits for network idle, loaded
+fonts, and a settle delay, then writes a 1600px wide WebP. Select views with
+`--family SLUG` or `--view FAMILY/VIEW`, or capture a deployed site with
+`--base-url`:
 
 ```console
 pnpm --filter @marimo-studio/docs thumbnails -- --view athletes/field
-pnpm --filter @marimo-studio/docs thumbnails -- --preset tall --family occupancy
-pnpm --filter @marimo-studio/docs thumbnails -- --preset tall --format png --out /tmp/masters
-pnpm --filter @marimo-studio/docs thumbnails -- --width 1200 --height 1200 --out /tmp/square
 pnpm --filter @marimo-studio/docs thumbnails -- --base-url https://marimo-team.github.io/marimo-studio/
 ```
 
-WebP limits each dimension to 16383px. The script rejects options that could
-exceed it before capturing and suggests a lower `--max-height`, `--scale`, or
-`--output-width`, or `--format png`. PNG output at native width is written
-directly from Chromium without re-encoding. Run
-`pnpm --filter @marimo-studio/docs thumbnails -- --help` for every option.
-Console errors from a view are printed beside its capture. Inspect the images
-before committing them.
+A view that fails to load is reported and the remaining views are still
+captured. Inspect the images before committing them.
 
 ## Build and serve
 

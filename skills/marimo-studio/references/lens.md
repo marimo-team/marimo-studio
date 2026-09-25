@@ -15,7 +15,7 @@ To enable feedback, install `marimo-studio[lens]` in the notebook environment
 and restart a running notebook. When the notebook imports no Lens, Marimo mounts
 one and the development preview reuses it, so selections from the Notebook pane
 dock and the preview dock reach you together. Use that instance without adding a
-Lens cell or projection. For an explicitly authored Lens in another Server view,
+Lens cell or projection. For an explicitly authored Lens in another Python-runtime view,
 define one value:
 
 ```python

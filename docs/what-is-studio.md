@@ -12,7 +12,7 @@ a page designed for the work they need to do.
 <StudioViewStack family="occupancy" />
 
 The Building occupancy notebook supports a live monitor, a model review, and a
-printable report. Each view presents the same sensor analysis through its own
+printable PDF report. Each view presents the same sensor analysis through its own
 layout, interaction, and explanation.
 
 ## Notebook and views

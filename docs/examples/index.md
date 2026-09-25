@@ -9,15 +9,15 @@ pageClass: studio-example-page
 
 # Examples
 
-Four notebooks back twelve live views. Open a family to compare one analysis
-presented as a lecture, explainer, lab, report, dashboard, story, map, slide
-deck, or PDF.
+Four notebooks back twelve live views, from lecture decks and linked explorers
+to operations maps and printable reports. Open an example to compare how each
+view presents one analysis.
 
 <div class="studio-example-gallery">
   <StudioExampleCard family="quadratic-programs">A lecture deck, a reading explainer, and an interactive geometry lab.</StudioExampleCard>
-  <StudioExampleCard family="athletes">A report, a linked Mosaic dashboard, and Three.js slides.</StudioExampleCard>
-  <StudioExampleCard family="earthquakes">A scroll-driven story, a map, and Reveal.js slides.</StudioExampleCard>
-  <StudioExampleCard family="occupancy">A monitoring dashboard, an interactive model report, and a printable PDF.</StudioExampleCard>
+  <StudioExampleCard family="athletes">An overview report, a linked Mosaic explorer, and a Three.js field presentation.</StudioExampleCard>
+  <StudioExampleCard family="earthquakes">A scroll-driven story, an operations map, and a Reveal.js briefing.</StudioExampleCard>
+  <StudioExampleCard family="occupancy">A room monitor, an interactive model review, and a printable PDF report.</StudioExampleCard>
 </div>
 
 ## Run an example locally

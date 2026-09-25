@@ -25,7 +25,9 @@ resolves the notebook's declared dependencies with `--sandbox`.
 
 ## For agents
 
-Read the version-matched briefing shipped with Studio:
+Read the version-matched briefing shipped with Studio through
+[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
+instructions a Python package ships for coding agents:
 
 ```console
 uvx --with marimo-studio agent-plugins read marimo-studio

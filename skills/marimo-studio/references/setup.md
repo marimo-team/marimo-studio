@@ -24,10 +24,12 @@ uvx --with marimo-studio agent-plugins read marimo-studio
 Outside code mode, bind the saved notebook explicitly:
 
 ```python
+import asyncio
+
 from marimo_studio.authoring import open_workspace
 
 workspace = open_workspace("notebook.py")
-print(await workspace.status())
+print(asyncio.run(workspace.status()))
 ```
 
 Saved-workspace APIs support source inspection, view authoring, and builds.

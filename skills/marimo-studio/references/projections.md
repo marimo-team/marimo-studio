@@ -61,7 +61,7 @@ updates, and declare every kernel input:
   selectors such as `summary.events`. Bind dynamic selectors and source IDs to
   the state that renders the result. Use `data-marimo-allow="*"` for selectors
   the provider cannot bound at build time. Unbounded selectors require Server
-  or WASM runtime (`--runtime wasm` for export). Prepared exports need finite
+  or Browser runtime (`--runtime wasm` for export). Prepared exports need finite
   authored targets.
 - Link browser-only aggregates to their actual kernel inputs and label the
   browser calculation. Canvas and PDF picking is limited to the chart or page

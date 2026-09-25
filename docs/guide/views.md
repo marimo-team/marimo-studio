@@ -11,8 +11,8 @@ or audience.
 
 <StudioViewStack family="athletes" />
 
-The [Rio athletes example](../examples/athletes.md) has a report, an explorer,
-and a field briefing. Each view has its own project, build, and last successful
+The [Rio athletes example](../examples/athletes.md) has `overview`, `explorer`,
+and `field` views. Each view has its own project, build, and last successful
 artifact. Keep shared measures and reusable controls in the notebook, and
 layout, wording, and browser dependencies in each view.
 

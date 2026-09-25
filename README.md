@@ -46,18 +46,20 @@ resolves the notebook's declared dependencies with `--sandbox`.
 The [Rio 2016 notebook](https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html)
 supplies one analysis to three interfaces:
 
-| View                                                                                                    | Explore                                                      |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [Publication report](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html) | Roster totals, delegations, sports, and medalists            |
-| [Linked explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html)    | Filter the roster and brush linked charts                    |
-| [Interactive briefing](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)  | Move through the athlete data in a four-chapter presentation |
+| View                                                                                          | Explore                                                      |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [Overview](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html) | Roster totals, delegations, sports, and medalists            |
+| [Explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html) | Filter the roster and brush linked charts                    |
+| [Field](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)       | Move through the athlete data in a four-chapter presentation |
 
 Use HTML, React, Svelte, or Observable Notebook Kit. Each view owns its source
 and browser dependencies. [Explore all examples](https://marimo-team.github.io/marimo-studio/examples/).
 
 ## For agents
 
-Read the version-matched briefing shipped with Studio:
+Read the version-matched briefing shipped with Studio through
+[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
+instructions a Python package ships for coding agents:
 
 ```console
 uvx --with marimo-studio agent-plugins read marimo-studio
