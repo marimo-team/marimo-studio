@@ -436,7 +436,6 @@ def test_registered_svelte_starter_builds_typed_projections_and_reports_warnings
   hidden
   mo-value="rows"
   use:observeMarimoValue={{
-    selector: "rows",
     onValue: (value: MarimoTable<Row>) => {
       rowCount =
         getMarimoDataSource(value)?.bytes.byteLength ?? value.toArray().length;

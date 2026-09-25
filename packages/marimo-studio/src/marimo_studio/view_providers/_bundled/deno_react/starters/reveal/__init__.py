@@ -15,6 +15,9 @@ from marimo_studio.view_providers import (
 from marimo_studio.view_providers._bundled._starters import (
     BundledStarter,
     StarterRendering,
+    app_title,
+    humanize,
+    script_json,
     starter_cells,
 )
 
@@ -95,25 +98,21 @@ def _markdown_headings(markdown: str | None) -> tuple[tuple[int, str], ...]:
     return tuple(headings)
 
 
-def _humanize(value: str) -> str:
-    return " ".join(value.replace("_", " ").replace("-", " ").split()).title()
-
-
 def _notebook_title(
     context: StarterContext,
     cells: tuple[tuple[CellSpec, StarterCellTarget], ...],
 ) -> str:
-    configured = context.notebook.app_config.get("app_title")
-    if isinstance(configured, str) and configured.strip():
-        return configured.strip()
-    for cell, _target in cells:
-        heading = next(
-            (text for level, text in _markdown_headings(cell.markdown) if level == 1),
-            None,
-        )
-        if heading is not None:
-            return heading
-    return _humanize(context.notebook_name)
+    """Prefer the app title, then the first top-level heading, then the filename."""
+    heading = next(
+        (
+            text
+            for cell, _target in cells
+            for level, text in _markdown_headings(cell.markdown)
+            if level == 1
+        ),
+        None,
+    )
+    return app_title(context) or heading or humanize(context.notebook_name)
 
 
 def _slide_title(cell: CellSpec) -> tuple[str, bool]:
@@ -121,7 +120,7 @@ def _slide_title(cell: CellSpec) -> tuple[str, bool]:
     if heading is not None:
         return heading[1], False
     if cell.name is not None:
-        return _humanize(cell.name), True
+        return humanize(cell.name), True
     return f"Cell {cell.index + 1}", True
 
 
@@ -165,10 +164,7 @@ def _render(context: StarterContext) -> StarterRendering:
     return StarterRendering(
         replacements={
             _SLIDE_HOSTS_MARKER: hosts,
-            _TITLE_MARKER: json.dumps(
-                _notebook_title(context, cells),
-                ensure_ascii=False,
-            ),
+            _TITLE_MARKER: script_json(_notebook_title(context, cells)),
         },
         cell_targets=tuple(target for _cell, target in cells),
     )

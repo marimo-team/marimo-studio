@@ -81,6 +81,13 @@ h1 {
   top: var(--pad);
 }
 
+.unavailable {
+  color: var(--muted);
+  margin: 0;
+  padding: 4rem 0;
+  text-align: center;
+}
+
 .stage figcaption {
   color: var(--muted);
   font-size: 0.8125rem;

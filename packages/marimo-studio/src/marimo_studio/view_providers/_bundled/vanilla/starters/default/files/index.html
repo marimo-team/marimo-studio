@@ -53,7 +53,12 @@
         host.addEventListener("marimo-value-updated", sync);
         host.addEventListener("marimo-value-error", fail);
         if (host.dataset.marimoError !== undefined) {
-          onError({ code: host.dataset.marimoErrorCode, message: host.dataset.marimoError });
+          onError({
+            selector: host.getAttribute("mo-value"),
+            code: host.dataset.marimoErrorCode,
+            message: host.dataset.marimoError,
+            hint: host.dataset.marimoDiagnosticHint,
+          });
         } else if (host.marimoValue !== undefined) {
           onValue(host.marimoValue);
         }

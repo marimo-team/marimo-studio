@@ -40,7 +40,6 @@ reorder, group, or replace targets as the component design develops.
   hidden
   mo-value="rows"
   use:observeMarimoValue={{
-    selector: "rows",
     onValue: (value: MarimoTable<Row>) => {
       rows = value;
     },

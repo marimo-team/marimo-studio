@@ -256,7 +256,6 @@ $effect(() => {
   id="athlete-data"
   mo-value="athlete_facts"
   use:observeMarimoValue={{
-    selector: "athlete_facts",
     onValue: (value: unknown) => {
       if (isAthleteTable(value)) {
         athleteFacts = value;

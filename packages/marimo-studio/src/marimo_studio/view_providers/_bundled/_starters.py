@@ -62,13 +62,34 @@ def provider_starters(catalog: StarterCatalog) -> tuple[ProviderStarter, ...]:
     return tuple(starter.info for starter in catalog.values())
 
 
-def notebook_label(context: StarterContext) -> str:
-    """Return the notebook's app title, or a readable form of its filename."""
+def humanize(value: str) -> str:
+    """Return a title from a snake-case, kebab-case, or spaced name."""
+    return " ".join(value.replace("_", " ").replace("-", " ").split()).title()
+
+
+def app_title(context: StarterContext) -> str | None:
+    """Return the notebook's configured app title, if it has one."""
     configured = context.notebook.app_config.get("app_title")
     if isinstance(configured, str) and configured.strip():
         return configured.strip()
-    words = context.notebook_name.replace("_", " ").replace("-", " ").split()
-    return " ".join(words).title()
+    return None
+
+
+def notebook_label(context: StarterContext) -> str:
+    """Return the notebook's app title, or a readable form of its filename."""
+    return app_title(context) or humanize(context.notebook_name)
+
+
+def script_json(value: str) -> str:
+    """Return a JSON string literal that cannot close an HTML `<script>` element."""
+    return (
+        json.dumps(value, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
 
 
 def _replacements(
@@ -80,8 +101,8 @@ def _replacements(
     replacements = {
         "__NOTEBOOK_LABEL_HTML__": html.escape(label),
         "__VIEW_HEADING_HTML__": html.escape(heading),
-        "__NOTEBOOK_LABEL_JSON__": json.dumps(label),
-        "__VIEW_HEADING_JSON__": json.dumps(heading),
+        "__NOTEBOOK_LABEL_JSON__": script_json(label),
+        "__VIEW_HEADING_JSON__": script_json(heading),
     }
     for marker, value in additions.items():
         if _MARKER_NAME.fullmatch(marker) is None:

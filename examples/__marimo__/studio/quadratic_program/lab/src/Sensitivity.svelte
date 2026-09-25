@@ -2,7 +2,7 @@
   import { scaleLinear } from "d3-scale";
   import { line } from "d3-shape";
 
-  import { heldRuns, type SweepRow } from "./lib/problem.ts";
+  import { arrowStep, heldRuns, type SweepRow } from "./lib/problem.ts";
 
   let {
     sweep,
@@ -68,12 +68,11 @@
     scrubbing = false;
   };
 
-  const steps: Record<string, number> = { ArrowLeft: -2, ArrowDown: -2, ArrowRight: 2, ArrowUp: 2 };
-
   const step = (event: KeyboardEvent) => {
-    if (event.key in steps) {
+    const change = arrowStep(event.key, sweep);
+    if (change !== undefined) {
       event.preventDefault();
-      onturn(row.direction + steps[event.key]);
+      onturn(row.direction + change);
     }
   };
 </script>

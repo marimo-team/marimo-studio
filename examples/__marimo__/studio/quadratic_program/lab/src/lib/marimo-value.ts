@@ -75,7 +75,6 @@ export type MarimoValueElement<T = MarimoValue> = HTMLElement & {
 };
 
 export type MarimoValueOptions<T = MarimoValue> = {
-  selector: string;
   onValue: (value: T) => void;
   onError?: () => void;
 };

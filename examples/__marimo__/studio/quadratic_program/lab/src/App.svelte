@@ -14,6 +14,8 @@
   let bowl = $state<Bowl>();
   let sweep = $state<SweepRow[]>();
   let direction = $state(0);
+  let unavailable = $state(false);
+  const fail = () => (unavailable = true);
 
   const row = $derived(sweep ? nearestRow(sweep, direction) : undefined);
   const held = $derived(
@@ -40,8 +42,8 @@
   hidden
   mo-value="region"
   use:observeMarimoValue={{
-    selector: "region",
     onValue: (value: Region) => (region = value),
+    onError: fail,
   }}
 ></span>
 <span
@@ -49,8 +51,8 @@
   hidden
   mo-value="bowl"
   use:observeMarimoValue={{
-    selector: "bowl",
     onValue: (value: Bowl) => (bowl = value),
+    onError: fail,
   }}
 ></span>
 <span
@@ -58,8 +60,8 @@
   hidden
   mo-value="sweep"
   use:observeMarimoValue={{
-    selector: "sweep",
     onValue: (value: SweepRow[]) => (sweep = value),
+    onError: fail,
   }}
 ></span>
 <span
@@ -67,8 +69,8 @@
   hidden
   mo-value="pull_direction.value"
   use:observeMarimoValue={{
-    selector: "pull_direction.value",
     onValue: followNotebook,
+    onError: fail,
   }}
 ></span>
 
@@ -85,12 +87,14 @@
 
   <figure
     class="stage"
-    aria-busy={!row}
+    aria-busy={!row && !unavailable}
     data-marimo-lens-inputs="region-data bowl-data sweep-data direction-data"
     data-marimo-lens-label="Feasible region, level curves, and the path of the optimum"
     data-marimo-lens-render-source={JSON.stringify({ path: "src/Geometry.svelte" })}
   >
-    {#if region && bowl && sweep && row}
+    {#if unavailable}
+      <p class="unavailable">The figure is unavailable.</p>
+    {:else if region && bowl && sweep && row}
       <Geometry {region} {bowl} {sweep} {row} {direction} {onturn} />
     {/if}
     <figcaption>Drag across the figure, or focus it and use the arrow keys.</figcaption>

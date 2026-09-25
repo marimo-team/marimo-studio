@@ -31,6 +31,18 @@ const separation = (a: number, b: number) => {
   return Math.min(difference, 360 - difference);
 };
 
+/** Return the direction change an arrow key asks for, one solved direction at a time. */
+export const arrowStep = (key: string, sweep: SweepRow[]): number | undefined => {
+  const spacing = sweep[1].direction - sweep[0].direction;
+  const steps: Record<string, number> = {
+    ArrowUp: spacing,
+    ArrowRight: spacing,
+    ArrowDown: -spacing,
+    ArrowLeft: -spacing,
+  };
+  return steps[key];
+};
+
 /** Return the solved row whose direction of q is closest to `degrees`. */
 export const nearestRow = (sweep: SweepRow[], degrees: number) =>
   sweep.reduce((best, row) =>

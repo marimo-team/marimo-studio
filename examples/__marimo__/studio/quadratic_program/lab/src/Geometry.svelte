@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Bowl, Region, SweepRow } from "./lib/problem.ts";
+  import { arrowStep, type Bowl, type Region, type SweepRow } from "./lib/problem.ts";
 
   let {
     region,
@@ -51,17 +51,11 @@
     dragging = false;
   };
 
-  const steps: Record<string, number> = {
-    ArrowUp: 2,
-    ArrowRight: 2,
-    ArrowDown: -2,
-    ArrowLeft: -2,
-  };
-
   const step = (event: KeyboardEvent) => {
-    if (event.key in steps) {
+    const change = arrowStep(event.key, sweep);
+    if (change !== undefined) {
       event.preventDefault();
-      onturn(direction + steps[event.key]);
+      onturn(direction + change);
     }
   };
 </script>

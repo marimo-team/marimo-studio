@@ -40,7 +40,6 @@ Mosaic controls, crossfilter, plots, scorecards, and roster table.
   hidden
   mo-value="rows"
   use:observeMarimoValue={{
-    selector: "rows",
     onValue: (value: MarimoTable<Row>) => {
       rows = value;
     },
