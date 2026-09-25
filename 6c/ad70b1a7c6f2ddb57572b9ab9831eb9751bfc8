@@ -1,0 +1,132 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/AGENTS.md
+  s_59305f5a2ee336::t_92e68d699abe67 124-136
+  s_59305f5a2ee336::t_5c326d28394525 118-122
+  s_59305f5a2ee336::t_2a282033d83739 116-117,123
+  s_aaf82c54e7a7ef::t_f9466233095644 93-108
+  s_aaf82c54e7a7ef::t_7f1665657fc825 87
+skills/marimo-studio/references/delivery.md
+  s_59305f5a2ee336::t_ab5a0a6d8cb71a 1-36,39-64,66-68,82-83,86-104,109-138
+  s_59305f5a2ee336::t_3412525f7abb5d 37-38
+  s_59305f5a2ee336::t_92e68d699abe67 65
+  s_aaf82c54e7a7ef::t_82f32cff2e4075 69-75,105-108
+  s_aaf82c54e7a7ef::t_fba9e1d04c35c5 76-81,84-85
+scripts/verify-installed-package.py
+  s_59305f5a2ee336::t_49cb3956b11eb4 136,244-245
+  s_59305f5a2ee336::t_98d8000be3dc16 264-266
+  s_59305f5a2ee336::t_ab8863c50e8587 94-108,110,112-113
+  s_59305f5a2ee336::t_ab7573194b9ee6 10,131,251-263
+skills/marimo-studio/references/projections.md
+  s_59305f5a2ee336::t_ab5a0a6d8cb71a 1-5,7-31,33-50,53-62,65-78
+  s_59305f5a2ee336::t_92e68d699abe67 6,32,51-52,63-64
+skills/marimo-studio/references/setup.md
+  s_59305f5a2ee336::t_3412525f7abb5d 63-70
+  s_66971d10bde8d7::t_b256f1e8aad2cd 13-16
+  s_aaf82c54e7a7ef::t_f320e01dcf380c 5
+  s_59305f5a2ee336::t_73a932cc4e1930 1-4,6-12,17-62,71-76
+skills/marimo-studio/references/authoring.md
+  s_59305f5a2ee336::t_92e68d699abe67 16-20,22-23,110,128
+  s_59305f5a2ee336::t_ab5a0a6d8cb71a 1-15,21,24-109,111-127,129-160
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/AGENTS.md
+  s_aaf82c54e7a7ef::t_7f1665657fc825 50,52-53,55-56
+  s_59305f5a2ee336::t_92e68d699abe67 147-159
+docs/reference/python-api.md
+  s_59305f5a2ee336::t_b442c839052af3 486,489,491,494,496-499,501,504-505,508-510,512,515-518,520,523-533,553-555
+  s_66971d10bde8d7::t_ceb00e74a192fa 495
+  s_59305f5a2ee336::t_5d57163c1298f5 622-634
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_starters.py
+  s_aaf82c54e7a7ef::t_6c0d8b0176ca1c 66-73
+development_docs/architecture/agents-and-delivery.md
+  s_59305f5a2ee336::t_b442c839052af3 11-17,28-36,41-43
+packages/marimo-studio/tests/providers/test_bundled_starters.py
+  s_aaf82c54e7a7ef::t_4907f63fe8fa09 21,242-295
+scripts/verify-dist.sh
+  s_59305f5a2ee336::t_54b0d4e703ac25 82-84
+  s_59305f5a2ee336::t_49cb3956b11eb4 90
+packages/marimo-studio/tests/agent/test_workspace.py
+  s_59305f5a2ee336::t_98d8000be3dc16 95-96,110-112
+  s_59305f5a2ee336::t_49cb3956b11eb4 66-67,73-74,86-87
+  s_59305f5a2ee336::t_a700139314c07a 89,93-94,97
+  s_59305f5a2ee336::t_b4aafb8fc7edb4 5,7-8,85,98-109,113-154
+packages/marimo-studio/pyproject.toml
+  s_59305f5a2ee336::t_49cb3956b11eb4 11,33,109
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/default/files/AGENTS.md
+  s_59305f5a2ee336::t_92e68d699abe67 109-121
+  s_59305f5a2ee336::t_2a282033d83739 101-102,108
+  s_59305f5a2ee336::t_5c326d28394525 103-107
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/src/App.tsx
+  s_aaf82c54e7a7ef::t_f9466233095644 4-5,17-27
+  s_aaf82c54e7a7ef::t_6c0d8b0176ca1c 8
+  s_aaf82c54e7a7ef::t_76cd80e2ec5305 28-49
+skills/marimo-studio/agents/openai.yaml
+  s_59305f5a2ee336::t_92e68d699abe67 4
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_59305f5a2ee336::t_148bee404f52f7 14
+packages/marimo-studio/src/marimo_studio/agent/__init__.py
+  s_59305f5a2ee336::t_49cb3956b11eb4 27,32,34,48-49,58
+skills/marimo-studio/references/verification.md
+  s_59305f5a2ee336::t_b2cdb9cbcb61b4 43
+  s_59305f5a2ee336::t_ab5a0a6d8cb71a 1-42,44-85
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/__init__.py
+  s_aaf82c54e7a7ef::t_76cd80e2ec5305 155,157-161
+  s_aaf82c54e7a7ef::t_ed18b9c3e68b14 181
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/starters/default/files/AGENTS.md
+  s_59305f5a2ee336::t_92e68d699abe67 113-125
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_obsnotebook/starters/default/files/AGENTS.md
+  s_59305f5a2ee336::t_92e68d699abe67 3-5,66-72
+pyproject.toml
+  s_59305f5a2ee336::t_49cb3956b11eb4 20,31
+scripts/check_python_architecture.py
+  s_59305f5a2ee336::t_e009934a5d1e19 197-198
+packages/marimo-studio/src/marimo_studio/__init__.py
+  s_59305f5a2ee336::t_49cb3956b11eb4 20,50
+skills/marimo-studio/references/lens.md
+  s_aaf82c54e7a7ef::t_5bc428cc9fd3a0 14
+  s_66971d10bde8d7::t_b256f1e8aad2cd 7-8
+  s_59305f5a2ee336::t_ab5a0a6d8cb71a 1-6,9-13,20-29,33-56,61-67
+  s_aaf82c54e7a7ef::t_7f1665657fc825 30-32
+  s_aaf82c54e7a7ef::t_5a5ca045a0d678 15-19
+  s_59305f5a2ee336::t_b2cdb9cbcb61b4 57-60
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/src/style.css
+  s_aaf82c54e7a7ef::t_396307aaf38bfe 68-69
+skills/marimo-studio/SKILL.md
+  s_59305f5a2ee336::t_e0942dfebb1021 17-23,187-191
+  s_59305f5a2ee336::t_b2cdb9cbcb61b4 131
+  s_59305f5a2ee336::t_73a932cc4e1930 4-6,11-13,15,25-27,29,47,52-54,57-59,61-64,66-69,71,73-75,77-78,81-83,86-88,91-95,98-99,102,104,107-109,111,113,116,118-119,122-130,133,155-156,162-164,166-167,172-186,192-210,214,223-227,229-232,234-236,238-241,243-247,249-254,256-257,259,261,263-264,266,271-272
+  s_59305f5a2ee336::t_7a8a2e4d0db3ee 158-159
+  s_59305f5a2ee336::t_3412525f7abb5d 132,142-143,146-148,151-152
+  s_aaf82c54e7a7ef::t_c86e21f13eb89d 31-32,34-38,40-45
+  s_66971d10bde8d7::t_b256f1e8aad2cd 269-270
+  s_aaf82c54e7a7ef::t_304cf136f5acab 134-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6cad70b1a7c6f2ddb57572b9ab9831eb9751bfc8",
+  "prompts": {},
+  "sessions": {
+    "s_59305f5a2ee336": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca4d-0102-7303-9584-667f0ec02624",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_66971d10bde8d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2db9750-b9d4-4dc4-a013-4bce226201e5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
