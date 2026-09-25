@@ -18,6 +18,7 @@ interface NotebookServerOptions {
   environment?: NodeJS.ProcessEnv;
   extensions?: "native" | "studio";
   registryDirectory?: string;
+  sandbox?: boolean;
 }
 
 interface NotebookServerTimeoutOptions {
@@ -33,6 +34,7 @@ export const startNotebookServer = ({
   environment: extraEnvironment = {},
   extensions = "studio",
   registryDirectory = notebookProcessRegistryDirectory,
+  sandbox = false,
 }: NotebookServerOptions): ServerHandle => {
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
@@ -66,7 +68,7 @@ export const startNotebookServer = ({
       "marimo",
       command,
       target,
-      "--no-sandbox",
+      sandbox ? "--sandbox" : "--no-sandbox",
       "--headless",
       ...authentication,
     ],

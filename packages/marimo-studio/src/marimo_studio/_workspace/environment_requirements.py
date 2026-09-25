@@ -310,7 +310,7 @@ def allows_source_checkout(
     *,
     marker_environment: MarkerEnvironment | None,
 ) -> bool:
-    """Return whether the invoking checkout satisfies declared ownership."""
+    """Return whether the invoking local Studio source satisfies declared ownership."""
     selected_constraints = tuple(constraints)
     if any(
         uses_dependency_source(

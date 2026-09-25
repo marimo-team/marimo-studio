@@ -83,6 +83,12 @@ def main() -> None:
                 raise SystemExit("Expected marimo edit, run, or new")
             from marimo._cli.cli import main as marimo
 
+            if "--sandbox" in args:
+                # Marimo relaunches a sandboxed editor only to layer its server
+                # tools, which this environment already provides. Keeping the
+                # editor in this process preserves the bound listener while each
+                # kernel still starts in its notebook's sandbox.
+                os.environ["MARIMO_SERVER_OVERLAY"] = "1"
             marimo(
                 args=[*args[1:], "--host", "127.0.0.1", "--port", str(port)],
                 prog_name="marimo",

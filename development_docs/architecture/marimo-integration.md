@@ -272,6 +272,21 @@ runtime instance digest. Browser requests also carry the current session ID.
 The server rejects requests whose revision, runtime, or session identity does
 not match the selected presentation.
 
+### Sandboxed kernels
+
+`marimo edit --sandbox` and `marimo run --sandbox` start each kernel or app
+host in an environment built from the notebook's PEP 723 manifest. Studio's
+kernel half loads through the `marimo.kernel.lifespan` entry point, so that
+environment must contain the Studio the server runs. `SandboxRuntime` layers
+it through Marimo's `RuntimeOverlay`, the same mechanism that binds the kernel
+to the running Marimo. It appends one requirement for the lifespan of the
+server adapters: `-e <path>` for an editable checkout, the file URL of a local
+wheel or directory, or `marimo-studio==<version>` for an index install. When
+the server has Deno, the overlay also pins `deno==<version>`, because code mode
+authors and builds framework views inside the kernel. An overlay entry takes
+precedence over the manifest's own requirement, and the manifest is never
+edited.
+
 ## Kernel projection host
 
 `KernelProjectionHost` supplies three operations:

@@ -43,6 +43,12 @@ command through `uv`. `uv` may resolve and install packages before provider code
 loads. A third-party key such as `acme-views/report` requires an active
 `acme-views` dependency in the notebook or project.
 
+Runtime validation, and `view preflight` or `view export` with the Zero-Python
+runtime, execute notebook Python. When the notebook declares dependencies, a
+Python version, or a project environment, these commands also rerun through
+`uv` in that environment before preparing notebook states. A WebAssembly export
+runs notebook Python in the visitor's browser and stays in the current process.
+
 Reading or repairing `view.toml` uses Studio's provider-independent manifest
 path in the current process. This keeps the manifest available when its provider
 is unavailable or its content needs repair.

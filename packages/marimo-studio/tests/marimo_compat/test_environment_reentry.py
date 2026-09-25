@@ -15,6 +15,7 @@ from marimo_studio._cli.environment import (
 )
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.installation import LocalStudioSource
 from marimo_studio.view_providers import ProviderAvailability
 from marimo_studio.view_providers._bundled import _deno
 from marimo_studio.view_providers._bundled.deno_react import (
@@ -228,4 +229,32 @@ default = "dashboard"
     source_root = environment_module.package_source_root()
     assert source_root is not None
     assert command[command.index("--with-editable") + 1] == str(source_root)
+    assert command[command.index("--") + 1 :] == ["python", "-V"]
+
+
+def test_installed_wheel_reentry_installs_the_invoking_wheel(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    wheel = tmp_path / f"marimo_studio-{version('marimo-studio')}-py3-none-any.whl"
+    wheel.write_bytes(b"")
+    monkeypatch.setattr(environment_module, "package_source_root", lambda: None)
+    monkeypatch.setattr(
+        environment_module,
+        "local_studio_source",
+        lambda: LocalStudioSource(url=wheel.as_uri(), path=wheel, editable=False),
+    )
+    monkeypatch.setattr(environment_module.shutil, "which", lambda _: "/usr/bin/uv")
+    monkeypatch.setattr(
+        environment_module,
+        "create_environment_flag_builder",
+        lambda: lambda *_args, **_kwargs: [],
+    )
+
+    command = environment_command(load_studio(notebook_path), ["python", "-V"])
+
+    assert command[command.index("--with") + 1] == f"marimo-studio @ {wheel.as_uri()}"
+    assert "--with-editable" not in command
     assert command[command.index("--") + 1 :] == ["python", "-V"]

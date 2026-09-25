@@ -188,3 +188,72 @@ def test_first_external_view_create_bootstraps_the_selected_starter_distribution
 
     assert result.exit_code == 19, result.output
     assert len(captured) == 1
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["view", "export", "dashboard", "--output", "static"],
+        ["view", "preflight", "dashboard"],
+    ),
+    ids=("export", "preflight"),
+)
+def test_prepared_delivery_reruns_in_the_notebook_environment(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+) -> None:
+    prepare_view(notebook_path)
+    module = "marimo_studio._cli.commands.view_delivery"
+    targets: list[Path] = []
+
+    def reenter(target, _requested) -> bool:
+        targets.append(target.notebook)
+        return True
+
+    monkeypatch.setattr(f"{module}.provider_bootstrap_required", lambda _target: False)
+    monkeypatch.setattr(f"{module}.should_reenter", reenter)
+    monkeypatch.setattr(f"{module}.run_in_environment", lambda _target, _args: 23)
+
+    result = CliRunner().invoke(cli, [*arguments, "--target", str(notebook_path)])
+
+    assert result.exit_code == 23, result.output
+    assert targets == [notebook_path.resolve()]
+
+
+def test_browser_runtime_export_runs_where_it_was_invoked(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    module = "marimo_studio._cli.commands.view_delivery"
+    exported: list[str] = []
+
+    async def export_view(_notebook, _view, _output, **options):
+        exported.append(options["runtime"])
+        raise SystemExit(0)
+
+    monkeypatch.setattr(f"{module}.provider_bootstrap_required", lambda _target: False)
+    monkeypatch.setattr(
+        f"{module}.should_reenter",
+        lambda _target, _requested: pytest.fail("WebAssembly export re-entered"),
+    )
+    monkeypatch.setattr(f"{module}.export_view", export_view)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "export",
+            "dashboard",
+            "--output",
+            "static",
+            "--runtime",
+            "wasm",
+            "--target",
+            str(notebook_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert exported == ["wasm"]

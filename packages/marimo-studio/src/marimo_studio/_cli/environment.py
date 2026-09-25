@@ -40,6 +40,10 @@ from marimo_studio._workspace.environment_requirements import (
     studio_dependency_constraint,
     uses_dependency_source,
 )
+from marimo_studio._workspace.installation import (
+    STUDIO_DISTRIBUTION,
+    local_studio_source,
+)
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.models import NotebookEnvironment, StudioWorkspace
 from marimo_studio._workspace.python_project import (
@@ -579,14 +583,27 @@ def environment_command(
             ):
                 flags.extend(["--no-sources-package", distribution])
     command.extend(flags)
-    if source_root is not None and allows_source_checkout(
+    local_source = _invoking_studio_source(source_root)
+    if local_source and allows_source_checkout(
         _package_version(),
         constraints,
         marker_environment=marker_environment,
     ):
-        command.extend(["--with-editable", str(source_root)])
+        command.extend(local_source)
     command.extend(["--", *args])
     return command
+
+
+def _invoking_studio_source(source_root: Path | None) -> list[str]:
+    """Return uv flags that install the local source of the invoking Studio."""
+    if source_root is not None:
+        return ["--with-editable", str(source_root)]
+    source = local_studio_source()
+    if source is None:
+        return []
+    if source.editable:
+        return ["--with-editable", str(source.path)]
+    return ["--with", f"{STUDIO_DISTRIBUTION} @ {source.url}"]
 
 
 def _target_provider_ids(target: EnvironmentTarget) -> tuple[str, ...]:

@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
+from marimo_studio._cli.environment import SANDBOX_ENV
 
 from .export_test_support import configure_export_view
 
@@ -20,7 +21,9 @@ _PREPARE_TIMEOUT = 120.0
 def test_export_command_reports_the_static_entrypoint(
     notebook_path: Path,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv(SANDBOX_ENV, "1")
     configure_export_view(notebook_path)
     output = tmp_path / "site"
 

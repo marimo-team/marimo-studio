@@ -18,6 +18,7 @@ const endpointNames = {
     "forcedInterruption",
     "runInterruption",
     "hostSession",
+    "sandbox",
   ],
   provider: [
     "live",

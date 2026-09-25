@@ -31,7 +31,9 @@ def permission_paths(*paths: Path) -> str:
 
 
 DENO_MIN_VERSION = "2.9.5"
-INSTALL_ACTION = "pip install 'marimo-studio[deno]'"
+INSTALL_ACTION = (
+    "Install marimo-studio[deno] in the Python environment that runs Studio."
+)
 _AVAILABILITY_TIMEOUT = 15.0
 _SAFE_ENVIRONMENT = frozenset(
     {
