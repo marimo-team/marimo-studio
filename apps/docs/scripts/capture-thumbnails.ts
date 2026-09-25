@@ -67,7 +67,8 @@ const usage = `Usage: pnpm --filter @marimo-studio/docs thumbnails [options]
 
 Captures one image per documentation example view from the published examples
 in public/examples. Run \`make docs-examples\` first, or pass --base-url. Capture
-uses Playwright's Chromium, which \`make docs-thumbnails\` installs.
+uses Playwright's Chromium: run \`make docs-thumbnails\`, or
+\`pnpm --filter @marimo-studio/docs install-browser\` before this script.
 
 Presets set every capture and output option. Flags override single values:
 ${presetNames.map((name) => `  ${name.padEnd(22)}${describeShape(presets[name])}`).join("\n")}

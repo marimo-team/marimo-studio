@@ -156,7 +156,6 @@
   --accent-foreground: var(--marimo-cell-accent, currentColor);
   --ring: var(--marimo-cell-accent, currentColor);
   --link: var(--marimo-cell-accent, inherit);
-  --link-visited: var(--marimo-cell-accent, inherit);
   --radius: var(--marimo-cell-radius, 3px);
   --gray-1: var(--marimo-cell-background, transparent);
   --gray-2: var(--marimo-cell-muted, var(--muted));

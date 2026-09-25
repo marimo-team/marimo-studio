@@ -7,6 +7,7 @@
     "build": "pnpm test && pnpm examples:build && vitepress build && pnpm verify",
     "dev": "portless",
     "dev:server": "pnpm examples:build && node scripts/serve-docs.ts dev",
+    "install-browser": "playwright install --with-deps chromium",
     "examples:build": "node scripts/build-examples.ts",
     "preview": "portless run --name preview.docs.marimo-studio pnpm run preview:server",
     "preview:server": "node scripts/serve-docs.ts preview",

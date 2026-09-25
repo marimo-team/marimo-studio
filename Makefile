@@ -14,7 +14,7 @@ DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/d
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
 # Portless binds its default proxy port 443 through sudo. Without a terminal,
 # reuse a proxy already answering there, or start the unprivileged proxy.
-PORTLESS_ENV = $(shell [ -t 0 ] || nc -z 127.0.0.1 443 2>/dev/null || echo PORTLESS_PORT=1355)
+PORTLESS_ENV = $(shell [ -t 0 ] || { command -v nc >/dev/null && nc -z 127.0.0.1 443 2>/dev/null; } || echo PORTLESS_PORT=1355)
 PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-group marimo-studio-build --no-emit-workspace --no-annotate --no-header
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
@@ -103,6 +103,7 @@ docs-examples: _frontend-ready build ## Export examples for the documentation si
 	$(VP) run --filter @marimo-studio/docs examples:build
 
 docs-thumbnails: _browser-ready ## Capture example gallery thumbnails from exported views.
+	@test -d apps/docs/public/examples || $(MAKE) docs-examples
 	$(VP) run --filter @marimo-studio/docs thumbnails
 
 docs-build: _frontend-ready build ## Build the VitePress documentation.
