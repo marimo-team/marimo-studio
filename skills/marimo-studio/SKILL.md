@@ -214,6 +214,9 @@ contract. These conventions apply even when Lens is not installed.
 After editing, build and check source freshness in the same call:
 
 ```python
+import marimo_studio.agent as studio_agent
+
+view = studio_agent.current_workspace().view("dashboard")
 build = await view.build()
 inspection = await view.inspect()
 print(build.revision, inspection.freshness)
@@ -266,7 +269,7 @@ import marimo_studio.agent
 print(marimo_studio.agent.skill().file("references/projections.md").read_text())
 ```
 
-Use `print(help(view))` for operation signatures and
+Use `help(view)` for operation signatures and
 `marimo_studio.agent.plugin()` for the complete plugin bundle. The
 [documentation index](https://marimo-team.github.io/marimo-studio/llms.txt)
 routes broader guides. Check published APIs against the installed version.

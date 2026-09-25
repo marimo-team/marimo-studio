@@ -277,7 +277,7 @@ not match the selected presentation.
 `marimo edit --sandbox` and `marimo run --sandbox` start each kernel or app
 host in an environment built from the notebook's PEP 723 manifest. Studio's
 kernel half loads through the `marimo.kernel.lifespan` entry point, so that
-environment must contain the Studio the server runs. `SandboxRuntime` layers
+environment must contain the Studio the server runs. `PrivateSandboxRuntime` layers
 it through Marimo's `RuntimeOverlay`, the same mechanism that binds the kernel
 to the running Marimo. It appends one requirement for the lifespan of the
 server adapters: `-e <path>` for an editable checkout, the file URL of a local

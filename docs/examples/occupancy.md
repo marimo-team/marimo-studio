@@ -1,6 +1,6 @@
 ---
 title: Building occupancy
-description: Compare a facilities monitor, model review, and printable field report backed by one room-sensor notebook.
+description: Compare a dashboard, a model report, and a printable PDF backed by one room-sensor notebook.
 sidebar: false
 aside: false
 outline: false
@@ -54,9 +54,9 @@ browser, and its Python packages on an uncached run.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/occupancy.py)
-- [Facilities monitor](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/monitor)
-- [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
-- [PDF field report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
+- [Dashboard view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/monitor)
+- [Report view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
+- [PDF view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
 
 All three deployed views use prepared states and run without a Python kernel.
 They keep statistical definitions in the notebook. Their presentation

@@ -1,6 +1,6 @@
 ---
 title: Rio 2016 athletes
-description: Compare a publication report, linked Mosaic explorer, and Three.js briefing backed by one Rio 2016 athlete notebook.
+description: Compare a report, a Mosaic dashboard, and Three.js slides backed by one Rio 2016 athlete notebook.
 sidebar: false
 aside: false
 outline: false
@@ -44,7 +44,7 @@ uv run marimo edit examples/athletes.py --sandbox
 
 Open Studio from the marimo editor, then switch among `overview`, `explorer`,
 and `field`. The notebook fetches the pinned athlete CSV from
-`raw.githubusercontent.com`. The explorer and field briefing also load the
+`raw.githubusercontent.com`. The Dashboard and Slides views also load the
 remote font or module origins declared by their view source.
 
 ## Read the source

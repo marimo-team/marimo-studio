@@ -132,26 +132,22 @@ onBeforeUnmount(() => {
       </nav>
     </header>
 
-    <a
-      :id="panelId"
-      class="studio-example-card__frame"
-      :href="viewHref"
-      role="tabpanel"
-      :aria-labelledby="tabId(selected.key)"
-    >
-      <img
-        v-for="(view, index) in example.views"
-        :key="view.key"
-        :src="thumbnail(view.key)"
-        :alt="index === selectedIndex ? `${example.title}: ${view.label}` : ''"
-        :aria-hidden="index !== selectedIndex"
-        :class="{ 'is-selected': index === selectedIndex }"
-        decoding="async"
-        loading="lazy"
-        width="1440"
-        height="900"
-      />
-    </a>
+    <div :id="panelId" role="tabpanel" :aria-labelledby="tabId(selected.key)">
+      <a class="studio-example-card__frame" :href="viewHref">
+        <img
+          v-for="(view, index) in example.views"
+          :key="view.key"
+          :src="thumbnail(view.key)"
+          :alt="index === selectedIndex ? `${example.title}: ${view.label}` : ''"
+          :aria-hidden="index !== selectedIndex"
+          :class="{ 'is-selected': index === selectedIndex }"
+          decoding="async"
+          loading="lazy"
+          width="1440"
+          height="900"
+        />
+      </a>
+    </div>
 
     <footer>
       <p><slot /></p>

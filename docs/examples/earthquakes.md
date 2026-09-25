@@ -1,6 +1,6 @@
 ---
 title: Earthquake watch
-description: Compare a story, operations map, and interactive lesson backed by one weekly earthquake notebook.
+description: Compare a scrolling story, a map, and a slide lesson backed by one weekly earthquake notebook.
 sidebar: false
 aside: false
 outline: false
@@ -53,9 +53,9 @@ add browser network requests.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/earthquakes.py)
-- [Scrollytelling story](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/story)
-- [Operations map](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/operations)
-- [Interactive lesson](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/briefing)
+- [Story view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/story)
+- [Map view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/operations)
+- [Slides view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/briefing)
 
 Reveal.js supplies navigation, fragments, Auto-Animate, overview mode, slide
 numbers, and keyboard controls inside the presentation.

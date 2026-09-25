@@ -24,7 +24,7 @@ Python help includes the same briefing alongside the API:
 ```python
 import marimo_studio.agent
 
-print(help(marimo_studio.agent))
+help(marimo_studio.agent)
 ```
 
 For a terminal agent, start with:

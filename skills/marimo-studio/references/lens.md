@@ -4,7 +4,7 @@
 rendered result or authored page region and give that exact surface to a
 code-mode agent. When enabling Lens, addressing selections, or needing metadata
 details beyond the traceability conventions, import `marimo_lens.agent` and run
-`print(help(marimo_lens.agent))` in the notebook environment. Follow its
+`help(marimo_lens.agent)` in the notebook environment. Follow its
 packaged skill and browse the [target metadata reference](https://marimo-team.github.io/marimo-lens/custom-targets)
 as needed. Reuse that discovery for the same environment and Lens version,
 combining it with an already-needed inspection call when possible. Routine view

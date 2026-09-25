@@ -24,18 +24,8 @@ print(status.launch_requirements)
 ```
 
 Check dependency consistency in the notebook's environment before validation
-or export:
-
-```console
-marimo-studio doctor --dependencies --target notebook.py --json
-```
-
-Read its interpreter path, declaration drift, provider requirements, and import
-availability. It inspects imports without executing notebook cells. Preserve
-project-managed execution with `uv run --project <root>` and `--no-sandbox`.
-Use `--sandbox` when the notebook's PEP 723 dependencies own execution.
-See [setup](setup.md#check-missing-capabilities) to interpret declaration drift
-separately from missing imports.
+or export with `marimo-studio doctor --dependencies`, as described in
+[setup](setup.md#check-missing-capabilities).
 
 Pass every exact requirement through the environment tool. A standalone
 notebook whose only provider is the default Vanilla provider runs with:

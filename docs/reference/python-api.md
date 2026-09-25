@@ -492,7 +492,7 @@ print(ap.read("marimo-studio"))
 ```
 
 Returns the installed core skill with its package identity and resource paths.
-`print(help(marimo_studio.agent))` includes the same briefing and Python API help.
+`help(marimo_studio.agent)` includes the same briefing and Python API help.
 Reading instructions leaves the workspace and current view unchanged.
 
 ### `skill`

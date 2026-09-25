@@ -36,7 +36,7 @@ From the notebook's Python environment:
 ```python
 import marimo_studio.agent
 
-print(help(marimo_studio.agent))
+help(marimo_studio.agent)
 ```
 
 The briefing covers inspecting, creating, editing, building, and verifying

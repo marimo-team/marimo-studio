@@ -1,5 +1,5 @@
 import { chromium, type Browser, type Page } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -66,7 +66,8 @@ const describeShape = (shape: Shape): string => {
 const usage = `Usage: pnpm --filter @marimo-studio/docs thumbnails [options]
 
 Captures one image per documentation example view from the published examples
-in public/examples. Run examples:build first, or pass --base-url.
+in public/examples. Run \`make docs-examples\` first, or pass --base-url. Capture
+uses Playwright's Chromium, which \`make docs-thumbnails\` installs.
 
 Presets set every capture and output option. Flags override single values:
 ${presetNames.map((name) => `  ${name.padEnd(22)}${describeShape(presets[name])}`).join("\n")}
@@ -331,7 +332,16 @@ const encode = async (encoder: Page, png: Buffer, options: Options): Promise<Buf
   return Buffer.from(encoded, "base64");
 };
 
-const capture = async (browser: Browser, baseUrl: string, options: Options): Promise<number> => {
+interface CaptureResult {
+  captured: number;
+  failed: string[];
+}
+
+const capture = async (
+  browser: Browser,
+  baseUrl: string,
+  options: Options,
+): Promise<CaptureResult> => {
   const selection = selectDocumentationExamples(documentationExampleFamilies, options.selectors);
   const context = await browser.newContext({
     colorScheme: options.theme,
@@ -341,6 +351,7 @@ const capture = async (browser: Browser, baseUrl: string, options: Options): Pro
   });
   const encoder = await browser.newPage();
   let captured = 0;
+  const failed: string[] = [];
   try {
     for (const { family, views } of selection.families) {
       for (const view of views) {
@@ -365,6 +376,11 @@ const capture = async (browser: Browser, baseUrl: string, options: Options): Pro
           for (const problem of problems) {
             console.warn(`  ${name} reported: ${problem}`);
           }
+        } catch (error) {
+          failed.push(name);
+          console.error(
+            `Could not capture ${name}: ${error instanceof Error ? error.message : String(error)}`,
+          );
         } finally {
           await page.close();
         }
@@ -373,7 +389,7 @@ const capture = async (browser: Browser, baseUrl: string, options: Options): Pro
   } finally {
     await context.close();
   }
-  return captured;
+  return { captured, failed };
 };
 
 const main = async (): Promise<void> => {
@@ -381,6 +397,13 @@ const main = async (): Promise<void> => {
   if (!options) {
     console.log(usage);
     return;
+  }
+  if (!options.baseUrl) {
+    try {
+      await stat(join(packageRoot, "public", "examples"));
+    } catch {
+      throw new Error("public/examples is missing. Run `make docs-examples` first.");
+    }
   }
   // Serve public/ the way the docs site publishes it, so exported views load
   // their workers, modules, and sibling assets over HTTP.
@@ -393,16 +416,20 @@ const main = async (): Promise<void> => {
         preview: { host: "127.0.0.1", port: 0 },
         root: packageRoot,
       });
-  const baseUrl = options.baseUrl ?? server?.resolvedUrls?.local[0];
-  if (!baseUrl) {
-    throw new Error("The thumbnail server did not report a local URL.");
-  }
-  const browser = await chromium.launch();
+  let browser: Browser | undefined;
   try {
-    const captured = await capture(browser, baseUrl, options);
+    const baseUrl = options.baseUrl ?? server?.resolvedUrls?.local[0];
+    if (!baseUrl) {
+      throw new Error("The thumbnail server did not report a local URL.");
+    }
+    browser = await chromium.launch();
+    const { captured, failed } = await capture(browser, baseUrl, options);
     console.log(`Captured ${captured} images with ${options.preset}: ${describeShape(options)}.`);
+    if (failed.length > 0) {
+      throw new Error(`Could not capture ${failed.join(", ")}.`);
+    }
   } finally {
-    await browser.close();
+    await browser?.close();
     await server?.close();
   }
 };

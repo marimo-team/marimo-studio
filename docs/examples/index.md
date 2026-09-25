@@ -10,14 +10,14 @@ pageClass: studio-example-page
 # Examples
 
 Four notebooks back twelve live views. Open a family to compare one analysis
-presented as a lecture, explainer, lab, report, explorer, story, map, monitor,
-model review, or deck.
+presented as a lecture, explainer, lab, report, dashboard, story, map, slide
+deck, or PDF.
 
 <div class="studio-example-gallery">
   <StudioExampleCard family="quadratic-programs">A lecture deck, a reading explainer, and an interactive geometry lab.</StudioExampleCard>
-  <StudioExampleCard family="athletes">A publication report, a linked Mosaic explorer, and a Three.js briefing.</StudioExampleCard>
-  <StudioExampleCard family="earthquakes">A scroll-driven story, an operations map, and a briefing deck.</StudioExampleCard>
-  <StudioExampleCard family="occupancy">A facilities monitor, an interactive model review, and a printable field report.</StudioExampleCard>
+  <StudioExampleCard family="athletes">A report, a linked Mosaic dashboard, and Three.js slides.</StudioExampleCard>
+  <StudioExampleCard family="earthquakes">A scroll-driven story, a map, and Reveal.js slides.</StudioExampleCard>
+  <StudioExampleCard family="occupancy">A monitoring dashboard, an interactive model report, and a printable PDF.</StudioExampleCard>
 </div>
 
 ## Run an example locally

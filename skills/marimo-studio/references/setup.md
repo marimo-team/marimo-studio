@@ -10,7 +10,7 @@ import agent_plugins as ap
 print(ap.read("marimo-studio"))
 ```
 
-`print(help(marimo_studio.agent))` exposes the same installed core briefing
+`help(marimo_studio.agent)` exposes the same installed core briefing
 with Python API help. Reading guidance is passive. It does not bind a workspace
 or activate a view. Reuse instructions while the environment and installation
 remain the same. A terminal can obtain a briefing before connecting:

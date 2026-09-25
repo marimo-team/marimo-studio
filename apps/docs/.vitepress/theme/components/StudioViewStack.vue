@@ -91,16 +91,17 @@ const selectFromKeyboard = (event: KeyboardEvent, index: number): void => {
 // frame so the rail keeps naming the document on screen.
 const markViewLoaded = (): void => {
   viewLoaded.value = true;
-  let location: Location | undefined;
+  let current: string | undefined;
+  let pathname: string | undefined;
   try {
-    location = viewFrame.value?.contentWindow?.location;
+    ({ href: current, pathname } = viewFrame.value?.contentWindow?.location ?? {});
   } catch {
+    // Cross-origin views keep the label of the tab that loaded them.
     return;
   }
-  if (!location) {
+  if (!current || !pathname) {
     return;
   }
-  const { href: current, pathname } = location;
   // Views add their own query and fragment state, so compare document paths.
   const index = views.findIndex(({ src }) => new URL(href(src), current).pathname === pathname);
   if (index >= 0 && index + 1 !== lastView.value) {
@@ -340,6 +341,8 @@ nav button[aria-selected="true"] {
 }
 
 .studio-view-stack__layer header {
+  position: relative;
+  z-index: 3;
   display: flex;
   flex: 0 0 auto;
   gap: 1rem;

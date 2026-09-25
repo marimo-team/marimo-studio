@@ -42,7 +42,7 @@ runtime to create the **presentation** shown in Preview.
 | --------------------------- | ---------------------------------------------------- |
 | Run changed notebook code   | Marimo updates dependent results in the view         |
 | Save a view source document | Studio builds and publishes the updated page         |
-| Switch Python runtime views | The next view uses the same live notebook session    |
+| Switch views                | The next view uses the same live notebook session    |
 | Change delivery runtime     | The same artifact receives results from that runtime |
 
 A failed build keeps the last successful artifact available while Source shows

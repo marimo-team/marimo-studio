@@ -158,7 +158,7 @@ const markLoaded = (): void => {
     </div>
 
     <figcaption>
-      <span class="studio-example__technologies" aria-label="Technologies used">
+      <span class="studio-example__technologies" role="group" aria-label="Technologies used">
         <template v-for="(technology, index) in selected.technologies" :key="technology.name">
           <span v-if="index > 0" aria-hidden="true"> · </span>
           <a
