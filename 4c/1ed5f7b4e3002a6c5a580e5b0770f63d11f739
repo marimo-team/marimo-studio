@@ -1,0 +1,56 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/default/files/src/lib/use-marimo-value.ts
+  s_aaf82c54e7a7ef::t_ede0fc7478f782 94
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/src/lib/use-marimo-value.ts
+  s_aaf82c54e7a7ef::t_ede0fc7478f782 94
+packages/marimo-frontend/patches/marimo-frontend.patch
+  s_aaf82c54e7a7ef::t_51c4f1d52d1969 143
+scripts/verify-installed-package.py
+  s_aaf82c54e7a7ef::t_e821579689af07 259
+packages/marimo-studio/src/marimo_studio/_compat/server/sandbox_runtime.py
+  s_aaf82c54e7a7ef::t_9690093d6b35f5 43-44,46-49,53-54
+examples/__marimo__/studio/occupancy/model-review/src/lib/use-marimo-value.ts
+  s_aaf82c54e7a7ef::t_ede0fc7478f782 96
+packages/marimo-studio/src/marimo_studio/_compat/release.json
+  s_aaf82c54e7a7ef::t_51c4f1d52d1969 4
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_obsnotebook/starters/default/files/AGENTS.md
+  s_aaf82c54e7a7ef::t_a7eb80d27d921b 72-78
+examples/__marimo__/studio/occupancy/pdf-report/src/lib/use-marimo-value.ts
+  s_aaf82c54e7a7ef::t_ede0fc7478f782 94
+packages/marimo-studio/tests/marimo_compat/test_sandbox_runtime.py
+  s_aaf82c54e7a7ef::t_9690093d6b35f5 144-153
+packages/marimo-studio/src/marimo_studio/_workspace/installation.py
+  s_aaf82c54e7a7ef::t_9690093d6b35f5 44-46
+  s_aaf82c54e7a7ef::t_62f2c635b9d224 7,31-34,42-43
+packages/studio/tests/view-starter-catalog.test.tsx
+  s_aaf82c54e7a7ef::t_9ef32a640c7f67 166-170,172
+packages/marimo-frontend/patches/marimo-frontend.json
+  s_aaf82c54e7a7ef::t_51c4f1d52d1969 4
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/starters/default/files/src/lib/marimo-value.ts
+  s_aaf82c54e7a7ef::t_ede0fc7478f782 100-105
+packages/marimo-studio/tests/agent/test_workspace.py
+  s_aaf82c54e7a7ef::t_9690093d6b35f5 103
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/index.html
+  s_aaf82c54e7a7ef::t_c2ff02bc388073 55-57
+examples/__marimo__/studio/athletes/explorer/src/lib/marimo-value.ts
+  s_aaf82c54e7a7ef::t_ede0fc7478f782 100-105
+packages/marimo-studio/tests/providers/test_bundled_starters.py
+  s_aaf82c54e7a7ef::t_9690093d6b35f5 248
+packages/studio/src/features/views/CreateViewForm.tsx
+  s_aaf82c54e7a7ef::t_9ef32a640c7f67 10-12,116,151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4c1ed5f7b4e3002a6c5a580e5b0770f63d11f739",
+  "prompts": {},
+  "sessions": {
+    "s_aaf82c54e7a7ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4597856c-ffba-4015-9b25-a2027aa76da0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
