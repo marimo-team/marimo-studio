@@ -13,124 +13,87 @@
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python 3.10 through 3.14" src="https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg"></a>
 </p>
 
-Marimo Studio builds custom reports, apps, and presentations from one
-[marimo](https://marimo.io/) notebook. Keep the analysis in Python, then shape
-each view with HTML, [React](https://react.dev/),
-[Svelte](https://svelte.dev/), or the browser libraries your work needs.
+Marimo Studio turns one [marimo](https://marimo.io/) notebook into reports,
+apps, and presentations. Keep data, computation, and controls in Python.
+Shape each view for its audience, by hand or with a coding agent.
 
 > **Experimental:** Marimo Studio is changing rapidly.
 
-## Examples
+[![Notebook, view source, and Preview in Studio](apps/docs/public/screenshots/studio-develop.png)](https://marimo-team.github.io/marimo-studio/)
 
-One notebook supplies the data and calculations for three views, each with its
-own frontend and interaction model.
+## Get started
 
-### [Notebook](https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html)
-
-[`marimo`](https://github.com/marimo-team/marimo) ·
-[`Python`](https://github.com/python/cpython) ·
-[`Polars`](https://github.com/pola-rs/polars)
-
-Load the Rio roster, derive age and medal counts, and inspect the data used by
-every view.
-
-[![Marimo notebook loading and transforming the Rio athlete records](apps/docs/public/screenshots/athletes-notebook.png)](https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html)
-
-### [Publication report](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html)
-
-[`Vanilla HTML`](https://github.com/whatwg/html)
-
-Summarize 11,538 athletes, 207 delegations, 28 sports, and 1,857 medalists.
-
-[![Athlete report showing totals for athletes, delegations, sports, and medalists](apps/docs/public/screenshots/athletes-overview.png)](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html)
-
-### [Linked explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html)
-
-[`Svelte`](https://github.com/sveltejs/svelte) ·
-[`Mosaic`](https://github.com/uwdata/mosaic)
-
-Filter by sport or sex, search by name, and brush charts to update the roster,
-distributions, and totals together.
-
-[![Athlete explorer with roster filters and a linked height and weight plot](apps/docs/public/screenshots/athletes-explorer.png)](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html)
-
-### [Interactive briefing](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)
-
-[`Vanilla HTML`](https://github.com/whatwg/html) ·
-[`Shower`](https://github.com/shower/shower) ·
-[`Three.js`](https://github.com/mrdoob/three.js)
-
-Move through the roster, sports, medalists, and body profiles in a four-chapter
-presentation built from one point per athlete.
-
-[![Athlete briefing showing the Olympic roster as an interactive point field](apps/docs/public/screenshots/athletes-field.png)](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)
-
-[Explore the notebook and every live view.](https://marimo-team.github.io/marimo-studio/examples/athletes)
-
-## Quickstart
-
-Open a notebook in an environment that contains Studio:
+Open a notebook with Studio installed:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-`uvx` is [uv](https://docs.astral.sh/uv/)'s temporary command runner. It creates
-an isolated Python environment for this invocation.
+Add a displayable cell, then click **Add view** in the Studio toolbar. Save the
+notebook if prompted, choose **HTML document**, and create the view. Notebook
+and Preview open side by side. The source action opens the view's files, and
+Marimo's agent sidebar stays available.
 
-The thin Studio toolbar appears immediately. Add a cell such as
-`mo.md("## Revenue is on target")`, then click **Add view**. Save the notebook
-if prompted, choose **HTML document**, and click **Create view**. The generated
-view places displayable notebook cells inside a frontend document.
+Saving view source rebuilds Preview. Notebook controls keep their reactive
+behavior, and a failed build retains the last successful view.
 
-Studio connects three surfaces:
+Follow the [quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
+for a complete first view. [uv](https://docs.astral.sh/uv/) supplies `uvx` and
+resolves the notebook's declared dependencies with `--sandbox`.
 
-- **Notebook** for Python and reactive computation
-- **Source** for the view project's HTML, styles, and browser code
-- **Preview** for the current artifact and notebook runtime
+## Example: Rio 2016 athletes
 
-Notebook and Preview open side by side. The toolbar's source action opens the
-view editor beneath Preview. Marimo's agent sidebar stays available while you
-edit or focus the view.
+The [Rio 2016 notebook](https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html)
+supplies one analysis to three interfaces:
 
-Saving Source rebuilds Preview. A failed build reports the source problem and
-keeps the current artifact available.
+| View                                                                                          | Explore                                                      |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [Overview](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html) | Roster totals, delegations, sports, and medalists            |
+| [Explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html) | Filter the roster and brush linked charts                    |
+| [Field](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)       | Move through the athlete data in a four-chapter presentation |
 
-![Notebook, view source, and Preview in a custom layout](apps/docs/public/screenshots/studio-develop.png)
+Use HTML, React, Svelte, or Observable Notebook Kit. Each view owns its source
+and browser dependencies. [Explore all examples](https://marimo-team.github.io/marimo-studio/examples/).
 
-For terminal-first setup with an existing saved notebook, run:
+## For agents
+
+Read the version-matched briefing shipped with Studio through
+[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
+instructions a Python package ships for coding agents:
 
 ```console
-uvx marimo-studio view create dashboard --target analysis.py
+uvx --with marimo-studio agent-plugins read marimo-studio
 ```
 
-## Build and run
+From the notebook's Python environment:
 
-```text
-notebook
-  -> named view project
-  -> validated artifact
-  -> Python, Browser, or Prepared runtime
-  -> rendered view
+```python
+import marimo_studio.agent
+
+help(marimo_studio.agent)
 ```
 
-One notebook can publish several named views, each with its own source, build,
-and runtime. Choose Python for server-backed views, Browser for views that run
-with [Pyodide](https://pyodide.org/) in the browser, or Prepared for static
-publishing from precomputed results. Prepared exports keep the Python notebook
-source on the build machine.
+The briefing covers inspecting the notebook, creating and editing a view,
+building it, and checking the rendered result. The
+[agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+explains connection and optional visual feedback with Marimo Lens.
 
-## Learn and operate
+## Run or export a view
 
-- [Start here](https://marimo-team.github.io/marimo-studio/guide/)
-- [Work in Studio](https://marimo-team.github.io/marimo-studio/guide/work-in-studio)
-- [Place notebook results](https://marimo-team.github.io/marimo-studio/guide/notebook-results)
-- [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
-- [Reference](https://marimo-team.github.io/marimo-studio/reference/)
-- [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
-- [Security](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
+Use a live **Python** server, execute Python in the **Browser**, or export
+**Prepared** results as a static site. Prepared delivery publishes the exported
+results and input states while keeping Python source on the build machine.
+
+[Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
+covers the delivery choice and what visitors receive.
+
+## Documentation
+
+[Guide](https://marimo-team.github.io/marimo-studio/guide/) ·
+[Reference](https://marimo-team.github.io/marimo-studio/reference/) ·
+[Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting) ·
+[Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 ## License
 
-Marimo Studio is licensed under the [Apache License 2.0](LICENSE).
+[Apache License 2.0](LICENSE).

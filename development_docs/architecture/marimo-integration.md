@@ -272,6 +272,26 @@ runtime instance digest. Browser requests also carry the current session ID.
 The server rejects requests whose revision, runtime, or session identity does
 not match the selected presentation.
 
+### Sandboxed kernels
+
+`marimo edit --sandbox` starts each kernel, and `marimo run --sandbox` on a
+directory starts each app host, in an environment built from the notebook's
+PEP 723 manifest. Studio's kernel half loads through the `marimo.kernel.lifespan`
+entry point, so that environment must contain the Studio the server runs.
+`PrivateSandboxRuntime` layers it through Marimo's `RuntimeOverlay`, the same
+mechanism that binds the kernel to the running Marimo. For the lifespan of the
+server adapters it appends `invoking_studio().requirement`: `-e <path>` for an
+editable checkout, a direct reference for a local or remote archive, directory,
+or VCS commit, or `marimo-studio==<version>` for an index install. When the
+server has Deno, the overlay also pins `deno==<version>`, because code mode
+authors and builds framework views inside the kernel. An overlay entry takes
+precedence over the manifest's own requirement, and the manifest is never
+edited.
+
+`marimo run --sandbox notebook.py` relaunches the whole server inside the
+notebook environment before Studio's lifespan starts, so that server runs the
+Studio the manifest declares.
+
 ## Kernel projection host
 
 `KernelProjectionHost` supplies three operations:
@@ -311,9 +331,9 @@ anonymous outputs created by Marimo's auto-mount hook. Otherwise, when Lens is
 installed, it owns one instance with `STUDIO_RESULT_SELECTOR`. Borrowed
 instances keep their configured selector and notebook ownership.
 
-Lens gives each document its own interaction owner, so the notebook dock and
-the preview dock drive one Lens model. Lens 0.2.1 and newer bounds its notebook
-UI to Marimo's `#App` pane, which Studio places inside the Notebook pane.
+Lens gives each document its own interaction owner, so the notebook dock and the
+preview dock drive one Lens model. Lens bounds its notebook UI to Marimo's
+`#App` pane, which Studio places inside the Notebook pane.
 
 Marimo mounts its Lens after the cell that imports marimo runs, unless an
 earlier cell output already holds one. That cell usually runs before a cell that

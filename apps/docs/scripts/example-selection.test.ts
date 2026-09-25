@@ -8,8 +8,8 @@ describe("documentation example selection", () => {
     const selection = selectDocumentationExamples(documentationExampleFamilies, []);
 
     expect(selection.complete).toBe(true);
-    expect(selection.notebooks).toBe(3);
-    expect(selection.views).toBe(9);
+    expect(selection.notebooks).toBe(4);
+    expect(selection.views).toBe(12);
   });
 
   it("unions family, notebook, and view selectors", () => {

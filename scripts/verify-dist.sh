@@ -79,12 +79,15 @@ def verify_metadata(source, archive):
         raise AssertionError(f"Distribution has the wrong license files: {archive}")
     if SpecifierSet(metadata["Requires-Python"] or "") != SpecifierSet(">=3.10,<3.15"):
         raise AssertionError(f"Distribution has the wrong Python requirement: {archive}")
+    urls = dict(value.split(", ", 1) for value in metadata.get_all("Project-URL") or ())
+    if urls.get("Documentation Index") != "https://marimo-team.github.io/marimo-studio/llms.txt":
+        raise AssertionError(f"Distribution has the wrong documentation index: {archive}")
     requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist") or ()]
     by_name = {}
     for requirement in requirements:
         by_name.setdefault(canonicalize_name(requirement.name), []).append(requirement)
     for name, specifier in {
-        "agent-plugins": ">=0.2",
+        "agent-plugins": ">=0.2.4",
         "htpy": ">=26.5.1",
         "marimo-export": ">=0.1.0",
         "marimo-lens": ">=0.2.2",

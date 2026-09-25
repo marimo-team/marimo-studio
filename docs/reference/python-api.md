@@ -483,38 +483,54 @@ load error, provider metadata, availability, and discovered starter IDs.
 
 ## `marimo_studio.agent`
 
-### `agent_plugin`
+### Installed briefing
+
+```python
+import agent_plugins as ap
+
+print(ap.read("marimo-studio"))
+```
+
+Returns the installed core skill with its package identity and resource paths.
+`help(marimo_studio.agent)` includes the same briefing and Python API help.
+Reading instructions leaves the workspace and current view unchanged.
+
+### `skill`
+
+```text
+skill() -> agent_plugins.Skill
+```
+
+Returns Studio's packaged `marimo-studio` skill. Read its body or a task-specific
+reference:
 
 ```python
 import marimo_studio.agent as studio_agent
 
-resources = studio_agent.agent_plugin()
+skill = studio_agent.skill()
+print(skill.body)
+print(skill.file("references/verification.md").read_text())
 ```
+
+Raises `AgentPluginError` when the installed plugin has no usable Studio skill.
+
+### `plugin`
 
 ```text
-agent_plugin() -> agent_plugins.Plugin
+plugin() -> agent_plugins.Plugin
 ```
 
-Returns the [Agent Plugin](https://github.com/peter-gy/agent-plugins) installed
-with the current Studio version. An Agent Plugin packages skills and related
-resources for coding agents. Studio's plugin contains the skills and resources
-selected by the distribution build.
-Raises `AgentPluginError` when the installed distribution has no usable plugin.
-
-### `agent_skill`
+Returns the complete [Agent Plugin](https://github.com/peter-gy/agent-plugins)
+bundled with the installed Studio version:
 
 ```python
-skill = studio_agent.agent_skill()
-print(skill.body)
+import marimo_studio.agent as studio_agent
+
+resources = studio_agent.plugin()
+print(resources.tree())
 ```
 
-```text
-agent_skill() -> agent_plugins.Skill
-```
-
-Returns Studio's packaged `marimo-studio` skill. The dynamic module help points
-to the same skill and its installed `SKILL.md`. Raises `AgentPluginError` when
-the packaged plugin does not contain that skill.
+Raises `AgentPluginError` when the installed distribution has no usable plugin.
 
 ### `current_workspace`
 
@@ -534,8 +550,9 @@ Call it once in each code-mode execution.
 ### `Workspace`
 
 The live workspace supports the saved-notebook operations documented in
-`marimo_studio.authoring`. Workspace-wide validation remains static or runtime
-validation.
+`marimo_studio.authoring`. `inspect_notebook()` reads saved source, and runtime
+inspection executes a separate process. Neither returns the live kernel globals.
+Workspace-wide validation remains static or isolated runtime validation.
 
 ### `View`
 
@@ -601,6 +618,19 @@ The live API returns the common issue record documented under
 `marimo_studio.authoring`.
 
 ## `marimo_studio`
+
+### `agent`
+
+The agent module is available after importing Studio:
+
+```python
+import marimo_studio
+
+print(marimo_studio.agent.skill().body)
+```
+
+See [`marimo_studio.agent`](#marimo-studio-agent) for installed instructions and
+the notebook-bound authoring API.
 
 ### `inspect_notebook`
 

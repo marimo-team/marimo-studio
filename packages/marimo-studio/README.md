@@ -1,64 +1,71 @@
 # Marimo Studio
 
-Marimo Studio builds custom reports, apps, and presentations from one
-[marimo](https://marimo.io/) notebook. Keep the analysis in Python, then shape
-each view with HTML, [React](https://react.dev/),
-[Svelte](https://svelte.dev/), or the browser libraries your work needs.
+Marimo Studio turns one [marimo](https://marimo.io/) notebook into reports,
+apps, and presentations. Keep data, computation, and controls in Python.
+Shape each view for its audience, by hand or with a coding agent.
 
 Marimo Studio 0.1 is experimental. Pin Studio and third-party view providers in
 saved projects.
 
-## Create your first view
-
-Open a notebook in an environment that contains Studio:
+## Get started
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-`uvx` is [uv](https://docs.astral.sh/uv/)'s temporary command runner. It creates
-an isolated Python environment for this invocation.
+Add a displayable cell, then click **Add view** in the Studio toolbar. Save the
+notebook if prompted and choose a name and starter. Notebook and Preview open
+side by side. Use the source action to edit the view's files, or work through
+Marimo's agent sidebar.
 
-Studio's thin toolbar is available immediately. Add a displayable cell and
-click **Add view**. Save the notebook if prompted, then choose a name and
-starter. The new view opens beside the notebook. Use the source action to edit
-its files beneath Preview, with Marimo's agent sidebar still available.
+Saving view source rebuilds Preview. A failed build retains the last successful
+view. Follow the [quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
+for a complete first view. [uv](https://docs.astral.sh/uv/) supplies `uvx` and
+resolves the notebook's declared dependencies with `--sandbox`.
 
-For terminal-first setup with an existing saved notebook, run:
+## For agents
+
+Read the version-matched briefing shipped with Studio through
+[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
+instructions a Python package ships for coding agents:
 
 ```console
-uvx marimo-studio view create dashboard --target analysis.py
+uvx --with marimo-studio agent-plugins read marimo-studio
 ```
 
-Saving Source builds a new immutable artifact. A failed build reports the source
-problem and keeps the current artifact available.
+From the notebook's Python environment:
 
-## Choose a runtime
+```python
+import marimo_studio.agent
 
-- The **Python runtime** uses a server-side marimo session and can access local
-  files, databases, credentials, and native packages.
-- The **Browser runtime** runs the saved notebook in a
-  [Pyodide](https://pyodide.org/) worker. Pyodide is a Python distribution
-  compiled for the browser. The browser receives notebook source and must be
-  able to fetch its dependencies and data.
-- The **Prepared runtime** computes finite input states during static export
-  and serves verified results to the view. Visitors receive the view and its
-  prepared outputs with no Python runtime.
+help(marimo_studio.agent)
+```
 
-## Continue
+The briefing covers inspecting, creating, editing, building, and verifying
+views. Follow the [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+to connect your agent and work with optional Marimo Lens feedback.
 
-- [Start here](https://marimo-team.github.io/marimo-studio/guide/)
-- [Examples](https://marimo-team.github.io/marimo-studio/examples/)
-- [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
-- [Reference](https://marimo-team.github.io/marimo-studio/reference/)
-- [Compatibility and support](https://marimo-team.github.io/marimo-studio/reference/compatibility)
-- [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
-- [Security](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md)
+## Run or export a view
 
-Use [GitHub Issues](https://github.com/marimo-team/marimo-studio/issues) for
-public bug reports and support requests.
+Serve a live **Python** app, run Python in the **Browser** with Pyodide, or publish
+**Prepared** results as a static site. Browser delivery includes notebook source.
+Prepared delivery includes the exported results and finite input states.
+
+[Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
+explains the delivery choice and what visitors receive.
+
+## Documentation
+
+[Guide](https://marimo-team.github.io/marimo-studio/guide/) ·
+[Examples](https://marimo-team.github.io/marimo-studio/examples/) ·
+[Reference](https://marimo-team.github.io/marimo-studio/reference/) ·
+[Compatibility](https://marimo-team.github.io/marimo-studio/reference/compatibility) ·
+[Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
+
+Report bugs through [GitHub Issues](https://github.com/marimo-team/marimo-studio/issues).
+See the [security policy](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md)
+for private reports.
 
 ## License
 
-Marimo Studio is licensed under the
 [Apache License 2.0](https://github.com/marimo-team/marimo-studio/blob/main/LICENSE).

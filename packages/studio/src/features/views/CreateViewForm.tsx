@@ -7,6 +7,9 @@ import type { ViewMessage } from "./controller.ts";
 import { StarterCatalogNotice } from "./StarterCatalogNotice.tsx";
 import { groupStartersByDistribution } from "./starters.ts";
 
+const VIEW_NAME_PATTERN = "[a-z](?:[a-z0-9]|-)*";
+const VIEW_NAME = new RegExp(`^${VIEW_NAME_PATTERN}$`);
+
 const MESSAGE_ROLES = {
   error: "alert",
   warning: "status",
@@ -64,6 +67,7 @@ export interface CreateViewFormProps {
   starter: string;
   starterCatalog: StarterCatalogState;
   starters: readonly Starter[];
+  viewRoot: string;
   onCancel: () => void;
   onNameChange: (name: string) => void;
   onRetryStarters: () => void;
@@ -80,6 +84,7 @@ export const CreateViewForm = ({
   starter,
   starterCatalog,
   starters,
+  viewRoot,
   onCancel,
   onNameChange,
   onRetryStarters,
@@ -108,7 +113,7 @@ export const CreateViewForm = ({
         autoCapitalize="none"
         spellCheck={false}
         aria-describedby="studio-view-name-hint"
-        pattern="[a-z](?:[a-z0-9]|-)*"
+        pattern={VIEW_NAME_PATTERN}
         placeholder="executive-report"
         required
         disabled={busy}
@@ -143,6 +148,7 @@ export const CreateViewForm = ({
       {selected ? (
         <details className="studio-starter-details">
           <summary>Files created</summary>
+          {viewRoot ? <code>{`${viewRoot}/${VIEW_NAME.test(name) ? name : "…"}/`}</code> : null}
           <span>{selected.documents.join(", ")}</span>
         </details>
       ) : null}

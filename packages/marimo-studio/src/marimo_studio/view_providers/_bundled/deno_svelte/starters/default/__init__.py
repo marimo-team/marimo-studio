@@ -59,8 +59,8 @@ starter = BundledStarter(
         key="default",
         title="Svelte",
         summary=(
-            "A typed Svelte application populated with notebook cells that may "
-            "display output and a live-value action."
+            "A TypeScript Svelte app with every notebook output in place, plus "
+            "an action that reads live notebook values."
         ),
         documents=_DOCUMENTS,
     ),

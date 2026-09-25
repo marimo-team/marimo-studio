@@ -209,7 +209,7 @@ connected cell, output, and value hosts in browser automation.
 ## Trace custom JavaScript rendering
 
 For point-and-note feedback with producer context, follow
-[Set up Marimo Lens](../guide/coding-agents.md#point-to-a-result-with-marimo-lens).
+[Select results with Marimo Lens](../guide/coding-agents.md#select-results-with-marimo-lens).
 
 Prefer `mo-value`, `marimo-output`, and `marimo-cell` when they can render the
 result directly. For a custom chart or component, retain its connection to the
@@ -274,7 +274,7 @@ Browser calculations must reference their real kernel inputs. They can be
 separate targets even when they share a dataframe. Canvas charts and PDF pages
 are single surfaces unless their renderer supplies finer DOM targets.
 
-### Labels while selecting a target
+### Selection labels
 
 While Lens is selecting a target, it outlines the element and attaches a compact
 label to its edge. Studio supplies the resolved cell or variable name and its
@@ -294,3 +294,63 @@ Override the display text when a region needs a more useful name:
 Lens owns this plain-text label contract and presentation. The labels do not
 replace source links or change the selection's notebook identity. Authored labels
 on native projection hosts also take precedence over Studio's defaults.
+
+### Select authored page regions
+
+Studio makes authored HTML inside `#app-shell` selectable, including copy and
+layout with no notebook inputs. Lens groups a click into the nearest section,
+card, figure, or block. It retains the clicked child's text, path, and relative
+bounds as a compact DOM hint. Native notebook outputs retain their own targets.
+
+Set the grouping selector on the view shell:
+
+```html
+<main id="app-shell" data-marimo-lens-scope=".card, header, figure">
+  <!-- Authored regions are selectable. -->
+</main>
+```
+
+Use `data-marimo-lens-target` to give an authored region explicit target identity
+and `data-marimo-lens-render-source` to identify its source file:
+
+```html
+<header
+  id="intro"
+  data-marimo-lens-target
+  data-marimo-lens-label="Introduction"
+  data-marimo-lens-render-source='{"path":"index.html"}'
+>
+  <h1>Regional outlook</h1>
+</header>
+```
+
+Keep the ID stable across rebuilds so Lens can reconnect feedback. An authored
+region with no notebook inputs retains its note and image with empty notebook
+provenance. Use `data-marimo-lens-inputs` when the region consumes notebook
+results.
+
+### Project an authored Lens
+
+Development previews reuse the Lens that Marimo mounts in the notebook. To put
+an explicitly authored Lens in another Server view, define it in the notebook:
+
+```python
+from marimo_lens import Lens
+from marimo_studio import STUDIO_RESULT_SELECTOR
+
+studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
+None
+```
+
+The final `None` leaves the notebook cell output empty. Project the value into
+the view to place the Lens dock there:
+
+```html
+<marimo-output value="studio_lens"></marimo-output>
+```
+
+Studio skips Marimo's automatic Lens in a notebook that imports Lens, so
+`studio_lens` is the notebook's only Lens.
+
+The [Lens agent guide](https://marimo-team.github.io/marimo-lens/agents) defines
+selection inspection, feedback, and resolution.

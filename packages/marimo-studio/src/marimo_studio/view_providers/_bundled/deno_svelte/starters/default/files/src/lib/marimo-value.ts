@@ -75,7 +75,6 @@ export type MarimoValueElement<T = MarimoValue> = HTMLElement & {
 };
 
 export type MarimoValueOptions<T = MarimoValue> = {
-  selector: string;
   onValue: (value: T) => void;
   onError?: () => void;
 };
@@ -97,7 +96,12 @@ export const observeMarimoValue = <T = MarimoValue>(
 
   host.addEventListener("marimo-value-updated", sync);
   host.addEventListener("marimo-value-error", fail);
-  sync();
+  // A host that failed before this action mounted keeps its error on the host.
+  if (host.dataset.marimoError === undefined) {
+    sync();
+  } else {
+    fail();
+  }
 
   return {
     update(next: MarimoValueOptions<T>) {

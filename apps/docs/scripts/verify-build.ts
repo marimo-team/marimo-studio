@@ -120,6 +120,10 @@ for (const family of documentationExampleFamilies) {
     const runtime = join(root, "_marimo-studio", "assets", "zero-python.js");
     const noJekyll = join(root, ".nojekyll");
 
+    check(
+      await isFile(join(distDir, "thumbnails", family.slug, `${view.key}.webp`)),
+      `Missing example thumbnail: ${family.slug}/${view.key}`,
+    );
     if (!(await isFile(entrypoint))) {
       failures.push(`Missing live example entrypoint: ${family.slug}/${view.key}`);
       continue;
@@ -168,6 +172,30 @@ for (const generated of ["llms.txt", "llms-full.txt", "robots.txt", "sitemap.xml
     await isFile(join(distDir, generated)),
     `Missing generated documentation file: ${generated}`,
   );
+}
+
+const llmsPath = join(distDir, "llms.txt");
+if (await isFile(llmsPath)) {
+  const index = await readFile(llmsPath, "utf8");
+  const home = (await isFile(indexPath)) ? await readFile(indexPath, "utf8") : "";
+  const heading = /<h1 class="heading"[^>]*>(.*?)<\/h1>/s.exec(home)?.[1] ?? "";
+  const headingText = heading
+    .replace(/<br\s*\/?>/g, " ")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+  check(
+    index.includes(`\n> ${headingText}\n`),
+    `Documentation index summary differs from the home heading: ${headingText}`,
+  );
+  const links = [...index.matchAll(/\]\((https:\/\/marimo-team\.github\.io\/[^)]+\.md)\)/g)];
+  check(links.length > 0, "Documentation index contains no Markdown page links.");
+  for (const match of links) {
+    const url = new URL(match[1]!);
+    const prefix = `${basePath}/`;
+    check(url.pathname.startsWith(prefix), `Index link escapes the deployment base: ${url.href}`);
+    const target = url.pathname.slice(prefix.length);
+    check(await isFile(join(distDir, target)), `Missing documentation index target: ${url.href}`);
+  }
 }
 
 const sitemapPath = join(distDir, "sitemap.xml");

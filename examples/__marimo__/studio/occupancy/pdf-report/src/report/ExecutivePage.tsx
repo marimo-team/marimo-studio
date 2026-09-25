@@ -34,9 +34,9 @@ export const ExecutivePage = ({ report }: { report: OccupancyReportData }) => {
         <View style={{ flex: 1 }}>
           <Text style={styles.orangePill}>{report.period.scope_label}</Text>
           <Text style={[styles.pageTitle, { marginTop: 10, fontSize: 42 }]}>
-            {hasOccupiedReadings ? "Room use at a glance." : (
+            {hasOccupiedReadings ? "Room use summary" : (
               <>
-                Room use{"\n"}after hours.
+                Vacant-period{"\n"}summary
               </>
             )}
           </Text>

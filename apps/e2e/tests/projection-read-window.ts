@@ -144,7 +144,12 @@ export class ProjectionReadRequestWindow {
     if (!operation.candidate) {
       return false;
     }
-    if (operation.kind === "values" && operation.wire?.projections.length === 0) {
+    // A read that requests no projection and owns no active output has nothing
+    // to recover when a newer document replaces it.
+    if (
+      operation.wire?.projections.length === 0 &&
+      (operation.kind === "values" || operation.wire.activeProjections?.length === 0)
+    ) {
       this.pruneSuccessfulReads();
       return true;
     }

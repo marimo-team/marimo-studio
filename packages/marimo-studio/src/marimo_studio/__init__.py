@@ -15,7 +15,9 @@ that use the current code-mode notebook and Studio tab.
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
+from types import ModuleType
 
 from marimo_studio._delivery.records import ASGIApp
 from marimo_studio._notebook.records import NotebookSpec
@@ -42,10 +44,19 @@ def inspect_notebook(
     return inspect(path, include_code=include_code)
 
 
+def __getattr__(name: str) -> ModuleType:
+    # Server and kernel entry points import this package, so the agent API
+    # loads on first attribute access instead.
+    if name == "agent":
+        return importlib.import_module("marimo_studio.agent")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "STUDIO_RESULT_SELECTOR",
     "ASGIApp",
     "NotebookSpec",
+    "agent",
     "create_asgi_app",
     "inspect_notebook",
 ]

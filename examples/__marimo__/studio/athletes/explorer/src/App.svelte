@@ -130,7 +130,7 @@ $effect(() => {
   <header class="hero">
     <div>
       <p class="eyebrow">Rio de Janeiro · 2016</p>
-      <h1>Athlete field book</h1>
+      <h1>Athlete explorer</h1>
     </div>
     <p class="lede">
       Explore body profiles, age, participation, and athlete medal awards across
@@ -161,7 +161,7 @@ $effect(() => {
   <div class="workspace">
     <aside class="filter-panel" aria-labelledby="filters-title">
       <p class="eyebrow">Roster filters</p>
-      <h2 id="filters-title">Narrow the roster</h2>
+      <h2 id="filters-title">Filter the roster</h2>
       <p>
         Choose a sport or sex, search by name, or brush a chart. The roster,
         distributions, and headline totals update together.
@@ -256,7 +256,6 @@ $effect(() => {
   id="athlete-data"
   mo-value="athlete_facts"
   use:observeMarimoValue={{
-    selector: "athlete_facts",
     onValue: (value: unknown) => {
       if (isAthleteTable(value)) {
         athleteFacts = value;

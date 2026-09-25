@@ -28,13 +28,5 @@ owns task workflows and developed examples.
 | Saved-workspace, code-mode, inspection, and ASGI APIs             | [Python API](python-api.md)          |
 | Third-party provider registration, inspection, and build protocol | [View provider API](provider-api.md) |
 
-## Terms
-
-A **view** is one named presentation of a saved notebook. Its **view project**
-contains authored frontend source and `view.toml`. A **view provider** inspects
-that source and builds an immutable browser **artifact**. Studio combines the
-artifact with a notebook runtime to create a **presentation** in Preview or run
-mode.
-
-See [Identities and state](identities.md) for the complete term and identity
-map.
+[Identities and state](identities.md#product-terms) defines the product terms
+used across these pages.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Marimo Studio"
   short_description: "Build focused views from Marimo notebooks"
-  default_prompt: "Use $marimo-studio to inspect the notebook and view source, make the requested change safely, build and show the view, then verify the rendered result."
+  default_prompt: "Use $marimo-studio to complete the requested notebook view work, preserving its live data connections and verifying the result."

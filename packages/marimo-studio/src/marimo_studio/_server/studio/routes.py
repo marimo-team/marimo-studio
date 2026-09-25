@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Callable
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
@@ -59,6 +60,8 @@ from marimo_studio._workspace.config import (
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import (
     DEFAULT_VIEW_NAME,
+    MARIMO_DIRECTORY,
+    STUDIO_DIRECTORY,
     StudioDefinition,
     StudioWorkspace,
 )
@@ -260,6 +263,15 @@ async def delete_view_response(
     )
 
 
+def _view_root_label(notebook: Path, view_root: Path) -> str:
+    """Return where view projects live, relative to the notebook's folder."""
+    try:
+        return Path(os.path.relpath(view_root, notebook.parent)).as_posix()
+    except ValueError:
+        # Windows paths on different drives have no relative form.
+        return view_root.as_posix()
+
+
 def view_inventory_payload(
     definition: StudioDefinition,
     workspace: StudioWorkspace | None,
@@ -276,6 +288,7 @@ def view_inventory_payload(
         ),
         "default_view": definition.default_view,
         "default_starter": DEFAULT_STARTER_ID,
+        "view_root": _view_root_label(definition.notebook, definition.view_root),
         "views": (
             [
                 {
@@ -306,6 +319,9 @@ def unconfigured_view_inventory_payload(
         "generation": unconfigured_catalog_generation(notebook),
         "default_view": DEFAULT_VIEW_NAME,
         "default_starter": DEFAULT_STARTER_ID,
+        "view_root": PurePosixPath(
+            MARIMO_DIRECTORY, STUDIO_DIRECTORY, Path(notebook).stem
+        ).as_posix(),
         "views": [],
         "starters": (
             list(starter_records)

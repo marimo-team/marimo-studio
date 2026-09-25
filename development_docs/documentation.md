@@ -7,17 +7,18 @@ examples, and site configuration into the
 
 ## Source ownership
 
-| Source                                       | Owner                                                                         |
-| -------------------------------------------- | ----------------------------------------------------------------------------- |
-| `docs/`                                      | Public concepts, guides, examples, and reference                              |
-| `apps/docs/.vitepress/routes.ts`             | Canonical page routes, navigation, and complete route inventory               |
-| `apps/docs/.vitepress/config.mts`            | VitePress behavior, metadata, local search, theme, and base path              |
-| `apps/docs/examples.ts`                      | Documentation example families, technologies, labels, and exported paths      |
-| `apps/docs/scripts/build-examples.ts`        | Notebook and view export transaction                                          |
-| `apps/docs/scripts/source-integrity.test.ts` | Page metadata, route inventory, and heading fragments                         |
-| `apps/docs/scripts/verify-build.ts`          | Built routes, assets, base paths, examples, and sibling links                 |
-| `apps/docs/public/`                          | Authored brand, icon, and screenshot assets plus generated examples           |
-| `development_docs/`                          | Contributor decisions, ownership, lifecycle, validation, and release workflow |
+| Source                                       | Owner                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------ |
+| `docs/`                                      | Public concepts, guides, examples, and reference                               |
+| `apps/docs/.vitepress/routes.ts`             | Canonical page routes, navigation, and complete route inventory                |
+| `apps/docs/.vitepress/config.mts`            | VitePress behavior, metadata, local search, theme, and base path               |
+| `apps/docs/examples.ts`                      | Documentation example families, technologies, labels, and exported paths       |
+| `apps/docs/scripts/build-examples.ts`        | Notebook and view export transaction                                           |
+| `apps/docs/scripts/capture-thumbnails.ts`    | Gallery thumbnails captured from the published example views                   |
+| `apps/docs/scripts/source-integrity.test.ts` | Page metadata, route inventory, and heading fragments                          |
+| `apps/docs/scripts/verify-build.ts`          | Built routes, assets, base paths, examples, and sibling links                  |
+| `apps/docs/public/`                          | Authored brand, icon, screenshot, and thumbnail assets plus generated examples |
+| `development_docs/`                          | Contributor decisions, ownership, lifecycle, validation, and release workflow  |
 
 Every public Markdown page must appear in `siteRoutes`. A new page also belongs
 in the matching introduction, guide, example, or reference list so navigation,
@@ -65,6 +66,44 @@ runtime export per named view. Generated example files are build evidence.
 Change the notebook, view source, provider lockfile, or example catalog, then
 rebuild them through the documentation command.
 
+## Notebook and view stack
+
+`StudioViewStack` frames an example family's notebook export behind one of its
+views. The tab rail chooses the document in front, and a click on the back layer
+brings it forward. Both layers are live, scrollable iframes that load once the
+stack nears the viewport. Containers narrower than 36rem show one flat layer at
+a time.
+
+```md
+<StudioViewStack family="quadratic-programs" />
+```
+
+## Example thumbnails
+
+The Examples page renders one `StudioExampleCard` per family. Each card cycles
+through `apps/docs/public/thumbnails/FAMILY/VIEW.webp` for the views listed in
+`documentationExampleFamilies`. Thumbnails are committed assets. Recapture them
+after a visible view change or when a view joins the catalog:
+
+```console
+make docs-thumbnails
+```
+
+The target exports the examples when `apps/docs/public/examples` is missing and
+installs Chromium. The script serves `apps/docs/public` locally, opens each
+exported view at 1440x900 and device scale 2, waits for network idle, loaded
+fonts, and a settle delay, then writes a 1600px wide WebP. Select views with
+`--family SLUG` or `--view FAMILY/VIEW`, or capture a deployed site with
+`--base-url`:
+
+```console
+pnpm --filter @marimo-studio/docs thumbnails -- --view athletes/field
+pnpm --filter @marimo-studio/docs thumbnails -- --base-url https://marimo-team.github.io/marimo-studio/
+```
+
+A view that fails to load is reported and the remaining views are still
+captured. Inspect the images before committing them.
+
 ## Build and serve
 
 Build the complete site with:
@@ -86,8 +125,11 @@ make docs-serve
 [Portless](https://portless.sh/) assigns the VitePress server an available port
 and exposes it at `https://docs.marimo-studio.localhost/`. Linked Git worktrees
 receive a branch prefix, so each running workspace has its own URL. Use the URL
-printed by `make docs-serve`. On its first HTTPS run, Portless may request local
-administrator access to bind port 443 and trust its local certificate authority.
+printed by `make docs-serve`. On its first HTTPS run from a terminal, Portless
+may request local administrator access to bind port 443 and trust its local
+certificate authority. Without a terminal, such as from a coding agent, the
+target reuses a proxy already listening on port 443 or starts one on port 1355,
+and the printed URL includes `:1355`.
 
 Preview an existing `make docs-build` artifact with:
 
@@ -144,10 +186,16 @@ Final build verification requires:
   and `.nojekyll` marker.
 - Static notebook exports retain source and filename metadata.
 - View exports use a document-relative base and link to existing siblings.
+- Every example view has a gallery thumbnail.
+- Documentation index links stay under the deployment base and resolve to
+  generated Markdown files.
 
 The site also emits canonical metadata, local search data, `llms.txt`, and
 `llms-full.txt` through VitePress and its configured plugin. Inspect those files
 after changing site metadata or build plugins.
+The LLM plugin receives the site origin and adds VitePress's base path itself.
+The Python package exposes the published `llms.txt` as its `Documentation Index`
+project URL, which `agent-plugins read marimo-studio` includes in the briefing.
 
 ## Deployment
 

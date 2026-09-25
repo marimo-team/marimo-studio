@@ -1,18 +1,18 @@
 <!doctype html>
 <notebook theme="air">
-  <title>Room 01, observed</title>
+  <title>Room 01 · Occupancy monitor</title>
   <script id="1" type="text/html">
     <header class="masthead">
-      <a class="wordmark" href="./index.html"><span class="field-mark" aria-hidden="true">◒</span> Field notes</a>
+      <a class="wordmark" href="./index.html"><span class="field-mark" aria-hidden="true">◒</span> Building occupancy</a>
       <nav aria-label="Occupancy views">
         <a href="../model-review/index.html">Model review ↗</a>
         <a href="../pdf-report/index.html">Field report ↗</a>
       </nav>
     </header>
     <section class="introduction">
-      <p class="eyebrow">Building occupancy / Room 01</p>
-      <h1>Room 01, observed.</h1>
-      <p class="lede">A field notebook of environmental signals, room use, and the readings that stand apart.</p>
+      <p class="eyebrow">Room 01</p>
+      <h1>Occupancy monitor</h1>
+      <p class="lede">Environmental sensor readings, room occupancy, and flagged deviations for the selected observation scope.</p>
     </section>
     <section class="controls" aria-label="Observation controls">
       <marimo-cell name="analysis_scope_control"></marimo-cell>
@@ -64,8 +64,8 @@
       </div>
     </section>
     <section class="section-heading" data-marimo-lens-inputs="summary-data">
-      <p class="eyebrow">01 / The signal</p>
-      <h2 id="signal-heading">${summary.metric}, through time.</h2>
+      <p class="eyebrow">01 / Signal history</p>
+      <h2 id="signal-heading">${summary.metric} over time</h2>
       <p>The measured signal against a ${summary.monitor.baseline_window}-reading rolling baseline. Amber marks readings beyond the local ${Math.round(summary.monitor.anomaly_quantile * 100)}th-percentile deviation.</p>
     </section>
   </script>
@@ -75,8 +75,8 @@
   <script id="12" type="text/html">
     <div class="chart-key"><span><i class="key-signal"></i>Measured signal</span><span><i class="key-baseline"></i>Rolling baseline</span><span><i class="key-anomaly"></i>Flagged deviation</span></div>
     <section class="section-heading">
-      <p class="eyebrow">02 / The room in use</p>
-      <h2>A daily occupancy rhythm.</h2>
+      <p class="eyebrow">02 / Occupancy</p>
+      <h2>Daily occupancy</h2>
       <p>The share of readings labelled occupied on each day, within the selected observation scope.</p>
     </section>
   </script>

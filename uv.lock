@@ -28,7 +28,7 @@ members = [
 
 [manifest.dependency-groups]
 dev = [
-    { name = "agent-plugins", specifier = ">=0.2" },
+    { name = "agent-plugins", specifier = ">=0.2.4" },
     { name = "basedpyright", specifier = ">=1.39.10" },
     { name = "deno", specifier = "==2.9.5" },
     { name = "httpx2", specifier = ">=2.9" },
@@ -54,7 +54,7 @@ e2e = [
     { name = "marimo-studio-e2e-provider", editable = "apps/e2e/fixtures-provider/provider" },
 ]
 marimo-studio-build = [
-    { name = "agent-plugins", specifier = ">=0.2" },
+    { name = "agent-plugins", specifier = ">=0.2.4" },
     { name = "uv-build", specifier = ">=0.12,<0.13" },
 ]
 release = [{ name = "twine", specifier = ">=6.2" }]
@@ -1282,7 +1282,7 @@ recommended = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-plugins", specifier = ">=0.2" },
+    { name = "agent-plugins", specifier = ">=0.2.4" },
     { name = "click", specifier = ">=8.2" },
     { name = "deno", marker = "extra == 'deno'", specifier = ">=2.9.5" },
     { name = "htpy", specifier = ">=26.5.1" },

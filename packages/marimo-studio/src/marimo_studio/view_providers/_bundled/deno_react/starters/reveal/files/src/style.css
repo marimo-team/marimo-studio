@@ -65,6 +65,8 @@ body {
 }
 
 marimo-cell {
+  /* Scale notebook Markdown with the slide. */
+  --marimo-cell-font-size: 1em;
   display: block;
   min-width: 0;
 }

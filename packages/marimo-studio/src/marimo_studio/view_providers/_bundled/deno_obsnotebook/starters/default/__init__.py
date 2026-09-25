@@ -34,8 +34,8 @@ starter = BundledStarter(
         key="default",
         title="Observable Notebook Kit",
         summary=(
-            "Reactive Observable notebook HTML with native Marimo projections "
-            "and a live-value generator."
+            "An Observable notebook page with every notebook output in place, "
+            "plus a generator that reads live notebook values."
         ),
         documents=tuple(
             PurePosixPath(path)

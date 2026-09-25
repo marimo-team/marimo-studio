@@ -7,6 +7,7 @@ import asyncio
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from hashlib import sha256
@@ -90,14 +91,30 @@ from importlib import resources
 from dataclasses import fields
 from inspect import signature
 from typing import get_args
+import sys
+import threading
+import agent_plugins
+
+def unavailable(*args, **kwargs):
+    raise AssertionError("Agent discovery attempted runtime or resource activation")
+
+def audit(event, args):
+    if event in {"socket.connect", "socket.bind", "subprocess.Popen", "os.system"}:
+        unavailable()
+
+sys.addaudithook(audit)
+threading.Thread.start = unavailable
+read, locate = agent_plugins.read, agent_plugins.locate
+agent_plugins.read = agent_plugins.locate = unavailable
 import marimo_studio
+assert callable(marimo_studio.agent.current_workspace)
 import marimo_studio.agent
+agent_plugins.read, agent_plugins.locate = read, locate
+assert marimo_studio.agent.skill().source in marimo_studio.agent.__doc__
 import marimo_studio.authoring
 import marimo_studio.asgi
 import marimo_studio.errors
 import marimo_studio.view_providers
-import agent_plugins
-
 assert callable(marimo_studio.create_asgi_app)
 assert callable(marimo_studio.agent.current_workspace)
 assert callable(marimo_studio.authoring.open_workspace)
@@ -111,12 +128,12 @@ assert callable(marimo_studio.asgi.app)
 assert resources.files("marimo_studio").joinpath("py.typed").is_file()
 assert set(marimo_studio.__all__) == {
     "STUDIO_RESULT_SELECTOR", "ASGIApp", "NotebookSpec", "create_asgi_app",
-    "inspect_notebook",
+    "agent", "inspect_notebook",
 }
 assert set(marimo_studio.agent.__all__) == {
     "PublicationHold", "ViewInspection", "ViewSourceChanges", "ViewSourceFile",
     "ValidationIssue", "ValidationReport", "View", "ShowResult", "Workspace",
-    "agent_plugin", "agent_skill", "current_workspace",
+    "plugin", "skill", "current_workspace",
 }
 assert set(marimo_studio.authoring.__all__) == {
     "PublicationHold", "ViewSourceChanges", "ViewSourceFile",
@@ -224,15 +241,24 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
         raise AssertionError(
             f"Agent Plugin discovery returned {plugin.manifest.name!r}"
         )
-    skill = studio_agent.agent_skill()
-    if studio_agent.agent_plugin() != plugin or skill not in plugin.skills:
+    skill = studio_agent.skill()
+    if studio_agent.plugin() != plugin or skill not in plugin.skills:
         raise AssertionError("Studio agent discovery returned another Agent Plugin")
     if {item.path.name for item in plugin.skills} != {"marimo-studio"}:
         raise AssertionError(
             "Agent Plugin discovery returned an unexpected skill catalog"
         )
-    if str(skill / "SKILL.md") not in (studio_agent.__doc__ or ""):
-        raise AssertionError("Studio agent help omits its installed Agent Skill")
+    briefing = agent_plugins.read(_DISTRIBUTION)
+    if studio_agent.__doc__ != briefing or skill.source not in briefing:
+        raise AssertionError("Studio agent help differs from its installed briefing")
+    references = set(re.findall(r"\]\((references/[\w-]+\.md)", skill.source))
+    if not references:
+        raise AssertionError("Studio agent skill has no task references")
+    for reference in references:
+        if not skill.file(reference).read_text(encoding="utf-8").strip():
+            raise AssertionError(
+                f"Installed Agent Skill reference is empty: {reference}"
+            )
 
 
 def _validate_cli(notebook: Path, view: str) -> None:

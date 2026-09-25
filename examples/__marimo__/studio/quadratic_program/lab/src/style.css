@@ -1,0 +1,321 @@
+:root {
+  --paper: #faf9f6;
+  --ink: #1b1d22;
+  --muted: #6b6f76;
+  --rule: #e5e2dc;
+  --region: #eef0f3;
+  --level: #a3a8b0;
+  --accent: #b33a2e;
+  --text-font: "Inter Variable", system-ui, sans-serif;
+  --heading-font: "Newsreader Variable", Georgia, serif;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem / 1.6 var(--text-font);
+}
+
+marimo-cell {
+  --marimo-cell-font: var(--text-font);
+  --marimo-cell-heading-font: var(--heading-font);
+  --marimo-cell-foreground: var(--ink);
+  --marimo-cell-accent: var(--accent);
+  --marimo-cell-background: transparent;
+  --marimo-cell-padding: 0;
+  display: block;
+  min-width: 0;
+}
+
+/* The figure holds the left column at the viewport's height while the title,
+   controls, and chart scroll beside it, so any frame opens on the geometry. */
+.lab {
+  --pad: clamp(1.25rem, 6vh, 4.5rem);
+  box-sizing: border-box;
+  column-gap: clamp(2rem, 5vw, 4.5rem);
+  display: grid;
+  grid-template-areas:
+    "stage masthead"
+    "stage panel";
+  grid-template-columns: minmax(0, 1.15fr) minmax(17rem, 1fr);
+  grid-template-rows: auto 1fr;
+  margin: 0 auto;
+  max-width: 78rem;
+  padding: var(--pad) clamp(1.25rem, 3vw, 2rem);
+}
+
+.masthead {
+  grid-area: masthead;
+  margin-bottom: clamp(1.5rem, 4vh, 2.5rem);
+}
+
+.kicker {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  margin: 0 0 1.25rem;
+  text-transform: uppercase;
+}
+
+h1 {
+  font: 400 clamp(2rem, 4vw, 3.5rem) / 1.04 var(--heading-font);
+  letter-spacing: -0.015em;
+  margin: 0 0 1.25rem;
+  text-wrap: balance;
+}
+
+.lede {
+  color: var(--muted);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.stage {
+  align-self: start;
+  grid-area: stage;
+  margin: 0;
+  position: sticky;
+  top: var(--pad);
+}
+
+.unavailable {
+  color: var(--muted);
+  margin: 0;
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.stage figcaption {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+.geometry {
+  cursor: grab;
+  display: block;
+  max-height: calc(100svh - 2 * var(--pad) - 2rem);
+  touch-action: none;
+  user-select: none;
+  width: 100%;
+}
+
+.geometry:active {
+  cursor: grabbing;
+}
+
+/* The dial ring shows focus in place of a rectangular outline. */
+.geometry:focus {
+  outline: none;
+}
+
+.geometry:focus-visible .dial {
+  stroke: var(--accent);
+}
+
+.sensitivity:focus {
+  outline: none;
+}
+
+.sensitivity:focus-visible .cursor {
+  stroke: var(--accent);
+  stroke-opacity: 1;
+  stroke-width: 2px;
+}
+
+.geometry :is(line, ellipse, polyline, .dial, .window, .center) {
+  vector-effect: non-scaling-stroke;
+}
+
+.window {
+  fill: #fff;
+  stroke: var(--rule);
+  stroke-width: 1px;
+}
+
+.region {
+  fill: var(--region);
+}
+
+.wall {
+  stroke: var(--level);
+  stroke-width: 1.25px;
+}
+
+.wall.active {
+  stroke: var(--accent);
+}
+
+.level {
+  fill: none;
+  stroke: var(--level);
+  stroke-width: 1px;
+}
+
+.trail {
+  fill: none;
+  stroke: var(--ink);
+  stroke-dasharray: 2 3;
+  stroke-opacity: 0.45;
+  stroke-width: 1px;
+}
+
+.contact {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2px;
+}
+
+.center {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.25px;
+}
+
+.optimum {
+  fill: var(--accent);
+}
+
+.dial {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 6px;
+}
+
+.pull {
+  stroke: var(--ink);
+  stroke-opacity: 0.18;
+  stroke-width: 1px;
+}
+
+.handle {
+  fill: var(--ink);
+}
+
+.handle-label {
+  dominant-baseline: middle;
+  fill: var(--ink);
+  font: italic 0.34px var(--heading-font);
+  text-anchor: middle;
+}
+
+.panel {
+  align-content: start;
+  display: grid;
+  gap: 2rem;
+  grid-area: panel;
+}
+
+.readout {
+  border-top: 1px solid var(--rule);
+  display: grid;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+.readout div {
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  padding: 0.6rem 0;
+}
+
+.readout dt {
+  color: var(--muted);
+}
+
+.readout dd {
+  margin: 0;
+}
+
+.dual {
+  color: var(--accent);
+  margin-left: 0.25rem;
+}
+
+.chart h2 {
+  color: var(--muted);
+  font: 500 0.75rem / 1 var(--text-font);
+  letter-spacing: 0.14em;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+}
+
+.sensitivity {
+  cursor: ew-resize;
+  display: block;
+  font-variant-numeric: tabular-nums;
+  touch-action: none;
+  user-select: none;
+  width: 100%;
+}
+
+.sensitivity .grid {
+  stroke: var(--rule);
+}
+
+.sensitivity .curve {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5px;
+}
+
+.sensitivity .held {
+  fill: var(--accent);
+  opacity: 0.75;
+}
+
+.sensitivity .cursor {
+  stroke: var(--ink);
+  stroke-opacity: 0.35;
+}
+
+.sensitivity .marker {
+  fill: var(--accent);
+  stroke: var(--paper);
+  stroke-width: 2px;
+}
+
+.sensitivity .tick {
+  dominant-baseline: middle;
+  fill: var(--muted);
+  font-size: 11px;
+  text-anchor: end;
+}
+
+.sensitivity .axis {
+  text-anchor: middle;
+}
+
+.sensitivity .wall-name {
+  fill: var(--ink);
+  font: italic 13px var(--heading-font);
+}
+
+.sensitivity .subscript {
+  font-size: 9px;
+}
+
+@media (max-width: 640px) {
+  .lab {
+    grid-template-areas:
+      "masthead"
+      "stage"
+      "panel";
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2rem;
+  }
+
+  .masthead {
+    margin-bottom: 0;
+  }
+
+  .stage {
+    position: static;
+  }
+}

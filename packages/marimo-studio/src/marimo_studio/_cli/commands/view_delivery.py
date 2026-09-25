@@ -20,7 +20,7 @@ from marimo_studio._authoring.view import (
 from marimo_studio._browser_client.transport import studio_server_connection
 from marimo_studio._cli.activity import activity
 from marimo_studio._cli.diagnostics import diagnostics, json_option, run_in_environment
-from marimo_studio._cli.environment import provider_bootstrap_required
+from marimo_studio._cli.environment import provider_bootstrap_required, should_reenter
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
     browser_client_option,
@@ -77,6 +77,19 @@ def _emit_export_warnings(result: StaticExportResult) -> None:
 def _bootstrap_provider_environment(target: Path | None, notebook: Path) -> None:
     environment = resolve_environment_target(target, notebook)
     if provider_bootstrap_required(environment):
+        raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
+
+
+def _enter_delivery_environment(
+    target: Path | None,
+    notebook: Path,
+    runtime: StaticRuntime,
+) -> None:
+    """Rerun where provider requirements and Prepared notebook dependencies live."""
+    environment = resolve_environment_target(target, notebook)
+    if provider_bootstrap_required(environment) or (
+        runtime == "zero-python" and should_reenter(environment, None)
+    ):
         raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
 
 
@@ -251,7 +264,7 @@ def export(
             "--prepare-timeout is only valid with --runtime zero-python."
         )
     notebook = resolve_notebook(target)
-    _bootstrap_provider_environment(target, notebook)
+    _enter_delivery_environment(target, notebook, runtime)
     with activity(diagnostics(), phase="export", view=view_name) as progress:
         result = asyncio.run(
             export_view(
@@ -315,7 +328,7 @@ def preflight(
             "--prepare-timeout is only valid with --runtime zero-python."
         )
     notebook = resolve_notebook(target)
-    _bootstrap_provider_environment(target, notebook)
+    _enter_delivery_environment(target, notebook, runtime)
     with activity(diagnostics(), phase="preflight", view=view_name) as progress:
         result = asyncio.run(
             preflight_view(

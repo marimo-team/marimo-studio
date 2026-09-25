@@ -24,6 +24,7 @@ export interface ViewSnapshot {
   starters: readonly Starter[];
   defaultStarter: string;
   starterCatalog: StarterCatalogState;
+  viewRoot: string;
   creating: boolean;
   deleting: boolean;
   removing?: string;
@@ -84,6 +85,7 @@ export class ViewController {
       starters: initialStarters,
       defaultStarter: initialDefaultStarter,
       starterCatalog: initialStarters.length > 0 ? { phase: "ready" } : { phase: "idle" },
+      viewRoot: "",
       creating: false,
       deleting: false,
     };
@@ -598,6 +600,7 @@ export class ViewController {
       starters: inventory.starters,
       defaultStarter: inventory.default_starter,
       starterCatalog: { phase: "ready" },
+      viewRoot: inventory.view_root,
     });
   }
 

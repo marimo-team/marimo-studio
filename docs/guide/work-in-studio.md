@@ -5,18 +5,11 @@ description: Work with notebook code, view source, and the rendered result in on
 
 # Edit and preview in Studio
 
-Open Marimo in an environment containing Studio:
+Studio adds a toolbar to `marimo edit` in any environment that contains
+`marimo-studio`, including for a new, unsaved notebook. [Create your first
+view](getting-started.md) opens a notebook and adds its first view.
 
-```console
-uvx --with marimo-studio marimo edit analysis.py --sandbox
-```
-
-The thin Studio toolbar appears immediately, including in a new, unsaved
-notebook. Click **Add view** to name a view and choose a starter. For an
-unsaved notebook, the action first opens Marimo's Save dialog. Studio writes
-view configuration when you create the view.
-
-## Work beside the notebook
+## Use the toolbar
 
 Studio opens the notebook and custom view side by side. The native agent
 sidebar remains available, including when you focus the custom view.
@@ -63,11 +56,7 @@ the project:
 marimo-studio view build dashboard --target analysis.py
 ```
 
-## Switch views and runtimes
-
-The view menu saves pending Source edits before selecting another view. A
-failed save or unresolved conflict stops the switch so the current document can
-be repaired.
+## Choose a runtime
 
 Click the status item in the toolbar to choose where notebook code executes:
 
@@ -82,5 +71,6 @@ Switching runtimes keeps the view artifact fixed and replaces the notebook
 runtime that supplies results.
 
 Use **Open preview in new tab** to inspect the current presentation without the
-authoring panes. Continue with [Manage view source](manage-source.md) for the
-Source catalog and conflict recovery.
+authoring panes. [Create and manage views](views.md#switch-views) covers
+switching between views. Continue with [Manage view source](manage-source.md)
+for the Source catalog and conflict recovery.

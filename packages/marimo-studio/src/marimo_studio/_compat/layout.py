@@ -335,6 +335,37 @@ _SYMBOLS = {
             "7a21d82d77b4a7f6ad0d4d5637b40c3c105477f8f4d54b7da448f43a9ff1e446",
         ),
     ),
+    "sandbox-studio-runtime": (
+        SymbolContract(
+            "marimo._environments.overlay",
+            "runtime_overlay",
+            _parameters(
+                ("extras", "POSITIONAL_OR_KEYWORD", True),
+                ("command", "POSITIONAL_OR_KEYWORD", True),
+            ),
+            "3b61b0052b33b3f66b65e6bc3ec263c6a9cdaa03687dce5fc90276de67c303cd",
+        ),
+        _source_contract(
+            "marimo._environments.overlay",
+            "RuntimeOverlay",
+            "060b46852f7c25c22b65e96e139623d891e1f8b875f6c4e044fada0779fdeca0",
+        ),
+        _source_contract(
+            "marimo._environments.environment",
+            "_with_args",
+            "6480ab176df2e68a96de15fe87aab4ea86b2a4ef3a76c939a8a1876f33e6dcdb",
+        ),
+        _source_contract(
+            "marimo._session.managers.ipc",
+            "IPCKernelManagerImpl.start_kernel",
+            "090a5be3b647330a2d67093c6f5520e905765544adb3655d9b1c05097ee32c83",
+        ),
+        _source_contract(
+            "marimo._session.app_host.pool",
+            "AppHostPool._sandbox_plan",
+            "40e8899556119579c6401b1df39549046c4fca9e863da3fb2ba5c3a8ec4c6d7e",
+        ),
+    ),
     "zero-python-state-ledger": (
         SymbolContract(
             "marimo._runtime.runner.hooks",

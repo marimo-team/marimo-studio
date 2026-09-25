@@ -1,6 +1,6 @@
 ---
 title: Earthquake watch
-description: Compare a story, operations map, and interactive lesson backed by one weekly earthquake notebook.
+description: Compare a scrolling story, an operations map, and a briefing deck backed by one weekly earthquake notebook.
 sidebar: false
 aside: false
 outline: false
@@ -23,7 +23,7 @@ Scroll **Story** to move through the map sequence. In **Operations**, raise the
 minimum magnitude. The map, priority list, and summary resolve from 138 states
 prepared from the notebook's magnitude and review-status controls.
 
-In **Interactive lesson**, use the comparison slider to recompute the amplitude and
+In **Briefing**, use the comparison slider to recompute the amplitude and
 energy ratios. Then change the catalog filter and watch the selected count and
 epicenter map update inside the [Reveal.js](https://revealjs.com/)
 presentation. On the frequency slide, move the magnitude threshold to compare
@@ -53,9 +53,9 @@ add browser network requests.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/earthquakes.py)
-- [Scrollytelling story](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/story)
-- [Operations map](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/operations)
-- [Interactive lesson](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/briefing)
+- [Story](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/story)
+- [Operations](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/operations)
+- [Briefing](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/briefing)
 
 Reveal.js supplies navigation, fragments, Auto-Animate, overview mode, slide
 numbers, and keyboard controls inside the presentation.

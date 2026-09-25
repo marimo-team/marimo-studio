@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
+import sys
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
@@ -188,3 +191,72 @@ def test_first_external_view_create_bootstraps_the_selected_starter_distribution
 
     assert result.exit_code == 19, result.output
     assert len(captured) == 1
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["view", "export", "dashboard", "--output", "static"],
+        ["view", "preflight", "dashboard"],
+    ),
+    ids=("export", "preflight"),
+)
+def test_prepared_delivery_reruns_in_the_notebook_environment(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+) -> None:
+    prepare_view(notebook_path)
+    invocation = [*arguments, "--target", str(notebook_path)]
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(returncode=23)
+
+    monkeypatch.setattr(sys, "argv", ["marimo-studio", *invocation])
+    monkeypatch.setattr(environment_module.subprocess, "run", run)
+
+    result = CliRunner().invoke(cli, invocation)
+
+    assert result.exit_code == 23, result.output
+    [command] = commands
+    assert command[:2] == [shutil.which("uv"), "run"]
+    assert command[command.index("--") + 1 :] == ["marimo-studio", *invocation]
+
+
+def test_browser_runtime_export_runs_where_it_was_invoked(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    exported: list[str] = []
+
+    async def export_view(_notebook, _view, _output, **options):
+        exported.append(options["runtime"])
+
+    monkeypatch.setattr(
+        environment_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("Browser export reran through uv"),
+    )
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view_delivery.export_view", export_view
+    )
+
+    CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "export",
+            "dashboard",
+            "--output",
+            "static",
+            "--runtime",
+            "wasm",
+            "--target",
+            str(notebook_path),
+        ],
+    )
+
+    assert exported == ["wasm"]

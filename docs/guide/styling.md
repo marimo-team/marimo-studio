@@ -123,8 +123,20 @@ content with the page:
 <marimo-output class="report-output" value="revenue_chart"></marimo-output>
 ```
 
-Use `--marimo-cell-content-width` for rendered Markdown and
-`--marimo-cell-error` for cell error treatment.
+`--marimo-cell-accent` colors links, selected options, slider fills, and focus
+rings in native output, including Marimo controls. Without it, controls use the
+text color and links keep Marimo's link color. Borders, muted surfaces, and
+secondary text mix from `--marimo-cell-foreground`, so unselected controls keep
+neutral outlines beside the accent. Set `--marimo-cell-border-color`,
+`--marimo-cell-muted`, or `--marimo-cell-muted-foreground` to choose them
+directly. Tooltips, dropdown menus, and date pickers open outside the projected
+cell, so they keep Marimo's theme.
+
+Use `--marimo-cell-content-width` and `--marimo-cell-font-size` for rendered
+Markdown and `--marimo-cell-error` for cell error treatment. Markdown keeps
+Marimo's `1rem` base size by default. Set `--marimo-cell-font-size: 1em` to size
+it from the surrounding element, as the Reveal.js starter does so notebook text
+scales with its slides.
 
 ## Control loading states
 

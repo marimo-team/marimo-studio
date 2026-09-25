@@ -18,6 +18,7 @@ from marimo_studio.view_providers._bundled._starters import (
     starter_cells,
 )
 from marimo_studio.view_providers._bundled.deno_react import provider as react_provider
+from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
 
 from ..provider_test_support import provider_starter_context
 
@@ -238,3 +239,57 @@ if __name__ == "__main__":
     assert [target.target for _cell, target in starter_cells(context)] == [
         "independent"
     ]
+
+
+@pytest.mark.parametrize(
+    ("filename", "app", "label"),
+    (
+        (
+            "example.py",
+            'marimo.App(app_title="Quadratic Program")',
+            "Quadratic Program",
+        ),
+        ("research-notes.py", "marimo.App()", "Research Notes"),
+    ),
+    ids=("app-title", "filename"),
+)
+def test_vanilla_starter_labels_the_page_with_the_notebook_title(
+    tmp_path: Path,
+    filename: str,
+    app: str,
+    label: str,
+) -> None:
+    notebook = tmp_path / filename
+    notebook.write_text(
+        f"""\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = {app}
+
+@app.cell
+def _():
+    import marimo as mo
+    return (mo,)
+
+if __name__ == "__main__":
+    app.run()
+""",
+        encoding="utf-8",
+    )
+    context = starter_context(
+        inspect_notebook(notebook, include_code=True),
+        None,
+        "dashboard",
+    )
+    starter = next(
+        item for item in vanilla_provider.starters() if item.key == "default"
+    )
+
+    page = (
+        vanilla_provider.create(starter, context)
+        .files[PurePosixPath("index.html")]
+        .decode()
+    )
+
+    assert f"<title>{label} · Dashboard</title>" in page

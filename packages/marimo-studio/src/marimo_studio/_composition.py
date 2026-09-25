@@ -122,6 +122,7 @@ def create_server_adapters() -> ServerAdapters:
         PrivateNotebookSaveTransform,
     )
     from marimo_studio._compat.server.peer_state import PrivatePeerCommandRelay
+    from marimo_studio._compat.server.sandbox_runtime import PrivateSandboxRuntime
     from marimo_studio._compat.server.session_cache import (
         PrivateSessionCachePublication,
     )
@@ -135,6 +136,7 @@ def create_server_adapters() -> ServerAdapters:
     peer_commands = PrivatePeerCommandRelay()
     session_cache = PrivateSessionCachePublication()
     usage = PrivateUsageRoute()
+    sandbox_runtime = PrivateSandboxRuntime()
     code_mode = PrivateCodeModeBridge()
     return ServerAdapters(
         server=PrivateServerGateway(),
@@ -156,6 +158,7 @@ def create_server_adapters() -> ServerAdapters:
                 peer_commands,
                 session_cache,
                 usage,
+                sandbox_runtime,
                 code_mode,
             )
         ),

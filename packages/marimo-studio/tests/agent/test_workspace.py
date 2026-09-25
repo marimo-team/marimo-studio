@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import pydoc
+import re
 import shutil
+import subprocess
+import sys
 import threading
 from contextvars import ContextVar
 from importlib.metadata import distribution
@@ -60,15 +63,15 @@ def test_marimo_code_mode_loads_the_studio_workspace_api() -> None:
         "ViewSourceFile",
         "ShowResult",
         "Workspace",
-        "agent_plugin",
-        "agent_skill",
+        "plugin",
+        "skill",
         "current_workspace",
     }
 
 
 def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
-    plugin = studio_agent.agent_plugin()
-    skill = studio_agent.agent_skill()
+    plugin = studio_agent.plugin()
+    skill = studio_agent.skill()
 
     assert plugin.manifest.name == "marimo-studio"
     assert plugin.manifest.license == "Apache-2.0"
@@ -79,13 +82,66 @@ def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
     assert isinstance(skill, agent_plugins.Skill)
 
 
-def test_agent_module_help_points_to_the_packaged_studio_skill() -> None:
-    plugin = studio_agent.agent_plugin()
-    skill = studio_agent.agent_skill()
+def test_agent_module_help_contains_the_installed_core_briefing() -> None:
+    plugin = studio_agent.plugin()
+    skill = studio_agent.skill()
     rendered = pydoc.render_doc(studio_agent)
+    briefing = agent_plugins.read("marimo-studio")
 
     assert str(plugin.path) in rendered
     assert str(skill / "SKILL.md") in rendered
+    assert studio_agent.__doc__ == briefing
+    assert skill.source in briefing
+
+
+def test_packaged_skill_references_resolve_from_the_installed_skill() -> None:
+    skill = studio_agent.skill()
+    references = set(re.findall(r"\]\((references/[\w-]+\.md)", skill.source))
+
+    assert references
+    for reference in references:
+        assert skill.file(reference).read_text(encoding="utf-8").strip()
+
+
+def test_agent_discovery_is_passive_in_a_fresh_process(tmp_path: Path) -> None:
+    program = """
+import sys
+import threading
+import agent_plugins
+
+def unavailable(*args, **kwargs):
+    raise AssertionError("Agent discovery attempted runtime or resource activation")
+
+def audit(event, args):
+    if event in {"socket.connect", "socket.bind", "subprocess.Popen", "os.system"}:
+        unavailable()
+
+sys.addaudithook(audit)
+threading.Thread.start = unavailable
+read, locate = agent_plugins.read, agent_plugins.locate
+agent_plugins.read = agent_plugins.locate = unavailable
+import marimo_studio
+assert callable(marimo_studio.agent.current_workspace)
+agent_plugins.read, agent_plugins.locate = read, locate
+marimo_studio.agent.current_workspace = unavailable
+plugin = marimo_studio.agent.plugin()
+skill = marimo_studio.agent.skill()
+assert skill == plugin.skill("marimo-studio")
+assert skill.source in marimo_studio.agent.__doc__
+help(marimo_studio.agent)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "marimo_studio.agent" in result.stdout
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_agent_creation_and_binding_share_the_saved_notebook(

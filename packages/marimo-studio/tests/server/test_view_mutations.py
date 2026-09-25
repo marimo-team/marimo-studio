@@ -179,6 +179,7 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
     assert before_payload["schema"] == 1
     assert before_payload["default_view"] == "dashboard"
     assert before_payload["default_starter"] == "marimo-studio/vanilla:default"
+    assert before_payload["view_root"] == f"__marimo__/studio/{notebook_path.stem}"
     assert before_payload["views"] == []
     assert host["state"] == "needs-view"
     assert host["defaultView"] == "dashboard"

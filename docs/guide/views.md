@@ -1,38 +1,20 @@
 ---
-title: One notebook, many views
-description: Keep shared analysis in one reactive notebook and give each task its own named view.
+title: Create and manage views
+description: Create, switch, and remove the named views of a notebook.
 ---
 
-# One notebook, many views
+# Create and manage views
 
 A view is the stable name and URL for one interface backed by a notebook. Add a
 view when the same analysis needs a different layout, explanation, interaction,
 or audience.
 
-<StudioExample family="athletes" />
+<StudioViewStack family="athletes" />
 
-The Rio athletes notebook supports three views. The report uses native Marimo
-controls and a rendered [Polars](https://pola.rs/) table. The explorer passes
-the full athlete table to [Svelte](https://svelte.dev/),
-[Mosaic](https://uwdata.github.io/mosaic/), and
-[DuckDB-WASM](https://duckdb.org/docs/stable/clients/wasm/overview). The field
-briefing presents the same records through [Three.js](https://threejs.org/).
-
-## Keep ownership clear
-
-The notebook owns data loading, transformations, metrics, models, reusable
-controls, and Python execution. Each view owns its view project, browser
-dependencies, layout, wording, and interaction.
-
-| Change                                  | Owner        |
-| --------------------------------------- | ------------ |
-| Correct a shared measure                | Notebook     |
-| Add a reusable control                  | Notebook     |
-| Change a chart library                  | View project |
-| Rewrite an explanation for one audience | View project |
-
-Each view has an independent build and last successful artifact. Building one
-view leaves the notebook session and other views available.
+The [Rio athletes example](../examples/athletes.md) has `overview`, `explorer`,
+and `field` views. Each view has its own project, build, and last successful
+artifact. Keep shared measures and reusable controls in the notebook, and
+layout, wording, and browser dependencies in each view.
 
 ## Create another view
 

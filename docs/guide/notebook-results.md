@@ -115,7 +115,7 @@ packages. Prepared export writes eager dataframes through marimo's cache as
 Arrow IPC before the static directory is published. Materialize lazy or remote
 queries in the notebook before projecting them.
 
-## Use dynamic projection targets deliberately
+## Use dynamic projection targets
 
 React and Svelte providers inspect literal targets and finite arrays during the
 build. Keep those targets explicit when possible:

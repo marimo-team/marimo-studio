@@ -49,6 +49,7 @@ export const viewList = (
   generation: viewGeneration(0),
   default_view: defaultView,
   default_starter: defaultStarter,
+  view_root: "__marimo__/studio/analysis",
   views: names.map((name, index) => ({
     generation: generations[name] ?? viewGeneration(index + 1),
     name,

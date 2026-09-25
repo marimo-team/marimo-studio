@@ -49,7 +49,7 @@ inspect or build the view again.
 Starter identity is creation-time input. The saved manifest keeps the provider
 contract that owns the project after creation.
 
-## Keep project guidance with the view
+## Add `AGENTS.md` and `DESIGN.md`
 
 Bundled starters create `AGENTS.md`, a project-local instruction file for
 coding agents, with provider-specific guidance. Keep the project intent section

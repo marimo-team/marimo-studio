@@ -1,46 +1,32 @@
 ---
 title: Guide
-description: Learn the Studio model in order or go directly to the task you need.
+description: Create a view, refine its presentation, and deliver it to your audience.
 ---
 
 # Guide
 
-Start with a saved marimo notebook and create one view. Continue through
-notebook results and Studio authoring, or open the task guide that matches what
-you need to do.
-
-## Start here
-
-1. [Create your first view](getting-started.md) creates a view project and
-   opens the notebook in Studio.
-2. [One notebook, many views](views.md) separates shared analysis from
-   purpose-specific interfaces.
-3. [Place notebook results in a view](notebook-results.md) connects cells,
-   rendered outputs, and browser values to source documents.
-4. [Edit and preview in Studio](work-in-studio.md) covers modes, layouts,
-   runtime switching, and build feedback.
+[Create your first view](getting-started.md) for a working page, or
+[author with a coding agent](coding-agents.md) from a task and audience.
 
 ## Author a view
 
-- [Manage view source](manage-source.md) explains source documents, build
-  inputs, manifests, conflicts, and recovery.
-- [Style a view](styling.md) covers authored CSS, theme tokens, projected
-  Marimo output, and loading states.
-- [Choose a frontend](frontend-options.md) compares Vanilla HTML, React,
-  Reveal.js, Svelte, and Observable Notebook Kit starters.
-- [Author with a coding agent](coding-agents.md) gives agents the same
-  inspect, edit, build, show, and verify loop.
+| Task                                                | Guide                                    |
+| --------------------------------------------------- | ---------------------------------------- |
+| Place controls, charts, tables, and values          | [Notebook results](notebook-results.md)  |
+| Work with Notebook, Source, and Preview             | [Edit and preview](work-in-studio.md)    |
+| Create, switch, and remove views                    | [Create and manage views](views.md)      |
+| Choose HTML, React, Svelte, slides, or Notebook Kit | [Choose a frontend](frontend-options.md) |
+| Work with files, conflicts, and source recovery     | [Manage view source](manage-source.md)   |
+| Set typography, colors, and loading states          | [Style a view](styling.md)               |
 
-## Run and deliver a view
+## Deliver a view
 
-- [Navigate and preserve state](navigation-and-sessions.md) covers view URLs,
-  query parameters, fragments, history, and Python session replay.
-- [Run or export a view](run-and-share.md) compares Python, Browser, and
-  Prepared runtimes with static delivery.
-- [Deploy a live Python view](deploy.md) covers authenticated serving,
-  application servers, reverse proxies, and health checks.
-- [Troubleshoot Studio](troubleshooting.md) routes common failures to a focused
-  diagnostic and recovery action.
+| Task                                            | Guide                                                 |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| Link views and preserve public state            | [Navigation and sessions](navigation-and-sessions.md) |
+| Choose Python, Browser, or Prepared delivery    | [Run or export a view](run-and-share.md)              |
+| Host a live Python application                  | [Deploy a live Python view](deploy.md)                |
+| Diagnose a discovery, build, or runtime failure | [Troubleshoot Studio](troubleshooting.md)             |
 
-Use the [reference](../reference/index.md) when you need an exact command,
-configuration field, record shape, limit, or browser event.
+The [reference](../reference/index.md) defines commands, configuration,
+projections, and APIs.

@@ -141,3 +141,34 @@ it("groups starter choices by registering distribution", async () => {
   expect(within(studio).getByRole("radio", { name: /HTML/ })).toBeChecked();
   controller.dispose();
 });
+
+it("shows the folder where a new view's files are created", async () => {
+  const remote: ViewRemote = {
+    list: vi.fn(async () => viewList(["dashboard"])),
+    create: vi.fn(),
+    remove: vi.fn(),
+  };
+  const controller = new ViewController(
+    "dashboard",
+    ["dashboard"],
+    remote,
+    vi.fn(async () => true),
+    vi.fn(async () => true),
+    vi.fn(),
+  );
+  const user = userEvent.setup();
+  render(<ViewMenu controller={controller} />);
+
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
+  await screen.findByRole("radio", { name: /HTML/ });
+  await user.click(screen.getByText("Files created"));
+  const files = screen.getByText("Files created").closest("details");
+  await user.type(screen.getByLabelText("New view"), "Briefing");
+  expect(files).toHaveTextContent("__marimo__/studio/analysis/…/");
+  await user.clear(screen.getByLabelText("New view"));
+  await user.type(screen.getByLabelText("New view"), "briefing");
+
+  expect(files).toHaveTextContent("__marimo__/studio/analysis/briefing/");
+  controller.dispose();
+});

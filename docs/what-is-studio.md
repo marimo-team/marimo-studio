@@ -1,54 +1,56 @@
 ---
 title: What is Studio?
-description: Turn one reactive Marimo notebook into named web views for different jobs.
+description: Keep one reactive analysis behind web views built for different audiences and tasks.
 ---
 
 # What is Studio?
 
-Marimo Studio turns one saved Marimo notebook into named web views. The
-notebook owns data, Python computation, controls, and reusable results. Each
-view owns the layout, wording, visual encoding, and browser interaction for one
-job.
+Marimo Studio turns one reactive Marimo notebook into named web views. Keep
+your data, calculations, controls, and assumptions in Python. Give each audience
+a page designed for the work they need to do.
 
-<StudioExample family="occupancy" />
+<StudioViewStack family="occupancy" />
 
 The Building occupancy notebook supports a live monitor, a model review, and a
-printable field report. All three views use the same sensor analysis. Each has
-its own source documents, browser dependencies, build, route, and current
-artifact.
+printable PDF report. Each view presents the same sensor analysis through its own
+layout, interaction, and explanation.
 
-## The product model
+## Notebook and views
 
-```text
-saved Marimo notebook
-  -> named view
-  -> view project
-  -> built artifact
-  -> Preview with notebook results
-```
+A notebook preserves the decisions behind the result: where data comes from,
+how a measure is defined, which assumptions a model uses, and how corrections
+are applied. Marimo tracks dependencies and reruns affected cells as inputs
+change.
 
-A **view** is the stable name and URL, such as `monitor`, `model-review`, or
-`pdf-report`. Its **view project** is the saved frontend directory. A **view
-provider** inspects that project and builds an immutable browser **artifact**.
-Studio combines the artifact with a notebook runtime to create the
-**presentation** shown in Preview.
+A view gives those results a purpose. An analyst may need a detailed explorer,
+a decision-maker a brief report, and a class an interactive explanation. Each
+view has its own source and URL while drawing on the same notebook.
 
-The notebook and each view can change independently:
+Coding agents can build and revise those interfaces from Studio's installed
+instructions. You review the rendered result, refine the task, and retain
+shared analytical decisions in the notebook. [Author with a coding
+agent](guide/coding-agents.md) starts that workflow.
 
-| Action                 | Result                                                           |
-| ---------------------- | ---------------------------------------------------------------- |
-| Save notebook code     | Marimo reruns affected cells and updates mounted results         |
-| Save a source document | Studio builds a new artifact for the selected view               |
-| Switch views           | Studio presents another artifact against the same notebook       |
-| Switch runtimes        | The same artifact receives results from another notebook runtime |
+## Product model
+
+A **view** is a name and URL, such as `monitor` or `report`. Its **view project**
+is the saved frontend directory. A **view provider** builds that project into
+an immutable browser **artifact**. Studio combines the artifact with a notebook
+runtime to create the **presentation** shown in Preview.
+
+| Action                      | Result                                               |
+| --------------------------- | ---------------------------------------------------- |
+| Run changed notebook code   | Marimo updates dependent results in the view         |
+| Save a view source document | Studio builds and publishes the updated page         |
+| Switch views                | The next view uses the same live notebook session    |
+| Change delivery runtime     | The same artifact receives results from that runtime |
 
 A failed build keeps the last successful artifact available while Source shows
-the diagnostic.
+the diagnostic. Each view can evolve independently.
 
-## Notebook results enter the view by name
+## Place notebook results by name
 
-View source can place a complete cell, render one Python object, or read a
-browser value:
+Place a complete cell, render one Python object, or display a browser value:
 
 ```html
 <marimo-cell name="summary"></marimo-cell>
@@ -56,23 +58,17 @@ browser value:
 <strong mo-value="metrics.total"></strong>
 ```
 
-Studio resolves each target to the notebook cell that produces it and the
-upstream cells required to compute it. Marimo keeps control changes and
-dependent results reactive while the frontend stays mounted.
+Studio resolves each name to its producing notebook cell and dependencies.
+Marimo keeps controls and results reactive while the frontend stays mounted.
+[Place notebook results in a view](guide/notebook-results.md) develops the three
+projection forms.
 
-[Place notebook results in a view](guide/notebook-results.md) explains the
-three projection forms.
+## Notebook, Source, and Preview
 
-## Studio connects three authoring surfaces
+Studio brings **Notebook**, **Source**, and **Preview** together. Edit Python,
+shape the view, and inspect the result side by side. The native agent sidebar
+remains available throughout.
 
-- **Notebook** edits Python and reactive computation.
-- **Source** edits the selected view project's source documents.
-- **Preview** renders the current artifact with live notebook results.
-
-Notebook and Preview open side by side beneath a thin toolbar. The source
-action opens the view editor beneath Preview. The native agent sidebar remains
-available as you switch views and focus the result.
-
-[Create your first view](guide/getting-started.md) for a working path from a
-saved notebook. [Why Studio?](why-studio.md) explains the product decision
-behind the model.
+[Create your first view](guide/getting-started.md), browse the
+[examples](examples/index.md), or choose a [delivery runtime](guide/run-and-share.md)
+for a live application, browser execution, or a prepared static report.

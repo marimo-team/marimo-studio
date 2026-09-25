@@ -127,12 +127,13 @@ def test_starter_human_output_reports_unavailable_recovery_once(
     from marimo_studio._views.catalog import get_starter
     from marimo_studio.view_providers import ProviderAvailability
 
+    action = "Install marimo-studio[deno] in the Python environment that runs Studio."
     starter = replace(
         get_starter("marimo-studio/react:default"),
         availability=ProviderAvailability(
             False,
             reason="deno-package-missing",
-            action="pip install 'marimo-studio[deno]'",
+            action=action,
         ),
     )
 
@@ -150,7 +151,7 @@ def test_starter_human_output_reports_unavailable_recovery_once(
     output = unstyle(result.output)
     assert "unavailable" in output
     assert "deno-package-missing" in output
-    assert output.count("pip install 'marimo-studio[deno]'") == 1
+    assert output.count(action) == 1
 
 
 def test_starter_list_separates_human_records(

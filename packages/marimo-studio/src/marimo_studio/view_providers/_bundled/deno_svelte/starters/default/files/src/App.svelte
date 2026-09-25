@@ -1,5 +1,5 @@
 <script lang="ts">
-  const notebookLabel = __NOTEBOOK_NAME_JSON__;
+  const notebookLabel = __NOTEBOOK_LABEL_JSON__;
   const viewHeading = __VIEW_HEADING_JSON__;
   let resultsVisible = $state(true);
 </script>
