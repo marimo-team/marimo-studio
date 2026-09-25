@@ -20,10 +20,11 @@ const keyboardCondition = (event: KeyboardEvent) =>
   );
 
 const Figure = (
-  { region, bowl, solution, steps }: {
+  { region, bowl, solution, unavailable, steps }: {
     region?: Region;
     bowl?: Bowl;
     solution?: Solution;
+    unavailable: boolean;
     steps?: boolean;
   },
 ) => (
@@ -33,7 +34,9 @@ const Figure = (
     data-marimo-lens-label="Feasible region and level curves"
     data-marimo-lens-render-source={JSON.stringify({ path: "src/problem.tsx" })}
   >
-    {region && bowl && solution
+    {unavailable
+      ? <p className="unavailable">The figure is unavailable.</p>
+      : region && bowl && solution
       ? (
         <ProblemFigure
           region={region}
@@ -46,7 +49,12 @@ const Figure = (
   </figure>
 );
 
-const DualBars = ({ solution }: { solution?: Solution }) => {
+const DualBars = (
+  { solution, unavailable }: { solution?: Solution; unavailable: boolean },
+) => {
+  if (unavailable) {
+    return <p className="unavailable">The dual values are unavailable.</p>;
+  }
   if (!solution) {
     return null;
   }
@@ -94,6 +102,7 @@ export const App = () => {
     region: region.value,
     bowl: bowl.value,
     solution: solution.value,
+    unavailable: region.error || bowl.error || solution.error,
   };
 
   return (
@@ -163,7 +172,10 @@ export const App = () => {
 
       <Slide className="split">
         <marimo-cell name="duality" />
-        <DualBars solution={problem.solution} />
+        <DualBars
+          solution={problem.solution}
+          unavailable={solution.error}
+        />
       </Slide>
 
       <Slide className="split">

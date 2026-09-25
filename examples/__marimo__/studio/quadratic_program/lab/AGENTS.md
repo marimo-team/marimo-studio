@@ -23,10 +23,10 @@ agents.
 
 ## Use the supplied Studio integration
 
-The target array in the `{#each ... as name}` block in `src/App.svelte` starts
-with each enabled notebook cell that may display output, including literal
-Markdown, in document order. Edit that array and its surrounding markup to keep,
-reorder, group, or replace targets as the component design develops.
+`src/App.svelte` reads four notebook values through explicit `mo-value` hosts,
+`region`, `bowl`, `sweep`, and `pull_direction.value`, and projects the
+`curvature` cell. Keep a host for every value the components read, and list its
+id in the `data-marimo-lens-inputs` of each region that renders it.
 
 - `src/app.d.ts` adds Studio attributes to Svelte's element types.
 - `src/lib/marimo-value.ts` supplies the `observeMarimoValue` action. Attach it

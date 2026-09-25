@@ -209,6 +209,7 @@
           <marimo-cell name="solution_summary"></marimo-cell>
           <table
             class="duals"
+            aria-busy="true"
             data-marimo-lens-inputs="solution-data"
             data-marimo-lens-label="Dual values"
             data-marimo-lens-render-source='{"path":"index.html"}'
@@ -243,7 +244,9 @@
         const fail = (event) => onError(event.detail);
         host.addEventListener("marimo-value-updated", sync);
         host.addEventListener("marimo-value-error", fail);
-        if (host.marimoValue !== undefined) {
+        if (host.dataset.marimoError !== undefined) {
+          onError({ code: host.dataset.marimoErrorCode, message: host.dataset.marimoError });
+        } else if (host.marimoValue !== undefined) {
           onValue(host.marimoValue);
         }
         return () => {
@@ -276,10 +279,21 @@
           return row;
         });
         document.querySelector("#duals").replaceChildren(...rows);
+        document.querySelector(".duals").setAttribute("aria-busy", "false");
+      };
+
+      const clearDuals = () => {
+        const row = document.createElement("tr");
+        const message = cell("The dual values are unavailable.");
+        message.colSpan = 3;
+        row.append(message);
+        document.querySelector("#duals").replaceChildren(row);
+        document.querySelector(".duals").setAttribute("aria-busy", "false");
       };
 
       const stop = observeMarimoValue(document.querySelector("#solution-data"), {
         onValue: renderDuals,
+        onError: clearDuals,
       });
       window.addEventListener("pagehide", stop, { once: true });
       document.querySelector("#app-shell").setAttribute("data-ready", "");

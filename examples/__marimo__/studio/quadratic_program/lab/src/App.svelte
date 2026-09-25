@@ -63,6 +63,7 @@
   }}
 ></span>
 <span
+  id="direction-data"
   hidden
   mo-value="pull_direction.value"
   use:observeMarimoValue={{
@@ -84,7 +85,8 @@
 
   <figure
     class="stage"
-    data-marimo-lens-inputs="region-data bowl-data sweep-data"
+    aria-busy={!row}
+    data-marimo-lens-inputs="region-data bowl-data sweep-data direction-data"
     data-marimo-lens-label="Feasible region, level curves, and the path of the optimum"
     data-marimo-lens-render-source={JSON.stringify({ path: "src/Geometry.svelte" })}
   >
@@ -100,7 +102,7 @@
     {#if row}
       <dl
         class="readout"
-        data-marimo-lens-inputs="sweep-data"
+        data-marimo-lens-inputs="sweep-data direction-data"
         data-marimo-lens-label="Solution for the current direction"
         data-marimo-lens-render-source={JSON.stringify({ path: "src/App.svelte" })}
       >
@@ -133,7 +135,7 @@
     {#if sweep && row}
       <section
         class="chart"
-        data-marimo-lens-inputs="sweep-data"
+        data-marimo-lens-inputs="sweep-data direction-data"
         data-marimo-lens-label="Optimal value and active walls by direction"
         data-marimo-lens-render-source={JSON.stringify({ path: "src/Sensitivity.svelte" })}
       >

@@ -106,8 +106,18 @@ h1 {
   outline: none;
 }
 
-.geometry:focus .dial {
-  stroke: color-mix(in srgb, var(--accent) 35%, var(--rule));
+.geometry:focus-visible .dial {
+  stroke: var(--accent);
+}
+
+.sensitivity:focus {
+  outline: none;
+}
+
+.sensitivity:focus-visible .cursor {
+  stroke: var(--accent);
+  stroke-opacity: 1;
+  stroke-width: 2px;
 }
 
 .geometry :is(line, ellipse, polyline, .dial, .window, .center) {

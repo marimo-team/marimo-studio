@@ -131,6 +131,12 @@ body {
   width: 100%;
 }
 
+.unavailable {
+  color: var(--muted);
+  font-size: 0.6em;
+  margin: 0;
+}
+
 .problem-figure {
   display: block;
   height: 100%;

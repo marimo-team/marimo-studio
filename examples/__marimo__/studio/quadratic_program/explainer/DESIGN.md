@@ -19,9 +19,11 @@ it.
 | muted  | `#6b6f76` | Secondary text and captions                    |
 | rule   | `#e5e2dc` | Hairlines and table borders                    |
 | accent | `#b33a2e` | The solution, active walls, and contact curves |
+| region | `#eef0f3` | The feasible region in the notebook's figures  |
+| level  | `#9aa0a8` | Level curves and inactive walls in the figures |
 
-The notebook's figures use the same ink and accent, a `#eef0f3` region, and
-`#9aa0a8` level curves. Keep those colors aligned with the notebook.
+The notebook's figures draw with ink, accent, region, and level. Keep those
+colors aligned with the notebook.
 
 ## Type
 

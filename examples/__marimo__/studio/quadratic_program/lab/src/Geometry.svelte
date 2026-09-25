@@ -74,9 +74,9 @@
   tabindex="0"
   aria-label="Direction of q"
   aria-valuemin="0"
-  aria-valuemax="358"
-  aria-valuenow={Math.round(direction)}
-  aria-valuetext="{Math.round(direction)} degrees"
+  aria-valuemax="359"
+  aria-valuenow={Math.round(direction) % 360}
+  aria-valuetext="{Math.round(direction) % 360} degrees"
   onpointerdown={press}
   onpointermove={drag}
   onpointerup={release}

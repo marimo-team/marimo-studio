@@ -67,14 +67,29 @@
   const release = () => {
     scrubbing = false;
   };
+
+  const steps: Record<string, number> = { ArrowLeft: -2, ArrowDown: -2, ArrowRight: 2, ArrowUp: 2 };
+
+  const step = (event: KeyboardEvent) => {
+    if (event.key in steps) {
+      event.preventDefault();
+      onturn(row.direction + steps[event.key]);
+    }
+  };
 </script>
 
 <svg
   bind:this={svg}
   class="sensitivity"
   viewBox="0 0 {WIDTH} {height}"
-  role="img"
-  aria-label="Optimal value and the walls holding the solution for every direction of q"
+  role="slider"
+  tabindex="0"
+  aria-label="Direction of q on the optimal value chart"
+  aria-valuemin="0"
+  aria-valuemax="359"
+  aria-valuenow={row.direction}
+  aria-valuetext="{row.direction} degrees, optimal value {row.value.toFixed(3)}"
+  onkeydown={step}
   onpointerdown={press}
   onpointermove={scrub}
   onpointerup={release}
