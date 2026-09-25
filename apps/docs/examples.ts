@@ -1,5 +1,3 @@
-export type DocumentationExampleKind = "app" | "report" | "slides";
-
 export interface DocumentationTechnology {
   description: string;
   name: string;
@@ -87,7 +85,6 @@ export const documentationExampleSource = {
 
 export interface DocumentationExampleView {
   key: string;
-  kind: DocumentationExampleKind;
   label: string;
   technologies: readonly DocumentationTechnology[];
 }
@@ -95,34 +92,51 @@ export interface DocumentationExampleView {
 export interface DocumentationExampleFamily {
   notebook: string;
   slug: string;
-  summary: string;
   title: string;
   views: readonly DocumentationExampleView[];
 }
 
 export const documentationExampleFamilies = [
   {
+    notebook: "examples/quadratic_program.py",
+    slug: "quadratic-programs",
+    title: "Quadratic programs",
+    views: [
+      {
+        key: "lecture",
+        label: "Lecture",
+        technologies: [documentationTechnologies.react, documentationTechnologies.revealJs],
+      },
+      {
+        key: "explainer",
+        label: "Explainer",
+        technologies: [documentationTechnologies.vanillaHtml],
+      },
+      {
+        key: "lab",
+        label: "Lab",
+        technologies: [documentationTechnologies.svelte, documentationTechnologies.d3],
+      },
+    ],
+  },
+  {
     notebook: "examples/athletes.py",
     slug: "athletes",
-    summary: "A report, linked explorer, and Three.js briefing share the Rio 2016 roster.",
     title: "Rio 2016 athletes",
     views: [
       {
         key: "overview",
-        kind: "report",
         label: "Report",
         technologies: [documentationTechnologies.vanillaHtml],
       },
       {
         key: "explorer",
-        kind: "app",
-        label: "Explorer",
+        label: "Dashboard",
         technologies: [documentationTechnologies.svelte, documentationTechnologies.mosaic],
       },
       {
         key: "field",
-        kind: "slides",
-        label: "Field briefing",
+        label: "Slides",
         technologies: [
           documentationTechnologies.vanillaHtml,
           documentationTechnologies.shower,
@@ -134,12 +148,10 @@ export const documentationExampleFamilies = [
   {
     notebook: "examples/earthquakes.py",
     slug: "earthquakes",
-    summary: "A seismic story, operations map, and interactive lesson share one weekly USGS model.",
     title: "Earthquake watch",
     views: [
       {
         key: "story",
-        kind: "report",
         label: "Story",
         technologies: [
           documentationTechnologies.vanillaHtml,
@@ -148,14 +160,12 @@ export const documentationExampleFamilies = [
       },
       {
         key: "operations",
-        kind: "app",
-        label: "Operations",
+        label: "Map",
         technologies: [documentationTechnologies.react, documentationTechnologies.mapLibre],
       },
       {
         key: "briefing",
-        kind: "slides",
-        label: "Interactive lesson",
+        label: "Slides",
         technologies: [
           documentationTechnologies.react,
           documentationTechnologies.revealJs,
@@ -167,14 +177,11 @@ export const documentationExampleFamilies = [
   {
     notebook: "examples/occupancy.py",
     slug: "occupancy",
-    summary:
-      "A reactive scope updates one room-sensor model across a live monitor, model review, and A4 field report.",
     title: "Building occupancy",
     views: [
       {
         key: "monitor",
-        kind: "app",
-        label: "Monitor",
+        label: "Dashboard",
         technologies: [
           documentationTechnologies.notebookKit,
           documentationTechnologies.observablePlot,
@@ -182,14 +189,12 @@ export const documentationExampleFamilies = [
       },
       {
         key: "model-review",
-        kind: "report",
-        label: "Model review",
+        label: "Report",
         technologies: [documentationTechnologies.react, documentationTechnologies.recharts],
       },
       {
         key: "pdf-report",
-        kind: "report",
-        label: "PDF report",
+        label: "PDF",
         technologies: [documentationTechnologies.react, documentationTechnologies.reactPdf],
       },
     ],

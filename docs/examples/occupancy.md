@@ -19,18 +19,18 @@ threshold sweep.
 
 <StudioExample family="occupancy" />
 
-In **Monitor**, choose an observation scope and signal. The controls resolve 12
+In **Dashboard**, choose an observation scope and signal. The controls resolve 12
 prepared combinations. [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
 connects those results to [Observable Plot](https://observablehq.com/plot/) charts
 in a field-notebook layout, updating the signal, baseline, anomalies, and summary together.
 
-In **Model review**, choose one of three prepared scopes and move the threshold
+In **Report**, choose one of three prepared scopes and move the threshold
 across 17 notebook-computed operating points. Threshold changes update
 accuracy, precision, recall, the curve marker, confusion counts, and error
 evidence in the browser. [Recharts](https://recharts.org/) renders the threshold
 curve as a React component.
 
-In **PDF report**, choose one of the three prepared scopes. The React view
+In **PDF**, choose one of the three prepared scopes. The React view
 composes the notebook-owned room profile and model evidence into an A4 report,
 then generates the downloadable PDF in the browser.
 

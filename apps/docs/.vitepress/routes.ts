@@ -1,10 +1,10 @@
 export const routes = {
   home: "/",
   whatIsStudio: "/what-is-studio",
-  whyStudio: "/why-studio",
   examplesRoot: "/examples/",
   examples: {
     index: "/examples/",
+    quadraticPrograms: "/examples/quadratic-programs",
     athletes: "/examples/athletes",
     earthquakes: "/examples/earthquakes",
     occupancy: "/examples/occupancy",
@@ -43,20 +43,19 @@ export const routes = {
 
 export const exampleItems = [
   { text: "Examples", link: routes.examples.index },
+  { text: "Quadratic programs", link: routes.examples.quadraticPrograms },
   { text: "Rio 2016 athletes", link: routes.examples.athletes },
   { text: "Earthquake watch", link: routes.examples.earthquakes },
   { text: "Building occupancy", link: routes.examples.occupancy },
 ];
 
-export const introductionItems = [
-  { text: "What is Studio?", link: routes.whatIsStudio },
-  { text: "Why Studio?", link: routes.whyStudio },
-];
+export const introductionItems = [{ text: "What is Studio?", link: routes.whatIsStudio }];
 
 export const startItems = [
-  { text: "Start here", link: routes.guide.index },
+  { text: "Overview", link: routes.guide.index },
   { text: "Create your first view", link: routes.guide.gettingStarted },
-  { text: "One notebook, many views", link: routes.guide.views },
+  { text: "Author with a coding agent", link: routes.guide.codingAgents },
+  { text: "Create and manage views", link: routes.guide.views },
   { text: "Place notebook results in a view", link: routes.guide.notebookResults },
 ];
 
@@ -65,7 +64,6 @@ export const authoringItems = [
   { text: "Manage view source", link: routes.guide.manageSource },
   { text: "Style a view", link: routes.guide.styling },
   { text: "Choose a frontend", link: routes.guide.frontendOptions },
-  { text: "Author with a coding agent", link: routes.guide.codingAgents },
 ];
 
 export const deliveryItems = [

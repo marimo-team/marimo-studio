@@ -12,10 +12,13 @@ FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples 
 TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
 DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_obsnotebook $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
+# Portless binds its default proxy port 443 through sudo. Without a terminal,
+# reuse a proxy already answering there, or start the unprivileged proxy.
+PORTLESS_ENV = $(shell [ -t 0 ] || nc -z 127.0.0.1 443 2>/dev/null || echo PORTLESS_PORT=1355)
 PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-group marimo-studio-build --no-emit-workspace --no-annotate --no-header
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
-.PHONY: e2e e2e-ui docs-examples docs-build docs-serve docs-preview package
+.PHONY: e2e e2e-ui docs-examples docs-thumbnails docs-build docs-serve docs-preview package
 .PHONY: _anti-slop-check _architecture-check _provider-sources-check _workflow-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 .PHONY: _prepare-browser-tests
@@ -99,14 +102,17 @@ e2e-ui: _browser-ready build _prepare-browser-tests ## Open the browser test run
 docs-examples: _frontend-ready build ## Export examples for the documentation site.
 	$(VP) run --filter @marimo-studio/docs examples:build
 
+docs-thumbnails: _browser-ready ## Capture example gallery thumbnails from exported views.
+	$(VP) run --filter @marimo-studio/docs thumbnails
+
 docs-build: _frontend-ready build ## Build the VitePress documentation.
 	$(VP) run --filter @marimo-studio/docs build
 
 docs-serve: _frontend-ready build ## Serve documentation through Portless.
-	BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
+	$(PORTLESS_ENV) BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
 
 docs-preview: _frontend-ready ## Preview built documentation through Portless.
-	$(VP) run --filter @marimo-studio/docs preview
+	$(PORTLESS_ENV) $(VP) run --filter @marimo-studio/docs preview
 
 package: _package-build ## Build and validate the wheel and source distribution.
 	./scripts/verify-installed-wheel.sh "$(DIST_DIR)"

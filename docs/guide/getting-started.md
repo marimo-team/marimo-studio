@@ -1,79 +1,35 @@
 ---
 title: Create your first view
-description: Create a web view from a saved Marimo notebook and place one reactive result inside it.
+description: Open a saved Marimo notebook, create a view, and place one reactive result inside it.
 ---
 
 # Create your first view
 
-Start with Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), a Python
-project and environment manager, and a saved Marimo notebook such as
-`analysis.py`.
-
-::: tip Save a new notebook first
-For an untitled notebook, use Marimo **Save As** before creating a view. Studio
-follows the saved notebook after Marimo reloads it. The view project then has a
-stable location beside that file.
-:::
-
-## Create the view project
-
-Preview the filesystem and configuration changes:
-
-```console
-uvx marimo-studio view create dashboard \
-  --target analysis.py \
-  --dry-run
-```
-
-Create the view after reviewing the plan:
-
-```console
-uvx marimo-studio view create dashboard \
-  --target analysis.py
-```
-
-The default starter creates this view project beside the notebook:
-
-```text
-analysis.py
-__marimo__/studio/analysis/
-  dashboard/
-    view.toml
-    index.html
-    AGENTS.md
-```
-
-`view.toml` records the view provider. `index.html` is the first source
-document. `AGENTS.md` gives coding agents project-specific guidance. A
-`DESIGN.md` file also appears in Source when you add one to record the
-audience, task, and visual decisions for the view.
-
-The first create command can update the notebook's Studio configuration, set
-`dashboard` as the default view, and pin the Studio requirement. It prints the
-launch command required by the selected starter.
+Start with Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), and a saved
+Marimo notebook such as `analysis.py`.
 
 ## Open Studio
-
-For the default Vanilla starter, run:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 Marimo's `--sandbox` flag resolves the notebook's declared Python dependencies
-with uv. It manages the environment and does not isolate untrusted notebook
-code from your files or network.
+with uv. Notebook code still has access to your files and network.
 
-The thin toolbar is available whenever Studio is installed, including before
-the notebook has view configuration. Click **Add view** to choose a name and
-starter. An unsaved notebook first opens Marimo's Save dialog.
+Click **Add view** in the Studio toolbar. Name the view `dashboard`, choose
+**HTML document**, and review the files it will create. For an untitled notebook,
+save it when prompted so the view has a stable location beside the notebook.
 
-Notebook and Preview open side by side. Use the source action to edit the
-view's files beneath Preview. The native agent sidebar remains available.
+Notebook and Preview open side by side. The source action opens the view's
+files beneath Preview. The starter places notebook cells that may display output in a working page.
 
-## Place one notebook cell
+## Place a notebook result
 
-Give a producing cell a semantic name:
+You can [ask a coding agent](coding-agents.md) to shape the view around your
+audience and task, or edit its source directly.
+
+For a first manual change, add a named cell to the saved notebook source:
 
 ```python
 @app.cell
@@ -85,30 +41,58 @@ def sales_summary():
     return (summary,)
 ```
 
-Place the complete cell inside `#app-shell`:
+If the notebook already imports `marimo as mo` in another cell, reuse that
+import. Run the cell, then open `index.html` in Source and place its result
+inside the existing `#app-shell`:
 
 ```html
-<main id="app-shell">
-  <marimo-cell name="sales_summary"></marimo-cell>
-</main>
+<marimo-cell name="sales_summary"></marimo-cell>
 ```
 
-Save `index.html`. Preview renders **Revenue is on target**. A later notebook
-run updates the mounted cell through Marimo reactivity. A frontend build error
-keeps the last successful artifact visible and reports the affected source
-document.
+Save the source. Preview shows **Revenue is on target**. Change the notebook
+message and run the cell again to see the result update in the view.
+
+The notebook owns the computation. The view owns the page around it. A frontend
+build error keeps the last successful page visible while you repair the source.
+
+## View project files
+
+The default starter saves the view beside the notebook:
+
+```text
+analysis.py
+__marimo__/studio/analysis/
+  dashboard/
+    view.toml
+    index.html
+    AGENTS.md
+```
+
+`view.toml` records the provider. `index.html` is the page source. `AGENTS.md`
+gives coding agents the project's conventions. Add `DESIGN.md` to keep the
+view's audience and visual direction with its source.
+
+To create the same view from a terminal:
+
+```console
+uvx marimo-studio view create dashboard --target analysis.py
+```
+
+Add `--dry-run` to inspect the plan first. Creation can update the notebook's
+Studio configuration, set the default view, and pin its Studio requirement.
+The command prints the launch requirements for the chosen starter.
 
 ## Run the view
 
-Start the notebook as an application:
+Run the notebook as an application:
 
 ```console
 uvx --with marimo-studio marimo run analysis.py --sandbox
 ```
 
-The default view opens at `/`. Another view named `report` opens at `/report/`.
+The default view opens at `/`. A second view named `report` opens at `/report/`.
+Choose [Run or export a view](run-and-share.md) for hosting and static delivery.
 
 Continue with [Place notebook results in a view](notebook-results.md) for
-rendered outputs and browser values. Use [Troubleshoot
-Studio](troubleshooting.md) when Studio cannot discover the view or build its
-source.
+controls, rich outputs, and browser values, or [Choose a
+frontend](frontend-options.md) for React, Svelte, slides, and other starters.

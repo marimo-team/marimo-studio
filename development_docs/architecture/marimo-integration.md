@@ -326,9 +326,9 @@ anonymous outputs created by Marimo's auto-mount hook. Otherwise, when Lens is
 installed, it owns one instance with `STUDIO_RESULT_SELECTOR`. Borrowed
 instances keep their configured selector and notebook ownership.
 
-Lens gives each document its own interaction owner, so the notebook dock and
-the preview dock drive one Lens model. Lens 0.2.1 and newer bounds its notebook
-UI to Marimo's `#App` pane, which Studio places inside the Notebook pane.
+Lens gives each document its own interaction owner, so the notebook dock and the
+preview dock drive one Lens model. Lens bounds its notebook UI to Marimo's
+`#App` pane, which Studio places inside the Notebook pane.
 
 Marimo mounts its Lens after the cell that imports marimo runs, unless an
 earlier cell output already holds one. That cell usually runs before a cell that

@@ -19,11 +19,11 @@ and one shared `seismic_analysis` value.
 
 <StudioExample family="earthquakes" />
 
-Scroll **Story** to move through the map sequence. In **Operations**, raise the
+Scroll **Story** to move through the map sequence. In **Map**, raise the
 minimum magnitude. The map, priority list, and summary resolve from 138 states
 prepared from the notebook's magnitude and review-status controls.
 
-In **Interactive lesson**, use the comparison slider to recompute the amplitude and
+In **Slides**, use the comparison slider to recompute the amplitude and
 energy ratios. Then change the catalog filter and watch the selected count and
 epicenter map update inside the [Reveal.js](https://revealjs.com/)
 presentation. On the frequency slide, move the magnitude threshold to compare

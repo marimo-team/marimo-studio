@@ -22,11 +22,11 @@ In **Report**, change **Sport**. The native Marimo control selects one of 29
 prepared notebook states. Four `mo-value` totals, the browser-drawn roster, and
 the `top_sports` chart update from that result.
 
-In **Explorer**, select a sport bar or brush an age range.
+In **Dashboard**, select a sport bar or brush an age range.
 [Mosaic](https://uwdata.github.io/mosaic/) coordinates that browser-side
 selection while the notebook remains the source of the complete athlete table.
 
-In **Field briefing**, move through the roster as a four-chapter
+In **Slides**, move through the roster as a four-chapter
 [Three.js](https://threejs.org/) 3D presentation. The same records regroup by
 sport, medal status, height, weight, and age. Its sport control uses the same
 29 prepared states as Report.
@@ -51,8 +51,8 @@ remote font or module origins declared by their view source.
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/athletes.py)
 - [Report view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/overview)
-- [Explorer view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/explorer)
-- [Field briefing](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/field)
+- [Dashboard view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/explorer)
+- [Slides view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/field)
 
 The three views use sibling-relative URLs, so their links survive a deployment
 base path and a copied parent directory.

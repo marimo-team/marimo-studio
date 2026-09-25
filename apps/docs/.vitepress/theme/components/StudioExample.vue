@@ -1,22 +1,14 @@
 <script setup lang="ts">
-import { Icon, type IconifyIcon } from "@iconify/vue/offline";
+import { Icon } from "@iconify/vue/offline";
 import { withBase } from "vitepress";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import {
   documentationExampleFamilies,
   documentationExampleSource,
   documentationTechnologies,
-  type DocumentationExampleKind,
 } from "../../../examples.ts";
-import {
-  appIcon,
-  externalLinkIcon,
-  githubIcon,
-  notebookIcon,
-  reportIcon,
-  slidesIcon,
-} from "./studio-icons.ts";
+import { externalLinkIcon } from "./studio-icons.ts";
 
 const props = defineProps<{
   family: string;
@@ -29,16 +21,9 @@ if (!example) {
 
 const notebookTab = {
   key: "notebook",
-  kind: "notebook",
   label: "Notebook",
   technologies: [documentationTechnologies.marimo],
 } as const;
-
-const viewKindIcons = {
-  app: appIcon,
-  report: reportIcon,
-  slides: slidesIcon,
-} satisfies Record<DocumentationExampleKind, IconifyIcon>;
 
 const selectedKey = ref(example.views[0].key);
 const loaded = ref(false);
@@ -51,15 +36,15 @@ const selected = computed(() =>
     ? notebookTab
     : (example.views.find(({ key }) => key === selectedKey.value) ?? example.views[0]),
 );
-const viewHref = (key: string): string => withBase(`/examples/${example.slug}/${key}/index.html`);
-const href = computed(() => viewHref(selected.value.key));
-const notebookName = computed(() => example.notebook.split("/").at(-1));
-const notebookSourceHref = computed(
-  () =>
-    `${documentationExampleSource.repository}/blob/${documentationExampleSource.revision}/${example.notebook}`,
-);
-const viewSourceHref = (key: string): string =>
-  `${documentationExampleSource.repository}/tree/${documentationExampleSource.revision}/${documentationExampleSource.viewProjectsRoot}/${example.slug}/${key}`;
+const href = computed(() => withBase(`/examples/${example.slug}/${selected.value.key}/index.html`));
+// Studio stores view projects under a directory named after the notebook file.
+const viewProjects = example.notebook.replace(/^.*\//, "").replace(/\.py$/, "");
+const sourceHref = computed(() => {
+  const { repository, revision, viewProjectsRoot } = documentationExampleSource;
+  return selected.value.key === notebookTab.key
+    ? `${repository}/blob/${revision}/${example.notebook}`
+    : `${repository}/tree/${revision}/${viewProjectsRoot}/${viewProjects}/${selected.value.key}`;
+});
 const tabId = (key: string): string => `studio-example-${example.slug}-${key}-tab`;
 const panelId = `studio-example-${example.slug}-panel`;
 
@@ -93,6 +78,14 @@ const selectFromKeyboard = (event: KeyboardEvent, key: string): void => {
   requestAnimationFrame(() => document.getElementById(tabId(next.key))?.focus());
 };
 
+// Gallery cards link to the view they were showing through `?view=KEY`.
+onMounted(() => {
+  const requested = new URLSearchParams(window.location.search).get("view");
+  if (requested && example.views.some(({ key }) => key === requested)) {
+    select(requested);
+  }
+});
+
 const markLoaded = (): void => {
   loaded.value = true;
   let pathname: string | undefined;
@@ -104,9 +97,7 @@ const markLoaded = (): void => {
   if (!pathname) {
     return;
   }
-  const active = [notebookTab, ...example.views].find(({ key }) =>
-    pathname.endsWith(`/${example.slug}/${key}/index.html`),
-  );
+  const active = tabs.find(({ key }) => pathname.endsWith(`/${example.slug}/${key}/index.html`));
   if (active) {
     selectedKey.value = active.key;
   }
@@ -114,85 +105,45 @@ const markLoaded = (): void => {
 </script>
 
 <template>
-  <figure class="studio-example">
-    <header class="studio-example__header">
-      <div class="studio-example__heading">
-        <h3>{{ example.title }}</h3>
-      </div>
+  <figure class="studio-example" :aria-label="example.title">
+    <div class="studio-example__rail">
+      <nav aria-label="Switch between the shared notebook and its views" role="tablist">
+        <template v-for="(tab, index) in tabs" :key="tab.key">
+          <span v-if="index === 1" class="studio-example__rule" aria-hidden="true" />
+          <button
+            :id="tabId(tab.key)"
+            type="button"
+            role="tab"
+            :aria-controls="panelId"
+            :aria-selected="tab.key === selected.key"
+            :tabindex="tab.key === selected.key ? 0 : -1"
+            @click="select(tab.key)"
+            @keydown="selectFromKeyboard($event, tab.key)"
+          >
+            {{ tab.label }}
+          </button>
+        </template>
+      </nav>
       <a
+        class="studio-example__open"
         :href="href"
         target="_blank"
         rel="noopener noreferrer"
-        :aria-label="`Open ${selected.label.toLowerCase()} full page`"
-        title="Open full page"
+        :aria-label="`Open ${selected.label} in a new tab`"
+        title="Open in a new tab"
       >
-        <span class="studio-example__open-label">Open full page</span>
-        <Icon :icon="externalLinkIcon" class="studio-example__icon" :aria-hidden="true" />
+        <Icon :icon="externalLinkIcon" :aria-hidden="true" />
       </a>
-      <p class="studio-example__summary">{{ example.summary }}</p>
-    </header>
-
-    <div class="studio-example__switcher">
-      <span class="studio-example__current" role="group" aria-label="Technologies used">
-        <template v-for="(technology, index) in selected.technologies" :key="technology.name">
-          <span v-if="index > 0" class="studio-example__technology-separator" aria-hidden="true">
-            ·
-          </span>
-          <a
-            :href="technology.projectUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            :title="technology.description"
-          >
-            {{ technology.name }}
-          </a>
-        </template>
-      </span>
-      <nav aria-label="Switch between the shared notebook and its views" role="tablist">
-        <button
-          :id="tabId(notebookTab.key)"
-          type="button"
-          class="studio-example__source-tab"
-          role="tab"
-          :aria-controls="panelId"
-          :aria-selected="selected.key === notebookTab.key"
-          :tabindex="selected.key === notebookTab.key ? 0 : -1"
-          @click="select(notebookTab.key)"
-          @keydown="selectFromKeyboard($event, notebookTab.key)"
-        >
-          <Icon :icon="notebookIcon" class="studio-example__icon" :aria-hidden="true" />
-          <span>{{ notebookTab.label }}</span>
-        </button>
-        <span class="studio-example__tab-flow" aria-hidden="true">→</span>
-        <button
-          v-for="view in example.views"
-          :id="tabId(view.key)"
-          :key="view.key"
-          type="button"
-          role="tab"
-          :aria-controls="panelId"
-          :aria-selected="view.key === selected.key"
-          :tabindex="view.key === selected.key ? 0 : -1"
-          @click="select(view.key)"
-          @keydown="selectFromKeyboard($event, view.key)"
-        >
-          <Icon :icon="viewKindIcons[view.kind]" class="studio-example__icon" :aria-hidden="true" />
-          <span>{{ view.label }}</span>
-        </button>
-      </nav>
     </div>
 
     <div
       :id="panelId"
       class="studio-example__viewport"
-      :data-kind="selected.kind"
       :aria-busy="!loaded"
       :aria-labelledby="tabId(selected.key)"
       role="tabpanel"
     >
-      <div v-if="!loaded" class="studio-example__loading" role="status">
-        Starting {{ selected.label.toLowerCase() }}…
-      </div>
+      <div v-if="!loaded" class="studio-example__loading" role="status">Loading…</div>
       <iframe
         :key="frameKey"
         ref="frame"
@@ -207,30 +158,27 @@ const markLoaded = (): void => {
     </div>
 
     <figcaption>
-      <span class="studio-example__source-links">
-        <span class="studio-example__source-prefix">
-          <Icon :icon="githubIcon" class="studio-example__icon" :aria-hidden="true" />
-          <span class="studio-example__source-label">Source</span>
-        </span>
-        <span class="studio-example__source-divider" aria-hidden="true" />
-        <a :href="notebookSourceHref" target="_blank" rel="noopener noreferrer">
-          {{ notebookName }}
-        </a>
-        <span
-          class="studio-example__source-divider studio-example__view-divider"
-          aria-hidden="true"
-        />
-        <span class="studio-example__view-sources">
-          <template v-for="(view, index) in example.views" :key="view.key">
-            <span v-if="index > 0" class="studio-example__source-separator" aria-hidden="true">
-              ·
-            </span>
-            <a :href="viewSourceHref(view.key)" target="_blank" rel="noopener noreferrer">
-              {{ view.label }}
-            </a>
-          </template>
-        </span>
+      <span class="studio-example__technologies" aria-label="Technologies used">
+        <template v-for="(technology, index) in selected.technologies" :key="technology.name">
+          <span v-if="index > 0" aria-hidden="true"> · </span>
+          <a
+            :href="technology.projectUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            :title="technology.description"
+          >
+            {{ technology.name }}
+          </a>
+        </template>
       </span>
+      <a
+        :href="sourceHref"
+        target="_blank"
+        rel="noopener noreferrer"
+        :aria-label="`${selected.label} source on GitHub`"
+      >
+        Source
+      </a>
     </figcaption>
   </figure>
 </template>
@@ -238,154 +186,94 @@ const markLoaded = (): void => {
 <style scoped>
 .studio-example {
   display: grid;
-  height: calc(100vh - var(--vp-nav-height));
-  height: calc(100dvh - var(--vp-nav-height));
+  height: calc(100vh - var(--vp-nav-height) - 2rem);
+  height: calc(100dvh - var(--vp-nav-height) - 2rem);
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  margin: 2rem 0 3rem;
-  scroll-margin-top: var(--vp-nav-height);
-  overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 12px;
-  background: var(--vp-c-bg);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  margin: 2.5rem 0 3rem;
+  scroll-margin-top: calc(var(--vp-nav-height) + 1rem);
 }
 
-.studio-example__header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 2rem;
-  row-gap: 0.45rem;
-  align-items: center;
-  padding: 1.1rem 1.25rem 1rem;
-}
-
-.studio-example__heading {
-  min-width: 0;
-}
-
-.studio-example h3 {
-  margin: 0;
-  border: 0;
-  font-size: 20px;
-  line-height: 28px;
-}
-
-.studio-example__summary {
-  grid-column: 1 / -1;
-  max-width: 44rem;
-  margin: 0;
-  color: var(--vp-c-text-2);
-  font-size: 0.9rem;
-  line-height: 1.55;
-}
-
-.studio-example__header > a {
-  display: inline-flex;
-  gap: 0.35rem;
-  align-items: center;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
-  color: var(--vp-c-text-1);
-  font-size: 0.78rem;
-  font-weight: 500;
-  text-decoration: none;
-  touch-action: manipulation;
-}
-
-.studio-example__header > a:hover {
-  color: var(--vp-c-brand-1);
-}
-
-.studio-example__icon {
-  width: 0.875rem;
-  height: 0.875rem;
-  flex: 0 0 auto;
-}
-
-.studio-example__switcher {
+.studio-example__rail {
   display: flex;
-  gap: 1rem;
+  gap: 1.5rem;
   align-items: center;
   justify-content: space-between;
-  min-height: 2.75rem;
-  padding: 0 1.25rem;
-  border-top: 1px solid var(--vp-c-divider);
-  border-bottom: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg-soft);
+  padding-bottom: 0.75rem;
 }
 
-.studio-example__current {
+.studio-example__rail nav {
   display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.studio-example__rail nav::-webkit-scrollbar {
+  display: none;
+}
+
+.studio-example__rail button {
   flex: 0 0 auto;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-  color: var(--vp-c-text-2);
-  font-size: 12px;
-}
-
-.studio-example__current a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.studio-example__current a:hover {
-  color: var(--vp-c-brand-1);
-}
-
-.studio-example__technology-separator {
-  color: var(--vp-c-text-3);
-}
-
-.studio-example__switcher nav {
-  display: flex;
-  gap: 1.15rem;
-  justify-content: flex-end;
-}
-
-.studio-example__tab-flow {
-  align-self: center;
-  color: var(--vp-c-text-3);
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.72rem;
-}
-
-.studio-example__switcher button {
-  display: inline-flex;
-  gap: 0.35rem;
-  align-items: center;
-  min-height: 2.75rem;
+  padding: 0.25rem 0;
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 0.72rem 0.05rem 0.62rem;
   background: transparent;
   color: var(--vp-c-text-2);
   cursor: pointer;
   font: inherit;
-  font-size: 0.76rem;
+  font-size: 13px;
   font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  text-decoration: underline 1px transparent;
+  text-underline-offset: 7px;
   touch-action: manipulation;
 }
 
-.studio-example__switcher button span {
-  white-space: nowrap;
-}
-
-.studio-example__switcher button:hover {
-  border-bottom-color: var(--vp-c-divider);
+.studio-example__rail button:hover {
   color: var(--vp-c-text-1);
 }
 
-.studio-example__switcher button[aria-selected="true"] {
-  border-bottom-color: var(--vp-c-brand-1);
+.studio-example__rail button[aria-selected="true"] {
+  color: var(--vp-c-text-1);
+  text-decoration-color: currentColor;
+}
+
+.studio-example__rule {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 14px;
+  margin-inline: -0.25rem;
+  background: var(--vp-c-divider);
+}
+
+.studio-example__open {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin-right: -0.5rem;
+  color: var(--vp-c-text-2);
+  touch-action: manipulation;
+}
+
+.studio-example__open:hover {
   color: var(--vp-c-text-1);
 }
 
-.studio-example__switcher button:focus-visible,
-.studio-example__header > a:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--vp-c-brand-1) 45%, transparent);
+.studio-example__open svg {
+  width: 14px;
+  height: 14px;
+}
+
+.studio-example__rail button:focus-visible,
+.studio-example a:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
   outline-offset: 3px;
+  border-radius: 2px;
 }
 
 .studio-example__viewport {
@@ -393,7 +281,9 @@ const markLoaded = (): void => {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+  background: var(--vp-c-bg);
 }
 
 .studio-example__viewport iframe {
@@ -410,168 +300,64 @@ const markLoaded = (): void => {
   z-index: 1;
   display: grid;
   place-content: center;
-  justify-items: center;
-  padding: 2rem;
-  background: var(--vp-c-bg-soft);
+  background: var(--vp-c-bg);
   color: var(--vp-c-text-2);
-  font-size: 14px;
-  text-align: center;
+  font-size: 13px;
 }
 
 figcaption {
   display: flex;
-  gap: 1rem;
-  justify-content: flex-start;
-  padding: 0.65rem 1.25rem;
-  border-top: 1px solid var(--vp-c-divider);
-  color: var(--vp-c-text-3);
-  font-size: 12px;
-}
-
-.studio-example__source-links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.studio-example__source-prefix,
-.studio-example__view-sources {
-  display: inline-flex;
-  align-items: center;
-}
-
-.studio-example__source-prefix {
-  gap: 0.3rem;
-}
-
-.studio-example__source-label {
-  color: var(--vp-c-text-2);
-}
-
-.studio-example__view-sources {
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.studio-example__source-divider {
-  width: 1px;
-  height: 0.85rem;
-  flex: 0 0 auto;
-  background: var(--vp-c-divider);
-}
-
-.studio-example__source-separator {
-  color: var(--vp-c-text-3);
-}
-
-.studio-example__source-links a {
-  display: inline-flex;
-  gap: 0.2rem;
+  gap: 1.5rem;
   align-items: baseline;
+  justify-content: space-between;
+  padding-top: 0.75rem;
   color: var(--vp-c-text-2);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.studio-example__technologies {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+figcaption a {
+  color: inherit;
   text-decoration: none;
 }
 
-.studio-example__source-links a:hover {
-  color: var(--vp-c-brand-1);
+figcaption a:hover {
+  color: var(--vp-c-text-1);
 }
 
 @media (max-width: 720px) {
   .studio-example {
-    height: calc(100svh - var(--vp-nav-height));
-    height: calc(100dvh - var(--vp-nav-height));
-    margin-block: 1.5rem 2.5rem;
-    border-radius: 6px;
+    height: calc(100svh - var(--vp-nav-height) - 1.5rem);
+    height: calc(100dvh - var(--vp-nav-height) - 1.5rem);
+    margin-block: 2rem 2.5rem;
   }
 
-  .studio-example__header {
-    min-height: 3.5rem;
-    column-gap: 0.75rem;
-    row-gap: 0.55rem;
-    padding: 0.4rem 0.75rem;
+  .studio-example__rail {
+    gap: 0.5rem;
   }
 
-  .studio-example__header > a {
+  /* Labels can outgrow a phone width. The faded edge shows that the tabs scroll. */
+  .studio-example__rail nav {
+    gap: 1rem;
+    padding-right: 1.5rem;
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+
+  .studio-example__rail button {
+    min-height: 2.75rem;
+  }
+
+  .studio-example__open {
     width: 2.75rem;
     height: 2.75rem;
-    justify-content: center;
-  }
-
-  .studio-example__open-label {
-    display: none;
-  }
-
-  .studio-example__summary {
-    display: none;
-  }
-
-  .studio-example h3 {
-    font-size: 1.1rem;
-  }
-
-  .studio-example__source-label {
-    display: none;
-  }
-
-  .studio-example__switcher {
-    display: flex;
-    padding: 0 0.5rem;
-  }
-
-  .studio-example__current {
-    display: none;
-  }
-
-  .studio-example__switcher nav {
-    width: 100%;
-    gap: 0.125rem;
-    justify-content: space-between;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .studio-example__switcher nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .studio-example__switcher button {
-    flex: 0 0 auto;
-  }
-
-  figcaption {
-    display: block;
-    min-height: 2.5rem;
-    overflow-x: auto;
-    padding: 0.4rem 0.75rem;
-    scrollbar-width: none;
-  }
-
-  figcaption::-webkit-scrollbar {
-    display: none;
-  }
-
-  .studio-example__source-links {
-    width: max-content;
-    min-height: 1.7rem;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-  }
-
-  .studio-example__view-divider {
-    display: block;
-  }
-
-  .studio-example__view-sources {
-    flex-wrap: nowrap;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .studio-example *,
-  .studio-example *::before,
-  .studio-example *::after {
-    scroll-behavior: auto !important;
+    margin-right: -0.75rem;
   }
 }
 </style>

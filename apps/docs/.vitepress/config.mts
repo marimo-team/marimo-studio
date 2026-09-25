@@ -34,7 +34,8 @@ const canonicalUrl = (page: string): string => {
 // SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
 // are loaded and executed by this VitePress version during every docs build.
 const llmsPlugins = llmstxt({
-  domain: siteUrl.href.replace(/\/$/, ""),
+  // The plugin appends the VitePress base, so the domain is the site origin.
+  domain: siteUrl.origin,
   excludeIndexPage: false,
 }) as [Plugin, Plugin];
 const viteConfig: UserConfig["vite"] = {
@@ -114,6 +115,7 @@ export default defineConfig({
     nav: [
       { text: "Overview", link: routes.whatIsStudio },
       { text: "Guide", link: routes.guide.index },
+      { text: "Agents", link: routes.guide.codingAgents },
       { text: "Examples", link: routes.examples.index },
       { text: "Reference", link: routes.reference.index },
       { text: "Project", items: projectItems },

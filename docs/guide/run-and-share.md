@@ -249,7 +249,7 @@ The WebAssembly export contains saved notebook source and starts Python through
 Pyodide in each visitor's browser. Its packages, data sources, scripts,
 workers, and remote assets must be reachable from that browser.
 
-## Export the analytical notebook
+## Export the notebook
 
 Create a static record of notebook code and captured output:
 

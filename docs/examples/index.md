@@ -1,33 +1,23 @@
 ---
 title: Examples
-description: Compare nine live views backed by three Marimo notebooks.
+description: Compare twelve live views backed by four Marimo notebooks.
 sidebar: false
 aside: false
 outline: false
 pageClass: studio-example-page
 ---
 
-# One notebook, many views
+# Examples
 
-Three notebooks back nine live views. Open a family to compare the same
-analysis as a report, explorer, story, map, monitor, model review, or deck.
+Four notebooks back twelve live views. Open a family to compare one analysis
+presented as a lecture, explainer, lab, report, explorer, story, map, monitor,
+model review, or deck.
 
-<div class="studio-example-catalog">
-  <a href="./athletes">
-    <strong>Rio 2016 athletes</strong>
-    <p>A publication report, linked Mosaic explorer, and Three.js briefing.</p>
-    <small>Vanilla HTML · Svelte · Mosaic · Three.js</small>
-  </a>
-  <a href="./earthquakes">
-    <strong>Earthquake watch</strong>
-    <p>A scroll-driven story, an operations map, and a briefing deck.</p>
-    <small>Observable Plot · MapLibre · Reveal.js</small>
-  </a>
-  <a href="./occupancy">
-    <strong>Building occupancy</strong>
-    <p>A facilities monitor, interactive model review, and printable field report.</p>
-    <small>Notebook Kit · Observable Plot · Recharts · React PDF</small>
-  </a>
+<div class="studio-example-gallery">
+  <StudioExampleCard family="quadratic-programs">A lecture deck, a reading explainer, and an interactive geometry lab.</StudioExampleCard>
+  <StudioExampleCard family="athletes">A publication report, a linked Mosaic explorer, and a Three.js briefing.</StudioExampleCard>
+  <StudioExampleCard family="earthquakes">A scroll-driven story, an operations map, and a briefing deck.</StudioExampleCard>
+  <StudioExampleCard family="occupancy">A facilities monitor, an interactive model review, and a printable field report.</StudioExampleCard>
 </div>
 
 ## Run an example locally
@@ -35,10 +25,10 @@ analysis as a report, explorer, story, map, monitor, model review, or deck.
 From the repository root, open one example notebook:
 
 ```console
-uv run marimo edit examples/athletes.py --sandbox
+uv run marimo edit examples/quadratic_program.py --sandbox
 ```
 
-Replace `athletes.py` with `earthquakes.py` or `occupancy.py` to open another
-family. Studio discovers the view projects stored beside each notebook. The
+Replace `quadratic_program.py` with `athletes.py`, `earthquakes.py`, or
+`occupancy.py` to open another family. Studio discovers the view projects stored beside each notebook. The
 examples fetch pinned datasets and can load fonts, maps, or remote modules
 declared by their view source.
