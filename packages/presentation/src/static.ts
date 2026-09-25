@@ -13,6 +13,7 @@ import {
   mountConfiguredRuntime,
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator.ts";
+import "./runtime/style.css";
 
 declare global {
   interface Window {
