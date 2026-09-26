@@ -1,6 +1,6 @@
 [project]
 name = "marimo-studio"
-version = "0.1.6"
+version = "0.2.0"
 description = "Custom views for Marimo notebooks"
 readme = "README.md"
 license = "Apache-2.0"

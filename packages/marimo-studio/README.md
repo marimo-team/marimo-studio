@@ -4,7 +4,7 @@ Marimo Studio turns one [marimo](https://marimo.io/) notebook into reports,
 apps, and presentations. Keep data, computation, and controls in Python.
 Shape each view for its audience, by hand or with a coding agent.
 
-Marimo Studio 0.1 is experimental. Pin Studio and third-party view providers in
+Marimo Studio is experimental. Pin Studio and third-party view providers in
 saved projects.
 
 ## Get started
