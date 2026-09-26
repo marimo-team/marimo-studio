@@ -1,0 +1,65 @@
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ReportFrame.tsx
+  s_ff72e508592faa::t_9a4d15eeec6f3e 1,10-17,73-125
+  s_ff72e508592faa::t_a45057d4f34f93 6
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ExecutivePage.tsx
+  s_ff72e508592faa::t_e7e37d4cec8977 96-100
+  s_ff72e508592faa::t_a45057d4f34f93 3-9,93-95,101-103
+  s_ff72e508592faa::t_7afca81cdd1f27 41
+examples/__marimo__/studio/occupancy/pdf-report/src/report/OccupancyVisuals.tsx
+  s_ff72e508592faa::t_a45057d4f34f93 3,9,12,45,50-51,116,121,123
+  s_ff72e508592faa::t_26c01dd2eeec9e 10-11,44,52
+examples/__marimo__/studio/occupancy/pdf-report/src/style.css
+  s_ff72e508592faa::t_723a06b77711d0 90-91
+  s_ff72e508592faa::t_d52906803b4592 3,79,88,114,126-127,243,258
+examples/__marimo__/studio/occupancy/pdf-report/src/install-report-fonts.ts
+  s_ff72e508592faa::t_d52906803b4592 2,4,6,18
+  s_ff72e508592faa::t_11948726a20aec 12-16,20,22-23
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ModelVisuals.tsx
+  s_ff72e508592faa::t_a45057d4f34f93 12,55-59,178-182
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ModelPage.tsx
+  s_ff72e508592faa::t_e7e37d4cec8977 33-37,174-176
+  s_ff72e508592faa::t_ed887e81f6224c 31,161
+  s_ff72e508592faa::t_ba32b847017c22 12
+  s_ff72e508592faa::t_d4e20f2e8231f7 10-11,13-17,30,32,38-39,74,80,84,88,93,96-98,213
+examples/__marimo__/studio/occupancy/pdf-report/src/report/EnvironmentPage.tsx
+  s_ff72e508592faa::t_e8fb1349c5a1c8 226-228
+  s_ff72e508592faa::t_ba32b847017c22 189,198,201
+examples/__marimo__/studio/occupancy/pdf-report/deno.json
+  s_ff72e508592faa::t_d52906803b4592 21
+examples/__marimo__/studio/occupancy/pdf-report/scripts/sync-fonts.ts
+  s_ff72e508592faa::t_d52906803b4592 1-2,5,8,15-18
+examples/__marimo__/studio/occupancy/pdf-report/AGENTS.md
+  s_ff72e508592faa::t_e7e37d4cec8977 22,38-41,43
+examples/__marimo__/studio/occupancy/pdf-report/DESIGN.md
+  s_ff72e508592faa::t_e7e37d4cec8977 14-16,44-50
+examples/__marimo__/studio/occupancy/pdf-report/src/report/OccupancyReport.tsx
+  s_ff72e508592faa::t_11948726a20aec 10,14,16-18,28
+examples/__marimo__/studio/occupancy/pdf-report/src/report/theme.ts
+  s_ff72e508592faa::t_9a4d15eeec6f3e 21-22,24-28,33-40
+  s_ff72e508592faa::t_d52906803b4592 16-17,20,23
+  s_ff72e508592faa::t_11948726a20aec 14
+  s_ff72e508592faa::t_ba32b847017c22 29-32
+examples/__marimo__/studio/occupancy/pdf-report/public/fonts/INTER-LICENSE.txt
+  s_ff72e508592faa::t_d52906803b4592 1-93
+examples/__marimo__/studio/occupancy/pdf-report/src/report/styles.ts
+  s_ff72e508592faa::t_ed887e81f6224c 10,34,43,45,92,94
+  s_ff72e508592faa::t_7afca81cdd1f27 3
+  s_ff72e508592faa::t_a45057d4f34f93 150-154
+  s_ff72e508592faa::t_9a4d15eeec6f3e 36-39,50,52,63,66-68,70,72-73,76,111,114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a6ed4b5ad9cf446679099ab2d1f69d0859771d90",
+  "prompts": {},
+  "sessions": {
+    "s_ff72e508592faa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac81956a-eead-41c3-95bd-cad8b7d9b2e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
