@@ -27,9 +27,9 @@ validation do not update the live notebook session.
 Obtain its URL in code mode:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-view = studio_agent.current_workspace().view("dashboard")
+view = marimo_studio.agent.current_workspace().view("dashboard")
 print(await view.preview_url(runtime="server"))
 ```
 

@@ -72,7 +72,7 @@ Follow the installed Studio skill's `references/projections.md` for the shared
 contract:
 
 ```python
-import marimo_studio.agent
+import marimo_studio
 
 print(marimo_studio.agent.skill().file("references/projections.md").read_text())
 ```

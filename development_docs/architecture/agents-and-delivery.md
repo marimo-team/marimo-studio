@@ -15,10 +15,17 @@ These discovery operations are passive. The core skill owns the cross-provider
 authoring workflow, references own conditional detail, and each view's
 `AGENTS.md` owns its provider and project conventions.
 
-```python
-import marimo_studio.agent as studio_agent
+Marimo owns the connection to the notebook kernel. The `marimo.agent.capability`
+entry point registers `marimo_studio.agent` as the `studio` capability, so
+`help(marimo._code_mode)` leads an agent to Studio's help. The editor bridge
+attaches the calling session and notebook on both code-mode routes:
+`/api/ai/chat` for the chat sidebar and `/api/kernel/execute` for
+`marimo pair execute`.
 
-workspace = studio_agent.current_workspace()
+```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
 view = await workspace.create_view(
     "dashboard",
     starter="marimo-studio/vanilla:default",
@@ -31,9 +38,9 @@ Acquire workspace and view handles again in each code-mode execution. After
 building, use a separate execution to show the view and get its browser URL:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-view = studio_agent.current_workspace().view("dashboard")
+view = marimo_studio.agent.current_workspace().view("dashboard")
 await view.show()
 url = await view.preview_url(runtime="server")
 ```

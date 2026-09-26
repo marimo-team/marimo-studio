@@ -28,28 +28,25 @@ environment and Studio installation remain unchanged.
 
 ## Bind to the intended notebook
 
-Live Studio work runs in the notebook's kernel through Marimo code mode. Two
-hosts provide it:
+Live Studio work runs in the notebook's kernel through Marimo code mode.
+Marimo's chat sidebar in **Code Mode** already runs there. A terminal agent
+sends each execution through `marimo pair execute`. Run
+`uvx marimo@latest pair --help` for server discovery, notebook selection, and
+authentication, then run each Python example below as one execution.
 
-- Marimo's chat sidebar in **Code Mode** already runs the agent in the
-  notebook's kernel.
-- An external agent pairs with a running notebook through the `marimo-pair`
-  skill, which owns finding, starting, and connecting to notebook servers and
-  executing code in them.
-
-Studio adds one requirement to either host. The Marimo server must run with
-`marimo-studio` installed, for example through `uvx --with marimo-studio` or
-the notebook project's dependencies. Sandboxed kernels then import the same
-Studio as the server. When neither host is connected, ask the user to open the
-notebook in Studio and connect one. Saved-notebook authoring continues from a
-terminal as described below.
+Studio adds one requirement. The Marimo server must run with `marimo-studio`
+installed, for example through `uvx --with marimo-studio` or the notebook
+project's dependencies. `help(marimo._code_mode)` then lists Studio as the
+`studio` capability, and sandboxed kernels import the same Studio as the
+server. Without a running notebook, ask the user to open it in Studio, or
+continue with saved-notebook authoring from a terminal as described below.
 
 Inside notebook code mode, combine connection with the first inspection:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 status = await workspace.status()
 print(status)
 ```
@@ -99,9 +96,9 @@ Use the requested name in place of `dashboard`. Finish that execution, then
 activate the view in a fresh code-mode call:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-await studio_agent.current_workspace().view("dashboard").show()
+await marimo_studio.agent.current_workspace().view("dashboard").show()
 ```
 
 `show()` activates the user's Studio tab. If build or activation fails, repair
@@ -113,9 +110,9 @@ view's preview URL to open the result.
 Acquire the view and inspect its editable documents:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 view = workspace.view("dashboard")
 inspection = await view.inspect()
 print(inspection.root)
@@ -214,9 +211,9 @@ contract. These conventions apply even when Lens is not installed.
 After editing, build and check source freshness in the same call:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-view = studio_agent.current_workspace().view("dashboard")
+view = marimo_studio.agent.current_workspace().view("dashboard")
 build = await view.build()
 inspection = await view.inspect()
 print(build.revision, inspection.freshness)
@@ -264,7 +261,7 @@ performed. Keep the notebook and view runnable.
 Read a packaged reference from the same installation:
 
 ```python
-import marimo_studio.agent
+import marimo_studio
 
 print(marimo_studio.agent.skill().file("references/projections.md").read_text())
 ```

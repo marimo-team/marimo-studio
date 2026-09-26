@@ -25,9 +25,18 @@ runs.
 
 ## Ask for a view
 
-[Open your notebook in Studio](getting-started.md), then use Marimo's AI sidebar
-in **Code Mode (beta)** or connect your agent through **Settings → Pair with an
-agent**. Code mode lets the agent run Python in the live notebook kernel.
+[Open your notebook in Studio](getting-started.md), then connect an agent to
+its kernel. Marimo's AI sidebar runs the agent there in **Code Mode (beta)**. A
+terminal agent such as Claude Code or Codex pairs through the `marimo pair`
+command, which finds running notebooks and runs the agent's Python in the
+notebook kernel:
+
+```console
+claude "Pair with me on my running marimo notebook analysis.py. Run \`uvx marimo@latest pair --help\` first."
+```
+
+Code mode lists Studio among the capabilities installed with the notebook, so
+the agent reads the briefing for the Studio version the notebook runs.
 
 Give the agent an audience, a task, and a result to check:
 
@@ -49,9 +58,9 @@ For agent authors and integrations, the live API begins with the current
 workspace. Run this in one code-mode execution:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 notebook = await workspace.inspect_notebook()
 for cell in notebook.cells:
     print(cell.name, cell.definitions, cell.has_output_expression)
@@ -66,9 +75,9 @@ browser result are separate evidence.
 After authoring and building `briefing`, show it in a new code-mode execution:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-view = studio_agent.current_workspace().view("briefing")
+view = marimo_studio.agent.current_workspace().view("briefing")
 await view.show()
 print(await view.preview_url(runtime="server"))
 ```
@@ -89,9 +98,9 @@ and records. The installed skill supplies the complete authoring workflow and
 references for source edits, projections, verification, and delivery:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-print(studio_agent.skill().file("references/verification.md").read_text())
+print(marimo_studio.agent.skill().file("references/verification.md").read_text())
 ```
 
 ## Select results with Marimo Lens
