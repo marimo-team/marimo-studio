@@ -1,0 +1,51 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/starters/default/files/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 121
+examples/__marimo__/studio/quadratic_program/lecture/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 131
+README.md
+  s_d90006552dfb6e::t_00bd40c22334fc 71
+skills/marimo-studio/references/verification.md
+  s_d90006552dfb6e::t_00bd40c22334fc 30,32
+docs/reference/python-api.md
+  s_d90006552dfb6e::t_16462084ce7f9f 486,489
+  s_d90006552dfb6e::t_666c5393b16c49 487-488
+  s_d90006552dfb6e::t_00bd40c22334fc 512,514,531,533,542,544
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 156
+development_docs/architecture/agents-and-delivery.md
+  s_d90006552dfb6e::t_07000895f2c10a 26,28,41,43
+skills/marimo-studio/SKILL.md
+  s_d90006552dfb6e::t_07000895f2c10a 47,49,99,101,113,115,214,216,264
+docs/guide/coding-agents.md
+  s_d90006552dfb6e::t_07000895f2c10a 61,63,78,80,101,103
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/default/files/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 118
+packages/marimo-studio/README.md
+  s_d90006552dfb6e::t_00bd40c22334fc 39
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_obsnotebook/starters/default/files/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 75
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 133
+examples/__marimo__/studio/quadratic_program/explainer/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 136
+skills/marimo-studio/references/setup.md
+  s_d90006552dfb6e::t_07000895f2c10a 9
+examples/__marimo__/studio/quadratic_program/lab/AGENTS.md
+  s_d90006552dfb6e::t_00bd40c22334fc 131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "78e6d1df4421d2d1c081173d6ba30d0e54576ad2",
+  "prompts": {},
+  "sessions": {
+    "s_d90006552dfb6e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61a2b652-3e66-4b6f-b224-724eda313f96",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
