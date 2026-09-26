@@ -4,17 +4,26 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Quadratic Programming · A Visual Explainer</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/newsreader@5/index.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5/index.css">
     <style>
+      /* Projected Markdown sets headings at the text weight. A family whose
+         only face is Geist SemiBold gives them heading weight through the
+         heading font token. */
+      @font-face {
+        font-display: swap;
+        font-family: "Geist Heading";
+        font-weight: 100 900;
+        src: url("https://cdn.jsdelivr.net/npm/@fontsource/geist@5/files/geist-latin-600-normal.woff2") format("woff2");
+      }
+
       :root {
-        --paper: #faf9f6;
-        --ink: #1b1d22;
-        --muted: #6b6f76;
-        --rule: #e5e2dc;
-        --accent: #b33a2e;
-        --text-font: "Inter Variable", system-ui, sans-serif;
-        --heading-font: "Newsreader Variable", Georgia, serif;
+        --paper: #ffffff;
+        --ink: #171717;
+        --muted: #666666;
+        --rule: #ebebeb;
+        --data: #b33a2e;
+        --text-font: "Geist Variable", system-ui, sans-serif;
+        --heading-font: "Geist Heading", var(--text-font);
         color-scheme: light;
       }
 
@@ -29,7 +38,7 @@
         --marimo-cell-font: var(--text-font);
         --marimo-cell-heading-font: var(--heading-font);
         --marimo-cell-foreground: var(--ink);
-        --marimo-cell-accent: var(--accent);
+        --marimo-cell-accent: var(--ink);
         --marimo-cell-background: transparent;
         --marimo-cell-padding: 0;
         --marimo-cell-content-width: 100%;
@@ -38,62 +47,59 @@
       #app-shell {
         box-sizing: border-box;
         margin: 0 auto;
-        max-width: 76rem;
-        padding: 5rem 2rem 6rem;
+        max-width: 75rem;
+        padding: 4.5rem 2rem 6rem;
       }
 
       .masthead {
-        margin-bottom: 4.5rem;
+        margin-bottom: 4rem;
         max-width: 46rem;
       }
 
-      .kicker {
+      .context {
         color: var(--muted);
-        font-size: 0.75rem;
-        letter-spacing: 0.14em;
-        margin: 0 0 1.25rem;
-        text-transform: uppercase;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        margin: 0 0 0.75rem;
       }
 
       h1 {
-        font: 400 clamp(2.5rem, 5vw, 3.75rem) / 1.04 var(--heading-font);
-        letter-spacing: -0.015em;
-        margin: 0 0 1.5rem;
+        font: 600 clamp(2.25rem, 4.5vw, 3rem) / 1.08 var(--text-font);
+        letter-spacing: -0.045em;
+        margin: 0 0 1rem;
         text-wrap: balance;
       }
 
       .lede {
         color: var(--muted);
-        font-size: 1.1875rem;
-        line-height: 1.55;
+        font-size: 1.125rem;
+        line-height: 1.6;
         margin: 0;
-        max-width: 40rem;
+        max-width: 38rem;
       }
 
       .explainer {
         align-items: start;
         display: grid;
-        gap: 5rem;
+        gap: 4.5rem;
         grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
       }
 
       .reading {
         display: grid;
-        gap: 3rem;
+        gap: 2.5rem;
       }
 
       .workbench {
         display: grid;
-        gap: 1.75rem;
+        gap: 2rem;
         position: sticky;
         top: 2rem;
       }
 
       .controls {
-        border-bottom: 1px solid var(--rule);
         display: grid;
-        gap: 0.75rem;
-        padding-bottom: 1.5rem;
+        gap: 1rem;
       }
 
       .figure {
@@ -109,25 +115,24 @@
       }
 
       .duals caption {
-        color: var(--muted);
-        font-size: 0.75rem;
-        letter-spacing: 0.14em;
-        padding-bottom: 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        padding-bottom: 0.5rem;
         text-align: left;
-        text-transform: uppercase;
       }
 
       .duals th,
       .duals td {
-        border-top: 1px solid var(--rule);
-        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--rule);
+        padding: 0.625rem 0;
         text-align: left;
+        vertical-align: baseline;
       }
 
       .duals th {
         color: var(--muted);
-        font-size: 0.8125rem;
-        font-weight: 500;
+        font-size: 0.875rem;
+        font-weight: 400;
       }
 
       .duals :is(th, td):nth-child(2) {
@@ -139,24 +144,36 @@
         padding-left: 2rem;
       }
 
+      .duals td {
+        color: var(--muted);
+      }
+
       .duals tr[data-active="true"] td {
-        color: var(--accent);
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      /* The figure marks active walls in the notebook's data color, so the
+         status names them in the same color. */
+      .duals tr[data-active="true"] td:last-child {
+        color: var(--data);
       }
 
       .sensitivity {
-        border-top: 1px solid var(--rule);
         display: grid;
         gap: 2rem;
-        margin-top: 7rem;
+        margin-top: 8rem;
         max-width: 50rem;
-        padding-top: 3.5rem;
       }
 
       .closing {
-        border-top: 1px solid var(--rule);
-        margin-top: 5rem;
+        margin-top: 6rem;
         max-width: 50rem;
-        padding-top: 3.5rem;
+      }
+
+      .sensitivity > marimo-cell[name="sensitivity_context"],
+      .closing > marimo-cell {
+        max-width: 38rem;
       }
 
       @media (max-width: 960px) {
@@ -173,13 +190,21 @@
           order: -1;
           position: static;
         }
+
+        .sensitivity {
+          margin-top: 5rem;
+        }
+
+        .closing {
+          margin-top: 4rem;
+        }
       }
     </style>
   </head>
   <body>
     <main id="app-shell">
       <header class="masthead">
-        <p class="kicker">Convex optimization</p>
+        <p class="context">Convex optimization</p>
         <h1>Quadratic programming</h1>
         <p class="lede">
           A quadratic program minimizes a convex quadratic objective subject to

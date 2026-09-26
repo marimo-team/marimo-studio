@@ -6,29 +6,32 @@ the figure and the solution stay in view.
 
 ## Direction
 
-Quiet and exact, like a well-set textbook page. White space and alignment carry
-the structure. One accent marks the solution, and nothing else competes with
-it.
+Monochrome and precise, like a well-made developer tool. Typography, alignment,
+and spacing carry the structure on a white canvas, with hairlines only inside
+tables. Controls stay black. The only color is the notebook's data red, which
+marks the solution and its active walls in the figures and the dual-value
+table. This sets the Explainer apart from the warm textbook pages of the
+Lecture and Lab.
 
 ## Tokens
 
-| Token  | Value     | Use                                            |
-| ------ | --------- | ---------------------------------------------- |
-| paper  | `#faf9f6` | Page background                                |
-| ink    | `#1b1d22` | Text, primary lines, the bottom of the bowl    |
-| muted  | `#6b6f76` | Secondary text and captions                    |
-| rule   | `#e5e2dc` | Hairlines and table borders                    |
-| accent | `#b33a2e` | The solution, active walls, and contact curves |
-| region | `#eef0f3` | The feasible region in the notebook's figures  |
-| level  | `#9aa0a8` | Level curves and inactive walls in the figures |
+| Token | Value     | Use                                                   |
+| ----- | --------- | ----------------------------------------------------- |
+| paper | `#ffffff` | Page background                                       |
+| ink   | `#171717` | Text, controls, and active dual rows                  |
+| muted | `#666666` | Secondary text, labels, and inactive dual rows        |
+| rule  | `#ebebeb` | Table hairlines                                       |
+| data  | `#b33a2e` | The notebook's solution color, reused for active rows |
 
-The notebook's figures draw with ink, accent, region, and level. Keep those
-colors aligned with the notebook.
+The notebook's figures draw on a transparent background with their own ink,
+accent, region, and level colors. Keep `data` aligned with the notebook's
+accent.
 
 ## Type
 
-- Headings: Newsreader, regular weight, tight leading.
-- Text and controls: Inter.
+- Everything in Geist: semibold headings with tight tracking, regular text,
+  sentence-case labels.
+- Math: the notebook's rendered notation.
 - Values: tabular figures so digits align while controls change.
 
 ## Layout
