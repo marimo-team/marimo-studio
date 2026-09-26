@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/cli/test_documentation_examples.py
+  s_ff72e508592faa::t_cd671ac0217ff7 1,35-36,40-46,50-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c1289f0622e593132ee8df36095991c3093b295c",
+  "prompts": {},
+  "sessions": {
+    "s_ff72e508592faa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac81956a-eead-41c3-95bd-cad8b7d9b2e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
