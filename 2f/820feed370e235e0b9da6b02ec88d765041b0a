@@ -1,0 +1,21 @@
+apps/docs/.vitepress/config.mts
+  s_ff72e508592faa::t_f52b68e106a7db 93
+docs/examples/index.md
+  s_ff72e508592faa::t_f52b68e106a7db 3,12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2f820feed370e235e0b9da6b02ec88d765041b0a",
+  "prompts": {},
+  "sessions": {
+    "s_ff72e508592faa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac81956a-eead-41c3-95bd-cad8b7d9b2e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
