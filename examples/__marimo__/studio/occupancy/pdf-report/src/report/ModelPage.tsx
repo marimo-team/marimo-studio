@@ -7,7 +7,14 @@ import {
   ThresholdChart,
 } from "./ModelVisuals.tsx";
 import { styles } from "./styles.ts";
-import { formatPercent, formatTimestamp, palette, typefaces } from "./theme.ts";
+import {
+  capInset,
+  capTop,
+  formatPercent,
+  formatTimestamp,
+  palette,
+  typefaces,
+} from "./theme.ts";
 import type { OccupancyReportData, ReportError } from "./types.ts";
 
 const formatPercentile = (quantile: number): string => {
@@ -19,6 +26,16 @@ const formatPercentile = (quantile: number): string => {
     : suffixes[percentile % 10] ?? "th";
   return `${percentile}${suffix}`;
 };
+
+// Rows center their capitals and the score glyph on one axis.
+const ROW_HEIGHT = 18;
+const CELL_SIZE = 6.5;
+const cell = {
+  fontSize: CELL_SIZE,
+  lineHeight: 1,
+  marginTop: capInset(CELL_SIZE, ROW_HEIGHT),
+};
+const GLYPH_HEIGHT = 10;
 
 const ErrorTable = ({
   errors,
@@ -54,35 +71,31 @@ const ErrorTable = ({
         key={`${String(row.date)}-${row.outcome}`}
         style={{
           flexDirection: "row",
-          alignItems: "center",
-          minHeight: 20,
+          height: ROW_HEIGHT,
           borderBottomWidth: 0.6,
           borderBottomColor: palette.rule,
         }}
       >
         <Text
-          style={{
+          style={[cell, {
             flex: 1.45,
             fontFamily: typefaces.body,
-            fontSize: 6.4,
             fontWeight: 500,
-          }}
+          }]}
         >
           {formatTimestamp(row.date)}
         </Text>
-        <Text style={{ flex: 1.2, color: palette.orange, fontSize: 6.5 }}>
+        <Text style={[cell, { flex: 1.2, color: palette.orange }]}>
           {row.outcome === "false positive"
             ? "false alert"
             : "missed occupancy"}
         </Text>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginTop: (ROW_HEIGHT - GLYPH_HEIGHT) / 2 }}>
           <ScoreGlyph score={row.score} threshold={threshold} />
         </View>
-        <Text style={{ flex: 0.62, fontSize: 6.5 }}>{row.CO2.toFixed(0)}</Text>
-        <Text style={{ flex: 0.62, fontSize: 6.5 }}>
-          {row.Light.toFixed(0)}
-        </Text>
-        <Text style={{ flex: 0.58, fontSize: 6.5 }}>
+        <Text style={[cell, { flex: 0.62 }]}>{row.CO2.toFixed(0)}</Text>
+        <Text style={[cell, { flex: 0.62 }]}>{row.Light.toFixed(0)}</Text>
+        <Text style={[cell, { flex: 0.58 }]}>
           {row.Temperature.toFixed(1)}°
         </Text>
       </View>
@@ -145,7 +158,7 @@ export const ModelPage = ({ report }: { report: OccupancyReportData }) => {
         <ThresholdChart model={model} showRecall={hasOccupiedReadings} />
       </View>
 
-      <View style={{ marginTop: 11 }}>
+      <View style={{ marginTop: 16 }}>
         <TwoColumn
           gap={18}
           left={
@@ -158,7 +171,9 @@ export const ModelPage = ({ report }: { report: OccupancyReportData }) => {
             </View>
           }
           right={
-            <View style={[styles.panel, { minHeight: 112 }]}>
+            <View
+              style={[styles.panel, { minHeight: 112, marginTop: capTop(6.2) }]}
+            >
               <Text style={styles.panelLabel}>CLASSIFICATION ERRORS</Text>
               <Text
                 style={{
@@ -195,7 +210,7 @@ export const ModelPage = ({ report }: { report: OccupancyReportData }) => {
 
       <Text style={[styles.caption, { marginTop: 4 }]}>
         Data: Luis Candanedo, UCI Occupancy Detection training split (CC BY
-        4.0). Analysis: Building Occupancy Marimo notebook. Document: React PDF
+        4.0). Analysis: Building Occupancy marimo notebook. Document: React PDF
         4.8.1.
       </Text>
     </Page>

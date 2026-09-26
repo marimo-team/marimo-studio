@@ -1,6 +1,12 @@
 import { Page, Text, View } from "@react-pdf/renderer";
 
-import { Metric, SectionHeading, Topline, TwoColumn } from "./ReportFrame.tsx";
+import {
+  Legend,
+  Metric,
+  SectionHeading,
+  Topline,
+  TwoColumn,
+} from "./ReportFrame.tsx";
 import { OccupancyDial, OccupancyTimeline } from "./OccupancyVisuals.tsx";
 import { styles } from "./styles.ts";
 import {
@@ -32,8 +38,7 @@ export const ExecutivePage = ({ report }: { report: OccupancyReportData }) => {
         }}
       >
         <View style={{ flex: 1 }}>
-          <Text style={styles.orangePill}>{report.period.scope_label}</Text>
-          <Text style={[styles.pageTitle, { marginTop: 10, fontSize: 42 }]}>
+          <Text style={[styles.pageTitle, { marginTop: 6 }]}>
             {hasOccupiedReadings ? "Room use summary" : (
               <>
                 Vacant-period{"\n"}summary
@@ -85,27 +90,17 @@ export const ExecutivePage = ({ report }: { report: OccupancyReportData }) => {
         />
         <View style={styles.panel}>
           <OccupancyTimeline rows={report.hourly} />
-          <View style={{ flexDirection: "row", gap: 18, marginTop: 1 }}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
-            >
-              <View
-                style={{
-                  width: 13,
-                  height: 5,
-                  backgroundColor: palette.orange,
-                }}
-              />
-              <Text style={styles.caption}>Occupancy share</Text>
-            </View>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
-            >
-              <View
-                style={{ width: 13, height: 1.5, backgroundColor: palette.ink }}
-              />
-              <Text style={styles.caption}>Mean CO2</Text>
-            </View>
+          <View style={{ marginTop: 6 }}>
+            <Legend
+              items={[
+                {
+                  label: "Occupancy share",
+                  color: palette.orange,
+                  mark: "bar",
+                },
+                { label: "Mean CO2", color: palette.ink, mark: "line" },
+              ]}
+            />
           </View>
         </View>
       </View>

@@ -1,13 +1,13 @@
 import { StyleSheet } from "@react-pdf/renderer";
 
-import { palette, typefaces } from "./theme.ts";
+import { baselineGap, palette, typefaces } from "./theme.ts";
 
 export const styles = StyleSheet.create({
   page: {
     position: "relative",
     paddingTop: 30,
     paddingRight: 34,
-    paddingBottom: 40,
+    paddingBottom: 34,
     paddingLeft: 34,
     backgroundColor: palette.paper,
     color: palette.ink,
@@ -31,23 +31,25 @@ export const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   pageTitle: {
-    marginTop: 24,
+    marginTop: 22,
     fontFamily: typefaces.display,
-    fontSize: 33,
-    lineHeight: 0.98,
-    letterSpacing: -1.2,
+    fontSize: 34,
+    fontWeight: 500,
+    lineHeight: 1.04,
+    letterSpacing: -1.3,
   },
   pageLead: {
     width: "68%",
-    marginTop: 10,
+    marginTop: 12,
     color: palette.slate,
-    fontSize: 10,
+    fontSize: 9.5,
     lineHeight: 1.45,
   },
   sectionHeading: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "flex-end",
     justifyContent: "space-between",
+    gap: 24,
     marginBottom: 10,
   },
   sectionIndex: {
@@ -58,14 +60,20 @@ export const styles = StyleSheet.create({
     letterSpacing: 0.85,
   },
   sectionTitle: {
-    marginTop: 2,
+    marginTop: 3,
     fontFamily: typefaces.display,
     fontSize: 15,
+    fontWeight: 500,
+    letterSpacing: -0.3,
+    lineHeight: 1.2,
   },
+  // The note shares the title's baseline.
   sectionNote: {
-    maxWidth: 170,
+    maxWidth: 240,
+    marginBottom: baselineGap(15, 1.2) - baselineGap(7, 1.3),
     color: palette.fog,
     fontSize: 7,
+    lineHeight: 1.3,
     textAlign: "right",
   },
   rule: {
@@ -81,9 +89,9 @@ export const styles = StyleSheet.create({
   metric: {
     flexGrow: 1,
     flexBasis: 0,
-    paddingTop: 11,
+    paddingTop: 10,
     paddingRight: 10,
-    paddingBottom: 12,
+    paddingBottom: 11,
     paddingLeft: 10,
     borderRightWidth: 0.6,
     borderRightColor: palette.rule,
@@ -100,9 +108,10 @@ export const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   metricValue: {
-    marginTop: 4,
+    marginTop: 6,
     fontFamily: typefaces.display,
     fontSize: 21,
+    letterSpacing: -0.4,
     lineHeight: 1,
   },
   metricValueOrange: {
@@ -138,25 +147,15 @@ export const styles = StyleSheet.create({
     fontFamily: typefaces.body,
     fontWeight: 600,
   },
+  legendLabel: {
+    color: palette.fog,
+    fontSize: 6.5,
+    lineHeight: 1,
+  },
   caption: {
     marginTop: 7,
     color: palette.fog,
     fontSize: 6.5,
     lineHeight: 1.35,
-  },
-  orangePill: {
-    alignSelf: "flex-start",
-    paddingTop: 3,
-    paddingRight: 7,
-    paddingBottom: 3,
-    paddingLeft: 7,
-    borderRadius: 2,
-    backgroundColor: palette.orangeWash,
-    color: palette.orange,
-    fontFamily: typefaces.body,
-    fontSize: 6.2,
-    fontWeight: 600,
-    letterSpacing: 0.85,
-    textTransform: "uppercase",
   },
 });

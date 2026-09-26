@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: "Hanken Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   --ink: #102126;
   --slate: #3d5761;
   --fog: #586d75;
@@ -76,7 +76,7 @@ a {
 .document-spec {
   margin: 0;
   color: var(--fog);
-  font-family: "Hanken Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 500;
   font-size: 0.72rem;
   letter-spacing: 0.04em;
@@ -85,10 +85,10 @@ a {
 
 .workbench-title h1 {
   margin: 0.08rem 0 0;
-  font-family: "Newsreader", serif;
+  font-family: "Inter", sans-serif;
   font-size: clamp(1.18rem, 1.7vw, 1.45rem);
-  font-weight: 400;
-  letter-spacing: -0.025em;
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
 .workbench-actions {
@@ -111,7 +111,7 @@ a {
   display: block;
   margin: 0;
   color: var(--fog);
-  font-family: "Hanken Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 500;
   font-size: 0.7rem;
   letter-spacing: 0.04em;
@@ -123,8 +123,8 @@ a {
   width: min(100%, 34rem);
   min-width: 0;
   --marimo-cell-skeleton-height: 2.25rem;
-  --marimo-cell-font: "Hanken Grotesk", sans-serif;
-  --marimo-cell-heading-font: "Newsreader", serif;
+  --marimo-cell-font: "Inter", sans-serif;
+  --marimo-cell-heading-font: "Inter", sans-serif;
   --marimo-cell-monospace-font: ui-monospace, monospace;
   --marimo-cell-radius: 4px;
 }
@@ -240,7 +240,7 @@ a {
   place-content: center;
   justify-items: center;
   color: var(--slate);
-  font-family: "Hanken Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 500;
   font-size: 0.8rem;
   letter-spacing: 0.04em;
@@ -255,7 +255,7 @@ a {
   place-items: center;
   margin: 0;
   color: var(--slate);
-  font-family: "Hanken Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 500;
   font-size: 0.8rem;
   letter-spacing: 0.04em;

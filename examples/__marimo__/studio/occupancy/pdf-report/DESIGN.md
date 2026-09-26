@@ -11,9 +11,9 @@ colors:
   rule: "#e9eef0"
   signal: "#fa4e1d"
 typography:
-  display: Newsreader
-  body: Hanken Grotesk
-  metadata: Hanken Grotesk Medium
+  display: Inter Medium
+  body: Inter
+  metadata: Inter Medium
 page:
   size: A4 portrait
   count: 3
@@ -41,9 +41,13 @@ The browser workbench behaves as quiet document furniture around the report.
 ## Page system
 
 Each A4 portrait page uses a 34-point horizontal margin and a compact running
-header with the page index. Newsreader gives headings and figures a measured
-editorial voice. Hanken Grotesk carries body copy, measurements, timestamps,
-and section coordinates with one consistent rhythm.
+header with the page index. Inter carries every role: medium weight with tight
+tracking for titles and figures, regular weight for body copy, and tracked
+capitals for labels, timestamps, and section coordinates.
+
+Glyphs align to the marks they label. Legend swatches center on their label's
+capitals, the dial percentage centers in its ring, error rows center their
+text on the score glyph, and section notes share their heading's baseline.
 
 Page one establishes the selected readings, occupancy rate, hourly rhythm, and
 operational reading. Page two compares occupied and vacant sensor conditions

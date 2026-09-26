@@ -11,10 +11,32 @@ export const palette = {
   sky: "#e4eeff",
 } as const;
 
+// One family carries every role. Display text sets its own weight and tracking.
 export const typefaces = {
-  body: "Hanken Grotesk",
-  display: "Newsreader",
+  body: "Inter",
+  display: "Inter",
 } as const;
+
+// Inter vertical metrics in em. React PDF places the baseline one
+// ascent below the top of a text box, whatever its line height, so these
+// metrics position glyphs exactly against marks, rings, and fills.
+export const fontMetrics = { ascent: 0.96875, capHeight: 0.7275 } as const;
+
+/** Distance from the top of a text box to the vertical center of its capitals. */
+export const capCenter = (fontSize: number) =>
+  (fontMetrics.ascent - fontMetrics.capHeight / 2) * fontSize;
+
+/** Distance from the top of a text box to the top of its capitals. */
+export const capTop = (fontSize: number) =>
+  (fontMetrics.ascent - fontMetrics.capHeight) * fontSize;
+
+/** Top offset that centers a line of capitals within a box of `height`. */
+export const capInset = (fontSize: number, height: number) =>
+  height / 2 - capCenter(fontSize);
+
+/** Space between the baseline and the bottom of a text box. */
+export const baselineGap = (fontSize: number, lineHeight: number) =>
+  fontSize * (lineHeight - fontMetrics.ascent);
 
 const compactNumber = new Intl.NumberFormat("en", {
   notation: "compact",
