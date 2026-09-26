@@ -88,10 +88,16 @@ def _console_commands(document: str) -> tuple[tuple[str, ...], ...]:
             line = raw_line.strip()
             if not line or line.startswith("export "):
                 continue
-            pending += line.removesuffix("\\").rstrip() + " "
             if line.endswith("\\"):
+                pending += line.removesuffix("\\").rstrip() + " "
                 continue
-            arguments = tuple(shlex.split(pending))
+            pending += line
+            try:
+                arguments = tuple(shlex.split(pending))
+            except ValueError:
+                # A quoted argument continues on the next line, as in a shell.
+                pending += "\n"
+                continue
             pending = ""
             normalized = _studio_cli_arguments(arguments)
             if normalized is not None:
