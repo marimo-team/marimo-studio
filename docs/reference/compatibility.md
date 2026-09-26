@@ -1,14 +1,14 @@
 ---
 title: Compatibility and support
-description: Supported Python, Marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for Marimo Studio 0.1.
+description: Supported Python, Marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for Marimo Studio 0.2.
 ---
 
 # Compatibility and support
 
-Marimo Studio 0.1.1 begins the first documented compatibility line. The
-notebook-to-view workflow, projection elements, and last-successful build
-behavior are supported product contracts. Before 1.0, CLI, Python, provider,
-and saved configuration contracts may change between minor releases.
+Marimo Studio 0.2 is the current compatibility line. The notebook-to-view
+workflow, projection elements, and last-successful build behavior are supported
+product contracts. Before 1.0, CLI, Python, provider, and saved configuration
+contracts may change between minor releases.
 
 Add Studio to the notebook or project dependencies:
 
@@ -66,7 +66,7 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 
 ## Supported environment
 
-| Component                        | 0.1.1 contract                                                                       |
+| Component                        | 0.2.0 contract                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------------ |
 | Python                           | 3.10 through 3.14                                                                    |
 | Marimo                           | 0.25.0                                                                               |
@@ -125,7 +125,7 @@ query, replay, and readiness messages at the parent boundary.
 
 ## Third-party view providers
 
-Studio 0.1 requires provider API version `1`. Set
+Studio 0.2 requires provider API version `1`. Set
 `ProviderInfo.api_version=PROVIDER_API_VERSION` and declare `marimo-studio`
 as a dependency. Test the provider against each Studio minor release it supports.
 

@@ -101,7 +101,7 @@ support](compatibility.md) owns the current release policy.
 | `ProjectionKind`   | `Literal["cell", "output", "value"]` used by `MountDeclaration.kind`                                 |
 
 `PROVIDER_API_VERSION` is the integer that a provider assigns to
-`ProviderInfo.api_version`. Studio 0.1 requires an exact match.
+`ProviderInfo.api_version`. Studio 0.2 requires an exact match.
 
 ## Create starting files
 
