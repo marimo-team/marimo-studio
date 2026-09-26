@@ -28,21 +28,18 @@ environment and Studio installation remain unchanged.
 
 ## Bind to the intended notebook
 
-Live Studio work runs in the notebook's kernel through Marimo code mode. Two
-hosts provide it:
+Live Studio work runs in the notebook's kernel through Marimo code mode.
+Marimo's chat sidebar in **Code Mode** already runs there. A terminal agent
+sends each execution through `marimo pair execute`. Run
+`uvx marimo@latest pair --help` for server discovery, notebook selection, and
+authentication, then run each Python example below as one execution.
 
-- Marimo's chat sidebar in **Code Mode** already runs the agent in the
-  notebook's kernel.
-- An external agent pairs with a running notebook through the `marimo-pair`
-  skill, which owns finding, starting, and connecting to notebook servers and
-  executing code in them.
-
-Studio adds one requirement to either host. The Marimo server must run with
-`marimo-studio` installed, for example through `uvx --with marimo-studio` or
-the notebook project's dependencies. Sandboxed kernels then import the same
-Studio as the server. When neither host is connected, ask the user to open the
-notebook in Studio and connect one. Saved-notebook authoring continues from a
-terminal as described below.
+Studio adds one requirement. The Marimo server must run with `marimo-studio`
+installed, for example through `uvx --with marimo-studio` or the notebook
+project's dependencies. `help(marimo._code_mode)` then lists Studio as the
+`studio` capability, and sandboxed kernels import the same Studio as the
+server. Without a running notebook, ask the user to open it in Studio, or
+continue with saved-notebook authoring from a terminal as described below.
 
 Inside notebook code mode, combine connection with the first inspection:
 

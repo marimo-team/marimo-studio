@@ -15,6 +15,13 @@ These discovery operations are passive. The core skill owns the cross-provider
 authoring workflow, references own conditional detail, and each view's
 `AGENTS.md` owns its provider and project conventions.
 
+Marimo owns the connection to the notebook kernel. The `marimo.agent.capability`
+entry point registers `marimo_studio.agent` as the `studio` capability, so
+`help(marimo._code_mode)` leads an agent to Studio's help. The editor bridge
+attaches the calling session and notebook on both code-mode routes:
+`/api/ai/chat` for the chat sidebar and `/api/kernel/execute` for
+`marimo pair execute`.
+
 ```python
 import marimo_studio.agent as studio_agent
 

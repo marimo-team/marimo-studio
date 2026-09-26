@@ -25,9 +25,18 @@ runs.
 
 ## Ask for a view
 
-[Open your notebook in Studio](getting-started.md), then use Marimo's AI sidebar
-in **Code Mode (beta)** or connect your agent through **Settings → Pair with an
-agent**. Code mode lets the agent run Python in the live notebook kernel.
+[Open your notebook in Studio](getting-started.md), then connect an agent to
+its kernel. Marimo's AI sidebar runs the agent there in **Code Mode (beta)**. A
+terminal agent such as Claude Code or Codex pairs through the `marimo pair`
+command, which finds running notebooks and runs the agent's Python in the
+notebook kernel:
+
+```console
+claude "Pair with me on my running marimo notebook analysis.py. Run \`uvx marimo@latest pair --help\` first."
+```
+
+Code mode lists Studio among the capabilities installed with the notebook, so
+the agent reads the briefing for the Studio version the notebook runs.
 
 Give the agent an audience, a task, and a result to check:
 
