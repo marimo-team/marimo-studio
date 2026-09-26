@@ -6,7 +6,7 @@ came from a disposable terminal environment, connect through Marimo's
 briefing in the notebook kernel:
 
 ```python
-import marimo_studio.agent
+import marimo_studio
 
 help(marimo_studio.agent)
 ```

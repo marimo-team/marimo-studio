@@ -23,9 +23,9 @@ attaches the calling session and notebook on both code-mode routes:
 `marimo pair execute`.
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 view = await workspace.create_view(
     "dashboard",
     starter="marimo-studio/vanilla:default",
@@ -38,9 +38,9 @@ Acquire workspace and view handles again in each code-mode execution. After
 building, use a separate execution to show the view and get its browser URL:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-view = studio_agent.current_workspace().view("dashboard")
+view = marimo_studio.agent.current_workspace().view("dashboard")
 await view.show()
 url = await view.preview_url(runtime="server")
 ```

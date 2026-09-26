@@ -44,9 +44,9 @@ continue with saved-notebook authoring from a terminal as described below.
 Inside notebook code mode, combine connection with the first inspection:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 status = await workspace.status()
 print(status)
 ```
@@ -96,9 +96,9 @@ Use the requested name in place of `dashboard`. Finish that execution, then
 activate the view in a fresh code-mode call:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-await studio_agent.current_workspace().view("dashboard").show()
+await marimo_studio.agent.current_workspace().view("dashboard").show()
 ```
 
 `show()` activates the user's Studio tab. If build or activation fails, repair
@@ -110,9 +110,9 @@ view's preview URL to open the result.
 Acquire the view and inspect its editable documents:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 view = workspace.view("dashboard")
 inspection = await view.inspect()
 print(inspection.root)
@@ -211,9 +211,9 @@ contract. These conventions apply even when Lens is not installed.
 After editing, build and check source freshness in the same call:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-view = studio_agent.current_workspace().view("dashboard")
+view = marimo_studio.agent.current_workspace().view("dashboard")
 build = await view.build()
 inspection = await view.inspect()
 print(build.revision, inspection.freshness)
@@ -261,7 +261,7 @@ performed. Keep the notebook and view runnable.
 Read a packaged reference from the same installation:
 
 ```python
-import marimo_studio.agent
+import marimo_studio
 
 print(marimo_studio.agent.skill().file("references/projections.md").read_text())
 ```

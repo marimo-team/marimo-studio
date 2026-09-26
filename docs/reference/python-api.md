@@ -483,6 +483,10 @@ load error, provider metadata, availability, and discovered starter IDs.
 
 ## `marimo_studio.agent`
 
+`import marimo_studio` exposes this module as `marimo_studio.agent`. Studio
+loads it on first attribute access. For typed editor completion, import
+`marimo_studio.agent` directly.
+
 ### Installed briefing
 
 ```python
@@ -505,9 +509,9 @@ Returns Studio's packaged `marimo-studio` skill. Read its body or a task-specifi
 reference:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-skill = studio_agent.skill()
+skill = marimo_studio.agent.skill()
 print(skill.body)
 print(skill.file("references/verification.md").read_text())
 ```
@@ -524,9 +528,9 @@ Returns the complete [Agent Plugin](https://github.com/peter-gy/agent-plugins)
 bundled with the installed Studio version:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-resources = studio_agent.plugin()
+resources = marimo_studio.agent.plugin()
 print(resources.tree())
 ```
 
@@ -535,9 +539,9 @@ Raises `AgentPluginError` when the installed distribution has no usable plugin.
 ### `current_workspace`
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 ```
 
 ```text

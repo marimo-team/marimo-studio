@@ -58,9 +58,9 @@ For agent authors and integrations, the live API begins with the current
 workspace. Run this in one code-mode execution:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-workspace = studio_agent.current_workspace()
+workspace = marimo_studio.agent.current_workspace()
 notebook = await workspace.inspect_notebook()
 for cell in notebook.cells:
     print(cell.name, cell.definitions, cell.has_output_expression)
@@ -75,9 +75,9 @@ browser result are separate evidence.
 After authoring and building `briefing`, show it in a new code-mode execution:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-view = studio_agent.current_workspace().view("briefing")
+view = marimo_studio.agent.current_workspace().view("briefing")
 await view.show()
 print(await view.preview_url(runtime="server"))
 ```
@@ -98,9 +98,9 @@ and records. The installed skill supplies the complete authoring workflow and
 references for source edits, projections, verification, and delivery:
 
 ```python
-import marimo_studio.agent as studio_agent
+import marimo_studio
 
-print(studio_agent.skill().file("references/verification.md").read_text())
+print(marimo_studio.agent.skill().file("references/verification.md").read_text())
 ```
 
 ## Select results with Marimo Lens

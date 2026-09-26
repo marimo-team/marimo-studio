@@ -68,7 +68,7 @@ uvx --with marimo-studio agent-plugins read marimo-studio
 From the notebook's Python environment:
 
 ```python
-import marimo_studio.agent
+import marimo_studio
 
 help(marimo_studio.agent)
 ```
