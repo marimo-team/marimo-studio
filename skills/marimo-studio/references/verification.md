@@ -20,7 +20,7 @@ production build. Verify production through the exact URL and its displayed
 presentation revision, then assert the application's behavior.
 
 Building view source does not execute modified notebook cells. After editing
-notebook Python, run the changed cells in the live notebook, using Marimo's
+notebook Python, run the changed cells in the live notebook, using marimo's
 **Run all** action when appropriate. Static checks and isolated runtime
 validation do not update the live notebook session.
 
@@ -39,7 +39,7 @@ waits through an external tool or interpreter. Waiting synchronously inside
 code mode can block the notebook work being awaited. The URL renders a separate top-level
 presentation with the server's authentication and document sandbox. Keep the
 notebook session open on an edit-mode server.
-Authenticate the chosen browser through Marimo's normal login. An API access
+Authenticate the chosen browser through marimo's normal login. An API access
 token authorizes URL lookup. It is never embedded in the returned URL.
 
 Outside code mode, supply the running server URL:

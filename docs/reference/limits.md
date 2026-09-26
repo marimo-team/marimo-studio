@@ -1,6 +1,6 @@
 ---
 title: Limits
-description: File, source, provider, projection, payload, output, and timeout limits enforced by Marimo Studio.
+description: File, source, provider, projection, payload, output, and timeout limits enforced by Studio.
 ---
 
 # Limits

@@ -1,11 +1,11 @@
 ---
 title: Built-in view providers
-description: Provider keys, starter IDs, source documents, requirements, and view.toml options included with Marimo Studio.
+description: Provider keys, starter IDs, source documents, requirements, and view.toml options included with Studio.
 ---
 
 # Built-in view providers
 
-Marimo Studio includes Vanilla HTML, [React](https://react.dev/),
+Studio includes Vanilla HTML, [React](https://react.dev/),
 [Svelte](https://svelte.dev/), and
 [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit) view providers. A provider key selects the view
 project's inspection and build contract. A starter ID selects the files created
@@ -172,7 +172,7 @@ marimo-studio view create report --target analysis.py \
 ```
 
 Edit `src/index.html` as a Notebook Kit `<notebook>` document. The starter places
-eligible Marimo cells in `type="text/html"` cells. `src/page.tmpl` provides the
+eligible marimo cells in `type="text/html"` cells. `src/page.tmpl` provides the
 page shell with `<main id="app-shell">`, and `src/style.css` supplies styling.
 Source also includes the live-value and Vite adapters, `vite.config.ts`, `package.json`,
 `deno.json`, and the read-only `deno.lock`.
@@ -212,7 +212,7 @@ Prepared exports:
 ```
 
 Define the native control combinations in `states.yaml` when visitors can change
-Marimo inputs. See [prepared static exports](../guide/run-and-share.md#export-a-prepared-static-view).
+marimo inputs. See [prepared static exports](../guide/run-and-share.md#export-a-prepared-static-view).
 An omitted state file captures the initial notebook state.
 
 For an unbounded runtime selector, use `data-marimo-allow="*"` and the Server or
@@ -228,7 +228,7 @@ Studio authorizes hosts declared in HTML cells and templates. Put projections
 there rather than constructing them in JavaScript strings or Markdown. Native
 projections reconnect when Observable replaces an HTML cell.
 
-Keep shared data loading and computation in Marimo. Build-time interpreter cells
+Keep shared data loading and computation in marimo. Build-time interpreter cells
 and database queries produce diagnostics. Relative `FileAttachment` assets
 under `src/` are build inputs. Add exact npm versions to `package.json` and
 refresh `deno.lock` when adding browser dependencies. Bare package imports are

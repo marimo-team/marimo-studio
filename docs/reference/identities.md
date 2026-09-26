@@ -13,7 +13,7 @@ content. Generations identify replaceable owners and incarnations.
 
 | Term             | Contract                                                                                                                                                   |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notebook         | Saved Marimo Python file that owns data, computation, controls, and reactive behavior                                                                      |
+| Notebook         | Saved marimo Python file that owns data, computation, controls, and reactive behavior                                                                      |
 | View             | Stable name and route for one presentation of a notebook                                                                                                   |
 | View project     | Directory containing `view.toml`, authored frontend source, and provider configuration for one view                                                        |
 | Source document  | UTF-8 text file authorized by provider inspection or the Studio-owned `view.toml`                                                                          |
@@ -24,7 +24,7 @@ content. Generations identify replaceable owners and incarnations.
 | Artifact         | Validated immutable browser file tree produced by one build profile                                                                                        |
 | Presentation     | One artifact combined with notebook source, runtime configuration, projections, and browser session state                                                  |
 | Preview          | Studio surface that renders the current development presentation                                                                                           |
-| Python runtime   | Notebook execution in a server-side Marimo session. Its configuration ID is `server`                                                                       |
+| Python runtime   | Notebook execution in a server-side marimo session. Its configuration ID is `server`                                                                       |
 | Browser runtime  | Notebook execution in a browser worker through [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/). Its configuration ID is `wasm` |
 | Prepared runtime | Browser rendering from verified outputs computed during export. Its static runtime ID is `zero-python`                                                     |
 

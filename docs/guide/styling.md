@@ -7,7 +7,7 @@ description: Use authored CSS, theme tokens, and projection variables in a Studi
 
 The view project owns page layout and visual styling. Add inline styles to a
 Vanilla document or import a stylesheet from the selected provider's browser
-entry point. Define page tokens at `:root` because Marimo theme tokens are
+entry point. Define page tokens at `:root` because marimo theme tokens are
 scoped to rendered cell and output content and do not cascade to sibling page
 elements.
 
@@ -101,7 +101,7 @@ only nonce or hash styles.
 
 ## Style projected cells and output
 
-Studio treats native Marimo output subtrees as their own rendering boundary.
+Studio treats native marimo output subtrees as their own rendering boundary.
 Set projection variables on `marimo-cell` or `marimo-output` to integrate that
 content with the page:
 
@@ -124,17 +124,17 @@ content with the page:
 ```
 
 `--marimo-cell-accent` colors links, selected options, slider fills, and focus
-rings in native output, including Marimo controls. Without it, controls use the
-text color and links keep Marimo's link color. Borders, muted surfaces, and
+rings in native output, including marimo controls. Without it, controls use the
+text color and links keep marimo's link color. Borders, muted surfaces, and
 secondary text mix from `--marimo-cell-foreground`, so unselected controls keep
 neutral outlines beside the accent. Set `--marimo-cell-border-color`,
 `--marimo-cell-muted`, or `--marimo-cell-muted-foreground` to choose them
 directly. Tooltips, dropdown menus, and date pickers open outside the projected
-cell, so they keep Marimo's theme.
+cell, so they keep marimo's theme.
 
 Use `--marimo-cell-content-width` and `--marimo-cell-font-size` for rendered
 Markdown and `--marimo-cell-error` for cell error treatment. Markdown keeps
-Marimo's `1rem` base size by default. Set `--marimo-cell-font-size: 1em` to size
+marimo's `1rem` base size by default. Set `--marimo-cell-font-size: 1em` to size
 it from the surrounding element, as the Reveal.js starter does so notebook text
 scales with its slides.
 

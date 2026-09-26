@@ -1,6 +1,6 @@
 # HTML starter instructions
 
-Follow the Marimo Studio skill for notebook ownership, projection selection,
+Follow the `marimo-studio` skill for notebook ownership, projection selection,
 view lifecycle, and validation. This file covers the single-document project
 supplied by this starter.
 

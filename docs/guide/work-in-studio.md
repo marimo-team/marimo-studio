@@ -1,6 +1,6 @@
 ---
 title: Edit and preview in Studio
-description: Work with notebook code, view source, and the rendered result in one Marimo session.
+description: Work with notebook code, view source, and the rendered result in one marimo session.
 ---
 
 # Edit and preview in Studio

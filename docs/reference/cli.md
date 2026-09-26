@@ -152,7 +152,7 @@ local CSS and JavaScript files. `--starter` selects another installed starter.
 
 A completed creation returns exact `launch_requirements` in JSON and prints an
 environment-aware launch command. Project notebooks use `uv run` with
-`--no-sandbox`; standalone notebooks use `uvx` with `--sandbox`. Install and run
+`--no-sandbox`. Standalone notebooks use `uvx` with `--sandbox`. Install and run
 requirements for reviewed providers.
 
 ## `marimo-studio view inspect`
@@ -289,7 +289,7 @@ active preview document, including while its notebook outputs are preparing.
 Successful activation commits the selected frame and its browser-authored address.
 Before inspecting outputs or interacting, wait inside the frame for
 `html[data-marimo-studio-state="ready"]`. Keeping these milestones separate lets
-`show()` return from code mode so Marimo can process the preview's kernel work.
+`show()` return from code mode so marimo can process the preview's kernel work.
 Refresh these fields with `view show` after a view, runtime, or session change.
 
 Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
@@ -378,25 +378,25 @@ static directory.
 
 The result contains the runtime, exact entry file, file count, delivery
 warnings, and Zero-Python cache activity. It also contains the complete static
-preflight report. Authored hits and misses come directly from marimo-export's
-observation of Marimo's native cell-cache decisions. `--force` delegates
-replacement identity, rollback, and recovery to marimo-export's staged
+preflight report. Authored hits and misses come directly from `marimo-export`'s
+observation of marimo's native cell-cache decisions. `--force` delegates
+replacement identity, rollback, and recovery to `marimo-export`'s staged
 application delivery.
 
 Export progress is written to stderr. It covers the production build,
 Zero-Python plan and state preparation, bundle assembly, delivery preflight,
 and commit. `--json` keeps the terminal result on stdout and writes schema 1
 JSON Lines progress events to stderr. Each progress record includes the view,
-runtime, owning source, and nested event. Events owned by marimo-export retain
+runtime, owning source, and nested event. Events owned by `marimo-export` retain
 its state counts, cache activity, elapsed time, and message unchanged. Callers
 can stream or discard stderr independently of the result.
 
 Studio rejects a symlink destination, a filesystem root, the user's home
 directory, and any destination that contains, equals, or sits within an export
-source. Studio assembles and preflights the application in a marimo-export
+source. Studio assembles and preflights the application in a `marimo-export`
 `StagedDelivery`. A failed preflight preserves the current destination.
-Marimo-export verifies the nested prepared export and complete directory before
-committing it with destination change detection and rollback.
+`marimo-export` verifies the nested prepared export and complete directory
+before committing it with destination change detection and rollback.
 
 The Zero-Python directory contains the production artifact, prepared result
 index and assets, runtime configuration, notebook `public/` files, and a

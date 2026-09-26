@@ -1,12 +1,12 @@
 ---
 name: marimo-studio
 description: >-
-  Create, inspect, and refine web views of a Marimo notebook. Use for Studio
+  Create, inspect, and refine web views of a marimo notebook. Use for Studio
   view source, live notebook projections, browser verification, selected
   feedback, and running or exporting a named view.
 ---
 
-# Author Marimo Studio views
+# Author Studio views
 
 Studio turns one reactive notebook into named web views. The notebook owns
 computation, data, controls, and domain decisions. A view owns its presentation
@@ -14,13 +14,13 @@ and browser interaction. Studio owns view projects, builds, and delivery.
 
 ## Choose the requested work
 
-| Request                            | Start with                                                                          |
-| ---------------------------------- | ----------------------------------------------------------------------------------- |
-| Explain or inspect a view          | Inspect its source and notebook producers. Keep the task read-only.                 |
-| Create a dashboard or presentation | Inspect existing views, choose a starter, build and show a first result.            |
-| Change an existing view            | Read its project instructions and affected documents, then edit and verify.         |
-| Address a Lens selection           | Read [Lens in Studio](references/lens.md) and the installed Lens skill.             |
-| Run, publish, or export            | Read [delivery](references/delivery.md) before designing controls or exposing data. |
+| Request                                                                | Start with                                                                          |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Explain or inspect a view                                              | Inspect its source and notebook producers. Keep the task read-only.                 |
+| Create a dashboard or presentation                                     | Inspect existing views, choose a starter, build and show a first result.            |
+| Change an existing view                                                | Read its project instructions and affected documents, then edit and verify.         |
+| Address a [Lens](https://marimo-team.github.io/marimo-lens/) selection | Read [Lens in Studio](references/lens.md) and the installed Lens skill.             |
+| Run, publish, or export                                                | Read [delivery](references/delivery.md) before designing controls or exposing data. |
 
 This core contains the ordinary authoring workflow. Read conditional references
 when the task needs their detail. Reuse this briefing while the Python
@@ -28,18 +28,18 @@ environment and Studio installation remain unchanged.
 
 ## Bind to the intended notebook
 
-Live Studio work runs in the notebook's kernel through Marimo code mode.
-Marimo's chat sidebar in **Code Mode** already runs there. A terminal agent
+Live Studio work runs in the notebook's kernel through marimo code mode.
+marimo's chat sidebar in **Code Mode** already runs there. A terminal agent
 sends each execution through `marimo pair execute`. Run
 `uvx marimo@latest pair --help` for server discovery, notebook selection, and
 authentication, then run each Python example below as one execution.
 
-Studio adds one requirement. The Marimo server must run with `marimo-studio`
+Studio adds one requirement. The marimo server must run with `marimo-studio`
 installed, for example through `uvx --with marimo-studio` or the notebook
 project's dependencies. `help(marimo._code_mode)` then lists Studio as the
 `studio` capability, and sandboxed kernels import the same Studio as the
 server. Without a running notebook, ask the user to open it in Studio, or
-continue with saved-notebook authoring from a terminal as described below.
+continue with saved-notebook authoring from a terminal.
 
 Inside notebook code mode, combine connection with the first inspection:
 
@@ -127,11 +127,11 @@ dependencies, and toolchain. Preserve its accumulated decisions. Record durable
 audience, analytical goals, interaction priorities, and design choices there.
 Keep transient task status out of project instructions.
 Use the user's visual direction, then `DESIGN.md` if inspection lists it, then
-[Marimo's design guidance](https://raw.githubusercontent.com/marimo-team/marimo/refs/heads/main/DESIGN.md).
+[marimo's design guidance](https://raw.githubusercontent.com/marimo-team/marimo/refs/heads/main/DESIGN.md).
 Read the chosen design source before styling. Native notebook output is an
 opaque subtree, so theme it through projection variables on its host:
 `--marimo-cell-font`, `--marimo-cell-heading-font`, `--marimo-cell-foreground`,
-`--marimo-cell-accent` for links and Marimo controls, and
+`--marimo-cell-accent` for links and marimo controls, and
 `--marimo-cell-font-size` for Markdown. The
 [styling guide](https://marimo-team.github.io/marimo-studio/guide/styling.md)
 lists the complete set.
@@ -145,8 +145,8 @@ for cell in notebook.cells:
     print(cell.name, cell.definitions, cell.has_output_expression)
 ```
 
-Print selected fields rather than the full inspection record, which also
-contains the complete saved notebook. Read code for the chosen selector:
+Print selected fields. The full inspection record also contains the complete
+saved notebook. Read code for the chosen selector:
 
 ```python
 producer = await workspace.inspect_notebook(
@@ -184,7 +184,7 @@ focused components and use the project's formatter when available.
 | Needed result                                            | Authored host                                   |
 | -------------------------------------------------------- | ----------------------------------------------- |
 | Complete displayed cell, including controls and errors   | `<marimo-cell name="summary"></marimo-cell>`    |
-| One Python object rendered by Marimo                     | `<marimo-output value="chart"></marimo-output>` |
+| One Python object rendered by marimo                     | `<marimo-output value="chart"></marimo-output>` |
 | JSON-compatible data or eager dataframe for browser code | `<strong mo-value="metrics.total"></strong>`    |
 
 Read a cell's `name`, `definitions`, and `has_output_expression` before choosing
@@ -197,7 +197,7 @@ expression.
 Never copy notebook-derived values or analytical claims into frontend source.
 Project metrics, dates, categories, chart inputs, and analytical prose from
 named notebook results. Literal UI copy and design constants can stay in the
-view. Keep native Marimo output subtrees opaque and authored hosts inside
+view. Keep native marimo output subtrees opaque and authored hosts inside
 `#app-shell`.
 
 Custom renderers must consume current projections, subscribe to updates, and

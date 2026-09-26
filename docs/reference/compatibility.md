@@ -1,11 +1,11 @@
 ---
 title: Compatibility and support
-description: Supported Python, Marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for Marimo Studio 0.2.
+description: Supported Python, marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for marimo-studio 0.2.
 ---
 
 # Compatibility and support
 
-Marimo Studio 0.2 is the current compatibility line. The notebook-to-view
+`marimo-studio` 0.2 is the current compatibility line. The notebook-to-view
 workflow, projection elements, and last-successful build behavior are supported
 product contracts. Before 1.0, CLI, Python, provider, and saved configuration
 contracts may change between minor releases.
@@ -69,7 +69,7 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 | Component                        | 0.2.0 contract                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------------ |
 | Python                           | 3.10 through 3.14                                                                    |
-| Marimo                           | 0.25.0                                                                               |
+| marimo                           | 0.25.0                                                                               |
 | [Deno](https://docs.deno.com/)   | 2.9.5 from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring |
 | [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment    |
 | Browser acceptance               | Current Chromium on Linux and Windows                                                |
@@ -102,7 +102,7 @@ browser resources retain their own network and cross-origin requirements.
 
 ## Deployment boundary
 
-`create_asgi_app()` and `marimo_studio.asgi:app` return a run-mode Marimo
+`create_asgi_app()` and `marimo_studio.asgi:app` return a run-mode marimo
 [ASGI](https://asgi.readthedocs.io/en/latest/) application with Studio
 middleware and owned lifespan cleanup. ASGI is the standard interface between
 asynchronous Python web applications and servers. The hosting stack owns
@@ -111,8 +111,8 @@ encryption, proxy headers, process supervision, resource limits, and network
 exposure. Forward the application lifespan so Studio can close notebook
 sessions and background tasks during shutdown.
 
-Marimo authentication supplies `read` and `edit` scopes to Studio routes.
-Source mutations also require the Marimo server token. Run-mode presentations
+marimo authentication supplies `read` and `edit` scopes to Studio routes.
+Source mutations also require the marimo server token. Run-mode presentations
 use read access. Keep authentication enabled when a deployment can execute
 Python code or reach private files, services, or credentials.
 

@@ -1,6 +1,6 @@
 # Lens in Studio views
 
-[Marimo Lens](https://marimo-team.github.io/marimo-lens/) lets a person mark a
+[Lens](https://marimo-team.github.io/marimo-lens/) lets a person mark a
 rendered result or authored page region and give that exact surface to a
 code-mode agent. When enabling Lens, addressing selections, or needing metadata
 details beyond the traceability conventions, import `marimo_lens.agent` and run
@@ -12,7 +12,7 @@ authoring follows the conventions directly, without Lens setup prompts or
 additional discovery calls.
 
 To enable feedback, install `marimo-studio[lens]` in the notebook environment
-and restart a running notebook. When the notebook imports no Lens, Marimo mounts
+and restart a running notebook. When the notebook imports no Lens, marimo mounts
 one and the development preview reuses it, so selections from the Notebook pane
 dock and the preview dock reach you together. Use that instance without adding a
 Lens cell or projection. For an explicitly authored Lens in another Python-runtime view,
@@ -28,7 +28,7 @@ None
 
 The final `None` keeps the Lens dock on the projected Studio surface. Rendering
 `studio_lens` as the notebook cell output also mounts a notebook dock. Studio
-skips Marimo's automatic Lens in a notebook that imports Lens, so `studio_lens`
+skips marimo's automatic Lens in a notebook that imports Lens, so `studio_lens`
 is the notebook's only Lens.
 
 Project the value once in each view that should collect feedback. Link custom
@@ -59,7 +59,7 @@ for a declared authored region. Each view owns these regions in its markup.
 Keep labels and rendering-source references on the selected root. Plain HTML
 regions without notebook input hosts have empty notebook provenance.
 
-Use the packaged Marimo Lens skill for the feedback lifecycle. Pass the
+Use the packaged Lens skill for the feedback lifecycle. Pass the
 captured `SelectionReference` to Lens activity and reveal calls. Use its
 `cells` as notebook provenance and `target["sources"]` for exact value selectors.
 For a DOM target, use `documentPath`,

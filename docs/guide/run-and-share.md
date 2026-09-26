@@ -125,7 +125,7 @@ prepared outputs, runtime metadata, and files placed in the notebook's
 Python. Cell names, IDs, and code hashes remain as provenance, while notebook
 source and cell bodies are not serialized into the export.
 
-See [marimo-export](https://github.com/marimo-team/marimo-export) for the
+See [`marimo-export`](https://github.com/marimo-team/marimo-export) for the
 publication format and browser reader.
 :::
 
@@ -137,21 +137,21 @@ Unknown state or cache evidence is `null`. The current export API does not expos
 an active notebook cell, so the heartbeat's `cell` is `null`.
 
 Each Zero-Python export uses the authored notebook's `__marimo__/cache/`
-directory. [Marimo's native cell cache](https://docs.marimo.io/api/caching/)
+directory. [marimo's native cell cache](https://docs.marimo.io/api/caching/)
 decides which authored cells can be restored across states, views, and later
-export commands. marimo-export retains the resulting portable states in its
+export commands. `marimo-export` retains the resulting portable states in its
 configured export repository. An exact later export can reuse that prepared
 generation before starting the notebook. Set `MARIMO_EXPORT_REPOSITORY` to
 choose the repository directory.
 
 Prepared publication identity includes the saved notebook document. Changing a
 Python control label therefore creates a new publication and walks the prepared
-states again, even when Marimo restores analytical cells from cache. Keep
+states again, even when marimo restores analytical cells from cache. Keep
 presentation-only headings and labels in view source when they should change
 independently of notebook computation. View-only edits can reuse the prepared
 notebook states while Studio rebuilds the presentation artifact.
 
-The repository stores verified portable publications. Marimo remains the
+The repository stores verified portable publications. marimo remains the
 owner of computation cache keys, invalidation, serialization, and restoration.
 Use `mo.watch.file` in an upstream notebook cell when a result depends on file
 contents that can change independently of notebook source.

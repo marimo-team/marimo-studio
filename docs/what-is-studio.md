@@ -5,9 +5,9 @@ description: Keep one reactive analysis behind web views built for different aud
 
 # What is Studio?
 
-Marimo Studio turns one reactive Marimo notebook into named web views. Keep
-your data, calculations, controls, and assumptions in Python. Give each audience
-a page designed for the work they need to do.
+Studio turns one reactive marimo notebook into named web views. Keep your
+data, calculations, controls, and assumptions in Python. Give each audience a
+page designed for the work they need to do.
 
 <StudioViewStack family="occupancy" />
 
@@ -19,7 +19,7 @@ layout, interaction, and explanation.
 
 A notebook preserves the decisions behind the result: where data comes from,
 how a measure is defined, which assumptions a model uses, and how corrections
-are applied. Marimo tracks dependencies and reruns affected cells as inputs
+are applied. marimo tracks dependencies and reruns affected cells as inputs
 change.
 
 A view gives those results a purpose. An analyst may need a detailed explorer,
@@ -40,7 +40,7 @@ runtime to create the **presentation** shown in Preview.
 
 | Action                      | Result                                               |
 | --------------------------- | ---------------------------------------------------- |
-| Run changed notebook code   | Marimo updates dependent results in the view         |
+| Run changed notebook code   | marimo updates dependent results in the view         |
 | Save a view source document | Studio builds and publishes the updated page         |
 | Switch views                | The next view uses the same live notebook session    |
 | Change delivery runtime     | The same artifact receives results from that runtime |
@@ -59,7 +59,7 @@ Place a complete cell, render one Python object, or display a browser value:
 ```
 
 Studio resolves each name to its producing notebook cell and dependencies.
-Marimo keeps controls and results reactive while the frontend stays mounted.
+marimo keeps controls and results reactive while the frontend stays mounted.
 [Place notebook results in a view](guide/notebook-results.md) develops the three
 projection forms.
 

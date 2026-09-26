@@ -45,7 +45,7 @@ notebook already defines the intended value.
 
 Apply these conventions while authoring every view, even when Lens is not
 installed, so adding Lens exposes named targets and their source context.
-Keep metadata on authored regions and projection hosts, outside native Marimo
+Keep metadata on authored regions and projection hosts, outside native marimo
 output subtrees.
 
 Custom JavaScript rendering must consume live projections, handle their

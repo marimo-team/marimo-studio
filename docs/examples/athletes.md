@@ -18,7 +18,7 @@ profiles. One notebook backs all three views.
 
 <StudioExample family="athletes" />
 
-In **Overview**, change **Sport**. The native Marimo control selects one of 29
+In **Overview**, change **Sport**. The native marimo control selects one of 29
 prepared notebook states. Four `mo-value` totals, the browser-drawn roster, and
 the `top_sports` chart update from that result.
 

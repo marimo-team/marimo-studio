@@ -1,6 +1,6 @@
 ---
 layout: home
-title: Marimo Studio
+title: marimo-studio
 titleTemplate: false
 description: Turn reactive Python into reports, apps, and presentations with a coding agent.
 
@@ -10,7 +10,7 @@ hero:
   image:
     light: /brand/marimo-studio-lockup-stacked-light.svg
     dark: /brand/marimo-studio-lockup-stacked-dark.svg
-    alt: Marimo Studio
+    alt: marimo-studio
   actions:
     - theme: brand
       text: Get started

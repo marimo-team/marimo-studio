@@ -26,7 +26,7 @@ runs.
 ## Ask for a view
 
 [Open your notebook in Studio](getting-started.md), then connect an agent to
-its kernel. Marimo's AI sidebar runs the agent there in **Code Mode (beta)**. A
+its kernel. marimo's AI sidebar runs the agent there in **Code Mode (beta)**. A
 terminal agent such as Claude Code or Codex pairs through the `marimo pair`
 command, which finds running notebooks and runs the agent's Python in the
 notebook kernel:
@@ -40,7 +40,7 @@ the agent reads the briefing for the Studio version the notebook runs.
 
 Give the agent an audience, a task, and a result to check:
 
-> Read the installed marimo-studio briefing. Create a view named `briefing`
+> Read the installed `marimo-studio` briefing. Create a view named `briefing`
 > for a quarterly review. Use the notebook's existing measures and controls.
 > Lead with the headline results, then show the evidence behind them. Verify
 > the view at desktop and phone widths and check that changing a control
@@ -103,9 +103,9 @@ import marimo_studio
 print(marimo_studio.agent.skill().file("references/verification.md").read_text())
 ```
 
-## Select results with Marimo Lens
+## Select results with Lens
 
-[Marimo Lens](https://marimo-team.github.io/marimo-lens/) lets you select a
+[Lens](https://marimo-team.github.io/marimo-lens/) lets you select a
 rendered result and attach a note. The agent receives the image and the
 notebook context behind that selection. Install Lens in the notebook's Python
 environment:
@@ -118,7 +118,7 @@ The `lens` extra installs a Lens release compatible with the installed Studio. F
 sandboxed notebooks, also declare `marimo-studio[lens]` in the script's
 dependencies. Restart a running notebook after installing or upgrading Lens.
 
-When the notebook imports no Lens of its own, Marimo mounts one in the notebook.
+When the notebook imports no Lens of its own, marimo mounts one in the notebook.
 The development preview reuses that same Lens, so the Notebook pane and the
 preview each show a dock, and selections from either one reach the agent
 together. Select a result, add a note, and ask:

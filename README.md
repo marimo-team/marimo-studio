@@ -2,7 +2,7 @@
   <a href="https://marimo-team.github.io/marimo-studio/">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-dark.svg">
-      <img alt="Marimo Studio" src="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="360">
+      <img alt="marimo-studio" src="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="360">
     </picture>
   </a>
 </p>
@@ -13,11 +13,12 @@
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python 3.10 through 3.14" src="https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg"></a>
 </p>
 
-Marimo Studio turns one [marimo](https://marimo.io/) notebook into reports,
+`marimo-studio` turns one [marimo](https://marimo.io/) notebook into reports,
 apps, and presentations. Keep data, computation, and controls in Python.
 Shape each view for its audience, by hand or with a coding agent.
 
-> **Experimental:** Marimo Studio is changing rapidly.
+> **Experimental:** Studio is changing rapidly. Pin `marimo-studio` in saved
+> projects.
 
 [![Notebook, view source, and Preview in Studio](apps/docs/public/screenshots/studio-develop.png)](https://marimo-team.github.io/marimo-studio/)
 
@@ -32,7 +33,7 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox
 Add a displayable cell, then click **Add view** in the Studio toolbar. Save the
 notebook if prompted, choose **HTML document**, and create the view. Notebook
 and Preview open side by side. The source action opens the view's files, and
-Marimo's agent sidebar stays available.
+marimo's agent sidebar stays available.
 
 Saving view source rebuilds Preview. Notebook controls keep their reactive
 behavior, and a failed build retains the last successful view.
@@ -44,7 +45,7 @@ resolves the notebook's declared dependencies with `--sandbox`.
 ## Example: Rio 2016 athletes
 
 The [Rio 2016 notebook](https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html)
-supplies one analysis to three interfaces:
+supplies one analysis to three views:
 
 | View                                                                                          | Explore                                                      |
 | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -52,8 +53,9 @@ supplies one analysis to three interfaces:
 | [Explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html) | Filter the roster and brush linked charts                    |
 | [Field](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)       | Move through the athlete data in a four-chapter presentation |
 
-Use HTML, React, Svelte, or Observable Notebook Kit. Each view owns its source
-and browser dependencies. [Explore all examples](https://marimo-team.github.io/marimo-studio/examples/).
+Build views with HTML, React, Svelte, or Observable Notebook Kit. Each view owns
+its source and browser dependencies.
+[Explore all examples](https://marimo-team.github.io/marimo-studio/examples/).
 
 ## For agents
 
@@ -76,7 +78,8 @@ help(marimo_studio.agent)
 The briefing covers inspecting the notebook, creating and editing a view,
 building it, and checking the rendered result. The
 [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-explains connection and optional visual feedback with Marimo Lens.
+explains how to connect an agent and send it visual feedback with
+[Lens](https://marimo-team.github.io/marimo-lens/).
 
 ## Run or export a view
 

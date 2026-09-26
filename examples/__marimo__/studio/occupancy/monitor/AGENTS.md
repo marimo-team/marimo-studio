@@ -47,7 +47,7 @@ Configure native control combinations in `states.yaml` for Prepared exports. An
 omitted state file captures the initial notebook state.
 
 Keep shared computation, data loading, controls, and domain decisions in the
-Marimo notebook. Use Observable cells for this view's presentation and local
+marimo notebook. Use Observable cells for this view's presentation and local
 interaction. Build-time interpreter cells and database queries are rejected.
 Relative `FileAttachment` assets under `src/` are included in builds. Bare npm
 imports are bundled by Vite. Notebook Kit's `npm:` and `jsr:` imports use remote

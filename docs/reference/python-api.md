@@ -7,7 +7,7 @@ description: Inspect notebooks, author views, verify the current Studio tab, and
 
 Use `marimo_studio.authoring` for a saved notebook on disk. Use
 `marimo_studio.agent` inside
-[Marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)
+[marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)
 when an operation needs the current Studio tab. Code mode gives a coding agent
 a Python execution inside the live notebook kernel. Public records are frozen
 dataclasses. Their `to_dict()` methods produce the schema used by
@@ -362,9 +362,9 @@ written into a static export.
 ### `StaticExportResult`
 
 Contains `notebook`, `view`, selected `runtime`, provider artifact `document`,
-`cache_activity`, `preflight`, and marimo-export's `DeliveryResult`. The
+`cache_activity`, `preflight`, and `marimo-export`'s `DeliveryResult`. The
 `output`, `files`, and `warnings` properties expose the committed delivery.
-A Zero-Python result carries marimo-export's authored and projection cache
+A Zero-Python result carries `marimo-export`'s authored and projection cache
 dispositions. A WebAssembly result sets `cache_activity` to `None`. The
 `entrypoint` property resolves `output / document`. `to_dict()` emits the
 flattened output path, file count, warnings, and resolved entrypoint.
@@ -663,13 +663,13 @@ app = create_asgi_app("analysis.py")
 create_asgi_app(notebook: str | Path) -> ASGIApp
 ```
 
-Returns a Marimo run-mode [ASGI](https://asgi.readthedocs.io/en/latest/)
+Returns a marimo run-mode [ASGI](https://asgi.readthedocs.io/en/latest/)
 application that serves the notebook's default and named views. ASGI is the
 standard interface between asynchronous Python web applications and servers.
 The application lifespan opens Studio services and closes its notebook
 sessions and background tasks during shutdown.
 
-Forward the application lifespan through the ASGI server. Marimo owns
+Forward the application lifespan through the ASGI server. marimo owns
 authentication and supplies read and edit scopes to Studio routes. The hosting
 stack owns TLS, proxy headers, process supervision, network exposure, and
 resource limits. See [Compatibility and
@@ -691,7 +691,7 @@ and authored regions marked with `data-marimo-lens-target`.
 See [custom JavaScript rendering](projections.md#trace-custom-javascript-rendering)
 for the authoring contract.
 
-Pass the selector to [Marimo Lens](https://marimo-team.github.io/marimo-lens/)
+Pass the selector to [Lens](https://marimo-team.github.io/marimo-lens/)
 to collect feedback from native projections and custom rendered regions:
 
 ```python

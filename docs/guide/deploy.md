@@ -5,13 +5,13 @@ description: Serve a Studio view with authentication, a managed process, a rever
 
 # Deploy a live Python view
 
-A live Python view runs notebook code on the server for each Marimo session.
+A live Python view runs notebook code on the server for each marimo session.
 Deploy it with the same care as an application that can read the notebook's
 files, packages, databases, network, and credentials.
 
 ## Start an authenticated process
 
-Store the Marimo token in a file readable by the application user:
+Store the marimo token in a file readable by the application user:
 
 ```console
 uv run --with marimo-studio marimo run /srv/analysis/analysis.py \
@@ -23,7 +23,7 @@ uv run --with marimo-studio marimo run /srv/analysis/analysis.py \
 ```
 
 Binding to `127.0.0.1` keeps the process behind the local reverse proxy. The
-token protects the Marimo and Studio routes with session-based authentication.
+token protects the marimo and Studio routes with session-based authentication.
 Keep the token file outside the repository and rotate it through the deployment
 secret manager.
 
@@ -45,7 +45,7 @@ connections so live notebook updates continue to work. Preserve the original
 host and scheme. Restrict the upstream port to trusted local or private-network
 clients.
 
-When the public URL includes a path prefix, pass the same value to Marimo:
+When the public URL includes a path prefix, pass the same value to marimo:
 
 ```console
 marimo run /srv/analysis/analysis.py \
@@ -84,13 +84,13 @@ rejected setting.
 Allow a parent origin only when you trust its pages to present Studio controls.
 An allowed parent can position the authenticated workspace inside its own
 interface and attempt clickjacking, where a user is misled into interacting with
-the framed application. The allowlist changes framing policy. Marimo
-authentication remains required. Marimo token sessions use `SameSite=Lax`
+the framed application. The allowlist changes framing policy. marimo
+authentication remains required. marimo token sessions use `SameSite=Lax`
 cookies. For a same-site parent on another origin, authenticate on the Studio
 origin before loading the workspace in the frame. A cross-site parent needs an
 external authentication layer designed for third-party iframe contexts.
 
-This setting controls which parent documents may frame Studio. Marimo's
+This setting controls which parent documents may frame Studio. marimo's
 `--allow-origins` option controls request origins for browser clients.
 
 ## Run as an ASGI application
@@ -126,7 +126,7 @@ authentication before exposing it beyond a trusted network.
 
 ## Check readiness and shutdown
 
-Use the Marimo health endpoint for the process check:
+Use the marimo health endpoint for the process check:
 
 ```console
 curl --fail http://127.0.0.1:8000/health

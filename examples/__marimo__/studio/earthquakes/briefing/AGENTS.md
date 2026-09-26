@@ -1,6 +1,6 @@
 # Reveal.js React view instructions
 
-Follow the Marimo Studio skill for notebook ownership, projection selection,
+Follow the `marimo-studio` skill for notebook ownership, projection selection,
 view lifecycle, and validation. This file covers the Reveal.js project in the
 `briefing` view.
 
@@ -66,7 +66,7 @@ epicenters and source records, not tectonic boundaries.
 
 ## Validate the presentation
 
-Build through Marimo Studio. Export the Zero-Python and WebAssembly sites.
+Build through Studio. Export the Zero-Python and WebAssembly sites.
 Exercise both lesson sliders and the catalog controls in the browser. Check
 horizontal navigation, fragments, Auto-Animate, overview mode, progress, slide
 numbering, and keyboard focus.

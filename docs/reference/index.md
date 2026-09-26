@@ -5,7 +5,7 @@ description: Exact commands, configuration, projection, Python, provider, compat
 
 # Reference
 
-Use these pages to look up an exact Marimo Studio contract. The [guide](../guide/index.md)
+Use these pages to look up an exact Studio contract. The [guide](../guide/index.md)
 owns task workflows and developed examples.
 
 ## Product contracts

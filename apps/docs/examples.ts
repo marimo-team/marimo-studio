@@ -22,7 +22,7 @@ export const documentationTechnologies = {
   },
   marimo: {
     description: "Reactive Python notebooks for data, computation, controls, and reusable results.",
-    name: "Marimo",
+    name: "marimo",
     projectUrl: "https://github.com/marimo-team/marimo",
   },
   mosaic: {

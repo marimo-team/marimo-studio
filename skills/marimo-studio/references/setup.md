@@ -1,7 +1,7 @@
 # Connect and select the environment
 
 Use the notebook's Python environment for Studio operations. If the briefing
-came from a disposable terminal environment, connect through Marimo's
+came from a disposable terminal environment, connect through marimo's
 **Code Mode** sidebar or `marimo pair execute`, then read the installed
 briefing in the notebook kernel:
 

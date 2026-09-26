@@ -63,7 +63,7 @@ from a preset, keeps its previous value and the combination matches no prepared
 state. Make each prepared control an independent input, and derive the dependent
 values in Python.
 
-The state walk can restore a cell whose inputs did not change from Marimo's
+The state walk can restore a cell whose inputs did not change from marimo's
 cache. The cache restores each definition of that cell separately, so objects
 that must stay shared, such as a CVXPY problem and the `Parameter` a function
 assigns before solving, return as independent copies. Build those objects inside
@@ -109,7 +109,7 @@ marimo-studio view export dashboard \
 Use `--runtime wasm` on both commands for a Browser export.
 
 Export runs the same preflight before committing its destination. Progress is
-written to stderr, including marimo-export prepared-state reuse and cache
+written to stderr, including `marimo-export` prepared-state reuse and cache
 activity. Each progress record names its owning source and nests that owner's
 event. With `--json`, stdout remains one terminal result and stderr contains
 JSON Lines progress and diagnostics. Events are flushed during environment

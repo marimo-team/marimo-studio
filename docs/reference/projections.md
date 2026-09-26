@@ -12,7 +12,7 @@ selected notebook runtime, and mounts the result in the host element.
 | Host                            | Target                          | Browser result                                           |
 | ------------------------------- | ------------------------------- | -------------------------------------------------------- |
 | `<marimo-cell name="summary">`  | Named cell or Studio cell alias | Complete native cell presentation                        |
-| `<marimo-output value="chart">` | Notebook value selector         | One value rendered by Marimo's output renderer           |
+| `<marimo-output value="chart">` | Notebook value selector         | One value rendered by marimo's output renderer           |
 | `mo-value="metrics.total"`      | Notebook value selector         | JSON value or Arrow-backed table exposed to browser code |
 
 The Python runtime is configured as `server`. The Browser runtime is
@@ -34,7 +34,7 @@ and self-closing HTML elements such as `<h1 mo-value="total"/>`.
 <marimo-cell name="summary"></marimo-cell>
 ```
 
-`name` accepts a native Marimo cell name or an alias stored under
+`name` accepts a native marimo cell name or an alias stored under
 `[tool.marimo-studio.cells]`. The host receives the cell's native output,
 controls, console output when `show_cell_logs` is enabled, error state, and
 reactive updates.
@@ -49,7 +49,7 @@ target enters `data-state="error"` with diagnostic code
 <marimo-output value="chart"></marimo-output>
 ```
 
-`value` selects a Python value. Marimo renders the selected object through its
+`value` selects a Python value. marimo renders the selected object through its
 native output renderer and keeps the result current when its producer reruns.
 
 One presentation can mount an output target once. A second host for the same
@@ -209,7 +209,7 @@ connected cell, output, and value hosts in browser automation.
 ## Trace custom JavaScript rendering
 
 For point-and-note feedback with producer context, follow
-[Select results with Marimo Lens](../guide/coding-agents.md#select-results-with-marimo-lens).
+[Select results with Lens](../guide/coding-agents.md#select-results-with-lens).
 
 Prefer `mo-value`, `marimo-output`, and `marimo-cell` when they can render the
 result directly. For a custom chart or component, retain its connection to the
@@ -224,11 +224,12 @@ notebook through the existing projection hosts:
 ```
 
 `data-marimo-lens-inputs` lists unique projection host IDs, separated by spaces, in
-the same document. It declares the region's complete notebook input set. Lens
-reads the hosts' resolved symbolic selectors and producing cells; authors do not
-copy runtime metadata. References can also point to `marimo-output` or
-`marimo-cell` hosts. Missing, duplicate, or unbound references make the region
-unavailable. References cannot chain through other annotated regions.
+the same document. It declares the region's complete notebook input set.
+[Lens](https://marimo-team.github.io/marimo-lens/) reads the hosts' resolved
+symbolic selectors and producing cells. Authors do not copy runtime metadata.
+References can also point to `marimo-output` or `marimo-cell` hosts.
+Missing, duplicate, or unbound references make the region unavailable.
+References cannot chain through other annotated regions.
 
 Alternatively, put existing hidden `mo-value` hosts directly inside their
 consuming region. `STUDIO_RESULT_SELECTOR` includes those parents and explicitly
@@ -239,7 +240,7 @@ Lens CSS selector can choose other containing regions.
 Keep references current when JS dependencies change, including transformed
 inputs and portals. Use `aria-busy="true"` while asynchronous rendering is
 incomplete and clear it on completion. Lens retains value selectors and producer
-context; this does not infer arbitrary JS dataflow or pin historical kernel
+context. It does not infer arbitrary JS dataflow or pin historical kernel
 values to captured pixels.
 
 ### Select individual results
@@ -262,7 +263,7 @@ state used to render the result. For non-JSON values, reference a hidden
 `marimo-output` host through `data-marimo-lens-inputs`.
 
 Dynamic selectors require the Python or Browser runtime. Prepared exports need
-a finite authored target set; use `view export --runtime wasm` when row or
+a finite authored target set. Use `view export --runtime wasm` when row or
 threshold selection generates paths at runtime.
 
 Prepared views can project a collection through a fixed selector and reference
@@ -279,7 +280,7 @@ are single surfaces unless their renderer supplies finer DOM targets.
 While Lens is selecting a target, it outlines the element and attaches a compact
 label to its edge. Studio supplies the resolved cell or variable name and its
 producer automatically. Custom regions inherit the labels of their source hosts.
-Override the display text when a region needs a more useful name:
+Override the display text when a region needs a more specific name:
 
 ```html
 <section
@@ -331,7 +332,7 @@ results.
 
 ### Project an authored Lens
 
-Development previews reuse the Lens that Marimo mounts in the notebook. To put
+Development previews reuse the Lens that marimo mounts in the notebook. To put
 an explicitly authored Lens in another Server view, define it in the notebook:
 
 ```python
@@ -349,7 +350,7 @@ the view to place the Lens dock there:
 <marimo-output value="studio_lens"></marimo-output>
 ```
 
-Studio skips Marimo's automatic Lens in a notebook that imports Lens, so
+Studio skips marimo's automatic Lens in a notebook that imports Lens, so
 `studio_lens` is the notebook's only Lens.
 
 The [Lens agent guide](https://marimo-team.github.io/marimo-lens/agents) defines
