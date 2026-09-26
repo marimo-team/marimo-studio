@@ -61,6 +61,17 @@ lab. Each view reads from the same Python notebook.
 
 <StudioViewStack family="quadratic-programs" />
 
+## Example views
+
+Each example notebook backs several views: slide decks, reading pages, linked
+explorers, maps, monitors, and printable reports. Open a view to compare it
+with its siblings and the notebook behind them.
+
+<StudioViewMasonry />
+
+[Browse the examples](./examples/) or
+[run one locally](./examples/#run-an-example-locally).
+
 ## Ask a coding agent for a view
 
 Ask your coding agent to turn an existing notebook into a view for your audience:

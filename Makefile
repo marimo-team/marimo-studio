@@ -102,7 +102,7 @@ e2e-ui: _browser-ready build _prepare-browser-tests ## Open the browser test run
 docs-examples: _frontend-ready build ## Export examples for the documentation site.
 	$(VP) run --filter @marimo-studio/docs examples:build
 
-docs-thumbnails: _browser-ready ## Capture example gallery thumbnails from exported views.
+docs-thumbnails: _browser-ready ## Capture example thumbnails and landing posters from exported views.
 	@test -d apps/docs/public/examples || $(MAKE) docs-examples
 	$(VP) run --filter @marimo-studio/docs thumbnails
 

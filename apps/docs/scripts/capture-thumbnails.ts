@@ -4,21 +4,24 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { preview } from "vite";
 
-import { documentationExampleFamilies } from "../examples.ts";
+import { documentationExampleFamilies, documentationPosterViewports } from "../examples.ts";
 import { selectDocumentationExamples } from "./example-selection.ts";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
-const outputRoot = join(packageRoot, "public", "thumbnails");
+const thumbnailRoot = join(packageRoot, "public", "thumbnails");
+const posterRoot = join(packageRoot, "public", "posters");
 const viewport = { height: 900, width: 1440 };
-const outputWidth = 1600;
+const thumbnailWidth = 1600;
+const posterWidth = 1024;
 const quality = 0.86;
 const settleMs = 1500;
 const timeoutMs = 60_000;
 
 const usage = `Usage: pnpm --filter @marimo-studio/docs thumbnails [selectors] [--base-url URL]
 
-Captures the Examples gallery image for each view from the exported examples in
-public/examples, and writes public/thumbnails/FAMILY/VIEW.webp. Run
+Captures the Examples gallery image and the landing-page poster for each view
+from the exported examples in public/examples. Writes
+public/thumbnails/FAMILY/VIEW.webp and public/posters/FAMILY/VIEW.webp. Run
 \`make docs-thumbnails\` to export missing examples and install Chromium first.
 
 Selectors may be repeated. Without selectors every view is captured:
@@ -38,7 +41,7 @@ const waitForView = async (page: Page, url: string): Promise<void> => {
 };
 
 /** Chromium resamples the capture and encodes WebP, so no image library is required. */
-const encodeWebp = async (encoder: Page, png: Buffer): Promise<Buffer> => {
+const encodeWebp = async (encoder: Page, png: Buffer, outputWidth: number): Promise<Buffer> => {
   const encoded = await encoder.evaluate(
     async ({ data, quality, width }) => {
       const source = await createImageBitmap(await (await fetch(data)).blob());
@@ -62,6 +65,11 @@ const encodeWebp = async (encoder: Page, png: Buffer): Promise<Buffer> => {
   return Buffer.from(encoded, "base64");
 };
 
+const write = async (path: string, image: Buffer): Promise<void> => {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, image);
+};
+
 const capture = async (browser: Browser, baseUrl: string, selectors: string[]) => {
   const selection = selectDocumentationExamples(documentationExampleFamilies, selectors);
   const context = await browser.newContext({
@@ -79,10 +87,20 @@ const capture = async (browser: Browser, baseUrl: string, selectors: string[]) =
         page.on("pageerror", (error) => console.warn(`  ${name} reported: ${error.message}`));
         try {
           await waitForView(page, new URL(`examples/${name}/index.html`, baseUrl).href);
-          const image = await encodeWebp(encoder, await page.screenshot({ type: "png" }));
-          const path = join(outputRoot, family.slug, `${view.key}.webp`);
-          await mkdir(dirname(path), { recursive: true });
-          await writeFile(path, image);
+          const thumbnail = await page.screenshot({ type: "png" });
+          await write(
+            join(thumbnailRoot, family.slug, `${view.key}.webp`),
+            await encodeWebp(encoder, thumbnail, thumbnailWidth),
+          );
+          // Posters reflow the same page at their own viewport so reports show
+          // more of their scroll and apps keep a single screen.
+          await page.setViewportSize(documentationPosterViewports[view.poster]);
+          await page.waitForTimeout(settleMs);
+          const poster = await page.screenshot({ type: "png" });
+          await write(
+            join(posterRoot, family.slug, `${view.key}.webp`),
+            await encodeWebp(encoder, poster, posterWidth),
+          );
           console.log(`Captured ${name}`);
         } catch (error) {
           failed.push(name);

@@ -78,12 +78,30 @@ a time.
 <StudioViewStack family="quadratic-programs" />
 ```
 
-## Example thumbnails
+## View masonry
+
+`StudioViewMasonry` lays out every view in `documentationExampleFamilies` as a
+column masonry of posters on the landing page, interleaving families so
+neighboring tiles come from different notebooks. Each tile links to its
+example page with the view selected.
+
+```md
+<StudioViewMasonry />
+```
+
+Each catalog view declares a `poster` shape. Use `tall` for pages that scroll
+past one screen and `wide` for single-screen apps and decks.
+`documentationPosterViewports` maps each shape to its capture viewport, and the
+component uses the same size to reserve the tile before the image loads.
+
+## Example thumbnails and posters
 
 The Examples page renders one `StudioExampleCard` per family. Each card cycles
 through `apps/docs/public/thumbnails/FAMILY/VIEW.webp` for the views listed in
-`documentationExampleFamilies`. Thumbnails are committed assets. Recapture them
-after a visible view change or when a view joins the catalog:
+`documentationExampleFamilies`. The landing page masonry reads
+`apps/docs/public/posters/FAMILY/VIEW.webp`. Thumbnails and posters are
+committed assets. Recapture them after a visible view change or when a view
+joins the catalog:
 
 ```console
 make docs-thumbnails
@@ -92,9 +110,10 @@ make docs-thumbnails
 The target exports the examples when `apps/docs/public/examples` is missing and
 installs Chromium. The script serves `apps/docs/public` locally, opens each
 exported view at 1440x900 and device scale 2, waits for network idle, loaded
-fonts, and a settle delay, then writes a 1600px wide WebP. Select views with
-`--family SLUG` or `--view FAMILY/VIEW`, or capture a deployed site with
-`--base-url`:
+fonts, and a settle delay, then writes a 1600px wide WebP thumbnail. It then
+resizes the same page to the view's poster viewport, waits again, and writes a
+1024px wide WebP poster. Select views with `--family SLUG` or
+`--view FAMILY/VIEW`, or capture a deployed site with `--base-url`:
 
 ```console
 pnpm --filter @marimo-studio/docs thumbnails -- --view athletes/field
