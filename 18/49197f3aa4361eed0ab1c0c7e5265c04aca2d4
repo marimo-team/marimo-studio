@@ -1,0 +1,28 @@
+packages/marimo-studio/pyproject.toml
+  s_0734fd328ae404::t_c35a14b21b7d93 3
+docs/reference/compatibility.md
+  s_0734fd328ae404::t_57a5c869ddcc06 3,8-11,69,128
+docs/reference/provider-api.md
+  s_0734fd328ae404::t_f74f416039476a 104
+packages/marimo-studio/README.md
+  s_0734fd328ae404::t_57a5c869ddcc06 7
+.github/release-notes/v0.2.0.md
+  s_0734fd328ae404::t_57a5c869ddcc06 1-16,20-42
+  s_0734fd328ae404::t_1ea402b022acbc 17-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1849197f3aa4361eed0ab1c0c7e5265c04aca2d4",
+  "prompts": {},
+  "sessions": {
+    "s_0734fd328ae404": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0dc34-0ddf-7e72-a400-7404a6133c0b",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
