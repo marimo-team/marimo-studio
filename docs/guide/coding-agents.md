@@ -9,53 +9,43 @@ A coding agent can inspect a notebook, create a view, edit its source, and
 verify the result in a browser. Studio ships the instructions and Python API
 with the package, so the agent works from your installed version.
 
-## Give the agent its briefing
-
-A terminal agent reads Studio's installed briefing with
-[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
-instructions a Python package ships for coding agents:
-
-```console
-uvx --with marimo-studio agent-plugins read marimo-studio
-```
-
-From the notebook's Python environment, `help(marimo_studio.agent)` prints the
-same briefing with the Python API, matching the Studio version the notebook
-runs.
-
 ## Ask for a view
 
-[Open your notebook in Studio](getting-started.md), then connect an agent to
-its kernel. marimo's AI sidebar runs the agent there in **Code Mode (beta)**. A
-terminal agent such as Claude Code or Codex pairs through the `marimo pair`
-command, which finds running notebooks and runs the agent's Python in the
-notebook kernel:
+Give a terminal agent such as Claude Code or Codex one instruction:
 
 ```console
-claude "Pair with me on my running marimo notebook analysis.py. Run \`uvx marimo@latest pair --help\` first."
+claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
+to build a briefing view of analysis.py that leads with the headline results.'
 ```
 
-Code mode lists Studio among the capabilities installed with the notebook, so
-the agent reads the briefing for the Studio version the notebook runs.
+[Agent Plugins](https://github.com/peter-gy/agent-plugins) prints the
+instructions a Python package ships for coding agents. Studio's briefing tells
+the agent to find your running notebook with `marimo pair`, or to start it with
+Studio when it is not running, then to run its Python in the notebook kernel.
+The agent inspects the notebook and available starters, reads the view's
+`AGENTS.md`, then edits, builds, and shows the view in Preview.
+
+In marimo's AI sidebar, the agent already runs in the kernel. Switch to
+**Code Mode (beta)** and ask for the view directly.
+
+## Write a good request
 
 Give the agent an audience, a task, and a result to check:
 
-> Read the installed `marimo-studio` briefing. Create a view named `briefing`
-> for a quarterly review. Use the notebook's existing measures and controls.
-> Lead with the headline results, then show the evidence behind them. Verify
-> the view at desktop and phone widths and check that changing a control
-> updates its dependent results.
+> Create a view named `briefing` for a quarterly review. Use the notebook's
+> existing measures and controls. Lead with the headline results, then show
+> the evidence behind them. Verify the view at desktop and phone widths and
+> check that changing a control updates its dependent results.
 
-The agent inspects the notebook and available starters, reads the view's
-`AGENTS.md`, then edits, builds, and shows the view. Review the result in
-Preview. Keep shared calculations in the notebook and audience-specific layout
-and wording in the view. Record lasting visual decisions in the project's
-`DESIGN.md`.
+Review the result in Preview. Keep shared calculations in the notebook and
+audience-specific layout and wording in the view. Record lasting visual
+decisions in the project's `DESIGN.md`.
 
 ## Inspect and verify
 
 For agent authors and integrations, the live API begins with the current
-workspace. Run this in one code-mode execution:
+workspace. From the notebook's Python environment, `help(marimo_studio.agent)`
+prints the briefing with the Python API. Run this in one code-mode execution:
 
 ```python
 import marimo_studio

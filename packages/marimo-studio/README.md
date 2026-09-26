@@ -23,27 +23,20 @@ view. Follow the [quickstart](https://marimo-team.github.io/marimo-studio/guide/
 for a complete first view. [uv](https://docs.astral.sh/uv/) supplies `uvx` and
 resolves the notebook's declared dependencies with `--sandbox`.
 
-## For agents
+## Build a view with a coding agent
 
-Read the version-matched briefing shipped with Studio through
-[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
-instructions a Python package ships for coding agents:
+Give a terminal agent such as Claude Code or Codex one instruction:
 
 ```console
-uvx --with marimo-studio agent-plugins read marimo-studio
+claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
+to build a briefing view of analysis.py that leads with the headline results.'
 ```
 
-From the notebook's Python environment:
-
-```python
-import marimo_studio
-
-help(marimo_studio.agent)
-```
-
-The briefing covers inspecting, creating, editing, building, and verifying
-views. Follow the [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-to connect your agent and send it visual feedback with
+`agent-plugins read` prints the briefing Studio ships for coding agents through
+[Agent Plugins](https://github.com/peter-gy/agent-plugins). It tells the agent
+how to pair with your running notebook, or start one, then create, build, and
+show the view. Follow the [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+for request guidance and visual feedback with
 [Lens](https://marimo-team.github.io/marimo-lens/).
 
 ## Run or export a view

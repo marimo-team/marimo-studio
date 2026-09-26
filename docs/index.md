@@ -74,19 +74,16 @@ with its siblings and the notebook behind them.
 
 ## Ask a coding agent for a view
 
-Ask your coding agent to turn an existing notebook into a view for your audience:
-
-> Create a concise briefing from this notebook. Keep the results connected to
-> Python, add a way to explore them, and check the view on a narrow screen.
-
-Studio ships the instructions and API your agent needs with the Python package.
-Read its installed briefing from a terminal with
-[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
-instructions a Python package ships for coding agents:
+Give a terminal agent one instruction:
 
 ```console
-uvx --with marimo-studio agent-plugins read marimo-studio
+claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
+to build a briefing view of analysis.py that leads with the headline results.'
 ```
 
-[Connect your agent](./guide/coding-agents) or
+The briefing ships with the `marimo-studio` package. It tells the agent how to
+pair with your running notebook, or start one, then create, build, and show the
+view beside the notebook.
+
+[Author with a coding agent](./guide/coding-agents) or
 [create your first view](./guide/getting-started).

@@ -30,16 +30,37 @@ environment and Studio installation remain unchanged.
 
 Live Studio work runs in the notebook's kernel through marimo code mode.
 marimo's chat sidebar in **Code Mode** already runs there. A terminal agent
-sends each execution through `marimo pair execute`. Run
-`uvx marimo@latest pair --help` for server discovery, notebook selection, and
-authentication, then run each Python example below as one execution.
+pairs with the running notebook through `marimo pair`. List running notebooks
+first:
 
-Studio adds one requirement. The marimo server must run with `marimo-studio`
-installed, for example through `uvx --with marimo-studio` or the notebook
-project's dependencies. `help(marimo._code_mode)` then lists Studio as the
-`studio` capability, and sandboxed kernels import the same Studio as the
-server. Without a running notebook, ask the user to open it in Studio, or
-continue with saved-notebook authoring from a terminal.
+```console
+uvx marimo@latest pair notebook list
+```
+
+Pick the user's notebook and pass its server URL and absolute `path` to every
+execution. Run each Python example below as one execution:
+
+```console
+uvx marimo@latest pair execute --url <URL> --file <PATH> --code-file - <<'PY'
+import marimo_studio
+print(await marimo_studio.agent.current_workspace().status())
+PY
+```
+
+When the notebook is not running, start it in the background. marimo opens a
+Studio tab in the user's browser, and the notebook appears in the list once
+that tab connects:
+
+```console
+uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox
+```
+
+Studio needs `marimo-studio` in the marimo server's environment, as in that
+command or the notebook project's dependencies. `help(marimo._code_mode)` then
+lists Studio as the `studio` capability, and sandboxed kernels import the same
+Studio as the server. Run `uvx marimo@latest pair --help` for authentication
+and session selection. Without a way to run the notebook, continue with
+saved-notebook authoring from a terminal.
 
 Inside notebook code mode, combine connection with the first inspection:
 

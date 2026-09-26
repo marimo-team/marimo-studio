@@ -57,28 +57,23 @@ Build views with HTML, React, Svelte, or Observable Notebook Kit. Each view owns
 its source and browser dependencies.
 [Explore all examples](https://marimo-team.github.io/marimo-studio/examples/).
 
-## For agents
+## Build a view with a coding agent
 
-Read the version-matched briefing shipped with Studio through
-[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
-instructions a Python package ships for coding agents:
+Give a terminal agent such as Claude Code or Codex one instruction:
 
 ```console
-uvx --with marimo-studio agent-plugins read marimo-studio
+claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
+to build a briefing view of analysis.py that leads with the headline results.'
 ```
 
-From the notebook's Python environment:
+`agent-plugins read` prints the briefing Studio ships for coding agents through
+[Agent Plugins](https://github.com/peter-gy/agent-plugins). It tells the agent
+how to pair with your running notebook, or start one, then create, build, and
+show the view in Preview beside the notebook. In marimo's AI sidebar in
+**Code Mode**, ask for the view directly.
 
-```python
-import marimo_studio
-
-help(marimo_studio.agent)
-```
-
-The briefing covers inspecting the notebook, creating and editing a view,
-building it, and checking the rendered result. The
-[agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-explains how to connect an agent and send it visual feedback with
+The [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+covers writing a good request and sending visual feedback with
 [Lens](https://marimo-team.github.io/marimo-lens/).
 
 ## Run or export a view
