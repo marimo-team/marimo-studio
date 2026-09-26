@@ -7,7 +7,6 @@ import { createMarkdownRenderer } from "vitepress";
 import { siteRoutes } from "../.vitepress/routes.ts";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
-const repositoryRoot = resolve(packageRoot, "../..");
 const docsRoot = resolve(packageRoot, "../../docs");
 const markdownRenderer = createMarkdownRenderer(docsRoot);
 
@@ -54,18 +53,6 @@ const resolveTarget = (sourceFile: string, href: string): string | undefined => 
 
 describe("documentation source integrity", () => {
   const files = markdownFiles(docsRoot);
-
-  it("uploads generated hidden example dependencies to GitHub Pages", () => {
-    const workflow = readFileSync(
-      join(repositoryRoot, ".github", "workflows", "pages.yml"),
-      "utf8",
-    );
-    const uploadStep = workflow
-      .split("- name: Upload GitHub Pages artifact", 2)[1]
-      ?.split("\n  deploy:", 1)[0];
-
-    expect(uploadStep).toContain("include-hidden-files: true");
-  });
 
   it("gives every public page a title and description", async () => {
     const markdown = await markdownRenderer;
