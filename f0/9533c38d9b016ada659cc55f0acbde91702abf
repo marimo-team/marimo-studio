@@ -1,0 +1,28 @@
+skills/marimo-studio/references/setup.md
+  s_d90006552dfb6e::t_26ceeb43a9a9ce 4-6,11,14-17,23-24
+  s_d90006552dfb6e::t_eabe1d4cc93dd6 25-28
+  s_d90006552dfb6e::t_f80f621c035049 9
+skills/marimo-studio/SKILL.md
+  s_d90006552dfb6e::t_26ceeb43a9a9ce 31-42
+development_docs/architecture/agents-and-delivery.md
+  s_d90006552dfb6e::t_f607cc688a5eda 20-23
+  s_d90006552dfb6e::t_a08980b772ba2c 18-19,24
+docs/guide/coding-agents.md
+  s_d90006552dfb6e::t_cae9c3b3b7d115 28-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f09533c38d9b016ada659cc55f0acbde91702abf",
+  "prompts": {},
+  "sessions": {
+    "s_d90006552dfb6e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61a2b652-3e66-4b6f-b224-724eda313f96",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
