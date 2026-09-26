@@ -1,46 +1,24 @@
 export const reportFontAssets = {
-  hankenRegular: new URL("./fonts/hanken-grotesk-regular.woff", import.meta.url)
+  regular: new URL("./fonts/inter-regular.woff", import.meta.url)
     .href,
-  hankenMedium: new URL("./fonts/hanken-grotesk-medium.woff", import.meta.url)
+  medium: new URL("./fonts/inter-medium.woff", import.meta.url)
     .href,
-  hankenSemibold: new URL(
-    "./fonts/hanken-grotesk-semibold.woff",
-    import.meta.url,
-  ).href,
-  newsreaderRegular: new URL("./fonts/newsreader-regular.woff", import.meta.url)
+  semibold: new URL("./fonts/inter-semibold.woff", import.meta.url)
     .href,
 } as const;
 
 const fontSheet = document.createElement("style");
 fontSheet.dataset.occupancyReportFonts = "";
-fontSheet.textContent = `
+fontSheet.textContent = [
+  [400, reportFontAssets.regular],
+  [500, reportFontAssets.medium],
+  [600, reportFontAssets.semibold],
+].map(([weight, src]) => `
   @font-face {
-    font-family: "Hanken Grotesk";
+    font-family: "Inter";
     font-style: normal;
-    font-weight: 400;
+    font-weight: ${weight};
     font-display: swap;
-    src: url("${reportFontAssets.hankenRegular}") format("woff");
-  }
-  @font-face {
-    font-family: "Hanken Grotesk";
-    font-style: normal;
-    font-weight: 500;
-    font-display: swap;
-    src: url("${reportFontAssets.hankenMedium}") format("woff");
-  }
-  @font-face {
-    font-family: "Hanken Grotesk";
-    font-style: normal;
-    font-weight: 600;
-    font-display: swap;
-    src: url("${reportFontAssets.hankenSemibold}") format("woff");
-  }
-  @font-face {
-    font-family: "Newsreader";
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url("${reportFontAssets.newsreaderRegular}") format("woff");
-  }
-`;
+    src: url("${src}") format("woff");
+  }`).join("");
 document.head.append(fontSheet);

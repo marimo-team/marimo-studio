@@ -4,6 +4,7 @@ import DefaultTheme from "vitepress/theme";
 
 import StudioExample from "./components/StudioExample.vue";
 import StudioExampleCard from "./components/StudioExampleCard.vue";
+import StudioViewMasonry from "./components/StudioViewMasonry.vue";
 import StudioViewStack from "./components/StudioViewStack.vue";
 import "./custom.css";
 
@@ -12,6 +13,7 @@ export default {
   enhanceApp({ app }) {
     app.component("StudioExample", StudioExample);
     app.component("StudioExampleCard", StudioExampleCard);
+    app.component("StudioViewMasonry", StudioViewMasonry);
     app.component("StudioViewStack", StudioViewStack);
   },
 } satisfies Theme;

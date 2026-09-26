@@ -94,18 +94,18 @@ routing state, so notebook code does not receive it through
 
 ## Open multiple tabs
 
-In edit mode, Studio uses [Marimo's native sessions](https://docs.marimo.io/).
+In edit mode, Studio uses [marimo's native sessions](https://docs.marimo.io/).
 Tabs opened on the same notebook and server share one Python kernel. Changing
 a control recomputes notebook outputs across Python previews. Widget state and
 public query parameters synchronize across those tabs. Each Studio tab keeps
 its selected view.
 
-Marimo gives the first connection editing control. Other tabs can interact
+marimo gives the first connection editing control. Other tabs can interact
 with the notebook through its kiosk view. Select **Take over** in the embedded
 editor to move editing control to that tab. Closing the editor tab leaves the
 remaining tabs connected to the same kernel.
 
-Run mode follows Marimo's visitor sessions. The Browser runtime runs a separate
+Run mode follows marimo's visitor sessions. The Browser runtime runs a separate
 notebook in each browser worker. Selecting another runtime changes which
 notebook instance supplies that tab's outputs.
 

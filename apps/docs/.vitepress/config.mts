@@ -70,7 +70,7 @@ export default defineConfig({
   lastUpdated: true,
   sitemap: { hostname: siteUrl.href },
   srcDir: "../../docs",
-  title: "Marimo Studio",
+  title: "marimo-studio",
   transformHead({ description, page, title }): HeadConfig[] {
     const canonical = canonicalUrl(page);
     const pageDescription = description || socialDescription;
@@ -78,7 +78,7 @@ export default defineConfig({
     return [
       ["link", { href: canonical, rel: "canonical" }],
       ["meta", { property: "og:type", content: "website" }],
-      ["meta", { property: "og:site_name", content: "Marimo Studio" }],
+      ["meta", { property: "og:site_name", content: "marimo-studio" }],
       ["meta", { property: "og:locale", content: "en_US" }],
       ["meta", { property: "og:title", content: title }],
       ["meta", { property: "og:description", content: pageDescription }],
@@ -90,7 +90,7 @@ export default defineConfig({
         "meta",
         {
           property: "og:image:alt",
-          content: "Notebook, view source, and Preview in Marimo Studio",
+          content: "Notebook, view source, and Preview in Studio",
         },
       ],
       ["meta", { name: "twitter:title", content: title }],
@@ -105,10 +105,10 @@ export default defineConfig({
     },
     footer: {
       message:
-        'marimo-studio is a collaboration of <a class="studio-footer-link" href="https://marimo.io/">Marimo Team</a>, <a class="studio-footer-link" href="https://ivia.ethz.ch/">ETH Zurich IVIA Lab</a>, and <a class="studio-footer-link" href="https://dig.cmu.edu/team">CMU Data Interaction Group</a>',
+        'marimo-studio is a collaboration of <a class="studio-footer-link" href="https://marimo.io/">marimo team</a>, <a class="studio-footer-link" href="https://ivia.ethz.ch/">ETH Zurich IVIA Lab</a>, and <a class="studio-footer-link" href="https://dig.cmu.edu/team">CMU Data Interaction Group</a>',
     },
     logo: {
-      alt: "Marimo Studio",
+      alt: "marimo-studio",
       dark: "/brand/marimo-studio-lockup-horizontal-dark.svg",
       light: "/brand/marimo-studio-lockup-horizontal-light.svg",
     },

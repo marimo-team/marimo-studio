@@ -1,6 +1,6 @@
 # React starter instructions
 
-Follow the Marimo Studio skill for notebook ownership, projection selection,
+Follow the `marimo-studio` skill for notebook ownership, projection selection,
 view lifecycle, and validation. This file covers the React project supplied by
 this starter.
 
@@ -19,8 +19,7 @@ Use native React PDF SVG primitives for charts so the report stays sharp when
 printed. Keep each page fixed to A4 portrait, use explicit page composition, and
 repeat the report identity and page count through fixed page furniture. Follow
 the Architect's Field Report in `DESIGN.md`: chalk paper, deep teal ink,
-hairline rules, Newsreader display type, Hanken Grotesk body type, and one
-restrained orange signal. Keep the observation scope as a compact field tag
+hairline rules, Inter for every text role, and one restrained orange signal. Keep the observation scope as a compact field tag
 whose insets follow its text.
 
 Keep the environmental graphic in a top-down plan view with labeled signal
@@ -36,10 +35,12 @@ into the published artifact.
 Resolve the WOFF files under `public/fonts` through
 `src/install-report-fonts.ts`, then register the same asset URLs with React PDF
 and the browser. The SIL Open Font License files travel with the published
-artifact.
+artifact. `fontMetrics` in `src/report/theme.ts` records Inter's ascent and cap
+height. React PDF places each baseline one ascent below the top of its text
+box, so `capCenter`, `capTop`, and `capInset` align glyphs with marks, rings,
+and fills. Update those metrics with the font.
 
-The pinned `@fontsource/newsreader` and `@fontsource/hanken-grotesk` packages
-own the source files. Run `deno task sync:fonts` after changing their versions
+The pinned `@fontsource/inter` package owns the source files. Run `deno task sync:fonts` after changing their versions
 or selected weights, then commit the public fonts and license files together.
 
 ## Use the supplied Studio integration

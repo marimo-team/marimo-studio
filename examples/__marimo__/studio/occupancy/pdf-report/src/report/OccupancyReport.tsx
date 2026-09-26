@@ -7,32 +7,15 @@ import { reportFontAssets } from "../install-report-fonts.ts";
 import { EnvironmentPage } from "./EnvironmentPage.tsx";
 import { ExecutivePage } from "./ExecutivePage.tsx";
 import { ModelPage } from "./ModelPage.tsx";
+import { typefaces } from "./theme.ts";
 import type { OccupancyReportData } from "./types.ts";
 
 Font.register({
-  family: "Hanken Grotesk",
+  family: typefaces.body,
   fonts: [
-    {
-      src: reportFontAssets.hankenRegular,
-      fontWeight: 400,
-    },
-    {
-      src: reportFontAssets.hankenMedium,
-      fontWeight: 500,
-    },
-    {
-      src: reportFontAssets.hankenSemibold,
-      fontWeight: 600,
-    },
-  ],
-});
-Font.register({
-  family: "Newsreader",
-  fonts: [
-    {
-      src: reportFontAssets.newsreaderRegular,
-      fontWeight: 400,
-    },
+    { src: reportFontAssets.regular, fontWeight: 400 },
+    { src: reportFontAssets.medium, fontWeight: 500 },
+    { src: reportFontAssets.semibold, fontWeight: 600 },
   ],
 });
 Font.registerHyphenationCallback((word) => [word]);
@@ -42,7 +25,7 @@ export const OccupancyReport = (
 ): ReactElement<DocumentProps> => (
   <Document
     title={`${report.room} Occupancy Field Report`}
-    author="Marimo Studio"
+    author="marimo-studio"
     subject="Building occupancy, environmental signals, and model evidence"
     keywords="occupancy, facilities, carbon dioxide, sensors, model review"
     language="en"

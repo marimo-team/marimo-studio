@@ -29,26 +29,26 @@ marimo-cell {
   min-width: 0;
 }
 
-/* The figure holds the left column at the viewport's height while the title,
-   controls, and chart scroll beside it, so any frame opens on the geometry. */
+/* The dial and the value curve share one sticky column sized to the viewport,
+   so any frame shows both instruments beside the title and readout. */
 .lab {
-  --pad: clamp(1.25rem, 6vh, 4.5rem);
+  --pad: clamp(1rem, 5vh, 4.5rem);
   box-sizing: border-box;
-  column-gap: clamp(2rem, 5vw, 4.5rem);
+  column-gap: clamp(1.75rem, 4.5vw, 4.5rem);
   display: grid;
   grid-template-areas:
-    "stage masthead"
-    "stage panel";
-  grid-template-columns: minmax(0, 1.15fr) minmax(17rem, 1fr);
+    "instrument masthead"
+    "instrument panel";
+  grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 1fr);
   grid-template-rows: auto 1fr;
   margin: 0 auto;
-  max-width: 78rem;
+  max-width: 80rem;
   padding: var(--pad) clamp(1.25rem, 3vw, 2rem);
 }
 
 .masthead {
   grid-area: masthead;
-  margin-bottom: clamp(1.5rem, 4vh, 2.5rem);
+  margin-bottom: clamp(1.25rem, 4vh, 2.5rem);
 }
 
 .kicker {
@@ -73,12 +73,22 @@ h1 {
   margin: 0;
 }
 
-.stage {
+.instrument {
   align-self: start;
-  grid-area: stage;
-  margin: 0;
+  display: grid;
+  gap: clamp(0.75rem, 3vh, 2rem);
+  grid-area: instrument;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: calc(100svh - 2 * var(--pad));
+  min-height: 24rem;
   position: sticky;
   top: var(--pad);
+}
+
+.stage {
+  margin: 0;
+  min-height: 0;
+  position: relative;
 }
 
 .unavailable {
@@ -88,17 +98,12 @@ h1 {
   text-align: center;
 }
 
-.stage figcaption {
-  color: var(--muted);
-  font-size: 0.8125rem;
-  margin-top: 0.75rem;
-  text-align: center;
-}
-
 .geometry {
   cursor: grab;
   display: block;
-  max-height: calc(100svh - 2 * var(--pad) - 2rem);
+  height: 100%;
+  inset: 0;
+  position: absolute;
   touch-action: none;
   user-select: none;
   width: 100%;
@@ -206,7 +211,7 @@ h1 {
 .panel {
   align-content: start;
   display: grid;
-  gap: 2rem;
+  gap: clamp(1.5rem, 4vh, 2.25rem);
   grid-area: panel;
 }
 
@@ -214,41 +219,78 @@ h1 {
   border-top: 1px solid var(--rule);
   display: grid;
   font-variant-numeric: tabular-nums;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
 }
 
 .readout div {
+  align-content: start;
   border-bottom: 1px solid var(--rule);
   display: grid;
-  gap: 1rem;
-  grid-template-columns: 9rem minmax(0, 1fr);
-  padding: 0.6rem 0;
+  gap: 0.25rem;
+  padding: 0.75rem 0.75rem 0.75rem 0;
+}
+
+.readout div:nth-child(even) {
+  border-left: 1px solid var(--rule);
+  padding-left: 0.75rem;
 }
 
 .readout dt {
   color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.3;
 }
 
+/* Values scale down in the narrowest two-column frames so a signed pair such
+   as (−0.71, −1.88) stays inside its cell. */
 .readout dd {
+  font-size: clamp(1.0625rem, 2.6vw, 1.25rem);
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
   margin: 0;
+  white-space: nowrap;
+}
+
+/* Two walls can hold the solution at once. Reserve both lines so the control
+   underneath keeps its place as the direction turns. */
+.readout .held {
+  display: grid;
+  min-height: 2.6em;
+}
+
+.readout em {
+  font-family: var(--heading-font);
+}
+
+.readout sub {
+  font-size: 0.6em;
+  line-height: 0;
 }
 
 .dual {
   color: var(--accent);
+  font-size: 0.8125rem;
   margin-left: 0.25rem;
+}
+
+.chart {
+  min-width: 0;
 }
 
 .chart h2 {
   color: var(--muted);
-  font: 500 0.75rem / 1 var(--text-font);
+  font: 500 0.6875rem / 1 var(--text-font);
   letter-spacing: 0.14em;
-  margin: 0 0 1rem;
+  margin: 0 0 0.625rem;
   text-transform: uppercase;
 }
 
 .sensitivity {
   cursor: ew-resize;
   display: block;
+  overflow: visible;
   font-variant-numeric: tabular-nums;
   touch-action: none;
   user-select: none;
@@ -305,7 +347,7 @@ h1 {
   .lab {
     grid-template-areas:
       "masthead"
-      "stage"
+      "instrument"
       "panel";
     grid-template-columns: minmax(0, 1fr);
     row-gap: 2rem;
@@ -315,7 +357,14 @@ h1 {
     margin-bottom: 0;
   }
 
-  .stage {
+  .instrument {
+    height: auto;
+    min-height: 0;
     position: static;
+  }
+
+  .stage {
+    aspect-ratio: 1;
+    max-height: 80svh;
   }
 }

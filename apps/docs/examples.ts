@@ -22,7 +22,7 @@ export const documentationTechnologies = {
   },
   marimo: {
     description: "Reactive Python notebooks for data, computation, controls, and reusable results.",
-    name: "Marimo",
+    name: "marimo",
     projectUrl: "https://github.com/marimo-team/marimo",
   },
   mosaic: {
@@ -83,9 +83,22 @@ export const documentationExampleSource = {
   viewProjectsRoot: "examples/__marimo__/studio",
 } as const;
 
+/**
+ * Poster shape on the landing page. Scrolling pages use `tall`, and
+ * single-screen apps and decks use `wide`.
+ */
+export type DocumentationPosterShape = "tall" | "wide";
+
+/** Viewport, in CSS pixels, that captures each poster shape. */
+export const documentationPosterViewports = {
+  tall: { height: 1600, width: 1280 },
+  wide: { height: 800, width: 1280 },
+} as const satisfies Record<DocumentationPosterShape, { height: number; width: number }>;
+
 export interface DocumentationExampleView {
   key: string;
   label: string;
+  poster: DocumentationPosterShape;
   technologies: readonly DocumentationTechnology[];
 }
 
@@ -105,16 +118,19 @@ export const documentationExampleFamilies = [
       {
         key: "lecture",
         label: "Lecture",
+        poster: "wide",
         technologies: [documentationTechnologies.react, documentationTechnologies.revealJs],
       },
       {
         key: "explainer",
         label: "Explainer",
+        poster: "tall",
         technologies: [documentationTechnologies.vanillaHtml],
       },
       {
         key: "lab",
         label: "Lab",
+        poster: "wide",
         technologies: [documentationTechnologies.svelte, documentationTechnologies.d3],
       },
     ],
@@ -127,16 +143,19 @@ export const documentationExampleFamilies = [
       {
         key: "overview",
         label: "Overview",
+        poster: "tall",
         technologies: [documentationTechnologies.vanillaHtml],
       },
       {
         key: "explorer",
         label: "Explorer",
+        poster: "tall",
         technologies: [documentationTechnologies.svelte, documentationTechnologies.mosaic],
       },
       {
         key: "field",
         label: "Field",
+        poster: "wide",
         technologies: [
           documentationTechnologies.vanillaHtml,
           documentationTechnologies.shower,
@@ -153,6 +172,7 @@ export const documentationExampleFamilies = [
       {
         key: "story",
         label: "Story",
+        poster: "tall",
         technologies: [
           documentationTechnologies.vanillaHtml,
           documentationTechnologies.observablePlot,
@@ -161,11 +181,13 @@ export const documentationExampleFamilies = [
       {
         key: "operations",
         label: "Operations",
+        poster: "wide",
         technologies: [documentationTechnologies.react, documentationTechnologies.mapLibre],
       },
       {
         key: "briefing",
         label: "Briefing",
+        poster: "wide",
         technologies: [
           documentationTechnologies.react,
           documentationTechnologies.revealJs,
@@ -182,6 +204,7 @@ export const documentationExampleFamilies = [
       {
         key: "monitor",
         label: "Monitor",
+        poster: "tall",
         technologies: [
           documentationTechnologies.notebookKit,
           documentationTechnologies.observablePlot,
@@ -190,11 +213,13 @@ export const documentationExampleFamilies = [
       {
         key: "model-review",
         label: "Model review",
+        poster: "tall",
         technologies: [documentationTechnologies.react, documentationTechnologies.recharts],
       },
       {
         key: "pdf-report",
         label: "PDF report",
+        poster: "tall",
         technologies: [documentationTechnologies.react, documentationTechnologies.reactPdf],
       },
     ],

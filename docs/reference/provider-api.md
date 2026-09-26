@@ -123,7 +123,7 @@ this metadata and leaves cell bodies unexecuted.
 
 `CellSpec.may_display_output` is a conservative static signal. It is `True`
 when the cell ends in an output expression, when symbolic analysis finds a
-Marimo output operation, or when ambiguity, work-budget exhaustion, or the
+marimo output operation, or when ambiguity, work-budget exhaustion, or the
 recursion limit prevents a definitive result. Use it to seed an editable
 starter while retaining likely output cells. `CellSpec.has_output_expression`
 reports the narrower final-expression case.
@@ -445,7 +445,7 @@ SourceSpan(
 ```
 
 Locates one cell in the saved notebook. Lines and columns use the coordinates
-reported by Marimo's static notebook compiler.
+reported by marimo's static notebook compiler.
 
 ### `CellConfigSpec`
 
@@ -470,7 +470,7 @@ visibility setting.
 | `runtime_id`                   | Cell ID in the compiled notebook snapshot                                 |
 | `index`                        | Zero-based document position                                              |
 | `kind`                         | One `CellKind` value                                                      |
-| `name`                         | Native Marimo cell name, or `None` for an anonymous cell                  |
+| `name`                         | Native marimo cell name, or `None` for an anonymous cell                  |
 | `source`                       | `SourceSpan` in the saved notebook                                        |
 | `code_sha256` and `preview`    | Source digest and bounded preview text                                    |
 | `definitions` and `references` | Variable names produced and consumed by the cell                          |

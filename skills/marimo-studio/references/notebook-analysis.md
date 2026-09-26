@@ -69,13 +69,13 @@ segment_summary_sql
 - Keep the graph acyclic. Define each shared variable once and let downstream
   cells react to it.
 
-### Parameterize dimensions with Marimo controls
+### Parameterize dimensions with marimo controls
 
 Create a control in one cell, display it as that cell's final expression, and
 read its `.value` from downstream transformation cells. Choose the control from
 the dimension's datatype and selection semantics:
 
-| Dimension                                 | Marimo control                                     |
+| Dimension                                 | marimo control                                     |
 | ----------------------------------------- | -------------------------------------------------- |
 | One value from a small categorical domain | `mo.ui.dropdown`                                   |
 | Several categorical values                | `mo.ui.multiselect`                                |

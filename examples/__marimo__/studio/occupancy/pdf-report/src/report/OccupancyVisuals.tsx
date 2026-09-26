@@ -1,10 +1,14 @@
 import { Circle, G, Line, Path, Rect, Svg, Text } from "@react-pdf/renderer";
 
-import { palette, typefaces } from "./theme.ts";
+import { fontMetrics, palette, typefaces } from "./theme.ts";
 import type { HourlyReading } from "./types.ts";
 
 const clamp = (value: number, low: number, high: number) =>
   Math.min(Math.max(value, low), high);
+
+const DIAL_SIZE = 27;
+// Tracking also trails the last glyph, so the anchor shifts by half of it.
+const DIAL_TRACKING = -0.6;
 
 export const OccupancyDial = ({ rate }: { rate: number }) => {
   const radius = 43;
@@ -37,13 +41,15 @@ export const OccupancyDial = ({ rate }: { rate: number }) => {
         )
         : null}
       <Text
-        x={63}
-        y={70}
+        x={63 - DIAL_TRACKING / 2}
+        y={63 + (fontMetrics.capHeight * DIAL_SIZE) / 2}
         textAnchor="middle"
         style={{
           fill: palette.ink,
           fontFamily: typefaces.display,
-          fontSize: 28,
+          fontSize: DIAL_SIZE,
+          fontWeight: 500,
+          letterSpacing: DIAL_TRACKING,
         }}
       >
         {`${(clamp(rate, 0, 1) * 100).toFixed(0)}%`}
@@ -107,14 +113,14 @@ const SignalLabel = ({
     </Text>
     <Text
       x={labelX}
-      y={labelY + 9}
+      y={labelY + 13}
       textAnchor={anchor}
       style={{
         fill: palette.fog,
         fontFamily: typefaces.body,
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: 500,
-        letterSpacing: 0.2,
+        letterSpacing: 0.3,
       }}
     >
       {unit}

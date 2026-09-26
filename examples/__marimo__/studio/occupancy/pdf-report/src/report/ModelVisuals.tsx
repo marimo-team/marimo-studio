@@ -9,6 +9,7 @@ import {
   View,
 } from "@react-pdf/renderer";
 
+import { Legend } from "./ReportFrame.tsx";
 import { palette, typefaces } from "./theme.ts";
 import type { ModelReport, ThresholdPoint } from "./types.ts";
 
@@ -51,11 +52,11 @@ export const ThresholdChart = (
       values.findIndex((candidate) => Math.abs(candidate - value) < 0.001) ===
         index,
   );
-  const legendItems = [
-    { label: "Accuracy", color: palette.ink, dash: undefined },
-    { label: "Precision", color: palette.slate, dash: "5 2" },
-    { label: "Recall", color: palette.orange, dash: undefined },
-  ].filter((item) => showRecall || item.label !== "Recall");
+  const legendItems = ([
+    { label: "Accuracy", color: palette.ink, mark: "line" },
+    { label: "Precision", color: palette.slate, mark: "dash" },
+    { label: "Recall", color: palette.orange, mark: "line" },
+  ] as const).filter((item) => showRecall || item.label !== "Recall");
 
   return (
     <View>
@@ -174,33 +175,11 @@ export const ThresholdChart = (
           </Text>
         ))}
       </Svg>
-      <View style={{ flexDirection: "row", gap: 16 }}>
-        {legendItems.map(({ label, color, dash }) => (
-          <View
-            key={label}
-            style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
-          >
-            <Svg width={15} height={5} viewBox="0 0 15 5">
-              <Line
-                x1={0}
-                y1={2.5}
-                x2={15}
-                y2={2.5}
-                stroke={color}
-                strokeWidth={1.3}
-                strokeDasharray={dash}
-              />
-            </Svg>
-            <Text style={{ color: palette.fog, fontSize: 6.5 }}>{label}</Text>
-          </View>
-        ))}
-        {showRecall ? null : (
-          <Text
-            style={{ marginLeft: "auto", color: palette.fog, fontSize: 6.5 }}
-          >
-            Recall unavailable for this scope
-          </Text>
-        )}
+      <View style={{ marginTop: 4 }}>
+        <Legend
+          items={legendItems}
+          note={showRecall ? undefined : "Recall unavailable for this scope"}
+        />
       </View>
     </View>
   );

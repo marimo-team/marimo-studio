@@ -107,7 +107,7 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create briefing \
 ```
 
 The starter supplies Reveal.js structure, navigation, fragments, overview, and
-one initial slide for each notebook cell that may display output. Place Marimo
+one initial slide for each notebook cell that may display output. Place marimo
 controls and dependent results directly inside a slide.
 
 ## Svelte
@@ -137,7 +137,7 @@ Commit `package.json` and `deno.lock` after the update.
 
 [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit) demonstrates
 a bespoke provider integration: its notebook HTML format and reactive JavaScript
-runtime work with the same Marimo projections as the other frontends.
+runtime work with the same marimo projections as the other frontends.
 
 Create an Observable notebook view:
 
@@ -150,7 +150,7 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create report \
 Write Notebook Kit cells in `src/index.html`. Put `marimo-cell`, `marimo-output`,
 and `mo-value` hosts inside `type="text/html"` cells. The supplied
 `marimoValue(host)` generator connects a declared value host to Observable's
-reactive graph. Keep shared computations and controls in the Marimo notebook.
+reactive graph. Keep shared computations and controls in the marimo notebook.
 
 The starter builds through Vite and Deno with frozen dependencies. Edit the
 page template in `src/page.tmpl` and styles in `src/style.css`. See the

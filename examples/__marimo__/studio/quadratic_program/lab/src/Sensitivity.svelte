@@ -14,18 +14,20 @@
     onturn: (degrees: number) => void;
   } = $props();
 
-  const WIDTH = 520;
-  const LEFT = 48;
-  const RIGHT = 20;
-  const TOP = 10;
-  const CURVE = 150;
-  const GAP = 26;
-  const STRIP = 18;
-  const AXIS = 24;
+  const LEFT = 44;
+  const RIGHT = 14;
+  const TOP = 8;
+  const GAP = 16;
+  const STRIP = 15;
+  const AXIS = 20;
 
+  // The chart draws in CSS pixels at its measured width, so labels keep their
+  // size while the curve widens with the column.
+  let width = $state(520);
+  const curveHeight = $derived(Math.round(Math.min(Math.max(width * 0.2, 72), 132)));
   const walls = $derived(row.active.length);
-  const height = $derived(TOP + CURVE + GAP + walls * STRIP + AXIS);
-  const x = scaleLinear().domain([0, 360]).range([LEFT, WIDTH - RIGHT]);
+  const height = $derived(TOP + curveHeight + GAP + walls * STRIP + AXIS);
+  const x = $derived(scaleLinear().domain([0, 360]).range([LEFT, width - RIGHT]));
   const y = $derived(
     scaleLinear()
       .domain([
@@ -33,7 +35,7 @@
         Math.max(...sweep.map(({ value }) => value)),
       ])
       .nice()
-      .range([TOP + CURVE, TOP]),
+      .range([TOP + curveHeight, TOP]),
   );
   const curve = $derived(
     line<SweepRow>()
@@ -41,7 +43,7 @@
       .y(({ value }) => y(value))(sweep) ?? "",
   );
   const band = $derived(x(sweep[1].direction) - x(sweep[0].direction));
-  const strip = (wall: number) => TOP + CURVE + GAP + (walls - 1 - wall) * STRIP;
+  const strip = (wall: number) => TOP + curveHeight + GAP + (walls - 1 - wall) * STRIP;
 
   let svg: SVGSVGElement;
   let scrubbing = false;
@@ -77,48 +79,51 @@
   };
 </script>
 
-<svg
-  bind:this={svg}
-  class="sensitivity"
-  viewBox="0 0 {WIDTH} {height}"
-  role="slider"
-  tabindex="0"
-  aria-label="Direction of q on the optimal value chart"
-  aria-valuemin="0"
-  aria-valuemax="359"
-  aria-valuenow={row.direction}
-  aria-valuetext="{row.direction} degrees, optimal value {row.value.toFixed(3)}"
-  onkeydown={step}
-  onpointerdown={press}
-  onpointermove={scrub}
-  onpointerup={release}
-  onpointercancel={release}
->
-  {#each y.ticks(3) as tick}
-    <line class="grid" x1={LEFT} x2={WIDTH - RIGHT} y1={y(tick)} y2={y(tick)} />
-    <text class="tick" x={LEFT - 10} y={y(tick)}>{String(tick).replace("-", "−")}</text>
-  {/each}
-  <path class="curve" d={curve} />
-
-  {#each { length: walls } as _, wall}
-    <text class="tick wall-name" x={LEFT - 10} y={strip(wall) + STRIP / 2}>
-      g<tspan class="subscript" dy="0.25em">{wall + 1}</tspan>
-    </text>
-    {#each heldRuns(sweep, wall) as [first, last]}
-      <rect
-        class="held"
-        x={x(first) - band / 2}
-        y={strip(wall) + 4}
-        width={x(last) - x(first) + band}
-        height={STRIP - 8}
-      />
+<div class="sensitivity-frame" bind:clientWidth={width}>
+  <svg
+    bind:this={svg}
+    class="sensitivity"
+    viewBox="0 0 {width} {height}"
+    {height}
+    role="slider"
+    tabindex="0"
+    aria-label="Direction of q on the optimal value chart"
+    aria-valuemin="0"
+    aria-valuemax="359"
+    aria-valuenow={row.direction}
+    aria-valuetext="{row.direction} degrees, optimal value {row.value.toFixed(3)}"
+    onkeydown={step}
+    onpointerdown={press}
+    onpointermove={scrub}
+    onpointerup={release}
+    onpointercancel={release}
+  >
+    {#each y.ticks(curveHeight < 100 ? 2 : 3) as tick}
+      <line class="grid" x1={LEFT} x2={width - RIGHT} y1={y(tick)} y2={y(tick)} />
+      <text class="tick" x={LEFT - 10} y={y(tick)}>{String(tick).replace("-", "−")}</text>
     {/each}
-  {/each}
+    <path class="curve" d={curve} />
 
-  <line class="cursor" x1={x(row.direction)} x2={x(row.direction)} y1={TOP} y2={height - AXIS} />
-  <circle class="marker" cx={x(row.direction)} cy={y(row.value)} r="4.5" />
+    {#each { length: walls } as _, wall}
+      <text class="tick wall-name" x={LEFT - 10} y={strip(wall) + STRIP / 2}>
+        g<tspan class="subscript" dy="0.25em">{wall + 1}</tspan>
+      </text>
+      {#each heldRuns(sweep, wall) as [first, last]}
+        <rect
+          class="held"
+          x={x(first) - band / 2}
+          y={strip(wall) + 4}
+          width={x(last) - x(first) + band}
+          height={STRIP - 8}
+        />
+      {/each}
+    {/each}
 
-  {#each [0, 90, 180, 270, 360] as tick}
-    <text class="tick axis" x={x(tick)} y={height - 6}>{tick}°</text>
-  {/each}
-</svg>
+    <line class="cursor" x1={x(row.direction)} x2={x(row.direction)} y1={TOP} y2={height - AXIS} />
+    <circle class="marker" cx={x(row.direction)} cy={y(row.value)} r="4.5" />
+
+    {#each [0, 90, 180, 270, 360] as tick}
+      <text class="tick axis" x={x(tick)} y={height - 6}>{tick}°</text>
+    {/each}
+  </svg>
+</div>

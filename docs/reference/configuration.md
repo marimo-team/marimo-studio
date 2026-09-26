@@ -18,7 +18,7 @@ from named tables and typed values.
 ## Edit root ownership
 
 Studio opens at edit-mode `/` by default. An embedding host can keep the native
-Marimo editor at `/` and expose Studio through `/studio/`:
+marimo editor at `/` and expose Studio through `/studio/`:
 
 ```console
 MARIMO_STUDIO_EDIT_ROOT=marimo marimo edit analysis.py --headless
@@ -29,23 +29,23 @@ MARIMO_STUDIO_EDIT_ROOT=marimo marimo edit analysis.py --headless
 | Value    | Edit `/`                  | Edit `/studio/`            | Run `/`                     |
 | -------- | ------------------------- | -------------------------- | --------------------------- |
 | `studio` | Studio entry, the default | Studio authoring workspace | Default Studio presentation |
-| `marimo` | Native Marimo editor      | Studio authoring workspace | Default Studio presentation |
+| `marimo` | Native marimo editor      | Studio authoring workspace | Default Studio presentation |
 
-The setting is process configuration. Apply it before Marimo loads the Studio
+The setting is process configuration. Apply it before marimo loads the Studio
 server extension. A direct `/studio/` request can create the first view, then
 opens Source, Preview, and the embedded native editor.
 
-Opening `/studio/` creates a Studio browser client bound to a native Marimo
+Opening `/studio/` creates a Studio browser client bound to a native marimo
 connection. Tabs editing the same notebook share its Python kernel through
-Marimo's editor and interactor roles. Enter Studio before calling `view.show()`
+marimo's editor and interactor roles. Enter Studio before calling `view.show()`
 from code mode. A remote agent can select a connected Studio browser client.
 Navigating between `/` and `/studio/` creates a connection to the same kernel
-while Marimo retains the notebook session. See
+while marimo retains the notebook session. See
 [Navigate and preserve state](../guide/navigation-and-sessions.md#open-multiple-tabs)
 for shared state and runtime boundaries.
 
 Authentication, public base paths, WebSockets, and framing remain server and
-reverse-proxy concerns. A host must forward the complete configured Marimo base
+reverse-proxy concerns. A host must forward the complete configured marimo base
 path, including `/studio/`, `/_marimo-studio/`, named views, revision-qualified
 artifacts, native HTTP routes, and WebSockets. Its framing policy must admit the
 outer host, the Studio document, and Studio's nested native editor.
@@ -64,16 +64,16 @@ Creating the first view can add these settings to a standalone notebook:
 # ///
 ```
 
-| Field                   | Type                           | Default     | Behavior                                                                       |
-| ----------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------ |
-| `default`               | string                         | Required    | Selects the initial Studio workspace view and the view served at run-mode `/`  |
-| `runtime`               | `"server"` or `"wasm"`         | `"server"`  | Chooses the notebook runtime when the URL has no valid override                |
-| `runtimes`              | non-empty array of runtime IDs | `[runtime]` | Lists the distinct runtimes people may select. It must contain `runtime`       |
-| `preserve_session`      | boolean                        | `false`     | Reconnects an eligible Python runtime refresh to its matching notebook session |
-| `show_cell_logs`        | boolean                        | `true`      | Includes stdout and stderr in complete-cell projections                        |
-| `view_root`             | relative path                  | See below   | Stores authored view projects at a configurable location                       |
-| `cells`                 | table                          | Empty       | Stores stable aliases for existing notebook cells                              |
-| `provider_dependencies` | array of requirements          | Omitted     | Inline PEP 723 ownership record for third-party requirements that Studio added |
+| Field                   | Type                           | Default                                   | Behavior                                                                       |
+| ----------------------- | ------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `default`               | string                         | Required                                  | Selects the initial Studio workspace view and the view served at run-mode `/`  |
+| `runtime`               | `"server"` or `"wasm"`         | `"server"`                                | Chooses the notebook runtime when the URL has no valid override                |
+| `runtimes`              | non-empty array of runtime IDs | `[runtime]`                               | Lists the distinct runtimes people may select. It must contain `runtime`       |
+| `preserve_session`      | boolean                        | `false`                                   | Reconnects an eligible Python runtime refresh to its matching notebook session |
+| `show_cell_logs`        | boolean                        | `true`                                    | Includes stdout and stderr in complete-cell projections                        |
+| `view_root`             | relative path                  | See [Project settings](#project-settings) | Stores authored view projects at a configurable location                       |
+| `cells`                 | table                          | Empty                                     | Stores stable aliases for existing notebook cells                              |
+| `provider_dependencies` | array of requirements          | Omitted                                   | Inline PEP 723 ownership record for third-party requirements that Studio added |
 
 For a standalone notebook, view creation pins the installed Studio version.
 React, Svelte, and Notebook Kit add the `deno` extra to that exact Studio requirement. An
@@ -146,12 +146,12 @@ host casing, default ports, and an optional trailing slash, then removes
 duplicates. An invalid or oversized value stops server startup.
 
 This setting changes framing policy. It does not grant request access or bypass
-Marimo authentication. Allow only parent origins whose pages you trust to
+marimo authentication. Allow only parent origins whose pages you trust to
 present Studio controls. See [Embed the Studio edit
 workspace](../guide/deploy.md#embed-the-studio-edit-workspace) for the deployment
 command and clickjacking boundary.
 
-Studio also preserves Marimo's trusted, server-level `html_head` content in its
+Studio also preserves marimo's trusted, server-level `html_head` content in its
 outer edit document. A host-injected script can declare its exact parent with a
 `data-parent-origin` attribute. Studio validates that HTTP or HTTPS origin and
 adds it to the edit document's framing policy. Explicit
@@ -251,7 +251,7 @@ beside `view.toml`.
 ## Prepared state space
 
 A view project can declare its finite input state space in `states.yaml`.
-The file uses marimo-export's public `StateSpace` contract. Zero-Python export
+The file uses `marimo-export`'s public `StateSpace` contract. Zero-Python export
 executes those states and packages the projected results:
 
 ```yaml

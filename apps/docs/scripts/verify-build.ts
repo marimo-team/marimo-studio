@@ -124,6 +124,10 @@ for (const family of documentationExampleFamilies) {
       await isFile(join(distDir, "thumbnails", family.slug, `${view.key}.webp`)),
       `Missing example thumbnail: ${family.slug}/${view.key}`,
     );
+    check(
+      await isFile(join(distDir, "posters", family.slug, `${view.key}.webp`)),
+      `Missing example poster: ${family.slug}/${view.key}`,
+    );
     if (!(await isFile(entrypoint))) {
       failures.push(`Missing live example entrypoint: ${family.slug}/${view.key}`);
       continue;

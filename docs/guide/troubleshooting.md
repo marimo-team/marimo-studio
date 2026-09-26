@@ -20,9 +20,9 @@ declared by the notebook or Python project. Review the saved dependencies and
 each `view.toml` before operating an unfamiliar project.
 :::
 
-## Studio does not appear in Marimo
+## Studio does not appear in marimo
 
-Open the notebook in an environment that contains both Marimo and Studio:
+Open the notebook in an environment that contains both marimo and Studio:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
@@ -134,7 +134,7 @@ need browser automation controlled outside that notebook kernel. Waiting
 synchronously inside code mode can block those computations.
 
 If the preview asks you to run changed notebook cells, execute those cells in
-the live notebook or use Marimo's **Run all** action, then retry the preview.
+the live notebook or use marimo's **Run all** action, then retry the preview.
 Building the view, checking notebook syntax, and isolated runtime validation
 leave the live notebook's execution state unchanged.
 
@@ -184,6 +184,6 @@ paths and provider or runtime diagnostic text. Redact credentials, private
 paths, hostnames, and sensitive diagnostics before sharing them.
 
 Open a [GitHub issue](https://github.com/marimo-team/marimo-studio/issues) with
-the Studio and Marimo versions, the smallest reproduction, and redacted output.
+the Studio and marimo versions, the smallest reproduction, and redacted output.
 Report suspected vulnerabilities through the [security
 policy](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md).

@@ -1,6 +1,6 @@
 # Reveal.js React starter instructions
 
-Follow the Marimo Studio skill for notebook ownership, projection selection,
+Follow the `marimo-studio` skill for notebook ownership, projection selection,
 view lifecycle, and validation. This file covers the Reveal.js project supplied
 by this starter.
 
@@ -106,7 +106,7 @@ files after an intentional dependency update.
 
 ## Validate the presentation
 
-Build through Marimo Studio, then inspect the rendered deck in a browser. Check
+Build through Studio, then inspect the rendered deck in a browser. Check
 keyboard and control navigation, slide scaling, fragments, notebook results,
 speaker-facing content, and narrow viewport behavior. The Studio build verifies
 types and packages the deck before publishing it.

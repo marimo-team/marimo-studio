@@ -1,10 +1,10 @@
-# Marimo Studio
+# marimo-studio
 
-Marimo Studio turns one [marimo](https://marimo.io/) notebook into reports,
+`marimo-studio` turns one [marimo](https://marimo.io/) notebook into reports,
 apps, and presentations. Keep data, computation, and controls in Python.
 Shape each view for its audience, by hand or with a coding agent.
 
-Marimo Studio is experimental. Pin Studio and third-party view providers in
+Studio is experimental. Pin `marimo-studio` and third-party view providers in
 saved projects.
 
 ## Get started
@@ -16,34 +16,28 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox
 Add a displayable cell, then click **Add view** in the Studio toolbar. Save the
 notebook if prompted and choose a name and starter. Notebook and Preview open
 side by side. Use the source action to edit the view's files, or work through
-Marimo's agent sidebar.
+marimo's agent sidebar.
 
 Saving view source rebuilds Preview. A failed build retains the last successful
 view. Follow the [quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
 for a complete first view. [uv](https://docs.astral.sh/uv/) supplies `uvx` and
 resolves the notebook's declared dependencies with `--sandbox`.
 
-## For agents
+## Build a view with a coding agent
 
-Read the version-matched briefing shipped with Studio through
-[Agent Plugins](https://github.com/peter-gy/agent-plugins), which prints the
-instructions a Python package ships for coding agents:
+Give a terminal agent such as Claude Code or Codex one instruction:
 
 ```console
-uvx --with marimo-studio agent-plugins read marimo-studio
+claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
+to build a briefing view of analysis.py that leads with the headline results.'
 ```
 
-From the notebook's Python environment:
-
-```python
-import marimo_studio
-
-help(marimo_studio.agent)
-```
-
-The briefing covers inspecting, creating, editing, building, and verifying
-views. Follow the [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-to connect your agent and work with optional Marimo Lens feedback.
+`agent-plugins read` prints the briefing Studio ships for coding agents through
+[Agent Plugins](https://github.com/peter-gy/agent-plugins). It tells the agent
+how to pair with your running notebook, or start one, then create, build, and
+show the view. Follow the [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+for request guidance and visual feedback with
+[Lens](https://marimo-team.github.io/marimo-lens/).
 
 ## Run or export a view
 

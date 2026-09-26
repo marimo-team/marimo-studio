@@ -1,31 +1,24 @@
 # Connect and select the environment
 
-Use the notebook's Python environment for Studio operations. If the briefing
-came from a disposable terminal environment, connect through Marimo's
-**Code Mode** sidebar or `marimo pair execute`, then read the installed
-briefing in the notebook kernel:
-
-```python
-import marimo_studio
-
-help(marimo_studio.agent)
-```
-
-The help text contains the installed core briefing with Python API help.
-Reading guidance is passive. It does not bind a workspace or activate a view.
-Reuse instructions while the environment and installation remain the same. A
-terminal can obtain a briefing before connecting:
+Use the notebook's Python environment for Studio operations. A terminal can
+read the briefing before any notebook runs:
 
 ```console
 uvx --with marimo-studio agent-plugins read marimo-studio
 ```
 
-`marimo pair notebook list` reports running servers with their notebooks and
-sessions. Target the notebook the user opened in Studio with
+Inside the notebook kernel, `help(marimo_studio.agent)` prints the same core
+briefing with Python API help for the Studio version the notebook runs.
+Reading guidance is passive. It does not bind a workspace or activate a view.
+Reuse instructions while the environment and installation remain the same.
+
+`uvx marimo@latest pair notebook list` reports running servers with their
+notebooks and sessions. Target the notebook the user opened in Studio with
 `marimo pair execute --url <URL> --file <PATH>`, passing the absolute `path`
 from that list. A relative file resolves against the agent's working
 directory. A notebook has a session once a browser opens it, and `view.show()`
-needs that open Studio tab.
+needs that open Studio tab. When a server requires a token, pass
+`--token-file <PATH>` to every `pair` command or set `MARIMO_TOKEN`.
 
 ## Work from a saved notebook
 

@@ -8,6 +8,14 @@ and the dial around it is the one control a reader needs to find.
 Quiet and exact, like a well-set textbook page. White space and alignment carry
 the structure. One accent marks the solution, and nothing else competes with it.
 
+## Layout
+
+The dial and the optimal value curve share one sticky column sized to the
+viewport, so both stay on screen together in any frame, including the
+documentation's view stack. The title, the readout, and **Shape of P** follow
+in that order beside them, and the readout opens beside the instruments. Narrow
+screens stack the title, the instruments, and the panel.
+
 ## Tokens
 
 | Token  | Value     | Use                                            |

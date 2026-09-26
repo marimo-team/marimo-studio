@@ -22,6 +22,10 @@
     row ? row.active.flatMap((active, wall) => (active ? [wall] : [])) : [],
   );
 
+  // Typeset negative readings with a true minus sign, as the chart ticks do.
+  const signed = (value: number, digits: number) =>
+    value.toFixed(digits).replace(/^-/, "−");
+
   const onturn = (degrees: number) => {
     direction = turn(degrees);
   };
@@ -79,30 +83,41 @@
     <p class="kicker">Quadratic programs</p>
     <h1>Sensitivity to the linear term</h1>
     <p class="lede">
-      Drag the handle around the dial to rotate the linear term <em>q</em>. The
-      level curves, the solution <em>x</em>*, and its active constraints update
-      for each direction.
+      Turn the dial, or scrub the curve beneath it, to rotate the linear term
+      <em>q</em>. Arrow keys step either one. The solution <em>x</em>* and the
+      walls that hold it follow.
     </p>
   </header>
 
-  <figure
-    class="stage"
-    aria-busy={!row && !unavailable}
-    data-marimo-lens-inputs="region-data bowl-data sweep-data direction-data"
-    data-marimo-lens-label="Feasible region, level curves, and the path of the optimum"
-    data-marimo-lens-render-source={JSON.stringify({ path: "src/Geometry.svelte" })}
-  >
-    {#if unavailable}
-      <p class="unavailable">The figure is unavailable.</p>
-    {:else if region && bowl && sweep && row}
-      <Geometry {region} {bowl} {sweep} {row} {direction} {onturn} />
+  <div class="instrument">
+    <figure
+      class="stage"
+      aria-busy={!row && !unavailable}
+      data-marimo-lens-inputs="region-data bowl-data sweep-data direction-data"
+      data-marimo-lens-label="Feasible region, level curves, and the path of the optimum"
+      data-marimo-lens-render-source={JSON.stringify({ path: "src/Geometry.svelte" })}
+    >
+      {#if unavailable}
+        <p class="unavailable">The figure is unavailable.</p>
+      {:else if region && bowl && sweep && row}
+        <Geometry {region} {bowl} {sweep} {row} {direction} {onturn} />
+      {/if}
+    </figure>
+
+    {#if sweep && row}
+      <section
+        class="chart"
+        data-marimo-lens-inputs="sweep-data direction-data"
+        data-marimo-lens-label="Optimal value and active walls by direction"
+        data-marimo-lens-render-source={JSON.stringify({ path: "src/Sensitivity.svelte" })}
+      >
+        <h2>Optimal value by direction</h2>
+        <Sensitivity {sweep} {row} {onturn} />
+      </section>
     {/if}
-    <figcaption>Drag across the figure, or focus it and use the arrow keys.</figcaption>
-  </figure>
+  </div>
 
   <aside class="panel">
-    <marimo-cell name="curvature"></marimo-cell>
-
     {#if row}
       <dl
         class="readout"
@@ -116,36 +131,25 @@
         </div>
         <div>
           <dt>Optimal value</dt>
-          <dd>{row.value.toFixed(3)}</dd>
+          <dd>{signed(row.value, 3)}</dd>
         </div>
         <div>
           <dt><em>x</em>*</dt>
-          <dd>({row.optimum[0].toFixed(2)}, {row.optimum[1].toFixed(2)})</dd>
+          <dd>({signed(row.optimum[0], 2)}, {signed(row.optimum[1], 2)})</dd>
         </div>
         <div>
-          <dt>Active constraints</dt>
-          <dd>
-            {#each held as wall, index}
-              {index > 0 ? ", " : ""}g<sub>{wall + 1}</sub>
-              <span class="dual">λ {row.duals[wall].toFixed(2)}</span>
+          <dt>Active walls</dt>
+          <dd class="held">
+            {#each held as wall}
+              <span><em>g</em><sub>{wall + 1}</sub> <span class="dual">λ {row.duals[wall].toFixed(2)}</span></span>
             {:else}
-              None
+              <span>None</span>
             {/each}
           </dd>
         </div>
       </dl>
     {/if}
 
-    {#if sweep && row}
-      <section
-        class="chart"
-        data-marimo-lens-inputs="sweep-data direction-data"
-        data-marimo-lens-label="Optimal value and active walls by direction"
-        data-marimo-lens-render-source={JSON.stringify({ path: "src/Sensitivity.svelte" })}
-      >
-        <h2>Optimal value by direction</h2>
-        <Sensitivity {sweep} {row} {onturn} />
-      </section>
-    {/if}
+    <marimo-cell name="curvature"></marimo-cell>
   </aside>
 </div>

@@ -33,10 +33,11 @@ beside it. The native **Shape of P** and **Direction of q** controls select one
 of 48 prepared notebook states.
 
 **Lab** is a [Svelte](https://svelte.dev/) app drawn with
-[D3](https://d3js.org/). Drag around the dial to turn _q_. The notebook's
-`sweep` records the solution for 180 directions, so the optimum, the level
-curves, the chart, and the active constraints update in the browser.
-**Shape of P** selects one of four prepared states.
+[D3](https://d3js.org/). Drag the handle around the dial, or scrub the value
+curve beneath it, to turn _q_. The notebook's `sweep` records the solution for
+180 directions, so the optimum, the level curves, the readout, and the active
+walls update in the browser. **Shape of P** selects one of four prepared
+states.
 
 Open **Notebook** to read the analysis the three views share.
 

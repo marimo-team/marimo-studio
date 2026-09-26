@@ -186,7 +186,7 @@ export const EnvironmentPage = (
               >
                 {formatPercent(day.occupancy_rate, 0)}
               </Text>
-              <Text style={[styles.caption, { marginTop: 3 }]}>occupied</Text>
+              <Text style={[styles.caption, { marginTop: 4 }]}>occupied</Text>
               <View
                 style={{
                   marginTop: 6,
@@ -195,10 +195,10 @@ export const EnvironmentPage = (
                   borderTopColor: palette.rule,
                 }}
               >
-                <Text style={styles.caption}>
+                <Text style={[styles.caption, { marginTop: 0 }]}>
                   MEAN {day.mean_co2.toFixed(0)} PPM
                 </Text>
-                <Text style={styles.caption}>
+                <Text style={[styles.caption, { marginTop: 3 }]}>
                   PEAK {day.peak_co2.toFixed(0)} PPM
                 </Text>
               </View>
@@ -223,8 +223,9 @@ export const EnvironmentPage = (
           style={{
             color: palette.paper,
             fontFamily: typefaces.display,
-            fontSize: 13,
-            lineHeight: 1.25,
+            fontSize: 11.5,
+            letterSpacing: -0.15,
+            lineHeight: 1.4,
           }}
         >
           {hasOccupiedReadings
