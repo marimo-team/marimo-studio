@@ -1,0 +1,19 @@
+docs/index.md
+  s_ff72e508592faa::t_f52b68e106a7db 64,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "af5cd92fee9bb5c9996d5abc5b3d06bc2cf0baa8",
+  "prompts": {},
+  "sessions": {
+    "s_ff72e508592faa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac81956a-eead-41c3-95bd-cad8b7d9b2e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
