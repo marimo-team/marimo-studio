@@ -1,0 +1,166 @@
+docs/reference/limits.md
+  s_ff72e508592faa::t_b248728269d09c 3
+docs/what-is-studio.md
+  s_ff72e508592faa::t_34964451ff6dad 8-10,22,43,62
+skills/marimo-studio/agents/openai.yaml
+  s_ff72e508592faa::t_91e047db5542de 2-3
+docs/examples/athletes.md
+  s_ff72e508592faa::t_34964451ff6dad 21
+examples/__marimo__/studio/athletes/explorer/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+apps/docs/scripts/capture-thumbnails.ts
+  s_ff72e508592faa::t_7eea154796cc20 7,11-12,14-15,22-24,44,68-72,90-103
+examples/__marimo__/studio/quadratic_program/lecture/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3,109
+examples/__marimo__/studio/occupancy/pdf-report/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+packages/marimo-studio/README.md
+  s_ff72e508592faa::t_24c0176519508a 1,3,7,19,46-47
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/AGENTS.md
+  s_ff72e508592faa::t_c65acfe5b56087 3
+docs/reference/compatibility.md
+  s_ff72e508592faa::t_a9f8515c058b59 3,8
+  s_ff72e508592faa::t_3a49292ba42834 72,105,114-115
+docs/reference/python-api.md
+  s_ff72e508592faa::t_d45aa521666f4a 10,666,672,694
+  s_ff72e508592faa::t_d1ccfd53c1c5bd 365,367
+docs/guide/styling.md
+  s_ff72e508592faa::t_246feda28de712 10,104,127-128,133,137
+apps/docs/.vitepress/theme/components/StudioViewMasonry.vue
+  s_ff72e508592faa::t_4fb98cbe1277b4 1-5,11,14-41,43-135
+  s_ff72e508592faa::t_41df4c72c7f5ba 6-10,12-13
+  s_ff72e508592faa::t_29d72aafc5d59f 42
+plugin.json
+  s_ff72e508592faa::t_91e047db5542de 4
+examples/__marimo__/studio/occupancy/monitor/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 50
+Makefile
+  s_ff72e508592faa::t_f1d717d0dc2b2c 105
+docs/reference/provider-api.md
+  s_ff72e508592faa::t_55f20ed2f47b16 126,448,473
+examples/__marimo__/studio/earthquakes/operations/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+docs/reference/index.md
+  s_ff72e508592faa::t_632e070ce3f993 8
+README.md
+  s_ff72e508592faa::t_24c0176519508a 5,16,20-21,36,48,56-58,81-82
+docs/guide/troubleshooting.md
+  s_ff72e508592faa::t_583f8fc2c7dda3 23,25,137,187
+docs/reference/configuration.md
+  s_ff72e508592faa::t_632e070ce3f993 21,32,34,38,40,43,48,149,154
+  s_ff72e508592faa::t_474de3946a712a 67-76
+  s_ff72e508592faa::t_d1ccfd53c1c5bd 254
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_obsnotebook/starters/default/files/AGENTS.md
+  s_ff72e508592faa::t_c65acfe5b56087 3,53
+docs/guide/work-in-studio.md
+  s_ff72e508592faa::t_34964451ff6dad 3
+docs/reference/identities.md
+  s_ff72e508592faa::t_b248728269d09c 16,27
+docs/guide/navigation-and-sessions.md
+  s_ff72e508592faa::t_5ca001d53e1bb2 97,103,108
+docs/guide/run-and-share.md
+  s_ff72e508592faa::t_b13bb1b2a3edc3 128,140,149,154
+  s_ff72e508592faa::t_41c4bdd3b92ed0 142
+skills/marimo-studio/references/delivery.md
+  s_ff72e508592faa::t_7178ce2f6f8ec6 66
+  s_ff72e508592faa::t_d1ccfd53c1c5bd 112
+skills/marimo-studio/references/projections.md
+  s_ff72e508592faa::t_7178ce2f6f8ec6 48
+development_docs/documentation.md
+  s_ff72e508592faa::t_f1d717d0dc2b2c 81-84,86-97,101-104,113-116
+  s_ff72e508592faa::t_00bc2d9cfe0ec7 85
+examples/__marimo__/studio/earthquakes/story/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/default/files/AGENTS.md
+  s_ff72e508592faa::t_c65acfe5b56087 3
+docs/index.md
+  s_ff72e508592faa::t_34964451ff6dad 3,13
+  s_ff72e508592faa::t_ca6fa556c84dbb 64-74
+examples/__marimo__/studio/occupancy/model-review/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/AGENTS.md
+  s_ff72e508592faa::t_c65acfe5b56087 3,111
+examples/__marimo__/studio/quadratic_program/lab/DESIGN.md
+  s_ff72e508592faa::t_f3eb2dabe96dd0 11-13,18
+  s_ff72e508592faa::t_6394a1c04f5804 14-17
+examples/__marimo__/studio/quadratic_program/lab/src/Sensitivity.svelte
+  s_ff72e508592faa::t_c4ed4cfd86324d 17-22,24-27,29-30,38,46,82,129
+  s_ff72e508592faa::t_cc3f24b1b0a405 83-105,107-119,122-123,125-128
+examples/__marimo__/studio/athletes/overview/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+docs/guide/deploy.md
+  s_ff72e508592faa::t_6321c15b022063 8,14,26,48,87-88,93,129
+examples/__marimo__/studio/quadratic_program/lab/src/style.css
+  s_ff72e508592faa::t_3ec5fc8e44cf0f 32-33,35,37,40-42,45,51,76,78-83,88,90-91,94,96-97,104-106,214,222,230,234-235,241-242,249-251,253-260,274,278-281,284,286,293,350,360-362,365-368
+  s_ff72e508592faa::t_13031ad8ec93e2 227,261-268
+  s_ff72e508592faa::t_f43057dd50132e 231,236,245-246,248
+  s_ff72e508592faa::t_c4ed4cfd86324d 269
+docs/guide/coding-agents.md
+  s_ff72e508592faa::t_34964451ff6dad 43,106,108,121
+docs/reference/errors-and-json.md
+  s_ff72e508592faa::t_81724c1a29214c 115
+  s_ff72e508592faa::t_8e2adff1a6a6b4 147-158,161-178
+  s_ff72e508592faa::t_d1ccfd53c1c5bd 159-160
+docs/reference/built-in-providers.md
+  s_ff72e508592faa::t_20f24dcf749963 3,8,175,215,231
+apps/docs/examples.ts
+  s_ff72e508592faa::t_8e2adff1a6a6b4 25
+  s_ff72e508592faa::t_2725f461918973 86-97,101,121,127,133,146,152,158,175,184,190,207,216
+  s_ff72e508592faa::t_6796e164107d21 222
+docs/reference/projections.md
+  s_ff72e508592faa::t_e80a74cf386888 15,37,52,212,227-228,243,266,283,335,353
+  s_ff72e508592faa::t_858db3b8e9a351 229
+  s_ff72e508592faa::t_41c4bdd3b92ed0 230
+  s_ff72e508592faa::t_91fb10192d33b8 231-232
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/starters/default/files/AGENTS.md
+  s_ff72e508592faa::t_c65acfe5b56087 3
+examples/__marimo__/studio/earthquakes/briefing/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+  s_ff72e508592faa::t_51f47e7f3d8bfa 69
+docs/guide/getting-started.md
+  s_ff72e508592faa::t_34964451ff6dad 3,9,17
+examples/__marimo__/studio/quadratic_program/lab/src/App.svelte
+  s_ff72e508592faa::t_13031ad8ec93e2 25,86,144
+  s_ff72e508592faa::t_d9199649d48763 26-28,92-116,118,134,138,141-143,146,153
+  s_ff72e508592faa::t_6394a1c04f5804 87-88
+packages/marimo-studio/pyproject.toml
+  s_ff72e508592faa::t_91e047db5542de 4
+examples/__marimo__/studio/quadratic_program/lab/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+skills/marimo-studio/SKILL.md
+  s_ff72e508592faa::t_8d1150269d18b2 4,9,22,130,134,148-149,187,200
+  s_ff72e508592faa::t_8e2adff1a6a6b4 17-21,23
+skills/marimo-studio/references/lens.md
+  s_ff72e508592faa::t_7178ce2f6f8ec6 3,15,31,62
+skills/marimo-studio/references/verification.md
+  s_ff72e508592faa::t_7178ce2f6f8ec6 23,42
+docs/examples/index.md
+  s_ff72e508592faa::t_34964451ff6dad 3,32-34
+docs/examples/quadratic-programs.md
+  s_ff72e508592faa::t_34964451ff6dad 36-40
+examples/__marimo__/studio/quadratic_program/explainer/AGENTS.md
+  s_ff72e508592faa::t_6394a1c04f5804 3
+docs/reference/cli.md
+  s_ff72e508592faa::t_6f203338b5ca6d 155,292,381-383,390,396
+  s_ff72e508592faa::t_41c4bdd3b92ed0 398-399
+apps/docs/.vitepress/theme/index.ts
+  s_ff72e508592faa::t_369ecd2bfc3c04 7,16
+apps/docs/scripts/verify-build.ts
+  s_ff72e508592faa::t_7eea154796cc20 127-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fd577009364c906e459dccd7b92b4a7ba67f9910",
+  "prompts": {},
+  "sessions": {
+    "s_ff72e508592faa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac81956a-eead-41c3-95bd-cad8b7d9b2e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
