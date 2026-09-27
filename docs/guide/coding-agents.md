@@ -11,19 +11,33 @@ with the package, so the agent works from your installed version.
 
 ## Ask for a view
 
-Give a terminal agent such as Claude Code or Codex one instruction:
+Paste one request into a terminal agent such as Claude Code or Codex:
 
-```console
-claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
-to build a briefing view of analysis.py that leads with the headline results.'
+```text
+Run `uvx --with marimo-studio agent-plugins read marimo-studio` and create
+a scrollytelling report and a slide deck explaining calculus basics.
 ```
 
 [Agent Plugins](https://github.com/peter-gy/agent-plugins) prints the
-instructions a Python package ships for coding agents. Studio's briefing tells
-the agent to find your running notebook with `marimo pair`, or to start it with
-Studio when it is not running, then to run its Python in the notebook kernel.
-The agent inspects the notebook and available starters, reads the view's
-`AGENTS.md`, then edits, builds, and shows the view in Preview.
+instructions a Python package ships for coding agents, and
+[uv](https://docs.astral.sh/uv/) supplies `uvx`. Studio's briefing tells the
+agent to start a notebook with Studio, write its cells, then create, build, and
+show each view in Preview beside the notebook.
+
+Name an existing notebook to build on its analysis:
+
+```text
+Run `uvx --with marimo-studio agent-plugins read marimo-studio` and build
+a briefing view of analysis.py that leads with the headline results.
+```
+
+The agent runs Python in the notebook kernel through
+[`marimo pair`](https://marimo.io/pair), a marimo command for working in a
+live notebook session. It finds local notebooks started with `--no-token` and
+starts a stopped notebook that way. For a notebook you started with a token,
+give the agent its URL and a file that holds the token. The agent then inspects
+the notebook and available starters, reads each view's `AGENTS.md`, and edits
+the view source.
 
 In marimo's AI sidebar, the agent already runs in the kernel. Switch to
 **Code Mode (beta)** and ask for the view directly.

@@ -18,6 +18,7 @@ and browser interaction. Studio owns view projects, builds, and delivery.
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | Explain or inspect a view                                              | Inspect its source and notebook producers. Keep the task read-only.                 |
 | Create a dashboard or presentation                                     | Inspect existing views, choose a starter, build and show a first result.            |
+| Build views about a topic that has no notebook                         | Start a new notebook, write its cells through code mode, then create each view.     |
 | Change an existing view                                                | Read its project instructions and affected documents, then edit and verify.         |
 | Address a [Lens](https://marimo-team.github.io/marimo-lens/) selection | Read [Lens in Studio](references/lens.md) and the installed Lens skill.             |
 | Run, publish, or export                                                | Read [delivery](references/delivery.md) before designing controls or exposing data. |
@@ -30,10 +31,11 @@ environment and Studio installation remain unchanged.
 
 Live Studio work runs in the notebook's kernel through marimo code mode.
 marimo's chat sidebar in **Code Mode** already runs there. A terminal agent
-pairs with the running notebook through `marimo pair`. List running notebooks
-first:
+pairs with the running notebook through the `marimo pair` CLI. Read its help
+once, then list running notebooks:
 
 ```console
+uvx marimo@latest pair --help
 uvx marimo@latest pair notebook list
 ```
 
@@ -47,20 +49,27 @@ print(await marimo_studio.agent.current_workspace().status())
 PY
 ```
 
-When the notebook is not running, start it in the background. marimo opens a
+The list shows local servers started with `--no-token`. For a server that
+requires a token, ask the user for its URL and a token file, then pass
+`--token-file <PATH>` to every `pair` command.
+
+When the notebook is not running, start it in the background. For a topic with
+no notebook, choose a new file name and marimo creates the file. marimo opens a
 Studio tab in the user's browser, and the notebook appears in the list once
 that tab connects:
 
 ```console
-uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox
+uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox --no-token
 ```
 
-Studio needs `marimo-studio` in the marimo server's environment, as in that
-command or the notebook project's dependencies. `help(marimo._code_mode)` then
-lists Studio as the `studio` capability, and sandboxed kernels import the same
-Studio as the server. Run `uvx marimo@latest pair --help` for authentication
-and session selection. Without a way to run the notebook, continue with
-saved-notebook authoring from a terminal.
+`--no-token` serves the editor on localhost without an access token, which lets
+`pair notebook list` find it. Studio needs `marimo-studio` in the marimo
+server's environment, as in that command or the notebook project's
+dependencies. `help(marimo._code_mode)` then lists Studio as the `studio`
+capability, and sandboxed kernels import the same Studio as the server. Create,
+edit, and run cells through `marimo._code_mode`, following the `pair --help`
+workflow. Without a way to run the notebook, continue with saved-notebook
+authoring from a terminal.
 
 Inside notebook code mode, combine connection with the first inspection:
 
@@ -102,7 +111,8 @@ for starter in starters:
 ```
 
 Pass the selected returned `starter.id` as `starter=` to `create_view()`.
-Resolve unavailable requirements before building. For an ordinary dashboard,
+Build a slide deck from the starter titled `Reveal.js slides`. Resolve
+unavailable requirements before building. For an ordinary dashboard,
 the default starter creates an editable HTML page with notebook output hosts:
 
 ```python
