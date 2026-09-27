@@ -22,6 +22,7 @@ apps/e2e/.workspace/
 apps/e2e/.cache/
 apps/e2e/playwright-report/
 apps/e2e/test-results/
+tools/example-showcase/shots/
 
 # Generated state within authored Studio workspaces
 **/__marimo__/studio/*/*/.artifacts/

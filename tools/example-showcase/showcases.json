@@ -1,0 +1,41 @@
+{
+  "themes": ["light", "dark"],
+  "scale": 2,
+  "supersample": 2,
+  "showcases": [
+    {
+      "name": "marimo-studio-wall",
+      "layout": "wall",
+      "height": 1100,
+      "plane": "translate3d(-30px, 140px, -980px) rotateX(40deg) rotateZ(-11deg)"
+    },
+    {
+      "name": "marimo-studio-fan-quadratic-programs",
+      "layout": "fan",
+      "family": "quadratic-programs",
+      "order": ["lab", "lecture", "explainer"],
+      "height": 1160
+    },
+    {
+      "name": "marimo-studio-fan-athletes",
+      "layout": "fan",
+      "family": "athletes",
+      "order": ["overview", "explorer", "field"],
+      "height": 1160
+    },
+    {
+      "name": "marimo-studio-fan-earthquakes",
+      "layout": "fan",
+      "family": "earthquakes",
+      "order": ["story", "operations", "briefing"],
+      "height": 1160
+    },
+    {
+      "name": "marimo-studio-fan-occupancy",
+      "layout": "fan",
+      "family": "occupancy",
+      "order": ["monitor", "model-review", "pdf-report"],
+      "height": 1160
+    }
+  ]
+}

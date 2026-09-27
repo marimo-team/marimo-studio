@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>marimo-studio views</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/400.css"
+    />
+    <style>
+      :root {
+        --w: 2400px;
+        --h: 1000px;
+        --card-bg: #fff;
+        --card-border: rgb(20 30 25 / 12%);
+        --chrome: #fbfbfa;
+        --chrome-rule: rgb(20 30 25 / 8%);
+        --label: #3c4043;
+        --muted: #8a8f94;
+        --shadow:
+          0 0 0 1px rgb(20 30 25 / 4%), 0 2px 4px rgb(20 30 25 / 5%),
+          0 18px 36px -12px rgb(20 30 25 / 18%), 0 48px 96px -32px rgb(20 30 25 / 26%);
+      }
+
+      body[data-theme="dark"] {
+        --card-bg: #111;
+        --card-border: rgb(255 255 255 / 12%);
+        --chrome: #1b1d1f;
+        --chrome-rule: rgb(255 255 255 / 8%);
+        --label: #e3e5e8;
+        --muted: #8f959b;
+        --shadow:
+          0 0 0 1px rgb(0 0 0 / 40%), 0 2px 4px rgb(0 0 0 / 30%),
+          0 18px 36px -12px rgb(0 0 0 / 55%), 0 48px 96px -32px rgb(0 0 0 / 70%);
+      }
+
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+      }
+
+      body[data-bg="light"] #canvas {
+        background: #fafaf9;
+      }
+
+      body[data-bg="dark"] #canvas {
+        background: #0d1117;
+      }
+
+      #canvas {
+        position: relative;
+        width: var(--w);
+        height: var(--h);
+        overflow: hidden;
+        perspective: 3200px;
+        perspective-origin: 50% 42%;
+        font-family: "Inter Variable", system-ui, sans-serif;
+      }
+
+      .card {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--card-bg);
+        box-shadow: var(--shadow);
+        transform-style: preserve-3d;
+        backface-visibility: hidden;
+      }
+
+      .card header {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 34px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--chrome-rule);
+        background: var(--chrome);
+        color: var(--label);
+        font-size: 13px;
+        font-weight: 550;
+        letter-spacing: -0.005em;
+      }
+
+      .card.is-right header {
+        flex-direction: row-reverse;
+      }
+
+      .card.is-quiet header span:last-child {
+        visibility: hidden;
+      }
+
+      .card header span:last-child {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 450;
+      }
+
+      .card.is-notebook header span:last-child {
+        font:
+          400 12px "JetBrains Mono",
+          ui-monospace,
+          monospace;
+      }
+
+      .card img {
+        display: block;
+        width: 100%;
+        flex: 1 1 auto;
+        min-height: 0;
+        object-fit: cover;
+        object-position: top center;
+      }
+
+      .plane {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        transform-style: preserve-3d;
+        transform: var(--plane, translate3d(40px, 60px, -760px) rotateX(48deg) rotateZ(-36deg));
+      }
+
+      /* The wall bleeds past the frame, so its edges fade out. */
+      body[data-layout="wall"] #canvas {
+        -webkit-mask-image:
+          linear-gradient(to bottom, #000 74%, transparent 99%),
+          linear-gradient(to right, transparent 0%, #000 7%, #000 93%, transparent 100%);
+        -webkit-mask-composite: source-in;
+        mask-image:
+          linear-gradient(to bottom, #000 74%, transparent 99%),
+          linear-gradient(to right, transparent 0%, #000 7%, #000 93%, transparent 100%);
+        mask-composite: intersect;
+      }
+
+      .card.is-notebook header {
+        background: var(--notebook-chrome, #eef5f2);
+        color: var(--notebook-label, #1d7363);
+      }
+
+      body[data-theme="dark"] .card.is-notebook header {
+        --notebook-chrome: #1f2a26;
+        --notebook-label: #cad996;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas"></div>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      const theme = params.get("theme") ?? "light";
+      const bg = params.get("bg") ?? "transparent";
+      const layout = params.get("layout") ?? "fan";
+      document.body.dataset.theme = theme;
+      document.body.dataset.bg = bg;
+      document.body.dataset.layout = layout;
+      if (params.get("plane"))
+        document.documentElement.style.setProperty("--plane", params.get("plane"));
+      if (params.get("h"))
+        document.documentElement.style.setProperty("--h", `${params.get("h")}px`);
+
+      // Notebook cards name their file. View cards name the technologies they
+      // are built with, so each frontend reads as its own app.
+      const card = (id, style, side) => {
+        const [family, view] = id.split("/");
+        const head = view === "notebook";
+        const entry = window.catalog[family];
+        const found = entry.views.find(({ key }) => key === view);
+        const [label, detail] = head
+          ? ["Notebook", entry.notebook]
+          : [found.label, found.technologies.join(" · ")];
+        const element = document.createElement("section");
+        element.className = ["card", side === "right" && "is-right", head && "is-notebook"]
+          .filter(Boolean)
+          .join(" ");
+        element.innerHTML = `<header><span>${label}</span><span>${detail}</span></header><img src="shots/${family}--${view}.png" alt="">`;
+        Object.assign(element.style, style);
+        document.getElementById("canvas").append(element);
+      };
+
+      // Cards are 16:10 screenshots under a 34px header.
+      const size = (width) => ({ width: `${width}px`, height: `${width * 0.625 + 34}px` });
+      const place = ({ x, y, z, ry, rz, width, depth }) => ({
+        ...size(width),
+        transform: `translate(-50%, -50%) translate3d(${x}px, ${y}px, ${z}px) rotateY(${ry}deg) rotateZ(${rz}deg)`,
+        zIndex: String(depth),
+      });
+
+      const families = Object.fromEntries(
+        Object.entries(window.catalog).map(([slug, { views }]) => [
+          slug,
+          views.map(({ key }) => key),
+        ]),
+      );
+
+      const layouts = {
+        // One notebook raised behind the front view, its other views fanned out.
+        fan: () => {
+          const family = params.get("family") ?? "athletes";
+          const [left, front, right] =
+            (params.get("order") ?? "").split(",").filter(Boolean).length === 3
+              ? params.get("order").split(",")
+              : [families[family][0], families[family][1], families[family][2]];
+          const slots = [
+            {
+              id: `${family}/notebook`,
+              x: 0,
+              y: -222,
+              z: -700,
+              ry: 0,
+              rz: 0,
+              width: 1180,
+              depth: 0,
+              side: "left",
+            },
+            {
+              id: `${family}/${left}`,
+              x: -620,
+              y: 88,
+              z: -280,
+              ry: 24,
+              rz: -3,
+              width: 1000,
+              depth: 2,
+              side: "left",
+              quiet: true,
+            },
+            {
+              id: `${family}/${right}`,
+              x: 620,
+              y: 88,
+              z: -280,
+              ry: -24,
+              rz: 3,
+              width: 1000,
+              depth: 2,
+              side: "right",
+              quiet: true,
+            },
+            {
+              id: `${family}/${front}`,
+              x: 0,
+              y: 132,
+              z: 0,
+              ry: 0,
+              rz: 0,
+              width: 1060,
+              depth: 7,
+              side: "left",
+            },
+          ];
+          for (const slot of slots) {
+            card(slot.id, place(slot), slot.side);
+            if (slot.quiet)
+              document.getElementById("canvas").lastElementChild.classList.add("is-quiet");
+          }
+        },
+        // Every notebook heads a column, with its views stacked beneath it.
+        wall: () => {
+          const plane = document.createElement("div");
+          plane.className = "plane";
+          document.getElementById("canvas").append(plane);
+          const width = 640,
+            gap = 44,
+            height = width * 0.625 + 34;
+          Object.entries(families).forEach(([family, views], c) =>
+            ["notebook", ...views].forEach((view, r) => {
+              card(
+                `${family}/${view}`,
+                {
+                  ...size(width),
+                  left: `${(c - 1.5) * (width + gap)}px`,
+                  top: `${(r - 1.5) * (height + gap)}px`,
+                  transform: "translate(-50%, -50%)",
+                },
+                "left",
+              );
+              plane.append(document.getElementById("canvas").lastElementChild);
+            }),
+          );
+        },
+      };
+      layouts[layout]();
+
+      await Promise.all([...document.images].map((image) => image.decode().catch(() => undefined)));
+      await document.fonts.ready;
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>
