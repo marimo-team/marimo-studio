@@ -50,8 +50,13 @@ PY
 ```
 
 The list shows local servers started with `--no-token`. For a server that
-requires a token, ask the user for its URL and a token file, then pass
-`--token-file <PATH>` to every `pair` command.
+requires a token, ask the user for its URL and a token file. List that server
+to read the notebook's absolute `path`, and pass `--token-file <PATH>` to every
+`pair` command:
+
+```console
+uvx marimo@latest pair notebook list --url <URL> --token-file <PATH>
+```
 
 When the notebook is not running, start it in the background. For a topic with
 no notebook, choose a new file name and marimo creates the file. marimo opens a

@@ -18,8 +18,10 @@ opened in Studio with `marimo pair execute --url <URL> --file <PATH>`, passing
 the absolute `path` from that list. A relative file resolves against the
 agent's working directory. A notebook has a session once a browser opens it,
 and `view.show()` needs that open Studio tab. A server that requires a token
-stays out of the list. Ask the user for its URL, then pass
-`--token-file <PATH>` to every `pair` command or set `MARIMO_TOKEN`.
+stays out of the list. Ask the user for its URL and a token file, then run
+`pair notebook list --url <URL> --token-file <PATH>` to read its notebook
+paths. Pass `--token-file <PATH>` to every `pair` command, or rely on
+`MARIMO_TOKEN` when the user has set it.
 
 ## Work from a saved notebook
 
