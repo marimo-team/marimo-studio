@@ -12,13 +12,16 @@ briefing with Python API help for the Studio version the notebook runs.
 Reading guidance is passive. It does not bind a workspace or activate a view.
 Reuse instructions while the environment and installation remain the same.
 
-`uvx marimo@latest pair notebook list` reports running servers with their
-notebooks and sessions. Target the notebook the user opened in Studio with
-`marimo pair execute --url <URL> --file <PATH>`, passing the absolute `path`
-from that list. A relative file resolves against the agent's working
-directory. A notebook has a session once a browser opens it, and `view.show()`
-needs that open Studio tab. When a server requires a token, pass
-`--token-file <PATH>` to every `pair` command or set `MARIMO_TOKEN`.
+`uvx marimo@latest pair notebook list` reports local servers started with
+`--no-token`, with their notebooks and sessions. Target the notebook the user
+opened in Studio with `marimo pair execute --url <URL> --file <PATH>`, passing
+the absolute `path` from that list. A relative file resolves against the
+agent's working directory. A notebook has a session once a browser opens it,
+and `view.show()` needs that open Studio tab. A server that requires a token
+stays out of the list. Ask the user for its URL and a token file, then run
+`pair notebook list --url <URL> --token-file <PATH>` to read its notebook
+paths. Pass `--token-file <PATH>` to every `pair` command, or rely on
+`MARIMO_TOKEN` when the user has set it.
 
 ## Work from a saved notebook
 

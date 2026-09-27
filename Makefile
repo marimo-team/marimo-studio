@@ -8,7 +8,7 @@ VP := $(PNPM) exec vp
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
 PYTHON_PATHS := $(PY_PACKAGE) scripts
-FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tsconfig.json vite.config.ts
+FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tools/example-showcase tsconfig.json vite.config.ts
 TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
 DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_obsnotebook $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
@@ -18,7 +18,7 @@ PORTLESS_ENV = $(shell [ -t 0 ] || { command -v nc >/dev/null && nc -z 127.0.0.1
 PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-group marimo-studio-build --no-emit-workspace --no-annotate --no-header
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
-.PHONY: e2e e2e-ui docs-examples docs-thumbnails docs-build docs-serve docs-preview package
+.PHONY: e2e e2e-ui docs-examples docs-thumbnails docs-showcase docs-build docs-serve docs-preview package
 .PHONY: _anti-slop-check _architecture-check _provider-sources-check _workflow-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 .PHONY: _prepare-browser-tests
@@ -71,6 +71,7 @@ typecheck: _frontend-ready ## Type-check Python and TypeScript sources.
 	$(UV) run basedpyright --level error
 	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
 	$(PNPM) --filter @marimo-studio/e2e typecheck
+	$(PNPM) exec tsc -p tools/example-showcase/tsconfig.json --noEmit
 
 python-test: ## Run the complete Python test profile for this environment.
 	./scripts/python-test.sh --profile all --parallel
@@ -105,6 +106,11 @@ docs-examples: _frontend-ready build ## Export examples for the documentation si
 docs-thumbnails: _browser-ready ## Capture example thumbnails and landing posters from exported views.
 	@test -d apps/docs/public/examples || $(MAKE) docs-examples
 	$(VP) run --filter @marimo-studio/docs thumbnails
+
+docs-showcase: _browser-ready ## Render example showcase images from exported examples.
+	@test -d apps/docs/public/examples || $(MAKE) docs-examples
+	node tools/example-showcase/capture.ts
+	node tools/example-showcase/render.ts
 
 docs-build: _frontend-ready build ## Build the VitePress documentation.
 	$(VP) run --filter @marimo-studio/docs build

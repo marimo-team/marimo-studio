@@ -1,7 +1,9 @@
 # Notebook analysis
 
 Read when adding or changing notebook computation. Inspect the saved producers
-and the relevant live values before editing. Execute changed cells in the live
+and the relevant live values before editing. Create, edit, and run cells
+through `marimo._code_mode` while the notebook runs, because the kernel can
+overwrite direct file edits when it saves. Execute changed cells in the live
 notebook before checking the view.
 
 For dataset work, keep the notebook markdown-led and reactive. Build named

@@ -74,16 +74,16 @@ with its siblings and the notebook behind them.
 
 ## Ask a coding agent for a view
 
-Give a terminal agent one instruction:
+Paste one request into a terminal agent such as Claude Code or Codex:
 
-```console
-claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
-to build a briefing view of analysis.py that leads with the headline results.'
+```text
+Run `uvx --with marimo-studio agent-plugins read marimo-studio` and create
+a scrollytelling report and a slide deck explaining calculus basics.
 ```
 
-The briefing ships with the `marimo-studio` package. It tells the agent how to
-pair with your running notebook, or start one, then create, build, and show the
-view beside the notebook.
+The instructions ship with the `marimo-studio` package. They tell the agent to
+start a notebook with Studio, write its cells, then create, build, and show
+each view beside the notebook.
 
 [Author with a coding agent](./guide/coding-agents) or
 [create your first view](./guide/getting-started).

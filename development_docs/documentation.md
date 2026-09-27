@@ -17,7 +17,8 @@ examples, and site configuration into the
 | `apps/docs/scripts/capture-thumbnails.ts`    | Gallery thumbnails captured from the published example views                   |
 | `apps/docs/scripts/source-integrity.test.ts` | Page metadata, route inventory, and heading fragments                          |
 | `apps/docs/scripts/verify-build.ts`          | Built routes, assets, base paths, examples, and sibling links                  |
-| `apps/docs/public/`                          | Authored brand, icon, screenshot, and thumbnail assets plus generated examples |
+| `tools/example-showcase/`                    | README showcase images composed from captured example views                    |
+| `apps/docs/public/`                          | Brand, icon, screenshot, thumbnail, and showcase files plus generated examples |
 | `development_docs/`                          | Contributor decisions, ownership, lifecycle, validation, and release workflow  |
 
 Every public Markdown page must appear in `siteRoutes`. A new page also belongs
@@ -122,6 +123,43 @@ pnpm --filter @marimo-studio/docs thumbnails -- --base-url https://marimo-team.g
 
 A view that fails to load is reported and the remaining views are still
 captured. Inspect the images before committing them.
+
+## Example showcase images
+
+The README opens with `apps/docs/public/showcase/marimo-studio-wall-THEME.webp`,
+which places every example notebook above its views on a receding plane. Each
+family also has a fan, `marimo-studio-fan-FAMILY-THEME.webp`, with the notebook
+raised behind its three views. Every image has `light` and `dark` variants for
+GitHub's color schemes and keeps a transparent background. The plain file is a
+2400px WebP at quality 0.9 for READMEs and pages, and the `@2x` file is the
+4800px lossless master. Render them again after a visible view change or when
+the catalog changes:
+
+```console
+make docs-showcase
+```
+
+The target exports the examples when `apps/docs/public/examples` is missing.
+`tools/example-showcase/capture.ts` serves `apps/docs/public`, opens each
+exported notebook and view at 1440x900 and device scale 3, waits for network
+idle, loaded fonts, and a settle delay, then writes a PNG to the ignored
+`tools/example-showcase/shots/` directory. `render.ts` composes each entry in
+`showcases.json` through `compose.html` on a 2400px canvas. It rasterizes the
+canvas at the largest output `scale` times `supersample`, then resamples it
+with Chromium's high-quality filter to each entry in `outputs`, largest first.
+`compose.html` loads Inter and JetBrains Mono from jsDelivr, so rendering needs
+network access. Card headers take notebook files, view labels, and technologies
+from `apps/docs/examples.ts`.
+
+Pass `FAMILY/VIEW` arguments to capture selected shots and showcase names to
+render a subset. A fan uses its family's shots and the wall uses every shot.
+`render.ts` names the capture command for any shot a selected showcase is
+missing:
+
+```console
+node tools/example-showcase/capture.ts quadratic-programs/lab
+node tools/example-showcase/render.ts marimo-studio-fan-quadratic-programs
+```
 
 ## Build and serve
 
