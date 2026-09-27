@@ -1,0 +1,23 @@
+tools/example-showcase/render.ts
+  s_9b427366cd8544::t_4ac5bc22665725 20-27,31,78-96,99,103-128,130,158,169-177
+development_docs/documentation.md
+  s_9b427366cd8544::t_919fe1aadad354 132-136,148-149,154-157,161
+tools/example-showcase/showcases.json
+  s_9b427366cd8544::t_4ac5bc22665725 4-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "08d702a41ca9103c1d31a630d385f8d37b2a2215",
+  "prompts": {},
+  "sessions": {
+    "s_9b427366cd8544": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d22ca0a-0aad-4f6a-baa3-253ab557ebee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
