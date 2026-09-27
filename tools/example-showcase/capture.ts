@@ -4,7 +4,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
-import { extname, join, resolve } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 
 import { documentationExampleFamilies } from "../../apps/docs/examples.ts";
 
@@ -48,13 +48,16 @@ if (!existsSync(join(publicDir, "examples"))) {
   throw new Error("Missing apps/docs/public/examples. Run `make docs-examples` first.");
 }
 
+// join() resolves ".." segments, so containment needs a path-segment boundary.
+const isPublic = (file: string): boolean => file.startsWith(`${publicDir}${sep}`);
+
 const server = createServer((request, response) => {
   const path = decodeURIComponent(new URL(request.url ?? "/", "http://localhost").pathname);
   let file = join(publicDir, path);
-  if (existsSync(file) && statSync(file).isDirectory()) {
+  if (isPublic(file) && existsSync(file) && statSync(file).isDirectory()) {
     file = join(file, "index.html");
   }
-  if (!file.startsWith(publicDir) || !existsSync(file)) {
+  if (!isPublic(file) || !existsSync(file)) {
     response.writeHead(404).end();
     return;
   }
