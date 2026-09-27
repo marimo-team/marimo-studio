@@ -4,40 +4,40 @@
 apps, and presentations. Keep data, computation, and controls in Python.
 Shape each view for its audience, by hand or with a coding agent.
 
+![Four example notebooks, each heading a column of its views](https://marimo-team.github.io/marimo-studio/showcase/marimo-studio-wall-light.webp)
+
 Studio is experimental. Pin `marimo-studio` and third-party view providers in
 saved projects.
 
-## Get started
+## Start with a coding agent
+
+Paste this request into Claude Code, Codex, or another terminal agent:
+
+```text
+Run `uvx --with marimo-studio agent-plugins read marimo-studio` and create
+a scrollytelling report and a slide deck explaining calculus basics.
+```
+
+The agent reads the instructions Studio ships for coding agents, starts a
+notebook with Studio in your browser, and writes the calculus in Python cells.
+It then builds both views and shows them beside the notebook. Change the topic,
+or name a notebook you already have. [uv](https://docs.astral.sh/uv/) supplies
+`uvx`. Follow the [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+for pairing with a running notebook and pointing at results with
+[Lens](https://marimo-team.github.io/marimo-lens/).
+
+## Start by hand
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Add a displayable cell, then click **Add view** in the Studio toolbar. Save the
-notebook if prompted and choose a name and starter. Notebook and Preview open
-side by side. Use the source action to edit the view's files, or work through
-marimo's agent sidebar.
-
-Saving view source rebuilds Preview. A failed build retains the last successful
-view. Follow the [quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
-for a complete first view. [uv](https://docs.astral.sh/uv/) supplies `uvx` and
-resolves the notebook's declared dependencies with `--sandbox`.
-
-## Build a view with a coding agent
-
-Give a terminal agent such as Claude Code or Codex one instruction:
-
-```console
-claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
-to build a briefing view of analysis.py that leads with the headline results.'
-```
-
-`agent-plugins read` prints the briefing Studio ships for coding agents through
-[Agent Plugins](https://github.com/peter-gy/agent-plugins). It tells the agent
-how to pair with your running notebook, or start one, then create, build, and
-show the view. Follow the [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-for request guidance and visual feedback with
-[Lens](https://marimo-team.github.io/marimo-lens/).
+Add a cell that displays a result, then click **Add view** in the Studio
+toolbar. Save the notebook if prompted and choose a name and starter. Notebook
+and Preview open side by side. Saving view source rebuilds Preview, and a
+failed build keeps the last successful view. Follow the
+[quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
+for a complete first view.
 
 ## Run or export a view
 

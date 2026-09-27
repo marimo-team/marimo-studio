@@ -8,86 +8,92 @@
 </p>
 
 <p align="center">
+  <a href="https://marimo-team.github.io/marimo-studio/examples/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/showcase/marimo-studio-wall-dark.webp">
+      <img alt="Four example notebooks, each heading a column of its views" src="apps/docs/public/showcase/marimo-studio-wall-light.webp" width="100%">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  <b>One reactive notebook. Many views.</b><br>
+  Turn a <a href="https://marimo.io/">marimo</a> notebook into reports, apps, and presentations, by hand or with a coding agent.
+</p>
+
+<p align="center">
   <a href="https://github.com/marimo-team/marimo-studio/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/marimo-team/marimo-studio/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://pypi.org/project/marimo-studio/"><img alt="PyPI" src="https://img.shields.io/pypi/v/marimo-studio.svg"></a>
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python 3.10 through 3.14" src="https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg"></a>
 </p>
 
-`marimo-studio` turns one [marimo](https://marimo.io/) notebook into reports,
-apps, and presentations. Keep data, computation, and controls in Python.
-Shape each view for its audience, by hand or with a coding agent.
+Studio keeps data, computation, and controls in the notebook and gives each
+audience its own view, such as a report, a dashboard, a lab, or a slide deck.
+Views render the notebook's live cells and controls, so changing an input
+updates the results that depend on it.
 
-> **Experimental:** Studio is changing rapidly. Pin `marimo-studio` in saved
+> [!NOTE]
+> Studio is experimental and changing rapidly. Pin `marimo-studio` in saved
 > projects.
 
-[![Notebook, view source, and Preview in Studio](apps/docs/public/screenshots/studio-develop.png)](https://marimo-team.github.io/marimo-studio/)
+## Start with a coding agent
 
-## Get started
+Paste this request into Claude Code, Codex, or another terminal agent:
 
-Open a notebook with Studio installed:
+```text
+Run `uvx --with marimo-studio agent-plugins read marimo-studio` and create
+a scrollytelling report and a slide deck explaining calculus basics.
+```
+
+The agent reads the instructions Studio ships for coding agents, starts a
+notebook with Studio in your browser, and writes the calculus in Python cells.
+It then builds both views and shows them beside the notebook. Change the topic,
+or name a notebook you already have. [uv](https://docs.astral.sh/uv/) supplies
+`uvx`.
+
+[Author with a coding agent](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+covers pairing with a running notebook and pointing at results with
+[Lens](https://marimo-team.github.io/marimo-lens/).
+
+## Start by hand
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Add a displayable cell, then click **Add view** in the Studio toolbar. Save the
-notebook if prompted, choose **HTML document**, and create the view. Notebook
-and Preview open side by side. The source action opens the view's files, and
-marimo's agent sidebar stays available.
+Add a cell that displays a result, then click **Add view** in the Studio
+toolbar. Save the notebook if prompted, choose **HTML document**, and create
+the view. Notebook and Preview open side by side. Saving view source rebuilds
+Preview, and a failed build keeps the last successful view.
 
-Saving view source rebuilds Preview. Notebook controls keep their reactive
-behavior, and a failed build retains the last successful view.
+![Notebook, Preview, and view source in Studio](apps/docs/public/screenshots/studio-develop.png)
 
-Follow the [quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
-for a complete first view. [uv](https://docs.astral.sh/uv/) supplies `uvx` and
-resolves the notebook's declared dependencies with `--sandbox`.
+The [quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
+walks through a complete first view.
 
-## Example: Rio 2016 athletes
+## Examples
 
-The [Rio 2016 notebook](https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html)
-supplies one analysis to three views:
+Each example notebook serves three views, built with different frontend stacks.
 
-| View                                                                                          | Explore                                                      |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [Overview](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html) | Roster totals, delegations, sports, and medalists            |
-| [Explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html) | Filter the roster and brush linked charts                    |
-| [Field](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)       | Move through the athlete data in a four-chapter presentation |
-
-Build views with HTML, React, Svelte, or Observable Notebook Kit. Each view owns
-its source and browser dependencies.
-[Explore all examples](https://marimo-team.github.io/marimo-studio/examples/).
-
-## Build a view with a coding agent
-
-Give a terminal agent such as Claude Code or Codex one instruction:
-
-```console
-claude 'Follow `uvx --with marimo-studio agent-plugins read marimo-studio`
-to build a briefing view of analysis.py that leads with the headline results.'
-```
-
-`agent-plugins read` prints the briefing Studio ships for coding agents through
-[Agent Plugins](https://github.com/peter-gy/agent-plugins). It tells the agent
-how to pair with your running notebook, or start one, then create, build, and
-show the view in Preview beside the notebook. In marimo's AI sidebar in
-**Code Mode**, ask for the view directly.
-
-The [agent guide](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-covers writing a good request and sending visual feedback with
-[Lens](https://marimo-team.github.io/marimo-lens/).
+| Notebook                                                                                      | Views                                                                                                                                                                                                                                                                                                             | Built with                                                |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs) | [Lecture](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs/lecture/index.html) · [Explainer](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs/explainer/index.html) · [Lab](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs/lab/index.html) | React, Reveal.js, HTML, Svelte, D3                        |
+| [Rio 2016 athletes](https://marimo-team.github.io/marimo-studio/examples/athletes)            | [Overview](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html) · [Explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html) · [Field](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)                           | HTML, Svelte, Mosaic, Shower, Three.js                    |
+| [Earthquake watch](https://marimo-team.github.io/marimo-studio/examples/earthquakes)          | [Story](https://marimo-team.github.io/marimo-studio/examples/earthquakes/story/index.html) · [Operations](https://marimo-team.github.io/marimo-studio/examples/earthquakes/operations/index.html) · [Briefing](https://marimo-team.github.io/marimo-studio/examples/earthquakes/briefing/index.html)              | HTML, Observable Plot, React, MapLibre, Reveal.js, D3     |
+| [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy)          | [Monitor](https://marimo-team.github.io/marimo-studio/examples/occupancy/monitor/index.html) · [Model review](https://marimo-team.github.io/marimo-studio/examples/occupancy/model-review/index.html) · [PDF report](https://marimo-team.github.io/marimo-studio/examples/occupancy/pdf-report/index.html)        | Notebook Kit, Observable Plot, React, Recharts, React PDF |
 
 ## Run or export a view
 
-Use a live **Python** server, execute Python in the **Browser**, or export
+Serve a live **Python** app, run Python in the **Browser**, or export
 **Prepared** results as a static site. Prepared delivery publishes the exported
-results and input states while keeping Python source on the build machine.
-
+results and input states and keeps Python source on the build machine.
 [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
-covers the delivery choice and what visitors receive.
+compares what visitors receive.
 
 ## Documentation
 
 [Guide](https://marimo-team.github.io/marimo-studio/guide/) ·
+[Examples](https://marimo-team.github.io/marimo-studio/examples/) ·
 [Reference](https://marimo-team.github.io/marimo-studio/reference/) ·
 [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting) ·
 [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
