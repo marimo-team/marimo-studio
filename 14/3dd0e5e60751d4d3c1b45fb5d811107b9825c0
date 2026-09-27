@@ -1,0 +1,25 @@
+packages/marimo-studio/pyproject.toml
+  s_68012e364ae417::t_5d3c12612b1504 3
+.github/release-notes/v0.2.1.md
+  s_68012e364ae417::t_d1f4fa4017162f 1-2,5-7,16-18,22-24,32-33
+  s_68012e364ae417::t_a51d92e09afe0e 15
+  s_68012e364ae417::t_d894dda2a5eb6f 3-4,8-14,19-21,25-31
+uv.lock
+  ai_agent 1254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "143dd0e5e60751d4d3c1b45fb5d811107b9825c0",
+  "prompts": {},
+  "sessions": {
+    "s_68012e364ae417": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e417-062b-71d2-93eb-3a557c6bc03a",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
