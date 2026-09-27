@@ -1,7 +1,10 @@
 {
   "themes": ["light", "dark"],
-  "scale": 2,
   "supersample": 2,
+  "outputs": [
+    { "suffix": "", "scale": 1, "quality": 0.9 },
+    { "suffix": "@2x", "scale": 2, "quality": 1 }
+  ],
   "showcases": [
     {
       "name": "marimo-studio-wall",

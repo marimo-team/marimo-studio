@@ -17,10 +17,18 @@ interface Showcase {
   plane?: string;
 }
 
+// Each output is written as NAME-THEME{suffix}.webp at canvasWidth * scale.
+interface ShowcaseOutput {
+  suffix: string;
+  scale: number;
+  // WebP quality from 0 to 1. Chromium encodes quality 1 losslessly.
+  quality: number;
+}
+
 interface ShowcaseConfig {
   themes: string[];
-  scale: number;
   supersample: number;
+  outputs: ShowcaseOutput[];
   showcases: Showcase[];
 }
 
@@ -67,38 +75,59 @@ const catalog = Object.fromEntries(
   ]),
 );
 
-// compose.html renders an empty card for a missing shot, so check them first.
-const missing = documentationExampleFamilies
-  .flatMap(({ slug, views }) =>
-    ["notebook", ...views.map(({ key }) => key)].map((view) => `${slug}--${view}.png`),
-  )
-  .filter((shot) => !existsSync(join(here, "shots", shot)));
+// compose.html renders an empty card for a missing shot, so check the shots
+// each selected showcase uses: a fan uses its family, the wall uses them all.
+const familyPages = (slug: string): string[] => {
+  const family = documentationExampleFamilies.find((entry) => entry.slug === slug);
+  if (!family) {
+    throw new Error(`Unknown example family: ${slug}.`);
+  }
+  return ["notebook", ...family.views.map(({ key }) => key)].map((view) => `${slug}/${view}`);
+};
+const pages = new Set(
+  showcases.flatMap((showcase) =>
+    showcase.layout === "wall"
+      ? documentationExampleFamilies.flatMap(({ slug }) => familyPages(slug))
+      : familyPages(showcase.family ?? ""),
+  ),
+);
+const missing = [...pages].filter(
+  (page) => !existsSync(join(here, "shots", `${page.replace("/", "--")}.png`)),
+);
 if (missing.length > 0) {
   throw new Error(
-    `Missing shots: ${missing.join(", ")}. Run node tools/example-showcase/capture.ts first.`,
+    `Missing shots. Capture them with node tools/example-showcase/capture.ts ${missing.join(" ")}`,
   );
 }
 
-// Resample the supersampled capture once with Chromium's high-quality filter.
-// WebP at quality 1 is lossless and keeps the transparent card shadows.
-const downscale = async (width: number): Promise<string> => {
-  const capture = await createImageBitmap(await (await fetch("/capture.png")).blob());
-  const height = Math.round((capture.height * width) / capture.width);
-  const image = await createImageBitmap(capture, {
-    premultiplyAlpha: "premultiply",
-    resizeHeight: height,
-    resizeQuality: "high",
-    resizeWidth: width,
-  });
-  const canvas = new OffscreenCanvas(width, height);
-  canvas.getContext("2d")?.drawImage(image, 0, 0);
-  const blob = await canvas.convertToBlob({ quality: 1, type: "image/webp" });
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = "";
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+// Largest output first, so each smaller output resamples the previous one in
+// steps close to 2x, where Chromium's high-quality filter matches Lanczos.
+const outputs = [...config.outputs].sort((left, right) => right.scale - left.scale);
+const renderScale = (outputs[0]?.scale ?? 1) * config.supersample;
+
+// Resample the supersampled capture with Chromium's high-quality filter and
+// encode each target as WebP. Transparent card shadows keep their alpha.
+const encode = async (targets: { quality: number; width: number }[]): Promise<string[]> => {
+  let image = await createImageBitmap(await (await fetch("/capture.png")).blob());
+  const encoded: string[] = [];
+  for (const { quality, width } of targets) {
+    image = await createImageBitmap(image, {
+      premultiplyAlpha: "premultiply",
+      resizeHeight: Math.round((image.height * width) / image.width),
+      resizeQuality: "high",
+      resizeWidth: width,
+    });
+    const canvas = new OffscreenCanvas(image.width, image.height);
+    canvas.getContext("2d")?.drawImage(image, 0, 0);
+    const blob = await canvas.convertToBlob({ quality, type: "image/webp" });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    encoded.push(btoa(binary));
   }
-  return btoa(binary);
+  return encoded;
 };
 
 await mkdir(outDir, { recursive: true });
@@ -126,7 +155,7 @@ try {
       if (showcase.plane) query.plane = showcase.plane;
       url.search = new URLSearchParams(query).toString();
       const page = await browser.newPage({
-        deviceScaleFactor: config.scale * config.supersample,
+        deviceScaleFactor: renderScale,
         viewport: { height: showcase.height, width: canvasWidth },
       });
       await page.addInitScript(
@@ -137,11 +166,15 @@ try {
       await page.waitForSelector("body[data-ready=true]", { timeout: 60_000 });
       capture = await page.locator("#canvas").screenshot({ omitBackground: true });
       await page.close();
-      const encoded: string = await encoder.evaluate(downscale, canvasWidth * config.scale);
-      await writeFile(
-        join(outDir, `${showcase.name}-${theme}.webp`),
-        Buffer.from(encoded, "base64"),
-      );
+      const targets = outputs.map(({ quality, scale }) => ({
+        quality,
+        width: canvasWidth * scale,
+      }));
+      const encoded: string[] = await encoder.evaluate(encode, targets);
+      for (const [index, { suffix }] of outputs.entries()) {
+        const file = join(outDir, `${showcase.name}-${theme}${suffix}.webp`);
+        await writeFile(file, Buffer.from(encoded[index] ?? "", "base64"));
+      }
       console.log(`rendered ${showcase.name}-${theme}`);
     }
   }
