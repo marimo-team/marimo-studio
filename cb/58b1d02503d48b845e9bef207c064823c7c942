@@ -1,0 +1,38 @@
+development_docs/documentation.md
+  s_9b427366cd8544::t_fe4aa92c78b819 127-128,130,135-141,143-144,151-158
+  s_9b427366cd8544::t_e1f7d75ccac7ef 20-21
+  s_9b427366cd8544::t_482e7efb6f9b65 129,131-134,142,145-150
+tools/example-showcase/capture.ts
+  s_9b427366cd8544::t_d6b6bd53d32608 2-74,76-99
+  s_9b427366cd8544::t_db430f074b2657 1,75
+tools/example-showcase/showcases.json
+  s_9b427366cd8544::t_db430f074b2657 3-4
+  s_9b427366cd8544::t_d6b6bd53d32608 1-2,5-41
+Makefile
+  s_9b427366cd8544::t_cb1a4006db6e4e 111
+  s_9b427366cd8544::t_362bf1de046525 11,21,74,110,112-113
+.gitignore
+  s_9b427366cd8544::t_362bf1de046525 25
+tools/example-showcase/render.ts
+  s_9b427366cd8544::t_6a47da940394fd 27-32
+  s_9b427366cd8544::t_2f2ffb3d232d96 4,23,40-41,82-103,107-108,113-114,129,138,140-144
+  s_9b427366cd8544::t_d6b6bd53d32608 1-3,5-22,24-26,33-39,42-44,51-81,104-106,115-128,130-137,139,145-150
+  s_9b427366cd8544::t_475fc11d66fe21 45-50
+  s_9b427366cd8544::t_fcc789e03bcee5 109-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cb58b1d02503d48b845e9bef207c064823c7c942",
+  "prompts": {},
+  "sessions": {
+    "s_9b427366cd8544": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d22ca0a-0aad-4f6a-baa3-253ab557ebee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
