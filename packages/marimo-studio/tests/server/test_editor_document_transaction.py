@@ -12,6 +12,7 @@ from starlette.types import ASGIApp, Message, Scope, Send
 import marimo_studio._server.editor_bridge as editor_bridge
 from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.ports import DocumentTransactionEvidence
+from marimo_studio._server.security import SecurityPolicy
 
 
 class _Evidence:
@@ -99,6 +100,7 @@ def _delegate(
             document_transactions=cast(DocumentTransactionEvidence, evidence),
             relative="/_marimo-studio/editor/api/document/transaction",
             mode="edit",
+            resolve_security_policy=lambda _scope: SecurityPolicy(),
         )
     )
     assert served is True

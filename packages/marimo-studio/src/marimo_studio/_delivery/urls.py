@@ -54,6 +54,16 @@ def public_url(base_url: str, path: str = "") -> str:
     return f"{base_path}{suffix}" or "/"
 
 
+def same_origin_url(path: str, query: str = "") -> str:
+    """Return a path-only redirect target on the browser's origin.
+
+    The target omits the request Host, which a reverse proxy may rewrite.
+    """
+    # Browsers resolve a leading "//" as a network path on another host.
+    target = "/" + path.lstrip("/")
+    return f"{target}?{query}" if query else target
+
+
 def studio_url(base_url: str, view_name: str | None = None) -> str:
     """Return the public Studio workspace URL."""
     suffix = f"{STUDIO_PATH}/{view_name}/" if view_name else f"{STUDIO_PATH}/"

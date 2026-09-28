@@ -47,7 +47,7 @@ from marimo_studio._server.request_body import (
     read_bounded_body,
 )
 from marimo_studio._server.routing import native_editor_target
-from marimo_studio._server.security import DEFAULT_SECURITY_POLICY, SecurityPolicy
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.editor_capability import (
     editor_binding_capability_matches,
@@ -85,7 +85,7 @@ async def delegate_editor_request(
     document_transactions: DocumentTransactionEvidence,
     relative: str,
     mode: str,
-    security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
+    resolve_security_policy: Callable[[Scope], SecurityPolicy],
     host_session_active: Callable[[ServerContext, str], bool] | None = None,
 ) -> bool:
     """Delegate one editor or code-mode request and report whether it matched."""
@@ -220,7 +220,7 @@ async def delegate_editor_request(
                     location.notebook,
                 )
         delegated_send = (
-            edit_document_send(send, security_policy)
+            edit_document_send(send, resolve_security_policy(scope))
             if scope["type"] == "http" and editor_root
             else send
         )

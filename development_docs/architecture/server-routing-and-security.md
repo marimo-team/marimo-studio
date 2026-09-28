@@ -54,7 +54,7 @@ Every routed notebook resolves to one state:
 | State                   | Record         | Edit-mode response                                                                                                  | Run-mode response                       |
 | ----------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Unconfigured            | `Unconfigured` | `/`: Studio-hosted native editor (`studio`) or native Marimo editor (`marimo`). `/studio/`: first-view application. | Marimo route or configuration error     |
-| Configured with no view | `NeedsView`    | First-view application                                                                                              | `workspace-not-initialized`             |
+| Configured with no view | `NeedsView`    | First-view application                                                                                              | Marimo route                            |
 | Ready                   | `Ready`        | Studio, Source, Preview, and support routes                                                                         | Default or named presentation           |
 | Invalid                 | `Invalid`      | Repair document and structured support errors                                                                       | Structured or plain configuration error |
 
@@ -103,7 +103,8 @@ middleware composition receives the same immutable policy record.
 
 Host entry validates the signed session, notebook owner, and canonical public
 query before native Marimo resumes an existing session. Native, Studio,
-handoff, and repair documents receive the configured `frame-ancestors` policy.
+handoff, and repair documents receive the request's `frame-ancestors` policy
+described in [Browser isolation](#browser-isolation).
 
 [Product and workspace](product-and-workspace.md#first-save) owns first-view and
 first-save behavior. [Browser runtime and authoring](browser-runtime-and-authoring.md#native-editor-session)
@@ -165,12 +166,14 @@ Studio window.
 Presentation responses enforce a sandbox content security policy, a null-origin
 CORS audience, no referrer, and explicit exposed headers. Studio documents use
 no-store, `nosniff`, and same-origin referrer policy. The native editor bridge
-and outer edit documents use one `SecurityPolicy` for `frame-ancestors`. The
-policy always includes `'self'` and may include canonical origins loaded from
-`MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` during server composition.
-Trusted host scripts carried in Marimo's server-level `html_head` remain in the
-outer Studio document. Their bounded `data-parent-origin` declarations extend
-the same policy for host-managed embedding without importing host code.
+and outer edit documents use one `SecurityPolicy` for `frame-ancestors`.
+Every document owner resolves it for its request through
+`PresentationMiddleware`. The policy always includes `'self'` and may include
+canonical origins loaded from `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` during
+server composition. Trusted host scripts carried in Marimo's server-level
+`html_head` remain in the outer Studio document. Their bounded
+`data-parent-origin` declarations extend the same policy for host-managed
+embedding without importing host code.
 
 ## Session admission
 

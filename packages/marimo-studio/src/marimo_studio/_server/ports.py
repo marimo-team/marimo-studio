@@ -51,6 +51,8 @@ class ServerGateway(Protocol):
 
     def uses_file_routing(self, scope: Scope) -> bool: ...
 
+    def trusted_html_head(self, scope: Scope) -> str | None: ...
+
     async def location(
         self,
         request: Request | WebSocket,

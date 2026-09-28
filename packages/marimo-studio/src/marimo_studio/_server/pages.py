@@ -34,6 +34,7 @@ from marimo_studio._delivery.urls import (
     UNFRAMED_QUERY_PARAM,
     WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
     public_url,
+    same_origin_url,
     studio_url,
     view_url,
     with_notebook_query,
@@ -86,13 +87,9 @@ def authentication_redirect(request: Request, base_url: str) -> Response:
     """Redirect a Studio page request through Marimo authentication."""
     if "access_token" in request.query_params:
         stripped = request.url.remove_query_params("access_token")
-        target = stripped.path
-        if stripped.query:
-            target += f"?{stripped.query}"
+        target = same_origin_url(stripped.path, stripped.query)
     else:
-        next_url = request.url.path
-        if request.url.query:
-            next_url += f"?{request.url.query}"
+        next_url = same_origin_url(request.url.path, request.url.query)
         login = public_url(base_url, "/auth/login")
         target = f"{login}?{urlencode({'next': next_url})}"
     return RedirectResponse(target, status_code=303, headers=DOCUMENT_HEADERS)
@@ -102,9 +99,7 @@ def page_redirect(request: Request, relative: str, page: bool) -> Response | Non
     """Canonicalize page routes with a trailing slash."""
     if not page or relative in {"", "/"} or relative.endswith("/"):
         return None
-    target = request.url.path + "/"
-    if request.url.query:
-        target += f"?{request.url.query}"
+    target = same_origin_url(request.url.path + "/", request.url.query)
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
 

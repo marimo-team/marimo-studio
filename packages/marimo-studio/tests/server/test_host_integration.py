@@ -7,6 +7,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
+from starlette.routing import Mount
 from starlette.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
@@ -98,6 +99,28 @@ def test_explicit_host_handoff_uses_the_embedding_security_policy(
         native = client.get("/?session_id=s_123456")
 
     assert handoff.status_code == 200
+    for response in (handoff, native):
+        assert response.headers["content-security-policy"] == (
+            "frame-ancestors 'self' https://host.example"
+        )
+
+
+def test_explicit_host_documents_allow_host_declared_parent_origins(
+    notebook_path: Path,
+) -> None:
+    app = _marimo_app(notebook_path, programmatic=True, route_policy=_EXPLICIT_HOST)
+    _edit_mode(app)
+    mounted: Any = next(route.app for route in app.routes if isinstance(route, Mount))
+    mounted.state.html_head = (
+        '<script data-parent-origin="https://host.example"></script>'
+    )
+
+    with TestClient(app) as client:
+        handoff = client.get("/")
+        native = client.get("/?session_id=s_123456")
+
+    assert handoff.text.count("<title>Opening notebook</title>") == 1
+    assert "<marimo-filename" in native.text
     for response in (handoff, native):
         assert response.headers["content-security-policy"] == (
             "frame-ancestors 'self' https://host.example"
@@ -366,6 +389,7 @@ def test_native_save_hands_off_a_newly_named_notebook(
             document_transactions=cast(Any, SimpleNamespace()),
             relative="/api/kernel/save",
             mode="edit",
+            resolve_security_policy=lambda _scope: SecurityPolicy(),
         )
     )
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode
 
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -13,6 +13,7 @@ from marimo_studio._delivery.urls import (
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
     PRESENTATION_RENEWAL_QUERY_PARAM,
     WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
+    same_origin_url,
 )
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.capability import (
@@ -93,10 +94,9 @@ def presentation_session_redirect(
         session_ids,
         preserve_session=preserve_session,
     )
-    parts = urlsplit(str(request.url))
     query = [
         (key, value)
-        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        for key, value in parse_qsl(request.url.query, keep_blank_values=True)
         if key
         not in {
             DOCUMENT_REPLAY_QUERY_PARAM,
@@ -114,8 +114,10 @@ def presentation_session_redirect(
     )
     if replay:
         query.append((DOCUMENT_REPLAY_QUERY_PARAM, "1"))
-    target = urlunsplit((*parts[:3], urlencode(query), parts.fragment))
-    return RedirectResponse(target, status_code=307)
+    return RedirectResponse(
+        same_origin_url(request.url.path, urlencode(query)),
+        status_code=307,
+    )
 
 
 def assign_presentation_session(

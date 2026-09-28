@@ -19,6 +19,7 @@ from marimo_studio._delivery.urls import (
     SERVER_INSTANCE_QUERY_PARAM,
     authored_view_root_url,
 )
+from marimo_studio._server.security import Origin, SecurityPolicy
 from marimo_studio._server.studio.event_capability import (
     workspace_events_capability,
 )
@@ -449,3 +450,25 @@ def test_editor_launcher_navigation_uses_the_public_mount(
         "region": ["eu"],
         **({"file": [file]} if file is not None else {}),
     }
+
+
+def test_directory_home_uses_the_embedding_security_policy(
+    notebook_path: Path,
+) -> None:
+    app = _marimo_app(
+        notebook_path,
+        programmatic=True,
+        security_policy=SecurityPolicy((Origin("https://host.example"),)),
+    )
+    _edit_mode(app)
+    _session_manager(app).workspace = DirectoryWorkspace(
+        str(notebook_path.parent), include_markdown=False
+    )
+
+    with TestClient(app) as client:
+        home = client.get("/")
+
+    assert home.status_code == 200
+    assert home.headers["content-security-policy"] == (
+        "frame-ancestors 'self' https://host.example"
+    )

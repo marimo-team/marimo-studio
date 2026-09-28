@@ -85,7 +85,7 @@ class _TransportHarness:
         self.notebooks = NotebookScopeRegistry()
         self.handler = HostEntryHandler(
             StudioRoutePolicy(edit_root="marimo"),
-            SecurityPolicy(),
+            lambda _scope: SecurityPolicy(),
             cast(ServerGateway, _Gateway(self.context)),
             cast(SessionState, self.sessions),
             self.notebooks,

@@ -13,8 +13,10 @@ owner reports a failure.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -36,6 +38,7 @@ from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.files import (
     file_response,
 )
+from marimo_studio._server.headers import edit_document_send
 from marimo_studio._server.host_integration import HostEntryHandler
 from marimo_studio._server.lifecycle_handler import (
     LifecycleRoute,
@@ -77,13 +80,19 @@ from marimo_studio._server.routing import (
     view_route_alias,
 )
 from marimo_studio._server.runtime.catalog import create_runtime_registry
-from marimo_studio._server.security import DEFAULT_SECURITY_POLICY, SecurityPolicy
+from marimo_studio._server.security import (
+    DEFAULT_SECURITY_POLICY,
+    SecurityPolicy,
+    extend_security_policy_from_host_head,
+)
 from marimo_studio._server.workspace_lifecycle import (
     Invalid,
     NeedsView,
     Ready,
     Unconfigured,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def _send_studio_response(
@@ -111,9 +120,10 @@ class PresentationMiddleware:
         self._adapters = adapter_factory()
         self._route_policy = route_policy
         self._notebooks = NotebookScopeRegistry()
+        self._viewless_notebooks: set[Path] = set()
         self._host_entry = HostEntryHandler(
             route_policy,
-            security_policy,
+            self._resolve_security_policy,
             self._adapters.server,
             self._adapters.session_state,
             self._notebooks,
@@ -134,12 +144,19 @@ class PresentationMiddleware:
             app,
             self._adapters,
             self._runtimes,
-            security_policy,
+            self._resolve_security_policy,
         )
         self._ready_routes = ReadyWorkspaceHandler(
             self._adapters,
             self._runtimes,
-            security_policy,
+            self._resolve_security_policy,
+        )
+
+    def _resolve_security_policy(self, scope: Scope) -> SecurityPolicy:
+        """Return the framing policy shared by every edit document in a request."""
+        return extend_security_policy_from_host_head(
+            self._security_policy,
+            self._adapters.server.trusted_html_head(scope),
         )
 
     @asynccontextmanager
@@ -259,7 +276,7 @@ class PresentationMiddleware:
             code_mode=self._adapters.code_mode,
             editor_runtime=self._adapters.editor_runtime,
             document_transactions=self._adapters.document_transactions,
-            security_policy=self._security_policy,
+            resolve_security_policy=self._resolve_security_policy,
             relative=relative,
             mode=mode,
             host_session_active=self._host_entry.session_active,
@@ -332,7 +349,7 @@ class PresentationMiddleware:
                     self.app,
                     scope,
                     receive,
-                    send,
+                    edit_document_send(send, self._resolve_security_policy(scope)),
                     resource_path=relative,
                     runtime_url=str(request.url),
                     eager_runtime=False,
@@ -377,6 +394,21 @@ class PresentationMiddleware:
                 or relative.strip("/").split("/")[0] == "studio"
             )
         ):
+            await self.app(scope, receive, send)
+            return
+        if (
+            isinstance(lifecycle, NeedsView)
+            and location.mode == "run"
+            and not presentation_access
+            and not is_support_route(relative)
+        ):
+            # Run mode presents views. A notebook without one runs as a marimo app.
+            if location.notebook not in self._viewless_notebooks:
+                self._viewless_notebooks.add(location.notebook)
+                _LOGGER.warning(
+                    "Studio found no views for %s. Run mode serves it as a marimo app.",
+                    location.notebook,
+                )
             await self.app(scope, receive, send)
             return
         if isinstance(lifecycle, Invalid) and landing:

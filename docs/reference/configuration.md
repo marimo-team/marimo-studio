@@ -31,6 +31,9 @@ MARIMO_STUDIO_EDIT_ROOT=marimo marimo edit analysis.py --headless
 | `studio` | Studio entry, the default | Studio authoring workspace | Default Studio presentation |
 | `marimo` | Native marimo editor      | Studio authoring workspace | Default Studio presentation |
 
+Until the view root contains a view, run `/` serves the notebook as a marimo
+app.
+
 The setting is process configuration. Apply it before marimo loads the Studio
 server extension. A direct `/studio/` request can create the first view, then
 opens Source, Preview, and the embedded native editor.
@@ -153,9 +156,20 @@ command and clickjacking boundary.
 
 Studio also preserves marimo's trusted, server-level `html_head` content in its
 outer edit document. A host-injected script can declare its exact parent with a
-`data-parent-origin` attribute. Studio validates that HTTP or HTTPS origin and
-adds it to the edit document's framing policy. Explicit
-`MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` entries remain additive.
+`data-parent-origin` attribute:
+
+```html
+<script
+  src="https://host.example.com/bridge.js"
+  data-parent-origin="https://host.example.com"
+></script>
+```
+
+Studio adds each valid HTTP or HTTPS origin to the framing policy of every edit
+document: the workspace, its embedded native editor, and the native documents
+served at edit `/`. Studio ignores a value that is not an exact origin.
+Declared origins add to `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` and share its
+entry and byte limits.
 
 ## Provider environments
 
