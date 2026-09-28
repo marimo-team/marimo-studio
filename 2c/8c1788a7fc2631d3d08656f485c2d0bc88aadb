@@ -1,0 +1,21 @@
+tools/example-showcase/tsconfig.json
+  s_9b427366cd8544::t_4ac5bc22665725 4
+tools/example-showcase/capture.ts
+  s_9b427366cd8544::t_ab8b7d31bfd9e6 51-53,57,60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2c8c1788a7fc2631d3d08656f485c2d0bc88aadb",
+  "prompts": {},
+  "sessions": {
+    "s_9b427366cd8544": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d22ca0a-0aad-4f6a-baa3-253ab557ebee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

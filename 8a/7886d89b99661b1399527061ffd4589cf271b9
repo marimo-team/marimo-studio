@@ -1,0 +1,101 @@
+docs/examples/earthquakes.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 45-46
+docs/guide/notebook-results.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 95-96,169
+docs/guide/work-in-studio.md
+  s_ab27814f3b8a84::t_58663410bde843 9-10
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 14-15,19,29-30
+docs/reference/limits.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 40,86,89
+apps/docs/.vitepress/routes.ts
+  s_ab27814f3b8a84::t_58663410bde843 56
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 83-84
+docs/reference/built-in-providers.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 8,10
+  s_ab27814f3b8a84::t_aa60bf6784b9da 218-219
+docs/reference/configuration.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 84,172-173,254
+docs/reference/cli.md
+  s_ab27814f3b8a84::t_aa60bf6784b9da 309,337-338,357,370,374-375,381,388,402,404
+apps/docs/examples.ts
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 75
+docs/examples/index.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 32
+packages/marimo-studio/src/marimo_studio/_views/overview.py
+  s_ab27814f3b8a84::t_d51faf2eb3e818 33
+docs/guide/run-and-share.md
+  s_ab27814f3b8a84::t_29796774fc799d 15
+  s_ab27814f3b8a84::t_560180515f236b 66
+  s_ab27814f3b8a84::t_aa60bf6784b9da 3,118,139,236,248,265
+docs/guide/coding-agents.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 98
+docs/index.md
+  s_ab27814f3b8a84::t_58663410bde843 89
+  s_ab27814f3b8a84::t_aa60bf6784b9da 53
+docs/what-is-studio.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 46,73
+  s_ab27814f3b8a84::t_58663410bde843 72
+docs/guide/troubleshooting.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 74
+docs/reference/compatibility.md
+  s_ab27814f3b8a84::t_aa60bf6784b9da 83-84,98
+docs/examples/athletes.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 45-46
+docs/guide/frontend-options.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 8,40,99
+packages/marimo-studio/src/marimo_studio/_cli/main.py
+  s_ab27814f3b8a84::t_560180515f236b 42
+docs/examples/occupancy.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 48-49
+docs/reference/errors-and-json.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 161
+packages/marimo-studio/src/marimo_studio/_views/create.py
+  s_ab27814f3b8a84::t_d51faf2eb3e818 180
+README.md
+  s_ab27814f3b8a84::t_ba23e6366ea89c 89-91
+  s_ab27814f3b8a84::t_d51faf2eb3e818 33-34
+  s_ab27814f3b8a84::t_58663410bde843 72
+docs/reference/projections.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 336
+docs/guide/deploy.md
+  s_ab27814f3b8a84::t_560180515f236b 17,51-52
+packages/marimo-studio/src/marimo_studio/_cli/targets.py
+  s_ab27814f3b8a84::t_560180515f236b 44
+packages/marimo-studio/README.md
+  s_ab27814f3b8a84::t_d51faf2eb3e818 5-7
+  s_ab27814f3b8a84::t_58663410bde843 40-41
+  s_ab27814f3b8a84::t_ba23e6366ea89c 47-49
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_delivery.py
+  s_ab27814f3b8a84::t_ce2942cf68182e 241,308
+docs/guide/views.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 14,51
+skills/marimo-studio/references/delivery.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 48,120-122
+docs/reference/python-api.md
+  s_ab27814f3b8a84::t_ce2942cf68182e 227,367-368,407-408
+docs/guide/index.md
+  s_ab27814f3b8a84::t_58663410bde843 8
+  s_ab27814f3b8a84::t_29796774fc799d 13-20,24-25,27-29
+  s_ab27814f3b8a84::t_ba23e6366ea89c 26
+docs/guide/getting-started.md
+  s_ab27814f3b8a84::t_58663410bde843 2,6
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 24
+docs/guide/styling.md
+  s_ab27814f3b8a84::t_3a8cdb9906d8fa 76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8a7886d89b99661b1399527061ffd4589cf271b9",
+  "prompts": {},
+  "sessions": {
+    "s_ab27814f3b8a84": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d47e4f6-563e-41a1-bdb2-e543d774a7c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
