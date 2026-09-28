@@ -33,6 +33,7 @@ def _editor_command(notebook: Path) -> str:
         "edit",
         str(notebook),
         "--sandbox",
+        "--watch",
     ]
     return (
         subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
@@ -298,7 +299,7 @@ def test_view_create_reports_exact_requirements_for_every_provider_distribution(
     arguments = ["uvx"]
     for requirement in requirements:
         arguments.extend(["--with", requirement])
-    arguments.extend(["marimo", "edit", str(notebook_path), "--sandbox"])
+    arguments.extend(["marimo", "edit", str(notebook_path), "--sandbox", "--watch"])
     expected = (
         subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
     )
@@ -362,7 +363,7 @@ def test_create_preserves_project_execution(notebook_path: Path, inline: bool) -
     )
     assert result.exit_code == 0, result.output
     assert "uv run --project" in result.stderr
-    assert "--no-sandbox" in result.stderr
+    assert "--no-sandbox --watch" in result.stderr
     assert project.read_text() == original
     metadata = read_notebook_metadata(notebook_path)
     assert metadata is not None

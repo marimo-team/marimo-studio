@@ -110,7 +110,7 @@ def test_root_help_launches_marimo_with_the_exact_studio_distribution() -> None:
     assert result.exit_code == 0, result.output
     assert (
         f"uvx --with marimo-studio=={version('marimo-studio')} "
-        "marimo edit analysis.py --sandbox"
+        "marimo edit analysis.py --sandbox --watch"
     ) in unstyle(result.output)
     assert "Default Vanilla authoring:" in unstyle(result.output)
 

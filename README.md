@@ -59,7 +59,7 @@ covers pairing with a running notebook and pointing at results with
 ## Start by hand
 
 ```console
-uvx --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
 Add a cell that displays a result, then click **Add view** in the Studio

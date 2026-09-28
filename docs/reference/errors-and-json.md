@@ -34,7 +34,7 @@ caller can process diagnostics as they arrive. One event has this shape:
   "command": "view create",
   "severity": "info",
   "code": "next-command",
-  "message": "uvx --with marimo-studio marimo edit analysis.py --sandbox",
+  "message": "uvx --with marimo-studio marimo edit analysis.py --sandbox --watch",
   "details": {
     "action": "edit"
   }

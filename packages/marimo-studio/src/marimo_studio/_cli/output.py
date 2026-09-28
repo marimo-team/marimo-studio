@@ -87,13 +87,13 @@ def render_view_next_command(result: ViewSetupResult) -> None:
     if project is None:
         command = _uvx_command(
             result.launch_requirements,
-            ["marimo", "edit", str(result.notebook), "--sandbox"],
+            ["marimo", "edit", str(result.notebook), "--sandbox", "--watch"],
         )
     else:
         command = _shell_command(
             environment_command(
                 result,
-                ["marimo", "edit", str(result.notebook), "--no-sandbox"],
+                ["marimo", "edit", str(result.notebook), "--no-sandbox", "--watch"],
             )
         )
     _echo_next_command("edit", command)
