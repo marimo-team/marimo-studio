@@ -83,8 +83,7 @@ def browser_entry_closure(name: str) -> BrowserEntryClosure:
         )
         if zero_python is not None:
             raise ProtocolError(
-                "WebAssembly browser entry includes Zero-Python runtime asset "
-                f"{zero_python!r}"
+                f"Browser runtime entry includes Prepared runtime asset {zero_python!r}"
             )
     if name == "zero-python":
         forbidden = next(
@@ -97,8 +96,7 @@ def browser_entry_closure(name: str) -> BrowserEntryClosure:
         )
         if forbidden is not None:
             raise ProtocolError(
-                "Zero-Python browser entry includes forbidden runtime asset "
-                f"{forbidden!r}"
+                f"Prepared runtime entry includes forbidden runtime asset {forbidden!r}"
             )
     try:
         total_bytes = sum(path.stat().st_size for path in paths)

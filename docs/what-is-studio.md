@@ -43,7 +43,7 @@ runtime to create the **presentation** shown in Preview.
 | Run changed notebook code   | marimo updates dependent results in the view         |
 | Save a view source document | Studio builds and publishes the updated page         |
 | Switch views                | The next view uses the same live notebook session    |
-| Change delivery runtime     | The same artifact receives results from that runtime |
+| Change runtime              | The same artifact receives results from that runtime |
 
 A failed build keeps the last successful artifact available while Source shows
 the diagnostic. Each view can evolve independently.
@@ -69,6 +69,6 @@ Studio brings **Notebook**, **Source**, and **Preview** together. Edit Python,
 shape the view, and inspect the result side by side. The native agent sidebar
 remains available throughout.
 
-[Create your first view](guide/getting-started.md), browse the
-[examples](examples/index.md), or choose a [delivery runtime](guide/run-and-share.md)
+Follow [Getting started](guide/getting-started.md), browse the
+[examples](examples/index.md), or choose a [runtime](guide/run-and-share.md)
 for a live application, browser execution, or a prepared static report.

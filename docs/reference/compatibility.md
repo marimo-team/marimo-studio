@@ -80,8 +80,8 @@ limit. Enable `LongPathsEnabled=1` with administrator privileges before starting
 Studio. Restart existing Studio and terminal processes after changing the
 setting.
 
-Server execution can use the packages, files, databases, and credentials
-available to its Python environment. Browser execution requires
+The Python runtime can use the packages, files, databases, and credentials
+available to its Python environment. The Browser runtime requires
 [Pyodide](https://pyodide.org/)-compatible packages and data sources the visitor
 can reach. [Run or export a view](../guide/run-and-share.md) defines those
 runtime and delivery boundaries.
@@ -95,7 +95,7 @@ runtime and delivery boundaries.
 | Static export        | Not applicable  | Supported      | Default                |
 
 Static exports are HTTP directories. A Prepared export contains the production
-artifact, runtime configuration, notebook public files, and precomputed
+artifact, runtime configuration, notebook public files, and prepared
 projection results. A Browser export also contains saved notebook source and
 runs it through Pyodide. Imported packages, remote data, fonts, maps, and other
 browser resources retain their own network and cross-origin requirements.

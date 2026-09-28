@@ -50,7 +50,7 @@ features:
       width: "24"
       height: "24"
     title: Run or export
-    details: Serve a live Python app, run Python in the browser, or publish precomputed results.
+    details: Serve a live Python app, run Python in the browser, or publish prepared results.
     link: ./guide/run-and-share
 ---
 
@@ -86,4 +86,4 @@ start a notebook with Studio, write its cells, then create, build, and show
 each view beside the notebook.
 
 [Author with a coding agent](./guide/coding-agents) or
-[create your first view](./guide/getting-started).
+follow [Getting started](./guide/getting-started) by hand.

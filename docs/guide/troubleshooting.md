@@ -25,7 +25,7 @@ each `view.toml` before operating an unfamiliar project.
 Open the notebook in an environment that contains both marimo and Studio:
 
 ```console
-uvx --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
 Save an untitled notebook with **Save As**, then create the first view against
@@ -71,7 +71,7 @@ Use the reported recovery file before overwriting an uncertain replacement.
 ## A source document is missing
 
 The view provider controls the Source catalog. Check `view.toml`, then inspect
-the project. For Vanilla HTML, local CSS and JavaScript appear after
+the project. For the Vanilla provider, local CSS and JavaScript appear after
 `index.html` references them directly. React and Svelte providers discover
 files under their configured source roots.
 
@@ -100,6 +100,19 @@ selector syntax, and runtime diagnostic.
 
 For a computed React or Svelte projection target, either use a finite literal
 set or add `data-marimo-allow="*"` at the dynamic host.
+
+## Preview needs repair after an outside edit
+
+A coding agent or another editor changed the notebook file, and the Studio
+server was started without `--watch`. Restart it with the flag:
+
+```console
+uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
+```
+
+On macOS, `--watch` misses changes when the notebook path passes through a
+symlinked folder such as `/tmp`. Open the notebook by its resolved path, for
+example `/private/tmp/analysis.py`.
 
 ## The Browser runtime does not start
 

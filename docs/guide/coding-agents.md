@@ -95,7 +95,7 @@ the last working artifact, so a visible page alone does not prove the edit was
 published. In the browser, wait for
 `html[data-marimo-studio-state="ready"]`, inspect wide and narrow layouts, and
 exercise controls through to their dependent results. Verify exports in the
-[delivery runtime](run-and-share.md) visitors will use.
+[runtime](run-and-share.md) visitors will use.
 
 The [Python API](../reference/python-api.md#marimo-studio-agent) defines methods
 and records. The installed skill supplies the complete authoring workflow and

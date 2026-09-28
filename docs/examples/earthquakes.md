@@ -42,8 +42,8 @@ From the repository root:
 uv run marimo edit examples/earthquakes.py --sandbox
 ```
 
-Open Studio from the marimo editor, then switch among `story`, `operations`,
-and `briefing`. The notebook fetches the pinned
+Studio opens `story`, the notebook's default view. Switch among `story`,
+`operations`, and `briefing`. The notebook fetches the pinned
 [GeoJSON](https://geojson.org/) map-data feed from
 `raw.githubusercontent.com`. [MapLibre](https://maplibre.org/) renders the
 maps, [Observable Plot](https://observablehq.com/plot/) renders the charts, and

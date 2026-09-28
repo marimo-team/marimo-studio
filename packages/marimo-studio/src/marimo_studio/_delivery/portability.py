@@ -57,9 +57,9 @@ def projection_portability(
                 "incompatible" if runtime == "zero-python" else "supported"
             )
             reason = (
-                "Zero-Python requires a finite authored target set."
+                "The Prepared runtime requires a finite authored target set."
                 if runtime == "zero-python"
-                else "WebAssembly resolves this target while the notebook runs."
+                else "The Browser runtime resolves this target while the notebook runs."
             )
             results.append(
                 ProjectionPortability(
@@ -76,10 +76,12 @@ def projection_portability(
         for target in targets:
             if runtime == "wasm":
                 status = "supported"
-                reason = "WebAssembly executes the notebook in the browser."
+                reason = "The Browser runtime executes the notebook in the browser."
             else:
                 status = "verification-required"
-                reason = "Zero-Python must capture this projection in every state."
+                reason = (
+                    "The Prepared runtime must capture this projection in every state."
+                )
             results.append(
                 ProjectionPortability(
                     site.id,
@@ -97,12 +99,12 @@ def projection_portability(
 def verify_projection_portability(
     projections: tuple[ProjectionPortability, ...],
 ) -> tuple[ProjectionPortability, ...]:
-    """Mark successfully prepared Zero-Python projections as verified."""
+    """Mark successfully prepared projections as verified."""
     return tuple(
         replace(
             item,
             status="verified",
-            reason="Zero-Python prepared this projection successfully.",
+            reason="The Prepared runtime prepared this projection successfully.",
         )
         if item.status == "verification-required"
         else item

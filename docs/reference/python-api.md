@@ -224,7 +224,7 @@ temporary directory. It returns before publishing a caller-owned destination.
 `runtime="zero-python"` prepares the configured notebook states.
 `runtime="wasm"` packages notebook source for execution through Pyodide in each
 visitor's browser.
-`prepare_timeout` bounds Zero-Python preparation and uses 30 seconds when
+`prepare_timeout` bounds Prepared preparation and uses 30 seconds when
 omitted. Passing `prepare_timeout` with `runtime="wasm"` raises `ValueError`
 before Studio loads the workspace or builds the provider artifact.
 
@@ -364,8 +364,8 @@ written into a static export.
 Contains `notebook`, `view`, selected `runtime`, provider artifact `document`,
 `cache_activity`, `preflight`, and `marimo-export`'s `DeliveryResult`. The
 `output`, `files`, and `warnings` properties expose the committed delivery.
-A Zero-Python result carries `marimo-export`'s authored and projection cache
-dispositions. A WebAssembly result sets `cache_activity` to `None`. The
+A Prepared result carries `marimo-export`'s authored and projection cache
+dispositions. A Browser result sets `cache_activity` to `None`. The
 `entrypoint` property resolves `output / document`. `to_dict()` emits the
 flattened output path, file count, warnings, and resolved entrypoint.
 
@@ -404,8 +404,8 @@ source location, reason, and status:
 | Status                  | Meaning                                                               |
 | ----------------------- | --------------------------------------------------------------------- |
 | `supported`             | The runtime accepts the projection model without prepared execution.  |
-| `verification-required` | Zero-Python still needs to capture the target's configured states.    |
-| `verified`              | Zero-Python captured the target through the completed preflight.      |
+| `verification-required` | Prepared still needs to capture the target's configured states.       |
+| `verified`              | Prepared captured the target through the completed preflight.         |
 | `incompatible`          | The selected runtime cannot represent the authored projection target. |
 
 ### `StaticPreflightIssue`

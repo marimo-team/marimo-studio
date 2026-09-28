@@ -50,14 +50,15 @@ class PublicationRuntimeProjector:
     ) -> PreparedRuntimeState:
         if binding_id is None or client_id is None:
             raise PublicationUnavailableError(
-                "The zero-Python publication for this view is unavailable. "
+                "The Prepared publication for this view is unavailable. "
                 "Open the view in Studio to prepare its current notebook state."
             )
         if authority == "edit":
             if session_id is None or context.internal_url is None:
                 raise PublicationUnavailableError(
-                    "Studio cannot prepare the zero-Python publication until its "
-                    "editor session and local server endpoint are available."
+                    "Studio cannot prepare notebook states for the Prepared "
+                    "runtime until its editor session and local server endpoint "
+                    "are available."
                 )
             selection = await self._publications.prepare(
                 PreparedViewRequest(
@@ -81,7 +82,7 @@ class PublicationRuntimeProjector:
             )
             if selection is None:
                 raise PublicationUnavailableError(
-                    "The zero-Python publication for this view and browser is "
+                    "The Prepared publication for this view and browser is "
                     "unavailable. "
                     "Open the view in Studio to prepare its current notebook state."
                 )
@@ -113,7 +114,7 @@ def _manifest_url(
 ) -> str:
     if presentation_session_id is None:
         raise PublicationUnavailableError(
-            "The Zero-Python presentation session is unavailable."
+            "The Prepared presentation session is unavailable."
         )
     return with_query(
         presentation_revision_url(

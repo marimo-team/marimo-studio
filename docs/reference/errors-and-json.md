@@ -34,7 +34,7 @@ caller can process diagnostics as they arrive. One event has this shape:
   "command": "view create",
   "severity": "info",
   "code": "next-command",
-  "message": "uvx --with marimo-studio marimo edit analysis.py --sandbox",
+  "message": "uvx --with marimo-studio marimo edit analysis.py --sandbox --watch",
   "details": {
     "action": "edit"
   }
@@ -158,7 +158,7 @@ Every expected error exposes:
 | `DependencyError`                  | `dependency-error`                                                                                                             |  `7` |                  `500` | Repair target Python metadata or environment preparation             |
 | `StaticExportError`                | `static-export-error`, `static-delivery-preflight-failed`, or a `marimo-export` `destination_*` or `export_commit_failed` code |  `3` |                  `500` | Repair the source, reference, or destination named by the diagnostic |
 | `PublicationError`                 | `zero-python-publication-error`, `zero-python-projection-*`, or the originating `marimo-export` code                           |  `3` |                  `409` | Repair the projected result or select another static runtime         |
-| `PublicationUnavailableError`      | `zero-python-publication-unavailable`                                                                                          |  `3` |                  `409` | Prepare the selected Zero-Python view and retry                      |
+| `PublicationUnavailableError`      | `zero-python-publication-unavailable`                                                                                          |  `3` |                  `409` | Open the view in Studio to prepare its notebook state, then retry    |
 | `PublicationLimitError`            | `zero-python-state-limit`                                                                                                      |  `3` |                  `413` | Reduce the prepared state space                                      |
 | `RuntimeSelectionError`            | `runtime-unavailable`                                                                                                          |  `3` |                  `400` | Select a runtime listed by the workspace                             |
 | `RuntimeConfigTooLargeError`       | `runtime-config-too-large`                                                                                                     |  `3` |                  `413` | Bound projection targets or reduce notebook source                   |

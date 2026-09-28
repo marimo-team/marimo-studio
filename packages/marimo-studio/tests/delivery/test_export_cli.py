@@ -133,8 +133,8 @@ def test_export_help_explains_runtime_and_preparation_timeout() -> None:
     assert result.exit_code == 0, result.output
     help_text = " ".join(result.output.split())
     assert "--runtime [zero-python|wasm]" in help_text
-    assert "zero-python prepares configured notebook states during export" in help_text
-    assert "wasm runs notebook Python in each visitor's browser" in help_text
+    assert "zero-python selects the Prepared runtime" in help_text
+    assert "wasm selects the Browser runtime" in help_text
     assert "--prepare-timeout SECONDS" in help_text
     assert "Defaults to 30 seconds when omitted" in help_text
 
@@ -145,8 +145,8 @@ def test_preflight_help_explains_runtime_and_preparation_timeout() -> None:
     assert result.exit_code == 0, result.output
     help_text = " ".join(result.output.split())
     assert "--runtime [zero-python|wasm]" in help_text
-    assert "zero-python verifies configured prepared states" in help_text
-    assert "wasm verifies the browser artifact and projection support" in help_text
+    assert "zero-python selects the Prepared runtime and verifies" in help_text
+    assert "wasm selects the Browser runtime and verifies" in help_text
     assert "--prepare-timeout SECONDS" in help_text
     assert "Defaults to 30 seconds when omitted" in help_text
 

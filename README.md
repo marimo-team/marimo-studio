@@ -30,7 +30,8 @@
 Studio keeps data, computation, and controls in the notebook and gives each
 audience its own view, such as a report, a dashboard, a lab, or a slide deck.
 Views render the notebook's live cells and controls, so changing an input
-updates the results that depend on it.
+updates the results that depend on it. Each view is its own frontend project,
+and every result it shows traces back to the notebook cell that computed it.
 
 > [!NOTE]
 > Studio is experimental and changing rapidly. Pin `marimo-studio` in saved
@@ -58,7 +59,7 @@ covers pairing with a running notebook and pointing at results with
 ## Start by hand
 
 ```console
-uvx --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
 Add a cell that displays a result, then click **Add view** in the Studio
@@ -68,7 +69,7 @@ Preview, and a failed build keeps the last successful view.
 
 ![Notebook, Preview, and view source in Studio](apps/docs/public/screenshots/studio-develop.png)
 
-The [quickstart](https://marimo-team.github.io/marimo-studio/guide/getting-started)
+[Getting started](https://marimo-team.github.io/marimo-studio/guide/getting-started)
 walks through a complete first view.
 
 ## Examples
@@ -85,8 +86,9 @@ Each example notebook serves three views, built with different frontend stacks.
 ## Run or export a view
 
 Serve a live **Python** app, run Python in the **Browser**, or export
-**Prepared** results as a static site. Prepared delivery publishes the exported
-results and input states and keeps Python source on the build machine.
+**Prepared** results as a static site. A Prepared export publishes the exported
+results and finite input states and keeps notebook source on the machine that
+runs the export.
 [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
 compares what visitors receive.
 

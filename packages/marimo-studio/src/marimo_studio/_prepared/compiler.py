@@ -86,14 +86,14 @@ def compile_export_view(
     """Compile one immutable mount catalog into finite prepared outputs."""
     if not mounts:
         raise PublicationError(
-            "Zero-Python preparation requires at least one projection mount."
+            "The Prepared runtime requires at least one projection mount."
         )
     identities: dict[_ProjectionIdentity, OutputSpec] = {}
     for site in sorted(mounts, key=lambda item: item.id):
         if site.allowed_targets is None:
             raise PublicationError(
                 f"Projection site {site.id!r} selects targets dynamically. "
-                "Declare a finite target set before using Zero-Python."
+                "Declare a finite target set before using the Prepared runtime."
             )
         for index, target in enumerate(site.allowed_targets):
             projection = resolve_projection(

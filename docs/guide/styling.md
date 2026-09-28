@@ -73,7 +73,7 @@ body {
 ## Use Vanilla browser helpers
 
 The bundled Vanilla starter loads a pinned UnoCSS runtime and the Iconify Icon
-web component from jsDelivr. Add utility classes directly to Vanilla HTML:
+web component from jsDelivr. Add utility classes directly to its HTML:
 
 ```html
 <section class="grid gap-6 md:grid-cols-2">

@@ -104,28 +104,41 @@ export const captureRetiringProjectionReads = (
   };
 };
 
-// The unsaved native page can retire its save response during navigation.
+// The unsaved native page can retire its save response during navigation. The
+// save also assigns a filename, which makes marimo refetch the package sandbox,
+// and that request can be retired by the same navigation.
 // Recover only after the saved file and original session have been verified.
 export const expectFirstSaveRetirement = (
   diagnostics: BrowserDiagnostics,
   origin: string,
 ): BrowserResponseRecovery => {
-  const request = diagnostics.expectRequestFailure({
-    origin,
-    method: "POST",
-    path: /^\/api\/kernel\/save$/,
-    errorText: "net::ERR_ABORTED",
-    required: false,
-  });
-  const error = diagnostics.expectConsole({
-    type: "error",
-    text: /^Failed to handle request: sendSave TypeError: Failed to fetch(?:\n|$)/,
-    required: false,
-  });
+  const retired = [
+    diagnostics.expectRequestFailure({
+      origin,
+      method: "POST",
+      path: /^\/api\/kernel\/save$/,
+      errorText: "net::ERR_ABORTED",
+      required: false,
+    }),
+    diagnostics.expectConsole({
+      type: "error",
+      text: /^Failed to handle request: sendSave TypeError: Failed to fetch(?:\n|$)/,
+      required: false,
+    }),
+    diagnostics.expectRequestFailure({
+      origin,
+      method: "POST",
+      path: /^\/api\/packages\/sandbox$/,
+      errorText: "net::ERR_ABORTED",
+      required: false,
+    }),
+    diagnostics.expectConsole({
+      type: "error",
+      text: /^Failed to handle request: getSandbox TypeError: Failed to fetch(?:\n|$)/,
+      required: false,
+    }),
+  ];
   return {
-    recovered: () => {
-      request.recovered();
-      error.recovered();
-    },
+    recovered: () => retired.forEach((expectation) => expectation.recovered()),
   };
 };

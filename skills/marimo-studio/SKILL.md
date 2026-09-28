@@ -64,12 +64,13 @@ Studio tab in the user's browser, and the notebook appears in the list once
 that tab connects:
 
 ```console
-uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox --no-token
+uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox --watch --no-token
 ```
 
-`--no-token` serves the editor on localhost without an access token, which lets
-`pair notebook list` find it. Studio needs `marimo-studio` in the marimo
-server's environment, as in that command or the notebook project's
+`--watch` reloads the notebook in Studio after you or another tool edits the
+file. `--no-token` serves the editor on localhost without an access token,
+which lets `pair notebook list` find it. Studio needs `marimo-studio` in the
+marimo server's environment, as in that command or the notebook project's
 dependencies. `help(marimo._code_mode)` then lists Studio as the `studio`
 capability, and sandboxed kernels import the same Studio as the server. Create,
 edit, and run cells through `marimo._code_mode`, following the `pair --help`

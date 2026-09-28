@@ -92,8 +92,8 @@ value has not arrived or cannot currently be read. JSON `null` remains a valid
 value. Listen for `marimo-value-error` when the view needs a local recovery
 state.
 
-React starters provide `useMarimoValue`. Svelte starters provide
-`observeMarimoValue`.
+React starters provide a `useMarimoValue` hook. Svelte starters provide a
+`use:observeMarimoValue` action.
 
 ## Pass a dataframe to JavaScript
 
@@ -166,5 +166,5 @@ marimo-studio validate dashboard \
 
 Runtime validation can perform file, network, database, and other work from any
 notebook cell. Use it with trusted notebooks. See the
-[Projection DOM API](../reference/projections.md) for event payloads, state
+[Notebook result projections](../reference/projections.md) for event payloads, state
 attributes, duplicate-host rules, and limits.

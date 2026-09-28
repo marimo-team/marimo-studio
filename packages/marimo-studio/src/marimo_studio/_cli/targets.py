@@ -41,7 +41,7 @@ def resolve_environment_target(
     if not notebook.exists():
         raise ConfigurationError(f"Target does not exist: {notebook}")
     if not notebook.is_file() or notebook.suffix != ".py":
-        raise ConfigurationError(f"Expected a Python Marimo notebook: {notebook}")
+        raise ConfigurationError(f"Expected a Python marimo notebook: {notebook}")
     path = Path(target).expanduser().resolve() if target is not None else notebook
     if path.is_dir():
         root = path

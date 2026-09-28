@@ -45,7 +45,7 @@ marimo-studio view preflight dashboard \
 
 Read every projection portability record and delivery diagnostic. Prepared
 must verify finite projection targets across the configured input states. Use
-WebAssembly when visitors must recompute unprepared states and the notebook can
+Browser when visitors must recompute unprepared states and the notebook can
 run through Pyodide.
 
 For Prepared controls, configure `states.yaml` in the selected view project.
@@ -117,8 +117,9 @@ re-entry. Five-second heartbeats report the phase, state, elapsed time, and
 latest cache evidence. Unavailable state, cache, or active-cell evidence is
 `null`.
 
-Prepared keeps Python source on the build machine and publishes prepared
-outputs. WebAssembly includes saved notebook source for browser execution.
+Prepared keeps notebook source on the machine that runs the export and
+publishes prepared outputs. Browser includes saved notebook source for browser
+execution.
 Review public files, data URLs, authored browser code, and remote dependencies
 before publishing.
 

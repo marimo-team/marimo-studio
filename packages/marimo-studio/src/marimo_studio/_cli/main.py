@@ -33,13 +33,13 @@ Examples:
   marimo-studio view create dashboard --target analysis.py
 
 Default Vanilla authoring:
-  uvx --with {_STUDIO_REQUIREMENT} marimo edit analysis.py --sandbox
+  uvx --with {_STUDIO_REQUIREMENT} marimo edit analysis.py --sandbox --watch
 """,
     no_args_is_help=True,
 )
 @click.version_option(prog_name="marimo-studio", package_name="marimo-studio")
 def cli() -> None:
-    """Design custom views for Marimo notebooks."""
+    """Design custom views for marimo notebooks."""
 
 
 cli.add_command(doctor)

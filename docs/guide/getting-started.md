@@ -1,9 +1,9 @@
 ---
-title: Create your first view
+title: Getting started
 description: Open a saved marimo notebook, create a view, and place one reactive result inside it.
 ---
 
-# Create your first view
+# Getting started
 
 Start with Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), and a saved
 [marimo](https://marimo.io/) notebook such as `analysis.py`.
@@ -11,17 +11,19 @@ Start with Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), and a sav
 ## Open Studio
 
 ```console
-uvx --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
 marimo's `--sandbox` flag resolves the notebook's declared Python dependencies
-with uv. Notebook code still has access to your files and network.
+with uv. Notebook code still has access to your files and network. `--watch`
+reloads the notebook when a coding agent or another editor changes the file,
+so Notebook and Preview show the saved code.
 
 Click **Add view** in the Studio toolbar. Name the view `dashboard`, choose
 **HTML document**, and review the files it will create. For an untitled notebook,
 save it when prompted so the view has a stable location beside the notebook.
 
-Notebook and Preview open side by side. The source action opens the view's
+Notebook and Preview open side by side. **Edit view source** opens the view's
 files beneath Preview. The starter page already shows every notebook cell that
 displays output.
 

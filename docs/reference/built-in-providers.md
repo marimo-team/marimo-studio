@@ -5,9 +5,9 @@ description: Provider keys, starter IDs, source documents, requirements, and vie
 
 # Built-in view providers
 
-Studio includes Vanilla HTML, [React](https://react.dev/),
+Studio includes view providers for plain HTML, [React](https://react.dev/),
 [Svelte](https://svelte.dev/), and
-[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit) view providers. A provider key selects the view
+[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit). A provider key selects the view
 project's inspection and build contract. A starter ID selects the files created
 for a new view project.
 
@@ -215,8 +215,8 @@ Define the native control combinations in `states.yaml` when visitors can change
 marimo inputs. See [prepared static exports](../guide/run-and-share.md#export-a-prepared-static-view).
 An omitted state file captures the initial notebook state.
 
-For an unbounded runtime selector, use `data-marimo-allow="*"` and the Server or
-WebAssembly runtime:
+For an unbounded runtime selector, use `data-marimo-allow="*"` and the Python or
+Browser runtime:
 
 ```html
 <script id="6" type="text/html">
