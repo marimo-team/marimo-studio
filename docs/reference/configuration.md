@@ -167,9 +167,9 @@ outer edit document. A host-injected script can declare its exact parent with a
 
 Studio adds each valid HTTP or HTTPS origin to the framing policy of every edit
 document: the workspace, its embedded native editor, and the native documents
-served at edit `/`. Studio ignores a value that is not an exact origin.
-Declared origins add to `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` and share its
-entry and byte limits.
+served at edit `/`. Declared origins add to
+`MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS`. Studio ignores a value that is not an
+exact origin, or one that would exceed the 32-entry or 4,096-byte limit.
 
 ## Provider environments
 

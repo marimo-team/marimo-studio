@@ -233,7 +233,8 @@ def test_run_mode_serves_the_notebook_when_its_views_are_missing(
     warnings = [
         record.levelname
         for record in caplog.records
-        if str(notebook_path) in record.getMessage()
+        if record.name.startswith("marimo_studio")
+        and str(notebook_path) in record.getMessage()
     ]
     assert warnings == ["WARNING"]
 
