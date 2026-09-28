@@ -27,6 +27,8 @@ export const NOTEBOOK_PROCESS_REGISTRY_ENV = "MARIMO_STUDIO_E2E_PROCESS_REGISTRY
 const DEFAULT_STOP_TIMEOUT = 5_000;
 const STOP_POLL_INTERVAL = 50;
 const REGISTRY_CLOSING_FILE = ".closing";
+const WINDOWS_RENAME_RETRY_COUNT = 20;
+const WINDOWS_RENAME_RETRY_DELAY = 25;
 const recordSchema = z.object({
   ownerNonce: z.string().regex(/^[a-f\d]{64}$/),
   port: z.number().int().positive().max(65_535).nullable(),
@@ -78,6 +80,25 @@ export const removeNotebookEndpointReceipt = (
 };
 
 const closingPath = (directory: string) => resolve(directory, REGISTRY_CLOSING_FILE);
+
+const replaceNotebookProcessRecord = (temporaryPath: string, path: string) => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      renameSync(temporaryPath, path);
+      return;
+    } catch (error) {
+      const retryable =
+        process.platform === "win32" &&
+        error instanceof Error &&
+        "code" in error &&
+        (error.code === "EPERM" || error.code === "EBUSY");
+      if (!retryable || attempt >= WINDOWS_RENAME_RETRY_COUNT) throw error;
+      // Windows may briefly keep the previous record open while it releases a
+      // directory handle. Keep the replacement atomic while that handle closes.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WINDOWS_RENAME_RETRY_DELAY);
+    }
+  }
+};
 
 export const closeNotebookProcessRegistry = ({
   directory = notebookProcessRegistryDirectory,
@@ -249,7 +270,7 @@ export const registerNotebookProcess = (
     mode: 0o600,
   });
   try {
-    renameSync(temporaryPath, path);
+    replaceNotebookProcessRecord(temporaryPath, path);
   } finally {
     rmSync(temporaryPath, { force: true });
   }
