@@ -1,0 +1,19 @@
+apps/e2e/scripts/notebook-process-registry.ts
+  s_eac43c43f9e1e7::t_784bba2c0dce79 30-31,84-102,273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e909fc92867e3fd6b8db807a2645de888b61edc6",
+  "prompts": {},
+  "sessions": {
+    "s_eac43c43f9e1e7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e87f-642b-7c62-be9b-8e04236bd8bf",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
