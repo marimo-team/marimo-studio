@@ -86,4 +86,4 @@ start a notebook with Studio, write its cells, then create, build, and show
 each view beside the notebook.
 
 [Author with a coding agent](./guide/coding-agents) or
-[get started](./guide/getting-started) by hand.
+follow [Getting started](./guide/getting-started) by hand.

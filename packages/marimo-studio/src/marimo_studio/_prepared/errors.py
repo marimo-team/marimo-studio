@@ -139,7 +139,7 @@ def publication_error(
                 details=diagnostic,
                 hint=(
                     "Select the Python runtime or Browser runtime in Studio, "
-                    "or export with WebAssembly. "
+                    "or export with the Browser runtime. "
                     "To use the Prepared runtime, project serializable data "
                     "or a portable notebook output."
                 ),
@@ -162,7 +162,7 @@ def publication_error(
             details=diagnostic,
             hint=(
                 "Select the Python runtime or Browser runtime in Studio, "
-                "or export with WebAssembly. "
+                "or export with the Browser runtime. "
                 "To use the Prepared runtime, project serializable data "
                 "or a portable notebook output."
             ),

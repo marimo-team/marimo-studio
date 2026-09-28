@@ -154,7 +154,7 @@ def _invalid_revision() -> JSONResponse:
     return JSONResponse(
         {
             "error": "invalid-presentation-revision",
-            "message": "The zero-Python manifest revision is invalid.",
+            "message": "The Prepared manifest revision is invalid.",
         },
         status_code=400,
         headers=NO_STORE,

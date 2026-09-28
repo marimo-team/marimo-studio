@@ -87,8 +87,8 @@ Each example notebook serves three views, built with different frontend stacks.
 
 Serve a live **Python** app, run Python in the **Browser**, or export
 **Prepared** results as a static site. A Prepared export publishes the exported
-results and input states and keeps notebook source on the machine that runs the
-export.
+results and finite input states and keeps notebook source on the machine that
+runs the export.
 [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
 compares what visitors receive.
 

@@ -887,8 +887,9 @@ def _export_to_delivery(
         if incompatible is not None:
             raise PublicationError(
                 (
-                    f"Zero-Python cannot prepare dynamic {incompatible.projection} "
-                    f"projection site {incompatible.site_id!r}."
+                    "The Prepared runtime cannot prepare dynamic "
+                    f"{incompatible.projection} projection site "
+                    f"{incompatible.site_id!r}."
                 ),
                 code="zero-python-projection-dynamic",
                 details={
@@ -897,7 +898,7 @@ def _export_to_delivery(
                 },
                 hint=(
                     "Declare a finite target set in authored view source or select "
-                    "the WebAssembly runtime."
+                    "the Browser runtime."
                 ),
             )
         if runtime == "zero-python" and artifact.mounts:
@@ -942,7 +943,8 @@ def _export_to_delivery(
                 raise
             except (OSError, RuntimeError, MarimoStudioError) as error:
                 raise StaticExportError(
-                    f"Could not prepare the Zero-Python publication: {error}"
+                    "Could not prepare notebook states for the Prepared runtime: "
+                    f"{error}"
                 ) from error
         try:
             bundle_started = monotonic()

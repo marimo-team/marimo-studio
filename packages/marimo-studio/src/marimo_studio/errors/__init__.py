@@ -203,7 +203,7 @@ class StaticExportError(ConfigurationError):
 
 
 class PublicationError(MarimoStudioError):
-    """A Zero-Python publication could not be prepared."""
+    """Studio could not prepare notebook states for the Prepared runtime."""
 
     code = "zero-python-publication-error"
     status_code = 409
@@ -232,7 +232,7 @@ class PublicationError(MarimoStudioError):
 
 
 class PublicationUnavailableError(PublicationError):
-    """A Zero-Python runtime has no publication for the selected view."""
+    """The Prepared runtime has no publication for the selected view."""
 
     code = "zero-python-publication-unavailable"
     transient = True

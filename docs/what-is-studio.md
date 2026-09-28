@@ -69,6 +69,6 @@ Studio brings **Notebook**, **Source**, and **Preview** together. Edit Python,
 shape the view, and inspect the result side by side. The native agent sidebar
 remains available throughout.
 
-[Get started](guide/getting-started.md), browse the
+Follow [Getting started](guide/getting-started.md), browse the
 [examples](examples/index.md), or choose a [runtime](guide/run-and-share.md)
 for a live application, browser execution, or a prepared static report.

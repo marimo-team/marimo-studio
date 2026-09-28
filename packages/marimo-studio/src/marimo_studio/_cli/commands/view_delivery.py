@@ -226,8 +226,9 @@ def preview(
     default=DEFAULT_STATIC_RUNTIME,
     show_default=True,
     help=(
-        "zero-python prepares configured notebook states during export. wasm runs "
-        "notebook Python in each visitor's browser."
+        "zero-python selects the Prepared runtime, which prepares configured "
+        "notebook states during export. wasm selects the Browser runtime, which "
+        "runs notebook Python in each visitor's browser."
     ),
 )
 @click.option("--force", is_flag=True, help="Replace an existing output directory.")
@@ -238,8 +239,8 @@ def preview(
     default=None,
     metavar="SECONDS",
     help=(
-        "Seconds to wait for Prepared notebook preparation. Defaults to 30 "
-        "seconds when omitted."
+        "Seconds to wait for notebook preparation with --runtime zero-python. "
+        "Defaults to 30 seconds when omitted."
     ),
 )
 @json_option
@@ -294,7 +295,8 @@ def export(
     default=DEFAULT_STATIC_RUNTIME,
     show_default=True,
     help=(
-        "zero-python verifies configured prepared states. wasm verifies the "
+        "zero-python selects the Prepared runtime and verifies configured "
+        "prepared states. wasm selects the Browser runtime and verifies the "
         "browser artifact and projection support."
     ),
 )
@@ -305,8 +307,8 @@ def export(
     default=None,
     metavar="SECONDS",
     help=(
-        "Seconds to wait for Prepared notebook preparation. Defaults to 30 "
-        "seconds when omitted."
+        "Seconds to wait for notebook preparation with --runtime zero-python. "
+        "Defaults to 30 seconds when omitted."
     ),
 )
 @json_option
