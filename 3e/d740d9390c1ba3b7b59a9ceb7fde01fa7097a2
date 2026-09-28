@@ -1,0 +1,38 @@
+packages/marimo-studio/src/marimo_studio/_cli/output.py
+  s_56b28226b7ec7e::t_b59d2139b13f8c 90,96
+packages/marimo-studio/tests/cli/test_workspace_commands.py
+  s_56b28226b7ec7e::t_b59d2139b13f8c 113
+docs/guide/getting-started.md
+  s_56b28226b7ec7e::t_8d36e8bb3da9f4 14,18-20
+docs/guide/troubleshooting.md
+  s_56b28226b7ec7e::t_8d36e8bb3da9f4 28,104-115
+packages/marimo-studio/src/marimo_studio/_cli/main.py
+  s_56b28226b7ec7e::t_b59d2139b13f8c 36
+docs/reference/errors-and-json.md
+  s_56b28226b7ec7e::t_8d36e8bb3da9f4 37
+skills/marimo-studio/SKILL.md
+  s_56b28226b7ec7e::t_8d36e8bb3da9f4 67,70-71
+  s_56b28226b7ec7e::t_99b15a1bd30794 72-73
+packages/marimo-studio/tests/cli/test_view_create_commands.py
+  s_56b28226b7ec7e::t_b59d2139b13f8c 36,302,366
+packages/marimo-studio/README.md
+  s_56b28226b7ec7e::t_8d36e8bb3da9f4 34
+README.md
+  s_56b28226b7ec7e::t_8d36e8bb3da9f4 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3ed740d9390c1ba3b7b59a9ceb7fde01fa7097a2",
+  "prompts": {},
+  "sessions": {
+    "s_56b28226b7ec7e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c90c6eb2-972d-46de-8207-4031403afc06",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
