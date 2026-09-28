@@ -1,0 +1,23 @@
+packages/marimo-studio/src/marimo_studio/_compat/release.json
+  s_d2bfc25839d67c::t_d3f9c585e5a366 4
+packages/marimo-frontend/patches/marimo-frontend.patch
+  s_d2bfc25839d67c::t_d3f9c585e5a366 23,26,135-137,142
+packages/marimo-frontend/patches/marimo-frontend.json
+  s_d2bfc25839d67c::t_d3f9c585e5a366 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "996e647e338b62c1b60cab118fcf61840c2c399e",
+  "prompts": {},
+  "sessions": {
+    "s_d2bfc25839d67c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5567a56c-ef97-4065-be28-4f1a28eda226",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
