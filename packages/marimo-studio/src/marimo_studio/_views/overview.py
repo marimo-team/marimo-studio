@@ -30,7 +30,7 @@ def overview(notebook: str | Path) -> StudioOverview:
     if not notebook_path.is_file():
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
     if notebook_path.suffix != ".py":
-        raise ConfigurationError(f"Expected a Python Marimo notebook: {notebook_path}")
+        raise ConfigurationError(f"Expected a Python marimo notebook: {notebook_path}")
 
     definition = discover_studio_definition(notebook_path)
     if definition is None:

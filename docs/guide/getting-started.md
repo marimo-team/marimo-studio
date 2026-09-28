@@ -1,9 +1,9 @@
 ---
-title: Create your first view
+title: Getting started
 description: Open a saved marimo notebook, create a view, and place one reactive result inside it.
 ---
 
-# Create your first view
+# Getting started
 
 Start with Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), and a saved
 [marimo](https://marimo.io/) notebook such as `analysis.py`.
@@ -21,7 +21,7 @@ Click **Add view** in the Studio toolbar. Name the view `dashboard`, choose
 **HTML document**, and review the files it will create. For an untitled notebook,
 save it when prompted so the view has a stable location beside the notebook.
 
-Notebook and Preview open side by side. The source action opens the view's
+Notebook and Preview open side by side. **Edit view source** opens the view's
 files beneath Preview. The starter page already shows every notebook cell that
 displays output.
 

@@ -333,7 +333,7 @@ results.
 ### Project an authored Lens
 
 Development previews reuse the Lens that marimo mounts in the notebook. To put
-an explicitly authored Lens in another Server view, define it in the notebook:
+an explicitly authored Lens in another Python runtime view, define it in the notebook:
 
 ```python
 from marimo_lens import Lens

@@ -45,8 +45,8 @@ From the repository root:
 uv run marimo edit examples/occupancy.py --sandbox
 ```
 
-Open Studio from the marimo editor, then switch among `monitor`, `model-review`,
-and `pdf-report`. The notebook fetches the pinned occupancy CSV from
+Studio opens `monitor`, the notebook's default view. Switch among `monitor`,
+`model-review`, and `pdf-report`. The notebook fetches the pinned occupancy CSV from
 `raw.githubusercontent.com`. The Browser runtime also needs
 [Pyodide](https://pyodide.org/), the Python distribution that runs in the
 browser, and its Python packages on an uncached run.

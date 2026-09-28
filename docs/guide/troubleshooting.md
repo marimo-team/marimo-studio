@@ -71,7 +71,7 @@ Use the reported recovery file before overwriting an uncertain replacement.
 ## A source document is missing
 
 The view provider controls the Source catalog. Check `view.toml`, then inspect
-the project. For Vanilla HTML, local CSS and JavaScript appear after
+the project. For the Vanilla provider, local CSS and JavaScript appear after
 `index.html` references them directly. React and Svelte providers discover
 files under their configured source roots.
 

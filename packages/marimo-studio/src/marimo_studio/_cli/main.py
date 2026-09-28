@@ -39,7 +39,7 @@ Default Vanilla authoring:
 )
 @click.version_option(prog_name="marimo-studio", package_name="marimo-studio")
 def cli() -> None:
-    """Design custom views for Marimo notebooks."""
+    """Design custom views for marimo notebooks."""
 
 
 cli.add_command(doctor)

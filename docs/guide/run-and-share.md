@@ -1,6 +1,6 @@
 ---
 title: Run or export a view
-description: Run a view with Python or WebAssembly, or export prepared results as a static directory.
+description: Run a view with the Python or Browser runtime, or export prepared results as a static directory.
 ---
 
 # Run or export a view
@@ -12,7 +12,7 @@ receive the view.
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **Python**<br>`server`        | The notebook needs server files, credentials, native packages, or a live service                                                  |
 | **Browser**<br>`wasm`         | Visitors should compute new states in a [Pyodide](https://pyodide.org/) Python worker, using browser-compatible packages and data |
-| **Prepared**<br>`zero-python` | Visitors should select among precomputed states and receive results while notebook source stays on the producer                   |
+| **Prepared**<br>`zero-python` | Visitors should select among prepared states and receive results while notebook source stays on the machine that runs the export  |
 
 `marimo run` serves Python or Browser from a live process. Studio's editor can
 preview all three. Static export defaults to Prepared and also supports Browser.
@@ -63,7 +63,7 @@ uv run --with marimo-studio --project . marimo run analysis.py --no-sandbox
 A standalone notebook whose view uses the default Vanilla provider runs with:
 
 ```console
-uv run --with marimo-studio marimo run analysis.py \
+uvx --with marimo-studio marimo run analysis.py \
   --sandbox \
   --headless \
   --host 127.0.0.1 \
@@ -115,7 +115,7 @@ marimo-studio view export dashboard \
 Preflight reports projection portability, prepared-state progress, and browser
 artifact references without publishing a destination. Export repeats those
 checks against the exact staged directory before committing it. Python executes
-while either Zero-Python command runs.
+while either command runs.
 
 ::: tip Publish without sharing Python source
 The Prepared runtime keeps the Python notebook and cell source on the machine
@@ -136,7 +136,7 @@ seconds with phase, elapsed time, state name, and the latest cache evidence.
 Unknown state or cache evidence is `null`. The current export API does not expose
 an active notebook cell, so the heartbeat's `cell` is `null`.
 
-Each Zero-Python export uses the authored notebook's `__marimo__/cache/`
+Each Prepared export uses the authored notebook's `__marimo__/cache/`
 directory. [marimo's native cell cache](https://docs.marimo.io/api/caching/)
 decides which authored cells can be restored across states, views, and later
 export commands. `marimo-export` retains the resulting portable states in its
@@ -233,7 +233,7 @@ A static export is a relocatable HTTP directory, not an offline bundle.
 Use `--force` after reviewing an existing destination that should be replaced.
 Studio stages the export before replacing that directory.
 
-## Export the WebAssembly runtime
+## Export a Browser view
 
 Use `--runtime wasm` when visitors should run notebook code and recompute input
 states that were not prepared during export:
@@ -245,7 +245,7 @@ marimo-studio view export dashboard \
   --runtime wasm
 ```
 
-The WebAssembly export contains saved notebook source and starts Python through
+The Browser export contains saved notebook source and starts Python through
 Pyodide in each visitor's browser. Its packages, data sources, scripts,
 workers, and remote assets must be reachable from that browser.
 
@@ -262,4 +262,4 @@ marimo export html analysis.py \
 
 Use this document when visitors should read the analysis as it ran during the
 export. Use a Studio Prepared export for a finite set of interactive states or
-a WebAssembly export for visitor-side Python execution.
+a Browser export for visitor-side Python execution.

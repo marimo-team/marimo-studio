@@ -81,7 +81,7 @@ installed third-party provider adds its exact distribution version to
 `dependencies`.
 
 Studio records each third-party requirement it introduced in
-`provider_dependencies`. Static WebAssembly removes a still-owned exact
+`provider_dependencies`. A Browser export removes a still-owned exact
 requirement from the browser notebook dependency list. A requirement remains
 when it predates view creation, the user later changes it, or the notebook
 imports the distribution directly.
@@ -169,8 +169,8 @@ Keep the `uv` executable available. Studio re-enters the target environment
 through `uv` when the current process does not satisfy the resolved Studio and
 provider requirements.
 
-`provider_dependencies` records the exact entries Studio introduced. Static
-WebAssembly cleanup uses that ownership record when removing an owned provider
+`provider_dependencies` records the exact entries Studio introduced. Browser
+export cleanup uses that ownership record when removing an owned provider
 requirement.
 
 When a Studio or provider requirement has an environment marker, Studio
@@ -251,7 +251,7 @@ beside `view.toml`.
 ## Prepared state space
 
 A view project can declare its finite input state space in `states.yaml`.
-The file uses `marimo-export`'s public `StateSpace` contract. Zero-Python export
+The file uses `marimo-export`'s public `StateSpace` contract. Prepared export
 executes those states and packages the projected results:
 
 ```yaml

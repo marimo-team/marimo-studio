@@ -177,7 +177,7 @@ def _validate_view_creation(
     if not notebook_path.is_file():
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
     if notebook_path.suffix != ".py":
-        raise ConfigurationError(f"Expected a Python Marimo notebook: {notebook_path}")
+        raise ConfigurationError(f"Expected a Python marimo notebook: {notebook_path}")
     saved_notebook = _saved_notebook(notebook_path, inspect_notebook)
     config_snapshot = _studio_snapshot(notebook_path)
     studio = config_snapshot.studio if config_snapshot is not None else None

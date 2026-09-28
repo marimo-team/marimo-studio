@@ -238,7 +238,7 @@ def preview(
     default=None,
     metavar="SECONDS",
     help=(
-        "Seconds to wait for Zero-Python notebook preparation. Defaults to 30 "
+        "Seconds to wait for Prepared notebook preparation. Defaults to 30 "
         "seconds when omitted."
     ),
 )
@@ -305,7 +305,7 @@ def export(
     default=None,
     metavar="SECONDS",
     help=(
-        "Seconds to wait for Zero-Python notebook preparation. Defaults to 30 "
+        "Seconds to wait for Prepared notebook preparation. Defaults to 30 "
         "seconds when omitted."
     ),
 )

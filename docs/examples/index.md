@@ -29,6 +29,6 @@ uv run marimo edit examples/quadratic_program.py --sandbox
 ```
 
 Replace `quadratic_program.py` with `athletes.py`, `earthquakes.py`, or
-`occupancy.py` to open another family. Studio discovers the view projects
+`occupancy.py` to open another example. Studio discovers the view projects
 stored beside each notebook. The examples fetch pinned datasets and can load
 fonts, maps, or remote modules declared by their view source.

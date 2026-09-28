@@ -37,7 +37,7 @@ missing entry document, and a document without one `head`, one `body`, and one
 `#app-shell`.
 
 Static export combines the artifact with Studio runtime assets and notebook
-public files. Prepared export adds verified output assets. WebAssembly export
+public files. Prepared export adds verified output assets. Browser export
 adds notebook source. Each copied tree is checked against the artifact file
 budget before the staged directory can replace the destination.
 
@@ -83,10 +83,10 @@ target.
 | One rendered output request set       |   100 selectors | Capability or protocol error |
 | Browser client response               | 5,000,000 bytes | Live request failure         |
 
-WebAssembly runtime configuration contains saved notebook source, projection
+Browser runtime configuration contains saved notebook source, projection
 declarations, runtime bindings, and presentation settings. Prepared runtime
 configuration contains the publication identity and manifest URL. Prefer
-finite projection targets and reduce notebook source when a WebAssembly record
+finite projection targets and reduce notebook source when a Browser record
 reaches 16 MiB.
 
 ## Provider records

@@ -72,7 +72,7 @@ export const documentationTechnologies = {
   },
   vanillaHtml: {
     description: "Browser-native HTML, CSS, and JavaScript with no framework runtime.",
-    name: "Vanilla HTML",
+    name: "Plain HTML",
     projectUrl: "https://github.com/whatwg/html",
   },
 } as const satisfies Record<string, DocumentationTechnology>;

@@ -11,7 +11,7 @@ or audience.
 
 <StudioViewStack family="athletes" />
 
-The [Rio athletes example](../examples/athletes.md) has `overview`, `explorer`,
+The [Rio 2016 athletes example](../examples/athletes.md) has `overview`, `explorer`,
 and `field` views. Each view has its own project, build, and last successful
 artifact. Keep shared measures and reusable controls in the notebook, and
 layout, wording, and browser dependencies in each view.
@@ -48,7 +48,7 @@ or unresolved source conflict keeps the current view selected for repair.
 
 ## Remove a view
 
-Use the remove action beside a view name and confirm **Remove view**. Removal
+Use the remove action beside a view name and confirm with **Remove**. Removal
 permanently deletes the view project and its files. If the removed view was the
 default, Studio names the replacement in the confirmation and promotes it to
 the main route.

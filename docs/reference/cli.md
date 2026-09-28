@@ -306,7 +306,7 @@ marimo-studio view preview VIEW
 
 Returns a URL string for the view in a top-level browser document. `--json`
 returns a JSON string. Open it with your preferred browser tool. The server
-must expose the requested runtime. Edit-mode Server previews require an open
+must expose the requested runtime. Edit-mode Python previews require an open
 notebook session. Use `MARIMO_STUDIO_SERVER_URL` to supply the server URL and
 `MARIMO_STUDIO_ACCESS_TOKEN` to authenticate the request when needed. The browser
 requires its own normal server authentication.
@@ -334,8 +334,8 @@ marimo-studio view preflight VIEW [--target PATH]
 
 Builds the production artifact, prepares the selected static runtime, and
 checks the staged browser files without publishing an output directory.
-Zero-Python verifies each finite projection against every configured input
-state. WebAssembly reports projection support and validates the browser
+Prepared verifies each finite projection against every configured input
+state. Browser reports projection support and validates the browser
 artifact without executing notebook code in a browser.
 
 The result includes every projection site, target, source location, runtime,
@@ -354,7 +354,7 @@ callbacks or fail during prepared-state capture. The diagnostic preserves the
 `marimo-export` code and details, identifies the projection when the exporter
 provides enough output identity, and lists candidate projections otherwise.
 
-`--prepare-timeout` has the same Zero-Python behavior as `view export`.
+`--prepare-timeout` has the same Prepared behavior as `view export`.
 
 ## `marimo-studio view export`
 
@@ -367,24 +367,25 @@ Builds the production profile and writes a static site. `--runtime zero-python`
 is the default. It executes the notebook during export and packages prepared
 outputs for the view's finite projection targets and configured input states.
 `--runtime wasm` packages notebook source for execution through Pyodide in the
-visitor's browser. `--prepare-timeout` bounds Zero-Python preparation and
+visitor's browser. `--prepare-timeout` bounds Prepared preparation and
 defaults to 30 seconds. Studio rejects `--prepare-timeout` with
 `--runtime wasm` before resolving the target or building the provider artifact.
 
-Zero-Python keeps Python notebook and cell source on the build machine. Its
+A Prepared export keeps Python notebook and cell source on the machine that
+runs the export. Its
 publication retains cell names, IDs, and code hashes as provenance. Projected
 outputs and files under the notebook's `public/` directory are included in the
 static directory.
 
 The result contains the runtime, exact entry file, file count, delivery
-warnings, and Zero-Python cache activity. It also contains the complete static
+warnings, and Prepared cache activity. It also contains the complete static
 preflight report. Authored hits and misses come directly from `marimo-export`'s
 observation of marimo's native cell-cache decisions. `--force` delegates
 replacement identity, rollback, and recovery to `marimo-export`'s staged
 application delivery.
 
 Export progress is written to stderr. It covers the production build,
-Zero-Python plan and state preparation, bundle assembly, delivery preflight,
+Prepared plan and state preparation, bundle assembly, delivery preflight,
 and commit. `--json` keeps the terminal result on stdout and writes schema 1
 JSON Lines progress events to stderr. Each progress record includes the view,
 runtime, owning source, and nested event. Events owned by `marimo-export` retain
@@ -398,9 +399,9 @@ source. Studio assembles and preflights the application in a `marimo-export`
 `marimo-export` verifies the nested prepared export and complete directory
 before committing it with destination change detection and rollback.
 
-The Zero-Python directory contains the production artifact, prepared result
+The Prepared directory contains the production artifact, prepared result
 index and assets, runtime configuration, notebook `public/` files, and a
-`.nojekyll` marker. The WebAssembly directory also contains saved notebook
+`.nojekyll` marker. The Browser directory also contains saved notebook
 source. Serve either directory over HTTP. Browser package imports, remote data,
 fonts, maps, and other view dependencies keep the network access expected by
 the authored frontend.

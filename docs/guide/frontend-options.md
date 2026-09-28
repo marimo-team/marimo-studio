@@ -5,7 +5,7 @@ description: Match each view to the smallest frontend and browser toolchain that
 
 # Choose a frontend
 
-Start with Vanilla HTML, CSS, and JavaScript. Choose
+Start with plain HTML, CSS, and JavaScript. Choose
 [React](https://react.dev/) or [Svelte](https://svelte.dev/) when component
 structure, imported assets, or a larger module graph makes the view project
 easier to maintain. Choose [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
@@ -37,7 +37,7 @@ Replace `<installed-deno-version>` with the Deno package version installed in
 the notebook's Python environment, available through
 `python -c "from importlib.metadata import version; print(version('deno'))"`.
 
-## Vanilla HTML
+## HTML document
 
 Create the default starter:
 
@@ -96,7 +96,7 @@ uv run -- deno add --frozen=false --save-exact npm:d3@7
 Commit `deno.json` and `deno.lock` after an intentional update. Normal Studio
 builds keep the lockfile frozen.
 
-## React with Reveal.js
+## Reveal.js slides
 
 Create a slide deck:
 

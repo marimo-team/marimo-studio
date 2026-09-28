@@ -42,8 +42,8 @@ From the repository root:
 uv run marimo edit examples/athletes.py --sandbox
 ```
 
-Open Studio from the marimo editor, then switch among `overview`, `explorer`,
-and `field`. The notebook fetches the pinned athlete CSV from
+Studio opens `overview`, the notebook's default view. Switch among `overview`,
+`explorer`, and `field`. The notebook fetches the pinned athlete CSV from
 `raw.githubusercontent.com`. The Explorer and Field views also load the
 remote font or module origins declared by their view source.
 

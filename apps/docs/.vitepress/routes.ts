@@ -53,7 +53,7 @@ export const introductionItems = [{ text: "What is Studio?", link: routes.whatIs
 
 export const startItems = [
   { text: "Overview", link: routes.guide.index },
-  { text: "Create your first view", link: routes.guide.gettingStarted },
+  { text: "Getting started", link: routes.guide.gettingStarted },
   { text: "Author with a coding agent", link: routes.guide.codingAgents },
   { text: "Create and manage views", link: routes.guide.views },
   { text: "Place notebook results in a view", link: routes.guide.notebookResults },
@@ -80,8 +80,8 @@ export const referenceItems = [
   { text: "CLI", link: routes.reference.cli },
   { text: "Python API", link: routes.reference.pythonApi },
   { text: "Configuration", link: routes.reference.configuration },
-  { text: "Projection DOM API", link: routes.reference.projections },
-  { text: "Built-in providers", link: routes.reference.builtInProviders },
+  { text: "Notebook result projections", link: routes.reference.projections },
+  { text: "Built-in view providers", link: routes.reference.builtInProviders },
   { text: "Compatibility and support", link: routes.reference.compatibility },
   { text: "View provider API", link: routes.reference.providerApi },
   { text: "Identities and state", link: routes.reference.identities },

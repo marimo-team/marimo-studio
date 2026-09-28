@@ -6,17 +6,17 @@ description: Work with notebook code, view source, and the rendered result in on
 # Edit and preview in Studio
 
 Studio adds a toolbar to `marimo edit` in any environment that contains
-`marimo-studio`, including for a new, unsaved notebook. [Create your first
-view](getting-started.md) opens a notebook and adds its first view.
+`marimo-studio`, including for a new, unsaved notebook. [Getting
+started](getting-started.md) opens a notebook and adds its first view.
 
 ## Use the toolbar
 
-Studio opens the notebook and custom view side by side. The native agent
-sidebar remains available, including when you focus the custom view.
+Studio opens Notebook and Preview side by side. The native agent sidebar
+remains available, including when you focus the view.
 
 - **Show notebook only** focuses the notebook. Click **Show view beside notebook**
   to restore the split, including its Source pane and sizes.
-- **Edit view source** opens Source beneath the custom view. File tabs select
+- **Edit view source** opens Source beneath Preview. File tabs select
   the view's authored documents.
 - **Live** (or the current status) gives a short runtime state. Hover or focus it
   for a contextual summary. Click it for diagnostics and runtime choices.
@@ -26,8 +26,8 @@ sidebar remains available, including when you focus the custom view.
 
 Drag a divider to resize. Choose **Arrange panes** from **Workspace options**
 to expose each pane's placement, swap, and close controls. Pane headers remain
-hidden during normal editing. The menu also offers equal split sizes and the
-saved or default layout.
+hidden during normal editing. The menu also offers **Equalize split sizes**,
+**Open saved layout**, and **Restore workspace**.
 
 Studio saves the custom layout for each notebook and selected view in the
 current browser. **Open saved layout** returns to that arrangement.
