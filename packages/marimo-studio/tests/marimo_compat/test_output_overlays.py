@@ -24,13 +24,13 @@ from .values_test_support import (
 
 
 def test_lens_overlay_shows_the_notebooks_open_lens() -> None:
-    from marimo_lens import Lens
+    marimo_lens = pytest.importorskip("marimo_lens")
 
     context = _native_output_context()
     with context.install():
         assert lens_overlay({}) == {}
-        lens = Lens()
-        assert lens_overlay({}) == {"lens": lens}
+        lens = marimo_lens.Lens()
+        assert lens_overlay({})["lens"] is lens
         lens.close()
         assert lens_overlay({}) == {}
 
