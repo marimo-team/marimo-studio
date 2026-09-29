@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from marimo_studio._compat.kernel_values.lens import LensOverlay
+from marimo_studio._compat.kernel_values.lens import lens_overlay
 from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
 from marimo_studio._compat.kernel_values.session import _parse_output_result
 from marimo_studio._projections.runtime_records import (
@@ -23,43 +23,24 @@ from .values_test_support import (
 )
 
 
-def test_optional_lens_reuses_notebook_instances_and_closes_only_its_own(
+def test_lens_overlay_shows_the_notebooks_open_lens() -> None:
+    marimo_lens = pytest.importorskip("marimo_lens")
+
+    context = _native_output_context()
+    with context.install():
+        assert lens_overlay({}) == {}
+        lens = marimo_lens.Lens()
+        assert lens_overlay({})["lens"] is lens
+        lens.close()
+        assert lens_overlay({}) == {}
+
+
+def test_lens_overlay_is_empty_without_marimo_lens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class Lens:
-        def __init__(self, **kwargs: object) -> None:
-            self.comm: object | None = object()
-            self.options = kwargs
+    monkeypatch.setitem(sys.modules, "marimo_lens", None)
 
-        def close(self) -> None:
-            self.comm = None
-
-    context = SimpleNamespace(
-        with_cell_id=lambda _: nullcontext(),
-        ui_element_registry=SimpleNamespace(_objects={}),
-        cell_lifecycle_registry=SimpleNamespace(dispose=lambda *_args, **_kwargs: None),
-    )
-    module = "marimo_studio._compat.kernel_values.lens"
-    monkeypatch.setattr(f"{module}.find_spec", lambda _: None)
-    overlay = LensOverlay(context)
-    assert overlay({}) == {}
-    monkeypatch.setattr(f"{module}.find_spec", lambda _: object())
-    monkeypatch.setattr(f"{module}.import_module", lambda _: SimpleNamespace(Lens=Lens))
-    owned = overlay({})["lens"]
-    assert isinstance(owned, Lens)
-    assert overlay({})["lens"] is owned
-    authored = Lens(dom_selector="#custom")
-    assert overlay({"lens": authored})["lens"] is authored
-    assert authored.options == {"dom_selector": "#custom"}
-    assert owned.comm is None
-    authored.close()
-    fallback = overlay({"lens": authored})["lens"]
-    assert isinstance(fallback, Lens) and fallback is not owned
-    replacement = Lens()
-    assert overlay({"lens": replacement})["lens"] is replacement
-    overlay.close()
-    assert fallback.comm is None
-    assert replacement.comm is not None
+    assert lens_overlay({}) == {}
 
 
 def test_output_callback_retains_overlay_resources_and_uses_the_output_wire_contract(
@@ -128,17 +109,10 @@ def test_kernel_overlays_are_development_outputs(
     )
     monkeypatch.setattr(kernel, "install_observation_ledger", lambda *_: lambda: None)
 
-    class Overlay:
-        def __init__(self, _context):
-            self.value = mo.md("Inspector")
-
-        def __call__(self, _namespace):
-            return {"inspector-panel": self.value}
-
-        def close(self):
-            pass
-
-    monkeypatch.setattr(kernel, "LensOverlay", Overlay)
+    inspector = mo.md("Inspector")
+    monkeypatch.setattr(
+        kernel, "lens_overlay", lambda _namespace: {"inspector-panel": inspector}
+    )
     bridge = kernel._KernelBridgeLifespan()
     try:
         with context.install():

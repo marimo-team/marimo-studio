@@ -33,7 +33,7 @@ dev = [
     { name = "deno", specifier = "==2.9.5" },
     { name = "httpx2", specifier = ">=2.9" },
     { name = "marimo", extras = ["recommended"], specifier = "==0.25.0" },
-    { name = "marimo-lens", specifier = ">=0.2.2" },
+    { name = "marimo-lens", specifier = ">=0.2.3" },
     { name = "pandas", specifier = ">=2.2.2" },
     { name = "pandas", marker = "python_full_version >= '3.13'", specifier = ">=2.2.3" },
     { name = "pandas", marker = "python_full_version >= '3.14'", specifier = ">=2.3.3" },
@@ -1234,7 +1234,7 @@ wheels = [
 
 [[package]]
 name = "marimo-lens"
-version = "0.2.2"
+version = "0.2.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-plugins" },
@@ -1244,9 +1244,9 @@ dependencies = [
     { name = "traitlets" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d9/2f/c9bc28d9dae3cdb30acb3a81e04b7ecd7afd4dfec42404f185d70a48ae76/marimo_lens-0.2.2.tar.gz", hash = "sha256:6aed69491f45f5a9929cd5e5a59f1f7522cf789c29f7949877e9c68c62f41937", size = 220762, upload-time = "2026-09-24T09:52:49.194Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/46/18cd9d7e107016e0c13e49d82633a1c362e00344e6ce246101015a9af3e0/marimo_lens-0.2.3.tar.gz", hash = "sha256:21d96d39571d6f2e89715bd0d44909cdbdb77e70142e611a72a188dcdf002ef6", size = 225173, upload-time = "2026-09-29T11:16:18.822Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/58/36c7348a0841176d4a78631d1c8fb59a6047a5cbe6bb2c5cc5ea4178b088/marimo_lens-0.2.2-py3-none-any.whl", hash = "sha256:633d3b7a8c36c435b724be923df85aacc138c7840695c125fec90774b51c9f02", size = 237110, upload-time = "2026-09-24T09:52:47.824Z" },
+    { url = "https://files.pythonhosted.org/packages/33/f4/5c805817a155c39c98a8225dc70c8ddae64d6b22577600e715f9fc5a9111/marimo_lens-0.2.3-py3-none-any.whl", hash = "sha256:2df4279bf382f9cf8e0d53a208badefd1bd3ed1a3908d52fc8a244a31bac6ae1", size = 242148, upload-time = "2026-09-29T11:16:17.735Z" },
 ]
 
 [[package]]
@@ -1288,7 +1288,7 @@ requires-dist = [
     { name = "htpy", specifier = ">=26.5.1" },
     { name = "marimo", specifier = "==0.25.0" },
     { name = "marimo-export", specifier = ">=0.1.0" },
-    { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.2.2" },
+    { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.2.3" },
     { name = "marimo-studio", extras = ["deno", "lens"], marker = "extra == 'recommended'", editable = "packages/marimo-studio" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
