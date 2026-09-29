@@ -34,6 +34,7 @@ from marimo_studio._server.records import (
 )
 from marimo_studio._server.routing import ArtifactAssetRoute
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.workspace_lifecycle import Ready
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
@@ -179,7 +180,11 @@ def _artifact_route(
         SimpleNamespace(peer_commands=SimpleNamespace(enable=lambda _location: None)),
     )
     return (
-        ReadyWorkspaceHandler(adapters, cast(RuntimeRegistry, object())),
+        ReadyWorkspaceHandler(
+            adapters,
+            cast(RuntimeRegistry, object()),
+            lambda _scope: SecurityPolicy(),
+        ),
         route,
         presentation,
     )

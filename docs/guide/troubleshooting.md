@@ -32,6 +32,14 @@ Save an untitled notebook with **Save As**, then create the first view against
 the saved path. Run `marimo-studio status --target analysis.py` when Studio
 reports an unconfigured notebook or a configured notebook with no view.
 
+## `marimo run` shows the notebook instead of a view
+
+Run mode serves the notebook as a marimo app while its view root contains no
+view, and the server logs a warning naming the notebook. `marimo-studio status`
+then reports `needs-view`. Restore the view directory beside the notebook, or
+set [`view_root`](../reference/configuration.md#project-settings) when the host
+persists authored files outside `__marimo__/`.
+
 ## A starter is unavailable
 
 Inspect its view provider and setup action:

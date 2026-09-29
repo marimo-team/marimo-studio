@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from html import escape
 
 from starlette.requests import HTTPConnection, Request
@@ -54,14 +55,14 @@ class HostEntryHandler:
     def __init__(
         self,
         route_policy: StudioRoutePolicy,
-        security_policy: SecurityPolicy,
+        resolve_security_policy: Callable[[Scope], SecurityPolicy],
         server: ServerGateway,
         sessions: SessionState,
         notebooks: NotebookScopeRegistry,
         editor_runtime: EditorRuntimeBootstrap,
     ) -> None:
         self._route_policy = route_policy
-        self._security_policy = security_policy
+        self._resolve_security_policy = resolve_security_policy
         self._server = server
         self._sessions = sessions
         self._notebooks = notebooks
@@ -178,7 +179,7 @@ class HostEntryHandler:
         receive: Receive,
         send: Send,
     ) -> None:
-        protected_send = edit_document_send(send, self._security_policy)
+        protected_send = edit_document_send(send, self._resolve_security_policy(scope))
         if not await self._editor_runtime.serve(
             app,
             scope,
@@ -289,7 +290,7 @@ class HostEntryHandler:
             request,
             context,
             session_id or self._notebooks.allocate_session_id(context, self._sessions),
-            self._security_policy,
+            self._resolve_security_policy(scope),
             transition,
         )
         await response(scope, receive, send)

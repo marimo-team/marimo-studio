@@ -42,11 +42,7 @@ from marimo_studio._server.presentation.session import PresentationSession
 from marimo_studio._server.records import ServerContext, ServerLocation
 from marimo_studio._server.routing import ArtifactAssetRoute, AuthoredViewRoute
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
-from marimo_studio._server.security import (
-    DEFAULT_SECURITY_POLICY,
-    SecurityPolicy,
-    extend_security_policy_from_host_head,
-)
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.support import support_response
 from marimo_studio._server.workspace_lifecycle import Ready
 from marimo_studio.errors import MarimoStudioError
@@ -82,11 +78,11 @@ class ReadyWorkspaceHandler:
         self,
         adapters: ServerAdapters,
         runtimes: RuntimeRegistry,
-        security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
+        resolve_security_policy: Callable[[Scope], SecurityPolicy],
     ) -> None:
         self._adapters = adapters
         self._runtimes = runtimes
-        self._security_policy = security_policy
+        self._resolve_security_policy = resolve_security_policy
 
     async def handle(
         self,
@@ -96,10 +92,6 @@ class ReadyWorkspaceHandler:
     ) -> None:
         presentation = route.notebook_scope.presentation
         workspace = route.lifecycle.workspace
-        security_policy = extend_security_policy_from_host_head(
-            self._security_policy,
-            route.context.trusted_html_head,
-        )
         artifact_response: Response | None = None
         try:
             redirect = (
@@ -163,7 +155,7 @@ class ReadyWorkspaceHandler:
                         self._runtimes.options_for(workspace, route.context),
                         self._adapters.session_state,
                         route.notebook_scope.session_ids,
-                        security_policy,
+                        self._resolve_security_policy(route.scope),
                     )
                 elif route.selected_asset is not None:
                     response, artifact_response = await self._artifact_response(route)
@@ -209,7 +201,7 @@ class ReadyWorkspaceHandler:
                 ),
                 lifecycle_id=request_lifecycle_id(route.request),
                 runtime=route.request.query_params.get("runtime", "server"),
-                security_policy=security_policy,
+                security_policy=self._resolve_security_policy(route.scope),
                 view_name=route.request_view,
             )
         if (

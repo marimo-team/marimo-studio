@@ -195,15 +195,17 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
     assert (definition.view_root / "dashboard" / "index.html").is_file()
 
 
-def test_definition_state_returns_structured_run_repair(
+def test_edit_mode_reports_missing_views_as_structured_repair(
     notebook_path: Path,
 ) -> None:
     setup = prepare_view(notebook_path)
     assert setup.workspace is not None
     shutil.rmtree(setup.workspace.view_root)
+    app = _marimo_app(notebook_path)
+    _edit_mode(app)
 
-    with TestClient(create_asgi_app(notebook_path)) as client:
-        response = client.get("/", headers={"Accept": "application/json"})
+    with TestClient(app) as client:
+        response = client.get("/dashboard/", headers={"Accept": "application/json"})
 
     assert response.status_code == 409
     payload = response.json()
@@ -211,6 +213,30 @@ def test_definition_state_returns_structured_run_repair(
     assert payload["state"] == "needs-view"
     assert payload["default_view"] == "dashboard"
     assert payload["views"] == []
+
+
+def test_run_mode_serves_the_notebook_when_its_views_are_missing(
+    notebook_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    setup = prepare_view(notebook_path)
+    assert setup.workspace is not None
+    shutil.rmtree(setup.workspace.view_root)
+
+    with TestClient(create_asgi_app(notebook_path)) as client:
+        pages = [client.get("/", follow_redirects=False) for _ in range(2)]
+        status = client.get("/_marimo-studio/status")
+
+    assert [page.status_code for page in pages] == [200, 200]
+    assert all("<marimo-filename" in page.text for page in pages)
+    assert status.json()["state"] == "needs-view"
+    warnings = [
+        record.levelname
+        for record in caplog.records
+        if record.name.startswith("marimo_studio")
+        and str(notebook_path) in record.getMessage()
+    ]
+    assert warnings == ["WARNING"]
 
 
 def test_workspace_status_reports_configuration_errors(

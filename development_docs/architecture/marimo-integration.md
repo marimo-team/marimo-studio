@@ -234,6 +234,7 @@ view source should never depend on a transient runtime ID.
 - Edit or run mode
 - User and override configuration
 - Process-bound server token
+- Trusted server-level `html_head`
 - Opaque server handle
 
 `PresentationMiddleware` consumes those records and delegates native Marimo

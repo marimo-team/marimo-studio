@@ -83,6 +83,11 @@ def _unique_notebook_key(manager: Any) -> str | None:
     return None if key == NEW_FILE else key
 
 
+def _trusted_html_head(state: object) -> str | None:
+    html_head = getattr(state, "html_head", None)
+    return html_head if isinstance(html_head, str) else None
+
+
 def _server_uses_file_routing(scope: Scope) -> bool:
     app = scope.get("app")
     state = getattr(app, "state", None)
@@ -198,7 +203,6 @@ def location_handle(location: ServerLocation) -> _LocationHandle:
 def _server_context(location: ServerLocation) -> ServerContext:
     handle = location_handle(location)
     config_manager = handle.config_manager
-    html_head = getattr(handle.state, "html_head", None)
     return ServerContext(
         notebook=location.notebook,
         file_key=location.file_key,
@@ -212,7 +216,7 @@ def _server_context(location: ServerLocation) -> ServerContext:
         config_overrides=config_manager.get_config_overrides(),
         server_token=str(handle.session_manager.skew_protection_token),
         access_token=str(handle.session_manager.auth_token) or None,
-        trusted_html_head=html_head if isinstance(html_head, str) else None,
+        trusted_html_head=_trusted_html_head(handle.state),
         handle=ServerHandle(
             _ContextHandle(
                 server=getattr(handle.state, "server", None),
@@ -342,6 +346,9 @@ class PrivateServerGateway:
 
     def uses_file_routing(self, scope: Scope) -> bool:
         return _server_uses_file_routing(scope)
+
+    def trusted_html_head(self, scope: Scope) -> str | None:
+        return _trusted_html_head(getattr(scope.get("app"), "state", None))
 
     async def location(
         self,

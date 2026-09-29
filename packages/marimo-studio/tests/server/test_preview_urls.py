@@ -137,6 +137,43 @@ def test_preview_requires_normal_notebook_authentication(notebook_path: Path) ->
     assert "secret" not in authenticated.text
 
 
+_SESSION_QUERY = {"marimo_studio_renewal", "session_id"}
+
+
+@pytest.mark.parametrize(
+    ("mount", "path", "expected", "added_query"),
+    [
+        ("/", "/dashboard/", "/dashboard/", _SESSION_QUERY),
+        ("/", "//dashboard/", "/dashboard/", _SESSION_QUERY),
+        ("/hosted", "/hosted/dashboard/", "/hosted/dashboard/", _SESSION_QUERY),
+        ("/", "//studio", "/studio/", set()),
+    ],
+)
+def test_studio_redirects_stay_on_the_request_origin(
+    notebook_path: Path,
+    mount: str,
+    path: str,
+    expected: str,
+    added_query: set[str],
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, path=mount)
+    edit_mode(app)
+
+    # A reverse proxy that rewrites Host forwards the kernel's internal address.
+    with TestClient(app) as client:
+        response = client.get(
+            f"http://testserver{path}",
+            headers={"Host": "10.0.0.7:2718"},
+            follow_redirects=False,
+        )
+
+    location = urlsplit(response.headers["location"])
+    assert response.status_code == 307
+    assert (location.scheme, location.netloc, location.path) == ("", "", expected)
+    assert added_query <= parse_qs(location.query).keys()
+
+
 @pytest.mark.parametrize("mode", ["edit", "run"])
 def test_exact_preview_opens_its_current_published_revision(
     notebook_path: Path, mode: str

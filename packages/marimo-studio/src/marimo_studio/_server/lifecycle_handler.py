@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from starlette.requests import Request
@@ -26,10 +27,7 @@ from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session import PresentationSession
 from marimo_studio._server.records import ServerContext, ServerLocation
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
-from marimo_studio._server.security import (
-    SecurityPolicy,
-    extend_security_policy_from_host_head,
-)
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.support import support_response
 from marimo_studio._server.workspace_lifecycle import (
     Invalid,
@@ -68,12 +66,12 @@ class LifecycleRouteHandler:
         app: ASGIApp,
         adapters: ServerAdapters,
         runtimes: RuntimeRegistry,
-        security_policy: SecurityPolicy,
+        resolve_security_policy: Callable[[Scope], SecurityPolicy],
     ) -> None:
         self._app = app
         self._adapters = adapters
         self._runtimes = runtimes
-        self._security_policy = security_policy
+        self._resolve_security_policy = resolve_security_policy
 
     async def handle(
         self,
@@ -82,10 +80,6 @@ class LifecycleRouteHandler:
         send: Send,
     ) -> None:
         lifecycle = route.lifecycle
-        security_policy = extend_security_policy_from_host_head(
-            self._security_policy,
-            route.context.trusted_html_head,
-        )
         if isinstance(lifecycle, Invalid):
             response = await self._invalid_response(route)
         elif route.relative.startswith(SUPPORT_PATH):
@@ -93,6 +87,7 @@ class LifecycleRouteHandler:
         elif route.location.mode == "edit" and (
             route.landing or route.relative.strip("/").split("/")[0] == "studio"
         ):
+            security_policy = self._resolve_security_policy(route.scope)
             redirect = page_redirect(
                 route.request,
                 route.relative,
@@ -194,10 +189,7 @@ class LifecycleRouteHandler:
             ),
             lifecycle_id=request_lifecycle_id(route.request),
             runtime=route.request.query_params.get("runtime", "server"),
-            security_policy=extend_security_policy_from_host_head(
-                self._security_policy,
-                route.context.trusted_html_head,
-            ),
+            security_policy=self._resolve_security_policy(route.scope),
             view_name=route.request_view,
         )
 
