@@ -1,0 +1,23 @@
+packages/marimo-studio/tests/server/test_view_mutations.py
+  s_041b1e6ba0dec8::t_254c43c4205615 236-237
+packages/marimo-studio/tests/server/test_preview_urls.py
+  s_041b1e6ba0dec8::t_254c43c4205615 140-142,144,146-149,157,174
+docs/reference/configuration.md
+  s_041b1e6ba0dec8::t_254c43c4205615 170-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4a62017b757fd362f8cddff16696dff71d5b103c",
+  "prompts": {},
+  "sessions": {
+    "s_041b1e6ba0dec8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d53a851-0666-45d4-8aca-61d3c08120d5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

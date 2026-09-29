@@ -1,0 +1,30 @@
+packages/marimo-studio/README.md
+  s_ae4151473348eb::t_61935170623fb9 1-37,52-55,65-70,72-83,103
+  s_ae4151473348eb::t_00a6201ff36772 87,93-94,100-101
+  s_ae4151473348eb::t_a4ed33ed8236d6 88-92,95-97,99
+uv.lock
+  ai_agent 1254
+README.md
+  s_ae4151473348eb::t_a4ed33ed8236d6 89-93,96-100
+  s_ae4151473348eb::t_00a6201ff36772 88,94-95,101-102
+.github/release-notes/v0.2.2.md
+  s_ae4151473348eb::t_355ca2da6d4871 1-38
+packages/marimo-studio/pyproject.toml
+  s_ae4151473348eb::t_fa39acc8ca539e 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4b6a22394e0f80276663608acc001f52cac33abb",
+  "prompts": {},
+  "sessions": {
+    "s_ae4151473348eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b2cbf2a9-2f05-4f2a-8607-0f97af62147f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
