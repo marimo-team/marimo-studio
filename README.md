@@ -85,10 +85,21 @@ Each example notebook serves three views, built with different frontend stacks.
 
 ## Run or export a view
 
-Serve a live **Python** app, run Python in the **Browser**, or export
-**Prepared** results as a static site. A Prepared export publishes the exported
-results and finite input states and keeps notebook source on the machine that
-runs the export.
+Serve the notebook's views as a live **Python** app:
+
+```console
+uvx --with marimo-studio marimo run analysis.py --sandbox
+```
+
+Export the `report` view with **Prepared** results as a static site:
+
+```console
+uvx marimo-studio view export report --target analysis.py --output dist/report
+```
+
+A Prepared export publishes the exported results and finite input states and
+keeps notebook source on the machine that runs the export. Views can also run
+Python in the visitor's **Browser**.
 [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
 compares what visitors receive.
 
