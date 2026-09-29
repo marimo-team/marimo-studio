@@ -90,7 +90,7 @@ def verify_metadata(source, archive):
         "agent-plugins": ">=0.2.4",
         "htpy": ">=26.5.1",
         "marimo-export": ">=0.1.0",
-        "marimo-lens": ">=0.2.2",
+        "marimo-lens": ">=0.2.3",
         "tree-sitter": ">=0.25.2",
         "tree-sitter-javascript": ">=0.25.0",
         "watchdog": ">=6.0.0",

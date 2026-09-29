@@ -29,7 +29,7 @@ from marimo_studio._compat.kernel_values.dependencies import (
 )
 from marimo_studio._compat.kernel_values.lens import (
     LensMountPolicy,
-    LensOverlay,
+    lens_overlay,
 )
 from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
@@ -276,7 +276,6 @@ class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
-        self._lens: LensOverlay | None = None
         self._lens_mount: LensMountPolicy | None = None
         self._value_encoder: ValueEncoder | None = None
         self._query_generations: dict[str, tuple[int, int]] = {}
@@ -302,12 +301,13 @@ class _KernelBridgeLifespan:
             return False
         from marimo._session.model import SessionMode
 
-        if (
+        edit_preview = (
             inspection is None
             and getattr(context, "session_mode", None) == SessionMode.EDIT
-        ):
-            self._lens = LensOverlay(context)
-        output_renderer = KernelOutputRenderer(context, overlays=self._lens)
+        )
+        output_renderer = KernelOutputRenderer(
+            context, overlays=lens_overlay if edit_preview else None
+        )
         observation_ledger: ObservationLedger | None = None
         observation_ledger_release: Callable[[], None] | None = None
         try:
@@ -719,14 +719,6 @@ class _KernelBridgeLifespan:
                 failure = error
             else:
                 self._lens_mount = None
-        if self._lens is not None:
-            try:
-                self._lens.close()
-            except BaseException as error:
-                if failure is None:
-                    failure = error
-            else:
-                self._lens = None
         if self._value_encoder is not None:
             try:
                 self._value_encoder.close()

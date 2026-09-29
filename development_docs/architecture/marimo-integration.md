@@ -327,10 +327,10 @@ response carries these overlays alongside requested projections. Stable
 objects retain their native output resources; completed notebook runs refresh
 the selection through the existing output reader.
 
-In edit mode, the private Lens adapter reuses an open notebook Lens, including
-anonymous outputs created by Marimo's auto-mount hook. Otherwise, when Lens is
-installed, it owns one instance with `STUDIO_RESULT_SELECTOR`. Borrowed
-instances keep their configured selector and notebook ownership.
+In edit mode, the private Lens adapter shows `marimo_lens.notebook_lens()`, the
+notebook's open Lens. That includes anonymous outputs such as the Lens that
+Marimo mounts automatically. The preview keeps the Lens's configured selector
+and notebook ownership. A notebook with no open Lens gets no preview overlay.
 
 Lens gives each document its own interaction owner, so the notebook dock and the
 preview dock drive one Lens model. Lens bounds its notebook UI to Marimo's
