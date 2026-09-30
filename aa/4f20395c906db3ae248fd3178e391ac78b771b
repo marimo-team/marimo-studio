@@ -1,0 +1,33 @@
+packages/marimo-studio/tests/agent/test_protocol.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 10,118-157
+packages/marimo-studio/src/marimo_studio/_authoring/view.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 28,36-43,396,411-417,433-434,436-439,470-473,475-477
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 40-45,47-51,309,311
+packages/marimo-studio/src/marimo_studio/authoring/__init__.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 46
+packages/marimo-studio/src/marimo_studio/_cli/output.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 20-25
+packages/marimo-studio/src/marimo_studio/_views/records.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 5,324-354
+packages/marimo-studio/src/marimo_studio/_browser_client/client.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 28,112
+packages/marimo-studio/src/marimo_studio/_browser_client/protocol.py
+  s_f8296af1d7933f::t_a2074aadf96ce0 11,168-169,171-175,177-188,193-196,198,201-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "aa4f20395c906db3ae248fd3178e391ac78b771b",
+  "prompts": {},
+  "sessions": {
+    "s_f8296af1d7933f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62bd6a9d-0227-4e2d-a288-3cef1089349a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

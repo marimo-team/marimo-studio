@@ -1,0 +1,15 @@
+skills/marimo-studio/references/gotchas.md
+  ai_agent 53-56
+docs/reference/python-api.md
+  ai_agent 205,213-233,302,604-608
+docs/guide/index.md
+  ai_agent 13-21
+skills/marimo-studio/SKILL.md
+  ai_agent 162-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "31a38dc0bc5a78e7f541f12d5195f95fc61c1777",
+  "prompts": {}
+}
