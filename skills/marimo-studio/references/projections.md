@@ -32,7 +32,8 @@ Materialize lazy or remote dataframe queries in the notebook before projecting
 them. Pandas may require PyArrow. WebAssembly notebooks need browser-compatible
 dataframe and Arrow writer packages. Each projected value must encode within
 1,000,000 bytes in every runtime. Filter, aggregate, or split larger tables into
-separate notebook values.
+separate notebook values, then select one at runtime as described in
+[Select targets](#select-targets).
 
 ## Select targets
 
@@ -41,6 +42,30 @@ The alias returned by `workspace.bind()` becomes an accepted value for
 attributes. Literal `name`, `value`, and `mo-value` selectors need no wildcard.
 Add `data-marimo-allow="*"` when runtime code intentionally selects a target
 that the provider cannot enumerate from source.
+
+When a table exceeds the 1,000,000-byte value limit, publish a compact index
+table plus a dictionary of per-item frames with string keys, such as
+`details = {str(key): frame for key, frame in groups}` and
+`default_details = details[default_key]`. Start the host on `default_details`,
+then change its selector to a key read from a row of the index table:
+
+```html
+<span id="details" hidden mo-value="default_details" data-marimo-allow="*"></span>
+```
+
+```js
+const select = (key) =>
+  document.getElementById("details").setAttribute("mo-value", `details[${JSON.stringify(key)}]`);
+```
+
+Keep the key as a column in each frame so the view can match arriving rows to
+the current selection. A wildcard host resolves its target while the notebook
+runs, so serve it with the Python runtime or export it with `--runtime wasm`.
+For a Prepared export, author one host per item.
+
+Views change notebook state through native marimo controls. Project a
+control's cell with `<marimo-cell>`, and keep other selection state in the
+browser.
 
 Reconsider the projection kind before changing notebook code to make a
 projection host render. Presentation requirements stay in the view when the

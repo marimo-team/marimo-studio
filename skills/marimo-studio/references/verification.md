@@ -38,8 +38,9 @@ with the chosen browser tool. Run kernel-dependent browser interactions and
 waits through an external tool or interpreter. Waiting synchronously inside
 code mode can block the notebook work being awaited. The URL renders a separate top-level
 presentation with the server's authentication and document sandbox. Keep the
-notebook session open on an edit-mode server. A code-mode URL binds the current
-editor session, so request a new URL after the server or session restarts.
+notebook session open on an edit-mode server. A code-mode URL follows the
+Studio tab connected to that session. Request a new URL after the server
+restarts, the session changes, or that tab closes.
 Authenticate the chosen browser through marimo's normal login. An API access
 token authorizes URL lookup. It is never embedded in the returned URL.
 
@@ -65,8 +66,9 @@ Wait with the browser's native selector or predicate tools for
 `html[data-marimo-studio-state="ready"]`. Read
 `document.documentElement.dataset.marimoStudioRevision` for the committed
 presentation revision, which differs from the artifact's `build.revision`.
-Studio readiness covers its runtime and mounted projections. Assert the
-application's intended result separately. After changing a control, wait for
+Studio readiness covers its runtime, mounted projections, and uncaught errors
+from view scripts, which set the state to `error` and show their location.
+Assert the application's intended result separately. After changing a control, wait for
 the dependent metric, text, and custom chart to update. The selected control
 value alone does not prove reactive completion.
 

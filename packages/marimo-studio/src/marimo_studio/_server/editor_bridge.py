@@ -291,7 +291,14 @@ async def delegate_editor_request(
         and relative.rstrip("/") in _CODE_MODE_ROUTES
     ):
         connection = Request(scope, receive)
-        location = await server.location(connection)
+        # Code-mode clients such as `marimo pair` omit `?file=`, so a folder
+        # server resolves their notebook from the calling session.
+        session_id = connection.headers.get("Marimo-Session-Id")
+        location = (
+            await server.session_location(connection, session_id)
+            if session_id is not None
+            else None
+        ) or await server.location(connection)
         if location is None:
             await app(scope, receive, send)
             return True

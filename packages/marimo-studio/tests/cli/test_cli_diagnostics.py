@@ -424,6 +424,29 @@ def test_view_create_rejects_the_starter_target_limit_without_mutation(
     assert not tmp_path.joinpath("__marimo__").exists()
 
 
+def test_view_create_lists_installed_starters_for_an_unqualified_name(
+    notebook_path: Path,
+) -> None:
+    source = notebook_path.read_text(encoding="utf-8")
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--starter",
+            "vanilla",
+            "--target",
+            str(notebook_path),
+        ],
+    )
+
+    assert isinstance(result.exception, ConfigurationError)
+    assert "Installed starters: " in str(result.exception)
+    assert "marimo-studio/vanilla:default" in str(result.exception)
+    assert notebook_path.read_text(encoding="utf-8") == source
+
+
 @pytest.mark.native_process
 def test_provider_stdout_cannot_corrupt_machine_output(
     notebook_path: Path,

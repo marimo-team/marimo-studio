@@ -11,6 +11,16 @@ from .query_operations import QueryOperationState
 from .session_bindings import SessionBindingLease, resolve_session_binding
 
 
+def studio_tab_unavailable() -> AgentRequestError:
+    """Return the error for a notebook session without a connected Studio tab."""
+    return AgentRequestError(
+        "browser-client-unavailable",
+        "No Studio tab is connected to this notebook session. Open or reload "
+        "the notebook in Studio, then retry.",
+        status_code=409,
+    )
+
+
 @dataclass(frozen=True)
 class PeerTarget:
     client_id: str
@@ -260,11 +270,7 @@ class WorkspacePresence:
             target = self.target(selected) if selected is not None else None
             if target is not None and target.session_id == session_id:
                 return target
-            raise AgentRequestError(
-                "browser-client-unavailable",
-                "The Studio browser for this Marimo session is not connected.",
-                status_code=409,
-            )
+            raise studio_tab_unavailable()
         connected = sorted(key for key in self.clients if self.target(key) is not None)
         if not connected:
             raise AgentRequestError(

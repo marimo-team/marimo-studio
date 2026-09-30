@@ -209,8 +209,11 @@ async def document_response(
         if client_id is not None:
             session_id = await clients.session_for_client(client_id)
             expected_sessions = request.query_params.getlist(EDITOR_SESSION_QUERY_PARAM)
-            if expected_sessions and (
-                len(expected_sessions) != 1 or session_id != expected_sessions[0]
+            # A disconnected editor tab reports no session and waits below.
+            if (
+                expected_sessions
+                and session_id is not None
+                and (len(expected_sessions) != 1 or session_id != expected_sessions[0])
             ):
                 raise AgentRequestError(
                     "preview-session-changed",

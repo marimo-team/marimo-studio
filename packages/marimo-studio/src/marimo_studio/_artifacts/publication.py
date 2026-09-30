@@ -155,23 +155,30 @@ def record_build_failure(
             duration_ms=round((time.monotonic() - started) * 1_000),
         )
         write_profile_state(project, profile_state(profile, published, build))
-    raise project_build_error(project, diagnostics[0])
+    raise project_build_error(project, diagnostics)
 
 
 def project_build_error(
-    project: ViewProject, diagnostic: ProjectDiagnostic
+    project: ViewProject, errors: tuple[ProjectDiagnostic, ...]
 ) -> ViewProjectError:
     """Return a build rejection without changing publication state."""
+    # Code mode shows only the message, so it carries the location and count.
+    first = errors[0]
+    source = project.root / first.source.path if first.source else project.manifest
+    message = first.message
+    if first.source is not None:
+        message = f"{source}:{first.source.line}:{first.source.column}: {message}"
+    if len(errors) > 1:
+        more = len(errors) - 1
+        message += f" Inspect the view to list {more} more error" + (
+            "s." if more > 1 else "."
+        )
     return ViewProjectError(
-        diagnostic.message,
-        source=(
-            project.root / diagnostic.source.path
-            if diagnostic.source is not None
-            else project.manifest
-        ),
-        line=diagnostic.source.line if diagnostic.source is not None else None,
-        column=diagnostic.source.column if diagnostic.source is not None else None,
-        hint=diagnostic.hint or None,
+        message,
+        source=source,
+        line=first.source.line if first.source else None,
+        column=first.source.column if first.source else None,
+        hint=first.hint or None,
     )
 
 

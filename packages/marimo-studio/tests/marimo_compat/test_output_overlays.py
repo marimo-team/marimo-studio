@@ -23,16 +23,27 @@ from .values_test_support import (
 )
 
 
-def test_lens_overlay_shows_the_notebooks_open_lens() -> None:
+def test_lens_overlay_shows_the_notebooks_open_lens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     marimo_lens = pytest.importorskip("marimo_lens")
+    from marimo._types.ids import CellId_t
 
     context = _native_output_context()
-    with context.install():
-        assert lens_overlay({}) == {}
-        lens = marimo_lens.Lens()
-        assert lens_overlay({})["lens"] is lens
-        lens.close()
-        assert lens_overlay({}) == {}
+    monkeypatch.setattr(
+        "marimo._messaging.notification_utils.broadcast_notification", lambda _: None
+    )
+    try:
+        with context.install():
+            assert lens_overlay({}) == {}
+            # marimo writes widget code to a virtual file only while a cell runs.
+            with context.with_cell_id(CellId_t("lens-cell")):
+                lens = marimo_lens.Lens()
+            assert lens_overlay({})["lens"] is lens
+            lens.close()
+            assert lens_overlay({}) == {}
+    finally:
+        context.virtual_file_registry.shutdown()
 
 
 def test_lens_overlay_is_empty_without_marimo_lens(

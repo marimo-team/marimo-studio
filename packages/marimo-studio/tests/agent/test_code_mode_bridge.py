@@ -94,6 +94,48 @@ def test_code_mode_routes_receive_the_calling_session(
     }
 
 
+def test_directory_server_code_mode_resolves_the_calling_session_notebook(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[Scope] = []
+
+    async def downstream(scope: Scope, receive: Receive, send: Send) -> None:
+        del receive
+        captured.append(scope)
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    monkeypatch.setattr(editor_bridge, "discover_studio", lambda _path: None)
+    middleware = studio_middleware.PresentationMiddleware(
+        downstream,
+        lambda: _adapters(SimpleNamespace(notebook=notebook_path), directory=True),
+    )
+    scope: Scope = {
+        "type": "http",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/kernel/execute",
+        "raw_path": b"/api/kernel/execute",
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"marimo-session-id", b"s_123456")],
+        "server": ("testserver", 80),
+        "client": ("testclient", 1),
+        "app": SimpleNamespace(),
+    }
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(_message: Message) -> None:
+        return None
+
+    asyncio.run(middleware(scope, receive, send))
+
+    assert captured[0]["meta"][STUDIO_NOTEBOOK_PATH_KEY] == str(notebook_path.resolve())
+
+
 def test_editor_transport_binds_its_marimo_session_to_the_studio_tab(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -254,9 +296,12 @@ def test_stale_editor_transport_does_not_bind_a_studio_client(
     assert not middleware._notebooks.contains(notebook_path)
 
 
-def _adapters(location: Any) -> ServerAdapters:
+def _adapters(location: Any, *, directory: bool = False) -> ServerAdapters:
     async def resolve_location(_connection: object) -> object:
-        return location
+        return None if directory else location
+
+    async def resolve_session_location(_connection: object, session_id: str) -> object:
+        return location if session_id == "s_123456" else None
 
     notebook = cast(Path, location.notebook)
     context = SimpleNamespace(
@@ -271,6 +316,7 @@ def _adapters(location: Any) -> ServerAdapters:
         relative_path=lambda scope, _base: scope["path"],
         mode=lambda _scope: "edit",
         location=resolve_location,
+        session_location=resolve_session_location,
         context=lambda _location: context,
     )
     sessions = SimpleNamespace(

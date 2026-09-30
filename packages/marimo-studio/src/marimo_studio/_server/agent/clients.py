@@ -33,7 +33,12 @@ from .workspace_presence import (
     PeerTarget,
     WorkspacePresence,
     WorkspaceStreamLease,
+    studio_tab_unavailable,
 )
+
+# A Studio tab reconnects after saves and reloads. Callers that need the tab
+# wait this long before reporting it unavailable.
+SESSION_RECONNECT_TIMEOUT = 1.0
 
 
 class StudioClientRegistry:
@@ -532,6 +537,15 @@ class StudioClientRegistry:
             except asyncio.TimeoutError:
                 return None
             return self._presence.target(self._session_clients.get(session_id))
+
+    async def session_target(self, session_id: str) -> PeerTarget:
+        """Return the Studio tab connected to a session, waiting for a reconnect."""
+        target = await self.wait_for_session_target(
+            session_id, SESSION_RECONNECT_TIMEOUT
+        )
+        if target is None:
+            raise studio_tab_unavailable()
+        return target
 
     async def select_target(
         self,

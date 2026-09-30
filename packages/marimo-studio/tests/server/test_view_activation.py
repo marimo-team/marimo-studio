@@ -190,7 +190,7 @@ def test_session_activation_requires_its_studio_host(
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
     monkeypatch.setattr(
-        "marimo_studio._server.presentation.activation._CLIENT_CONNECT_TIMEOUT",
+        "marimo_studio._server.agent.clients.SESSION_RECONNECT_TIMEOUT",
         0.02,
     )
 

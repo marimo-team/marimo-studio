@@ -69,6 +69,9 @@ export class ReadinessController {
   private presentation: PresentationRefreshState = "ready";
   private runtimeDiagnostic: RuntimeDiagnostic | undefined;
   private presentationDiagnostic: PresentationDiagnostic | undefined;
+  // A view script failure belongs to the whole document. Observer restarts
+  // keep it, and the next document starts without it.
+  private fault: PresentationDiagnostic | undefined;
   private hostStates: readonly string[] = [];
   private readonly presentationOwners = new Map<
     PresentationRefreshOwner,
@@ -89,11 +92,10 @@ export class ReadinessController {
 
   start(): void {
     this.connection = "connecting";
-    this.presentation = "ready";
     this.runtimeDiagnostic = undefined;
-    this.presentationDiagnostic = undefined;
     this.hostStates = [];
     this.presentationOwners.clear();
+    this.updatePresentation();
     this.waiter = deferred();
     this.commit();
   }
@@ -132,6 +134,16 @@ export class ReadinessController {
     this.commit();
   }
 
+  /** Fail the page for the rest of this document. The first fault wins. */
+  fail(diagnostic: PresentationDiagnostic): void {
+    if (this.fault) {
+      return;
+    }
+    this.fault = diagnostic;
+    this.updatePresentation();
+    this.commit();
+  }
+
   beginPresentation(owner: PresentationRefreshOwner): PresentationRefreshClaim {
     const generation = (this.presentationOwners.get(owner)?.generation ?? 0) + 1;
     this.presentationOwners.set(owner, { generation, state: "loading" });
@@ -159,6 +171,11 @@ export class ReadinessController {
   }
 
   private updatePresentation(): void {
+    if (this.fault) {
+      this.presentation = "error";
+      this.presentationDiagnostic = this.fault;
+      return;
+    }
     const owners = [...this.presentationOwners.values()];
     const failed = owners.find(({ state }) => state === "error");
     if (failed) {

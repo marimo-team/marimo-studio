@@ -33,6 +33,7 @@ import {
   type TrustedRuntimeSelection,
   viewHistoryNavigationForUrl,
 } from "./document/view-navigation.ts";
+import { watchViewScriptErrors } from "./document/view-script-errors.ts";
 import { errorMessage } from "./errors";
 import { startPresentationObservers, stopPresentationObservers } from "./observers";
 import { projectionHosts } from "./projections/host-runtime";
@@ -406,6 +407,7 @@ const start = (registry: RuntimeRegistry) => {
 };
 
 export const startPresentation = (registry: RuntimeRegistry): void => {
+  onFinalPageHide(watchViewScriptErrors());
   if (studioOwned()) {
     onFinalPageHide(
       runtimeProgress.subscribe(({ runtime, supportUrl, revision, progress, configured }) => {

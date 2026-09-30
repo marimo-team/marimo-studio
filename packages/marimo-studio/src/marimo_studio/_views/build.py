@@ -313,7 +313,9 @@ def _stable_artifact_commit(
             yield confirm_current
         except ArtifactCommitRejected as rejection:
             if not build_started:
-                raise project_build_error(project, rejection.diagnostic) from rejection
+                raise project_build_error(
+                    project, (rejection.diagnostic,)
+                ) from rejection
             record_build_failure(
                 project,
                 profile,

@@ -83,16 +83,11 @@ async def preview_url_response(
         )
     query = [*context.routing_query, ("runtime", runtime), (UNFRAMED_QUERY_PARAM, "1")]
     if context.mode == "edit" and session is not None and runtime != "wasm":
-        binding = await notebook_scope.clients.binding_for_session(session)
-        if binding is None:
-            raise AgentRequestError(
-                "preview-session-unavailable",
-                "The notebook session is not attached to Studio. Reopen its workspace.",
-                status_code=409,
-            )
+        # A server preview follows the Studio tab bound to this session.
+        target = await notebook_scope.clients.session_target(session)
         query.extend(
             (
-                (STUDIO_CLIENT_QUERY_PARAM, binding.client_id),
+                (STUDIO_CLIENT_QUERY_PARAM, target.client_id),
                 (EDITOR_SESSION_QUERY_PARAM, session),
             )
         )

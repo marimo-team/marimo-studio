@@ -196,7 +196,6 @@ export const setRuntimeConnectionState = (
 export const startRenderedViewObserver = (updateQuery: (query: string) => Promise<void>): void => {
   stopRenderedViewObserver();
   readiness.start();
-  document.documentElement.dataset.marimoStudioState = "connecting";
   globalThis.marimoStudio = {
     ready: () => {
       evaluate();
