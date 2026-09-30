@@ -86,9 +86,10 @@ The Studio tab renders the view in a sandboxed frame. Use frame-aware
 automation, or open the view's preview URL as in
 [verification](verification.md).
 
-**`ScreenshotError: Playwright is not installed.` from code mode.**
-`ctx.screenshot()` captures one notebook cell's output. Capture a view by
-opening its preview URL with an external browser tool.
+**`ScreenshotError: Playwright is not installed.` from marimo code mode.**
+marimo's `ctx.screenshot()` from `marimo._code_mode` captures one notebook
+cell's output and needs Playwright in the kernel environment. Capture a view
+by opening its preview URL with an external browser tool.
 
 **Projected output still shows old content after a restart.**
 marimo can restore cells as stale. Run stale cells in the live notebook before

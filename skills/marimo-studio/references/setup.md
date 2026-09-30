@@ -34,10 +34,10 @@ uvx --with "marimo-studio[deno]" marimo edit notebooks/ --sandbox --watch --no-t
 
 Each notebook gets its own sandboxed kernel when a browser opens its Studio
 tab at `/?file=<file>`, or a named view at `/studio/<view>/?file=<file>`,
-where `<file>` is the path relative to the served folder. Pass each notebook's absolute `path` from
-`pair notebook list` to `--file`. Views belong to their notebook, so two
-notebooks can each own a view with the same name. Keep an editor tab open for
-every notebook you pair with.
+where `<file>` is the path relative to the served folder. Pass each notebook's
+absolute `path` from `pair notebook list` to `--file`. Views belong to their
+notebook, so two notebooks can each own a view with the same name. Keep an
+editor tab open for every notebook you pair with.
 
 ## Work from a saved notebook
 
