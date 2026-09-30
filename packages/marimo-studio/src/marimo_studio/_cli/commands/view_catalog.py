@@ -22,7 +22,7 @@ from marimo_studio._cli.options import (
 )
 from marimo_studio._cli.output import (
     echo_json,
-    render_view_catalog,
+    emit_view_catalog,
     render_view_next_command,
     render_view_setup,
 )
@@ -115,10 +115,9 @@ def remove(
     ):
         raise click.exceptions.Exit(0)
     catalog = asyncio.run(remove_view(resolve_notebook(target), view_name))
-    if json_output:
-        echo_json({**catalog.to_dict(), "view": view_name})
-        return
-    render_view_catalog("Removed", f"view {view_name}", catalog)
+    emit_view_catalog(
+        catalog, view_name, "Removed", f"view {view_name}", json_output=json_output
+    )
 
 
 @click.command("rename", cls=ColoredCommand)
@@ -134,10 +133,13 @@ def rename(
 ) -> None:
     """Move one view and its project files to a new name."""
     catalog = asyncio.run(rename_view(resolve_notebook(target), view_name, new_name))
-    if json_output:
-        echo_json({**catalog.to_dict(), "view": new_name})
-        return
-    render_view_catalog("Renamed", f"view {view_name} to {new_name}", catalog)
+    emit_view_catalog(
+        catalog,
+        new_name,
+        "Renamed",
+        f"view {view_name} to {new_name}",
+        json_output=json_output,
+    )
 
 
 @click.command("default", cls=ColoredCommand)
@@ -147,7 +149,10 @@ def rename(
 def default(view_name: str, target: Path | None, json_output: bool) -> None:
     """Serve one view at the notebook's main route."""
     catalog = asyncio.run(make_default_view(resolve_notebook(target), view_name))
-    if json_output:
-        echo_json({**catalog.to_dict(), "view": view_name})
-        return
-    render_view_catalog("Selected", f"default view {view_name}", catalog)
+    emit_view_catalog(
+        catalog,
+        view_name,
+        "Selected",
+        f"default view {view_name}",
+        json_output=json_output,
+    )

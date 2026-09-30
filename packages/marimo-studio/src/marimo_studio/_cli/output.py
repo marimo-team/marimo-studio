@@ -204,8 +204,18 @@ def render_document_write(document: ViewDocument) -> None:
     echo(f"  {light_blue('revision')} {document.revision}")
 
 
-def render_view_catalog(verb: str, subject: str, catalog: ViewCatalog) -> None:
-    """Write a completed view catalog change in human text."""
+def emit_view_catalog(
+    catalog: ViewCatalog,
+    view: str,
+    verb: str,
+    subject: str,
+    *,
+    json_output: bool,
+) -> None:
+    """Write a completed view catalog change as JSON or human text."""
+    if json_output:
+        echo_json({**catalog.to_dict(), "view": view})
+        return
     echo(f"{green(verb)} {subject} in {catalog.notebook}")
     echo(f"  {light_blue('default')} {catalog.default_view}")
     echo(f"  {light_blue('views')} {', '.join(catalog.views)}")
