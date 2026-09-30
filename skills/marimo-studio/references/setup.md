@@ -24,6 +24,21 @@ stays out of the list. Ask the user for its URL and a token file, then run
 paths. Pass `--token-file <PATH>` to every `pair` command, or rely on
 `MARIMO_TOKEN` when the user has set it.
 
+## Serve several notebooks
+
+Serve a folder when views span several notebooks:
+
+```console
+uvx --with "marimo-studio[deno]" marimo edit notebooks/ --sandbox --watch --no-token
+```
+
+Each notebook gets its own sandboxed kernel when a browser opens its Studio
+tab at `/?file=<file>`, or a named view at `/studio/<view>/?file=<file>`,
+where `<file>` is the path relative to the served folder. Pass each notebook's absolute `path` from
+`pair notebook list` to `--file`. Views belong to their notebook, so two
+notebooks can each own a view with the same name. Keep an editor tab open for
+every notebook you pair with.
+
 ## Work from a saved notebook
 
 Outside code mode, bind the saved notebook explicitly:

@@ -22,6 +22,7 @@ and browser interaction. Studio owns view projects, builds, and delivery.
 | Change an existing view                                                | Read its project instructions and affected documents, then edit and verify.         |
 | Address a [Lens](https://marimo-team.github.io/marimo-lens/) selection | Read [Lens in Studio](references/lens.md) and the installed Lens skill.             |
 | Run, publish, or export                                                | Read [delivery](references/delivery.md) before designing controls or exposing data. |
+| Recover from a failed command, build, or browser check                 | Match the symptom in [gotchas](references/gotchas.md).                              |
 
 This core contains the ordinary authoring workflow. Read conditional references
 when the task needs their detail. Reuse this briefing while the Python
@@ -76,8 +77,10 @@ marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
 Notebook Kit starters. `help(marimo._code_mode)` then lists Studio as the
 `studio` capability, and sandboxed kernels import the same Studio as the
-server. Create, edit, and run cells through `marimo._code_mode`, following the
-`pair --help` workflow. Without a way to run the notebook, continue with
+server. For views across several notebooks, serve their folder as
+[setup](references/setup.md#serve-several-notebooks) describes. Create, edit,
+and run cells through `marimo._code_mode`, following the `pair --help`
+workflow. Without a way to run the notebook, continue with
 saved-notebook authoring from a terminal.
 
 Inside notebook code mode, combine connection with the first inspection:
@@ -139,6 +142,15 @@ activate the view in a fresh code-mode call:
 import marimo_studio
 
 await marimo_studio.agent.current_workspace().view("dashboard").show()
+```
+
+To move a view to another starter, create and show the new view, then remove
+the old one in a later execution:
+
+```python
+import marimo_studio
+
+await marimo_studio.agent.current_workspace().view("old-dashboard").remove()
 ```
 
 For a notebook outside a Python project, the first view adds a

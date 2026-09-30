@@ -97,7 +97,8 @@ A Prepared preview that reports `parent_document_changed` after the notebook's
 dependencies changed is comparing a running document with a saved file that
 moved on. Restart the notebook, then preview again.
 
-Export the verified runtime:
+Export the verified runtime with `marimo-studio view export`, or
+`await view.export(path, runtime="zero-python")` in code mode:
 
 ```console
 marimo-studio view export dashboard \
@@ -106,7 +107,9 @@ marimo-studio view export dashboard \
   --output dist/dashboard
 ```
 
-Use `--runtime wasm` on both commands for a Browser export.
+Use `--runtime wasm` on both commands for a Browser export. `marimo export
+html` writes the notebook page. Use it when the notebook itself is the
+deliverable.
 
 Export runs the same preflight before committing its destination. Progress is
 written to stderr, including `marimo-export` prepared-state reuse and cache
