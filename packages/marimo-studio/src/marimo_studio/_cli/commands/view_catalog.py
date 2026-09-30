@@ -1,4 +1,4 @@
-"""Create and remove named Studio views."""
+"""Create, select, and remove the named views of a notebook."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from marimo_studio._authoring.view import remove_view
+from marimo_studio._authoring.view import make_default_view, remove_view
 from marimo_studio._authoring.workspace import create_view
 from marimo_studio._cli.diagnostics import json_option, run_in_environment
 from marimo_studio._cli.environment import (
@@ -119,3 +119,16 @@ def remove(
         echo_json({**catalog.to_dict(), "view": view_name})
         return
     render_view_catalog("Removed", f"view {view_name}", catalog)
+
+
+@click.command("default", cls=ColoredCommand)
+@view_name_argument
+@target_option
+@json_option
+def default(view_name: str, target: Path | None, json_output: bool) -> None:
+    """Serve one view at the notebook's main route."""
+    catalog = asyncio.run(make_default_view(resolve_notebook(target), view_name))
+    if json_output:
+        echo_json({**catalog.to_dict(), "view": view_name})
+        return
+    render_view_catalog("Selected", f"default view {view_name}", catalog)

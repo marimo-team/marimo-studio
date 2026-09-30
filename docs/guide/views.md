@@ -1,6 +1,6 @@
 ---
 title: Create and manage views
-description: Create, switch, and remove the named views of a notebook.
+description: Create, switch, and remove the named views of a notebook, and choose its default view.
 ---
 
 # Create and manage views
@@ -28,14 +28,21 @@ The equivalent command is:
 marimo-studio view create report --target analysis.py
 ```
 
-Set the main route in the notebook configuration:
+## Choose the default view
+
+The default view opens at `/`. The `report` view opens at `/report/`. Serve
+`report` at the main route with:
+
+```console
+marimo-studio view default report --target analysis.py
+```
+
+Studio stores the choice as `default` in the notebook configuration:
 
 ```toml
 [tool.marimo-studio]
-default = "dashboard"
+default = "report"
 ```
-
-The default view opens at `/`. The `report` view opens at `/report/`.
 
 ## Switch views
 

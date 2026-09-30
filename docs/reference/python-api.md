@@ -157,10 +157,11 @@ post-commit catalog captured by the owning workspace.
 `catalog_generation` and `generation` identify the catalog and view incarnation
 that the handle observed.
 
-Successful `Workspace.bind()`, `Workspace.create_view()`, and `View.remove()`
-advance the owning `Workspace`. Existing `View` handles remain bound to their
-original generations. Reacquire them with `workspace.view(name)` after a catalog
-mutation.
+Successful `Workspace.bind()`, `Workspace.create_view()`, `View.make_default()`,
+and `View.remove()` advance the owning `Workspace`. Existing `View` handles
+remain bound to their original generations. Use the handle that
+`make_default()` returns, or reacquire handles with `workspace.view(name)`
+after a catalog mutation.
 
 Use Studio's remove and create operations for same-name replacement. Direct
 filesystem delete and recreation completed between observations is outside the
@@ -200,8 +201,13 @@ await view.preflight(
     prepare_timeout: float | None = None,
     progress: Callable[[StaticExportProgress], None] | None = None,
 ) -> StaticPreflightReport
+await view.make_default() -> View
 await view.remove() -> ViewCatalog
 ```
+
+`make_default()` serves the view at the notebook's main route and returns a
+handle bound to the committed catalog. Selecting the current default leaves the
+catalog unchanged.
 
 `inspect()` reads current filesystem state. Source can be edited through
 filesystem tools or `write()`. Provider inspection continues to own document

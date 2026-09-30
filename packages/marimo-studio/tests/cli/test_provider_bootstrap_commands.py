@@ -24,7 +24,7 @@ from marimo_studio._workspace import load_studio
         (["status"], "marimo_studio._cli.commands.status"),
         (
             ["view", "create", "appendix"],
-            "marimo_studio._cli.commands.view_create",
+            "marimo_studio._cli.commands.view_catalog",
         ),
         (
             ["view", "inspect", "dashboard"],
@@ -120,7 +120,7 @@ def test_first_vanilla_view_create_uses_the_base_studio_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view_create.run_in_environment",
+        "marimo_studio._cli.commands.view_catalog.run_in_environment",
         lambda _target, _args: pytest.fail("first Vanilla view re-entered"),
     )
 
@@ -172,7 +172,7 @@ def test_first_external_view_create_bootstraps_the_selected_starter_distribution
         requirement_is_installed,
     )
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view_create.run_in_environment",
+        "marimo_studio._cli.commands.view_catalog.run_in_environment",
         lambda target, _args: captured.append(target) or 19,
     )
 

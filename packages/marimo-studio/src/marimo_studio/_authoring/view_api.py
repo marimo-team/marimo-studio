@@ -15,6 +15,7 @@ from marimo_studio._authoring.view import (
     export_view,
     hold_publication,
     inspect_view,
+    make_default_view,
     preflight_view,
     read_document,
     release_publication,
@@ -251,16 +252,44 @@ class View:
             progress=progress,
         )
 
+    async def make_default(self: _View) -> _View:
+        """Serve this view at the notebook's main route.
+
+        Returns a handle bound to the committed catalog.
+        """
+        owner = self._present_owner()
+        catalog = await make_default_view(
+            self.workspace.notebook,
+            self.name,
+            expected_catalog_generation=owner.catalog_generation,
+            expected_generation=owner.view_generation,
+        )
+        return self._handle_in(catalog, self.name)
+
     async def remove(self) -> ViewCatalog:
-        """Remove this view and return the remaining workspace identity."""
-        if not isinstance(self._owner, PresentViewOwner):
-            raise WorkspaceGenerationConflictError()
-        result = await remove_view(
+        """Remove this view and return the remaining catalog."""
+        owner = self._present_owner()
+        catalog = await remove_view(
             self.workspace.notebook,
             self.name,
             connection=self.workspace._connection(),
-            expected_catalog_generation=self._owner.catalog_generation,
-            expected_generation=self._owner.view_generation,
+            expected_catalog_generation=owner.catalog_generation,
+            expected_generation=owner.view_generation,
         )
-        self.workspace._capture_catalog_generation(result.catalog_generation)
-        return result
+        self.workspace._capture_catalog_generation(catalog.catalog_generation)
+        return catalog
+
+    def _present_owner(self) -> PresentViewOwner:
+        if not isinstance(self._owner, PresentViewOwner):
+            raise WorkspaceGenerationConflictError()
+        return self._owner
+
+    def _handle_in(self: _View, catalog: ViewCatalog, name: str) -> _View:
+        # Later operations on the returned handle check the generations this
+        # catalog committed.
+        self.workspace._capture_catalog_generation(catalog.catalog_generation)
+        return self._create(
+            self.workspace,
+            name,
+            owner=PresentViewOwner(catalog.catalog_generation, catalog.views[name]),
+        )

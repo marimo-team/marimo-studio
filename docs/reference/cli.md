@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Inspect notebooks and create, edit, build, show, preflight, validate, export, and remove Studio views.
+description: Inspect notebooks and create, edit, build, show, preflight, validate, export, select, and remove Studio views.
 ---
 
 # CLI
@@ -154,6 +154,17 @@ A completed creation returns exact `launch_requirements` in JSON and prints an
 environment-aware launch command. Project notebooks use `uv run` with
 `--no-sandbox`. Standalone notebooks use `uvx` with `--sandbox`. Install and run
 requirements for reviewed providers.
+
+## `marimo-studio view default`
+
+```text
+marimo-studio view default VIEW [--target PATH] [--json]
+```
+
+Serves `VIEW` at the notebook's main route by writing `default` in the Studio
+configuration. The views and their project files stay unchanged. The JSON
+result lists the `views` with their generations, the `default_view`, and the
+updated `catalog_generation`.
 
 ## `marimo-studio view inspect`
 

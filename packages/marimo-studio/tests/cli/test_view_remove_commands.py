@@ -20,7 +20,7 @@ def test_view_remove_preserves_source_when_confirmation_is_declined(
     prepare_view(notebook_path)
     added = prepare_view(notebook_path, "executive")
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view_create._stdin_is_interactive",
+        "marimo_studio._cli.commands.view_catalog._stdin_is_interactive",
         lambda: True,
     )
 
@@ -77,7 +77,7 @@ def test_view_remove_requires_yes_for_machine_output(
     prepare_view(notebook_path)
     added = prepare_view(notebook_path, "executive")
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view_create._stdin_is_interactive",
+        "marimo_studio._cli.commands.view_catalog._stdin_is_interactive",
         lambda: True,
     )
 

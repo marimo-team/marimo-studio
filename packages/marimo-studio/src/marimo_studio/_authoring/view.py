@@ -22,6 +22,7 @@ from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._views.api import ViewCatalog
+from marimo_studio._views.api import make_default_view as make_default_operation
 from marimo_studio._views.api import remove_view as remove_view_operation
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.inspect import inspect_view as inspect_view_project
@@ -400,6 +401,26 @@ async def remove_view(
 
     def operation() -> ViewCatalog:
         return remove_view_operation(
+            load_studio(notebook),
+            view,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+
+    return await run_provider_operation(operation)
+
+
+async def make_default_view(
+    notebook: Path,
+    view: str,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+) -> ViewCatalog:
+    """Serve one named view at the main route and return the catalog."""
+
+    def operation() -> ViewCatalog:
+        return make_default_operation(
             load_studio(notebook),
             view,
             expected_catalog_generation=expected_catalog_generation,

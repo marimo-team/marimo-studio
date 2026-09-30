@@ -9,6 +9,7 @@ from pathlib import Path
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._notebook.records import CellSelector
 from marimo_studio._views.create import prepare_view as _prepare_view
+from marimo_studio._views.default_view import set_default_view as _set_default_view
 from marimo_studio._views.records import Starter, ViewSetupResult
 from marimo_studio._views.remove import delete_view as _delete_view
 from marimo_studio._views.resolve import resolve_studio as resolve_studio
@@ -121,6 +122,24 @@ def remove_view(
     """Remove one named view and return the remaining catalog."""
     return ViewCatalog.of(
         _delete_view(
+            studio,
+            name,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+    )
+
+
+def make_default_view(
+    studio: StudioWorkspace,
+    name: str,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+) -> ViewCatalog:
+    """Serve one named view at the main route and return the catalog."""
+    return ViewCatalog.of(
+        _set_default_view(
             studio,
             name,
             expected_catalog_generation=expected_catalog_generation,
