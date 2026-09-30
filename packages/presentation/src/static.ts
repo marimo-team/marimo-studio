@@ -3,6 +3,7 @@ import type { RuntimeRegistry } from "@marimo-studio/runtime";
 import { documentBase } from "./document/base.ts";
 import { onFinalPageHide } from "./document/page-lifecycle.ts";
 import { startQuerySync } from "./document/query-sync.ts";
+import { watchViewScriptErrors } from "./document/view-script-errors.ts";
 import { errorMessage } from "./errors.ts";
 import { startPresentationObservers, stopPresentationObservers } from "./observers.ts";
 import { projectionHosts } from "./projections/host-runtime.ts";
@@ -24,6 +25,7 @@ declare global {
 export const startStaticPresentation = (registry: RuntimeRegistry): void => {
   const lifetime = new AbortController();
   window.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
+  onFinalPageHide(watchViewScriptErrors());
   documentBase.start(document.baseURI);
   startQuerySync();
   onFinalPageHide(() => {

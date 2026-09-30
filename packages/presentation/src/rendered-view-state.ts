@@ -20,7 +20,7 @@ export interface RenderedViewIdentity {
   readonly sessionId?: string;
 }
 
-const configuredView = (): string => {
+export const configuredView = (): string => {
   if (hasRuntimeConfig()) {
     return getRuntimeConfig().view;
   }

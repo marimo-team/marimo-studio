@@ -210,6 +210,14 @@ projections. Custom chart, framework, and remote-request completion need their
 own application assertions. Read `data-marimo-studio-revision` on `<html>` for
 the committed presentation revision.
 
+An uncaught error or unhandled rejection from a view file or inline module
+script sets the state to `error` for the rest of that document. Studio shows
+the first one with its built file and position, such as
+`main.js:2:23: TypeError: <message>`, or `inline script:2:23: ...`, and
+`marimoStudio.diagnostics()` reports it with the `view-script-error` code.
+Studio's runtime, notebook files, remote scripts, and browser warnings such as
+ResizeObserver loop notices leave the state unchanged.
+
 Projection host state is the lifecycle contract for one mounted result.
 `marimo-studio:runtime-ready` fires on `document` when the notebook runtime
 reaches its ready boundary. `marimo-studio:idle` fires when Studio's presentation
