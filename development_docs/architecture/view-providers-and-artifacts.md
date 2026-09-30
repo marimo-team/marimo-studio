@@ -186,9 +186,9 @@ snapshot, static export, or retained history finishes. Pins use cross-process
 file locks. Process-local shares keep the same pin alive until the final share
 closes.
 
-Presentation history retains snapshots for the current and previous build of
-each profile, so a running server keeps at most those revisions plus the ones
-in-flight responses and exports still read.
+Presentation history retains up to eight snapshots per profile, all from that
+profile's current and previous build, so a running server keeps at most those
+revisions plus the ones in-flight responses and exports still read.
 
 Pruning protects revisions referenced by either profile or a live pin. It
 removes unowned revisions and retries deletion of quarantined trees whose open

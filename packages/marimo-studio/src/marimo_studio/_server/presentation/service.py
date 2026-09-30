@@ -8,8 +8,8 @@ state. Validation independently checks the corresponding published
 presentation revisions.
 
 The service caches current snapshots and retains a bounded history so a page
-can finish revision-qualified requests after a newer build publishes. History
-keeps the current and previous build of each profile. During
+can finish revision-qualified requests after a newer build publishes. Each
+profile keeps up to eight snapshots from its current and previous build. During
 edits or provider failures it can continue serving the last verified
 publication while current source is repaired. History eviction releases older
 leases, while view deletion and notebook shutdown release every retained
@@ -856,14 +856,15 @@ class NotebookPresentation:
                 closed = False
                 if previous_lease is not None:
                     released.append(previous_lease)
+                counts: dict[BuildProfile, int] = {}
                 builds: dict[BuildProfile, set[str]] = {}
-                for index, (revision, retained) in enumerate(
-                    reversed(tuple(history.items()))
-                ):
-                    artifacts = builds.setdefault(retained.artifact.profile, set())
+                for revision, retained in reversed(tuple(history.items())):
+                    profile = retained.artifact.profile
+                    counts[profile] = counts.get(profile, 0) + 1
+                    artifacts = builds.setdefault(profile, set())
                     artifacts.add(retained.artifact.artifact_revision)
                     if (
-                        index >= _SNAPSHOT_HISTORY_LIMIT
+                        counts[profile] > _SNAPSHOT_HISTORY_LIMIT
                         or len(artifacts) > _BUILD_HISTORY_LIMIT
                     ):
                         del history[revision]

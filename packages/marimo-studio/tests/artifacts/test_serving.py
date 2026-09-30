@@ -99,6 +99,7 @@ def _presentation_snapshot(
     view_name: str,
     revision: str,
     artifact_revision: str | None = None,
+    profile: BuildProfile = "development",
 ) -> PresentationSnapshot:
     return cast(
         PresentationSnapshot,
@@ -106,7 +107,7 @@ def _presentation_snapshot(
             view_name=view_name,
             revision=revision,
             artifact=SimpleNamespace(
-                profile="development",
+                profile=profile,
                 artifact_revision=artifact_revision or revision,
             ),
         ),
@@ -737,6 +738,30 @@ def test_presentation_revisited_revision_becomes_most_recent() -> None:
 
     presentation.close()
     assert all(lease.closed for lease in leases.values())
+
+
+def test_presentation_history_limits_snapshots_per_profile() -> None:
+    calls: list[str] = []
+    presentation = NotebookPresentation(Path("analysis.py"))
+    production = [
+        _presentation_snapshot("dashboard", f"production-{index}", profile="production")
+        for index in range(2)
+    ]
+    development = [
+        _presentation_snapshot("dashboard", f"development-{index}", "build")
+        for index in range(9)
+    ]
+    for snapshot in (*production, *development):
+        lease = _LeaseCloser(snapshot.revision, calls)
+        presentation._remember(snapshot, cast(ArtifactLease, lease))
+
+    assert calls == ["development-0"]
+    for snapshot in production:
+        assert (
+            presentation.snapshot_for_revision("dashboard", snapshot.revision)
+            is snapshot
+        )
+    presentation.close()
 
 
 def test_presentation_source_snapshot_closes_every_lease_after_failure() -> None:
