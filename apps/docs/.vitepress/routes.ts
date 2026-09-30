@@ -19,6 +19,7 @@ export const routes = {
     manageSource: "/guide/manage-source",
     styling: "/guide/styling",
     frontendOptions: "/guide/frontend-options",
+    viewProviders: "/guide/view-providers",
     codingAgents: "/guide/coding-agents",
     navigationAndSessions: "/guide/navigation-and-sessions",
     runAndShare: "/guide/run-and-share",
@@ -65,6 +66,7 @@ export const authoringItems = [
   { text: "Manage view source", link: routes.guide.manageSource },
   { text: "Style a view", link: routes.guide.styling },
   { text: "Choose a frontend", link: routes.guide.frontendOptions },
+  { text: "Add a view provider", link: routes.guide.viewProviders },
 ];
 
 export const deliveryItems = [
