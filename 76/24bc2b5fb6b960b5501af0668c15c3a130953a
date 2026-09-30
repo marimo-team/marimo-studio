@@ -1,0 +1,19 @@
+docs/reference/errors-and-json.md
+  s_9bac5c4c30c198::t_909dd8e844713d 177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7624bc2b5fb6b960b5501af0668c15c3a130953a",
+  "prompts": {},
+  "sessions": {
+    "s_9bac5c4c30c198": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d07ced2-aad0-49ed-950f-ba3fa2c9507d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
