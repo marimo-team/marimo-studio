@@ -13,7 +13,7 @@ from typing import Any, cast
 import pytest
 from starlette.testclient import TestClient
 
-import marimo_studio._server.studio.deletion as deletion_service
+import marimo_studio._server.studio.retirement as retirement_service
 import marimo_studio._server.studio.routes as studio_api_module
 import marimo_studio._views.remove as workspace_views
 import marimo_studio.agent as agent
@@ -113,8 +113,8 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
     prepare_view(studio.notebook, "operations")
     development_deletions: list[str] = []
     presentation_deletions: list[str] = []
-    development_deleting_view = DevelopmentCoordinator.deleting_view
-    presentation_deleting_view = NotebookPresentation.deleting_view
+    development_deleting_view = DevelopmentCoordinator.retiring_view
+    presentation_deleting_view = NotebookPresentation.retiring_view
 
     @asynccontextmanager
     async def track_development_deletion(
@@ -140,12 +140,12 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
 
     monkeypatch.setattr(
         DevelopmentCoordinator,
-        "deleting_view",
+        "retiring_view",
         track_development_deletion,
     )
     monkeypatch.setattr(
         NotebookPresentation,
-        "deleting_view",
+        "retiring_view",
         track_presentation_deletion,
     )
     app = _marimo_app(studio.notebook)
@@ -242,7 +242,7 @@ def test_view_deletion_capacity_returns_a_retryable_response(
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
     slots = threading.BoundedSemaphore(1)
     assert slots.acquire(blocking=False)
-    monkeypatch.setattr(deletion_service, "_DELETION_SLOTS", slots)
+    monkeypatch.setattr(retirement_service, "_RETIREMENT_SLOTS", slots)
 
     try:
         with TestClient(app) as client:
@@ -251,7 +251,7 @@ def test_view_deletion_capacity_returns_a_retryable_response(
         slots.release()
 
     assert response.status_code == 503
-    assert response.json()["error"] == "view-deletion-capacity-exhausted"
+    assert response.json()["error"] == "view-retirement-capacity-exhausted"
     assert response.json()["transient"] is True
     assert studio.view_root.joinpath("operations", "view.toml").is_file()
 
@@ -266,7 +266,7 @@ def test_committed_view_deletion_reports_incomplete_cleanup_as_success(
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-    delete = deletion_service.delete_view
+    delete = retirement_service.delete_view
     cleanup = tmp_path / "preserved-cleanup"
 
     def delete_with_cleanup_warning(
@@ -285,7 +285,7 @@ def test_committed_view_deletion_reports_incomplete_cleanup_as_success(
         raise ViewDeletionError(cleanup, committed_workspace=updated)
 
     monkeypatch.setattr(
-        deletion_service,
+        retirement_service,
         "delete_view",
         delete_with_cleanup_warning,
     )
@@ -436,7 +436,7 @@ def test_project_and_source_reads_report_transient_deletion(
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-    remove = deletion_service.delete_view
+    remove = retirement_service.delete_view
     deletion_started = threading.Event()
     release_deletion = threading.Event()
 
@@ -457,7 +457,7 @@ def test_project_and_source_reads_report_transient_deletion(
             expected_generation=expected_generation,
         )
 
-    monkeypatch.setattr(deletion_service, "delete_view", block_deletion)
+    monkeypatch.setattr(retirement_service, "delete_view", block_deletion)
 
     with TestClient(app) as client, ThreadPoolExecutor(max_workers=1) as executor:
         owner = _view_owner(client, "operations")
@@ -479,7 +479,7 @@ def test_project_and_source_reads_report_transient_deletion(
     assert project.status_code == 409
     assert source.status_code == 409
     for payload in (project.json(), source.json()):
-        assert payload["error"] == "view-deletion-in-progress"
+        assert payload["error"] == "view-retirement-in-progress"
         assert payload["view"] == "operations"
         assert payload["transient"] is True
     assert removed.status_code == 200
@@ -495,10 +495,10 @@ def test_view_deletion_cancels_build_before_off_thread_filesystem_cleanup(
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
     events: list[tuple[str, int]] = []
-    remove = deletion_service.delete_view
+    remove = retirement_service.delete_view
 
     @asynccontextmanager
-    async def deleting_view(
+    async def retiring_view(
         _coordinator: object,
         view_name: str,
     ) -> AsyncGenerator[None, None]:
@@ -524,8 +524,8 @@ def test_view_deletion_cancels_build_before_off_thread_filesystem_cleanup(
             expected_generation=expected_generation,
         )
 
-    monkeypatch.setattr(DevelopmentCoordinator, "deleting_view", deleting_view)
-    monkeypatch.setattr(deletion_service, "delete_view", remove_off_thread)
+    monkeypatch.setattr(DevelopmentCoordinator, "retiring_view", retiring_view)
+    monkeypatch.setattr(retirement_service, "delete_view", remove_off_thread)
 
     with TestClient(app) as client:
         removed = _delete_owned_view(client, "operations", headers)

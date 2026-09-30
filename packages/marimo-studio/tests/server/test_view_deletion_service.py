@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import pytest
 
-import marimo_studio._server.studio.deletion as deletion_service
+import marimo_studio._server.studio.retirement as retirement_service
 import marimo_studio._workspace.mutation_lock as mutation_locks
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.presentation.service import NotebookPresentation
@@ -19,7 +19,7 @@ from marimo_studio._views.sources import read_source
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ViewDeletionError, WorkspaceGenerationConflictError
-from marimo_studio.errors._internal import ViewDeletionCapacityError
+from marimo_studio.errors._internal import ViewRetirementCapacityError
 
 
 async def _wait_for_event(event: threading.Event) -> None:
@@ -32,7 +32,7 @@ class _Development:
         self.events = events
 
     @asynccontextmanager
-    async def deleting_view(self, view_name: str) -> AsyncIterator[None]:
+    async def retiring_view(self, view_name: str) -> AsyncIterator[None]:
         self.events.append(f"development-enter:{view_name}")
         try:
             yield
@@ -45,7 +45,7 @@ class _Presentation:
         self.events = events
 
     @contextmanager
-    def deleting_view(self, view_name: str) -> Iterator[Callable[[], None]]:
+    def retiring_view(self, view_name: str) -> Iterator[Callable[[], None]]:
         released = False
 
         def release() -> None:
@@ -75,15 +75,15 @@ def test_deletion_admits_a_snapshot_before_acquiring_its_build_lock(
     snapshot_held = threading.Event()
     deletion_waiting = threading.Event()
     snapshot_admitted = threading.Event()
-    deleting_view = presentation.deleting_view
+    retiring_view = presentation.retiring_view
 
     @contextmanager
     def observe_deletion(name: str):
         deletion_waiting.set()
-        with deleting_view(name) as release:
+        with retiring_view(name) as release:
             yield release
 
-    monkeypatch.setattr(presentation, "deleting_view", observe_deletion)
+    monkeypatch.setattr(presentation, "retiring_view", observe_deletion)
 
     def snapshot_owner() -> None:
         with presentation._coordination_lock("dashboard"):
@@ -102,7 +102,7 @@ def test_deletion_admits_a_snapshot_before_acquiring_its_build_lock(
     async def exercise() -> None:
         assert await asyncio.to_thread(snapshot_held.wait, 5)
         catalog_generation, view_generation = _owners(studio, "dashboard")
-        result = await deletion_service.delete_owned_view(
+        result = await retirement_service.delete_owned_view(
             studio,
             "dashboard",
             expected_catalog_generation=catalog_generation,
@@ -136,14 +136,14 @@ def test_deletion_drains_development_while_other_sources_remain_available(
 
         class Development:
             @asynccontextmanager
-            async def deleting_view(self, _name: str) -> AsyncGenerator[None, None]:
+            async def retiring_view(self, _name: str) -> AsyncGenerator[None, None]:
                 draining.set()
                 await release.wait()
                 yield
 
         catalog_generation, view_generation = _owners(studio, "dashboard")
         deletion = asyncio.create_task(
-            deletion_service.delete_owned_view(
+            retirement_service.delete_owned_view(
                 studio,
                 "dashboard",
                 expected_catalog_generation=catalog_generation,
@@ -179,7 +179,7 @@ def test_catalog_change_during_deletion_drain_preserves_presentation(
 
     class Development:
         @asynccontextmanager
-        async def deleting_view(self, _name: str) -> AsyncGenerator[None, None]:
+        async def retiring_view(self, _name: str) -> AsyncGenerator[None, None]:
             await asyncio.to_thread(prepare_view, notebook_path, "operations")
             try:
                 yield
@@ -190,7 +190,7 @@ def test_catalog_change_during_deletion_drain_preserves_presentation(
     async def exercise() -> None:
         catalog_generation, view_generation = _owners(studio, "dashboard")
         with pytest.raises(WorkspaceGenerationConflictError):
-            await deletion_service.delete_owned_view(
+            await retirement_service.delete_owned_view(
                 studio,
                 "dashboard",
                 expected_catalog_generation=catalog_generation,
@@ -238,8 +238,8 @@ def test_deletion_uses_a_dedicated_thread_when_the_default_executor_is_busy(
         deletion_threads.append(threading.get_ident())
         return studio
 
-    monkeypatch.setattr(deletion_service, "validate_view_deletion_owner", validate)
-    monkeypatch.setattr(deletion_service, "delete_view", remove)
+    monkeypatch.setattr(retirement_service, "validate_view_owner", validate)
+    monkeypatch.setattr(retirement_service, "delete_view", remove)
 
     async def exercise() -> None:
         loop = asyncio.get_running_loop()
@@ -251,7 +251,7 @@ def test_deletion_uses_a_dedicated_thread_when_the_default_executor_is_busy(
             await asyncio.wait_for(_wait_for_event(occupied), timeout=1)
             catalog_generation, view_generation = _owners(studio, "dashboard")
             result = await asyncio.wait_for(
-                deletion_service.delete_owned_view(
+                retirement_service.delete_owned_view(
                     studio,
                     "dashboard",
                     expected_catalog_generation=catalog_generation,
@@ -307,16 +307,16 @@ def test_deletion_capacity_rejects_without_starting_an_unbounded_thread(
         return studio
 
     monkeypatch.setattr(
-        deletion_service,
-        "_DELETION_SLOTS",
+        retirement_service,
+        "_RETIREMENT_SLOTS",
         threading.BoundedSemaphore(1),
     )
-    monkeypatch.setattr(deletion_service, "validate_view_deletion_owner", validate)
-    monkeypatch.setattr(deletion_service, "delete_view", remove)
+    monkeypatch.setattr(retirement_service, "validate_view_owner", validate)
+    monkeypatch.setattr(retirement_service, "delete_view", remove)
 
-    async def delete() -> deletion_service.ViewDeletionResult:
+    async def delete() -> retirement_service.RetiredView:
         catalog_generation, view_generation = _owners(studio, "dashboard")
-        return await deletion_service.delete_owned_view(
+        return await retirement_service.delete_owned_view(
             studio,
             "dashboard",
             expected_catalog_generation=catalog_generation,
@@ -329,7 +329,7 @@ def test_deletion_capacity_rejects_without_starting_an_unbounded_thread(
         first = asyncio.create_task(delete())
         await asyncio.wait_for(_wait_for_event(validation_started), timeout=1)
         try:
-            with pytest.raises(ViewDeletionCapacityError) as captured:
+            with pytest.raises(ViewRetirementCapacityError) as captured:
                 await delete()
             assert captured.value.status_code == 503
             assert captured.value.transient is True
@@ -368,17 +368,17 @@ def test_thread_start_failure_releases_deletion_capacity(
         return studio
 
     monkeypatch.setattr(
-        deletion_service,
-        "_DELETION_SLOTS",
+        retirement_service,
+        "_RETIREMENT_SLOTS",
         threading.BoundedSemaphore(1),
     )
     monkeypatch.setattr(threading.Thread, "start", start_after_failure)
-    monkeypatch.setattr(deletion_service, "validate_view_deletion_owner", validate)
-    monkeypatch.setattr(deletion_service, "delete_view", remove)
+    monkeypatch.setattr(retirement_service, "validate_view_owner", validate)
+    monkeypatch.setattr(retirement_service, "delete_view", remove)
 
-    async def delete() -> deletion_service.ViewDeletionResult:
+    async def delete() -> retirement_service.RetiredView:
         catalog_generation, view_generation = _owners(studio, "dashboard")
-        return await deletion_service.delete_owned_view(
+        return await retirement_service.delete_owned_view(
             studio,
             "dashboard",
             expected_catalog_generation=catalog_generation,
@@ -418,14 +418,14 @@ def test_cancelled_deletion_drains_the_owned_thread_before_propagating(
         committed.set()
         return studio
 
-    monkeypatch.setattr(deletion_service, "_DELETION_SLOTS", slots)
-    monkeypatch.setattr(deletion_service, "validate_view_deletion_owner", validate)
-    monkeypatch.setattr(deletion_service, "delete_view", remove)
+    monkeypatch.setattr(retirement_service, "_RETIREMENT_SLOTS", slots)
+    monkeypatch.setattr(retirement_service, "validate_view_owner", validate)
+    monkeypatch.setattr(retirement_service, "delete_view", remove)
 
     async def exercise() -> None:
         catalog_generation, view_generation = _owners(studio, "dashboard")
         deletion = asyncio.create_task(
-            deletion_service.delete_owned_view(
+            retirement_service.delete_owned_view(
                 studio,
                 "dashboard",
                 expected_catalog_generation=catalog_generation,
@@ -477,14 +477,14 @@ def test_cancelled_deletion_finishes_prevalidation_before_teardown(
         committed.set()
         return studio
 
-    monkeypatch.setattr(deletion_service, "_DELETION_SLOTS", slots)
-    monkeypatch.setattr(deletion_service, "validate_view_deletion_owner", validate)
-    monkeypatch.setattr(deletion_service, "delete_view", remove)
+    monkeypatch.setattr(retirement_service, "_RETIREMENT_SLOTS", slots)
+    monkeypatch.setattr(retirement_service, "validate_view_owner", validate)
+    monkeypatch.setattr(retirement_service, "delete_view", remove)
 
     async def exercise() -> None:
         catalog_generation, view_generation = _owners(studio, "dashboard")
         deletion = asyncio.create_task(
-            deletion_service.delete_owned_view(
+            retirement_service.delete_owned_view(
                 studio,
                 "dashboard",
                 expected_catalog_generation=catalog_generation,
@@ -544,9 +544,9 @@ def test_committed_cleanup_warning_does_not_use_the_default_executor(
     def remove(*_args: Any, **_kwargs: Any) -> StudioWorkspace:
         raise ViewDeletionError(cleanup, committed_workspace=studio)
 
-    monkeypatch.setattr(deletion_service, "_DELETION_SLOTS", slots)
-    monkeypatch.setattr(deletion_service, "validate_view_deletion_owner", validate)
-    monkeypatch.setattr(deletion_service, "delete_view", remove)
+    monkeypatch.setattr(retirement_service, "_RETIREMENT_SLOTS", slots)
+    monkeypatch.setattr(retirement_service, "validate_view_owner", validate)
+    monkeypatch.setattr(retirement_service, "delete_view", remove)
 
     async def exercise() -> None:
         loop = asyncio.get_running_loop()
@@ -557,7 +557,7 @@ def test_committed_cleanup_warning_does_not_use_the_default_executor(
             await asyncio.wait_for(_wait_for_event(occupied), timeout=1)
             catalog_generation, view_generation = _owners(studio, "dashboard")
             result = await asyncio.wait_for(
-                deletion_service.delete_owned_view(
+                retirement_service.delete_owned_view(
                     studio,
                     "dashboard",
                     expected_catalog_generation=catalog_generation,
@@ -601,14 +601,14 @@ def test_stale_owner_fails_before_server_teardown(
     def unexpected_remove(*_args: Any, **_kwargs: Any) -> StudioWorkspace:
         raise AssertionError("stale deletion reached the project mutation")
 
-    monkeypatch.setattr(deletion_service, "_DELETION_SLOTS", slots)
-    monkeypatch.setattr(deletion_service, "validate_view_deletion_owner", reject)
-    monkeypatch.setattr(deletion_service, "delete_view", unexpected_remove)
+    monkeypatch.setattr(retirement_service, "_RETIREMENT_SLOTS", slots)
+    monkeypatch.setattr(retirement_service, "validate_view_owner", reject)
+    monkeypatch.setattr(retirement_service, "delete_view", unexpected_remove)
 
     async def exercise() -> None:
         catalog_generation, view_generation = _owners(studio, "dashboard")
         with pytest.raises(WorkspaceGenerationConflictError):
-            await deletion_service.delete_owned_view(
+            await retirement_service.delete_owned_view(
                 studio,
                 "dashboard",
                 expected_catalog_generation=catalog_generation,

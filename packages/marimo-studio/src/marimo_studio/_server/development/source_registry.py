@@ -126,13 +126,13 @@ class SourceMonitorRegistry:
     def contains_locked(self, key: str | None, expected: _SourceMonitor) -> bool:
         return self._monitors.get(key) is expected
 
-    def begin_view_deletion_locked(self, view_name: str) -> ViewSourceOwners:
+    def begin_view_retirement_locked(self, view_name: str) -> ViewSourceOwners:
         return ViewSourceOwners(
             self._creations.pop(view_name, None),
             self._monitors.get(view_name),
         )
 
-    def finish_view_deletion_locked(
+    def finish_view_retirement_locked(
         self,
         view_name: str,
         monitor: _SourceMonitor | None,

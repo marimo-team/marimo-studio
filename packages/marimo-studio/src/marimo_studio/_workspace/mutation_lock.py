@@ -171,8 +171,10 @@ def view_build_lock(view_root: Path, view_name: str) -> Iterator[None]:
 
 
 @contextmanager
-def view_removal_lock(view_root: Path, view_name: str) -> Generator[None, None, None]:
-    """Acquire removal ownership while leaving the catalog available during builds."""
+def view_retirement_lock(
+    view_root: Path, view_name: str
+) -> Generator[None, None, None]:
+    """Own a view name for removal or rename after its in-flight build ends."""
     if VIEW_PATTERN.fullmatch(view_name) is None:
         raise ConfigurationError(f"Invalid Studio view name {view_name!r}")
     while True:

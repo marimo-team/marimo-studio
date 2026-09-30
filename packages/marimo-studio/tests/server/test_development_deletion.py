@@ -8,7 +8,7 @@ import pytest
 
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
-from marimo_studio.errors._internal import ViewDeletionInProgress
+from marimo_studio.errors._internal import ViewRetirementInProgress
 
 
 def test_view_deletion_cancels_a_queued_warmup_before_it_starts() -> None:
@@ -51,7 +51,7 @@ def test_view_deletion_cancels_a_queued_warmup_before_it_starts() -> None:
             assert not target_started.is_set()
 
             async def delete() -> None:
-                async with coordinator.deleting_view("target"):
+                async with coordinator.retiring_view("target"):
                     pass
 
             await asyncio.wait_for(delete(), timeout=1)
@@ -81,7 +81,7 @@ def test_deletion_evicts_completed_publication_before_same_name_recreation() -> 
                 0,
                 lambda: calls.append("old") or "old",
             )
-            async with coordinator.deleting_view("dashboard"):
+            async with coordinator.retiring_view("dashboard"):
                 pass
             second = await coordinator.publish(
                 "dashboard",
@@ -119,7 +119,7 @@ def test_deletion_guard_cancels_and_drains_a_generation_baseline() -> None:
         assert await asyncio.to_thread(started.wait, 1)
 
         async def delete() -> None:
-            async with coordinator.deleting_view("dashboard"):
+            async with coordinator.retiring_view("dashboard"):
                 assert finished.is_set()
 
         try:
@@ -155,7 +155,7 @@ def test_deletion_guard_signals_and_awaits_a_blocking_external_provider() -> Non
         assert await asyncio.to_thread(started.wait, 1)
 
         async def delete() -> None:
-            async with coordinator.deleting_view("dashboard"):
+            async with coordinator.retiring_view("dashboard"):
                 assert finished.is_set()
 
         await asyncio.wait_for(delete(), timeout=1)
@@ -198,9 +198,9 @@ def test_deletion_guard_rejects_publication_until_commit_or_rollback() -> None:
         assert await asyncio.to_thread(started.wait, 1)
         try:
             with pytest.raises(RuntimeError, match="rollback"):
-                async with coordinator.deleting_view("dashboard"):
+                async with coordinator.retiring_view("dashboard"):
                     assert finished.is_set()
-                    with pytest.raises(ViewDeletionInProgress):
+                    with pytest.raises(ViewRetirementInProgress):
                         await coordinator.publish("dashboard", 2, late_publication)
                     raise RuntimeError("rollback")
             resumed = await coordinator.publish("dashboard", 3, late_publication)
@@ -239,7 +239,7 @@ def test_cancelled_deletion_guard_drains_the_publication_before_reopening() -> N
         assert await asyncio.to_thread(started.wait, 1)
 
         async def remove() -> None:
-            async with coordinator.deleting_view("dashboard"):
+            async with coordinator.retiring_view("dashboard"):
                 raise AssertionError("Deletion began before its publication drained")
 
         deletion = asyncio.create_task(remove())
@@ -249,7 +249,7 @@ def test_cancelled_deletion_guard_drains_the_publication_before_reopening() -> N
         deletion.cancel()
         await asyncio.sleep(0)
         assert not deletion.done()
-        with pytest.raises(ViewDeletionInProgress):
+        with pytest.raises(ViewRetirementInProgress):
             await coordinator.publish("dashboard", 2, lambda: "late")
         finish.set()
         with pytest.raises(asyncio.CancelledError):

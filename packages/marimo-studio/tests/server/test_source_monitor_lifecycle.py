@@ -535,7 +535,7 @@ def test_rolled_back_deletion_keeps_an_idle_monitor_stopped(
         assert monitor.task is None
 
         with pytest.raises(RuntimeError, match="rollback"):
-            async with coordinator.deleting_view("dashboard"):
+            async with coordinator.retiring_view("dashboard"):
                 raise RuntimeError("rollback")
 
         assert monitor.task is None
@@ -558,7 +558,7 @@ def test_repeated_cancellation_finishes_view_deletion_state_commit(
         release_deletion = asyncio.Event()
 
         async def remove() -> None:
-            async with coordinator.deleting_view("dashboard"):
+            async with coordinator.retiring_view("dashboard"):
                 deletion_entered.set()
                 await release_deletion.wait()
 

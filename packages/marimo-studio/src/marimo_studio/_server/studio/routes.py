@@ -38,7 +38,7 @@ from marimo_studio._server.request_body import (
     read_bounded_body,
     read_json_body,
 )
-from marimo_studio._server.studio.deletion import delete_owned_view
+from marimo_studio._server.studio.retirement import delete_owned_view
 from marimo_studio._views.api import create_view
 from marimo_studio._views.catalog import starters
 from marimo_studio._views.inspection import view_project_state

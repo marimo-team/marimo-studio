@@ -141,7 +141,7 @@ def test_release_waits_for_publish_cleanup_not_long_lived_caller(
             if boundary == "deletion":
 
                 async def delete() -> None:
-                    async with coordinator.deleting_view("dashboard"):
+                    async with coordinator.retiring_view("dashboard"):
                         pass
 
                 await asyncio.wait_for(delete(), timeout=1)
@@ -314,7 +314,7 @@ def test_repeated_cancellation_finishes_close_state_commit(
 
         monkeypatch.setattr(coordinator, "_finish_close", gated_finish)
         async with coordinator._lock:
-            coordinator._deleting_views.add("stale-view")
+            coordinator._retiring_views.add("stale-view")
         closing = asyncio.create_task(coordinator.close())
         await asyncio.wait_for(finish_entered.wait(), timeout=1)
 
@@ -338,7 +338,7 @@ def test_repeated_cancellation_finishes_close_state_commit(
         assert not coordinator._source_monitors._creations
         assert not coordinator._publications._publications
         assert not coordinator._publications._baselines
-        assert not coordinator._deleting_views
+        assert not coordinator._retiring_views
         await coordinator.close()
         await subscription.close()
 

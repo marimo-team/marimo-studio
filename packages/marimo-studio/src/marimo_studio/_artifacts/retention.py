@@ -4,7 +4,7 @@ A lease promises that an artifact revision will remain available until its
 reader finishes. Browser responses, presentation snapshots, static exports,
 and retained page history may therefore keep an older revision after a new
 build publishes. That promise also applies across Studio processes, so pruning
-skips the revision and view deletion rejects while readers are active.
+skips the revision and view removal or rename rejects while readers are active.
 
 Reads verify manifest membership, size, and digest before bytes reach a
 consumer. The lease lets server delivery report a damaged revision and mark
@@ -302,8 +302,8 @@ def prune_artifacts(project: ViewProject) -> None:
 
 
 @contextmanager
-def artifact_deletion_guard(project: ViewProject) -> Iterator[None]:
-    """Block new leases and reject deletion while another process owns one."""
+def artifact_exclusion_guard(project: ViewProject) -> Iterator[None]:
+    """Block new leases and reject a view move while another process owns one."""
     with (
         view_mutation_lock(project.root.parent, project.name),
         artifact_lease_lock(project.root.parent, project.name),
@@ -323,7 +323,7 @@ def artifact_deletion_guard(project: ViewProject) -> Iterator[None]:
                     tuple(sorted(set().union(*holders.values()))),
                 )
         # Windows cannot rename a tree containing this open lock descriptor.
-        # The view-name lock remains held and blocks new leases through deletion.
+        # The view-name lock remains held and blocks new leases through the move.
         yield
 
 

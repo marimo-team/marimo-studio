@@ -14,7 +14,7 @@ import tomlkit
 from marimo_studio._server.development import source_changes
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._workspace import load_studio
-from marimo_studio.errors._internal import ViewDeletionInProgress
+from marimo_studio.errors._internal import ViewRetirementInProgress
 from marimo_studio.view_providers._host import provider_registry
 
 from ..app_helpers import created_one_view
@@ -80,7 +80,7 @@ def test_committed_deletion_evicts_monitor_before_provider_recreation(
                 await subscription.close()
             old_inspections = old_provider.inspections
 
-            async with coordinator.deleting_view("dashboard") as deletion:
+            async with coordinator.retiring_view("dashboard") as deletion:
                 shutil.rmtree(old_project.root)
                 shutil.copytree(replacement, old_project.root)
                 recreated_manifest = tomlkit.parse(
@@ -129,7 +129,7 @@ def test_completed_source_constructor_is_superseded_by_deletion(
 ) -> None:
     studio = created_one_view(notebook_path)
 
-    async def exercise() -> ViewDeletionInProgress:
+    async def exercise() -> ViewRetirementInProgress:
         coordinator = DevelopmentCoordinator(interval=60)
         claim = coordinator._claim_source_creation
         claim_started = asyncio.Event()
@@ -147,7 +147,7 @@ def test_completed_source_constructor_is_superseded_by_deletion(
         await asyncio.wait_for(claim_started.wait(), timeout=2)
 
         async def remove() -> None:
-            async with coordinator.deleting_view("dashboard"):
+            async with coordinator.retiring_view("dashboard"):
                 deletion_started.set()
                 await release_deletion.wait()
 
@@ -155,7 +155,7 @@ def test_completed_source_constructor_is_superseded_by_deletion(
         await asyncio.wait_for(deletion_started.wait(), timeout=2)
         release_claim.set()
         try:
-            with pytest.raises(ViewDeletionInProgress) as captured:
+            with pytest.raises(ViewRetirementInProgress) as captured:
                 await pending
             return captured.value
         finally:
@@ -165,7 +165,7 @@ def test_completed_source_constructor_is_superseded_by_deletion(
 
     error = asyncio.run(exercise())
 
-    assert error.code == "view-deletion-in-progress"
+    assert error.code == "view-retirement-in-progress"
     assert error.status_code == 409
     assert error.transient
     assert error.diagnostic_details() == {"view": "dashboard"}

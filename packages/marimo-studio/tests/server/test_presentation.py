@@ -399,7 +399,7 @@ def test_catalog_presentation_view_order_allows_snapshot_owner_to_finish(
         with workspace_catalog_lock(view_root):
             catalog_held.set()
             with (
-                presentation.deleting_view("dashboard") as release_artifacts,
+                presentation.retiring_view("dashboard") as release_artifacts,
                 view_mutation_lock(view_root, "dashboard"),
             ):
                 release_artifacts()

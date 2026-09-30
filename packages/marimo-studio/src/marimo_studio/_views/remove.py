@@ -8,7 +8,7 @@ from pathlib import Path
 
 import tomlkit
 
-from marimo_studio._artifacts.retention import artifact_deletion_guard
+from marimo_studio._artifacts.retention import artifact_exclusion_guard
 from marimo_studio._filesystem._secure_names import temporary_sibling_name
 from marimo_studio._filesystem._secure_types import ConditionalWriteError
 from marimo_studio._filesystem.io import (
@@ -29,7 +29,7 @@ from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.metadata import updated_notebook_default_source
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio._workspace.mutation_lock import view_removal_lock
+from marimo_studio._workspace.mutation_lock import view_retirement_lock
 from marimo_studio._workspace.transactions import write_file_transaction
 from marimo_studio._workspace.view_owners import view_owner_transition
 from marimo_studio.errors import (
@@ -61,23 +61,6 @@ def _require_directory_owner(
         raise ConfigurationError(
             f"View deletion staging owner changed before commit: {path}"
         )
-
-
-def validate_view_deletion_owner(
-    studio: StudioWorkspace,
-    name: str,
-    *,
-    expected_catalog_generation: str,
-    expected_generation: str,
-) -> StudioWorkspace:
-    """Return the current workspace when deletion still owns both generations."""
-    current = load_studio(studio.config_path)
-    generation = current.view_generations.get(name)
-    if current.catalog_generation != expected_catalog_generation:
-        raise WorkspaceGenerationConflictError()
-    if generation != expected_generation:
-        raise ViewGenerationConflictError(name, generation)
-    return current
 
 
 def _deletion_writes(
@@ -222,7 +205,7 @@ def _delete_view_locked(
         owner_path: owner_identity,
     }
     with (
-        artifact_deletion_guard(current.views[name]),
+        artifact_exclusion_guard(current.views[name]),
         secure_directory(current.root) as filesystem,
     ):
         expected = filesystem.directory_tree_identity(
@@ -375,7 +358,7 @@ def delete_view(
     expected_generation: str | None = None,
 ) -> StudioWorkspace:
     """Delete one view directory and return the updated workspace."""
-    with view_removal_lock(studio.view_root, name):
+    with view_retirement_lock(studio.view_root, name):
         return _delete_view_locked(
             studio,
             name,
