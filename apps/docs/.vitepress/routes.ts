@@ -23,6 +23,7 @@ export const routes = {
     navigationAndSessions: "/guide/navigation-and-sessions",
     runAndShare: "/guide/run-and-share",
     deploy: "/guide/deploy",
+    marimohub: "/guide/marimohub",
     troubleshooting: "/guide/troubleshooting",
   },
   referenceRoot: "/reference/",
@@ -70,6 +71,7 @@ export const deliveryItems = [
   { text: "Navigate and preserve state", link: routes.guide.navigationAndSessions },
   { text: "Run or export a view", link: routes.guide.runAndShare },
   { text: "Deploy a live Python view", link: routes.guide.deploy },
+  { text: "Use Studio in marimohub", link: routes.guide.marimohub },
   { text: "Troubleshoot Studio", link: routes.guide.troubleshooting },
 ];
 

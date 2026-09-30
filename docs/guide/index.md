@@ -26,6 +26,7 @@ Follow [Getting started](getting-started.md) for a working page, or
 | Link views and preserve public state            | [Navigate and preserve state](navigation-and-sessions.md) |
 | Choose the Python, Browser, or Prepared runtime | [Run or export a view](run-and-share.md)                  |
 | Host a live Python application                  | [Deploy a live Python view](deploy.md)                    |
+| Author and run views in marimohub               | [Use Studio in marimohub](marimohub.md)                   |
 | Diagnose a discovery, build, or runtime failure | [Troubleshoot Studio](troubleshooting.md)                 |
 
 The [reference](../reference/index.md) defines commands, configuration,
