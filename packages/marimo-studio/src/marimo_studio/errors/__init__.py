@@ -377,9 +377,10 @@ class PublicationHeldError(ConfigurationError):
         )
         self.view = view
         self.owner = owner
+        self.expiry = expiry
 
     def diagnostic_details(self) -> dict[str, object]:
-        return {"view": self.view, "owner": self.owner}
+        return {"view": self.view, "owner": self.owner, "expiry": self.expiry}
 
 
 class ViewRenameError(MarimoStudioError):
@@ -400,10 +401,11 @@ class ViewRenameError(MarimoStudioError):
         )
         self.name = name
         self.new_name = new_name
+        self.reason = reason
         self.transient = busy
 
     def diagnostic_details(self) -> dict[str, object]:
-        return {"view": self.name, "new_name": self.new_name}
+        return {"view": self.name, "new_name": self.new_name, "reason": self.reason}
 
 
 class ViewExistsError(MarimoStudioError):
@@ -533,9 +535,9 @@ class ViewInUseError(MarimoStudioError):
         label = "process" if len(processes) == 1 else "processes"
         holders = ", ".join(str(process) for process in processes)
         super().__init__(
-            f"View {name!r} is in use by {label} {holders}. Remove it from the "
-            "Studio tab or code mode of the notebook that process serves, or "
-            "stop the process and retry."
+            f"View {name!r} is in use by {label} {holders}. Rename or remove it "
+            "from code mode in the notebook that process serves, or stop the "
+            "process and retry."
         )
         self.name = name
         self.processes = processes
