@@ -54,7 +54,10 @@ async def available_runtime_options(
     runtimes: RuntimeRegistry,
 ) -> tuple[tuple[tuple[str, str], ...], str]:
     """Return runtimes compatible with one current presentation snapshot."""
-    snapshot = await presentation.snapshot_async(view_name)
+    snapshot = await presentation.snapshot_async(
+        view_name,
+        profile="development" if context.mode == "edit" else "production",
+    )
     available = list(runtimes.options_for(studio, context))
     if any(site.allowed_targets is None for site in snapshot.mounts):
         available = [item for item in available if item[0] != "zero-python"]

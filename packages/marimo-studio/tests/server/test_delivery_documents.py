@@ -257,6 +257,20 @@ def test_run_mode_builds_and_serves_the_production_profile(
     assert 'data-build-profile="production"' in response.text
 
 
+def test_run_mode_reports_runtimes_for_the_served_production_view(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        wrapper = client.get("/")
+        document = client.get(_presentation_fallback_url(wrapper.text))
+        runtimes = client.get("/_marimo-studio/views/dashboard/runtimes")
+
+    assert runtimes.status_code == 200
+    assert runtimes.json()["revision"] == document.headers["Marimo-Studio-Revision"]
+
+
 def test_mutable_studio_errors_are_not_cached(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
 
