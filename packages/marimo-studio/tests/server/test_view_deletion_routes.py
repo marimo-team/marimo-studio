@@ -7,7 +7,6 @@ from collections.abc import AsyncGenerator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -18,25 +17,27 @@ import marimo_studio._server.studio.routes as studio_api_module
 import marimo_studio._views.remove as workspace_views
 import marimo_studio.agent as agent
 import marimo_studio.authoring as authoring
-from marimo_studio._browser_client.transport import (
-    StudioServerConnection,
-    _raise_response_error,
-)
 from marimo_studio._server.development.coordinator import (
     DevelopmentCoordinator,
 )
-from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.ownership import PresentViewOwner
 from marimo_studio.errors import ViewDeletionError, ViewInUseError
 
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
-from ._view_mutation_test_support import _create_owned_view, _view_owner
+from ._view_mutation_test_support import (
+    _capture_scopes,
+    _code_mode_client,
+    _create_owned_view,
+    _serve,
+    _view_owner,
+)
 
 
 def _delete_owned_view(
@@ -105,29 +106,29 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
 ) -> None:
     studio = _configured(notebook_path)
     prepare_view(studio.notebook, "operations")
-    development_deletions: list[str] = []
-    presentation_deletions: list[str] = []
-    development_deleting_view = DevelopmentCoordinator.retiring_view
-    presentation_deleting_view = NotebookPresentation.retiring_view
+    development_retirements: list[str] = []
+    presentation_retirements: list[str] = []
+    development_retiring_view = DevelopmentCoordinator.retiring_view
+    presentation_retiring_view = NotebookPresentation.retiring_view
 
     @asynccontextmanager
-    async def track_development_deletion(
+    async def track_development_retirement(
         coordinator: DevelopmentCoordinator,
         view_name: str,
     ) -> AsyncGenerator[Any, None]:
-        development_deletions.append(view_name)
-        async with development_deleting_view(coordinator, view_name) as deletion:
-            yield deletion
+        development_retirements.append(view_name)
+        async with development_retiring_view(coordinator, view_name) as retirement:
+            yield retirement
 
     @contextmanager
-    def track_presentation_deletion(
+    def track_presentation_retirement(
         presentation: NotebookPresentation,
         view_name: str,
     ) -> Iterator[Callable[[], None]]:
-        with presentation_deleting_view(presentation, view_name) as release_artifacts:
+        with presentation_retiring_view(presentation, view_name) as release_artifacts:
 
             def release() -> None:
-                presentation_deletions.append(view_name)
+                presentation_retirements.append(view_name)
                 release_artifacts()
 
             yield release
@@ -135,12 +136,12 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
     monkeypatch.setattr(
         DevelopmentCoordinator,
         "retiring_view",
-        track_development_deletion,
+        track_development_retirement,
     )
     monkeypatch.setattr(
         NotebookPresentation,
         "retiring_view",
-        track_presentation_deletion,
+        track_presentation_retirement,
     )
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
@@ -151,8 +152,8 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
         original = _delete_owned_view(client, "operations", headers, original_owner)
         recreated = _create_owned_view(client, "operations", headers)
         replacement_owner = _view_owner(client, "operations")
-        development_deletions.clear()
-        presentation_deletions.clear()
+        development_retirements.clear()
+        presentation_retirements.clear()
         stale_catalog = _delete_owned_view(
             client,
             "operations",
@@ -165,8 +166,8 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
             headers,
             (replacement_owner[0], original_owner[1]),
         )
-        assert development_deletions == []
-        assert presentation_deletions == []
+        assert development_retirements == []
+        assert presentation_retirements == []
         current = _delete_owned_view(client, "operations", headers, replacement_owner)
 
     assert original.status_code == 200
@@ -181,8 +182,8 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
     assert stale_payload["current_generation"] == replacement_owner[1]
     assert stale_payload["transient"] is True
     assert current.status_code == 200
-    assert development_deletions == ["operations"]
-    assert presentation_deletions == ["operations"]
+    assert development_retirements == ["operations"]
+    assert presentation_retirements == ["operations"]
     assert not (studio.view_root / "operations").exists()
 
 
@@ -267,14 +268,12 @@ def test_committed_view_deletion_reports_incomplete_cleanup_as_success(
         workspace: StudioWorkspace,
         view_name: str,
         *,
-        expected_catalog_generation: str,
-        expected_generation: str,
+        owner: PresentViewOwner,
     ) -> StudioWorkspace:
         updated = delete(
             workspace,
             view_name,
-            expected_catalog_generation=expected_catalog_generation,
-            expected_generation=expected_generation,
+            owner=owner,
         )
         raise ViewDeletionError(cleanup, committed_workspace=updated)
 
@@ -303,19 +302,7 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
 ) -> None:
     studio = _configured(notebook_path)
     prepare_view(studio.notebook, "operations")
-    scopes: list[NotebookScope] = []
-    create_scope = NotebookScope.create
-
-    def capture_scope(
-        path: Path,
-        watcher: Any = None,
-        session_ids: Any = None,
-    ) -> NotebookScope:
-        scope = create_scope(path, watcher, session_ids)
-        scopes.append(scope)
-        return scope
-
-    monkeypatch.setattr(NotebookScope, "create", staticmethod(capture_scope))
+    scopes = _capture_scopes(monkeypatch)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
@@ -331,9 +318,8 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
         remove_tree(filesystem, path)
 
     with TestClient(app) as client:
+        _serve(client, scopes, "operations")
         owner = _view_owner(client, "operations")
-        assert len(scopes) == 1
-        scopes[0].presentation.snapshot("operations")
         retained_pins = tuple(
             (studio.view_root / "operations").glob(".artifacts/.pins/*/*")
         )
@@ -354,61 +340,12 @@ def test_code_mode_removal_releases_artifacts_its_server_retains(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _configured(notebook_path)
-    scopes: list[NotebookScope] = []
-    create_scope = NotebookScope.create
-
-    def capture_scope(
-        path: Path,
-        watcher: Any = None,
-        session_ids: Any = None,
-    ) -> NotebookScope:
-        scope = create_scope(path, watcher, session_ids)
-        scopes.append(scope)
-        return scope
-
-    monkeypatch.setattr(NotebookScope, "create", staticmethod(capture_scope))
+    scopes = _capture_scopes(monkeypatch)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
-    connection = StudioServerConnection(
-        "http://testserver",
-        server_token=str(_session_manager(app).skew_protection_token),
-        session_id="s_123456",
-    )
-    monkeypatch.setattr(
-        "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(
-            active_notebook=lambda: studio.notebook.resolve(),
-            connection=lambda: connection,
-        ),
-    )
 
-    with TestClient(app) as client:
-        # Code mode reaches its server over HTTP. Route those requests into the
-        # in-process app so this server's retained pins are the ones at stake.
-        async def request_json(
-            actual: StudioServerConnection,
-            path: str,
-            *,
-            method: str = "GET",
-            body: dict[str, object] | None = None,
-            **_options: object,
-        ) -> dict[str, Any]:
-            response = client.request(
-                method,
-                path,
-                headers={"Marimo-Server-Token": actual.server_token},
-                json=body,
-            )
-            if response.is_error:
-                _raise_response_error(response.status_code, response.content)
-            return response.json()
-
-        monkeypatch.setattr(
-            "marimo_studio._browser_client.client.request_json",
-            request_json,
-        )
-        _view_owner(client, "dashboard")
-        scopes[0].presentation.snapshot("dashboard")
+    with _code_mode_client(app, studio.notebook, monkeypatch) as client:
+        _serve(client, scopes, "dashboard")
         saved = authoring.open_workspace(studio.notebook).view("dashboard")
         with pytest.raises(ViewInUseError) as in_use:
             asyncio.run(saved.remove())
@@ -438,8 +375,7 @@ def test_project_and_source_reads_report_transient_deletion(
         workspace: StudioWorkspace,
         view_name: str,
         *,
-        expected_catalog_generation: str,
-        expected_generation: str,
+        owner: PresentViewOwner,
     ) -> StudioWorkspace:
         deletion_started.set()
         if not release_deletion.wait(timeout=10):
@@ -447,8 +383,7 @@ def test_project_and_source_reads_report_transient_deletion(
         return remove(
             workspace,
             view_name,
-            expected_catalog_generation=expected_catalog_generation,
-            expected_generation=expected_generation,
+            owner=owner,
         )
 
     monkeypatch.setattr(retirement_service, "delete_view", block_deletion)
@@ -507,15 +442,13 @@ def test_view_deletion_cancels_build_before_off_thread_filesystem_cleanup(
         workspace: StudioWorkspace,
         view_name: str,
         *,
-        expected_catalog_generation: str,
-        expected_generation: str,
+        owner: PresentViewOwner,
     ) -> StudioWorkspace:
         events.append(("delete", threading.get_ident()))
         return remove(
             workspace,
             view_name,
-            expected_catalog_generation=expected_catalog_generation,
-            expected_generation=expected_generation,
+            owner=owner,
         )
 
     monkeypatch.setattr(DevelopmentCoordinator, "retiring_view", retiring_view)

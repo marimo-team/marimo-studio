@@ -163,19 +163,22 @@ def acquire_publication_hold(
         )
     with view_mutation_lock(root.parent, root.name):
         generation = _require_generation(root, expected_generation)
-        current = read_publication_hold(root)
-        if current is not None and current.status == "active":
-            raise PublicationHeldError(
-                root.name,
-                current.owner,
-                current.expiry,
-                "Release that hold with its token or wait for it to expire.",
-            )
+        require_unheld(
+            root,
+            "Release that hold with its token or wait for it to expire.",
+        )
         hold = PublicationHold(
             secrets.token_hex(32), owner, generation, time.time() + ttl
         )
         _write_hold(root, hold)
         return hold
+
+
+def require_unheld(root: Path, next_step: str) -> None:
+    """Raise ``PublicationHeldError`` while a publication hold on the view is active."""
+    hold = read_publication_hold(root)
+    if hold is not None and hold.status == "active":
+        raise PublicationHeldError(root.name, hold.owner, hold.expiry, next_step)
 
 
 def release_publication_hold(

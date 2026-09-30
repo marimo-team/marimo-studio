@@ -23,6 +23,10 @@ from marimo_studio._authoring.view import (
     rename_view,
     write_document,
 )
+from marimo_studio._browser_client.client import (
+    request_view_removal,
+    request_view_rename,
+)
 from marimo_studio._browser_client.transport import studio_server_connection
 from marimo_studio._delivery.export import (
     DEFAULT_STATIC_RUNTIME,
@@ -266,12 +270,10 @@ class View:
 
         Returns a handle bound to the committed catalog.
         """
-        owner = self._present_owner()
         catalog = await make_default_view(
             self.workspace.notebook,
             self.name,
-            expected_catalog_generation=owner.catalog_generation,
-            expected_generation=owner.view_generation,
+            owner=self._present_owner(),
         )
         return self._handle_in(catalog, self.name)
 
@@ -281,26 +283,25 @@ class View:
         The old name stops identifying a view, so view operations on handles
         bound to it raise ``ViewGenerationConflictError``.
         """
+        notebook = self.workspace.notebook
         owner = self._present_owner()
-        catalog = await rename_view(
-            self.workspace.notebook,
-            self.name,
-            new_name,
-            connection=self.workspace._connection(),
-            expected_catalog_generation=owner.catalog_generation,
-            expected_generation=owner.view_generation,
+        connection = self.workspace._connection()
+        catalog = await (
+            request_view_rename(connection, notebook, self.name, new_name, owner)
+            if connection is not None
+            else rename_view(notebook, self.name, new_name, owner=owner)
         )
         return self._handle_in(catalog, new_name)
 
     async def remove(self) -> ViewCatalog:
         """Remove this view and return the remaining catalog."""
+        notebook = self.workspace.notebook
         owner = self._present_owner()
-        catalog = await remove_view(
-            self.workspace.notebook,
-            self.name,
-            connection=self.workspace._connection(),
-            expected_catalog_generation=owner.catalog_generation,
-            expected_generation=owner.view_generation,
+        connection = self.workspace._connection()
+        catalog = await (
+            request_view_removal(connection, notebook, self.name, owner)
+            if connection is not None
+            else remove_view(notebook, self.name, owner=owner)
         )
         self.workspace._capture_catalog_generation(catalog.catalog_generation)
         return catalog

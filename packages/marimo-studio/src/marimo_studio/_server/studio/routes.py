@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePosixPath
 
@@ -60,7 +59,6 @@ from marimo_studio._views.sources import (
 from marimo_studio._workspace.config import (
     load_studio,
     materialize_studio_workspace_after_conflict,
-    validate_view_name,
 )
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import (
@@ -70,6 +68,7 @@ from marimo_studio._workspace.models import (
     StudioDefinition,
     StudioWorkspace,
 )
+from marimo_studio._workspace.ownership import PresentViewOwner
 from marimo_studio._workspace.project_manifest import (
     VIEW_MANIFEST_PATH,
 )
@@ -96,6 +95,14 @@ def _owner_generation(value: object) -> str | None:
     return None
 
 
+def _invalid_request(error: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        {"error": error, "message": message},
+        status_code=400,
+        headers=NO_STORE,
+    )
+
+
 async def create_view_response(
     request: Request,
     notebook: Path,
@@ -118,54 +125,24 @@ async def create_view_response(
         return json_body_error_response(error)
     fields = {"catalog_generation", "name", "starter"}
     if not isinstance(body, dict) or set(body) != fields:
-        return JSONResponse(
-            {
-                "error": "invalid-view-create-request",
-                "message": (
-                    "View creation requires name, starter, and catalog generation."
-                ),
-            },
-            status_code=400,
-            headers=NO_STORE,
+        return _invalid_request(
+            "invalid-view-create-request",
+            "View creation requires name, starter, and catalog generation.",
         )
     name = body.get("name") if isinstance(body, dict) else None
     starter = body.get("starter") if isinstance(body, dict) else None
     catalog_generation = _owner_generation(body.get("catalog_generation"))
     if not isinstance(name, str):
-        return JSONResponse(
-            {
-                "error": "invalid-view-name",
-                "message": "name must be a string.",
-            },
-            status_code=400,
-            headers=NO_STORE,
-        )
+        return _invalid_request("invalid-view-name", "name must be a string.")
     if not isinstance(starter, str):
-        return JSONResponse(
-            {
-                "error": "invalid-view-starter",
-                "message": "starter must be a string.",
-            },
-            status_code=400,
-            headers=NO_STORE,
-        )
+        return _invalid_request("invalid-view-starter", "starter must be a string.")
     if catalog_generation is None:
-        return JSONResponse(
-            {
-                "error": "invalid-view-create-request",
-                "message": (
-                    "View creation requires name, starter, and catalog generation."
-                ),
-            },
-            status_code=400,
-            headers=NO_STORE,
+        return _invalid_request(
+            "invalid-view-create-request",
+            "View creation requires name, starter, and catalog generation.",
         )
     if catalog_generation != current_catalog_generation:
         return error_response(WorkspaceGenerationConflictError())
-    try:
-        validate_view_name(name)
-    except MarimoStudioError as error:
-        return error_response(error)
     try:
         await run_provider_operation(
             partial(
@@ -188,24 +165,16 @@ async def create_view_response(
     )
 
 
-@dataclass(frozen=True)
-class _OwnedViewRequest:
-    """A view mutation bound to the generations its client observed."""
-
-    name: str
-    catalog_generation: str
-    view_generation: str
-
-
 async def _owned_view_request(
     request: Request,
     server_token: str,
     *,
     method: str,
-    name_field: str,
+    field: str,
     error: str,
     message: str,
-) -> _OwnedViewRequest | Response:
+) -> tuple[str, PresentViewOwner] | Response:
+    """Read one view mutation and the owner generations its client observed."""
     if request.method != method:
         return Response(status_code=405)
     if not has_edit_access(request.scope):
@@ -219,18 +188,17 @@ async def _owned_view_request(
         )
     except JSONBodyError as body_error:
         return json_body_error_response(body_error)
-    fields = {"catalog_generation", name_field, "view_generation"}
-    if isinstance(body, dict) and set(body) == fields:
-        name = body[name_field]
+    if isinstance(body, dict) and set(body) == {
+        "catalog_generation",
+        field,
+        "view_generation",
+    }:
+        value = body[field]
         catalog_generation = _owner_generation(body["catalog_generation"])
         view_generation = _owner_generation(body["view_generation"])
-        if isinstance(name, str) and catalog_generation and view_generation:
-            return _OwnedViewRequest(name, catalog_generation, view_generation)
-    return JSONResponse(
-        {"error": error, "message": message},
-        status_code=400,
-        headers=NO_STORE,
-    )
+        if isinstance(value, str) and catalog_generation and view_generation:
+            return value, PresentViewOwner(catalog_generation, view_generation)
+    return _invalid_request(error, message)
 
 
 async def _retired_view_response(
@@ -268,30 +236,27 @@ async def delete_view_response(
     development: DevelopmentCoordinator,
 ) -> Response:
     """Delete a named view from an authenticated Studio workspace."""
+    error = "invalid-view-delete-request"
     message = "View deletion requires name and current owner generations."
     owned = await _owned_view_request(
         request,
         server_token,
         method="DELETE",
-        name_field="name",
-        error="invalid-view-delete-request",
+        field="name",
+        error=error,
         message=message,
     )
     if isinstance(owned, Response):
         return owned
-    if owned.name != name:
-        return JSONResponse(
-            {"error": "invalid-view-delete-request", "message": message},
-            status_code=400,
-            headers=NO_STORE,
-        )
+    requested, owner = owned
+    if requested != name:
+        return _invalid_request(error, message)
     return await _retired_view_response(
         name,
         lambda: delete_owned_view(
             studio,
             name,
-            expected_catalog_generation=owned.catalog_generation,
-            expected_generation=owned.view_generation,
+            owner=owner,
             presentation=presentation,
             development=development,
         ),
@@ -311,24 +276,20 @@ async def rename_view_response(
         request,
         server_token,
         method="POST",
-        name_field="new_name",
+        field="new_name",
         error="invalid-view-rename-request",
         message="View rename requires the new name and current owner generations.",
     )
     if isinstance(owned, Response):
         return owned
-    try:
-        new_name = validate_view_name(owned.name)
-    except MarimoStudioError as error:
-        return error_response(error)
+    new_name, owner = owned
     return await _retired_view_response(
         new_name,
         lambda: rename_owned_view(
             studio,
             name,
             new_name,
-            expected_catalog_generation=owned.catalog_generation,
-            expected_generation=owned.view_generation,
+            owner=owner,
             presentation=presentation,
             development=development,
         ),
@@ -488,22 +449,10 @@ async def source_response(
     except BoundedBodyDisconnected:
         return Response(status_code=499, headers=NO_STORE)
     except InvalidContentLength as error:
-        return JSONResponse(
-            {
-                "error": "invalid-source-body",
-                "message": str(error),
-            },
-            status_code=400,
-            headers=NO_STORE,
-        )
+        return _invalid_request("invalid-source-body", str(error))
     except UnicodeDecodeError:
-        return JSONResponse(
-            {
-                "error": "invalid-source-encoding",
-                "message": "Studio source files must be UTF-8 text.",
-            },
-            status_code=400,
-            headers=NO_STORE,
+        return _invalid_request(
+            "invalid-source-encoding", "Studio source files must be UTF-8 text."
         )
     except MarimoStudioError as error:
         return error_response(error)

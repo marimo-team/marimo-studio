@@ -70,7 +70,6 @@ def test_a_misnamed_view_folder_is_a_configuration_error(notebook_path: Path) ->
 def test_an_invalid_default_view_is_a_configuration_error(notebook_path: Path) -> None:
     prepare_view(notebook_path)
     source = notebook_path.read_text(encoding="utf-8")
-    assert 'default = "dashboard"' in source
     notebook_path.write_text(
         source.replace('default = "dashboard"', 'default = "Dashboard"'),
         encoding="utf-8",

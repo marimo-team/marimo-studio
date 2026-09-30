@@ -16,11 +16,13 @@ import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.remove as workspace_views
 import marimo_studio._workspace.generation as workspace_generation
 import marimo_studio._workspace.mutation_lock as mutation_locks
+import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
 from marimo_studio._views.sources import read_source
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.ownership import PresentViewOwner
 from marimo_studio._workspace.view_owners import load_view_owner, view_owner_path
 from marimo_studio.errors import (
     ConfigurationError,
@@ -333,16 +335,18 @@ def test_stale_view_generation_cannot_delete_a_replacement(
         delete_view(
             observed,
             "executive",
-            expected_catalog_generation=current.catalog_generation,
-            expected_generation=observed.view_generations["executive"],
+            owner=PresentViewOwner(
+                current.catalog_generation, observed.view_generations["executive"]
+            ),
         )
 
     assert target.joinpath("index.html").read_text(encoding="utf-8") == replacement
     delete_view(
         current,
         "executive",
-        expected_catalog_generation=current.catalog_generation,
-        expected_generation=current.view_generations["executive"],
+        owner=PresentViewOwner(
+            current.catalog_generation, current.view_generations["executive"]
+        ),
     )
     assert tuple(load_studio(notebook_path).views) == ("dashboard",)
 
@@ -377,8 +381,9 @@ def test_deleted_name_gets_a_fresh_owner_when_directory_identity_is_reused(
         delete_view(
             current,
             "executive",
-            expected_catalog_generation=current.catalog_generation,
-            expected_generation=observed.view_generations["executive"],
+            owner=PresentViewOwner(
+                current.catalog_generation, observed.view_generations["executive"]
+            ),
         )
 
 
@@ -537,11 +542,11 @@ def test_view_deletion_rejects_a_concurrent_notebook_save(
     prepare_view(notebook_path)
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
-    transaction = workspace_views.write_file_transaction
+    transaction = workspace_transactions.write_file_transaction
     changed = notebook_path.read_text(encoding="utf-8") + "# concurrent save\n"
 
     monkeypatch.setattr(
-        workspace_views,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, notebook_path, changed),
     )
@@ -563,11 +568,11 @@ def test_view_deletion_rejects_a_concurrent_project_configuration_edit(
     prepare_view(notebook_path)
     prepare_view(notebook_path, "executive")
     studio = load_studio(pyproject)
-    transaction = workspace_views.write_file_transaction
+    transaction = workspace_transactions.write_file_transaction
     changed = pyproject.read_text(encoding="utf-8") + "# concurrent edit\n"
 
     monkeypatch.setattr(
-        workspace_views,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, pyproject, changed),
     )
@@ -593,7 +598,7 @@ def test_view_deletion_preserves_a_recreated_target_and_original_recovery(
     target = studio.views["executive"].root
     original = target.joinpath("index.html").read_bytes()
     replacement = "<!doctype html><title>replacement</title>"
-    transaction = workspace_views.write_file_transaction
+    transaction = workspace_transactions.write_file_transaction
 
     def recreate() -> None:
         if target.exists():
@@ -618,7 +623,7 @@ def test_view_deletion_preserves_a_recreated_target_and_original_recovery(
                 recreate()
 
     monkeypatch.setattr(
-        workspace_views,
+        workspace_transactions,
         "write_file_transaction",
         recreate_around_transaction,
     )
@@ -639,11 +644,11 @@ def test_project_view_deletion_preserves_a_concurrent_notebook_edit(
     prepare_view(notebook_path)
     prepare_view(notebook_path, "executive")
     studio = load_studio(pyproject)
-    transaction = workspace_views.write_file_transaction
+    transaction = workspace_transactions.write_file_transaction
     changed = notebook_path.read_text(encoding="utf-8") + "# concurrent save\n"
 
     monkeypatch.setattr(
-        workspace_views,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, notebook_path, changed),
     )

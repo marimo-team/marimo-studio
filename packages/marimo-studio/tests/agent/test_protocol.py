@@ -123,7 +123,6 @@ _VIEWS = [
 ]
 _CATALOG = {
     "schema": 1,
-    "name": "summary",
     "generation": "c" * 64,
     "default_view": "dashboard",
     "views": _VIEWS,
@@ -131,7 +130,7 @@ _CATALOG = {
 
 
 def test_view_catalog_protocol_maps_views_to_generations(tmp_path: Path) -> None:
-    catalog = parse_view_catalog(_CATALOG, tmp_path, "summary", present=True)
+    catalog = parse_view_catalog(_CATALOG, tmp_path)
 
     assert catalog.default_view == "dashboard"
     assert catalog.views == {"dashboard": "d" * 64, "summary": "s" * 64}
@@ -139,19 +138,19 @@ def test_view_catalog_protocol_maps_views_to_generations(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
-    ("payload", "present"),
+    "payload",
     [
-        ({**_CATALOG, "views": [{"name": ["dashboard"], "generation": "d"}]}, True),
-        ({**_CATALOG, "default_view": ["dashboard"]}, True),
-        ({**_CATALOG, "views": _VIEWS[:1]}, True),
-        (_CATALOG, False),
-        ({**_CATALOG, "views": [*_VIEWS, _VIEWS[0]]}, True),
+        {**_CATALOG, "schema": 2},
+        {**_CATALOG, "generation": ""},
+        {**_CATALOG, "views": [{"name": ["dashboard"], "generation": "d"}]},
+        {**_CATALOG, "views": [*_VIEWS, _VIEWS[0]]},
+        {**_CATALOG, "default_view": "overview"},
     ],
+    ids=["schema", "generation", "view-name", "duplicate-view", "default-view"],
 )
 def test_view_catalog_protocol_rejects_inconsistent_catalogs(
     tmp_path: Path,
     payload: dict[str, object],
-    present: bool,
 ) -> None:
     with pytest.raises(ProtocolError, match="view catalog response"):
-        parse_view_catalog(payload, tmp_path, "summary", present=present)
+        parse_view_catalog(payload, tmp_path)

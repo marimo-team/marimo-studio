@@ -194,7 +194,7 @@ def reconcile_view_owners(
         pass
     with workspace_catalog_lock(view_root):
         current_names = refresh_names() if refresh_names is not None else names
-        writes, expected = _locked_view_owner_writes(view_root, current_names)
+        writes, expected = view_owner_writes(view_root, current_names)
         if writes:
             with ExitStack() as locks:
                 for path in sorted(writes):
@@ -204,7 +204,7 @@ def reconcile_view_owners(
                             path.name.removesuffix(_VIEW_OWNER_SUFFIX),
                         )
                     )
-                writes, expected = _locked_view_owner_writes(
+                writes, expected = view_owner_writes(
                     view_root,
                     current_names,
                 )
@@ -218,10 +218,16 @@ def reconcile_view_owners(
         return current_names
 
 
-def _locked_view_owner_writes(
+def view_owner_writes(
     view_root: Path,
     names: set[str],
 ) -> tuple[dict[Path, str], dict[Path, FileIdentity | None]]:
+    """Plan owner records for a catalog whose views are exactly ``names``.
+
+    A name without a present owner gets a fresh present owner, and a present
+    owner outside ``names`` becomes a fresh tombstone. Run it under the
+    workspace catalog lock.
+    """
     try:
         return _view_owner_writes(view_root, names)
     except _ViewOwnerTransactionInProgress as error:

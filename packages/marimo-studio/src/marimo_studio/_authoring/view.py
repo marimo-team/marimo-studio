@@ -7,10 +7,6 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from marimo_studio._browser_client.client import (
-    request_view_removal,
-    request_view_rename,
-)
 from marimo_studio._browser_client.client import show_view as show_browser_view
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import StudioServerConnection
@@ -55,7 +51,7 @@ from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition, validate_view_name
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
-from marimo_studio._workspace.ownership import ObservedViewOwner
+from marimo_studio._workspace.ownership import ObservedViewOwner, PresentViewOwner
 from marimo_studio._workspace.project_manifest import VIEW_MANIFEST_PATH
 from marimo_studio.errors import (
     ProtocolError,
@@ -389,57 +385,24 @@ async def remove_view(
     notebook: Path,
     view: str,
     *,
-    connection: StudioServerConnection | None = None,
-    expected_catalog_generation: str | None = None,
-    expected_generation: str | None = None,
+    owner: PresentViewOwner | None = None,
 ) -> ViewCatalog:
     """Remove one named view and return the remaining catalog."""
-    if connection is not None:
-        if expected_catalog_generation is None or expected_generation is None:
-            raise WorkspaceGenerationConflictError()
-        # The attached server pins this view's artifacts for its pages and
-        # history. Only that server can release those pins before deletion.
-        return await request_view_removal(
-            connection,
-            notebook,
-            view,
-            catalog_generation=expected_catalog_generation,
-            view_generation=expected_generation,
-        )
-
-    def operation() -> ViewCatalog:
-        return ViewCatalog.of(
-            delete_view(
-                load_studio(notebook),
-                view,
-                expected_catalog_generation=expected_catalog_generation,
-                expected_generation=expected_generation,
-            )
-        )
-
-    return await run_provider_operation(operation)
+    return await _catalog_change(
+        lambda: delete_view(load_studio(notebook), view, owner=owner)
+    )
 
 
 async def make_default_view(
     notebook: Path,
     view: str,
     *,
-    expected_catalog_generation: str | None = None,
-    expected_generation: str | None = None,
+    owner: PresentViewOwner | None = None,
 ) -> ViewCatalog:
     """Serve one named view at the main route and return the catalog."""
-
-    def operation() -> ViewCatalog:
-        return ViewCatalog.of(
-            set_default_view(
-                load_studio_definition(notebook),
-                view,
-                expected_catalog_generation=expected_catalog_generation,
-                expected_generation=expected_generation,
-            )
-        )
-
-    return await run_provider_operation(operation)
+    return await _catalog_change(
+        lambda: set_default_view(load_studio_definition(notebook), view, owner=owner)
+    )
 
 
 async def rename_view(
@@ -447,34 +410,13 @@ async def rename_view(
     view: str,
     new_name: str,
     *,
-    connection: StudioServerConnection | None = None,
-    expected_catalog_generation: str | None = None,
-    expected_generation: str | None = None,
+    owner: PresentViewOwner | None = None,
 ) -> ViewCatalog:
     """Rename one view and return the catalog."""
-    if connection is not None:
-        if expected_catalog_generation is None or expected_generation is None:
-            raise WorkspaceGenerationConflictError()
-        # The attached server pins this view's artifacts under its current
-        # name. Only that server can release those pins before the move.
-        return await request_view_rename(
-            connection,
-            notebook,
-            view,
-            new_name,
-            catalog_generation=expected_catalog_generation,
-            view_generation=expected_generation,
-        )
+    return await _catalog_change(
+        lambda: rename_view_project(load_studio(notebook), view, new_name, owner=owner)
+    )
 
-    def operation() -> ViewCatalog:
-        return ViewCatalog.of(
-            rename_view_project(
-                load_studio(notebook),
-                view,
-                new_name,
-                expected_catalog_generation=expected_catalog_generation,
-                expected_generation=expected_generation,
-            )
-        )
 
-    return await run_provider_operation(operation)
+async def _catalog_change(change: Callable[[], StudioWorkspace]) -> ViewCatalog:
+    return await run_provider_operation(lambda: ViewCatalog.of(change()))

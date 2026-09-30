@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generic, TypeVar
@@ -12,8 +12,12 @@ from marimo_studio._filesystem.io import (
     reject_mutable_symlinks,
 )
 from marimo_studio._filesystem.secure import FileIdentity
-from marimo_studio._workspace.config import studio_definition_from_source
+from marimo_studio._workspace.config import (
+    default_view_writes,
+    studio_definition_from_source,
+)
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
+from marimo_studio._workspace.view_owners import view_owner_writes
 from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
 
 _TStudio = TypeVar("_TStudio", bound=StudioDefinition)
@@ -35,6 +39,22 @@ class WorkspaceConfigSnapshot(Generic[_TStudio]):
         if self.notebook_identity is not None:
             expected[self.studio.notebook] = self.notebook_identity
         return expected
+
+    def catalog_writes(
+        self,
+        views: Collection[str],
+        default_view: str,
+    ) -> tuple[dict[Path, str], dict[Path, FileIdentity | None]]:
+        """Plan the owner and configuration writes for a changed view catalog.
+
+        ``views`` names every view after the change. Run it under the workspace
+        catalog lock.
+        """
+        owners, owner_identities = view_owner_writes(self.studio.view_root, set(views))
+        return (
+            {**owners, **default_view_writes(self.studio, self.source, default_view)},
+            {**self.expected_identities, **owner_identities},
+        )
 
 
 def _source_and_identity(path: Path, root: Path) -> tuple[str, FileIdentity]:

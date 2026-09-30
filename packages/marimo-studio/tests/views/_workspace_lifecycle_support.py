@@ -5,6 +5,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from marimo_studio._views.api import prepare_view
+from marimo_studio.authoring import Workspace, open_workspace
+
 
 def _project_configuration(notebook: Path) -> Path:
     path = notebook.parent / "pyproject.toml"
@@ -31,3 +34,11 @@ def _write_before_transaction(
             yield
 
     return wrapped
+
+
+def _workspace_with_report(notebook: Path, *, project: bool = False) -> Workspace:
+    if project:
+        _project_configuration(notebook)
+    prepare_view(notebook)
+    prepare_view(notebook, "report")
+    return open_workspace(notebook)

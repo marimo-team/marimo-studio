@@ -6,45 +6,30 @@ from pathlib import Path
 import pytest
 
 import marimo_studio.authoring as studio_authoring
-from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import WorkspaceGenerationConflictError
 
-
-def _workspace_with_report(notebook: Path) -> studio_authoring.Workspace:
-    prepare_view(notebook)
-    prepare_view(notebook, "report")
-    return studio_authoring.open_workspace(notebook)
+from ._workspace_lifecycle_support import _workspace_with_report
 
 
-def test_make_default_serves_the_view_at_the_main_route(notebook_path: Path) -> None:
-    workspace = _workspace_with_report(notebook_path)
+@pytest.mark.parametrize("project", [False, True], ids=["notebook", "pyproject"])
+def test_make_default_serves_the_view_at_the_main_route(
+    notebook_path: Path,
+    project: bool,
+) -> None:
+    workspace = _workspace_with_report(notebook_path, project=project)
     before = load_studio(notebook_path)
 
     report = asyncio.run(workspace.view("report").make_default())
 
     after = load_studio(notebook_path)
+    assert after.config_source == ("pyproject" if project else "notebook")
     assert after.default_view == "report"
     assert after.catalog_generation != before.catalog_generation
     assert after.view_generations == before.view_generations
     assert report.catalog_generation == after.catalog_generation
     assert report.generation == after.view_generations["report"]
     assert asyncio.run(report.inspect()).view == "report"
-
-
-def test_make_default_updates_project_configuration(notebook_path: Path) -> None:
-    (notebook_path.parent / "pyproject.toml").write_text(
-        f'[tool.marimo-studio]\nnotebook = "{notebook_path.name}"\n'
-        'default = "dashboard"\n',
-        encoding="utf-8",
-    )
-    workspace = _workspace_with_report(notebook_path)
-
-    asyncio.run(workspace.view("report").make_default())
-
-    studio = load_studio(notebook_path)
-    assert studio.config_source == "pyproject"
-    assert studio.default_view == "report"
 
 
 def test_make_default_on_the_current_default_leaves_the_configuration(
