@@ -158,10 +158,10 @@ post-commit catalog captured by the owning workspace.
 that the handle observed.
 
 Successful `Workspace.bind()`, `Workspace.create_view()`, `View.make_default()`,
-and `View.remove()` advance the owning `Workspace`. Existing `View` handles
-remain bound to their original generations. Use the handle that
-`make_default()` returns, or reacquire handles with `workspace.view(name)`
-after a catalog mutation.
+`View.rename()`, and `View.remove()` advance the owning `Workspace`. Existing
+`View` handles remain bound to their original generations. Use the handle that
+`make_default()` or `rename()` returns, or reacquire handles with
+`workspace.view(name)` after a catalog mutation.
 
 Use Studio's remove and create operations for same-name replacement. Direct
 filesystem delete and recreation completed between observations is outside the
@@ -202,12 +202,24 @@ await view.preflight(
     progress: Callable[[StaticExportProgress], None] | None = None,
 ) -> StaticPreflightReport
 await view.make_default() -> View
+await view.rename(name: str) -> View
 await view.remove() -> ViewCatalog
 ```
 
 `make_default()` serves the view at the notebook's main route and returns a
 handle bound to the committed catalog. Selecting the current default leaves the
 catalog unchanged.
+
+`rename(name)` moves the view project to `name` with its source, artifacts, and
+build history, and returns the handle for the new name. A default view stays
+the default. The project reads as `stale` until its next `build()`, which
+republishes it under the new name. The old name stops identifying a view, so
+handles bound to it raise `ViewGenerationConflictError`. `rename()` raises
+`ViewExistsError` for a taken name and `ConfigurationError` for an invalid
+name or an active publication hold. A view from
+`marimo_studio.agent.current_workspace()` is renamed by the attached Studio
+server, which releases the artifacts it serves under the old name first. Call
+`show()` on the returned handle to display the renamed view in the Studio tab.
 
 `inspect()` reads current filesystem state. Source can be edited through
 filesystem tools or `write()`. Provider inspection continues to own document

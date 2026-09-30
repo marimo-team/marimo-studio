@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePosixPath
 
@@ -38,7 +39,11 @@ from marimo_studio._server.request_body import (
     read_bounded_body,
     read_json_body,
 )
-from marimo_studio._server.studio.retirement import delete_owned_view
+from marimo_studio._server.studio.retirement import (
+    RetiredView,
+    delete_owned_view,
+    rename_owned_view,
+)
 from marimo_studio._views.api import create_view
 from marimo_studio._views.catalog import starters
 from marimo_studio._views.inspection import view_project_state
@@ -187,16 +192,24 @@ async def create_view_response(
     )
 
 
-async def delete_view_response(
+@dataclass(frozen=True)
+class _OwnedViewRequest:
+    """A view mutation bound to the generations its client observed."""
+
+    name: str
+    catalog_generation: str
+    view_generation: str
+
+
+async def _owned_view_request(
     request: Request,
-    studio: StudioWorkspace,
-    name: str,
     server_token: str,
-    presentation: NotebookPresentation,
-    development: DevelopmentCoordinator,
-) -> Response:
-    """Delete a named view from an authenticated Studio workspace."""
-    if request.method != "DELETE":
+    *,
+    method: str,
+    error: str,
+    message: str,
+) -> _OwnedViewRequest | Response:
+    if request.method != method:
         return Response(status_code=405)
     if not has_edit_access(request.scope):
         return forbidden_response()
@@ -207,45 +220,31 @@ async def delete_view_response(
             request,
             max_bytes=_STUDIO_MUTATION_JSON_MAX_BYTES,
         )
-    except JSONBodyError as error:
-        return json_body_error_response(error)
+    except JSONBodyError as body_error:
+        return json_body_error_response(body_error)
     fields = {"catalog_generation", "name", "view_generation"}
-    if not isinstance(body, dict) or set(body) != fields:
-        return JSONResponse(
-            {
-                "error": "invalid-view-delete-request",
-                "message": "View deletion requires name and current owner generations.",
-            },
-            status_code=400,
-            headers=NO_STORE,
-        )
-    request_name = body.get("name")
-    catalog_generation = _owner_generation(body.get("catalog_generation"))
-    view_generation = _owner_generation(body.get("view_generation"))
-    if request_name != name or catalog_generation is None or view_generation is None:
-        return JSONResponse(
-            {
-                "error": "invalid-view-delete-request",
-                "message": "View deletion requires name and current owner generations.",
-            },
-            status_code=400,
-            headers=NO_STORE,
-        )
+    if isinstance(body, dict) and set(body) == fields:
+        name = body["name"]
+        catalog_generation = _owner_generation(body["catalog_generation"])
+        view_generation = _owner_generation(body["view_generation"])
+        if isinstance(name, str) and catalog_generation and view_generation:
+            return _OwnedViewRequest(name, catalog_generation, view_generation)
+    return JSONResponse(
+        {"error": error, "message": message},
+        status_code=400,
+        headers=NO_STORE,
+    )
+
+
+async def _retired_view_response(
+    name: str,
+    retire: Callable[[], Awaitable[RetiredView]],
+) -> Response:
     try:
         starter_records = await run_provider_operation(
             lambda: tuple(item.to_dict() for item in starters())
         )
-    except MarimoStudioError as error:
-        return error_response(error)
-    try:
-        result = await delete_owned_view(
-            studio,
-            name,
-            expected_catalog_generation=catalog_generation,
-            expected_generation=view_generation,
-            presentation=presentation,
-            development=development,
-        )
+        result = await retire()
     except MarimoStudioError as error:
         return error_response(error)
     inventory = view_inventory_payload(
@@ -260,6 +259,84 @@ async def delete_view_response(
             **({"cleanup": str(result.cleanup)} if result.cleanup is not None else {}),
         },
         headers=NO_STORE,
+    )
+
+
+async def delete_view_response(
+    request: Request,
+    studio: StudioWorkspace,
+    name: str,
+    server_token: str,
+    presentation: NotebookPresentation,
+    development: DevelopmentCoordinator,
+) -> Response:
+    """Delete a named view from an authenticated Studio workspace."""
+    message = "View deletion requires name and current owner generations."
+    owned = await _owned_view_request(
+        request,
+        server_token,
+        method="DELETE",
+        error="invalid-view-delete-request",
+        message=message,
+    )
+    if isinstance(owned, Response):
+        return owned
+    if owned.name != name:
+        return JSONResponse(
+            {"error": "invalid-view-delete-request", "message": message},
+            status_code=400,
+            headers=NO_STORE,
+        )
+    return await _retired_view_response(
+        name,
+        lambda: delete_owned_view(
+            studio,
+            name,
+            expected_catalog_generation=owned.catalog_generation,
+            expected_generation=owned.view_generation,
+            presentation=presentation,
+            development=development,
+        ),
+    )
+
+
+async def rename_view_response(
+    request: Request,
+    studio: StudioWorkspace,
+    name: str,
+    server_token: str,
+    presentation: NotebookPresentation,
+    development: DevelopmentCoordinator,
+) -> Response:
+    """Rename a named view in an authenticated Studio workspace."""
+    owned = await _owned_view_request(
+        request,
+        server_token,
+        method="POST",
+        error="invalid-view-rename-request",
+        message="View rename requires the new name and current owner generations.",
+    )
+    if isinstance(owned, Response):
+        return owned
+    try:
+        new_name = validate_view_name(owned.name)
+    except MarimoStudioError as error:
+        return JSONResponse(
+            {"error": "invalid-view-name", "message": str(error)},
+            status_code=400,
+            headers=NO_STORE,
+        )
+    return await _retired_view_response(
+        new_name,
+        lambda: rename_owned_view(
+            studio,
+            name,
+            new_name,
+            expected_catalog_generation=owned.catalog_generation,
+            expected_generation=owned.view_generation,
+            presentation=presentation,
+            development=development,
+        ),
     )
 
 

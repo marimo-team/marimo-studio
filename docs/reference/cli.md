@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Inspect notebooks and create, edit, build, show, preflight, validate, export, select, and remove Studio views.
+description: Inspect notebooks and create, edit, build, show, preflight, validate, export, rename, select, and remove Studio views.
 ---
 
 # CLI
@@ -416,6 +416,24 @@ index and assets, runtime configuration, notebook `public/` files, and a
 source. Serve either directory over HTTP. Browser package imports, remote data,
 fonts, maps, and other view dependencies keep the network access expected by
 the authored frontend.
+
+## `marimo-studio view rename`
+
+```text
+marimo-studio view rename VIEW NEW_NAME [--target PATH] [--json]
+```
+
+Moves the view project to `NEW_NAME` with its source, artifacts, and build
+history. A default view stays the default under its new name. The project
+reads as `stale` until its next build, which republishes it under `NEW_NAME`.
+`NEW_NAME` follows the view name rules and must be free. An active publication
+hold on `VIEW` blocks the rename until the hold is released or expires. The
+JSON result names the renamed `view` and lists the `views` with their
+generations, the `default_view`, and the updated `catalog_generation`.
+
+A running Studio server keeps the artifacts of views it serves in use, and the
+command then reports `view-in-use` with that server's process ID. Rename the
+view from code mode in that notebook, which lets the server release them first.
 
 ## `marimo-studio view remove`
 

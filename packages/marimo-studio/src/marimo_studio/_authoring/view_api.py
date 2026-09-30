@@ -20,6 +20,7 @@ from marimo_studio._authoring.view import (
     read_document,
     release_publication,
     remove_view,
+    rename_view,
     write_document,
 )
 from marimo_studio._browser_client.transport import studio_server_connection
@@ -265,6 +266,23 @@ class View:
             expected_generation=owner.view_generation,
         )
         return self._handle_in(catalog, self.name)
+
+    async def rename(self: _View, name: str) -> _View:
+        """Move this view to a new name and return the handle for that name.
+
+        The old name stops identifying a view, so handles bound to it raise
+        ``ViewGenerationConflictError``.
+        """
+        owner = self._present_owner()
+        catalog = await rename_view(
+            self.workspace.notebook,
+            self.name,
+            name,
+            connection=self.workspace._connection(),
+            expected_catalog_generation=owner.catalog_generation,
+            expected_generation=owner.view_generation,
+        )
+        return self._handle_in(catalog, name)
 
     async def remove(self) -> ViewCatalog:
         """Remove this view and return the remaining catalog."""

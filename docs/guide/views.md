@@ -1,6 +1,6 @@
 ---
 title: Create and manage views
-description: Create, switch, and remove the named views of a notebook, and choose its default view.
+description: Create, rename, switch, and remove the named views of a notebook, and choose its default view.
 ---
 
 # Create and manage views
@@ -43,6 +43,18 @@ Studio stores the choice as `default` in the notebook configuration:
 [tool.marimo-studio]
 default = "report"
 ```
+
+## Rename a view
+
+Rename a view to give its URL and menu entry a new name:
+
+```console
+marimo-studio view rename report summary --target analysis.py
+```
+
+The project keeps its source, artifacts, and build history, and a default view
+stays the default. Links to `/report/` stop resolving, so update any view that
+links to the old URL.
 
 ## Switch views
 

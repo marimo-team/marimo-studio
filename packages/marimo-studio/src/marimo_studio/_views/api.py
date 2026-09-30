@@ -12,6 +12,7 @@ from marimo_studio._views.create import prepare_view as _prepare_view
 from marimo_studio._views.default_view import set_default_view as _set_default_view
 from marimo_studio._views.records import Starter, ViewSetupResult
 from marimo_studio._views.remove import delete_view as _delete_view
+from marimo_studio._views.rename import rename_view as _rename_view
 from marimo_studio._views.resolve import resolve_studio as resolve_studio
 from marimo_studio._workspace.bindings import (
     bind_cell as _bind_cell,
@@ -142,6 +143,26 @@ def make_default_view(
         _set_default_view(
             studio,
             name,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+    )
+
+
+def rename_view(
+    studio: StudioWorkspace,
+    name: str,
+    new_name: str,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+) -> ViewCatalog:
+    """Rename one view and return the catalog."""
+    return ViewCatalog.of(
+        _rename_view(
+            studio,
+            name,
+            new_name,
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
         )

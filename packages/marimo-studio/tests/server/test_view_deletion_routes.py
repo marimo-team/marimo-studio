@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from starlette.testclient import TestClient
@@ -36,13 +36,7 @@ from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
-from ._view_mutation_test_support import _create_owned_view
-
-
-def _view_owner(client: TestClient, name: str) -> tuple[str, str]:
-    inventory = client.get("/_marimo-studio/views").json()
-    view = next(item for item in inventory["views"] if item["name"] == name)
-    return cast(str, inventory["generation"]), cast(str, view["generation"])
+from ._view_mutation_test_support import _create_owned_view, _view_owner
 
 
 def _delete_owned_view(

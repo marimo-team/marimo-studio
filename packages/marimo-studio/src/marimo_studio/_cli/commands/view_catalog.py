@@ -1,4 +1,4 @@
-"""Create, select, and remove the named views of a notebook."""
+"""Create, rename, select, and remove the named views of a notebook."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from marimo_studio._authoring.view import make_default_view, remove_view
+from marimo_studio._authoring.view import make_default_view, remove_view, rename_view
 from marimo_studio._authoring.workspace import create_view
 from marimo_studio._cli.diagnostics import json_option, run_in_environment
 from marimo_studio._cli.environment import (
@@ -119,6 +119,25 @@ def remove(
         echo_json({**catalog.to_dict(), "view": view_name})
         return
     render_view_catalog("Removed", f"view {view_name}", catalog)
+
+
+@click.command("rename", cls=ColoredCommand)
+@view_name_argument
+@click.argument("new_name", metavar="NEW_NAME")
+@target_option
+@json_option
+def rename(
+    view_name: str,
+    new_name: str,
+    target: Path | None,
+    json_output: bool,
+) -> None:
+    """Move one view and its project files to a new name."""
+    catalog = asyncio.run(rename_view(resolve_notebook(target), view_name, new_name))
+    if json_output:
+        echo_json({**catalog.to_dict(), "view": new_name})
+        return
+    render_view_catalog("Renamed", f"view {view_name} to {new_name}", catalog)
 
 
 @click.command("default", cls=ColoredCommand)

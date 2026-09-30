@@ -29,6 +29,7 @@ PARITY = (
     (studio_authoring.View, "export", ("view", "export")),
     (studio_authoring.View, "preflight", ("view", "preflight")),
     (studio_authoring.View, "make_default", ("view", "default")),
+    (studio_authoring.View, "rename", ("view", "rename")),
     (studio_authoring.View, "remove", ("view", "remove")),
 )
 

@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from marimo_studio._browser_client.limits import (
     VIEW_ACTIVATION_HTTP_TIMEOUT,
-    VIEW_REMOVAL_HTTP_TIMEOUT,
+    VIEW_RETIREMENT_HTTP_TIMEOUT,
 )
 from marimo_studio._browser_client.protocol import (
     ViewShowRequest,
@@ -104,12 +104,37 @@ async def request_view_removal(
             "name": view,
             "view_generation": view_generation,
         },
-        timeout=VIEW_REMOVAL_HTTP_TIMEOUT,
+        timeout=VIEW_RETIREMENT_HTTP_TIMEOUT,
     )
     cleanup = payload.get("cleanup")
     if isinstance(cleanup, str) and cleanup:
         raise ViewDeletionError(Path(cleanup))
     return parse_view_catalog(payload, notebook, view)
+
+
+async def request_view_rename(
+    connection: StudioServerConnection,
+    notebook: Path,
+    view: str,
+    name: str,
+    *,
+    catalog_generation: str,
+    view_generation: str,
+) -> ViewCatalog:
+    """Rename one view through the server that serves its artifacts."""
+    connection = await _authorized_connection(connection, notebook)
+    payload = await request_json(
+        connection,
+        f"{SUPPORT_PATH}/views/{quote(view, safe='')}/rename",
+        method="POST",
+        body={
+            "catalog_generation": catalog_generation,
+            "name": name,
+            "view_generation": view_generation,
+        },
+        timeout=VIEW_RETIREMENT_HTTP_TIMEOUT,
+    )
+    return parse_view_catalog(payload, notebook, name)
 
 
 async def _authorized_connection(

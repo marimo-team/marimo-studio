@@ -7,7 +7,10 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from marimo_studio._browser_client.client import request_view_removal
+from marimo_studio._browser_client.client import (
+    request_view_removal,
+    request_view_rename,
+)
 from marimo_studio._browser_client.client import show_view as show_browser_view
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import StudioServerConnection
@@ -24,6 +27,7 @@ from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._views.api import ViewCatalog
 from marimo_studio._views.api import make_default_view as make_default_operation
 from marimo_studio._views.api import remove_view as remove_view_operation
+from marimo_studio._views.api import rename_view as rename_view_operation
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.inspect import inspect_view as inspect_view_project
 from marimo_studio._views.publication_hold import (
@@ -423,6 +427,42 @@ async def make_default_view(
         return make_default_operation(
             load_studio(notebook),
             view,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+
+    return await run_provider_operation(operation)
+
+
+async def rename_view(
+    notebook: Path,
+    view: str,
+    name: str,
+    *,
+    connection: StudioServerConnection | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+) -> ViewCatalog:
+    """Rename one view and return the catalog."""
+    if connection is not None:
+        if expected_catalog_generation is None or expected_generation is None:
+            raise WorkspaceGenerationConflictError()
+        # The attached server pins this view's artifacts under its current
+        # name. Only that server can release those pins before the move.
+        return await request_view_rename(
+            connection,
+            notebook,
+            view,
+            name,
+            catalog_generation=expected_catalog_generation,
+            view_generation=expected_generation,
+        )
+
+    def operation() -> ViewCatalog:
+        return rename_view_operation(
+            load_studio(notebook),
+            view,
+            name,
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
         )

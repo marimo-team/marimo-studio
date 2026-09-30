@@ -20,6 +20,7 @@ from marimo_studio._processes.ownership import (
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._views.remove import delete_view
+from marimo_studio._views.rename import rename_view
 from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.mutation_lock import (
@@ -268,6 +269,40 @@ async def delete_owned_view(
         studio,
         name,
         delete,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generation=expected_generation,
+        presentation=presentation,
+        development=development,
+    )
+
+
+async def rename_owned_view(
+    studio: StudioWorkspace,
+    name: str,
+    new_name: str,
+    *,
+    expected_catalog_generation: str,
+    expected_generation: str,
+    presentation: NotebookPresentation,
+    development: DevelopmentCoordinator,
+) -> RetiredView:
+    """Rename one observed view after draining every server-side owner."""
+
+    def rename(current: StudioWorkspace) -> RetiredView:
+        return RetiredView(
+            rename_view(
+                current,
+                name,
+                new_name,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generation=expected_generation,
+            )
+        )
+
+    return await retire_owned_view(
+        studio,
+        name,
+        rename,
         expected_catalog_generation=expected_catalog_generation,
         expected_generation=expected_generation,
         presentation=presentation,

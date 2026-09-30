@@ -23,3 +23,9 @@ def _create_owned_view(
             "starter": "marimo-studio/vanilla:default",
         },
     )
+
+
+def _view_owner(client: TestClient, name: str) -> tuple[str, str]:
+    inventory = client.get("/_marimo-studio/views").json()
+    view = next(item for item in inventory["views"] if item["name"] == name)
+    return cast(str, inventory["generation"]), cast(str, view["generation"])
