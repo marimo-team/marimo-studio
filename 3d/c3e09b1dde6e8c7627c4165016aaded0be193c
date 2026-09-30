@@ -1,0 +1,22 @@
+packages/marimo-studio/src/marimo_studio/_server/editor_bridge.py
+  ai_agent 294-295
+  s_f8296af1d7933f::t_1753e9bdceb8df 296-301
+packages/marimo-studio/tests/agent/test_code_mode_bridge.py
+  s_f8296af1d7933f::t_040d9e04695439 97-138,299,301-306,321
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3dc3e09b1dde6e8c7627c4165016aaded0be193c",
+  "prompts": {},
+  "sessions": {
+    "s_f8296af1d7933f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62bd6a9d-0227-4e2d-a288-3cef1089349a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
