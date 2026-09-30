@@ -1,0 +1,19 @@
+apps/e2e/tests/presentation-security.spec.ts
+  s_9bac5c4c30c198::t_c59adfe70bc32f 507
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bf670deed8c53aebabf79aa1b5c85d61c2224e9b",
+  "prompts": {},
+  "sessions": {
+    "s_9bac5c4c30c198": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d07ced2-aad0-49ed-950f-ba3fa2c9507d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
