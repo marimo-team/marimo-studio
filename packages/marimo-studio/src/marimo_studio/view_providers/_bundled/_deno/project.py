@@ -326,6 +326,12 @@ def _copy_public_assets(
         occupied[key] = relative
 
 
+MISSING_DEPENDENCY_HINT = (
+    "Fix the reported source error. Add a missing package as the view's "
+    "AGENTS.md describes, then build the view again."
+)
+
+
 def failure(
     provider: str,
     code: str,
@@ -337,7 +343,7 @@ def failure(
         code=code,
         severity="error",
         message=f"{provider} could not {operation}: {output.strip()}",
-        hint="Fix the reported source or dependency error and build the view again.",
+        hint=MISSING_DEPENDENCY_HINT,
     )
 
 

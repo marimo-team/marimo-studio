@@ -31,19 +31,21 @@ environment and Studio installation remain unchanged.
 
 Live Studio work runs in the notebook's kernel through marimo code mode.
 marimo's chat sidebar in **Code Mode** already runs there. A terminal agent
-pairs with the running notebook through the `marimo pair` CLI. Read its help
-once, then list running notebooks:
+pairs with the running notebook through the `marimo pair` CLI. Run it with
+`--with marimo-studio` so uv resolves the marimo release that Studio pins, the
+same release the Studio server runs. Read the help once, then list running
+notebooks:
 
 ```console
-uvx marimo@latest pair --help
-uvx marimo@latest pair notebook list
+uvx --with marimo-studio marimo pair --help
+uvx --with marimo-studio marimo pair notebook list
 ```
 
 Pick the user's notebook and pass its server URL and absolute `path` to every
 execution. Run each Python example below as one execution:
 
 ```console
-uvx marimo@latest pair execute --url <URL> --file <PATH> --code-file - <<'PY'
+uvx --with marimo-studio marimo pair execute --url <URL> --file <PATH> --code-file - <<'PY'
 import marimo_studio
 print(await marimo_studio.agent.current_workspace().status())
 PY
@@ -55,7 +57,7 @@ to read the notebook's absolute `path`, and pass `--token-file <PATH>` to every
 `pair` command:
 
 ```console
-uvx marimo@latest pair notebook list --url <URL> --token-file <PATH>
+uvx --with marimo-studio marimo pair notebook list --url <URL> --token-file <PATH>
 ```
 
 When the notebook is not running, start it in the background. For a topic with
@@ -71,11 +73,12 @@ uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox --watch --no-
 file. `--no-token` serves the editor on localhost without an access token,
 which lets `pair notebook list` find it. Studio needs `marimo-studio` in the
 marimo server's environment, as in that command or the notebook project's
-dependencies. `help(marimo._code_mode)` then lists Studio as the `studio`
-capability, and sandboxed kernels import the same Studio as the server. Create,
-edit, and run cells through `marimo._code_mode`, following the `pair --help`
-workflow. Without a way to run the notebook, continue with saved-notebook
-authoring from a terminal.
+dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
+Notebook Kit starters. `help(marimo._code_mode)` then lists Studio as the
+`studio` capability, and sandboxed kernels import the same Studio as the
+server. Create, edit, and run cells through `marimo._code_mode`, following the
+`pair --help` workflow. Without a way to run the notebook, continue with
+saved-notebook authoring from a terminal.
 
 Inside notebook code mode, combine connection with the first inspection:
 
@@ -137,6 +140,16 @@ import marimo_studio
 
 await marimo_studio.agent.current_workspace().view("dashboard").show()
 ```
+
+For a notebook outside a Python project, the first view adds a
+[PEP 723](https://peps.python.org/pep-0723/) script header, the notebook's
+inline dependency list, and declares `marimo-studio` there. A `--sandbox`
+launch installs only those dependencies, and marimo records package installs
+there only in sandboxed sessions. After creating that view from an unsandboxed
+session, declare the notebook's own packages with
+`uv add --script notebook.py <package>`.
+`marimo-studio doctor --dependencies --target notebook.py` lists imports the
+header does not cover.
 
 `show()` activates the user's Studio tab. If build or activation fails, repair
 the reported problem before expanding the view. Terminal workflows use the
@@ -215,6 +228,23 @@ For new files, manifest changes, multi-file edits, or recovery, read
 [authoring](references/authoring.md). Publication holds delay artifact
 replacement but do not make source writes atomic. Keep source organized around
 focused components and use the project's formatter when available.
+
+Add browser packages as the project's `AGENTS.md` describes. An HTML view
+references a pinned URL with a `<script src>` tag or a module `import`. React,
+Svelte, Reveal.js, and Notebook Kit views build with a frozen `deno.lock`, so a
+new package needs one intentional update from the view root with the Deno that
+Studio builds with. From code mode, run it through the kernel's Python with the
+project's flags, such as `--package-json` for Svelte, then build:
+
+```python
+import subprocess
+import sys
+
+root = (await view.inspect()).root
+add = ["add", "--frozen=false", "--save-exact", "npm:vega-embed@6"]
+subprocess.run([sys.executable, "-m", "deno", *add], cwd=root, check=True)
+await view.build()
+```
 
 ## Project notebook results
 

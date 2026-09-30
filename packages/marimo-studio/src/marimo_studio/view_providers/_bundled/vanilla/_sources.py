@@ -54,6 +54,10 @@ class VanillaLocalDependencyError(ViewProjectError):
     """A direct Vanilla source can fetch an undeclared project-local file."""
 
 
+class VanillaWildcardError(ViewProjectError):
+    """A projection host declares a data-marimo-allow value other than "*"."""
+
+
 class VanillaSourceGraphError(Exception):
     """Preserve discovered source context when graph analysis fails."""
 
@@ -329,6 +333,18 @@ def _mounts(
         for declaration in parser.mounts:
             if declaration.kind != kind:
                 continue
+            if declaration.allow not in (None, "*"):
+                line, column = declaration.position
+                raise VanillaWildcardError(
+                    'data-marimo-allow must be the literal "*".',
+                    source=path.as_posix(),
+                    line=line,
+                    column=column,
+                    hint=(
+                        'Add data-marimo-allow="*" to a projection host whose '
+                        "selector page JavaScript changes at runtime."
+                    ),
+                )
             key = (declaration.kind, declaration.target)
             occurrence = occurrences.get(key, 0)
             mounts.append(
@@ -338,6 +354,7 @@ def _mounts(
                     declaration.target,
                     declaration.position,
                     occurrence,
+                    dynamic=declaration.allow == "*",
                 )
             )
             offsets.append(declaration.insertion_offset)
@@ -351,6 +368,8 @@ def _literal_mount(
     target: str,
     position: tuple[int, int],
     occurrence: int,
+    *,
+    dynamic: bool,
 ) -> MountDeclaration:
     identity = json.dumps(
         [_PROVIDER_KEY, path.as_posix(), kind, target, occurrence],
@@ -362,7 +381,7 @@ def _literal_mount(
         id=f"site-{hashlib.sha256(identity.encode()).hexdigest()}",
         kind=kind,
         source=SourceLocation(path, line, column),
-        allowed_targets=(target,),
+        allowed_targets=None if dynamic else (target,),
     )
 
 

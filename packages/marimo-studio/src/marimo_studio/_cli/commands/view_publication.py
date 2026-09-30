@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -48,8 +47,7 @@ def hold(
     if json_output:
         echo_json({"schema": 1, "view": view_name, **result.to_dict()})
         return
-    expires = datetime.fromtimestamp(result.expires_at, timezone.utc).isoformat()
-    click.echo(f"Publication held by {result.owner} until {expires}")
+    click.echo(f"Publication held by {result.owner} until {result.expiry}")
     click.echo(f"Release token: {result.token}")
 
 

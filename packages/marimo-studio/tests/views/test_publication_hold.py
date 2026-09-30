@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -67,6 +68,24 @@ def test_hold_requires_a_bounded_finite_lifetime(
         acquire_publication_hold(project.root, owner="agent", ttl=ttl)
 
 
+@pytest.mark.parametrize("expires_at", [1e300, 253_402_300_800.0])
+def test_hold_record_with_an_unrepresentable_expiry_is_invalid(
+    notebook_path: Path,
+    expires_at: float,
+) -> None:
+    project = created_one_view(notebook_path).views["dashboard"]
+    acquire_publication_hold(project.root, owner="agent")
+    path = publication_hold_path(project.root)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(
+        json.dumps({**record, "expires_at": expires_at}) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="Invalid publication hold"):
+        acquire_publication_hold(project.root, owner="another agent")
+
+
 def test_expired_hold_preserves_source_and_admits_new_owner(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -120,6 +139,11 @@ def test_hold_preserves_current_publication_while_source_is_edited(
         publish_view(project, "development")
     state = read_build_state(project, "development")
     assert state.diagnostics[0].code == "publication-held"
+    assert re.fullmatch(
+        r"Publication is held by 'layout agent' until "
+        r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC\.",
+        state.diagnostics[0].message,
+    )
     published = lease_published_artifact(project, "development")
     assert published is not None
     with published as current:

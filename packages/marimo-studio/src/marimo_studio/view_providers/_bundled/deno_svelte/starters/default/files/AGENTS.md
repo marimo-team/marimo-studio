@@ -62,14 +62,16 @@ fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
 
 ## Add dependencies
 
-Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
-environment so dependency updates and Studio builds use the same version.
-
-Run from the view root. Use `--package-json` so Vite resolves application
-dependencies through `package.json` and the installed `node_modules` tree:
+Studio builds with the frozen `deno.lock`, so builds never change dependencies.
+Add a package with one intentional update from the view root. Run the Deno from
+`marimo-studio[deno]` through the Python interpreter of the environment that
+runs Studio, so the update and later builds use the same Deno. From marimo code
+mode, that interpreter is the kernel's `sys.executable`. Use `--package-json` so
+Vite resolves application dependencies through `package.json` and the installed
+`node_modules` tree:
 
 ```console
-uv run -- deno add --package-json --frozen=false --save-exact \
+python -m deno add --package-json --frozen=false --save-exact \
   npm:d3@7 \
   npm:@observablehq/plot@0.6 \
   npm:arquero@8 \
@@ -92,8 +94,7 @@ aliases when a package's documentation calls for them.
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit
 `package.json` and `deno.lock` after adding or changing an application
-dependency. Use `--frozen=false` for that intentional update. Normal builds
-remain frozen.
+dependency.
 
 ## Work within the Svelte project
 

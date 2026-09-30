@@ -152,12 +152,13 @@ def _live_pin_revisions(
     project: ViewProject,
     *,
     create: bool = True,
-) -> set[str]:
+) -> dict[str, set[int]]:
+    """Map each revision with a live pin to the processes holding its pins."""
     root = _pins_root(project)
     if create:
         ensure_secure_directory(project.root, root, "Artifact pins directory")
     elif not root.exists() and not root.is_symlink():
-        return set()
+        return {}
     else:
         assert_secure_path(
             project.root,
@@ -165,7 +166,7 @@ def _live_pin_revisions(
             "Artifact pins directory",
             final_kind="directory",
         )
-    live: set[str] = set()
+    live: dict[str, set[int]] = {}
     with secure_directory(root) as pins:
         for directory in pins.children():
             if _DIGEST.fullmatch(directory.name) is None:
@@ -174,7 +175,8 @@ def _live_pin_revisions(
                 )
             with secure_directory(directory) as revision_pins:
                 for pin in revision_pins.children():
-                    if _PIN.fullmatch(pin.name) is None:
+                    holder = _PIN.fullmatch(pin.name)
+                    if holder is None:
                         raise ConfigurationError(f"Artifact pin name is invalid: {pin}")
                     descriptor = revision_pins.open_file(pin, os.O_RDWR)
                     acquired = False
@@ -184,7 +186,9 @@ def _live_pin_revisions(
                         if not acquired:
                             os.close(descriptor)
                     if not acquired:
-                        live.add(f"sha256:{directory.name}")
+                        live.setdefault(f"sha256:{directory.name}", set()).add(
+                            int(holder.group(1))
+                        )
                     else:
                         _close_locked_descriptor(descriptor)
                         revision_pins.unlink(pin)
@@ -252,7 +256,7 @@ def prune_artifacts_locked(project: ViewProject) -> None:
         final_kind="directory",
     )
     try:
-        protected = _live_pin_revisions(project, create=False)
+        protected = set(_live_pin_revisions(project, create=False))
         _prune_quarantine_locked(project)
         for profile in ("development", "production"):
             try:
@@ -313,8 +317,11 @@ def artifact_deletion_guard(project: ViewProject) -> Iterator[None]:
                     )
                 yield
                 return
-            if _live_pin_revisions(project, create=False):
-                raise ViewInUseError(project.name)
+            if holders := _live_pin_revisions(project, create=False):
+                raise ViewInUseError(
+                    project.name,
+                    tuple(sorted(set().union(*holders.values()))),
+                )
         # Windows cannot rename a tree containing this open lock descriptor.
         # The view-name lock remains held and blocks new leases through deletion.
         yield

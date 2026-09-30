@@ -6,7 +6,6 @@ import json
 import os
 import shlex
 import subprocess
-from datetime import datetime, timezone
 from typing import Any
 
 from marimo_studio._browser_client.records import ShowResult
@@ -108,8 +107,7 @@ def render_view_inspection(result: ViewInspection) -> None:
     echo(f"  build {result.freshness}")
     hold = result.publication_hold
     if hold is not None:
-        expires = datetime.fromtimestamp(hold.expires_at, timezone.utc).isoformat()
-        echo(f"  publication {hold.status} · {hold.owner} · expires {expires}")
+        echo(f"  publication {hold.status} · {hold.owner} · expires {hold.expiry}")
     echo(f"  {light_blue('documents')}")
     for document in result.documents:
         echo(

@@ -50,7 +50,7 @@ def test_python_projects_pin_the_supported_marimo_release() -> None:
     assert f"marimo=={version}" in package["project"]["dependencies"]
 
 
-def test_same_version_source_drift_fails_with_the_observed_fingerprint(
+def test_same_version_source_drift_names_the_release_to_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def changed(self: object, file_key: object) -> None:
@@ -64,9 +64,8 @@ def test_same_version_source_drift_fails_with_the_observed_fingerprint(
 
     message = str(raised.value)
     assert "server-context" in message
-    assert "get_session_by_file_key" in message
-    assert "fingerprint" in message
-    assert layout_module.MARIMO_VERSION in message
+    assert "get_session_by_file_key has different source code" in message
+    assert f"Install marimo=={layout_module.MARIMO_VERSION}" in message
 
 
 def test_private_signature_drift_fails_before_adapter_construction(
@@ -96,7 +95,10 @@ def test_kernel_root_validates_the_release_before_construction(
     monkeypatch.setattr(layout_module, "version", lambda _name: "0.23.15")
     monkeypatch.setattr(composition_module, "_construct_kernel_lifespan", construct)
 
-    with pytest.raises(CompatibilityError, match="installed version"):
+    with pytest.raises(
+        CompatibilityError,
+        match=r"installed marimo version is 0\.23\.15",
+    ):
         composition_module.kernel_lifespan(None)
     assert constructed is False
     layout_module.clear_release_cache()

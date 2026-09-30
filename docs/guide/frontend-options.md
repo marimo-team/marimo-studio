@@ -31,11 +31,8 @@ uv add 'marimo-studio[deno]'
 ```
 
 Run Deno through that environment with `uv run -- deno` so dependency changes
-and Studio builds use the same Deno version. For a standalone tool environment,
-use `uvx --from 'deno==<installed-deno-version>' deno` in place of `uv run -- deno`.
-Replace `<installed-deno-version>` with the Deno package version installed in
-the notebook's Python environment, available through
-`python -c "from importlib.metadata import version; print(version('deno'))"`.
+and Studio builds use the same Deno version. Outside a uv project, run
+`python -m deno` with the Python of the environment that runs Studio.
 
 ## HTML document
 

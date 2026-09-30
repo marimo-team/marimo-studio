@@ -7,6 +7,7 @@ import math
 import secrets
 import time
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -34,6 +35,12 @@ class PublicationHold:
         if self.released:
             return "released"
         return "active" if time.time() < self.expires_at else "expired"
+
+    @property
+    def expiry(self) -> str:
+        """Return the expiry as a UTC time, such as ``2026-09-30 14:32:45 UTC``."""
+        expires = datetime.fromtimestamp(self.expires_at, timezone.utc)
+        return f"{expires:%Y-%m-%d %H:%M:%S} UTC"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -83,6 +90,10 @@ def read_publication_hold(root: Path) -> PublicationHold | None:
             or type(record["released"]) is not bool
         ):
             raise ValueError("invalid expiry or release state")
+        try:
+            datetime.fromtimestamp(expires_at, timezone.utc)
+        except (OverflowError, OSError) as error:
+            raise ValueError("expiry is outside the supported time range") from error
         hold = PublicationHold(
             record["token"],
             record["owner"],
@@ -151,8 +162,8 @@ def acquire_publication_hold(
         current = read_publication_hold(root)
         if current is not None and current.status == "active":
             raise ConfigurationError(
-                f"Publication is held by {current.owner!r} until {current.expires_at}. "
-                "Release that hold with its token or wait for expiry."
+                f"Publication is held by {current.owner!r} until {current.expiry}. "
+                "Release that hold with its token or wait for it to expire."
             )
         hold = PublicationHold(
             secrets.token_hex(32), owner, generation, time.time() + ttl

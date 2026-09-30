@@ -12,10 +12,11 @@ briefing with Python API help for the Studio version the notebook runs.
 Reading guidance is passive. It does not bind a workspace or activate a view.
 Reuse instructions while the environment and installation remain the same.
 
-`uvx marimo@latest pair notebook list` reports local servers started with
-`--no-token`, with their notebooks and sessions. Target the notebook the user
-opened in Studio with `marimo pair execute --url <URL> --file <PATH>`, passing
-the absolute `path` from that list. A relative file resolves against the
+`uvx --with marimo-studio marimo pair notebook list` reports local servers
+started with `--no-token`, with their notebooks and sessions. Target the
+notebook the user opened in Studio with
+`marimo pair execute --url <URL> --file <PATH>`, passing the absolute `path`
+from that list. A relative file resolves against the
 agent's working directory. A notebook has a session once a browser opens it,
 and `view.show()` needs that open Studio tab. A server that requires a token
 stays out of the list. Ask the user for its URL and a token file, then run
@@ -75,8 +76,8 @@ An intentional declaration difference alone does not establish a missing import
 or require changing unrelated project metadata.
 
 Framework starters need the Deno supplied by `marimo-studio[deno]` in the
-notebook's environment. Run dependency commands from the view root using that
-version, following the project's `AGENTS.md`. For a separate tool environment,
-use `uvx --from 'deno==<installed-deno-version>' deno`. Pinning Studio alone
-does not pin Deno. Preserve the project's dependency age policy and commit
-changed dependency manifests with their lockfiles.
+notebook's environment. Run dependency commands from the view root with
+`python -m deno`, using that environment's Python, and follow the project's
+`AGENTS.md`. Updates and Studio builds then use the same Deno. Preserve the
+project's dependency age policy and commit changed dependency manifests with
+their lockfiles.

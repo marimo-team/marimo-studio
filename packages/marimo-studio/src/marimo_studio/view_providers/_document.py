@@ -45,6 +45,7 @@ class HTMLMountDeclaration:
     target: str
     position: tuple[int, int]
     insertion_offset: int
+    allow: str | None = None
 
 
 @dataclass(frozen=True)
@@ -505,6 +506,11 @@ class HTMLDocumentParser(HTMLParser):
                     target,
                     position,
                     self._start_tag_insertion_offset(line, column),
+                    (
+                        attributes["data-marimo-allow"] or ""
+                        if "data-marimo-allow" in attributes
+                        else None
+                    ),
                 )
             )
         if self_closing:

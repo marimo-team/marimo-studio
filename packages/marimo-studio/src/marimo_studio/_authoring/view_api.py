@@ -258,6 +258,7 @@ class View:
         result = await remove_view(
             self.workspace.notebook,
             self.name,
+            connection=self.workspace._connection(),
             expected_catalog_generation=self._owner.catalog_generation,
             expected_generation=self._owner.view_generation,
         )

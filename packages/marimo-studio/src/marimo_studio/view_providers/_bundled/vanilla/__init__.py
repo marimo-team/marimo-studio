@@ -32,6 +32,7 @@ from marimo_studio.view_providers._bundled.vanilla._sources import (
     VanillaLocalDependencyError,
     VanillaSourceGraph,
     VanillaSourceGraphError,
+    VanillaWildcardError,
     vanilla_entry_document,
     vanilla_entry_path,
 )
@@ -42,7 +43,7 @@ from marimo_studio.view_providers._document import HTMLLocalResourceError
 
 _AGENT_INSTRUCTIONS_PATH = PurePosixPath("AGENTS.md")
 _OPTIONAL_DESIGN_PATH = PurePosixPath("DESIGN.md")
-_BUILD_FINGERPRINT = "vanilla-html-v4"
+_BUILD_FINGERPRINT = "vanilla-html-v5"
 
 
 def _guidance_documents(project: ViewProject) -> tuple[SourceDocument, ...]:
@@ -114,7 +115,11 @@ def _source_diagnostic(
         else "Restore the HTML entry document and build the view again."
     )
     return ProjectDiagnostic(
-        code="entry-document-invalid",
+        code=(
+            "projection-wildcard-invalid"
+            if isinstance(error, VanillaWildcardError)
+            else "entry-document-invalid"
+        ),
         severity="error",
         message=str(error),
         hint=hint,

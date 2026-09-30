@@ -251,6 +251,50 @@ def test_vanilla_instruments_exact_parser_sites(tmp_path: Path) -> None:
     ]
 
 
+def test_vanilla_wildcard_hosts_accept_runtime_targets(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    (project.root / "index.html").write_text(
+        """<!doctype html>
+<html>
+  <head><title>Dynamic targets</title></head>
+  <body>
+    <main id="app-shell">
+      <span mo-value='details["first"]' data-marimo-allow="*"></span>
+      <marimo-cell name="summary"></marimo-cell>
+    </main>
+  </body>
+</html>
+""",
+        encoding="utf-8",
+    )
+
+    inspection = provider.inspect(inspection_request(project))
+
+    assert inspection.diagnostics == ()
+    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+        ("cell", ("summary",)),
+        ("value", None),
+    ]
+
+
+@pytest.mark.parametrize("allow", ('data-marimo-allow="all"', "data-marimo-allow"))
+def test_vanilla_rejects_other_wildcard_values(tmp_path: Path, allow: str) -> None:
+    project = _project(tmp_path)
+    (project.root / "index.html").write_text(
+        "<!doctype html><html><head><title>Wildcard</title></head><body>"
+        f'<main id="app-shell">\n<span mo-value="rows" {allow}></span>'
+        "</main></body></html>",
+        encoding="utf-8",
+    )
+
+    diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
+
+    assert diagnostic.code == "projection-wildcard-invalid"
+    assert diagnostic.message == 'data-marimo-allow must be the literal "*".'
+    assert diagnostic.source is not None
+    assert diagnostic.source.line == 2
+
+
 def test_vanilla_rejects_nested_projection_hosts(tmp_path: Path) -> None:
     project = _project(tmp_path)
     source = project.root / "index.html"

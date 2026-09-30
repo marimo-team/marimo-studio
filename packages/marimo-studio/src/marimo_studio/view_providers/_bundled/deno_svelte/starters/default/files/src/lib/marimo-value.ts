@@ -74,9 +74,25 @@ export type MarimoValueElement<T = MarimoValue> = HTMLElement & {
   marimoValue?: T;
 };
 
+export type MarimoValueError = {
+  readonly selector: string;
+  readonly code: string;
+  readonly message: string;
+  readonly hint?: string;
+};
+
+/** Read the error a host recorded before its listeners attached. */
+const hostError = (host: HTMLElement): MarimoValueError | undefined =>
+  host.dataset.marimoError === undefined ? undefined : {
+    selector: host.getAttribute("mo-value")?.trim() ?? "",
+    code: host.dataset.marimoErrorCode ?? "",
+    message: host.dataset.marimoError,
+    hint: host.dataset.marimoDiagnosticHint,
+  };
+
 export type MarimoValueOptions<T = MarimoValue> = {
   onValue: (value: T) => void;
-  onError?: () => void;
+  onError?: (error: MarimoValueError) => void;
 };
 
 /** Subscribe an explicit `mo-value` host to current values and later updates. */
@@ -92,15 +108,16 @@ export const observeMarimoValue = <T = MarimoValue>(
       current.onValue(host.marimoValue);
     }
   };
-  const fail = () => current.onError?.();
+  const fail = (event: Event) =>
+    current.onError?.((event as CustomEvent<MarimoValueError>).detail);
 
   host.addEventListener("marimo-value-updated", sync);
   host.addEventListener("marimo-value-error", fail);
-  // A host that failed before this action mounted keeps its error on the host.
-  if (host.dataset.marimoError === undefined) {
+  const error = hostError(host);
+  if (error === undefined) {
     sync();
   } else {
-    fail();
+    current.onError?.(error);
   }
 
   return {

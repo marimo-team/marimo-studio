@@ -93,7 +93,7 @@ def test_prune_settles_when_project_disappears_before_pin_scan(
         selected: ViewProject,
         *,
         create: bool = True,
-    ) -> set[str]:
+    ) -> dict[str, set[int]]:
         assert selected == project
         shutil.rmtree(project.root)
         return live_pins(project, create=create)
@@ -195,7 +195,7 @@ def _hold_artifact_lease_in_process(root: str, ready: str, release: str) -> str:
     lease = lease_published_artifact(project, "development")
     if lease is None:
         return "missing"
-    Path(ready).write_text("ready\n", encoding="utf-8")
+    Path(ready).write_text(f"{os.getpid()}\n", encoding="utf-8")
     deadline = time.monotonic() + 5
     release_path = Path(release)
     while not release_path.exists():
@@ -299,8 +299,9 @@ def test_deletion_rejects_artifact_lease_owned_by_another_process(
             str(release),
         )
         _wait_for_file(ready)
-        with pytest.raises(ViewInUseError, match="open in another process"):
+        with pytest.raises(ViewInUseError) as in_use:
             delete_view(load_studio(notebook_path), "operations")
+        assert in_use.value.processes == (int(ready.read_text(encoding="utf-8")),)
         assert project.root.is_dir()
         release.write_text("release\n", encoding="utf-8")
         assert holder.result(timeout=5) == "released"

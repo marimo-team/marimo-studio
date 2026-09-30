@@ -47,6 +47,10 @@ needs row objects.
 
 ## Add dependencies
 
+Add a browser dependency by referencing its URL from `index.html`, with a
+`<script src>` tag or an `import` statement in a module script. Studio publishes
+the page as written, so the next build picks up the new URL.
+
 `index.html` loads two pinned browser dependencies from jsDelivr:
 
 - [UnoCSS runtime](https://unocss.dev/integrations/runtime) with its default

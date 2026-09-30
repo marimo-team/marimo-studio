@@ -480,10 +480,19 @@ class ViewInUseError(MarimoStudioError):
     code = "view-in-use"
     status_code = 409
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, processes: tuple[int, ...]) -> None:
+        label = "process" if len(processes) == 1 else "processes"
+        holders = ", ".join(str(process) for process in processes)
         super().__init__(
-            f"View {name!r} is open in another process. Close its readers and retry."
+            f"View {name!r} is in use by {label} {holders}. Remove it from the "
+            "Studio tab or code mode of the notebook that process serves, or "
+            "stop the process and retry."
         )
+        self.name = name
+        self.processes = processes
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"view": self.name, "processes": list(self.processes)}
 
 
 class LastViewError(MarimoStudioError):
@@ -493,7 +502,10 @@ class LastViewError(MarimoStudioError):
     status_code = 409
 
     def __init__(self) -> None:
-        super().__init__("Keep at least one view.")
+        super().__init__(
+            "Studio keeps at least one view, and this is the only one. Create "
+            "the replacement view first, then remove this one."
+        )
 
 
 __all__ = [

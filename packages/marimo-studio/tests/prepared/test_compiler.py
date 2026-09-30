@@ -67,7 +67,10 @@ def test_compiler_rejects_a_dynamic_mount(notebook_path: Path) -> None:
     snapshot = _snapshot(notebook_path)
     dynamic = replace(snapshot.mounts[0], allowed_targets=None)
 
-    with pytest.raises(PublicationError, match="selects targets dynamically"):
+    with pytest.raises(
+        PublicationError,
+        match=r"projection at index\.html:\d+:\d+ selects its target at runtime",
+    ):
         compile_export_view(
             snapshot.resolved,
             snapshot.view_name,

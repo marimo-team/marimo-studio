@@ -538,7 +538,7 @@ def assert_pinned_release() -> str:
     installed = version("marimo")
     failures: list[str] = []
     if installed != MARIMO_VERSION:
-        failures.append(f"installed version {installed!r}, expected {MARIMO_VERSION!r}")
+        failures.append(f"installed marimo version is {installed}")
     for capability, contracts in _SYMBOLS.items():
         for contract in contracts:
             observed = _observe_symbol(contract)
@@ -550,19 +550,20 @@ def assert_pinned_release() -> str:
                 and observed.parameters != contract.parameters
             ):
                 failures.append(
-                    f"{capability}: {contract.name}: parameters "
-                    f"{observed.parameters!r}, expected {contract.parameters!r}"
+                    f"{capability}: {contract.name} has different parameters"
                 )
             if observed.source_sha256 != contract.source_sha256:
                 failures.append(
-                    f"{capability}: {contract.name}: fingerprint "
-                    f"{observed.source_sha256}, expected {contract.source_sha256}"
+                    f"{capability}: {contract.name} has different source code"
                 )
     if failures:
         detail = "\n".join(f"- {failure}" for failure in failures)
         raise CompatibilityError(
-            "The installed Marimo source does not match Studio's pinned release. "
-            f"Required release: {MARIMO_VERSION}.\n{detail}"
+            f"Studio requires the published marimo {MARIMO_VERSION} release, and "
+            f"the installed marimo differs from it. Install marimo=={MARIMO_VERSION} "
+            "from PyPI in the Python environment that runs Studio. A marimo "
+            f"source checkout that reports version {MARIMO_VERSION} can still "
+            f"differ.\nDifferences from the release:\n{detail}"
         )
     return MARIMO_VERSION
 

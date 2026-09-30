@@ -272,8 +272,11 @@ at least one non-whitespace character. `ttl` is a finite number of seconds
 greater than zero and at most 3600. Invalid arguments raise `ValueError`.
 An active hold raises `ConfigurationError` with its owner and expiry.
 
-Retain the returned token. `release_publication()` releases the matching hold
-and returns its receipt. Repeating the release returns the same receipt.
+Retain the returned token. In a later execution,
+`(await view.inspect()).publication_hold` returns the current hold with its
+token, or `None` when the view has no hold record. `release_publication()`
+releases the matching hold and returns its receipt. Repeating the release
+returns the same receipt.
 It returns `None` when the view has no hold record. A mismatched token raises
 `ConfigurationError`. Both methods enforce the handle's view generation.
 They remain available when the manifest needs repair.
@@ -285,7 +288,9 @@ remain on disk after release, expiry, or editing-process exit.
 ### `PublicationHold`
 
 Contains `token`, `owner`, view `generation`, `expires_at` as Unix seconds, and
-`released`. The computed `status` is `active`, `expired`, or `released`.
+`released`. The computed `status` is `active`, `expired`, or `released`. The
+computed `expiry` renders `expires_at` as UTC text, such as
+`2026-09-30 14:32:45 UTC`.
 `to_dict()` includes `status` with the token, owner, generation, and expiry.
 
 ### `ViewBuild`
@@ -421,8 +426,11 @@ Identifies the removed view, the updated default view, and the remaining view
 names returned by `View.remove()`. `catalog_generation` identifies the
 post-commit catalog captured by the owning workspace.
 
-`remove()` raises `ViewInUseError` while another process holds an artifact
-lease for the view. A catalog change, including a same-name replacement, raises
+A view from `marimo_studio.agent.current_workspace()` is removed by the
+attached Studio server, which first releases the artifacts it serves for that
+view. `remove()` raises `ViewInUseError` while another process holds an
+artifact lease for the view. Its `processes` detail lists the holding process
+IDs. A catalog change, including a same-name replacement, raises
 `WorkspaceGenerationConflictError` and requires a new `Workspace` and `View`
 handle. `ViewDeletionError` reports an incomplete filesystem cleanup and
 exposes the cleanup path through `diagnostic_details()`.
