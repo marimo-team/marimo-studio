@@ -147,10 +147,18 @@ ENTRY = PurePosixPath("index.html")
 
 
 def create(starter, context):
+    cells = context.notebook.by_ref()
+    disabled = {cell.ref for cell in context.notebook.cells if cell.config.disabled}
+    pending = list(disabled)
+    while pending:
+        for child in cells[pending.pop()].downstream:
+            if child not in disabled:
+                disabled.add(child)
+                pending.append(child)
     selected = tuple(
         context.cell_targets[cell.ref]
         for cell in context.notebook.cells
-        if cell.kind == "cell" and not cell.config.disabled
+        if cell.kind == "cell" and cell.ref not in disabled
         if cell.may_display_output
     )
     cells = "\n".join(
@@ -168,6 +176,9 @@ def create(starter, context):
         cell_targets=selected,
     )
 ```
+
+The loop over `downstream` skips cells below a disabled cell, which marimo
+never runs.
 
 Studio validates `StarterPlan.cell_targets` against the supplied context, then
 commits required aliases with the project files. A notebook change or alias

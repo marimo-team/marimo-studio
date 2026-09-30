@@ -143,8 +143,10 @@ from marimo_studio.view_providers import (
     PROVIDER_API_VERSION,
     BuildRequest,
     BuildResult,
+    CellSpec,
     InspectionRequest,
     MountDeclaration,
+    NotebookSpec,
     ProjectInput,
     ProjectInspection,
     ProviderAvailability,
@@ -189,6 +191,23 @@ class CellHosts(HTMLParser):
             self.hosts.append((name, line, offset + 1))
 
 
+def enabled_cells(notebook: NotebookSpec) -> list[CellSpec]:
+    """Return ordinary cells that run: neither disabled nor below a disabled cell."""
+    cells = notebook.by_ref()
+    disabled = {cell.ref for cell in notebook.cells if cell.config.disabled}
+    pending = list(disabled)
+    while pending:
+        for child in cells[pending.pop()].downstream:
+            if child not in disabled:
+                disabled.add(child)
+                pending.append(child)
+    return [
+        cell
+        for cell in notebook.cells
+        if cell.kind == "cell" and cell.ref not in disabled
+    ]
+
+
 def instrument(source: str, mounts: tuple[MountDeclaration, ...]) -> str:
     """Add Studio's mount attribute to each declared <marimo-cell> host."""
     lines = source.splitlines(keepends=True)
@@ -222,8 +241,7 @@ class ReportProvider:
     def create(self, starter: ProviderStarter, context: StarterContext) -> StarterPlan:
         cells = tuple(
             context.cell_targets[cell.ref]
-            for cell in context.notebook.cells
-            if cell.kind == "cell" and not cell.config.disabled
+            for cell in enabled_cells(context.notebook)
             if cell.may_display_output
         )
         hosts = "\n".join(
@@ -296,9 +314,12 @@ Studio keeps the starter list for the life of the process.
 
 `create()` runs once, when someone clicks **Create**. It receives the saved
 notebook in `context.notebook` and returns every file of the new project in a
-`StarterPlan`. `ReportProvider` keeps the enabled cells that may display output,
-writes one `<marimo-cell>` host for each into `index.html`, and adds
-`AGENTS.md`.
+`StarterPlan`. `ReportProvider` writes one `<marimo-cell>` host into
+`index.html` for each cell that may display output, and adds `AGENTS.md`.
+
+`enabled_cells()` leaves out disabled cells and every cell downstream of one,
+because marimo never runs a cell whose inputs come from a disabled cell. The
+built-in starters apply the same rule.
 
 `context.cell_targets` supplies the name each host uses. A named cell such as
 `summary` keeps its name. For an unnamed cell, Studio proposes an alias such as
@@ -350,6 +371,8 @@ available acme-views/report
   starters acme-views/report:default
 ```
 
+`installed` reports the version of `acme-views`.
+
 Start `uv run marimo edit analysis.py`, open the view menu, and choose **New
 view**. **Acme report** waits under **From acme-views**, and **Files created**
 lists `index.html, AGENTS.md`. The CLI creates the same view:
@@ -361,8 +384,18 @@ uv run marimo-studio view create briefing \
 ```
 
 Open Source to see the provider's choices. The page holds one host per output
-cell. This `briefing` view also has a `DESIGN.md`, so Source lists it as a
-third tab:
+cell. Now give the view a design direction by saving
+`__marimo__/studio/analysis/briefing/DESIGN.md`:
+
+```md
+# Design
+
+Audience: the weekly operations review.
+Lead with the threshold control, then its result.
+```
+
+Studio lists `DESIGN.md` the next time it inspects the view, such as after the
+next save of `index.html`:
 
 ![Source panel for the briefing view with index.html, AGENTS.md, and DESIGN.md tabs, showing marimo-cell hosts named cell-2 and summary](/screenshots/provider-source.png){width=696}
 
@@ -393,13 +426,59 @@ report = "acme_views:provider"
 vite = "acme_views.vite:provider"
 ```
 
+### Pin the dashboard's npm packages
+
+The dashboard starter copies three files into every new view. Keep them in the
+package, in `src/acme_views/dashboard/`.
+
+`main.js` defines the Lit header:
+
+```js
+import { html, LitElement } from "lit";
+
+customElements.define(
+  "acme-header",
+  class extends LitElement {
+    render() {
+      return html`<h1>Acme dashboard</h1>`;
+    }
+  },
+);
+```
+
+`deno.json` pins Lit and Vite:
+
+```json
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "lit": "npm:lit@3.3.1",
+    "vite": "npm:vite@7.1.7"
+  }
+}
+```
+
+Generate `deno.lock` beside them:
+
+```console
+cd src/acme_views/dashboard
+uv run -- deno install --lockfile-only
+```
+
+The lockfile records the exact version and checksum of every package in the
+dependency tree, including packages that Lit and Vite pull in. Rerun the command
+after you change `deno.json`.
+
+### Write the Vite provider
+
 Create `src/acme_views/vite.py`:
 
 ```python
 import os
 import shutil
 from dataclasses import replace
-from pathlib import PurePosixPath
+from importlib.resources import files
+from pathlib import Path, PurePosixPath
 
 from deno import find_deno_bin
 from marimo_studio.view_providers import (
@@ -411,6 +490,7 @@ from marimo_studio.view_providers import (
     ProjectInput,
     ProjectInspection,
     ProviderAvailability,
+    ProviderCommandResult,
     ProviderInfo,
     ProviderStarter,
     SourceDocument,
@@ -423,22 +503,26 @@ from acme_views import AGENTS, ENTRY, ReportProvider, instrument
 
 MAIN = PurePosixPath("main.js")
 CONFIG = PurePosixPath("deno.json")
-VITE = "npm:vite@7.1.7"
+LOCK = PurePosixPath("deno.lock")
+TEMPLATE = files("acme_views") / "dashboard"
 
-MAIN_SOURCE = """import { LitElement, html } from "lit";
 
-customElements.define("acme-header", class extends LitElement {
-  render() {
-    return html`<h1>Acme dashboard</h1>`;
-  }
-});
-"""
+def installed(work: Path, pattern: str) -> str:
+    """Return the resolved paths of installed npm files that match `pattern`."""
+    paths = sorted((work / "node_modules" / ".deno").glob(pattern))
+    if not paths:
+        raise FileNotFoundError(f"deno install provided no {pattern}")
+    return ",".join(str(path.resolve()) for path in paths)
 
-CONFIG_SOURCE = """{
-  "nodeModulesDir": "auto",
-  "imports": { "lit": "npm:lit@3.3.1" }
-}
-"""
+
+def failure(step: str, result: ProviderCommandResult) -> BuildResult:
+    diagnostic = ProjectDiagnostic(
+        code="vite-build-failed",
+        severity="error",
+        message=f"{step} failed with exit code {result.returncode}.",
+        hint=result.stderr.strip()[-2000:],
+    )
+    return BuildResult(None, (diagnostic,))
 
 
 class ViteProvider(ReportProvider):
@@ -451,7 +535,7 @@ class ViteProvider(ReportProvider):
         key="default",
         title="Acme dashboard",
         summary="Start from a Vite page with a Lit header and every output cell.",
-        documents=(ENTRY, AGENTS, MAIN, CONFIG),
+        documents=(ENTRY, AGENTS, MAIN, CONFIG, LOCK),
     )
 
     def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
@@ -475,13 +559,10 @@ class ViteProvider(ReportProvider):
             "  </body>",
             '    <script type="module" src="./main.js"></script>\n  </body>',
         )
-        files = {
-            **plan.files,
-            ENTRY: page.encode(),
-            MAIN: MAIN_SOURCE.encode(),
-            CONFIG: CONFIG_SOURCE.encode(),
-        }
-        return StarterPlan(files=files, cell_targets=plan.cell_targets)
+        project_files = {**plan.files, ENTRY: page.encode()}
+        for path in (MAIN, CONFIG, LOCK):
+            project_files[path] = (TEMPLATE / path.name).read_bytes()
+        return StarterPlan(files=project_files, cell_targets=plan.cell_targets)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         inspection = super().inspect(request)
@@ -491,17 +572,20 @@ class ViteProvider(ReportProvider):
                 *inspection.editor_documents,
                 SourceDocument(MAIN, "javascript", "edit"),
                 SourceDocument(CONFIG, "json", "edit"),
+                SourceDocument(LOCK, "json", "read"),
             ),
             input_scope=(
                 *inspection.input_scope,
                 ProjectInput(MAIN, "file"),
                 ProjectInput(CONFIG, "file"),
+                ProjectInput(LOCK, "file"),
             ),
-            build_fingerprint=f"acme-vite-v1:{VITE}",
+            build_fingerprint="acme-vite-v1",
         )
 
     def build(self, request: BuildRequest) -> BuildResult:
-        work = request.staging_root.parent / "work"
+        work = (request.staging_root.parent / "work").resolve()
+        output = request.staging_root.resolve()
         for path in request.inputs:
             (work / path).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(request.project.root / path, work / path)
@@ -510,21 +594,41 @@ class ViteProvider(ReportProvider):
         (work / ENTRY).write_text(page, encoding="utf-8")
 
         deno = find_deno_bin()
-        environment = {**os.environ, "DENO_DIR": str(request.cache_root / "deno")}
-        output = str(request.staging_root)
-        for command in (
-            [deno, "install"],
-            [deno, "run", "-A", VITE, "build", "--base", "./", "--outDir", output],
-        ):
-            result = request.runner.run(command, cwd=work, environment=environment)
-            if result.returncode != 0:
-                failure = ProjectDiagnostic(
-                    code="vite-build-failed",
-                    severity="error",
-                    message=f"{command[1]} failed with exit code {result.returncode}.",
-                    hint=result.stderr.strip()[-2000:],
-                )
-                return BuildResult(None, (failure,))
+        cache = {"DENO_DIR": str(request.cache_root / "deno")}
+        result = request.runner.run(
+            [deno, "install", "--frozen"],
+            cwd=work,
+            environment={**os.environ, **cache},
+        )
+        if result.returncode != 0:
+            return failure("deno install", result)
+
+        # Stop Vite's package and workspace search at the working directory.
+        (work / "package.json").write_text('{ "private": true }\n', encoding="utf-8")
+        (work / "pnpm-workspace.yaml").write_text("packages: []\n", encoding="utf-8")
+        vite = [
+            deno,
+            "run",
+            "--cached-only",
+            "--frozen",
+            "--no-prompt",
+            f"--allow-read={work},{output}",
+            f"--allow-write={output}",
+            "--allow-env",
+            "--allow-sys=uid,osRelease",
+            f"--allow-ffi={installed(work, '@rollup+rollup-*/**/*.node')}",
+            f"--allow-run={installed(work, '@esbuild+*/**/esbuild*')}",
+            "node_modules/vite/bin/vite.js",
+            "build",
+            "--configLoader=native",
+            "--base",
+            "./",
+            "--outDir",
+            str(output),
+        ]
+        result = request.runner.run(vite, cwd=work, environment=cache)
+        if result.returncode != 0:
+            return failure("vite build", result)
         return BuildResult(ENTRY, ())
 
 
@@ -535,14 +639,14 @@ provider = ViteProvider()
 
 - `availability()` checks for the `deno` binary, so the picker disables the
   starter with a recovery action when it is missing.
-- `create()` adds `main.js` and a `deno.json` whose `imports` pin Lit from npm.
-- `inspect()` adds both files to Source and to the build inputs, and folds the
-  Vite version into `build_fingerprint` so a version change rebuilds existing
-  views.
+- `create()` copies `main.js`, `deno.json`, and `deno.lock` into the new view,
+  and adds an `<acme-header>` element and a `<script>` tag to `index.html`.
+- `inspect()` adds the three files to Source and to the build inputs.
+  `deno.lock` opens read-only.
 - `build()` copies the inputs to a working directory beside
-  `request.staging_root`, adds the mount attributes there, and runs two
-  commands. `deno install` reads `deno.json` and creates `node_modules`.
-  `deno run` starts the pinned Vite, which bundles `main.js` into
+  `request.staging_root` and adds the mount attributes there. `deno install
+--frozen` installs exactly the locked packages into `node_modules`, and fails
+  when `deno.json` and `deno.lock` disagree. Vite then bundles `main.js` into
   `request.staging_root`.
 
 Studio deletes the working directory after each build. `DENO_DIR` keeps Deno's
@@ -552,6 +656,29 @@ build downloads Vite and Lit, and later builds reuse them.
 command in one build shares a 120-second budget. A nonzero exit becomes a
 diagnostic that `marimo-studio view build` prints.
 
+### Sandbox the build
+
+npm packages run code inside Vite, so `build()` gives Vite only the
+[Deno permissions](https://docs.deno.com/runtime/fundamentals/security/) a
+build needs. Deno denies everything else, including network access and files
+outside the build:
+
+| Flag                                        | Allows                                        |
+| ------------------------------------------- | --------------------------------------------- |
+| `--allow-read` with the work and output     | reading the working copy and the built files  |
+| `--allow-write` with the output             | writing the built page                        |
+| `--allow-env`, `--allow-sys=uid,osRelease`  | the environment and system details Vite reads |
+| `--allow-ffi` with Rollup's `.node` binding | loading Rollup's native bundler               |
+| `--allow-run` with the esbuild binary       | starting esbuild, which transforms the code   |
+
+The Vite command receives `DENO_DIR` as its whole environment, so tokens and
+other variables from the Studio process stay out of the build. `--cached-only`
+and `--frozen` limit it to the packages that `deno install` placed. The
+`package.json` and `pnpm-workspace.yaml` that `build()` writes stop Vite from
+reading parent directories while it looks for a project root, and
+`--configLoader=native` loads a `vite.config.js` without writing a temporary
+file.
+
 ### Swap Lit for a JSX framework
 
 To build the dashboard header with [Preact](https://preactjs.com/) in place of
@@ -559,17 +686,16 @@ Lit, change the starter in four places:
 
 - Name the entry module `main.jsx`, point the `<script>` tag at it, and list it
   with the `javascriptreact` language.
-- Add `vite.config.js` to `StarterPlan.files`, `ProviderStarter.documents`,
-  `editor_documents`, and `input_scope`. Vite reads it from the working
-  directory:
+- Add `vite.config.js` to `src/acme_views/dashboard/`, the files `create()`
+  copies, `ProviderStarter.documents`, `editor_documents`, and `input_scope`:
 
   ```js
   export default { esbuild: { jsx: "automatic", jsxImportSource: "preact" } };
   ```
 
-- Add one `imports` entry per npm package to `deno.json`, such as
-  `"preact": "npm:preact@10.27.2"`. Vite resolves subpaths such as
-  `preact/hooks` from the `node_modules` directory that `deno install` creates.
+- Replace Lit with `"preact": "npm:preact@10.27.2"` in `deno.json` and
+  regenerate `deno.lock`. Vite resolves subpaths such as `preact/hooks` from
+  the `node_modules` directory that `deno install` creates.
 - Render components into their own element, such as `<div id="acme-header">`.
   Keep the `<marimo-cell>` hosts outside the component tree so the framework
   never replaces them.
@@ -578,8 +704,7 @@ Lit, change the starter in four places:
 `marimo-output`, or `mo-value` hosts inside components, extend `inspect()` to
 find them there. The built-in providers in
 [`view_providers/_bundled`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_bundled)
-find hosts in JSX and Svelte, pin dependencies in a frozen lockfile, and run
-Deno with narrow permissions.
+find hosts in JSX and Svelte.
 
 ## Provider rules
 
@@ -604,6 +729,10 @@ Studio validates most of these rules and reports the one a result breaks.
   `request.staging_root.parent / "work"` qualifies.
 - Pass `environment={**os.environ, ...}` to add variables. A mapping replaces
   the command's whole environment.
+- Pin npm packages in a lockfile that ships with the starter, and install them
+  with `deno install --frozen`.
+- Run build tools that execute npm code with scoped Deno permissions, as in
+  [Sandbox the build](#sandbox-the-build).
 - Use a kebab-case diagnostic `code` and a non-empty `message` without leading
   or trailing whitespace.
 - Change `build_fingerprint` when the provider's build output can change for
