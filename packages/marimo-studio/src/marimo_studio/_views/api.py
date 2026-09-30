@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,22 +22,33 @@ from marimo_studio._workspace.models import (
 
 
 @dataclass(frozen=True)
-class ViewRemovalResult:
-    """Describe a removed view and the remaining workspace."""
+class ViewCatalog:
+    """The named views of a notebook after a catalog change."""
 
     notebook: Path
-    view: str
     default_view: str
-    views: tuple[str, ...]
+    views: Mapping[str, str]
     catalog_generation: str
+
+    @classmethod
+    def of(cls, studio: StudioWorkspace) -> ViewCatalog:
+        """Capture the committed catalog of one loaded workspace."""
+        return cls(
+            notebook=studio.notebook,
+            default_view=studio.default_view,
+            views=dict(studio.view_generations),
+            catalog_generation=studio.catalog_generation,
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {
             "schema": 1,
             "notebook": str(self.notebook),
-            "view": self.view,
             "default_view": self.default_view,
-            "views": list(self.views),
+            "views": [
+                {"name": name, "generation": generation}
+                for name, generation in self.views.items()
+            ],
             "catalog_generation": self.catalog_generation,
         }
 
@@ -105,18 +117,13 @@ def remove_view(
     *,
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
-) -> ViewRemovalResult:
-    """Remove one named view and return the remaining workspace identity."""
-    updated = _delete_view(
-        studio,
-        name,
-        expected_catalog_generation=expected_catalog_generation,
-        expected_generation=expected_generation,
-    )
-    return ViewRemovalResult(
-        notebook=updated.notebook,
-        view=name,
-        default_view=updated.default_view,
-        views=tuple(updated.views),
-        catalog_generation=updated.catalog_generation,
+) -> ViewCatalog:
+    """Remove one named view and return the remaining catalog."""
+    return ViewCatalog.of(
+        _delete_view(
+            studio,
+            name,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
     )

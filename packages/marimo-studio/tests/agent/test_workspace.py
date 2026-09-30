@@ -334,15 +334,16 @@ def test_workspace_runtime_inspection_returns_selected_outputs(
     assert result.runtime.cells[result.cells[0].runtime_id].status == "idle"
 
 
-def test_view_remove_returns_the_remaining_workspace(notebook_path: Path) -> None:
+def test_view_remove_returns_the_remaining_catalog(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
     view = asyncio.run(workspace.create_view("report"))
 
-    result = asyncio.run(view.remove())
+    catalog = asyncio.run(view.remove())
 
-    assert result.view == "report"
-    assert result.views == ("dashboard",)
+    assert list(catalog.views) == ["dashboard"]
+    assert catalog.default_view == "dashboard"
+    assert catalog.views["dashboard"] == workspace.view("dashboard").generation
 
 
 def test_workspace_advances_after_sequential_bindings(notebook_path: Path) -> None:

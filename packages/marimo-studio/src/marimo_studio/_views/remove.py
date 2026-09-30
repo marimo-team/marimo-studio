@@ -6,8 +6,6 @@ import secrets
 from contextlib import suppress
 from pathlib import Path
 
-import tomlkit
-
 from marimo_studio._artifacts.retention import artifact_exclusion_guard
 from marimo_studio._filesystem._secure_names import temporary_sibling_name
 from marimo_studio._filesystem._secure_types import ConditionalWriteError
@@ -21,13 +19,9 @@ from marimo_studio._filesystem.secure import (
     SecureDirectory,
     secure_directory,
 )
-from marimo_studio._workspace.config import (
-    editable_studio_config,
-    load_studio,
-)
+from marimo_studio._workspace.config import default_view_writes, load_studio
 from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
 from marimo_studio._workspace.generation import view_generation
-from marimo_studio._workspace.metadata import updated_notebook_default_source
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.mutation_lock import view_retirement_lock
 from marimo_studio._workspace.transactions import write_file_transaction
@@ -61,25 +55,6 @@ def _require_directory_owner(
         raise ConfigurationError(
             f"View deletion staging owner changed before commit: {path}"
         )
-
-
-def _deletion_writes(
-    studio: StudioWorkspace,
-    next_default: str,
-    source: str,
-) -> dict[Path, str]:
-    if studio.uses_notebook_config:
-        updated = updated_notebook_default_source(
-            studio.notebook,
-            source,
-            default_view=next_default,
-        )
-        return {studio.notebook: updated} if updated != source else {}
-
-    document = tomlkit.parse(source)
-    editable_studio_config(document)["default"] = next_default
-    updated = tomlkit.dumps(document)
-    return {studio.config_path: updated} if updated != source else {}
 
 
 def _remove_owned_tombstone(
@@ -193,7 +168,7 @@ def _delete_view_locked(
     next_default = (
         remaining[0] if current.default_view == name else current.default_view
     )
-    writes = _deletion_writes(current, next_default, snapshot.source)
+    writes = default_view_writes(current, snapshot.source, next_default)
     owner_path, owner_source, owner_identity = view_owner_transition(
         current.view_root,
         name,

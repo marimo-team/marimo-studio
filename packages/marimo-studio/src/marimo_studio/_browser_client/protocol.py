@@ -8,7 +8,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 
 from marimo_studio._browser_client.records import PreviewAutomationTarget, ShowResult
-from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.api import ViewCatalog
 from marimo_studio._workspace.ownership import (
     ObservedViewOwner,
     observed_view_owner,
@@ -161,33 +161,33 @@ def parse_show_result(
     )
 
 
-def parse_removal_result(
+def parse_view_catalog(
     payload: dict[str, Any],
     notebook: Path,
     view: str,
-) -> ViewRemovalResult:
+) -> ViewCatalog:
+    """Parse the catalog a view mutation route committed for ``view``."""
     schema = payload.get("schema")
-    views = payload.get("views")
-    names = (
-        tuple(item.get("name") for item in views)
-        if isinstance(views, list) and all(isinstance(item, dict) for item in views)
-        else ()
+    items = payload.get("views")
+    views = (
+        {item.get("name"): item.get("generation") for item in items}
+        if isinstance(items, list) and all(isinstance(item, dict) for item in items)
+        else {}
     )
     if (
         type(schema) is not int
         or schema != 1
         or payload.get("name") != view
         or not _nonempty(payload.get("generation"))
-        or not _nonempty(payload.get("default_view"))
-        or not names
-        or not all(_nonempty(name) for name in names)
+        or payload.get("default_view") not in views
+        or len(views) != len(cast(list[object], items))
+        or not all(_nonempty(name) and _nonempty(gen) for name, gen in views.items())
     ):
-        raise ProtocolError("The Studio removal response is invalid.")
-    return ViewRemovalResult(
+        raise ProtocolError("The Studio view catalog response is invalid.")
+    return ViewCatalog(
         notebook=notebook,
-        view=view,
         default_view=cast(str, payload["default_view"]),
-        views=cast(tuple[str, ...], names),
+        views=cast(dict[str, str], views),
         catalog_generation=cast(str, payload["generation"]),
     )
 

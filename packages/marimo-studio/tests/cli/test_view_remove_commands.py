@@ -60,7 +60,12 @@ def test_view_remove_reports_the_updated_view_inventory(notebook_path: Path) -> 
         "notebook": str(notebook_path),
         "schema": 1,
         "view": "dashboard",
-        "views": ["executive"],
+        "views": [
+            {
+                "name": "executive",
+                "generation": updated.view_generations["executive"],
+            }
+        ],
     }
     assert not dashboard.exists()
 

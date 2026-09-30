@@ -421,7 +421,7 @@ def test_code_mode_removal_releases_artifacts_its_server_retains(
         removed = asyncio.run(agent.current_workspace().view("dashboard").remove())
 
     assert in_use.value.processes == (os.getpid(),)
-    assert removed.views == ("executive",)
+    assert list(removed.views) == ["executive"]
     assert removed.default_view == "executive"
     assert not (studio.view_root / "dashboard").exists()
     assert load_studio(studio.notebook).default_view == "executive"

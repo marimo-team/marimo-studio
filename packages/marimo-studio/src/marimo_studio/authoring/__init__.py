@@ -38,7 +38,7 @@ from marimo_studio._projections.runtime_records import (
 )
 from marimo_studio._validation.evidence import ValidationIssue as ValidationIssue
 from marimo_studio._validation.records import ValidationReport as ValidationReport
-from marimo_studio._views.api import ViewRemovalResult as ViewRemovalResult
+from marimo_studio._views.api import ViewCatalog as ViewCatalog
 from marimo_studio._views.publication_hold import PublicationHold as PublicationHold
 from marimo_studio._views.records import Starter as Starter
 from marimo_studio._views.records import StudioDiagnostic as StudioDiagnostic
@@ -79,10 +79,10 @@ __all__ = [
     "ValueReadResult",
     "View",
     "ViewBuild",
+    "ViewCatalog",
     "ViewDocument",
     "ViewInspection",
     "ViewOverview",
-    "ViewRemovalResult",
     "ViewSourceChanges",
     "ViewSourceFile",
     "Workspace",

@@ -31,7 +31,7 @@ from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
-from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.api import ViewCatalog
 from marimo_studio._views.publication_hold import (
     DEFAULT_PUBLICATION_HOLD_SECONDS,
     PublicationHold,
@@ -251,7 +251,7 @@ class View:
             progress=progress,
         )
 
-    async def remove(self) -> ViewRemovalResult:
+    async def remove(self) -> ViewCatalog:
         """Remove this view and return the remaining workspace identity."""
         if not isinstance(self._owner, PresentViewOwner):
             raise WorkspaceGenerationConflictError()

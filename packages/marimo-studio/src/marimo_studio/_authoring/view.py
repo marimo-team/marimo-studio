@@ -21,7 +21,7 @@ from marimo_studio._delivery.export import preflight_view as preflight_view_bund
 from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.provider_operation import run_provider_operation
-from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.api import ViewCatalog
 from marimo_studio._views.api import remove_view as remove_view_operation
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.inspect import inspect_view as inspect_view_project
@@ -383,7 +383,7 @@ async def remove_view(
     connection: StudioServerConnection | None = None,
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
-) -> ViewRemovalResult:
+) -> ViewCatalog:
     """Remove one named view and return the remaining workspace identity."""
     if connection is not None:
         if expected_catalog_generation is None or expected_generation is None:
@@ -398,7 +398,7 @@ async def remove_view(
             view_generation=expected_generation,
         )
 
-    def operation() -> ViewRemovalResult:
+    def operation() -> ViewCatalog:
         return remove_view_operation(
             load_studio(notebook),
             view,

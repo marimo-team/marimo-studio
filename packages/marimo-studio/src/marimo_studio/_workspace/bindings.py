@@ -5,21 +5,18 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any
 
-import tomlkit
-
 from marimo_studio._filesystem._secure_types import ConditionalWriteError
 from marimo_studio._filesystem.io import read_text
 from marimo_studio._notebook.ports import NotebookInspector
 from marimo_studio._notebook.records import CellRef, CellSelector, resolve_cell
 from marimo_studio._notebook.source_snapshot import inspect_notebook_source
-from marimo_studio._workspace.config import editable_studio_config, load_studio
+from marimo_studio._workspace.config import load_studio, updated_studio_config_source
 from marimo_studio._workspace.config_snapshot import (
     WorkspaceConfigSnapshot,
     snapshot_workspace_config,
 )
 from marimo_studio._workspace.metadata import (
     set_cell_bindings,
-    updated_notebook_config_source,
 )
 from marimo_studio._workspace.models import (
     ALIAS_PATTERN,
@@ -171,12 +168,10 @@ def cell_bindings_source(
     def update(config: MutableMapping[str, Any]) -> None:
         set_cell_bindings(config, bindings, remove=removed)
 
-    if studio.uses_notebook_config:
-        current = read_text(studio.notebook) if source is None else source
-        return updated_notebook_config_source(studio.notebook, current, update)
-    current = (
-        read_text(studio.config_path, root=studio.root) if source is None else source
-    )
-    document = tomlkit.parse(current)
-    update(editable_studio_config(document))
-    return tomlkit.dumps(document)
+    if source is None:
+        source = (
+            read_text(studio.notebook)
+            if studio.uses_notebook_config
+            else read_text(studio.config_path, root=studio.root)
+        )
+    return updated_studio_config_source(studio, source, update)

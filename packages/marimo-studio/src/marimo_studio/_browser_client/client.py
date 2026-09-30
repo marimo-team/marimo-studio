@@ -13,8 +13,8 @@ from marimo_studio._browser_client.limits import (
 from marimo_studio._browser_client.protocol import (
     ViewShowRequest,
     parse_connection_token,
-    parse_removal_result,
     parse_show_result,
+    parse_view_catalog,
 )
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import (
@@ -25,7 +25,7 @@ from marimo_studio._browser_client.transport import (
     studio_server_connection as studio_server_connection,
 )
 from marimo_studio._delivery.urls import SUPPORT_PATH
-from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.api import ViewCatalog
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.ownership import ObservedViewOwner, require_view_owner
 from marimo_studio.errors import (
@@ -92,7 +92,7 @@ async def request_view_removal(
     *,
     catalog_generation: str,
     view_generation: str,
-) -> ViewRemovalResult:
+) -> ViewCatalog:
     """Remove one view through the server that serves its artifacts."""
     connection = await _authorized_connection(connection, notebook)
     payload = await request_json(
@@ -109,7 +109,7 @@ async def request_view_removal(
     cleanup = payload.get("cleanup")
     if isinstance(cleanup, str) and cleanup:
         raise ViewDeletionError(Path(cleanup))
-    return parse_removal_result(payload, notebook, view)
+    return parse_view_catalog(payload, notebook, view)
 
 
 async def _authorized_connection(

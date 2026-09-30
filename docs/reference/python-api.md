@@ -200,7 +200,7 @@ await view.preflight(
     prepare_timeout: float | None = None,
     progress: Callable[[StaticExportProgress], None] | None = None,
 ) -> StaticPreflightReport
-await view.remove() -> ViewRemovalResult
+await view.remove() -> ViewCatalog
 ```
 
 `inspect()` reads current filesystem state. Source can be edited through
@@ -420,11 +420,12 @@ Names one source-located delivery diagnostic with `code`, `severity`,
 destination changes. Warnings identify browser dependencies that require
 caller review.
 
-### `ViewRemovalResult`
+### `ViewCatalog`
 
-Identifies the removed view, the updated default view, and the remaining view
-names returned by `View.remove()`. `catalog_generation` identifies the
-post-commit catalog captured by the owning workspace.
+The named views of a notebook after a catalog change. `View.remove()` returns
+it. `views` maps each remaining view name to its view generation in catalog
+order, `default_view` names the view at `/`, and `catalog_generation`
+identifies the committed catalog that the owning workspace captured.
 
 A view from `marimo_studio.agent.current_workspace()` is removed by the
 attached Studio server, which first releases the artifacts it serves for that
@@ -767,7 +768,7 @@ surfaces. Nested notebook records are documented under `NotebookSpec` and
 | `ViewDocument`       | `path`, `language`, `access`, `content`, `revision`                                                                                                                       |
 | `ViewInspection`     | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `build`                                                                                                      |
 | `ViewBuild`          | `view`, `profile`, `revision`, `issues`                                                                                                                                   |
-| `ViewRemovalResult`  | `notebook`, `view`, `default_view`, `views`, `catalog_generation`                                                                                                         |
+| `ViewCatalog`        | `notebook`, `default_view`, `views`, `catalog_generation`                                                                                                                 |
 | `StaticExportResult` | `notebook`, `view`, `runtime`, `document`, `cache_activity`, `preflight`, `delivery` and computed `output`, `files`, `warnings`, `entrypoint`                             |
 
 `StudioOverview.state` is `unconfigured`, `needs-view`, or `ready`.

@@ -144,7 +144,7 @@ assert set(marimo_studio.authoring.__all__) == {
     "StaticExportResult", "StaticPreflightIssue", "StaticPreflightReport", "StaticRuntime",
     "StudioDiagnostic", "StudioOverview", "ValidationIssue", "ValidationReport",
     "ValueReadError", "ValueReadResult", "View", "ViewBuild", "ViewDocument",
-    "ViewInspection", "ViewOverview", "ViewRemovalResult", "Workspace", "doctor",
+    "ViewInspection", "ViewOverview", "ViewCatalog", "Workspace", "doctor",
     "open_workspace",
 }
 assert set(get_args(marimo_studio.authoring.StaticRuntime)) == {"zero-python", "wasm"}

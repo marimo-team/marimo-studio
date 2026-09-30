@@ -22,8 +22,8 @@ from marimo_studio._cli.options import (
 )
 from marimo_studio._cli.output import (
     echo_json,
+    render_view_catalog,
     render_view_next_command,
-    render_view_removal,
     render_view_setup,
 )
 from marimo_studio._cli.targets import resolve_environment_target, resolve_notebook
@@ -114,8 +114,8 @@ def remove(
         err=True,
     ):
         raise click.exceptions.Exit(0)
-    result = asyncio.run(remove_view(resolve_notebook(target), view_name))
+    catalog = asyncio.run(remove_view(resolve_notebook(target), view_name))
     if json_output:
-        echo_json(result.to_dict())
+        echo_json({**catalog.to_dict(), "view": view_name})
         return
-    render_view_removal(result)
+    render_view_catalog("Removed", f"view {view_name}", catalog)

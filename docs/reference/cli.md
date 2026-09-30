@@ -414,7 +414,9 @@ marimo-studio view remove VIEW [--target PATH] [--yes] [--json]
 
 Confirms before deleting the view project. `--yes` is required for
 machine-readable or non-interactive use. A configured notebook keeps at least
-one view. The JSON result includes the updated `catalog_generation`.
+one view. The JSON result names the removed `view` and lists the remaining
+`views` with their generations, the `default_view`, and the updated
+`catalog_generation`.
 
 ## `marimo-studio validate`
 
