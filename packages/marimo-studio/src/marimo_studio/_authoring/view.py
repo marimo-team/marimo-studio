@@ -24,11 +24,8 @@ from marimo_studio._delivery.export import preflight_view as preflight_view_bund
 from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.provider_operation import run_provider_operation
-from marimo_studio._views.api import ViewCatalog
-from marimo_studio._views.api import make_default_view as make_default_operation
-from marimo_studio._views.api import remove_view as remove_view_operation
-from marimo_studio._views.api import rename_view as rename_view_operation
 from marimo_studio._views.build import build_view_project
+from marimo_studio._views.default_view import set_default_view
 from marimo_studio._views.inspect import inspect_view as inspect_view_project
 from marimo_studio._views.publication_hold import (
     DEFAULT_PUBLICATION_HOLD_SECONDS,
@@ -36,7 +33,14 @@ from marimo_studio._views.publication_hold import (
     acquire_publication_hold,
     release_publication_hold,
 )
-from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
+from marimo_studio._views.records import (
+    ViewBuild,
+    ViewCatalog,
+    ViewDocument,
+    ViewInspection,
+)
+from marimo_studio._views.remove import delete_view
+from marimo_studio._views.rename import rename_view as rename_view_project
 from marimo_studio._views.sources import (
     OwnedViewDocument,
     admit_source_owner,
@@ -389,7 +393,7 @@ async def remove_view(
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
 ) -> ViewCatalog:
-    """Remove one named view and return the remaining workspace identity."""
+    """Remove one named view and return the remaining catalog."""
     if connection is not None:
         if expected_catalog_generation is None or expected_generation is None:
             raise WorkspaceGenerationConflictError()
@@ -404,11 +408,13 @@ async def remove_view(
         )
 
     def operation() -> ViewCatalog:
-        return remove_view_operation(
-            load_studio(notebook),
-            view,
-            expected_catalog_generation=expected_catalog_generation,
-            expected_generation=expected_generation,
+        return ViewCatalog.of(
+            delete_view(
+                load_studio(notebook),
+                view,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generation=expected_generation,
+            )
         )
 
     return await run_provider_operation(operation)
@@ -424,11 +430,13 @@ async def make_default_view(
     """Serve one named view at the main route and return the catalog."""
 
     def operation() -> ViewCatalog:
-        return make_default_operation(
-            load_studio(notebook),
-            view,
-            expected_catalog_generation=expected_catalog_generation,
-            expected_generation=expected_generation,
+        return ViewCatalog.of(
+            set_default_view(
+                load_studio(notebook),
+                view,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generation=expected_generation,
+            )
         )
 
     return await run_provider_operation(operation)
@@ -459,12 +467,14 @@ async def rename_view(
         )
 
     def operation() -> ViewCatalog:
-        return rename_view_operation(
-            load_studio(notebook),
-            view,
-            name,
-            expected_catalog_generation=expected_catalog_generation,
-            expected_generation=expected_generation,
+        return ViewCatalog.of(
+            rename_view_project(
+                load_studio(notebook),
+                view,
+                name,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generation=expected_generation,
+            )
         )
 
     return await run_provider_operation(operation)

@@ -25,7 +25,7 @@ from marimo_studio._browser_client.transport import (
     studio_server_connection as studio_server_connection,
 )
 from marimo_studio._delivery.urls import SUPPORT_PATH
-from marimo_studio._views.api import ViewCatalog
+from marimo_studio._views.records import ViewCatalog
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.ownership import ObservedViewOwner, require_view_owner
 from marimo_studio.errors import (
@@ -109,7 +109,7 @@ async def request_view_removal(
     cleanup = payload.get("cleanup")
     if isinstance(cleanup, str) and cleanup:
         raise ViewDeletionError(Path(cleanup))
-    return parse_view_catalog(payload, notebook, view)
+    return parse_view_catalog(payload, notebook, view, present=False)
 
 
 async def request_view_rename(
@@ -134,7 +134,7 @@ async def request_view_rename(
         },
         timeout=VIEW_RETIREMENT_HTTP_TIMEOUT,
     )
-    return parse_view_catalog(payload, notebook, name)
+    return parse_view_catalog(payload, notebook, name, present=True)
 
 
 async def _authorized_connection(

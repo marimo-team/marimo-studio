@@ -33,14 +33,22 @@ from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
-from marimo_studio._views.api import ViewCatalog
 from marimo_studio._views.publication_hold import (
     DEFAULT_PUBLICATION_HOLD_SECONDS,
     PublicationHold,
 )
-from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
+from marimo_studio._views.records import (
+    ViewBuild,
+    ViewCatalog,
+    ViewDocument,
+    ViewInspection,
+)
 from marimo_studio._workspace.ownership import ObservedViewOwner, PresentViewOwner
-from marimo_studio.errors import ProtocolError, WorkspaceGenerationConflictError
+from marimo_studio.errors import (
+    ProtocolError,
+    ViewNotFoundError,
+    WorkspaceGenerationConflictError,
+)
 from marimo_studio.view_providers import BuildProfile
 
 _View = TypeVar("_View", bound="View")
@@ -298,8 +306,9 @@ class View:
         return catalog
 
     def _present_owner(self) -> PresentViewOwner:
+        # A handle taken while its name was absent never identified a view.
         if not isinstance(self._owner, PresentViewOwner):
-            raise WorkspaceGenerationConflictError()
+            raise ViewNotFoundError(self.name)
         return self._owner
 
     def _handle_in(self: _View, catalog: ViewCatalog, name: str) -> _View:

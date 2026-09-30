@@ -8,7 +8,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 
 from marimo_studio._browser_client.records import PreviewAutomationTarget, ShowResult
-from marimo_studio._views.api import ViewCatalog
+from marimo_studio._views.records import ViewCatalog
 from marimo_studio._workspace.ownership import (
     ObservedViewOwner,
     observed_view_owner,
@@ -165,30 +165,42 @@ def parse_view_catalog(
     payload: dict[str, Any],
     notebook: Path,
     view: str,
+    *,
+    present: bool,
 ) -> ViewCatalog:
-    """Parse the catalog a view mutation route committed for ``view``."""
-    schema = payload.get("schema")
+    """Parse the catalog that a view mutation route committed.
+
+    ``present`` states whether ``view`` names a view of the committed catalog.
+    """
+    invalid = ProtocolError("The Studio view catalog response is invalid.")
     items = payload.get("views")
-    views = (
-        {item.get("name"): item.get("generation") for item in items}
-        if isinstance(items, list) and all(isinstance(item, dict) for item in items)
-        else {}
-    )
+    if not isinstance(items, list):
+        raise invalid
+    views: dict[str, str] = {}
+    for item in items:
+        name = item.get("name") if isinstance(item, dict) else None
+        generation = item.get("generation") if isinstance(item, dict) else None
+        if not _nonempty(name) or not _nonempty(generation) or name in views:
+            raise invalid
+        views[cast(str, name)] = cast(str, generation)
+    schema = payload.get("schema")
+    default_view = payload.get("default_view")
+    catalog_generation = payload.get("generation")
     if (
         type(schema) is not int
         or schema != 1
         or payload.get("name") != view
-        or not _nonempty(payload.get("generation"))
-        or payload.get("default_view") not in views
-        or len(views) != len(cast(list[object], items))
-        or not all(_nonempty(name) and _nonempty(gen) for name, gen in views.items())
+        or not _nonempty(catalog_generation)
+        or not isinstance(default_view, str)
+        or default_view not in views
+        or (view in views) is not present
     ):
-        raise ProtocolError("The Studio view catalog response is invalid.")
+        raise invalid
     return ViewCatalog(
         notebook=notebook,
-        default_view=cast(str, payload["default_view"]),
-        views=cast(dict[str, str], views),
-        catalog_generation=cast(str, payload["generation"]),
+        default_view=default_view,
+        views=views,
+        catalog_generation=cast(str, catalog_generation),
     )
 
 

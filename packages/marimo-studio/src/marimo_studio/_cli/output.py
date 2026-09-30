@@ -16,9 +16,13 @@ from marimo_studio._delivery.export import StaticExportResult
 from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._notebook.inspection import InspectionResult
 from marimo_studio._validation.records import ValidationReport
-from marimo_studio._views.api import ViewCatalog
 from marimo_studio._views.overview import StudioOverview
-from marimo_studio._views.records import ViewDocument, ViewInspection, ViewSetupResult
+from marimo_studio._views.records import (
+    ViewCatalog,
+    ViewDocument,
+    ViewInspection,
+    ViewSetupResult,
+)
 from marimo_studio._workspace.models import BindingResult
 from marimo_studio._workspace.python_project import owning_project
 
