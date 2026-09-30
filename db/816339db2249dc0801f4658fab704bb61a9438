@@ -1,0 +1,30 @@
+packages/marimo-studio/tests/artifacts/test_serving.py
+  s_e5711cd086c9dc::t_60ba9e8544b389 525-528
+  s_e5711cd086c9dc::t_0c1072062ba9a8 18
+  s_e5711cd086c9dc::t_1b161033df1006 98-102,110
+  s_e5711cd086c9dc::t_f5caf12af8ca17 505-524,529-536
+  s_e5711cd086c9dc::t_2b3a2188c15ce1 700
+packages/marimo-studio/src/marimo_studio/_server/presentation/service.py
+  s_e5711cd086c9dc::t_162efde701dfa2 11-12
+  s_e5711cd086c9dc::t_bd919f98496df4 79
+  s_e5711cd086c9dc::t_d7be0d310bd3d6 78
+  s_e5711cd086c9dc::t_f9240330b77c7d 859-870
+development_docs/architecture/view-providers-and-artifacts.md
+  s_e5711cd086c9dc::t_f99d5b275fb3b9 189-192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "db816339db2249dc0801f4658fab704bb61a9438",
+  "prompts": {},
+  "sessions": {
+    "s_e5711cd086c9dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7338eb56-7800-49ba-9604-5c6685a579a3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
