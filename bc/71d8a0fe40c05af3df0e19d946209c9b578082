@@ -1,0 +1,29 @@
+docs/guide/marimohub.md
+  s_33bf2a888fde6f::t_78cfd5dba376d4 54,97
+  s_33bf2a888fde6f::t_aa8da0237dbb26 1-18,21-53,55-58,63-64,70,73-76,89-96,98-141
+  s_33bf2a888fde6f::t_908251384e1e1a 59-62,142-148
+  s_33bf2a888fde6f::t_7740316195658b 65-69,71-72,77-88
+  s_33bf2a888fde6f::t_94bf918423b8d3 19-20
+apps/docs/.vitepress/routes.ts
+  s_33bf2a888fde6f::t_52ac92beca9063 26,74
+docs/guide/index.md
+  s_33bf2a888fde6f::t_52ac92beca9063 29
+apps/docs/.vitepress/theme/custom.css
+  s_33bf2a888fde6f::t_5c240a0e5d46d4 113-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bc71d8a0fe40c05af3df0e19d946209c9b578082",
+  "prompts": {},
+  "sessions": {
+    "s_33bf2a888fde6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e529c10-d18b-4619-8266-e72e534d0353",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
