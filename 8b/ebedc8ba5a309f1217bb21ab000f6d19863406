@@ -1,0 +1,21 @@
+docs/reference/provider-api.md
+  s_91bd487b6989fe::t_ec96d0ca5842ea 150-157,161,180-181
+docs/guide/view-providers.md
+  s_91bd487b6989fe::t_e382985f1cd1dd 146,149,194-210,244,317-322,374-375,387-398,429-473,480-481,493,506-507,510-515,517-525,538,562-565,575,581,583,587-588,597-631,642-645,647-649,659-681,689-690,696-698,707,732-735
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8bebedc8ba5a309f1217bb21ab000f6d19863406",
+  "prompts": {},
+  "sessions": {
+    "s_91bd487b6989fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3acfaa0-83d1-40c0-b99c-57e2a8bde726",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
