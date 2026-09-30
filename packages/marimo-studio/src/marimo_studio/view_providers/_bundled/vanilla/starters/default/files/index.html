@@ -54,7 +54,7 @@
         host.addEventListener("marimo-value-error", fail);
         if (host.dataset.marimoError !== undefined) {
           onError({
-            selector: host.getAttribute("mo-value"),
+            selector: host.getAttribute("mo-value")?.trim() ?? "",
             code: host.dataset.marimoErrorCode,
             message: host.dataset.marimoError,
             hint: host.dataset.marimoDiagnosticHint,

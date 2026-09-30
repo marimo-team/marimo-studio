@@ -174,7 +174,7 @@ Every expected error exposes:
 | `WorkspaceGenerationConflictError` | `workspace-generation-conflict`                                                                                                |  `3` |                  `409` | Open the workspace again                                             |
 | `WorkspaceMutationError`           | `workspace-mutation-incomplete`                                                                                                |  `3` |                  `409` | Inspect `recovery` and reload before retrying                        |
 | `ViewDeletionError`                | `view-deletion-error`                                                                                                          |  `3` |                  `500` | Inspect `cleanup` or `recovery` before another mutation              |
-| `ViewInUseError`                   | `view-in-use`                                                                                                                  |  `3` |                  `409` | Remove through the server in `details.processes`, or stop it         |
+| `ViewInUseError`                   | `view-in-use`                                                                                                                  |  `3` |                  `409` | Remove via the process listed in `details.processes`, or stop it      |
 | `LastViewError`                    | `last-view`                                                                                                                    |  `3` |                  `409` | Create the replacement view, then remove this one                    |
 
 Generation and incomplete-mutation errors marked `transient` require a fresh

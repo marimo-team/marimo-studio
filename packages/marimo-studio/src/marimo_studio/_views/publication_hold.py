@@ -90,6 +90,10 @@ def read_publication_hold(root: Path) -> PublicationHold | None:
             or type(record["released"]) is not bool
         ):
             raise ValueError("invalid expiry or release state")
+        try:
+            datetime.fromtimestamp(expires_at, timezone.utc)
+        except (OverflowError, OSError) as error:
+            raise ValueError("expiry is outside the supported time range") from error
         hold = PublicationHold(
             record["token"],
             record["owner"],

@@ -272,10 +272,11 @@ at least one non-whitespace character. `ttl` is a finite number of seconds
 greater than zero and at most 3600. Invalid arguments raise `ValueError`.
 An active hold raises `ConfigurationError` with its owner and expiry.
 
-Retain the returned token, or read the current one from
-`(await view.inspect()).publication_hold.token` in a later execution.
-`release_publication()` releases the matching hold
-and returns its receipt. Repeating the release returns the same receipt.
+Retain the returned token. In a later execution,
+`(await view.inspect()).publication_hold` returns the current hold with its
+token, or `None` when the view has no hold record. `release_publication()`
+releases the matching hold and returns its receipt. Repeating the release
+returns the same receipt.
 It returns `None` when the view has no hold record. A mismatched token raises
 `ConfigurationError`. Both methods enforce the handle's view generation.
 They remain available when the manifest needs repair.

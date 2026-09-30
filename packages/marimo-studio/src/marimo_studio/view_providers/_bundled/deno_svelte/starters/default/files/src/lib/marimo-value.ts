@@ -84,7 +84,7 @@ export type MarimoValueError = {
 /** Read the error a host recorded before its listeners attached. */
 const hostError = (host: HTMLElement): MarimoValueError | undefined =>
   host.dataset.marimoError === undefined ? undefined : {
-    selector: host.getAttribute("mo-value") ?? "",
+    selector: host.getAttribute("mo-value")?.trim() ?? "",
     code: host.dataset.marimoErrorCode ?? "",
     message: host.dataset.marimoError,
     hint: host.dataset.marimoDiagnosticHint,

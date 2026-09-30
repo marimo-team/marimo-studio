@@ -67,6 +67,7 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
 
 def test_wildcard_value_hosts_authorize_runtime_selectors(
     notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = published_dashboard(notebook_path)
     _set_shell(
@@ -76,6 +77,24 @@ def test_wildcard_value_hosts_authorize_runtime_selectors(
     )
     with build_view_project_sync(studio.views["dashboard"]):
         pass
+    requested: list[str] = []
+
+    async def read_values(
+        _host: object,
+        _context: object,
+        _session_id: str,
+        _revision: str,
+        projections: tuple[SimpleNamespace, ...],
+        *_args: object,
+        **_kwargs: object,
+    ) -> SimpleNamespace:
+        requested.extend(item.request.target for item in projections)
+        return SimpleNamespace(errors={}, to_dict=lambda: {"errors": {}})
+
+    monkeypatch.setattr(
+        "marimo_studio._compat.kernel_values.host.PrivateKernelProjectionHost.read_values",
+        read_values,
+    )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
@@ -92,8 +111,8 @@ def test_wildcard_value_hosts_authorize_runtime_selectors(
         )
 
     assert site["allowedTargets"] is None
-    assert response.status_code == 409
-    assert response.json()["error"] == "unknown-session"
+    assert response.status_code == 200, response.text
+    assert requested == ["x"]
 
 
 def test_value_requests_allow_repeated_instances_with_one_target(
