@@ -206,8 +206,8 @@ await view.rename(new_name: str) -> View
 await view.remove() -> ViewCatalog
 ```
 
-`make_default()` serves the view at the notebook's main route and returns a
-handle bound to the committed catalog. Selecting the current default leaves the
+`make_default()` serves the view at the main route (`/`) and returns a handle
+bound to the committed catalog. Selecting the current default leaves the
 catalog unchanged.
 
 `rename(new_name)` moves the view project to `new_name` with its source,
@@ -216,19 +216,23 @@ default view stays the default. The project reads as `stale` until its next
 `build()`, which republishes it under the new name. Handles bound to the old
 name raise `ViewGenerationConflictError` from view operations such as
 `inspect()` and `build()`. `rename()` raises `ViewExistsError` for a taken
-name, `InvalidViewNameError` for a name outside the view name rules,
-`PublicationHeldError` while a publication hold is active, and
-`ViewRenameError` when the project folder cannot move. The view keeps its old
-name after each of these errors. `WorkspaceMutationError` reports a rename
-that stopped between names. Open a new `Workspace` and read `status()` to see
-which name the view has.
+name, including the view's own name, `InvalidViewNameError` for a name outside
+the view name rules, `PublicationHeldError` while a publication hold is
+active, and `ViewRenameError` when the project folder cannot move. The view
+keeps its old name after each of these errors.
 
 `remove()` deletes the view project and returns the remaining views as a
-`ViewCatalog`. It raises `LastViewError` for the only view and
-`ViewInUseError` while another process holds an artifact lease for the view.
-Its `processes` detail lists the holding process IDs. `ViewDeletionError`
+`ViewCatalog`. It raises `LastViewError` for the only view. `ViewDeletionError`
 reports an incomplete filesystem cleanup and exposes the cleanup path through
 `diagnostic_details()`.
+
+`rename()` and `remove()` raise `ViewInUseError` while another process holds
+an artifact lease for the view. Its `processes` detail lists the holding
+process IDs. `WorkspaceMutationError` reports a change that did not finish
+cleanly, so open a new `Workspace` before continuing. When its `recovery`
+names a renamed project folder, the view reloads under the new name, and
+`marimo-studio view default VIEW` repairs a default that still names the old
+one.
 
 A catalog change after the handle was acquired, including a same-name
 replacement, makes `make_default()`, `rename()`, and `remove()` raise
@@ -454,9 +458,9 @@ caller review.
 
 ### `ViewCatalog`
 
-The named views of a notebook after a catalog change. `View.remove()` returns
-it. `views` maps each remaining view name to its view generation in catalog
-order, `default_view` names the view at `/`, and `catalog_generation`
+`ViewCatalog` records the views of a notebook after a catalog change.
+`View.remove()` returns it. `views` maps each view name to its view generation
+in name order, `default_view` names the view at `/`, and `catalog_generation`
 identifies the committed catalog that the owning workspace captured.
 
 ### `ValidationReport`
