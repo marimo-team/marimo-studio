@@ -503,8 +503,8 @@ test("repairs an opaque preview through its scoped event stream", async ({
     ).toBeVisible();
     await scopedEvents;
 
-    projectRepair.seal();
     await writeWorkspaceFile(dashboardManifestPath, manifest);
+    projectRepair.seal();
     await waitForPreview(page);
     await expect(
       previewFrame(page).getByRole("heading", { name: "Studio browser fixture" }),
