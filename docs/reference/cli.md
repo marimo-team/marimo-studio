@@ -162,9 +162,11 @@ marimo-studio view default VIEW [--target PATH] [--json]
 ```
 
 Serves `VIEW` at the notebook's main route by writing `default` in the Studio
-configuration. The views and their project files stay unchanged. The JSON
-result lists the `views` with their generations, the `default_view`, and the
-updated `catalog_generation`.
+configuration. The views and their project files stay unchanged. When the
+configured `default` names a missing view, the command selects `VIEW` from the
+view projects on disk and repairs the configuration. The JSON result names the
+selected `view` and lists the `views` with their generations, the
+`default_view`, and the updated `catalog_generation`.
 
 ## `marimo-studio view inspect`
 

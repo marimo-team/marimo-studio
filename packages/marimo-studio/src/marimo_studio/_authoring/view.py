@@ -432,7 +432,7 @@ async def make_default_view(
     def operation() -> ViewCatalog:
         return ViewCatalog.of(
             set_default_view(
-                load_studio(notebook),
+                load_studio_definition(notebook),
                 view,
                 expected_catalog_generation=expected_catalog_generation,
                 expected_generation=expected_generation,

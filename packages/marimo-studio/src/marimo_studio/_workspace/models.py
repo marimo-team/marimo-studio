@@ -85,7 +85,9 @@ class StudioWorkspace(StudioDefinition):
             raise WorkspaceInitializationError(self.default_view)
         if self.default_view not in self.views:
             raise ConfigurationError(
-                f"Default view {self.default_view!r} does not exist in {self.view_root}"
+                f"Default view {self.default_view!r} does not exist in "
+                f"{self.view_root}. Choose an existing view with "
+                "`marimo-studio view default VIEW`."
             )
         if self.view_generations.keys() != self.views.keys():
             raise ConfigurationError("View generations must match the view catalog")

@@ -47,16 +47,22 @@ def test_make_default_updates_project_configuration(notebook_path: Path) -> None
     assert studio.default_view == "report"
 
 
-def test_make_default_on_the_current_default_keeps_the_catalog(
+def test_make_default_on_the_current_default_leaves_the_configuration(
     notebook_path: Path,
 ) -> None:
-    workspace = _workspace_with_report(notebook_path)
+    _workspace_with_report(notebook_path)
     before = load_studio(notebook_path)
+    source = notebook_path.read_text(encoding="utf-8").replace(
+        'default = "dashboard"',
+        "default = 'dashboard'",
+    )
+    notebook_path.write_text(source, encoding="utf-8")
+    workspace = studio_authoring.open_workspace(notebook_path)
 
     dashboard = asyncio.run(workspace.view("dashboard").make_default())
 
-    assert load_studio(notebook_path).catalog_generation == before.catalog_generation
-    assert dashboard.catalog_generation == before.catalog_generation
+    assert notebook_path.read_text(encoding="utf-8") == source
+    assert dashboard.generation == before.view_generations["dashboard"]
 
 
 def test_make_default_rejects_handles_from_an_earlier_catalog(
