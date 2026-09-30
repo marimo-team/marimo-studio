@@ -12,8 +12,8 @@ easier to maintain. Choose [Observable Notebook Kit](https://observablehq.com/no
 for reactive JavaScript, Markdown, and HTML cells.
 
 Every built-in view provider supports `marimo-cell`, `marimo-output`, and
-`mo-value`. Add support for any web framework or custom build workflow with a
-[view provider](../reference/provider-api.md).
+`mo-value`. To use another framework, see
+[Bring your own frontend](#bring-your-own-frontend).
 
 | Starter                              | Choose it for                                             |
 | ------------------------------------ | --------------------------------------------------------- |
@@ -175,5 +175,13 @@ The **Files created** detail in Studio shows the same document plan before view
 creation. A starter may also create provider-owned files required by its build.
 
 Use [Manage view source](manage-source.md) for the distinction between source
-documents and build inputs. Teams can add another project shape through a
-[view provider](../reference/provider-api.md).
+documents and build inputs.
+
+## Bring your own frontend
+
+Install a view provider package to add starters for another framework,
+template, or build tool. Its starters appear in the **New view** picker under
+the package name, and its views build with that framework's own commands.
+[Add a view provider](view-providers.md) walks through a complete provider,
+from the `pyproject.toml` entry point to a Vite build run by Deno, and starts
+with a prompt that asks a coding agent to build one.

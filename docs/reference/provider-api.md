@@ -17,6 +17,9 @@ Studio owns notebook execution, conditional Source writes, immutable build
 snapshots, artifact validation and publication, presentations, browser
 sessions, and agent workflows.
 
+[Add a view provider](../guide/view-providers.md) builds and installs a
+complete provider step by step.
+
 ::: warning View providers are trusted code
 An installed provider runs Python and child commands with the current user's
 filesystem permissions, environment variables, and network access. Studio runs

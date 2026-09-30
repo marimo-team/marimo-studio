@@ -116,6 +116,13 @@
   border-radius: 6px;
 }
 
+.vp-doc img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+}
+
 .VPFooter .message a {
   color: inherit;
   text-decoration: underline;

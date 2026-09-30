@@ -16,6 +16,7 @@ Follow [Getting started](getting-started.md) for a working page, or
 | Work with Notebook, Source, and Preview             | [Edit and preview in Studio](work-in-studio.md)         |
 | Create, switch, and remove views                    | [Create and manage views](views.md)                     |
 | Choose HTML, React, Svelte, slides, or Notebook Kit | [Choose a frontend](frontend-options.md)                |
+| Bring another frontend framework or build tool      | [Add a view provider](view-providers.md)                |
 | Work with files, conflicts, and source recovery     | [Manage view source](manage-source.md)                  |
 | Set typography, colors, and loading states          | [Style a view](styling.md)                              |
 
