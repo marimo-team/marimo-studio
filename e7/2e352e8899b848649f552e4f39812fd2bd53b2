@@ -1,0 +1,48 @@
+packages/marimo-studio/src/marimo_studio/_cli/commands/view.py
+  s_f8296af1d7933f::t_86b99e0831cb64 5,24
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  s_f8296af1d7933f::t_764a9c18e9548d 18,255-268,270-272,276-294
+docs/reference/python-api.md
+  s_f8296af1d7933f::t_b9dc1ff7f9e89d 160-164,204,208-210
+docs/guide/index.md
+  s_f8296af1d7933f::t_b9b791e4237536 17
+docs/reference/cli.md
+  s_f8296af1d7933f::t_b9dc1ff7f9e89d 3,158-167
+packages/marimo-studio/tests/cli/test_view_default_commands.py
+  s_f8296af1d7933f::t_1fc93000b04bb0 1-47
+packages/marimo-studio/tests/cli/test_view_remove_commands.py
+  s_f8296af1d7933f::t_6f82b3d9b4bdd9 23,80
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_catalog.py
+  s_f8296af1d7933f::t_86b99e0831cb64 1-134
+packages/marimo-studio/src/marimo_studio/_authoring/view.py
+  s_f8296af1d7933f::t_d9b22868899a35 25,411-423
+packages/marimo-studio/src/marimo_studio/_views/default_view.py
+  s_f8296af1d7933f::t_24a6bac90e46fd 1-58
+docs/guide/views.md
+  s_f8296af1d7933f::t_8fce0b82d37bb3 31
+  s_f8296af1d7933f::t_b9b791e4237536 3
+  s_f8296af1d7933f::t_b9dc1ff7f9e89d 33-40,44
+packages/marimo-studio/src/marimo_studio/_views/api.py
+  s_f8296af1d7933f::t_d9b22868899a35 12,131-142
+packages/marimo-studio/tests/cli/test_provider_bootstrap_commands.py
+  s_f8296af1d7933f::t_6f82b3d9b4bdd9 27,123,175
+packages/marimo-studio/tests/views/test_default_view.py
+  s_f8296af1d7933f::t_bd4bd9f86a5c9d 1-10,12-71
+  s_f8296af1d7933f::t_1fc93000b04bb0 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e72e352e8899b848649f552e4f39812fd2bd53b2",
+  "prompts": {},
+  "sessions": {
+    "s_f8296af1d7933f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62bd6a9d-0227-4e2d-a288-3cef1089349a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
