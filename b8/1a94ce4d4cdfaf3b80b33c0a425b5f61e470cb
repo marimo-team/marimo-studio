@@ -1,0 +1,74 @@
+packages/marimo-studio/src/marimo_studio/_server/support.py
+  s_f8296af1d7933f::t_9ad8d2fce56fa7 79,415-416
+packages/marimo-studio/src/marimo_studio/_browser_client/limits.py
+  s_f8296af1d7933f::t_7a05f8e5b24a3e 5-7
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_catalog.py
+  s_f8296af1d7933f::t_86b99e0831cb64 141-142
+  s_f8296af1d7933f::t_a7b819b6bd3e49 1,11,124-140
+packages/marimo-studio/tests/server/_view_mutation_test_support.py
+  s_f8296af1d7933f::t_ad3d742a1ee96b 26-31
+docs/guide/index.md
+  s_f8296af1d7933f::t_fc27d11ae3b77b 17
+packages/marimo-studio/tests/cli/test_view_rename_commands.py
+  s_f8296af1d7933f::t_e42581b4008ba9 1-57
+packages/marimo-studio/src/marimo_studio/_views/rename.py
+  s_f8296af1d7933f::t_35987753353849 1-15,17-132,134-135,161-172
+  s_f8296af1d7933f::t_4ec11d0c45d5b4 16,136-139,141-146
+  s_f8296af1d7933f::t_77b55ed2bf50b3 133,140,147-160
+packages/marimo-studio/tests/cli/test_public_surface.py
+  s_f8296af1d7933f::t_a7b819b6bd3e49 32
+packages/marimo-studio/tests/views/test_rename_view.py
+  s_f8296af1d7933f::t_ed8e5cdae8b768 1-15,17-45,48-49,54-153
+  s_f8296af1d7933f::t_59fd93873e1ac7 16,53
+  s_f8296af1d7933f::t_9f69dafe1c6e8f 46-47,50-52
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  s_f8296af1d7933f::t_59fd93873e1ac7 273-274
+  s_f8296af1d7933f::t_ebfdd6afc6c1bc 23,270-272,275-285
+packages/marimo-studio/src/marimo_studio/_authoring/view.py
+  s_f8296af1d7933f::t_ebfdd6afc6c1bc 10-13,30,435-465
+packages/marimo-studio/src/marimo_studio/_server/studio/routes.py
+  s_f8296af1d7933f::t_f8dc9f933dd1b0 324-328
+  s_f8296af1d7933f::t_9f6349ac735ace 7-8,42-46,195-204,207-212,223-224,226-242,247,265-323,329-339
+packages/marimo-studio/src/marimo_studio/_server/studio/retirement.py
+  s_f8296af1d7933f::t_9ad8d2fce56fa7 23,277-305
+  s_f8296af1d7933f::t_924382258a4163 306-310
+packages/marimo-studio/tests/server/test_view_rename_routes.py
+  s_f8296af1d7933f::t_ad3d742a1ee96b 1-94,96-184
+  s_f8296af1d7933f::t_f8dc9f933dd1b0 95
+docs/guide/views.md
+  s_f8296af1d7933f::t_fc27d11ae3b77b 3,47-57
+docs/reference/cli.md
+  s_f8296af1d7933f::t_fc27d11ae3b77b 3,420-426,433-436
+  s_f8296af1d7933f::t_1aa2ee84b43fae 427-428
+  s_f8296af1d7933f::t_671bc42341e641 429-432
+packages/marimo-studio/src/marimo_studio/_browser_client/client.py
+  s_f8296af1d7933f::t_7a05f8e5b24a3e 11,107,115-137
+packages/marimo-studio/src/marimo_studio/_cli/commands/view.py
+  s_f8296af1d7933f::t_a7b819b6bd3e49 5-10,40
+packages/marimo-studio/tests/server/test_view_deletion_routes.py
+  s_f8296af1d7933f::t_ad3d742a1ee96b 11,39
+docs/reference/identities.md
+  s_f8296af1d7933f::t_fc27d11ae3b77b 40,78-81
+docs/reference/python-api.md
+  s_f8296af1d7933f::t_fc27d11ae3b77b 161-164,205,213-214
+  s_f8296af1d7933f::t_5fbfdbbd5d71a5 216-222
+  s_f8296af1d7933f::t_1aa2ee84b43fae 215
+packages/marimo-studio/src/marimo_studio/_views/api.py
+  s_f8296af1d7933f::t_ebfdd6afc6c1bc 15,150-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b81a94ce4d4cdfaf3b80b33c0a425b5f61e470cb",
+  "prompts": {},
+  "sessions": {
+    "s_f8296af1d7933f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62bd6a9d-0227-4e2d-a288-3cef1089349a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
