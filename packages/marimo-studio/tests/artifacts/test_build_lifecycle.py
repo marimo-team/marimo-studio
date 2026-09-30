@@ -45,6 +45,7 @@ from marimo_studio.view_providers import (
     BuildResult,
     ProjectDiagnostic,
     ProjectInput,
+    SourceLocation,
     ViewProject,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -858,6 +859,38 @@ def test_failed_build_preserves_the_latest_profile_publication(
     assert retained.artifact_revision == second.artifact_revision
     assert read_build_state(project, "development").phase == "failed"
     first_pin.close()
+
+
+def test_failed_build_reports_its_first_location_and_remaining_count(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    provider = provider_registry().get(project.provider)
+    inspection = provider.inspect(inspection_request(project))
+    failed = replace(
+        inspection,
+        diagnostics=tuple(
+            ProjectDiagnostic(
+                code="provider-analysis-failed",
+                severity="error",
+                message=message,
+                source=SourceLocation(PurePosixPath("index.html"), line, 5),
+            )
+            for message, line in (("Unknown export.", 3), ("Unknown type.", 9))
+        ),
+    )
+    input_id = project_revision(project, failed, provider.provenance(failed))
+
+    with pytest.raises(ViewProjectError) as captured:
+        publish_artifact_lease(
+            project, "development", inspection=failed, input_id=input_id
+        )
+
+    assert str(captured.value) == (
+        f"{project.root / 'index.html'}:3:5: Unknown export. "
+        "Inspect the view to list 1 more error."
+    )
+    assert read_build_state(project, "development").diagnostics == failed.diagnostics
 
 
 @pytest.mark.parametrize("old_inspection_failed", [False, True])
