@@ -15,6 +15,7 @@ from starlette.types import Message, Scope
 import marimo_studio._server.presentation.service as presentation_module
 import marimo_studio._server.ready_handler as ready_handler_module
 import marimo_studio._views.revisions as revisions_module
+from marimo_studio._artifacts.paths import artifact_root
 from marimo_studio._artifacts.repository import read_build_state
 from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._server.files import artifact_file_response
@@ -94,15 +95,20 @@ class _LeaseCloser:
             raise self.failure
 
 
-def _presentation_snapshot(view_name: str, revision: str) -> PresentationSnapshot:
+def _presentation_snapshot(
+    view_name: str,
+    revision: str,
+    artifact_revision: str | None = None,
+    profile: BuildProfile = "development",
+) -> PresentationSnapshot:
     return cast(
         PresentationSnapshot,
         SimpleNamespace(
             view_name=view_name,
             revision=revision,
             artifact=SimpleNamespace(
-                profile="development",
-                artifact_revision=revision,
+                profile=profile,
+                artifact_revision=artifact_revision or revision,
             ),
         ),
     )
@@ -497,6 +503,38 @@ def test_presentation_history_pins_revisions_until_scope_release(
     assert second.artifact.root.parent.is_dir()
 
 
+def test_presentation_history_keeps_current_and_previous_build_per_profile(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    project = load_studio(notebook_path).view("dashboard")
+    presentation = NotebookPresentation(notebook_path)
+    try:
+        production = presentation.snapshot("dashboard", profile="production")
+        development = []
+        for label in ("first", "second", "third"):
+            _change_document(project, label)
+            development.append(presentation.snapshot("dashboard"))
+
+        retained = {
+            path.name for path in (artifact_root(project) / "revisions").iterdir()
+        }
+        assert retained == {
+            snapshot.artifact.root.parent.name
+            for snapshot in (production, *development[1:])
+        }
+        assert (
+            presentation.snapshot_for_revision("dashboard", development[0].revision)
+            is None
+        )
+        assert (
+            presentation.snapshot_for_revision("dashboard", development[1].revision)
+            is development[1]
+        )
+    finally:
+        presentation.close()
+
+
 def test_display_snapshot_uses_the_verified_publication_before_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -660,7 +698,7 @@ def test_presentation_revisited_revision_becomes_most_recent() -> None:
     def remember(revision: str, lease_name: str | None = None) -> None:
         lease = _LeaseCloser(lease_name or revision, calls)
         leases[lease.name] = lease
-        snapshot = _presentation_snapshot("dashboard", revision)
+        snapshot = _presentation_snapshot("dashboard", revision, "build")
         snapshots[revision] = snapshot
         presentation._remember(snapshot, cast(ArtifactLease, lease))
 
@@ -700,6 +738,30 @@ def test_presentation_revisited_revision_becomes_most_recent() -> None:
 
     presentation.close()
     assert all(lease.closed for lease in leases.values())
+
+
+def test_presentation_history_limits_snapshots_per_profile() -> None:
+    calls: list[str] = []
+    presentation = NotebookPresentation(Path("analysis.py"))
+    production = [
+        _presentation_snapshot("dashboard", f"production-{index}", profile="production")
+        for index in range(2)
+    ]
+    development = [
+        _presentation_snapshot("dashboard", f"development-{index}", "build")
+        for index in range(9)
+    ]
+    for snapshot in (*production, *development):
+        lease = _LeaseCloser(snapshot.revision, calls)
+        presentation._remember(snapshot, cast(ArtifactLease, lease))
+
+    assert calls == ["development-0"]
+    for snapshot in production:
+        assert (
+            presentation.snapshot_for_revision("dashboard", snapshot.revision)
+            is snapshot
+        )
+    presentation.close()
 
 
 def test_presentation_source_snapshot_closes_every_lease_after_failure() -> None:

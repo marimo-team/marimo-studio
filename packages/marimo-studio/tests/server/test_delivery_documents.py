@@ -15,7 +15,6 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_LIFECYCLE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
 )
-from marimo_studio._server.presentation import service as presentation_service
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
@@ -258,6 +257,20 @@ def test_run_mode_builds_and_serves_the_production_profile(
     assert 'data-build-profile="production"' in response.text
 
 
+def test_run_mode_reports_runtimes_for_the_served_production_view(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        wrapper = client.get("/")
+        document = client.get(_presentation_fallback_url(wrapper.text))
+        runtimes = client.get("/_marimo-studio/views/dashboard/runtimes")
+
+    assert runtimes.status_code == 200
+    assert runtimes.json()["revision"] == document.headers["Marimo-Studio-Revision"]
+
+
 def test_mutable_studio_errors_are_not_cached(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
 
@@ -277,9 +290,7 @@ def test_mutable_studio_errors_are_not_cached(notebook_path: Path) -> None:
 
 def test_view_entry_changes_refresh_the_presentation(
     notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(presentation_service, "_SNAPSHOT_HISTORY_LIMIT", 2)
     studio = _configured(notebook_path)
     view = studio.views["dashboard"]
     entry = view.root / "index.html"
