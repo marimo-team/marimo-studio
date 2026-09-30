@@ -78,14 +78,18 @@ objects.
 
 ## Add dependencies
 
-Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
-environment so dependency updates and Studio builds use the same version.
-
-Run from the view root so it updates `deno.json` and `deno.lock` together:
+Studio builds with the frozen `deno.lock`, so builds never change dependencies.
+Add a package with one intentional update from the view root. Run the Deno from
+`marimo-studio[deno]` through the Python interpreter of the environment that
+runs Studio, so the update and later builds use the same Deno. From marimo code
+mode, that interpreter is the kernel's `sys.executable`.
 
 ```console
-uv run -- deno add --frozen=false --save-exact npm:reveal.js
+python -m deno add --frozen=false --save-exact npm:@observablehq/plot@0.6
 ```
+
+The command updates `deno.json` and `deno.lock` together. Import the alias it
+writes, such as `import * as Plot from "@observablehq/plot";`.
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
 files after an intentional dependency update.

@@ -52,20 +52,22 @@ fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
 
 ## Add dependencies
 
-Use the Deno supplied by `marimo-studio[deno]` in the notebook's Python
-environment so dependency updates and Studio builds use the same version.
-
-Run from the view root so it updates `deno.json` and `deno.lock` together:
+Studio builds with the frozen `deno.lock`, so builds never change dependencies.
+Add a package with one intentional update from the view root. Run the Deno from
+`marimo-studio[deno]` through the Python interpreter of the environment that
+runs Studio, so the update and later builds use the same Deno. From marimo code
+mode, that interpreter is the kernel's `sys.executable`.
 
 ```console
-uv run -- deno add --frozen=false --save-exact \
+python -m deno add --frozen=false --save-exact \
   npm:d3@7 \
   npm:@observablehq/plot@0.6 \
   npm:arquero@8 \
   jsr:@std/csv@1
 ```
 
-Import the aliases written to `deno.json`:
+The command updates `deno.json` and `deno.lock` together. Import the aliases it
+writes to `deno.json`:
 
 ```ts
 import * as d3 from "d3";
@@ -80,8 +82,7 @@ through JSR. Deno also accepts registry package subpaths and explicit local
 aliases when a package's documentation calls for them.
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
-`deno.json` and `deno.lock` after adding or changing a dependency. Use
-`--frozen=false` for that intentional update. Normal builds remain frozen.
+`deno.json` and `deno.lock` after adding or changing a dependency.
 
 ## Work within the React project
 

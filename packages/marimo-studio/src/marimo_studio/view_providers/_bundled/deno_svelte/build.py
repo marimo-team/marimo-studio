@@ -15,6 +15,7 @@ from marimo_studio.view_providers import (
 from marimo_studio.view_providers._bundled import _deno
 from marimo_studio.view_providers._bundled._deno.analysis import tool_source_path
 from marimo_studio.view_providers._bundled._deno.project import (
+    MISSING_DEPENDENCY_HINT,
     ProviderProjectSpec,
     command,
     failure,
@@ -71,10 +72,13 @@ def _json_check_diagnostic(raw: str) -> ProjectDiagnostic | None:
         or not isinstance(filename, str)
     ):
         return None
+    code = _check_code(payload.get("code", "svelte-check"))
     return ProjectDiagnostic(
-        code=_check_code(payload.get("code", "svelte-check")),
+        code=code,
         severity="error" if severity == "ERROR" else "warning",
         message=str(payload.get("message", "Svelte check failed")),
+        # TS2307 reports an import that no installed package provides.
+        hint=MISSING_DEPENDENCY_HINT if code == "svelte-check-2307" else "",
         source=SourceLocation(
             tool_source_path(filename),
             int(start.get("line", 0)) + 1,

@@ -279,6 +279,35 @@ export const App = () => {
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_react_points_an_unadded_package_to_the_dependency_workflow(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    app = root / "src" / "App.tsx"
+    app.write_text(
+        app.read_text(encoding="utf-8")
+        + 'import embed from "vega-embed";\nexport const embedChart = embed;\n',
+        encoding="utf-8",
+    )
+    inspection = _inspect(react_provider, project)
+    files = root / ".artifacts" / ".staging" / "missing-package" / "files"
+    files.mkdir(parents=True)
+
+    report = _build(
+        react_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    assert report.document is None
+    assert [item.code for item in report.diagnostics] == ["react-check-failed"]
+    assert "vega-embed" in report.diagnostics[0].message
+    assert "AGENTS.md" in report.diagnostics[0].hint
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_reveal_starter_builds_a_deck_from_notebook_cells(
     tmp_path: Path,
 ) -> None:

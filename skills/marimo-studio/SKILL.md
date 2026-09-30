@@ -229,6 +229,23 @@ For new files, manifest changes, multi-file edits, or recovery, read
 replacement but do not make source writes atomic. Keep source organized around
 focused components and use the project's formatter when available.
 
+Add browser packages as the project's `AGENTS.md` describes. An HTML view
+references a pinned URL with a `<script src>` tag or a module `import`. React,
+Svelte, Reveal.js, and Notebook Kit views build with a frozen `deno.lock`, so a
+new package needs one intentional update from the view root with the Deno that
+Studio builds with. From code mode, run it through the kernel's Python with the
+project's flags, such as `--package-json` for Svelte, then build:
+
+```python
+import subprocess
+import sys
+
+root = (await view.inspect()).root
+add = ["add", "--frozen=false", "--save-exact", "npm:vega-embed@6"]
+subprocess.run([sys.executable, "-m", "deno", *add], cwd=root, check=True)
+await view.build()
+```
+
 ## Project notebook results
 
 | Needed result                                            | Authored host                                   |

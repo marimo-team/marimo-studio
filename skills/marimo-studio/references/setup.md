@@ -76,8 +76,8 @@ An intentional declaration difference alone does not establish a missing import
 or require changing unrelated project metadata.
 
 Framework starters need the Deno supplied by `marimo-studio[deno]` in the
-notebook's environment. Run dependency commands from the view root using that
-version, following the project's `AGENTS.md`. For a separate tool environment,
-use `uvx --from 'deno==<installed-deno-version>' deno`. Pinning Studio alone
-does not pin Deno. Preserve the project's dependency age policy and commit
-changed dependency manifests with their lockfiles.
+notebook's environment. Run dependency commands from the view root with
+`python -m deno`, using that environment's Python, and follow the project's
+`AGENTS.md`. Updates and Studio builds then use the same Deno. Preserve the
+project's dependency age policy and commit changed dependency manifests with
+their lockfiles.

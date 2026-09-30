@@ -413,6 +413,35 @@ def test_svelte_rejects_unsafe_dependency_configuration_before_install(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_svelte_points_an_unadded_package_to_the_dependency_workflow(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    main = root / "src" / "main.ts"
+    main.write_text(
+        main.read_text(encoding="utf-8")
+        + 'import embed from "vega-embed";\nexport const embedChart = embed;\n',
+        encoding="utf-8",
+    )
+    inspection = _inspect(svelte_provider, project)
+    files = root / ".artifacts" / ".staging" / "missing-package" / "files"
+    files.mkdir(parents=True)
+
+    report = _build(
+        svelte_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    missing = [item for item in report.diagnostics if item.code == "svelte-check-2307"]
+    assert report.document is None
+    assert "vega-embed" in missing[0].message
+    assert "AGENTS.md" in missing[0].hint
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_registered_svelte_starter_builds_typed_projections_and_reports_warnings(
     tmp_path: Path,
 ) -> None:
