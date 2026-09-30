@@ -1,0 +1,40 @@
+packages/presentation/tests/view-script-errors.test.ts
+  s_f8296af1d7933f::t_9321b79c0a0f46 1-14,16-17,19-22,34,42-43,49-50,53,55,57,59-64
+  s_f8296af1d7933f::t_b47f537dfe19dd 15,18,23-33,35-41,44-48,51-52,54,56,58,65-78,80-96,98,101-102,104,107-108,110
+  s_f8296af1d7933f::t_600f7a6a3083e9 112-128
+packages/presentation/src/main.ts
+  s_f8296af1d7933f::t_a221b9a0066024 36
+  s_f8296af1d7933f::t_e220ddc9151a35 410
+packages/presentation/src/readiness.ts
+  s_f8296af1d7933f::t_413665ca7d20df 5,72-74,137-146,174-178
+  s_f8296af1d7933f::t_d746a386919dce 91-93,98-101
+docs/reference/projections.md
+  s_f8296af1d7933f::t_5d7476af558c67 213-219
+packages/presentation/src/rendered-view-state.ts
+  s_f8296af1d7933f::t_c01695d7db8d08 23
+packages/presentation/src/document/view-script-errors.ts
+  s_f8296af1d7933f::t_921676a13fccdf 1,3,6-10,14,18-20,32,34-49,51,54,61
+  s_f8296af1d7933f::t_d746a386919dce 2,11-12,15-16,33,50,55-57,62-63
+  s_f8296af1d7933f::t_c01695d7db8d08 4,52-53
+  s_f8296af1d7933f::t_efc638256d081b 5
+  s_f8296af1d7933f::t_d36433ce17cf7f 13,17,58-60
+  s_f8296af1d7933f::t_2f24d1a9ef17c8 21-31
+packages/presentation/src/static.ts
+  s_f8296af1d7933f::t_e220ddc9151a35 6,28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0cf7d4f0566e0d76ea707b0eaf57ba6ede8a569f",
+  "prompts": {},
+  "sessions": {
+    "s_f8296af1d7933f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62bd6a9d-0227-4e2d-a288-3cef1089349a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
