@@ -12,7 +12,10 @@ environment can write as Arrow IPC becomes a shared
 [Flechette `Table`](https://github.com/uwdata/flechette). Treat the table as
 immutable. Its primary API is `numRows`, `numCols`, `names`, `schema`,
 `get(index)`, `getChild(name)`, `select(names)`, and `toColumns()`. Call
-`toArray()` when a consumer requires row objects.
+`toArray()` when a consumer requires row objects. Integer columns, including
+64-bit integers, read as numbers, list cells as arrays, and dates and
+timestamps as epoch milliseconds. Reading a 64-bit value beyond
+`Number.MAX_SAFE_INTEGER` throws.
 
 React and Svelte starter helpers export `getMarimoDataSource(table)`. It returns
 the table's codec, fingerprint, and shared Arrow IPC bytes under
@@ -20,14 +23,16 @@ the table's codec, fingerprint, and shared Arrow IPC bytes under
 bytes as immutable, or copy them before mutating them.
 
 React starters export `MarimoTable` with `useMarimoValue`. Svelte starters
-export the same table contract with `observeMarimoValue`. Keep the explicit
-`mo-value` host in authored source so provider inspection can authorize the
-selector.
+export the same table contract with `observeMarimoValue`. The React hook's
+`error` and the Svelte and HTML helpers' `onError` receive the host's
+`{ selector, code, message, hint }` error. Keep the explicit `mo-value` host in
+authored source so provider inspection can authorize the selector.
 
 Materialize lazy or remote dataframe queries in the notebook before projecting
 them. Pandas may require PyArrow. WebAssembly notebooks need browser-compatible
-dataframe and Arrow writer packages, and the encoded value must fit Studio's
-value byte limit.
+dataframe and Arrow writer packages. Each projected value must encode within
+1,000,000 bytes in every runtime. Filter, aggregate, or split larger tables into
+separate notebook values.
 
 ## Select targets
 

@@ -243,7 +243,7 @@ export const App = () => {
     <main>
       <span ref={hostRef} hidden mo-value="rows" />
       <output>
-        {error ? "Unavailable" : value?.get(0)?.label ?? sourceBytes ?? 0}
+        {error ? error.message : value?.get(0)?.label ?? sourceBytes ?? 0}
       </output>
       <marimo-cell name="summary" />
       <marimo-output value="rows" />

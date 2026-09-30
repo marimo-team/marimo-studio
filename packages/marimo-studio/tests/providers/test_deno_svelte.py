@@ -428,6 +428,7 @@ def test_registered_svelte_starter_builds_typed_projections_and_reports_warnings
   type Row = { id: string; label: string };
 
   let rowCount = $state(0);
+  let failure = $state("");
   const target = "controls";
   const note = (value: unknown) => String(value);
 </script>
@@ -440,9 +441,12 @@ def test_registered_svelte_starter_builds_typed_projections_and_reports_warnings
       rowCount =
         getMarimoDataSource(value)?.bytes.byteLength ?? value.toArray().length;
     },
+    onError: (error) => {
+      failure = error.hint ?? error.message;
+    },
   }}
 ></span>
-<output>{rowCount}</output>
+<output>{failure || rowCount}</output>
 <div>Visible content</div>
 <marimo-cell
   name={target}

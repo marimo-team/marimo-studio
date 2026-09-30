@@ -887,9 +887,10 @@ def _export_to_delivery(
         if incompatible is not None:
             raise PublicationError(
                 (
-                    "The Prepared runtime cannot prepare dynamic "
-                    f"{incompatible.projection} projection site "
-                    f"{incompatible.site_id!r}."
+                    "The Prepared runtime cannot prepare the dynamic "
+                    f"{incompatible.projection} projection at "
+                    f"{incompatible.source.path}:{incompatible.source.line}:"
+                    f"{incompatible.source.column}."
                 ),
                 code="zero-python-projection-dynamic",
                 details={

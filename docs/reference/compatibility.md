@@ -16,6 +16,10 @@ Add Studio to the notebook or project dependencies:
 dependencies = ["marimo-studio"]
 ```
 
+Use `marimo-studio[deno]` to enable every bundled starter. The `deno` extra
+supplies the Deno toolchain that the React, Reveal.js, Svelte, and Notebook Kit
+starters build with.
+
 ## Upgrade from 0.0.6
 
 Version 0.1.1 introduces explicit view manifests and a notebook-bound authoring

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path, PurePosixPath
 
+from marimo_studio._browser_client.client import request_view_removal
 from marimo_studio._browser_client.client import show_view as show_browser_view
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import StudioServerConnection
@@ -379,10 +380,23 @@ async def remove_view(
     notebook: Path,
     view: str,
     *,
+    connection: StudioServerConnection | None = None,
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
 ) -> ViewRemovalResult:
     """Remove one named view and return the remaining workspace identity."""
+    if connection is not None:
+        if expected_catalog_generation is None or expected_generation is None:
+            raise WorkspaceGenerationConflictError()
+        # The attached server pins this view's artifacts for its pages and
+        # history. Only that server can release those pins before deletion.
+        return await request_view_removal(
+            connection,
+            notebook,
+            view,
+            catalog_generation=expected_catalog_generation,
+            view_generation=expected_generation,
+        )
 
     def operation() -> ViewRemovalResult:
         return remove_view_operation(

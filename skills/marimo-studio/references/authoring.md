@@ -146,11 +146,13 @@ hold = await view.hold_publication(owner="source-refactor", ttl=300)
 print(hold.token, hold.expires_at)
 ```
 
-Retain the token across calls, edit files normally, inspect, then call
-`view.release_publication(token)` and build. The hold applies across processes
-and expires after the requested seconds, up to 3600. Release or expiry lets the
-live editor resume publication. A hold delays replacement artifacts while
-source editing remains available. It does not make multi-file writes atomic.
+Retain the token across calls. A later execution reads the current token from
+`(await view.inspect()).publication_hold.token`. Edit files normally, inspect,
+then call `view.release_publication(token)` and build. The hold applies across
+processes and expires after the requested seconds, up to 3600. Release or
+expiry lets the live editor resume publication. A hold delays replacement
+artifacts while source editing remains available. It does not make multi-file
+writes atomic.
 
 Retain the `ViewDocument` from `view.read()` when an edit needs a source
 checkpoint. To restore, read and review current content, then write checkpoint

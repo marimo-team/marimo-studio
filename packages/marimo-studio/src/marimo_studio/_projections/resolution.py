@@ -181,7 +181,8 @@ def _authorize_target(site: MountDeclaration, target: str) -> None:
     if site.allowed_targets is not None and target not in site.allowed_targets:
         raise ProjectionResolutionError(
             "projection-target-not-allowed",
-            f"Projection target {target!r} is not allowed by mount {site.id!r}.",
+            f"Projection target {target!r} is not allowed by the {site.kind} host "
+            f"at {site.source.path}:{site.source.line}:{site.source.column}.",
         )
 
 

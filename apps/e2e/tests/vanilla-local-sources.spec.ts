@@ -91,3 +91,47 @@ test("retains the preview during filesystem edits and reconciles on release", as
   await retireWorkspacePage(page, browserDiagnostics);
   editorModelRecovery.recovered();
 });
+
+test("retargets a wildcard Vanilla value host from page JavaScript", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
+  await page.goto("/studio/vanilla-local/?file=notebook.py");
+  const preview = await waitForViewPreview(page, "vanilla-local", "server", 120_000);
+  await editorModelRecovery.ready(page);
+
+  await writeViewSource(
+    page,
+    "vanilla-local",
+    "index.html",
+    `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dynamic value fixture</title>
+  </head>
+  <body>
+    <main id="app-shell">
+      <strong id="selected-metric" mo-value="metric" data-marimo-allow="*"></strong>
+      <button type="button" id="show-slow-metric">Show slow metric</button>
+    </main>
+    <script type="module">
+      document.querySelector("#show-slow-metric").addEventListener("click", () => {
+        document.querySelector("#selected-metric").setAttribute("mo-value", "slow_metric");
+      });
+    </script>
+  </body>
+</html>
+`,
+  );
+  const host = preview.locator("#selected-metric");
+  await expect(host).toHaveText("42", { timeout: 120_000 });
+
+  await preview.getByRole("button", { name: "Show slow metric" }).click();
+  await expect(host).toHaveText("7");
+  await expect(host).toHaveAttribute("data-state", "ready");
+  await retireWorkspacePage(page, browserDiagnostics);
+  editorModelRecovery.recovered();
+});

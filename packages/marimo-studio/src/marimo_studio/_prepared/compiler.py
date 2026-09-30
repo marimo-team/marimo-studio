@@ -91,9 +91,11 @@ def compile_export_view(
     identities: dict[_ProjectionIdentity, OutputSpec] = {}
     for site in sorted(mounts, key=lambda item: item.id):
         if site.allowed_targets is None:
+            source = site.source
             raise PublicationError(
-                f"Projection site {site.id!r} selects targets dynamically. "
-                "Declare a finite target set before using the Prepared runtime."
+                f"The {site.kind} projection at {source.path}:{source.line}:"
+                f"{source.column} selects its target at runtime. Declare a finite "
+                "target set before using the Prepared runtime."
             )
         for index, target in enumerate(site.allowed_targets):
             projection = resolve_projection(

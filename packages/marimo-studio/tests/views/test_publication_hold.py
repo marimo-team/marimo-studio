@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -120,6 +121,11 @@ def test_hold_preserves_current_publication_while_source_is_edited(
         publish_view(project, "development")
     state = read_build_state(project, "development")
     assert state.diagnostics[0].code == "publication-held"
+    assert re.fullmatch(
+        r"Publication is held by 'layout agent' until "
+        r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC\.",
+        state.diagnostics[0].message,
+    )
     published = lease_published_artifact(project, "development")
     assert published is not None
     with published as current:

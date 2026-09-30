@@ -77,7 +77,10 @@ def _projection_hint(error: ProjectionResolutionError) -> str:
             "Use a notebook variable followed by supported attribute or item selectors."
         )
     if error.code == "projection-target-not-allowed":
-        return "Use a target declared by this source site."
+        return (
+            "Use a target declared by this source site, or add "
+            'data-marimo-allow="*" to a host whose target changes at runtime.'
+        )
     return "Fix the provider projection site, then build the view again."
 
 

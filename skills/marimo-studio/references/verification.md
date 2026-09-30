@@ -38,7 +38,8 @@ with the chosen browser tool. Run kernel-dependent browser interactions and
 waits through an external tool or interpreter. Waiting synchronously inside
 code mode can block the notebook work being awaited. The URL renders a separate top-level
 presentation with the server's authentication and document sandbox. Keep the
-notebook session open on an edit-mode server.
+notebook session open on an edit-mode server. A code-mode URL binds the current
+editor session, so request a new URL after the server or session restarts.
 Authenticate the chosen browser through marimo's normal login. An API access
 token authorizes URL lookup. It is never embedded in the returned URL.
 
@@ -49,9 +50,12 @@ marimo-studio view preview dashboard --target notebook.py \
   --runtime server --server http://127.0.0.1:8000
 ```
 
-`show()` activates the user's Studio tab. To inspect that frame, wait for its
-requested navigation before checking readiness: its previous document may
-still be visible. Once the standalone page is open,
+`show()` activates the user's Studio tab. That tab renders the view in a
+sandboxed frame with an opaque origin, so scripts running in the Studio tab
+cannot read the frame's document. Inspect it with frame-aware browser
+automation, or open the standalone URL. Wait for the frame's requested
+navigation before checking readiness: its previous document may still be
+visible. Once the standalone page is open,
 iterate by building and reloading its stable URL. For a checkpoint,
 request `exact=True` or `--exact` after building the served profile. Opening an
 exact URL returns HTTP 409 if its revision differs or current view source is

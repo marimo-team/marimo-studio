@@ -284,7 +284,8 @@ export const resolveProjection = (
     return failure(
       request,
       "projection-target-not-allowed",
-      `Projection target ${JSON.stringify(request.target)} is not allowed by this mount.`,
+      `Projection target ${JSON.stringify(request.target)} is not allowed by this mount. ` +
+        'Add data-marimo-allow="*" to a host whose target changes at runtime.',
       site,
     );
   }

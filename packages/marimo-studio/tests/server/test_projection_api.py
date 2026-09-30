@@ -13,6 +13,7 @@ from marimo_studio import create_asgi_app
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
+from marimo_studio._views.build import build_view_project_sync
 from marimo_studio.errors._internal import RuntimeSyncError
 
 from ..app_helpers import published_dashboard
@@ -62,6 +63,37 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
     assert allowed.json()["error"] == "unknown-session"
     assert cross_view.status_code == 400
     assert cross_view.json()["error"] == "projection-target-not-allowed"
+
+
+def test_wildcard_value_hosts_authorize_runtime_selectors(
+    notebook_path: Path,
+) -> None:
+    studio = published_dashboard(notebook_path)
+    _set_shell(
+        studio,
+        "dashboard",
+        '<span mo-value="doubled" data-marimo-allow="*"></span>',
+    )
+    with build_view_project_sync(studio.views["dashboard"]):
+        pass
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        site = next(item for item in config["mounts"] if item["kind"] == "value")
+        projection = {"siteId": site["id"], "instanceId": "value-1", "target": "x"}
+        response = client.post(
+            _view_support_url(config, "values"),
+            headers={"Marimo-Session-Id": config["presentationSessionId"]},
+            json={
+                "revision": config["revision"],
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
+        )
+
+    assert site["allowedTargets"] is None
+    assert response.status_code == 409
+    assert response.json()["error"] == "unknown-session"
 
 
 def test_value_requests_allow_repeated_instances_with_one_target(

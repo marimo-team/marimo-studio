@@ -344,8 +344,11 @@ def _publication_hold_diagnostic(project: ViewProject) -> ProjectDiagnostic | No
     return ProjectDiagnostic(
         code="publication-held",
         severity="error",
-        message=f"Publication is held by {hold.owner!r} until {hold.expires_at}.",
-        hint="Release the publication hold with its token, then build the view again.",
+        message=f"Publication is held by {hold.owner!r} until {hold.expiry}.",
+        hint=(
+            "Release the hold with its token, which view inspection reports, or "
+            "wait for it to expire. Then build the view again."
+        ),
     )
 
 

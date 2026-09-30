@@ -62,6 +62,11 @@ The terminal command follows the same contract:
 marimo-studio view remove report --target analysis.py
 ```
 
+A running Studio server keeps the artifacts of views it serves in use, and the
+terminal command then reports `view-in-use` with that server's process ID.
+Remove the view from the Studio tab or from code mode in that notebook, which
+lets the server release them first.
+
 Use [Choose a frontend](frontend-options.md) to select a starter. Use [Navigate
 and preserve state](navigation-and-sessions.md) when views link to one another
 or share public query state.

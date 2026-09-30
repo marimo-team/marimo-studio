@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import os
 import threading
 from collections.abc import AsyncGenerator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -13,6 +16,12 @@ from starlette.testclient import TestClient
 import marimo_studio._server.studio.deletion as deletion_service
 import marimo_studio._server.studio.routes as studio_api_module
 import marimo_studio._views.remove as workspace_views
+import marimo_studio.agent as agent
+import marimo_studio.authoring as authoring
+from marimo_studio._browser_client.transport import (
+    StudioServerConnection,
+    _raise_response_error,
+)
 from marimo_studio._server.development.coordinator import (
     DevelopmentCoordinator,
 )
@@ -21,7 +30,7 @@ from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import ViewDeletionError
+from marimo_studio.errors import ViewDeletionError, ViewInUseError
 
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
@@ -344,6 +353,78 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
     assert retained_pins
     assert removed.status_code == 200
     assert not (studio.view_root / "operations").exists()
+
+
+def test_code_mode_removal_releases_artifacts_its_server_retains(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    scopes: list[NotebookScope] = []
+    create_scope = NotebookScope.create
+
+    def capture_scope(
+        path: Path,
+        watcher: Any = None,
+        session_ids: Any = None,
+    ) -> NotebookScope:
+        scope = create_scope(path, watcher, session_ids)
+        scopes.append(scope)
+        return scope
+
+    monkeypatch.setattr(NotebookScope, "create", staticmethod(capture_scope))
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    connection = StudioServerConnection(
+        "http://testserver",
+        server_token=str(_session_manager(app).skew_protection_token),
+        session_id="s_123456",
+    )
+    monkeypatch.setattr(
+        "marimo_studio._composition.create_code_mode_bridge",
+        lambda: SimpleNamespace(
+            active_notebook=lambda: studio.notebook.resolve(),
+            connection=lambda: connection,
+        ),
+    )
+
+    with TestClient(app) as client:
+        # Code mode reaches its server over HTTP. Route those requests into the
+        # in-process app so this server's retained pins are the ones at stake.
+        async def request_json(
+            actual: StudioServerConnection,
+            path: str,
+            *,
+            method: str = "GET",
+            body: dict[str, object] | None = None,
+            **_options: object,
+        ) -> dict[str, Any]:
+            response = client.request(
+                method,
+                path,
+                headers={"Marimo-Server-Token": actual.server_token},
+                json=body,
+            )
+            if response.is_error:
+                _raise_response_error(response.status_code, response.content)
+            return response.json()
+
+        monkeypatch.setattr(
+            "marimo_studio._browser_client.client.request_json",
+            request_json,
+        )
+        _view_owner(client, "dashboard")
+        scopes[0].presentation.snapshot("dashboard")
+        saved = authoring.open_workspace(studio.notebook).view("dashboard")
+        with pytest.raises(ViewInUseError) as in_use:
+            asyncio.run(saved.remove())
+        removed = asyncio.run(agent.current_workspace().view("dashboard").remove())
+
+    assert in_use.value.processes == (os.getpid(),)
+    assert removed.views == ("executive",)
+    assert removed.default_view == "executive"
+    assert not (studio.view_root / "dashboard").exists()
+    assert load_studio(studio.notebook).default_view == "executive"
 
 
 def test_project_and_source_reads_report_transient_deletion(

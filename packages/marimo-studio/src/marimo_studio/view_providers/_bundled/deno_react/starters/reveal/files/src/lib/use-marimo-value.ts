@@ -77,11 +77,27 @@ export type MarimoValueElement<T = MarimoValue> = HTMLSpanElement & {
   marimoValue?: T;
 };
 
+export type MarimoValueError = {
+  readonly selector: string;
+  readonly code: string;
+  readonly message: string;
+  readonly hint?: string;
+};
+
+/** Read the error a host recorded before its listeners attached. */
+const hostError = (host: HTMLElement): MarimoValueError | undefined =>
+  host.dataset.marimoError === undefined ? undefined : {
+    selector: host.getAttribute("mo-value") ?? "",
+    code: host.dataset.marimoErrorCode ?? "",
+    message: host.dataset.marimoError,
+    hint: host.dataset.marimoDiagnosticHint,
+  };
+
 /** Return a live notebook value and a ref for its explicit `mo-value` host. */
 export const useMarimoValue = <T = MarimoValue>(selector: string) => {
   const hostRef = useRef<MarimoValueElement<T>>(null);
   const [value, setValue] = useState<T>();
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<MarimoValueError>();
 
   useEffect(() => {
     const host = hostRef.current;
@@ -91,9 +107,10 @@ export const useMarimoValue = <T = MarimoValue>(selector: string) => {
 
     const sync = () => {
       setValue(host.marimoValue);
-      setError(host.dataset.marimoError !== undefined);
+      setError(hostError(host));
     };
-    const fail = () => setError(true);
+    const fail = (event: Event) =>
+      setError((event as CustomEvent<MarimoValueError>).detail);
 
     host.addEventListener("marimo-value-updated", sync);
     host.addEventListener("marimo-value-error", fail);

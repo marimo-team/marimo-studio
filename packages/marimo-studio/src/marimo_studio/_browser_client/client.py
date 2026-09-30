@@ -6,10 +6,14 @@ from dataclasses import replace
 from pathlib import Path
 from urllib.parse import quote
 
-from marimo_studio._browser_client.limits import VIEW_ACTIVATION_HTTP_TIMEOUT
+from marimo_studio._browser_client.limits import (
+    VIEW_ACTIVATION_HTTP_TIMEOUT,
+    VIEW_REMOVAL_HTTP_TIMEOUT,
+)
 from marimo_studio._browser_client.protocol import (
     ViewShowRequest,
     parse_connection_token,
+    parse_removal_result,
     parse_show_result,
 )
 from marimo_studio._browser_client.records import ShowResult
@@ -21,9 +25,15 @@ from marimo_studio._browser_client.transport import (
     studio_server_connection as studio_server_connection,
 )
 from marimo_studio._delivery.urls import SUPPORT_PATH
+from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.ownership import ObservedViewOwner, require_view_owner
-from marimo_studio.errors import AgentRequestError, CapabilityInputError, ProtocolError
+from marimo_studio.errors import (
+    AgentRequestError,
+    CapabilityInputError,
+    ProtocolError,
+    ViewDeletionError,
+)
 
 
 async def request_view_show(
@@ -73,6 +83,33 @@ async def show_view(
             owner=owner,
         ),
     )
+
+
+async def request_view_removal(
+    connection: StudioServerConnection,
+    notebook: Path,
+    view: str,
+    *,
+    catalog_generation: str,
+    view_generation: str,
+) -> ViewRemovalResult:
+    """Remove one view through the server that serves its artifacts."""
+    connection = await _authorized_connection(connection, notebook)
+    payload = await request_json(
+        connection,
+        f"{SUPPORT_PATH}/views/{quote(view, safe='')}",
+        method="DELETE",
+        body={
+            "catalog_generation": catalog_generation,
+            "name": view,
+            "view_generation": view_generation,
+        },
+        timeout=VIEW_REMOVAL_HTTP_TIMEOUT,
+    )
+    cleanup = payload.get("cleanup")
+    if isinstance(cleanup, str) and cleanup:
+        raise ViewDeletionError(Path(cleanup))
+    return parse_removal_result(payload, notebook, view)
 
 
 async def _authorized_connection(

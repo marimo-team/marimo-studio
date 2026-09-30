@@ -109,6 +109,12 @@ the complete projection budget.
 | `json-v1`      | `null`, boolean, number, string, array, or object        | `marimoValue` returns the decoded JSON-compatible value                        |
 | `arrow-ipc-v1` | [Flechette](https://github.com/uwdata/flechette) `Table` | `marimoValue` returns the table with its source bytes and fingerprint attached |
 
+Studio decodes Arrow tables with Flechette's default extraction options.
+Integer columns, including 64-bit integers, read as numbers, and reading a
+64-bit value beyond `Number.MAX_SAFE_INTEGER` throws. Booleans and strings keep
+their JavaScript types, list cells read as arrays, and dates and timestamps read
+as epoch milliseconds. `table.toArray()` returns plain row objects.
+
 React starters export `useMarimoValue()` and `getMarimoDataSource()` from
 `src/lib/use-marimo-value.ts`. Svelte starters export
 `observeMarimoValue()` and `getMarimoDataSource()` from
@@ -178,6 +184,13 @@ expression intentionally selects its target at runtime:
 
 ```tsx
 <marimo-cell name={selectedName} data-marimo-allow="*" />
+```
+
+The HTML provider authorizes each host for its authored target. Add the same
+wildcard when page JavaScript changes the host's selector:
+
+```html
+<span id="details" hidden mo-value="details.first" data-marimo-allow="*"></span>
 ```
 
 An unbounded expression without that literal wildcard produces
