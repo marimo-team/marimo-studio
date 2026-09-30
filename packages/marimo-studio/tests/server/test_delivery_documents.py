@@ -15,7 +15,6 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_LIFECYCLE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
 )
-from marimo_studio._server.presentation import service as presentation_service
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
@@ -277,9 +276,7 @@ def test_mutable_studio_errors_are_not_cached(notebook_path: Path) -> None:
 
 def test_view_entry_changes_refresh_the_presentation(
     notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(presentation_service, "_SNAPSHOT_HISTORY_LIMIT", 2)
     studio = _configured(notebook_path)
     view = studio.views["dashboard"]
     entry = view.root / "index.html"

@@ -8,7 +8,8 @@ state. Validation independently checks the corresponding published
 presentation revisions.
 
 The service caches current snapshots and retains a bounded history so a page
-can finish revision-qualified requests after a newer build publishes. During
+can finish revision-qualified requests after a newer build publishes. History
+keeps the current and previous build of each profile. During
 edits or provider failures it can continue serving the last verified
 publication while current source is repaired. History eviction releases older
 leases, while view deletion and notebook shutdown release every retained
@@ -74,6 +75,8 @@ if TYPE_CHECKING:
     from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 
 _SNAPSHOT_HISTORY_LIMIT = 8
+# Each retained lease keeps its artifact revision in `.artifacts/revisions`.
+_BUILD_HISTORY_LIMIT = 2
 _SNAPSHOT_RECONCILIATION_LIMIT = 8
 _SnapshotKey = tuple[str, BuildProfile]
 
@@ -853,10 +856,18 @@ class NotebookPresentation:
                 closed = False
                 if previous_lease is not None:
                     released.append(previous_lease)
-                while len(history) > _SNAPSHOT_HISTORY_LIMIT:
-                    revision = next(iter(history))
-                    del history[revision]
-                    released.append(leases.pop(revision))
+                builds: dict[BuildProfile, set[str]] = {}
+                for index, (revision, retained) in enumerate(
+                    reversed(tuple(history.items()))
+                ):
+                    artifacts = builds.setdefault(retained.artifact.profile, set())
+                    artifacts.add(retained.artifact.artifact_revision)
+                    if (
+                        index >= _SNAPSHOT_HISTORY_LIMIT
+                        or len(artifacts) > _BUILD_HISTORY_LIMIT
+                    ):
+                        del history[revision]
+                        released.append(leases.pop(revision))
         self._close_leases(released)
         if closed:
             raise RuntimeError("Notebook presentation is closed")
