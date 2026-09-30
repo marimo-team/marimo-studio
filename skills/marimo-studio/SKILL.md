@@ -144,14 +144,21 @@ import marimo_studio
 await marimo_studio.agent.current_workspace().view("dashboard").show()
 ```
 
-To move a view to another starter, create and show the new view, then remove
-the old one in a later execution:
+Rename a view to change its name and URL. It keeps its source and artifacts,
+reads as stale until the next build, and stays the default if it was:
 
 ```python
 import marimo_studio
 
-await marimo_studio.agent.current_workspace().view("old-dashboard").remove()
+workspace = marimo_studio.agent.current_workspace()
+summary = await workspace.view("report").rename("summary")
+await summary.build()
+await summary.make_default()
 ```
+
+`make_default()` serves a view at `/`. To move a view to another starter under
+the same name, create the new view under a temporary name and show it. In a
+later execution, remove the old view and rename the new one to the old name.
 
 For a notebook outside a Python project, the first view adds a
 [PEP 723](https://peps.python.org/pep-0723/) script header, the notebook's
