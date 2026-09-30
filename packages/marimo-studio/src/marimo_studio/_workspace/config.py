@@ -638,5 +638,4 @@ def default_view_writes(
     def select(config: MutableMapping[str, Any]) -> None:
         config["default"] = default_view
 
-    updated = updated_studio_config_source(studio, source, select)
-    return {studio.config_path: updated} if updated != source else {}
+    return {studio.config_path: updated_studio_config_source(studio, source, select)}

@@ -9,6 +9,7 @@ from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from threading import Barrier
+from typing import Any
 
 import marimo
 import pytest
@@ -406,7 +407,7 @@ def test_notebook_edit_before_transaction_is_preserved(
     )
 
     monkeypatch.setattr(
-        create_module,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, notebook_path, changed),
     )
@@ -427,7 +428,7 @@ def test_project_config_edit_before_transaction_is_preserved(
     changed = pyproject.read_text(encoding="utf-8") + "# concurrent edit\n"
 
     monkeypatch.setattr(
-        create_module,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, pyproject, changed),
     )
@@ -451,7 +452,7 @@ def test_project_notebook_edit_before_transaction_is_preserved(
     )
 
     monkeypatch.setattr(
-        create_module,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, notebook_path, changed),
     )
@@ -508,25 +509,14 @@ def test_view_directory_created_before_transaction_is_preserved(
     sentinel = project_root / "public" / "sentinel.js"
 
     @contextmanager
-    def occupy_view_directory(
-        root,
-        writes,
-        *,
-        expected=None,
-        claimed_directories=None,
-    ):
+    def occupy_view_directory(*args: Any, **kwargs: Any):
         sentinel.parent.mkdir(parents=True)
         sentinel.write_text("concurrent", encoding="utf-8")
-        with transaction(
-            root,
-            writes,
-            expected=expected,
-            claimed_directories=claimed_directories,
-        ):
+        with transaction(*args, **kwargs):
             yield
 
     monkeypatch.setattr(
-        create_module,
+        workspace_transactions,
         "write_file_transaction",
         occupy_view_directory,
     )

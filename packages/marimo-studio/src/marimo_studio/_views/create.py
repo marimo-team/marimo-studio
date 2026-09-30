@@ -18,7 +18,6 @@ from contextlib import ExitStack, nullcontext
 from pathlib import Path
 
 from marimo_studio._filesystem._secure_types import (
-    ConditionalWriteError,
     FileIdentity,
 )
 from marimo_studio._filesystem.io import (
@@ -65,12 +64,11 @@ from marimo_studio._workspace.mutation_lock import (
     view_mutation_lock,
     workspace_catalog_lock,
 )
-from marimo_studio._workspace.transactions import write_file_transaction
+from marimo_studio._workspace.transactions import workspace_transaction
 from marimo_studio.errors import (
     ConfigurationError,
     ViewExistsError,
     WorkspaceGenerationConflictError,
-    WorkspaceMutationError,
 )
 from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import StarterPlan
@@ -220,7 +218,8 @@ def _validate_view_creation(
 
 def _commit_view_creation_plan(plan: ViewCreationPlan) -> StudioWorkspace:
     transaction = (
-        write_file_transaction(
+        workspace_transaction(
+            "View creation",
             plan.transaction_root,
             plan.writes,
             expected=plan.expected_identities,
@@ -229,15 +228,8 @@ def _commit_view_creation_plan(plan: ViewCreationPlan) -> StudioWorkspace:
         if plan.writes
         else nullcontext()
     )
-    try:
-        with transaction:
-            return load_studio(plan.notebook)
-    except ConditionalWriteError as error:
-        raise WorkspaceMutationError(
-            "View creation",
-            recovery=error.recovery,
-            write_committed=error.committed is not None,
-        ) from error
+    with transaction:
+        return load_studio(plan.notebook)
 
 
 def _view_setup_result(
