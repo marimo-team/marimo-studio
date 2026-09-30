@@ -1,0 +1,25 @@
+packages/marimo-studio/src/marimo_studio/_views/rename.py
+  ai_agent 5-8,36,40,46-65,115,134-142,152-153,160-192,195,199-201
+packages/marimo-studio/src/marimo_studio/_authoring/view.py
+  ai_agent 448,464,474
+packages/marimo-studio/tests/server/test_view_rename_routes.py
+  ai_agent 20,58,94,175-176,182,188-232
+packages/marimo-studio/src/marimo_studio/_workspace/mutation_lock.py
+  ai_agent 166
+packages/marimo-studio/src/marimo_studio/_server/studio/routes.py
+  ai_agent 205,222,224,276,314
+packages/marimo-studio/tests/views/test_rename_view.py
+  ai_agent 10,15-16,19-21,93-94,111,117,159-250
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  ai_agent 278,288,293
+packages/marimo-studio/src/marimo_studio/_browser_client/client.py
+  ai_agent 119,132,137
+packages/marimo-studio/src/marimo_studio/_server/studio/retirement.py
+  ai_agent 23,71-72,75,293-307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bedce9720f222c3f7f561719e74b39303d9227cb",
+  "prompts": {}
+}
