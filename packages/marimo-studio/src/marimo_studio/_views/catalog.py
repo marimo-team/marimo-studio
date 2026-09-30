@@ -96,11 +96,19 @@ def get_starter(identity: str) -> Starter:
     available_starters = starters()
     matches = [item for item in available_starters if item.id == identity]
     if len(matches) != 1:
-        available = ", ".join(item.id for item in available_starters) or "none"
-        raise ConfigurationError(
-            f"Unknown view starter {identity!r}. Installed starters: {available}"
-        )
+        raise _unknown_starter(identity)
     return matches[0]
+
+
+def _unknown_starter(identity: str) -> ConfigurationError:
+    installed = sorted(
+        starter_id(provider.key, starter.key)
+        for provider, starter in provider_registry().starter_records()
+    )
+    return ConfigurationError(
+        f"Unknown view starter {identity!r}. "
+        f"Installed starters: {', '.join(installed) or 'none'}"
+    )
 
 
 def resolve_starter(
@@ -109,22 +117,12 @@ def resolve_starter(
     """Return the public record and provider-local starter for one key."""
     provider_key, separator, local_key = identity.rpartition(":")
     if not separator or not provider_key or not local_key:
-        raise ConfigurationError(
-            f"Unknown view starter {identity!r}. Use '<provider>:<starter>'."
-        )
+        raise _unknown_starter(identity)
     provider = provider_registry().get(provider_key)
     provider_starters = provider.starters()
     matches = [starter for starter in provider_starters if starter.key == local_key]
     if len(matches) != 1:
-        available = (
-            ", ".join(
-                starter_id(provider.key, starter.key) for starter in provider_starters
-            )
-            or "none"
-        )
-        raise ConfigurationError(
-            f"Unknown view starter {identity!r}. Installed starters: {available}"
-        )
+        raise _unknown_starter(identity)
     provider_starter = matches[0]
     record = _starter_record(
         provider,
