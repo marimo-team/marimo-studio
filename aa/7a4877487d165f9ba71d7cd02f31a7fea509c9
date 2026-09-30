@@ -1,0 +1,39 @@
+packages/marimo-studio/tests/views/test_publication_hold.py
+  s_9bac5c4c30c198::t_1b6478950294d2 71-88
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/reveal/files/src/lib/use-marimo-value.ts
+  s_9bac5c4c30c198::t_a1b84e5309dc80 90
+docs/reference/errors-and-json.md
+  s_9bac5c4c30c198::t_a48eb3ab40272e 177
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/starters/default/files/src/lib/use-marimo-value.ts
+  s_9bac5c4c30c198::t_a1b84e5309dc80 90
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/starters/default/files/index.html
+  s_9bac5c4c30c198::t_a1b84e5309dc80 57
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/starters/default/files/src/lib/marimo-value.ts
+  s_9bac5c4c30c198::t_a1b84e5309dc80 87
+docs/reference/python-api.md
+  s_9bac5c4c30c198::t_491ef04e4a189b 275-277
+  s_9bac5c4c30c198::t_8bcc51b884ac88 278-279
+packages/marimo-studio/tests/server/test_projection_api.py
+  s_9bac5c4c30c198::t_b92eb7ad2a6387 70,80-97,114-115
+packages/marimo-studio/src/marimo_studio/_views/publication_hold.py
+  s_9bac5c4c30c198::t_0552e2c5fd6a0c 93-96
+skills/marimo-studio/references/authoring.md
+  s_9bac5c4c30c198::t_8bcc51b884ac88 161-163
+  s_9bac5c4c30c198::t_491ef04e4a189b 149-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "aa7a4877487d165f9ba71d7cd02f31a7fea509c9",
+  "prompts": {},
+  "sessions": {
+    "s_9bac5c4c30c198": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d07ced2-aad0-49ed-950f-ba3fa2c9507d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
