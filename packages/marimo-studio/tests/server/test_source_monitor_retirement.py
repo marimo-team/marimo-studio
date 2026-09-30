@@ -22,7 +22,7 @@ from ..source_change_test_support import next_source
 
 
 @pytest.mark.parametrize("active", (True, False), ids=("active", "idle"))
-def test_committed_deletion_evicts_monitor_before_provider_recreation(
+def test_committed_retirement_evicts_monitor_before_provider_recreation(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -80,7 +80,7 @@ def test_committed_deletion_evicts_monitor_before_provider_recreation(
                 await subscription.close()
             old_inspections = old_provider.inspections
 
-            async with coordinator.retiring_view("dashboard") as deletion:
+            async with coordinator.retiring_view("dashboard") as retirement:
                 shutil.rmtree(old_project.root)
                 shutil.copytree(replacement, old_project.root)
                 recreated_manifest = tomlkit.parse(
@@ -91,7 +91,7 @@ def test_committed_deletion_evicts_monitor_before_provider_recreation(
                     tomlkit.dumps(recreated_manifest),
                     encoding="utf-8",
                 )
-                deletion.commit()
+                retirement.commit()
 
             current = load_studio(studio.notebook)
             catalog = await coordinator.project_catalog(current, "dashboard")
@@ -123,7 +123,7 @@ def test_committed_deletion_evicts_monitor_before_provider_recreation(
     asyncio.run(exercise())
 
 
-def test_completed_source_constructor_is_superseded_by_deletion(
+def test_completed_source_constructor_is_superseded_by_retirement(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -134,8 +134,8 @@ def test_completed_source_constructor_is_superseded_by_deletion(
         claim = coordinator._claim_source_creation
         claim_started = asyncio.Event()
         release_claim = asyncio.Event()
-        deletion_started = asyncio.Event()
-        release_deletion = asyncio.Event()
+        retirement_started = asyncio.Event()
+        release_retirement = asyncio.Event()
 
         async def blocked_claim(view_name: Any, creation: Any, producer: Any) -> Any:
             claim_started.set()
@@ -146,21 +146,21 @@ def test_completed_source_constructor_is_superseded_by_deletion(
         pending = asyncio.create_task(coordinator.subscribe(studio, "dashboard"))
         await asyncio.wait_for(claim_started.wait(), timeout=2)
 
-        async def remove() -> None:
+        async def retire() -> None:
             async with coordinator.retiring_view("dashboard"):
-                deletion_started.set()
-                await release_deletion.wait()
+                retirement_started.set()
+                await release_retirement.wait()
 
-        deletion = asyncio.create_task(remove())
-        await asyncio.wait_for(deletion_started.wait(), timeout=2)
+        retirement = asyncio.create_task(retire())
+        await asyncio.wait_for(retirement_started.wait(), timeout=2)
         release_claim.set()
         try:
             with pytest.raises(ViewRetirementInProgress) as captured:
                 await pending
             return captured.value
         finally:
-            release_deletion.set()
-            await deletion
+            release_retirement.set()
+            await retirement
             await coordinator.close()
 
     error = asyncio.run(exercise())

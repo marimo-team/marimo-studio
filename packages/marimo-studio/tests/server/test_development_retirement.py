@@ -11,7 +11,7 @@ from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio.errors._internal import ViewRetirementInProgress
 
 
-def test_view_deletion_cancels_a_queued_warmup_before_it_starts() -> None:
+def test_view_retirement_cancels_a_queued_warmup_before_it_starts() -> None:
     held_started = threading.Event()
     release_held = threading.Event()
     target_started = threading.Event()
@@ -50,11 +50,11 @@ def test_view_deletion_cancels_a_queued_warmup_before_it_starts() -> None:
             await asyncio.sleep(0)
             assert not target_started.is_set()
 
-            async def delete() -> None:
+            async def retire() -> None:
                 async with coordinator.retiring_view("target"):
                     pass
 
-            await asyncio.wait_for(delete(), timeout=1)
+            await asyncio.wait_for(retire(), timeout=1)
             assert not release_held.is_set()
             assert not target_started.is_set()
         finally:
@@ -70,7 +70,7 @@ def test_view_deletion_cancels_a_queued_warmup_before_it_starts() -> None:
     assert not target_started.is_set()
 
 
-def test_deletion_evicts_completed_publication_before_same_name_recreation() -> None:
+def test_retirement_evicts_completed_publication_before_same_name_recreation() -> None:
     calls: list[str] = []
 
     async def exercise() -> tuple[str, str]:
@@ -96,7 +96,7 @@ def test_deletion_evicts_completed_publication_before_same_name_recreation() -> 
     assert calls == ["old", "new"]
 
 
-def test_deletion_guard_cancels_and_drains_a_generation_baseline() -> None:
+def test_retirement_guard_cancels_and_drains_a_generation_baseline() -> None:
     started = threading.Event()
     cancelled = threading.Event()
     finished = threading.Event()
@@ -118,12 +118,12 @@ def test_deletion_guard_cancels_and_drains_a_generation_baseline() -> None:
         waiting = asyncio.create_task(coordinator.baseline("dashboard", 0, capture))
         assert await asyncio.to_thread(started.wait, 1)
 
-        async def delete() -> None:
+        async def retire() -> None:
             async with coordinator.retiring_view("dashboard"):
                 assert finished.is_set()
 
         try:
-            await asyncio.wait_for(delete(), timeout=1)
+            await asyncio.wait_for(retire(), timeout=1)
             with pytest.raises(asyncio.CancelledError):
                 await waiting
         finally:
@@ -132,7 +132,7 @@ def test_deletion_guard_cancels_and_drains_a_generation_baseline() -> None:
     asyncio.run(exercise())
 
 
-def test_deletion_guard_signals_and_awaits_a_blocking_external_provider() -> None:
+def test_retirement_guard_signals_and_awaits_a_blocking_external_provider() -> None:
     started = threading.Event()
     released = threading.Event()
     finished = threading.Event()
@@ -154,11 +154,11 @@ def test_deletion_guard_signals_and_awaits_a_blocking_external_provider() -> Non
         publication = asyncio.create_task(coordinator.publish("dashboard", 1, publish))
         assert await asyncio.to_thread(started.wait, 1)
 
-        async def delete() -> None:
+        async def retire() -> None:
             async with coordinator.retiring_view("dashboard"):
                 assert finished.is_set()
 
-        await asyncio.wait_for(delete(), timeout=1)
+        await asyncio.wait_for(retire(), timeout=1)
         try:
             return await publication
         finally:
@@ -167,7 +167,7 @@ def test_deletion_guard_signals_and_awaits_a_blocking_external_provider() -> Non
     assert asyncio.run(exercise()) == "stopped"
 
 
-def test_deletion_guard_rejects_publication_until_commit_or_rollback() -> None:
+def test_retirement_guard_rejects_publication_until_commit_or_rollback() -> None:
     started = threading.Event()
     released = threading.Event()
     finished = threading.Event()
@@ -212,7 +212,7 @@ def test_deletion_guard_rejects_publication_until_commit_or_rollback() -> None:
     assert calls == ["active", "late"]
 
 
-def test_cancelled_deletion_guard_drains_the_publication_before_reopening() -> None:
+def test_cancelled_retirement_guard_drains_the_publication_before_reopening() -> None:
     started = threading.Event()
     cancelled = threading.Event()
     finish = threading.Event()
@@ -238,22 +238,22 @@ def test_cancelled_deletion_guard_drains_the_publication_before_reopening() -> N
         )
         assert await asyncio.to_thread(started.wait, 1)
 
-        async def remove() -> None:
+        async def retire() -> None:
             async with coordinator.retiring_view("dashboard"):
                 raise AssertionError("Deletion began before its publication drained")
 
-        deletion = asyncio.create_task(remove())
+        retirement = asyncio.create_task(retire())
         assert await asyncio.to_thread(cancelled.wait, 1)
-        deletion.cancel()
+        retirement.cancel()
         await asyncio.sleep(0)
-        deletion.cancel()
+        retirement.cancel()
         await asyncio.sleep(0)
-        assert not deletion.done()
+        assert not retirement.done()
         with pytest.raises(ViewRetirementInProgress):
             await coordinator.publish("dashboard", 2, lambda: "late")
         finish.set()
         with pytest.raises(asyncio.CancelledError):
-            await deletion
+            await retirement
         assert finished.is_set()
         assert await coordinator.publish("dashboard", 3, lambda: "resumed") == "resumed"
         try:
