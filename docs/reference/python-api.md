@@ -202,7 +202,7 @@ await view.preflight(
     progress: Callable[[StaticExportProgress], None] | None = None,
 ) -> StaticPreflightReport
 await view.make_default() -> View
-await view.rename(name: str) -> View
+await view.rename(new_name: str) -> View
 await view.remove() -> ViewCatalog
 ```
 
@@ -210,16 +210,30 @@ await view.remove() -> ViewCatalog
 handle bound to the committed catalog. Selecting the current default leaves the
 catalog unchanged.
 
-`rename(name)` moves the view project to `name` with its source, artifacts, and
-build history, and returns the handle for the new name. A default view stays
-the default. The project reads as `stale` until its next `build()`, which
-republishes it under the new name. The old name stops identifying a view, so
-handles bound to it raise `ViewGenerationConflictError`. `rename()` raises
-`ViewExistsError` for a taken name and `ConfigurationError` for an invalid
-name or an active publication hold. A view from
-`marimo_studio.agent.current_workspace()` is renamed by the attached Studio
-server, which releases the artifacts it serves under the old name first. Call
-`show()` on the returned handle to display the renamed view in the Studio tab.
+`rename(new_name)` moves the view project to `new_name` with its source,
+artifacts, and build history, and returns the handle for the new name. A
+default view stays the default. The project reads as `stale` until its next
+`build()`, which republishes it under the new name. Handles bound to the old
+name raise `ViewGenerationConflictError` from view operations such as
+`inspect()` and `build()`. `rename()` raises `ViewExistsError` for a taken
+name, `InvalidViewNameError` for a name outside the view name rules,
+`PublicationHeldError` while a publication hold is active, and
+`ViewRenameError` when the project folder cannot move. The view keeps its old
+name after each of these errors. `WorkspaceMutationError` reports a rename
+that stopped between names. Open a new `Workspace` and read `status()` to see
+which name the view has.
+
+`remove()` deletes the view project and returns the remaining views as a
+`ViewCatalog`. It raises `LastViewError` for the only view and
+`ViewInUseError` while another process holds an artifact lease for the view.
+Its `processes` detail lists the holding process IDs. `ViewDeletionError`
+reports an incomplete filesystem cleanup and exposes the cleanup path through
+`diagnostic_details()`.
+
+A catalog change after the handle was acquired, including a same-name
+replacement, makes `make_default()`, `rename()`, and `remove()` raise
+`WorkspaceGenerationConflictError`. Open a new `Workspace` and acquire the
+view again.
 
 `inspect()` reads current filesystem state. Source can be edited through
 filesystem tools or `write()`. Provider inspection continues to own document
@@ -288,7 +302,7 @@ source editing remains available. Existing published artifacts can be reused.
 `owner` identifies the editor and must contain 1 to 256 characters, including
 at least one non-whitespace character. `ttl` is a finite number of seconds
 greater than zero and at most 3600. Invalid arguments raise `ValueError`.
-An active hold raises `ConfigurationError` with its owner and expiry.
+An active hold raises `PublicationHeldError` with its owner and expiry.
 
 Retain the returned token. In a later execution,
 `(await view.inspect()).publication_hold` returns the current hold with its
@@ -445,15 +459,6 @@ it. `views` maps each remaining view name to its view generation in catalog
 order, `default_view` names the view at `/`, and `catalog_generation`
 identifies the committed catalog that the owning workspace captured.
 
-A view from `marimo_studio.agent.current_workspace()` is removed by the
-attached Studio server, which first releases the artifacts it serves for that
-view. `remove()` raises `ViewInUseError` while another process holds an
-artifact lease for the view. Its `processes` detail lists the holding process
-IDs. A catalog change, including a same-name replacement, raises
-`WorkspaceGenerationConflictError` and requires a new `Workspace` and `View`
-handle. `ViewDeletionError` reports an incomplete filesystem cleanup and
-exposes the cleanup path through `diagnostic_details()`.
-
 ### `ValidationReport`
 
 ```text
@@ -598,6 +603,12 @@ await view.show() -> ShowResult
 code-mode execution so the notebook can finish rendering. Open the URL returned
 by `preview_url(runtime="server")` with your preferred browser tool for direct
 page inspection.
+
+The attached Studio server runs `rename()` and `remove()`, and first releases
+the artifacts it serves for the view. A failure raises `AgentRequestError`
+whose `code` names the error, such as `view-exists` or `view-in-use`, and whose
+`details` carry the same diagnostic details. Call `show()` on the handle that
+`rename()` returns to display the renamed view in the Studio tab.
 
 ### `ShowResult`
 

@@ -159,6 +159,8 @@ await summary.make_default()
 `make_default()` serves a view at `/`. To move a view to another starter under
 the same name, create the new view under a temporary name and show it. In a
 later execution, remove the old view and rename the new one to the old name.
+Removing the default view promotes another view, so call `make_default()` on
+the renamed view when the old view was the default.
 
 For a notebook outside a Python project, the first view adds a
 [PEP 723](https://peps.python.org/pep-0723/) script header, the notebook's

@@ -50,6 +50,10 @@ A running Studio server holds that view's artifacts. Remove or rename it from
 code mode in that notebook, for example with
 `await workspace.view("<name>").rename("<new-name>")`.
 
+**`PublicationHeldError` or `publication-held` from a view rename.**
+A publication hold is active on that view. Release it with its token as in
+[authoring](authoring.md), or wait for the expiry named in the message.
+
 **The starter lists targets such as `cell-1`, `cell-4`, and `cell-10`.**
 Starters place every displayable cell and bind a `cell-N` alias for each
 anonymous one. Replace those targets with names from the notebook. Name a cell
