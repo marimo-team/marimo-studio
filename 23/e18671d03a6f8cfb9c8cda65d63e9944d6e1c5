@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/marimo_compat/test_output_overlays.py
+  s_f8296af1d7933f::t_cc2351ef819cc2 26-28,30,33-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "23e18671d03a6f8cfb9c8cda65d63e9944d6e1c5",
+  "prompts": {},
+  "sessions": {
+    "s_f8296af1d7933f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62bd6a9d-0227-4e2d-a288-3cef1089349a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
