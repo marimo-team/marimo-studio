@@ -355,6 +355,29 @@ def test_preview_reports_unavailable_runtime_and_expired_session(
     assert expired.json()["error"] == "preview-session-unavailable"
 
 
+def test_preview_url_requires_a_connected_studio_tab(
+    notebook_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from marimo_studio._compat.server.session_state import PrivateSessionState
+
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+    monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: True)
+    monkeypatch.setattr(
+        "marimo_studio._server.agent.clients.SESSION_RECONNECT_TIMEOUT", 0.02
+    )
+    with TestClient(app) as client:
+        response = client.get(
+            ENDPOINT,
+            params={"runtime": "server"},
+            headers={"Marimo-Session-Id": "s_123456"},
+        )
+    assert response.status_code == 409
+    assert response.json()["error"] == "browser-client-unavailable"
+    assert "reload the notebook in Studio" in response.json()["message"]
+
+
 def test_session_bound_preview_retains_and_revalidates_its_editor(
     notebook_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -363,8 +386,7 @@ def test_session_bound_preview_retains_and_revalidates_its_editor(
         EDITOR_SESSION_QUERY_PARAM,
         STUDIO_CLIENT_QUERY_PARAM,
     )
-    from marimo_studio._server.agent.clients import StudioClientRegistry
-    from marimo_studio._server.agent.session_bindings import ClientBinding
+    from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
 
     configured(notebook_path)
     app = marimo_app(notebook_path)
@@ -379,14 +401,14 @@ def test_session_bound_preview_retains_and_revalidates_its_editor(
     )
     monkeypatch.setattr(PrivateSessionState, "ensure_started", lambda *_args: True)
 
-    async def binding(_registry, session_id):
-        return ClientBinding(client_id, session_id, True)
+    async def target(_registry, session_id):
+        return PeerTarget(client_id, session_id, 1, None, 0)
 
     async def session_for_client(_registry, selected):
         assert selected == client_id
         return current_session
 
-    monkeypatch.setattr(StudioClientRegistry, "binding_for_session", binding)
+    monkeypatch.setattr(StudioClientRegistry, "session_target", target)
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
 
     async def live_cells(*_args, **_kwargs):
@@ -455,7 +477,7 @@ def test_session_bound_preview_retains_and_revalidates_its_editor(
             headers={"Marimo-Studio-Preview-Session-Id": "s_view01"},
         )
     assert stale_document.status_code == 409
-    assert "session changed" in stale_document.text
+    assert stale_document.headers["Marimo-Studio-Error"] == "preview-session-changed"
     assert stale_config.status_code == 409, stale_config.text
     assert stale_config.json()["error"] == "preview-session-changed"
 
@@ -486,7 +508,37 @@ def test_exact_preview_rechecks_source_after_resolving_publication(
     assert response.json()["error"] == "preview-source-changed"
 
 
-@pytest.mark.parametrize("change", ["rebind", "session-close"])
+def test_session_bound_preview_waits_while_its_editor_tab_is_disconnected(
+    notebook_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from marimo_studio._compat.server.session_state import PrivateSessionState
+    from marimo_studio._server.agent.clients import StudioClientRegistry
+
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+
+    async def disconnected(*_args):
+        return None
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", disconnected)
+    monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: True)
+    with TestClient(app) as client:
+        response = client.get(
+            "/_marimo-studio/views/dashboard/config",
+            params={
+                "runtime": "server",
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_editor_session": "s_123456",
+            },
+            headers={"Marimo-Studio-Preview-Session-Id": "s_view01"},
+        )
+    assert response.status_code == 409
+    assert response.json()["transient"] is True
+    assert "Studio tab this preview follows" in response.json()["message"]
+
+
+@pytest.mark.parametrize("change", ["rebind", "session-close", "disconnect"])
 def test_runtime_config_revalidates_editor_after_preparation(
     notebook_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
@@ -540,13 +592,17 @@ def test_runtime_config_revalidates_editor_after_preparation(
             assert preparing.wait(3)
             if change == "rebind":
                 current_session = "s_newsession"
+            elif change == "disconnect":
+                current_session = None
             else:
                 session_exists = False
         finally:
             resume.set()
         response = request.result(timeout=3)
     assert response.status_code == 409
-    assert response.json()["error"] == "preview-session-changed"
+    assert response.json().get("transient", False) == (change == "disconnect")
+    if change != "disconnect":
+        assert response.json()["error"] == "preview-session-changed"
     assert attached == []
 
 

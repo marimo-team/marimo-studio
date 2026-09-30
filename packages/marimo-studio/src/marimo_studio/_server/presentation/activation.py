@@ -14,8 +14,6 @@ from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.ownership import ObservedViewOwner
 from marimo_studio.errors import AgentRequestError, ViewNotFoundError
 
-_CLIENT_CONNECT_TIMEOUT = 1.0
-
 
 @dataclass(frozen=True)
 class SessionViewTarget:
@@ -89,31 +87,13 @@ async def _activate_session_view(
             "View activation requires the active Marimo session.",
             status_code=409,
         )
-    target = await notebook_scope.clients.wait_for_session_target(
+    return await _activate_connected_view(
+        studio,
+        notebook_scope,
+        view_name,
+        await notebook_scope.clients.session_target(session_id),
         session_id,
-        _CLIENT_CONNECT_TIMEOUT,
-    )
-    if target is not None:
-        return await _activate_connected_view(
-            studio,
-            notebook_scope,
-            view_name,
-            target,
-            session_id,
-            owner=owner,
-        )
-
-    retained = await notebook_scope.clients.binding_for_session(session_id)
-    if retained is not None:
-        raise AgentRequestError(
-            "browser-client-unavailable",
-            "The Studio browser is reconnecting. Retry view activation shortly.",
-            status_code=409,
-        )
-    raise AgentRequestError(
-        "browser-client-unavailable",
-        "The Studio host for this Marimo session is not connected.",
-        status_code=409,
+        owner=owner,
     )
 
 

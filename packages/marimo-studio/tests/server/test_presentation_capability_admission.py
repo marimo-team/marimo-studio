@@ -12,7 +12,8 @@ from starlette.websockets import WebSocketDisconnect
 
 from marimo_studio import create_asgi_app
 from marimo_studio._delivery.urls import WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM
-from marimo_studio._server.agent.clients import ClientBinding, StudioClientRegistry
+from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
+from marimo_studio._server.agent.workspace_presence import studio_tab_unavailable
 from marimo_studio._server.ports import SessionOwner
 from marimo_studio._server.presentation import access as presentation_access
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
@@ -162,19 +163,13 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
         events_scope.update(view=view_name, client_id=options.get("client_id"))
         yield b"event: ready\ndata: {}\n\n"
 
-    async def binding_for_session(
+    async def session_target(
         _registry: StudioClientRegistry,
         session_id: str,
-    ) -> ClientBinding | None:
-        return (
-            ClientBinding(
-                client_id="studio-client",
-                session_id=session_id,
-                connected=True,
-            )
-            if session_id == "s_editor"
-            else None
-        )
+    ) -> PeerTarget:
+        if session_id != "s_editor":
+            raise studio_tab_unavailable()
+        return PeerTarget("studio-client", session_id, 1, None, 0)
 
     async def capture_outputs(request: Request, *_args: object, **_kwargs: object):
         projected_sessions.append(request.headers.get("Marimo-Session-Id"))
@@ -182,8 +177,8 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
 
     monkeypatch.setattr(
         StudioClientRegistry,
-        "binding_for_session",
-        binding_for_session,
+        "session_target",
+        session_target,
     )
     monkeypatch.setattr(
         "marimo_studio._server.support.change_events",

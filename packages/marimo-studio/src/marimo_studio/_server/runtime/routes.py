@@ -178,8 +178,13 @@ async def runtime_config_response(
     if client_id is not None:
         lookup_session_id = await clients.session_for_client(client_id)
         expected_sessions = request.query_params.getlist(EDITOR_SESSION_QUERY_PARAM)
-        if expected_sessions and (
-            len(expected_sessions) != 1 or lookup_session_id != expected_sessions[0]
+        # A disconnected editor tab reports no session and stays pending.
+        if (
+            expected_sessions
+            and lookup_session_id is not None
+            and (
+                len(expected_sessions) != 1 or lookup_session_id != expected_sessions[0]
+            )
         ):
             return JSONResponse(
                 {
@@ -192,7 +197,7 @@ async def runtime_config_response(
                 headers=NO_STORE,
             )
         if lookup_session_id is None:
-            return _session_pending()
+            return _editor_disconnected()
         if not sessions.exists(context, lookup_session_id):
             return _session_pending()
         if not sessions.ensure_started(context, lookup_session_id):
@@ -221,10 +226,11 @@ async def runtime_config_response(
         except RuntimeConfigTooLargeError as error:
             return error_response(error)
         if client_id is not None:
-            if (
-                lookup_session_id is None
-                or await clients.session_for_client(client_id) != lookup_session_id
-                or not sessions.exists(context, lookup_session_id)
+            current_session_id = await clients.session_for_client(client_id)
+            if current_session_id is None:
+                return _editor_disconnected()
+            if current_session_id != lookup_session_id or not sessions.exists(
+                context, current_session_id
             ):
                 return JSONResponse(
                     {
@@ -286,6 +292,13 @@ def _session_pending(
         },
         status_code=409,
         headers=NO_STORE,
+    )
+
+
+def _editor_disconnected() -> JSONResponse:
+    return _session_pending(
+        "Waiting for the Studio tab this preview follows. Reload the notebook "
+        "in Studio if that tab closed."
     )
 
 
