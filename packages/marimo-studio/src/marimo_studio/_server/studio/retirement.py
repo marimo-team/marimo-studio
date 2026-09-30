@@ -20,7 +20,7 @@ from marimo_studio._processes.ownership import (
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._views.remove import delete_view
-from marimo_studio._views.rename import rename_view
+from marimo_studio._views.rename import rename_view, require_rename_target
 from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.mutation_lock import (
@@ -68,9 +68,11 @@ def validate_view_owner(
 ) -> StudioWorkspace:
     """Return the current workspace when the caller still owns both generations."""
     current = load_studio(studio.config_path)
-    generation = current.view_generations.get(name)
+    # A stale catalog reports a workspace conflict before a view conflict, so
+    # clients reload the whole catalog first.
     if current.catalog_generation != expected_catalog_generation:
         raise WorkspaceGenerationConflictError()
+    generation = current.view_generations.get(name)
     if generation != expected_generation:
         raise ViewGenerationConflictError(name, generation)
     return current
@@ -287,6 +289,22 @@ async def rename_owned_view(
     development: DevelopmentCoordinator,
 ) -> RetiredView:
     """Rename one observed view after draining every server-side owner."""
+
+    def admit() -> StudioWorkspace:
+        current = validate_view_owner(
+            studio,
+            name,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+        require_rename_target(current, name, new_name)
+        return current
+
+    # Reject a rename that cannot commit before draining the served view. The
+    # commit checks again under the view locks.
+    current = await asyncio.to_thread(admit)
+    if new_name == name:
+        return RetiredView(current)
 
     def rename(current: StudioWorkspace) -> RetiredView:
         return RetiredView(

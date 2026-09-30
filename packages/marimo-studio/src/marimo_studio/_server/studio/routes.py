@@ -202,6 +202,7 @@ async def _owned_view_request(
     server_token: str,
     *,
     method: str,
+    name_field: str,
     error: str,
     message: str,
 ) -> _OwnedViewRequest | Response:
@@ -218,9 +219,9 @@ async def _owned_view_request(
         )
     except JSONBodyError as body_error:
         return json_body_error_response(body_error)
-    fields = {"catalog_generation", "name", "view_generation"}
+    fields = {"catalog_generation", name_field, "view_generation"}
     if isinstance(body, dict) and set(body) == fields:
-        name = body["name"]
+        name = body[name_field]
         catalog_generation = _owner_generation(body["catalog_generation"])
         view_generation = _owner_generation(body["view_generation"])
         if isinstance(name, str) and catalog_generation and view_generation:
@@ -272,6 +273,7 @@ async def delete_view_response(
         request,
         server_token,
         method="DELETE",
+        name_field="name",
         error="invalid-view-delete-request",
         message=message,
     )
@@ -309,6 +311,7 @@ async def rename_view_response(
         request,
         server_token,
         method="POST",
+        name_field="new_name",
         error="invalid-view-rename-request",
         message="View rename requires the new name and current owner generations.",
     )

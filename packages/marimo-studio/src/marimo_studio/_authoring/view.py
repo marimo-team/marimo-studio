@@ -445,7 +445,7 @@ async def make_default_view(
 async def rename_view(
     notebook: Path,
     view: str,
-    name: str,
+    new_name: str,
     *,
     connection: StudioServerConnection | None = None,
     expected_catalog_generation: str | None = None,
@@ -461,7 +461,7 @@ async def rename_view(
             connection,
             notebook,
             view,
-            name,
+            new_name,
             catalog_generation=expected_catalog_generation,
             view_generation=expected_generation,
         )
@@ -471,7 +471,7 @@ async def rename_view(
             rename_view_project(
                 load_studio(notebook),
                 view,
-                name,
+                new_name,
                 expected_catalog_generation=expected_catalog_generation,
                 expected_generation=expected_generation,
             )

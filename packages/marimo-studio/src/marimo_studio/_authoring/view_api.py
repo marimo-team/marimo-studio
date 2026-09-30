@@ -275,22 +275,22 @@ class View:
         )
         return self._handle_in(catalog, self.name)
 
-    async def rename(self: _View, name: str) -> _View:
+    async def rename(self: _View, new_name: str) -> _View:
         """Move this view to a new name and return the handle for that name.
 
-        The old name stops identifying a view, so handles bound to it raise
-        ``ViewGenerationConflictError``.
+        The old name stops identifying a view, so view operations on handles
+        bound to it raise ``ViewGenerationConflictError``.
         """
         owner = self._present_owner()
         catalog = await rename_view(
             self.workspace.notebook,
             self.name,
-            name,
+            new_name,
             connection=self.workspace._connection(),
             expected_catalog_generation=owner.catalog_generation,
             expected_generation=owner.view_generation,
         )
-        return self._handle_in(catalog, name)
+        return self._handle_in(catalog, new_name)
 
     async def remove(self) -> ViewCatalog:
         """Remove this view and return the remaining catalog."""

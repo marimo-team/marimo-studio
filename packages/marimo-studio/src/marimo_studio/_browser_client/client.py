@@ -116,7 +116,7 @@ async def request_view_rename(
     connection: StudioServerConnection,
     notebook: Path,
     view: str,
-    name: str,
+    new_name: str,
     *,
     catalog_generation: str,
     view_generation: str,
@@ -129,12 +129,12 @@ async def request_view_rename(
         method="POST",
         body={
             "catalog_generation": catalog_generation,
-            "name": name,
+            "new_name": new_name,
             "view_generation": view_generation,
         },
         timeout=VIEW_RETIREMENT_HTTP_TIMEOUT,
     )
-    return parse_view_catalog(payload, notebook, name, present=True)
+    return parse_view_catalog(payload, notebook, new_name, present=True)
 
 
 async def _authorized_connection(

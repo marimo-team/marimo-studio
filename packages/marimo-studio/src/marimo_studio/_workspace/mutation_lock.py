@@ -163,7 +163,7 @@ def artifact_lease_lock(view_root: Path, view_name: str) -> Iterator[None]:
 
 @contextmanager
 def view_build_lock(view_root: Path, view_name: str) -> Iterator[None]:
-    """Serialize builds with removal while authored files stay writable."""
+    """Serialize builds with removal and rename while authored files stay writable."""
     if VIEW_PATTERN.fullmatch(view_name) is None:
         raise ConfigurationError(f"Invalid Studio view name {view_name!r}")
     with _mutation_lock(view_root, f"{view_name}.build.lock"):
