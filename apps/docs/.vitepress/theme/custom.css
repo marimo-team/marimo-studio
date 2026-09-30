@@ -110,7 +110,8 @@
   text-underline-offset: 3px;
 }
 
-.vp-doc div[class*="language-"] {
+.vp-doc div[class*="language-"],
+.vp-doc p > img {
   border: 1px solid var(--vp-c-divider);
   border-radius: 6px;
 }
