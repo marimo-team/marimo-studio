@@ -1,0 +1,21 @@
+packages/marimo-studio/src/marimo_studio/_server/runtime/routes.py
+  s_e5711cd086c9dc::t_6aaaeeb4c9cc23 57-60
+packages/marimo-studio/tests/server/test_delivery_documents.py
+  s_e5711cd086c9dc::t_d429afb338671b 260-273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5739790a860306b87664fc9de9cb30cb622278ca",
+  "prompts": {},
+  "sessions": {
+    "s_e5711cd086c9dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7338eb56-7800-49ba-9604-5c6685a579a3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
