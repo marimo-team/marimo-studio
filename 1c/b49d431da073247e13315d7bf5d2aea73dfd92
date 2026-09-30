@@ -1,0 +1,21 @@
+skills/marimo-studio/references/setup.md
+  s_f8296af1d7933f::t_c4c43cac7816b5 37-40
+skills/marimo-studio/references/gotchas.md
+  s_f8296af1d7933f::t_c4c43cac7816b5 89-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1cb49d431da073247e13315d7bf5d2aea73dfd92",
+  "prompts": {},
+  "sessions": {
+    "s_f8296af1d7933f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62bd6a9d-0227-4e2d-a288-3cef1089349a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
