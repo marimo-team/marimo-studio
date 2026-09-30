@@ -357,6 +357,55 @@ class ProviderNotFoundError(ConfigurationError):
         return {"provider": self.key, "available_providers": list(self.available)}
 
 
+class InvalidViewNameError(ConfigurationError):
+    """A requested view name breaks the view name rules."""
+
+    code = "invalid-view-name"
+    status_code = 400
+
+
+class PublicationHeldError(ConfigurationError):
+    """A publication hold blocks an operation on its view."""
+
+    code = "publication-held"
+    status_code = 409
+
+    def __init__(self, view: str, owner: str, expiry: str, next_step: str) -> None:
+        super().__init__(
+            f"Publication of view {view!r} is held by {owner!r} until {expiry}. "
+            f"{next_step}"
+        )
+        self.view = view
+        self.owner = owner
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"view": self.view, "owner": self.owner}
+
+
+class ViewRenameError(MarimoStudioError):
+    """A view project could not move to its new name."""
+
+    code = "view-rename-error"
+    status_code = 409
+
+    def __init__(self, name: str, new_name: str, reason: str, *, busy: bool) -> None:
+        next_step = (
+            "Close programs that use its folder, then retry."
+            if busy
+            else "Resolve that error, then retry."
+        )
+        super().__init__(
+            f"View {name!r} could not move to {new_name!r}: {reason}. The view "
+            f"keeps its old name. {next_step}"
+        )
+        self.name = name
+        self.new_name = new_name
+        self.transient = busy
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"view": self.name, "new_name": self.new_name}
+
+
 class ViewExistsError(MarimoStudioError):
     """A requested Studio view name already identifies a project."""
 
@@ -514,12 +563,14 @@ __all__ = [
     "CapabilityInputError",
     "ConfigurationError",
     "DependencyError",
+    "InvalidViewNameError",
     "LastViewError",
     "MarimoStudioError",
     "NotebookSourceError",
     "ProtocolError",
     "ProviderNotFoundError",
     "PublicationError",
+    "PublicationHeldError",
     "PublicationLimitError",
     "PublicationUnavailableError",
     "RuntimeConfigTooLargeError",
@@ -537,6 +588,7 @@ __all__ = [
     "ViewInUseError",
     "ViewNotFoundError",
     "ViewProjectError",
+    "ViewRenameError",
     "WorkspaceGenerationConflictError",
     "WorkspaceMutationError",
 ]

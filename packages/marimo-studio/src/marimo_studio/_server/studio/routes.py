@@ -165,11 +165,7 @@ async def create_view_response(
     try:
         validate_view_name(name)
     except MarimoStudioError as error:
-        return JSONResponse(
-            {"error": "invalid-view-name", "message": str(error)},
-            status_code=400,
-            headers=NO_STORE,
-        )
+        return error_response(error)
     try:
         await run_provider_operation(
             partial(
@@ -321,11 +317,7 @@ async def rename_view_response(
     try:
         new_name = validate_view_name(owned.name)
     except MarimoStudioError as error:
-        return JSONResponse(
-            {"error": "invalid-view-name", "message": str(error)},
-            status_code=400,
-            headers=NO_STORE,
-        )
+        return error_response(error)
     return await _retired_view_response(
         new_name,
         lambda: rename_owned_view(

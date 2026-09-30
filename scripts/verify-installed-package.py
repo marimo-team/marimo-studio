@@ -161,13 +161,14 @@ assert set(marimo_studio.view_providers.__all__) == {
 }
 assert set(marimo_studio.errors.__all__) == {
     "AgentRequestError", "BindingError", "CapabilityInputError", "ConfigurationError",
-    "DependencyError", "LastViewError", "MarimoStudioError", "NotebookSourceError",
-    "ProtocolError", "ProviderNotFoundError", "PublicationError", "PublicationLimitError",
-    "PublicationUnavailableError", "RuntimeConfigTooLargeError",
-    "RuntimeSelectionError", "RuntimeTimeoutError", "SourceConflictError",
-    "SourceEncodingError", "SourceNotFoundError", "SourceTooLargeError",
-    "SourceValidationError", "StaticExportError", "ViewDeletionError", "ViewExistsError",
-    "ViewGenerationConflictError", "ViewInUseError", "ViewNotFoundError", "ViewProjectError",
+    "DependencyError", "InvalidViewNameError", "LastViewError", "MarimoStudioError",
+    "NotebookSourceError", "ProtocolError", "ProviderNotFoundError", "PublicationError",
+    "PublicationHeldError", "PublicationLimitError", "PublicationUnavailableError",
+    "RuntimeConfigTooLargeError", "RuntimeSelectionError", "RuntimeTimeoutError",
+    "SourceConflictError", "SourceEncodingError", "SourceNotFoundError",
+    "SourceTooLargeError", "SourceValidationError", "StaticExportError",
+    "ViewDeletionError", "ViewExistsError", "ViewGenerationConflictError",
+    "ViewInUseError", "ViewNotFoundError", "ViewProjectError", "ViewRenameError",
     "WorkspaceGenerationConflictError", "WorkspaceMutationError",
 }
 providers = marimo_studio.view_providers

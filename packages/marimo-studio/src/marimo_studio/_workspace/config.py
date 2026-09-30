@@ -56,7 +56,11 @@ from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
 from marimo_studio._workspace.project_manifest import load_view_project
 from marimo_studio._workspace.toml import parse_toml, read_toml
 from marimo_studio._workspace.view_owners import reconcile_view_owners
-from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
+from marimo_studio.errors import (
+    ConfigurationError,
+    InvalidViewNameError,
+    WorkspaceGenerationConflictError,
+)
 from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import ViewProject
 
@@ -96,12 +100,12 @@ def _reject_unknown_config_fields(
 
 def validate_view_name(name: str) -> str:
     if not VIEW_PATTERN.fullmatch(name):
-        raise ConfigurationError(
+        raise InvalidViewNameError(
             "View names must start with a lowercase letter and contain lowercase "
             "letters, digits, or hyphens."
         )
     if name in RESERVED_VIEW_NAMES:
-        raise ConfigurationError(f"View name {name!r} is reserved.")
+        raise InvalidViewNameError(f"View name {name!r} is reserved.")
     try:
         validate_portable_path_component(
             name,
@@ -109,7 +113,7 @@ def validate_view_name(name: str) -> str:
             max_bytes=VIEW_NAME_MAX_BYTES,
         )
     except ValueError as error:
-        raise ConfigurationError(str(error)) from error
+        raise InvalidViewNameError(str(error)) from error
     return name
 
 
@@ -354,7 +358,12 @@ def discover_views(
             view_root,
             {directory, directory / "view.toml"},
         )
-        validate_view_name(directory.name)
+        try:
+            validate_view_name(directory.name)
+        except InvalidViewNameError as error:
+            raise ConfigurationError(
+                f"View folder {directory} has an invalid name. {error}"
+            ) from error
         try:
             project = load_view_project(directory)
         except FileNotFoundError:
@@ -388,7 +397,12 @@ def _studio_definition(
     default_view = data.get("default")
     if not isinstance(default_view, str):
         raise ConfigurationError("default must name a view")
-    validate_view_name(default_view)
+    try:
+        validate_view_name(default_view)
+    except InvalidViewNameError as error:
+        raise ConfigurationError(
+            f"The default view in {config_path} is invalid. {error}"
+        ) from error
     default_runtime, runtimes = _runtimes(data)
     preserve_session = data.get("preserve_session", False)
     if not isinstance(preserve_session, bool):
@@ -618,6 +632,8 @@ def default_view_writes(
     default_view: str,
 ) -> dict[Path, str]:
     """Return the configuration write that selects one default view."""
+    if studio.default_view == default_view:
+        return {}
 
     def select(config: MutableMapping[str, Any]) -> None:
         config["default"] = default_view

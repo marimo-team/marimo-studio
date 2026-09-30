@@ -14,7 +14,11 @@ from typing import Literal
 from marimo_studio._filesystem.io import atomic_write_text, read_text
 from marimo_studio._workspace.generation import view_name_generation
 from marimo_studio._workspace.mutation_lock import view_mutation_lock
-from marimo_studio.errors import ConfigurationError, ViewGenerationConflictError
+from marimo_studio.errors import (
+    ConfigurationError,
+    PublicationHeldError,
+    ViewGenerationConflictError,
+)
 
 DEFAULT_PUBLICATION_HOLD_SECONDS = 300.0
 MAX_PUBLICATION_HOLD_SECONDS = 3_600.0
@@ -161,9 +165,11 @@ def acquire_publication_hold(
         generation = _require_generation(root, expected_generation)
         current = read_publication_hold(root)
         if current is not None and current.status == "active":
-            raise ConfigurationError(
-                f"Publication is held by {current.owner!r} until {current.expiry}. "
-                "Release that hold with its token or wait for it to expire."
+            raise PublicationHeldError(
+                root.name,
+                current.owner,
+                current.expiry,
+                "Release that hold with its token or wait for it to expire.",
             )
         hold = PublicationHold(
             secrets.token_hex(32), owner, generation, time.time() + ttl
