@@ -1,0 +1,21 @@
+.github/workflows/pages.yml
+  s_3d7e9be4f73d81::t_9ec16955f51856 129-131,137
+.github/workflows/e2e.yml
+  s_3d7e9be4f73d81::t_55e90fbe586a08 127-128,130-131,133-134,136-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c226093b6e93b9f562b9bb667a0608edcc949551",
+  "prompts": {},
+  "sessions": {
+    "s_3d7e9be4f73d81": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12dca28d-acd5-4a66-a109-48a013175277",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
