@@ -555,21 +555,6 @@ def _studio_config(
     return config
 
 
-def updated_notebook_default_source(
-    path: Path,
-    source: str,
-    *,
-    default_view: str,
-) -> str:
-    """Return notebook source with a new default view."""
-    document = _document(source, path)
-    if document is None:
-        raise ConfigurationError(f"Notebook has no PEP 723 metadata: {path}")
-    config = _studio_config(document, path)
-    config["default"] = default_view
-    return _replace_metadata(source, path, document)
-
-
 def updated_notebook_config_source(
     path: Path,
     source: str,

@@ -16,9 +16,13 @@ from marimo_studio._delivery.export import StaticExportResult
 from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._notebook.inspection import InspectionResult
 from marimo_studio._validation.records import ValidationReport
-from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.overview import StudioOverview
-from marimo_studio._views.records import ViewDocument, ViewInspection, ViewSetupResult
+from marimo_studio._views.records import (
+    ViewCatalog,
+    ViewDocument,
+    ViewInspection,
+    ViewSetupResult,
+)
 from marimo_studio._workspace.models import BindingResult
 from marimo_studio._workspace.python_project import owning_project
 
@@ -200,10 +204,21 @@ def render_document_write(document: ViewDocument) -> None:
     echo(f"  {light_blue('revision')} {document.revision}")
 
 
-def render_view_removal(result: ViewRemovalResult) -> None:
-    """Write a completed view removal in human text."""
-    echo(f"{green('Removed')} view {result.view} from {result.notebook}")
-    echo(f"  {light_blue('default')} {result.default_view}")
+def emit_view_catalog(
+    catalog: ViewCatalog,
+    view: str,
+    verb: str,
+    subject: str,
+    *,
+    json_output: bool,
+) -> None:
+    """Write a completed view catalog change as JSON or human text."""
+    if json_output:
+        echo_json({**catalog.to_dict(), "view": view})
+        return
+    echo(f"{green(verb)} {subject} in {catalog.notebook}")
+    echo(f"  {light_blue('default')} {catalog.default_view}")
+    echo(f"  {light_blue('views')} {', '.join(catalog.views)}")
 
 
 def render_view_show(result: ShowResult) -> None:

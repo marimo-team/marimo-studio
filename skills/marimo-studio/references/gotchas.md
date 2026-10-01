@@ -40,13 +40,19 @@ and read a publication hold back as in [authoring](authoring.md).
 ## Views
 
 **`LastViewError: Studio keeps at least one view`.**
-Create and show the replacement, then remove the old view, as in
+To change a name, rename the view. To replace a view, create and show
+the replacement, then remove the old view, as in
 [Select or create the view](../SKILL.md#select-or-create-the-view). Removing
 the default view promotes the first remaining view to default.
 
-**`view-in-use` from `marimo-studio view remove`.**
-A running Studio server holds that view's artifacts. Remove it from code mode
-in that notebook with `await workspace.view("<name>").remove()`.
+**`view-in-use` from `marimo-studio view remove` or `view rename`.**
+A running Studio server holds that view's artifacts. Remove or rename it from
+code mode in that notebook, for example with
+`await workspace.view("<name>").rename("<new-name>")`.
+
+**`PublicationHeldError` or `publication-held` from `hold_publication()` or a view rename.**
+Another publication hold is active on that view. Release it with its token as
+in [authoring](authoring.md), or wait for the expiry named in the message.
 
 **The starter lists targets such as `cell-1`, `cell-4`, and `cell-10`.**
 Starters place every displayable cell and bind a `cell-N` alias for each

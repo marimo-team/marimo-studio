@@ -31,32 +31,33 @@ class RuntimeSyncError(MarimoStudioError):
     transient = True
 
 
-class ViewDeletionInProgress(MarimoStudioError):
-    """A view-scoped operation was superseded by deletion."""
+class ViewRetirementInProgress(MarimoStudioError):
+    """A view-scoped operation was superseded by the view's removal or rename."""
 
-    code = "view-deletion-in-progress"
+    code = "view-retirement-in-progress"
     status_code = 409
     transient = True
 
     def __init__(self, view_name: str) -> None:
-        super().__init__(f"View {view_name!r} is being deleted.")
+        super().__init__(f"View {view_name!r} is being removed or renamed.")
         self.view_name = view_name
 
     def diagnostic_details(self) -> dict[str, object]:
         return {"view": self.view_name}
 
 
-class ViewDeletionCapacityError(MarimoStudioError):
-    """The server has no free dedicated view-deletion worker."""
+class ViewRetirementCapacityError(MarimoStudioError):
+    """The server has no free worker for a view removal or rename."""
 
-    code = "view-deletion-capacity-exhausted"
+    code = "view-retirement-capacity-exhausted"
     status_code = 503
     transient = True
-    public_hint = "Retry after an in-flight view deletion finishes."
+    public_hint = "Retry after an in-flight view removal or rename finishes."
 
     def __init__(self) -> None:
         super().__init__(
-            "Studio is already processing the maximum number of view deletions."
+            "Studio is already processing the maximum number of view removals "
+            "and renames."
         )
 
 

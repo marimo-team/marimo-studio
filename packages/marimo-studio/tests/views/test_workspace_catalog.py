@@ -55,6 +55,33 @@ def test_view_inventory_ignores_a_project_removed_during_load(
     assert set(workspace_config.discover_views(root)) == {"stable"}
 
 
+def test_a_misnamed_view_folder_is_a_configuration_error(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+    view_root = load_studio(notebook_path).view_root
+    shutil.copytree(view_root / "dashboard", view_root / "Report")
+
+    with pytest.raises(ConfigurationError) as failed:
+        load_studio(notebook_path)
+
+    assert failed.value.code == "configuration-error"
+    assert "Report" in str(failed.value)
+
+
+def test_an_invalid_default_view_is_a_configuration_error(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+    source = notebook_path.read_text(encoding="utf-8")
+    notebook_path.write_text(
+        source.replace('default = "dashboard"', 'default = "Dashboard"'),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError) as failed:
+        load_studio(notebook_path)
+
+    assert failed.value.code == "configuration-error"
+    assert notebook_path.name in str(failed.value)
+
+
 @pytest.mark.parametrize("disappearance", ("owner", "directory"))
 def test_workspace_materialization_reports_a_disappearing_view_as_a_conflict(
     notebook_path: Path,

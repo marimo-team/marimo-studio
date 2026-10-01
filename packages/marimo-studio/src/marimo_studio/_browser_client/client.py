@@ -8,13 +8,13 @@ from urllib.parse import quote
 
 from marimo_studio._browser_client.limits import (
     VIEW_ACTIVATION_HTTP_TIMEOUT,
-    VIEW_REMOVAL_HTTP_TIMEOUT,
+    VIEW_RETIREMENT_HTTP_TIMEOUT,
 )
 from marimo_studio._browser_client.protocol import (
     ViewShowRequest,
     parse_connection_token,
-    parse_removal_result,
     parse_show_result,
+    parse_view_catalog,
 )
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import (
@@ -25,9 +25,13 @@ from marimo_studio._browser_client.transport import (
     studio_server_connection as studio_server_connection,
 )
 from marimo_studio._delivery.urls import SUPPORT_PATH
-from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.records import ViewCatalog
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio._workspace.ownership import ObservedViewOwner, require_view_owner
+from marimo_studio._workspace.ownership import (
+    ObservedViewOwner,
+    PresentViewOwner,
+    require_view_owner,
+)
 from marimo_studio.errors import (
     AgentRequestError,
     CapabilityInputError,
@@ -89,27 +93,71 @@ async def request_view_removal(
     connection: StudioServerConnection,
     notebook: Path,
     view: str,
-    *,
-    catalog_generation: str,
-    view_generation: str,
-) -> ViewRemovalResult:
+    owner: PresentViewOwner,
+) -> ViewCatalog:
     """Remove one view through the server that serves its artifacts."""
-    connection = await _authorized_connection(connection, notebook)
-    payload = await request_json(
+    payload = await _request_retirement(
         connection,
-        f"{SUPPORT_PATH}/views/{quote(view, safe='')}",
+        notebook,
+        quote(view, safe=""),
         method="DELETE",
-        body={
-            "catalog_generation": catalog_generation,
-            "name": view,
-            "view_generation": view_generation,
-        },
-        timeout=VIEW_REMOVAL_HTTP_TIMEOUT,
+        body={"name": view},
+        owner=owner,
     )
     cleanup = payload.get("cleanup")
     if isinstance(cleanup, str) and cleanup:
         raise ViewDeletionError(Path(cleanup))
-    return parse_removal_result(payload, notebook, view)
+    catalog = parse_view_catalog(payload, notebook)
+    if view in catalog.views:
+        raise ProtocolError(f"The Studio server still lists removed view {view!r}.")
+    return catalog
+
+
+async def request_view_rename(
+    connection: StudioServerConnection,
+    notebook: Path,
+    view: str,
+    new_name: str,
+    owner: PresentViewOwner,
+) -> ViewCatalog:
+    """Rename one view through the server that serves its artifacts."""
+    payload = await _request_retirement(
+        connection,
+        notebook,
+        f"{quote(view, safe='')}/rename",
+        method="POST",
+        body={"new_name": new_name},
+        owner=owner,
+    )
+    catalog = parse_view_catalog(payload, notebook)
+    if new_name not in catalog.views:
+        raise ProtocolError(f"The Studio server omits renamed view {new_name!r}.")
+    return catalog
+
+
+async def _request_retirement(
+    connection: StudioServerConnection,
+    notebook: Path,
+    route: str,
+    *,
+    method: str,
+    body: dict[str, str],
+    owner: PresentViewOwner,
+) -> dict[str, object]:
+    # The attached server pins the view's artifacts for its pages and history.
+    # Only that server can release those pins before it moves or deletes them.
+    connection = await _authorized_connection(connection, notebook)
+    return await request_json(
+        connection,
+        f"{SUPPORT_PATH}/views/{route}",
+        method=method,
+        body={
+            **body,
+            "catalog_generation": owner.catalog_generation,
+            "view_generation": owner.view_generation,
+        },
+        timeout=VIEW_RETIREMENT_HTTP_TIMEOUT,
+    )
 
 
 async def _authorized_connection(

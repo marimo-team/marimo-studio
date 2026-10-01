@@ -2,7 +2,12 @@
 
 import click
 
-from marimo_studio._cli.commands.view_create import create, remove
+from marimo_studio._cli.commands.view_catalog import (
+    create,
+    default,
+    remove,
+    rename,
+)
 from marimo_studio._cli.commands.view_delivery import (
     build,
     export,
@@ -21,6 +26,7 @@ def view() -> None:
 
 
 view.add_command(create)
+view.add_command(default)
 view.add_command(inspect)
 view.add_command(read)
 view.add_command(write)
@@ -31,4 +37,5 @@ view.add_command(show)
 view.add_command(preview)
 view.add_command(export)
 view.add_command(preflight)
+view.add_command(rename)
 view.add_command(remove)

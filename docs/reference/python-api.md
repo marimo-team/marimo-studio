@@ -157,10 +157,11 @@ post-commit catalog captured by the owning workspace.
 `catalog_generation` and `generation` identify the catalog and view incarnation
 that the handle observed.
 
-Successful `Workspace.bind()`, `Workspace.create_view()`, and `View.remove()`
-advance the owning `Workspace`. Existing `View` handles remain bound to their
-original generations. Reacquire them with `workspace.view(name)` after a catalog
-mutation.
+Successful `Workspace.bind()`, `Workspace.create_view()`, `View.make_default()`,
+`View.rename()`, and `View.remove()` advance the owning `Workspace`. Existing
+`View` handles remain bound to their original generations. Use the handle that
+`make_default()` or `rename()` returns, or reacquire handles with
+`workspace.view(name)` after a catalog mutation.
 
 Use Studio's remove and create operations for same-name replacement. Direct
 filesystem delete and recreation completed between observations is outside the
@@ -200,8 +201,43 @@ await view.preflight(
     prepare_timeout: float | None = None,
     progress: Callable[[StaticExportProgress], None] | None = None,
 ) -> StaticPreflightReport
-await view.remove() -> ViewRemovalResult
+await view.make_default() -> View
+await view.rename(new_name: str) -> View
+await view.remove() -> ViewCatalog
 ```
+
+`make_default()` serves the view at the main route (`/`) and returns a handle
+bound to the committed catalog. Selecting the current default leaves the
+catalog unchanged.
+
+`rename(new_name)` moves the view project to `new_name` with its source,
+artifacts, and build history, and returns the handle for the new name. A
+default view stays the default. The project reads as `stale` until its next
+`build()`, which republishes it under the new name. Handles bound to the old
+name raise `ViewGenerationConflictError` from view operations such as
+`inspect()` and `build()`. `rename()` raises `ViewExistsError` for a taken
+name, including the view's own name, `InvalidViewNameError` for a name outside
+the view name rules, `PublicationHeldError` while a publication hold is
+active, and `ViewRenameError` when the project folder cannot move. The view
+keeps its old name after each of these errors.
+
+`remove()` deletes the view project and returns the remaining views as a
+`ViewCatalog`. It raises `LastViewError` for the only view. `ViewDeletionError`
+reports an incomplete filesystem cleanup and exposes the cleanup path through
+`diagnostic_details()`.
+
+`rename()` and `remove()` raise `ViewInUseError` while another process holds
+an artifact lease for the view. Its `processes` detail lists the holding
+process IDs. `WorkspaceMutationError` reports a change that did not finish
+cleanly, so open a new `Workspace` before continuing. When its `recovery`
+names a renamed project folder, the view reloads under the new name, and
+`marimo-studio view default VIEW` repairs a default that still names the old
+one.
+
+A catalog change after the handle was acquired, including a same-name
+replacement, makes `make_default()`, `rename()`, and `remove()` raise
+`WorkspaceGenerationConflictError`. Open a new `Workspace` and acquire the
+view again.
 
 `inspect()` reads current filesystem state. Source can be edited through
 filesystem tools or `write()`. Provider inspection continues to own document
@@ -270,7 +306,7 @@ source editing remains available. Existing published artifacts can be reused.
 `owner` identifies the editor and must contain 1 to 256 characters, including
 at least one non-whitespace character. `ttl` is a finite number of seconds
 greater than zero and at most 3600. Invalid arguments raise `ValueError`.
-An active hold raises `ConfigurationError` with its owner and expiry.
+An active hold raises `PublicationHeldError` with its owner and expiry.
 
 Retain the returned token. In a later execution,
 `(await view.inspect()).publication_hold` returns the current hold with its
@@ -420,20 +456,12 @@ Names one source-located delivery diagnostic with `code`, `severity`,
 destination changes. Warnings identify browser dependencies that require
 caller review.
 
-### `ViewRemovalResult`
+### `ViewCatalog`
 
-Identifies the removed view, the updated default view, and the remaining view
-names returned by `View.remove()`. `catalog_generation` identifies the
-post-commit catalog captured by the owning workspace.
-
-A view from `marimo_studio.agent.current_workspace()` is removed by the
-attached Studio server, which first releases the artifacts it serves for that
-view. `remove()` raises `ViewInUseError` while another process holds an
-artifact lease for the view. Its `processes` detail lists the holding process
-IDs. A catalog change, including a same-name replacement, raises
-`WorkspaceGenerationConflictError` and requires a new `Workspace` and `View`
-handle. `ViewDeletionError` reports an incomplete filesystem cleanup and
-exposes the cleanup path through `diagnostic_details()`.
+`ViewCatalog` records the views of a notebook after a catalog change.
+`View.remove()` returns it. `views` maps each view name to its view generation
+in name order, `default_view` names the view at `/`, and `catalog_generation`
+identifies the committed catalog that the owning workspace captured.
 
 ### `ValidationReport`
 
@@ -579,6 +607,12 @@ await view.show() -> ShowResult
 code-mode execution so the notebook can finish rendering. Open the URL returned
 by `preview_url(runtime="server")` with your preferred browser tool for direct
 page inspection.
+
+The attached Studio server runs `rename()` and `remove()`, and first releases
+the artifacts it serves for the view. A failure raises `AgentRequestError`
+whose `code` names the error, such as `view-exists` or `view-in-use`, and whose
+`details` carry the same diagnostic details. Call `show()` on the handle that
+`rename()` returns to display the renamed view in the Studio tab.
 
 ### `ShowResult`
 
@@ -767,7 +801,7 @@ surfaces. Nested notebook records are documented under `NotebookSpec` and
 | `ViewDocument`       | `path`, `language`, `access`, `content`, `revision`                                                                                                                       |
 | `ViewInspection`     | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `build`                                                                                                      |
 | `ViewBuild`          | `view`, `profile`, `revision`, `issues`                                                                                                                                   |
-| `ViewRemovalResult`  | `notebook`, `view`, `default_view`, `views`, `catalog_generation`                                                                                                         |
+| `ViewCatalog`        | `notebook`, `default_view`, `views`, `catalog_generation`                                                                                                                 |
 | `StaticExportResult` | `notebook`, `view`, `runtime`, `document`, `cache_activity`, `preflight`, `delivery` and computed `output`, `files`, `warnings`, `entrypoint`                             |
 
 `StudioOverview.state` is `unconfigured`, `needs-view`, or `ready`.

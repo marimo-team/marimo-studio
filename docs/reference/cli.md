@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Inspect notebooks and create, edit, build, show, preflight, validate, export, and remove Studio views.
+description: Inspect notebooks and create, edit, build, show, preflight, validate, export, rename, and remove Studio views, and set the default view.
 ---
 
 # CLI
@@ -154,6 +154,21 @@ A completed creation returns exact `launch_requirements` in JSON and prints an
 environment-aware launch command. Project notebooks use `uv run` with
 `--no-sandbox`. Standalone notebooks use `uvx` with `--sandbox`. Install and run
 requirements for reviewed providers.
+
+## `marimo-studio view default`
+
+```text
+marimo-studio view default VIEW [--target PATH] [--json]
+```
+
+Serves `VIEW` at the main route, `/`, by writing `default` in the Studio
+configuration. The views and their project files stay unchanged. When the
+configured `default` names a missing view, the command selects `VIEW` from the
+view projects on disk and repairs the configuration.
+
+The JSON result is the committed view catalog: the `view` the command changed,
+the `views` with their generations in name order, the `default_view`, and the
+`catalog_generation`. `view rename` and `view remove` report the same record.
 
 ## `marimo-studio view inspect`
 
@@ -406,6 +421,21 @@ source. Serve either directory over HTTP. Browser package imports, remote data,
 fonts, maps, and other view dependencies keep the network access expected by
 the authored frontend.
 
+## `marimo-studio view rename`
+
+```text
+marimo-studio view rename VIEW NEW_NAME [--target PATH] [--json]
+```
+
+Moves the view project to `NEW_NAME` with its source, artifacts, and build
+history. A default view stays the default under its new name. The project
+reads as `stale` until its next build, which republishes it under `NEW_NAME`.
+`NEW_NAME` follows the view name rules and must be free. An active publication
+hold on `VIEW` blocks the rename until the hold is released or expires. The
+JSON result is the [view catalog](#marimo-studio-view-default) with the new name
+as `view`. A view that a running Studio server serves reports `view-in-use`, as
+described in [Change a served view](../guide/views.md#change-a-served-view).
+
 ## `marimo-studio view remove`
 
 ```text
@@ -414,7 +444,10 @@ marimo-studio view remove VIEW [--target PATH] [--yes] [--json]
 
 Confirms before deleting the view project. `--yes` is required for
 machine-readable or non-interactive use. A configured notebook keeps at least
-one view. The JSON result includes the updated `catalog_generation`.
+one view. The JSON result is the [view catalog](#marimo-studio-view-default)
+with the removed name as `view`. A view that a running Studio server serves
+reports `view-in-use`, as described in
+[Change a served view](../guide/views.md#change-a-served-view).
 
 ## `marimo-studio validate`
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
@@ -319,4 +320,36 @@ class ViewSourceChanges:
             "added": [path.as_posix() for path in self.added],
             "modified": [path.as_posix() for path in self.modified],
             "deleted": [path.as_posix() for path in self.deleted],
+        }
+
+
+@dataclass(frozen=True)
+class ViewCatalog:
+    """The named views of a notebook after a catalog change."""
+
+    notebook: Path
+    default_view: str
+    views: Mapping[str, str]
+    catalog_generation: str
+
+    @classmethod
+    def of(cls, studio: StudioWorkspace) -> ViewCatalog:
+        """Capture the committed catalog of one loaded workspace."""
+        return cls(
+            notebook=studio.notebook,
+            default_view=studio.default_view,
+            views=dict(studio.view_generations),
+            catalog_generation=studio.catalog_generation,
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema": 1,
+            "notebook": str(self.notebook),
+            "default_view": self.default_view,
+            "views": [
+                {"name": name, "generation": generation}
+                for name, generation in self.views.items()
+            ],
+            "catalog_generation": self.catalog_generation,
         }

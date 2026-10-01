@@ -19,7 +19,7 @@ from marimo_studio._filesystem.secure import (
     SecureDirectory,
     secure_directory,
 )
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import ConfigurationError, WorkspaceMutationError
 
 
 def _add_error_note(error: BaseException, note: str) -> None:
@@ -433,3 +433,35 @@ def write_file_transaction(
                     f"Workspace rollback also failed: {rollback_error}",
                 )
             raise
+
+
+@contextmanager
+def workspace_transaction(
+    operation: str,
+    root: Path,
+    writes: Mapping[Path, str | bytes],
+    *,
+    expected: Mapping[Path, FileIdentity | None],
+    expected_directories: Mapping[Path, FileIdentity] | None = None,
+    claimed_directories: Mapping[Path, tuple[PurePosixPath, ...]] | None = None,
+) -> Iterator[None]:
+    """Run one named workspace mutation as a file transaction.
+
+    A conditional write that fails once the transaction began raises
+    ``WorkspaceMutationError``, so the caller reloads before retrying.
+    """
+    try:
+        with write_file_transaction(
+            root,
+            writes,
+            expected=expected,
+            expected_directories=expected_directories,
+            claimed_directories=claimed_directories,
+        ):
+            yield
+    except ConditionalWriteError as error:
+        raise WorkspaceMutationError(
+            operation,
+            recovery=error.recovery,
+            write_committed=error.committed is not None,
+        ) from error

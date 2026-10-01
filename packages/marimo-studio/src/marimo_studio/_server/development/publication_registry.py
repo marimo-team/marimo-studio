@@ -205,7 +205,7 @@ class PublicationRegistry:
             ):
                 baseline.control.cancel()
 
-    def begin_view_deletion_locked(self, view_name: str) -> ViewPublicationOwners:
+    def begin_view_retirement_locked(self, view_name: str) -> ViewPublicationOwners:
         owners = ViewPublicationOwners(
             tuple(
                 (key, publication)
@@ -225,7 +225,7 @@ class PublicationRegistry:
             baseline.task.cancel()
         return owners
 
-    def finish_view_deletion_locked(
+    def finish_view_retirement_locked(
         self,
         view_name: str,
         owners: ViewPublicationOwners,

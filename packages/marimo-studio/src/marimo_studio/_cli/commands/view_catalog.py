@@ -1,4 +1,4 @@
-"""Create and remove named Studio views."""
+"""Create, rename, select, and remove the named views of a notebook."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from marimo_studio._authoring.view import remove_view
+from marimo_studio._authoring.view import make_default_view, remove_view, rename_view
 from marimo_studio._authoring.workspace import create_view
 from marimo_studio._cli.diagnostics import json_option, run_in_environment
 from marimo_studio._cli.environment import (
@@ -22,8 +22,8 @@ from marimo_studio._cli.options import (
 )
 from marimo_studio._cli.output import (
     echo_json,
+    emit_view_catalog,
     render_view_next_command,
-    render_view_removal,
     render_view_setup,
 )
 from marimo_studio._cli.targets import resolve_environment_target, resolve_notebook
@@ -114,8 +114,45 @@ def remove(
         err=True,
     ):
         raise click.exceptions.Exit(0)
-    result = asyncio.run(remove_view(resolve_notebook(target), view_name))
-    if json_output:
-        echo_json(result.to_dict())
-        return
-    render_view_removal(result)
+    catalog = asyncio.run(remove_view(resolve_notebook(target), view_name))
+    emit_view_catalog(
+        catalog, view_name, "Removed", f"view {view_name}", json_output=json_output
+    )
+
+
+@click.command("rename", cls=ColoredCommand)
+@view_name_argument
+@click.argument("new_name", metavar="NEW_NAME")
+@target_option
+@json_option
+def rename(
+    view_name: str,
+    new_name: str,
+    target: Path | None,
+    json_output: bool,
+) -> None:
+    """Move one view and its project files to a new name."""
+    catalog = asyncio.run(rename_view(resolve_notebook(target), view_name, new_name))
+    emit_view_catalog(
+        catalog,
+        new_name,
+        "Renamed",
+        f"view {view_name} to {new_name}",
+        json_output=json_output,
+    )
+
+
+@click.command("default", cls=ColoredCommand)
+@view_name_argument
+@target_option
+@json_option
+def default(view_name: str, target: Path | None, json_output: bool) -> None:
+    """Serve one view at the notebook's main route."""
+    catalog = asyncio.run(make_default_view(resolve_notebook(target), view_name))
+    emit_view_catalog(
+        catalog,
+        view_name,
+        "Selected",
+        f"default view {view_name}",
+        json_output=json_output,
+    )

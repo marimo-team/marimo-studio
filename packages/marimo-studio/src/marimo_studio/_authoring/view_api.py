@@ -15,11 +15,17 @@ from marimo_studio._authoring.view import (
     export_view,
     hold_publication,
     inspect_view,
+    make_default_view,
     preflight_view,
     read_document,
     release_publication,
     remove_view,
+    rename_view,
     write_document,
+)
+from marimo_studio._browser_client.client import (
+    request_view_removal,
+    request_view_rename,
 )
 from marimo_studio._browser_client.transport import studio_server_connection
 from marimo_studio._delivery.export import (
@@ -31,14 +37,22 @@ from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
-from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.publication_hold import (
     DEFAULT_PUBLICATION_HOLD_SECONDS,
     PublicationHold,
 )
-from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
+from marimo_studio._views.records import (
+    ViewBuild,
+    ViewCatalog,
+    ViewDocument,
+    ViewInspection,
+)
 from marimo_studio._workspace.ownership import ObservedViewOwner, PresentViewOwner
-from marimo_studio.errors import ProtocolError, WorkspaceGenerationConflictError
+from marimo_studio.errors import (
+    ProtocolError,
+    ViewNotFoundError,
+    WorkspaceGenerationConflictError,
+)
 from marimo_studio.view_providers import BuildProfile
 
 _View = TypeVar("_View", bound="View")
@@ -251,16 +265,59 @@ class View:
             progress=progress,
         )
 
-    async def remove(self) -> ViewRemovalResult:
-        """Remove this view and return the remaining workspace identity."""
-        if not isinstance(self._owner, PresentViewOwner):
-            raise WorkspaceGenerationConflictError()
-        result = await remove_view(
+    async def make_default(self: _View) -> _View:
+        """Serve this view at the notebook's main route.
+
+        Returns a handle bound to the committed catalog.
+        """
+        catalog = await make_default_view(
             self.workspace.notebook,
             self.name,
-            connection=self.workspace._connection(),
-            expected_catalog_generation=self._owner.catalog_generation,
-            expected_generation=self._owner.view_generation,
+            owner=self._present_owner(),
         )
-        self.workspace._capture_catalog_generation(result.catalog_generation)
-        return result
+        return self._handle_in(catalog, self.name)
+
+    async def rename(self: _View, new_name: str) -> _View:
+        """Move this view to a new name and return the handle for that name.
+
+        The old name stops identifying a view, so view operations on handles
+        bound to it raise ``ViewGenerationConflictError``.
+        """
+        notebook = self.workspace.notebook
+        owner = self._present_owner()
+        connection = self.workspace._connection()
+        catalog = await (
+            request_view_rename(connection, notebook, self.name, new_name, owner)
+            if connection is not None
+            else rename_view(notebook, self.name, new_name, owner=owner)
+        )
+        return self._handle_in(catalog, new_name)
+
+    async def remove(self) -> ViewCatalog:
+        """Remove this view and return the remaining catalog."""
+        notebook = self.workspace.notebook
+        owner = self._present_owner()
+        connection = self.workspace._connection()
+        catalog = await (
+            request_view_removal(connection, notebook, self.name, owner)
+            if connection is not None
+            else remove_view(notebook, self.name, owner=owner)
+        )
+        self.workspace._capture_catalog_generation(catalog.catalog_generation)
+        return catalog
+
+    def _present_owner(self) -> PresentViewOwner:
+        # A handle taken while its name was absent never identified a view.
+        if not isinstance(self._owner, PresentViewOwner):
+            raise ViewNotFoundError(self.name)
+        return self._owner
+
+    def _handle_in(self: _View, catalog: ViewCatalog, name: str) -> _View:
+        # Later operations on the returned handle check the generations this
+        # catalog committed.
+        self.workspace._capture_catalog_generation(catalog.catalog_generation)
+        return self._create(
+            self.workspace,
+            name,
+            owner=PresentViewOwner(catalog.catalog_generation, catalog.views[name]),
+        )

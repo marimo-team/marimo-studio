@@ -37,7 +37,7 @@ artifact.
 
 | Identity           | Format                                                                              | Lifetime                                          |
 | ------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------- |
-| View name          | Lowercase letter followed by lowercase letters, digits, or hyphens                  | Stable until the view is removed                  |
+| View name          | Lowercase letter followed by lowercase letters, digits, or hyphens                  | Stable until the view is renamed or removed       |
 | Provider key       | Canonical distribution plus entry-point registration, such as `marimo-studio/react` | Preserved by Studio Source mutations for one view |
 | Starter ID         | Provider key plus local starter key, such as `marimo-studio/react:reveal`           | Used during creation and not persisted            |
 | Cell target        | Native cell name or Studio cell alias                                               | Stable while the notebook name or binding remains |
@@ -75,9 +75,10 @@ Do not construct or persist them as long-term identifiers.
 immediately before commit. A failed check preserves the current file and
 returns a conflict. Read the current source and retry from that state.
 
-Removing a view terminates its view generation. Recreating the same name
-creates a new view generation. Existing Python `View` handles remain bound to
-the incarnation they observed.
+Removing a view terminates its view generation. Renaming a view terminates the
+old name's generation and starts a generation for the new name. Recreating a
+name creates a new view generation. Existing Python `View` handles remain bound
+to the incarnation they observed.
 
 ## Runtime and browser identities
 

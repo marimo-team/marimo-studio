@@ -7,9 +7,9 @@ current state instead of an unbounded sequence of missed updates.
 
 Project reads, Source writes, presentation capture, and validation ask this
 coordinator to confirm that the view source they observed is still current.
-View deletion and notebook shutdown stop new work, drain provider operations
-and rebuilds, and close every file watcher before the filesystem mutation or
-scope close completes.
+View removal, view rename, and notebook shutdown stop new work, drain provider
+operations and rebuilds, and close every file watcher before the filesystem
+mutation or scope close completes.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ from marimo_studio._server.development.task_ownership import (
 )
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.errors._internal import ViewDeletionInProgress
+from marimo_studio.errors._internal import ViewRetirementInProgress
 from marimo_studio.view_providers import (
     BuildProfile,
     ProviderCancellation,
@@ -87,7 +87,7 @@ class DevelopmentCleanupError(RuntimeError):
 
 
 @dataclass
-class _ViewDeletion:
+class _ViewRetirement:
     committed: bool = False
 
     def commit(self) -> None:
@@ -109,7 +109,7 @@ class DevelopmentCoordinator:
             project_watcher = PrivateProjectWatcher
         self._interval = min(max(interval, 0), 0.1)
         self._lock = asyncio.Lock()
-        self._deleting_views: set[str] = set()
+        self._retiring_views: set[str] = set()
         self._closed = False
         self._close_lock = asyncio.Lock()
         self._cleanup_error: DevelopmentCleanupError | None = None
@@ -175,7 +175,7 @@ class DevelopmentCoordinator:
                 if subscription is None:
                     if view_name is None:
                         raise RuntimeError("Source monitor creation was superseded")
-                    raise ViewDeletionInProgress(view_name)
+                    raise ViewRetirementInProgress(view_name)
             return await self._activate_subscription(subscription)
         except BaseException:
             if not claimed:
@@ -198,13 +198,13 @@ class DevelopmentCoordinator:
                 async with self._lock:
                     self._ensure_open()
                     if subscription._key is not None and (
-                        subscription._key in self._deleting_views
+                        subscription._key in self._retiring_views
                         or not self._source_monitors.contains_locked(
                             subscription._key,
                             subscription._monitor,
                         )
                     ):
-                        raise ViewDeletionInProgress(subscription._key)
+                        raise ViewRetirementInProgress(subscription._key)
                 raise RuntimeError("Source monitor activation was superseded")
         except BaseException:
             await settle_ownership(
@@ -262,7 +262,7 @@ class DevelopmentCoordinator:
             not self._closed
             and self._source_monitors.contains_locked(key, monitor)
             and bool(monitor.subscribers)
-            and not (key is not None and key in self._deleting_views)
+            and not (key is not None and key in self._retiring_views)
         )
 
     async def _close_idle_watcher(
@@ -313,20 +313,20 @@ class DevelopmentCoordinator:
                 project, inspection, input_id = monitor.producer.catalog()
                 async with self._lock:
                     if (
-                        view_name in self._deleting_views
+                        view_name in self._retiring_views
                         or not self._source_monitors.contains_locked(
                             view_name,
                             monitor,
                         )
                     ):
-                        raise ViewDeletionInProgress(view_name)
+                        raise ViewRetirementInProgress(view_name)
                     generation = monitor.generation
             return ProjectCatalog(project, inspection, input_id, generation)
         finally:
             await subscription.close()
 
     async def require_view_available(self, view_name: str) -> None:
-        """Reject a project read before waiting on a deletion-owned catalog."""
+        """Reject a project read before waiting on a retirement-owned catalog."""
         async with self._lock:
             self._require_view_locked(view_name)
 
@@ -383,7 +383,7 @@ class DevelopmentCoordinator:
         async with self._lock:
             if self._closed:
                 return None
-            if key is not None and key in self._deleting_views:
+            if key is not None and key in self._retiring_views:
                 return None
             monitor = self._source_monitors.monitor_locked(key)
             if monitor is None or monitor is not expected:
@@ -443,7 +443,7 @@ class DevelopmentCoordinator:
         while True:
             async with self._lock:
                 monitor = self._source_monitors.monitor_locked(view_name)
-                if monitor is None or view_name in self._deleting_views:
+                if monitor is None or view_name in self._retiring_views:
                     return
             await self._scan_monitor(view_name, monitor)
             async with self._lock:
@@ -605,18 +605,20 @@ class DevelopmentCoordinator:
         return await self._publications.baseline(view_name, generation, operation)
 
     @asynccontextmanager
-    async def deleting_view(self, view_name: str) -> AsyncIterator[_ViewDeletion]:
-        """Drain view-scoped work while one deletion transaction is active."""
+    async def retiring_view(self, view_name: str) -> AsyncIterator[_ViewRetirement]:
+        """Drain view-scoped work while a removal or rename retires the name."""
         async with self._lock:
             self._ensure_open()
-            if view_name in self._deleting_views:
-                raise ViewDeletionInProgress(view_name)
-            self._deleting_views.add(view_name)
-            source_owners = self._source_monitors.begin_view_deletion_locked(view_name)
-            publication_owners = self._publications.begin_view_deletion_locked(
+            if view_name in self._retiring_views:
+                raise ViewRetirementInProgress(view_name)
+            self._retiring_views.add(view_name)
+            source_owners = self._source_monitors.begin_view_retirement_locked(
                 view_name
             )
-        deletion = _ViewDeletion()
+            publication_owners = self._publications.begin_view_retirement_locked(
+                view_name
+            )
+        retirement = _ViewRetirement()
         try:
             tasks: list[asyncio.Future[Any]] = []
             creation = source_owners.creation
@@ -650,23 +652,23 @@ class DevelopmentCoordinator:
                 errors = process_cleanup_errors(results)
                 if errors:
                     raise errors[0]
-            yield deletion
-            deletion.commit()
+            yield retirement
+            retirement.commit()
         finally:
             _result, cancellation = await settle_ownership(
-                self._finish_view_deletion(
+                self._finish_view_retirement(
                     view_name,
-                    deletion,
+                    retirement,
                     source_owners,
                     publication_owners,
                 )
             )
             propagate_cancellation(cancellation)
 
-    async def _finish_view_deletion(
+    async def _finish_view_retirement(
         self,
         view_name: str,
-        deletion: _ViewDeletion,
+        retirement: _ViewRetirement,
         source_owners: ViewSourceOwners,
         publication_owners: ViewPublicationOwners,
     ) -> None:
@@ -674,19 +676,19 @@ class DevelopmentCoordinator:
         close_monitor = False
         restart_monitor = False
         async with self._lock:
-            self._publications.finish_view_deletion_locked(
+            self._publications.finish_view_retirement_locked(
                 view_name,
                 publication_owners,
-                committed=deletion.committed,
+                committed=retirement.committed,
             )
-            self._deleting_views.discard(view_name)
-            close_monitor = self._source_monitors.finish_view_deletion_locked(
+            self._retiring_views.discard(view_name)
+            close_monitor = self._source_monitors.finish_view_retirement_locked(
                 view_name,
                 monitor,
-                committed=deletion.committed,
+                committed=retirement.committed,
             )
             if (
-                not deletion.committed
+                not retirement.committed
                 and not self._closed
                 and monitor is not None
                 and self._source_monitors.contains_locked(view_name, monitor)
@@ -705,8 +707,8 @@ class DevelopmentCoordinator:
 
     def _require_source_locked(self, view_name: str | None) -> None:
         self._ensure_open()
-        if view_name is not None and view_name in self._deleting_views:
-            raise ViewDeletionInProgress(view_name)
+        if view_name is not None and view_name in self._retiring_views:
+            raise ViewRetirementInProgress(view_name)
 
     def _require_view_locked(self, view_name: str) -> None:
         self._require_source_locked(view_name)
@@ -791,6 +793,6 @@ class DevelopmentCoordinator:
         async with self._lock:
             self._source_monitors.clear_locked()
             self._publications.clear_locked()
-            self._deleting_views.clear()
+            self._retiring_views.clear()
             if errors:
                 self._cleanup_error = DevelopmentCleanupError(errors)

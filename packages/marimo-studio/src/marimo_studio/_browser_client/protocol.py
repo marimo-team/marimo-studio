@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeGuard, cast
 from urllib.parse import urlsplit
 
 from marimo_studio._browser_client.records import PreviewAutomationTarget, ShowResult
-from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.records import ViewCatalog
 from marimo_studio._workspace.ownership import (
     ObservedViewOwner,
     observed_view_owner,
@@ -154,45 +154,45 @@ def parse_show_result(
         notebook=notebook,
         view=view,
         generation=cast(int, generation),
-        client_id=cast(str, client_id),
-        session_id=cast(str, session_id),
+        client_id=client_id,
+        session_id=session_id,
         preview_url=preview.preview_url,
         frame_selector=preview.frame_selector,
     )
 
 
-def parse_removal_result(
-    payload: dict[str, Any],
-    notebook: Path,
-    view: str,
-) -> ViewRemovalResult:
+def parse_view_catalog(payload: dict[str, Any], notebook: Path) -> ViewCatalog:
+    """Parse the catalog that a view mutation route committed."""
+    invalid = ProtocolError("The Studio view catalog response is invalid.")
+    items = payload.get("views")
+    if not isinstance(items, list):
+        raise invalid
+    views: dict[str, str] = {}
+    for item in items:
+        name = item.get("name") if isinstance(item, dict) else None
+        generation = item.get("generation") if isinstance(item, dict) else None
+        if not _nonempty(name) or not _nonempty(generation) or name in views:
+            raise invalid
+        views[name] = generation
     schema = payload.get("schema")
-    views = payload.get("views")
-    names = (
-        tuple(item.get("name") for item in views)
-        if isinstance(views, list) and all(isinstance(item, dict) for item in views)
-        else ()
-    )
+    default_view = payload.get("default_view")
+    catalog_generation = payload.get("generation")
     if (
         type(schema) is not int
         or schema != 1
-        or payload.get("name") != view
-        or not _nonempty(payload.get("generation"))
-        or not _nonempty(payload.get("default_view"))
-        or not names
-        or not all(_nonempty(name) for name in names)
+        or not _nonempty(catalog_generation)
+        or default_view not in views
     ):
-        raise ProtocolError("The Studio removal response is invalid.")
-    return ViewRemovalResult(
+        raise invalid
+    return ViewCatalog(
         notebook=notebook,
-        view=view,
-        default_view=cast(str, payload["default_view"]),
-        views=cast(tuple[str, ...], names),
-        catalog_generation=cast(str, payload["generation"]),
+        default_view=cast(str, default_view),
+        views=views,
+        catalog_generation=catalog_generation,
     )
 
 
-def _nonempty(value: object) -> bool:
+def _nonempty(value: object) -> TypeGuard[str]:
     return isinstance(value, str) and bool(value)
 
 

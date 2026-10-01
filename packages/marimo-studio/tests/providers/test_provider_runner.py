@@ -366,7 +366,7 @@ def test_view_deletion_reports_provider_cleanup_failure() -> None:
         assert await asyncio.to_thread(started.wait, 1)
         try:
             with pytest.raises(ProcessCleanupError, match="process tree survived"):
-                async with coordinator.deleting_view("dashboard"):
+                async with coordinator.retiring_view("dashboard"):
                     pytest.fail("Deletion continued after process cleanup failed")
         finally:
             await asyncio.gather(publication, return_exceptions=True)

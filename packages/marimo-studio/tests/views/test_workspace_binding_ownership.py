@@ -8,6 +8,7 @@ from threading import Barrier
 import pytest
 
 import marimo_studio._workspace.bindings as workspace_bindings
+import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._notebook.records import CellRef, NotebookSpec
 from marimo_studio._views.api import bind_cell, prepare_view
@@ -30,11 +31,11 @@ def test_bind_cell_rejects_a_concurrent_notebook_save(
 ) -> None:
     prepare_view(notebook_path)
     studio = load_studio(notebook_path)
-    transaction = workspace_bindings.write_file_transaction
+    transaction = workspace_transactions.write_file_transaction
     changed = notebook_path.read_text(encoding="utf-8") + "# concurrent save\n"
 
     monkeypatch.setattr(
-        workspace_bindings,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, notebook_path, changed),
     )
@@ -53,11 +54,11 @@ def test_bind_cell_rejects_a_concurrent_project_configuration_edit(
     pyproject = _project_configuration(notebook_path)
     prepare_view(notebook_path)
     studio = load_studio(pyproject)
-    transaction = workspace_bindings.write_file_transaction
+    transaction = workspace_transactions.write_file_transaction
     changed = pyproject.read_text(encoding="utf-8") + "# concurrent edit\n"
 
     monkeypatch.setattr(
-        workspace_bindings,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, pyproject, changed),
     )
@@ -76,11 +77,11 @@ def test_bind_cell_rejects_a_concurrent_project_notebook_save(
     pyproject = _project_configuration(notebook_path)
     prepare_view(notebook_path)
     studio = load_studio(pyproject)
-    transaction = workspace_bindings.write_file_transaction
+    transaction = workspace_transactions.write_file_transaction
     changed = notebook_path.read_text(encoding="utf-8") + "# concurrent save\n"
 
     monkeypatch.setattr(
-        workspace_bindings,
+        workspace_transactions,
         "write_file_transaction",
         _write_before_transaction(transaction, notebook_path, changed),
     )

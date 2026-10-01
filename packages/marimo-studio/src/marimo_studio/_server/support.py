@@ -76,6 +76,7 @@ from marimo_studio._server.studio.routes import (
     create_view_response,
     delete_view_response,
     project_response,
+    rename_view_response,
     source_response,
     unconfigured_view_inventory_payload,
     view_inventory_payload,
@@ -404,6 +405,15 @@ async def _view_response(
     view_name, separator, route = relative.partition("/")
     if not separator:
         return await delete_view_response(
+            request,
+            studio,
+            view_name,
+            context.server_token,
+            presentation,
+            notebook_scope.development,
+        )
+    if route == "rename":
+        return await rename_view_response(
             request,
             studio,
             view_name,

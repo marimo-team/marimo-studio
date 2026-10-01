@@ -7,6 +7,7 @@ import pytest
 from marimo_studio._browser_client.protocol import (
     parse_connection_token,
     parse_show_result,
+    parse_view_catalog,
 )
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio.errors import ProtocolError
@@ -114,3 +115,42 @@ def test_show_result_preserves_positional_identity_fields(tmp_path: Path) -> Non
         "generation": 2,
         "frame_selector": "iframe[data-test-preview]",
     }
+
+
+_VIEWS = [
+    {"name": "dashboard", "generation": "d" * 64},
+    {"name": "summary", "generation": "s" * 64},
+]
+_CATALOG = {
+    "schema": 1,
+    "generation": "c" * 64,
+    "default_view": "dashboard",
+    "views": _VIEWS,
+}
+
+
+def test_view_catalog_protocol_maps_views_to_generations(tmp_path: Path) -> None:
+    catalog = parse_view_catalog(_CATALOG, tmp_path)
+
+    assert catalog.default_view == "dashboard"
+    assert catalog.views == {"dashboard": "d" * 64, "summary": "s" * 64}
+    assert catalog.catalog_generation == "c" * 64
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {**_CATALOG, "schema": 2},
+        {**_CATALOG, "generation": ""},
+        {**_CATALOG, "views": [{"name": ["dashboard"], "generation": "d"}]},
+        {**_CATALOG, "views": [*_VIEWS, _VIEWS[0]]},
+        {**_CATALOG, "default_view": "overview"},
+    ],
+    ids=["schema", "generation", "view-name", "duplicate-view", "default-view"],
+)
+def test_view_catalog_protocol_rejects_inconsistent_catalogs(
+    tmp_path: Path,
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ProtocolError, match="view catalog response"):
+        parse_view_catalog(payload, tmp_path)

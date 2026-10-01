@@ -1,6 +1,6 @@
 ---
 title: Create and manage views
-description: Create, switch, and remove the named views of a notebook.
+description: Create, rename, switch, and remove the named views of a notebook, and set its default view.
 ---
 
 # Create and manage views
@@ -28,14 +28,35 @@ The equivalent command is:
 marimo-studio view create report --target analysis.py
 ```
 
-Set the main route in the notebook configuration:
+## Set the default view
+
+The default view opens at the main route, `/`. The `report` view opens at
+`/report/`. Serve `report` at `/` with:
+
+```console
+marimo-studio view default report --target analysis.py
+```
+
+Studio stores the choice as `default` in the notebook configuration:
 
 ```toml
 [tool.marimo-studio]
-default = "dashboard"
+default = "report"
 ```
 
-The default view opens at `/`. The `report` view opens at `/report/`.
+## Rename a view
+
+Rename a view to give its URL and menu entry a new name:
+
+```console
+marimo-studio view rename report summary --target analysis.py
+```
+
+The project keeps its source, artifacts, and build history, and a default view
+stays the default. The view reads as stale until its next build, which
+republishes it under the new name. Links to `/report/` stop resolving, so update
+any view that links to the old URL. While Studio serves the view, rename it as
+described in [Change a served view](#change-a-served-view).
 
 ## Switch views
 
@@ -62,10 +83,13 @@ The terminal command follows the same contract:
 marimo-studio view remove report --target analysis.py
 ```
 
-A running Studio server keeps the artifacts of views it serves in use, and the
-terminal command then reports `view-in-use` with that server's process ID.
-Remove the view from the Studio tab or from code mode in that notebook, which
-lets the server release them first.
+## Change a served view
+
+A running Studio server keeps the artifacts of the views it serves in use.
+`marimo-studio view rename` and `view remove` then report `view-in-use` with
+that server's process ID. Rename or remove the view from code mode in that
+notebook, or remove it from the Studio tab, so the server releases its
+artifacts first.
 
 Use [Choose a frontend](frontend-options.md) to select a starter. Use [Navigate
 and preserve state](navigation-and-sessions.md) when views link to one another

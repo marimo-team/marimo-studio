@@ -8,8 +8,10 @@ from typing import TypeAlias
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import (
     ViewGenerationConflictError,
+    ViewNotFoundError,
     WorkspaceGenerationConflictError,
 )
+from marimo_studio.view_providers import ViewProject
 
 
 @dataclass(frozen=True)
@@ -65,3 +67,26 @@ def require_view_owner(
         raise ViewGenerationConflictError(name, current_generation)
     if studio.catalog_generation != owner.catalog_generation:
         raise WorkspaceGenerationConflictError()
+
+
+def require_owned_view(
+    studio: StudioWorkspace,
+    name: str,
+    owner: PresentViewOwner | None,
+) -> ViewProject:
+    """Return the named view for a catalog change its caller still owns.
+
+    A catalog change checks the catalog generation first, so a stale handle
+    reports a workspace conflict and the client reloads the whole catalog.
+    Without an owner the change acts on the current catalog.
+    """
+    if owner is not None:
+        if studio.catalog_generation != owner.catalog_generation:
+            raise WorkspaceGenerationConflictError()
+        generation = studio.view_generations.get(name)
+        if generation != owner.view_generation:
+            raise ViewGenerationConflictError(name, generation)
+    project = studio.views.get(name)
+    if project is None:
+        raise ViewNotFoundError(name, available=tuple(studio.views))
+    return project

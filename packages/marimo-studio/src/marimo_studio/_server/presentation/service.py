@@ -12,7 +12,7 @@ can finish revision-qualified requests after a newer build publishes. Each
 profile keeps up to eight snapshots from its current and previous build. During
 edits or provider failures it can continue serving the last verified
 publication while current source is repaired. History eviction releases older
-leases, while view deletion and notebook shutdown release every retained
+leases, while view retirement and notebook shutdown release every retained
 snapshot.
 """
 
@@ -913,8 +913,8 @@ class NotebookPresentation:
         self._close_leases(released)
 
     @contextmanager
-    def deleting_view(self, view_name: str) -> Iterator[Callable[[], None]]:
-        """Coordinate deletion and defer artifact release until owner admission."""
+    def retiring_view(self, view_name: str) -> Iterator[Callable[[], None]]:
+        """Coordinate retirement and defer artifact release until owner admission."""
         with self._coordination_lock(view_name):
             self._ensure_open()
             yield partial(self._discard_views, (view_name,))
