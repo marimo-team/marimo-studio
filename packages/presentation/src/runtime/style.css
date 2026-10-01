@@ -149,13 +149,15 @@
     color-mix(in srgb, var(--marimo-cell-foreground, currentColor) 18%, transparent)
   );
   --input: var(--marimo-cell-border-color, var(--border));
-  --primary: var(--marimo-cell-accent, currentColor);
+  /* Controls pair `--primary` with `--primary-foreground` text on one element,
+     so `currentColor` would resolve to the foreground and hide the fill. */
+  --primary: var(--marimo-cell-accent, var(--marimo-cell-foreground, CanvasText));
   --primary-foreground: var(--marimo-cell-accent-foreground, Canvas);
   --secondary: var(--marimo-cell-muted, var(--muted));
   --secondary-foreground: var(--marimo-cell-foreground, currentColor);
   --accent: var(--marimo-cell-muted, var(--muted));
   --accent-foreground: var(--marimo-cell-accent, currentColor);
-  --ring: var(--marimo-cell-accent, currentColor);
+  --ring: var(--primary);
   --link: var(--marimo-cell-accent, inherit);
   --radius: var(--marimo-cell-radius, 3px);
   --gray-1: var(--marimo-cell-background, transparent);

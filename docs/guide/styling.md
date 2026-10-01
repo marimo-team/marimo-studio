@@ -124,8 +124,9 @@ content with the page:
 ```
 
 `--marimo-cell-accent` colors links, selected options, slider fills, and focus
-rings in native output, including marimo controls. Without it, controls use the
-text color and links keep marimo's link color. Borders, muted surfaces, and
+rings in native output, including marimo controls. Without it, controls use
+`--marimo-cell-foreground`, or the color scheme's text color when that is unset,
+and links keep marimo's link color. Borders, muted surfaces, and
 secondary text mix from `--marimo-cell-foreground`, so unselected controls keep
 neutral outlines beside the accent. Set `--marimo-cell-border-color`,
 `--marimo-cell-muted`, or `--marimo-cell-muted-foreground` to choose them
