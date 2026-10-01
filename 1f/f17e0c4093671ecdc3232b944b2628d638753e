@@ -1,0 +1,22 @@
+packages/presentation/src/runtime/style.css
+  s_24676b753cd8ca::t_295503e63891e5 160
+  s_24676b753cd8ca::t_ddc52e3a2c6914 152-154
+docs/guide/styling.md
+  s_24676b753cd8ca::t_5cd799855fe6ae 127-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1ff17e0c4093671ecdc3232b944b2628d638753e",
+  "prompts": {},
+  "sessions": {
+    "s_24676b753cd8ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d760a36-92de-4172-9764-7244beb32ff3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
