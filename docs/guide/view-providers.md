@@ -22,7 +22,7 @@ The view provider API is an advanced extension point. A future release may
 change it to reduce the code a provider needs, and Studio plans to ship a
 dedicated agent skill for writing providers. Studio requires an exact
 `PROVIDER_API_VERSION` match, so pin `marimo-studio` to the minor line you
-test, such as `marimo-studio>=0.2.2,<0.3`.
+test, such as `marimo-studio>=0.2.3,<0.3`.
 :::
 
 ## Ask a coding agent
@@ -119,7 +119,7 @@ resolve notebook environments:
 ```console
 uv init --lib acme-views
 cd acme-views
-uv add "marimo-studio>=0.2.2,<0.3"
+uv add "marimo-studio>=0.2.3,<0.3"
 ```
 
 When the notebook's directory is a uv project, `uv init` adds `acme-views` to
