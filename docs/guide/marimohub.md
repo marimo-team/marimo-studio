@@ -43,7 +43,7 @@ and click **Save**:
 
 ```python
 # /// script
-# dependencies = ["marimo-studio>=0.2.2"]
+# dependencies = ["marimo-studio>=0.2.3"]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
@@ -79,7 +79,7 @@ and choose that file under **Start from a file** in the **New Notebook** dialog.
 
 The **HTML document** starter keeps each view project to a few small files.
 React, Svelte, Reveal.js slides, and Notebook Kit starters need
-`marimo-studio[deno]>=0.2.2` and network access to the npm registry. Each of
+`marimo-studio[deno]>=0.2.3` and network access to the npm registry. Each of
 those views also keeps its Deno build cache in `.artifacts/`, about 55 MB and
 300 files for the React starter.
 
@@ -101,7 +101,7 @@ kernel as the notebook, so moving a slider in the view reruns the dependent
 cells and updates both panes.
 
 View creation also rewrites the notebook header. It pins the installed Studio
-version, for example `marimo-studio==0.2.2`, and records aliases for the cells
+version, for example `marimo-studio==0.2.3`, and records aliases for the cells
 the starter placed. The hub saves those changes with `notebook.py`.
 
 Continue with [Edit and preview in Studio](work-in-studio.md) and
@@ -144,5 +144,5 @@ the same view outside the hub.
 | The notebook page shows the marimo editor with no Studio toolbar | Check that `dependencies` lists `marimo-studio`, then stop and restart the session                          |
 | A new session offers **Add view** for a view you created         | Set `MARIMOHUB_PERSIST_WORKSPACE=workspace` and keep `view_root` outside `__marimo__/`                      |
 | **Run as app** shows the notebook instead of the view            | Same fix. Run mode serves the notebook as a marimo app while the view root contains no view                 |
-| A starter asks for `marimo-studio[deno]`                         | Change the dependency to `marimo-studio[deno]>=0.2.2` and restart the session                               |
+| A starter asks for `marimo-studio[deno]`                         | Change the dependency to `marimo-studio[deno]>=0.2.3` and restart the session                               |
 | A view loses source files after a restart                        | Check the hub server log for `captureWorkspace` cap warnings and reduce the notebook to one Deno-based view |
