@@ -91,12 +91,16 @@ test.each(["main", "provider", "installed"] as const)(
   },
 );
 
-test("prefix-mounted endpoints strip a per-run mount and hide the public host", async () => {
+test("prefix-mounted endpoints strip a per-run mount and rewrite Host", async () => {
   const first = createE2ENetwork({ runId: "prefix-run", suite: "main", workerId: "0" });
   const second = createE2ENetwork({ runId: "prefix-run", suite: "main", workerId: "1" });
-  const seen: { url?: string; host?: string }[] = [];
+  const seen: { url?: string; host?: string; forwardedHost?: string | string[] }[] = [];
   const server = createServer((incoming, response) => {
-    seen.push({ url: incoming.url, host: incoming.headers.host });
+    seen.push({
+      url: incoming.url,
+      host: incoming.headers.host,
+      forwardedHost: incoming.headers["x-forwarded-host"],
+    });
     response.end("owned backend");
   });
   server.listen(0, "127.0.0.1");
@@ -112,10 +116,13 @@ test("prefix-mounted endpoints strip a per-run mount and hide the public host", 
     endpoint.bindBackend(port);
     const get = (path: string) =>
       new Promise<number | undefined>((resolve, reject) => {
-        const call = request({ host: "127.0.0.1", port: endpoint.port, path }, (response) => {
-          response.resume();
-          response.once("end", () => resolve(response.statusCode));
-        });
+        const call = request(
+          { host: "127.0.0.1", port: endpoint.port, path, headers: { host: "workbench.example" } },
+          (response) => {
+            response.resume();
+            response.once("end", () => resolve(response.statusCode));
+          },
+        );
         call.once("error", reject);
         call.end();
       });
@@ -123,7 +130,15 @@ test("prefix-mounted endpoints strip a per-run mount and hide the public host", 
     expect(await get(`${mount}/studio/?file=notebook.py`)).toBe(200);
     expect(await get("/studio/")).toBe(404);
     expect(await get(mount)).toBe(404);
-    expect(seen).toEqual([{ url: "/studio/?file=notebook.py", host: `backend.invalid:${port}` }]);
+    // Like a real proxy, the endpoint forwards the public host but never the
+    // prefix. A URL built from either host leaves the prefix and is recorded.
+    expect(seen).toEqual([
+      {
+        url: "/studio/?file=notebook.py",
+        host: `backend.invalid:${port}`,
+        forwardedHost: "workbench.example",
+      },
+    ]);
     expect(endpoint.escapedRequests()).toEqual(["GET /studio/", `GET ${mount}`]);
   } finally {
     await Promise.all([first.close(), second.close()]);

@@ -109,8 +109,10 @@ const forwardedHeaders = (incoming: IncomingMessage) => {
 };
 
 // A prefix-mounted endpoint forwards only paths beneath its mount, removes the
-// mount, and rewrites Host to a reserved name that never resolves. The server
-// cannot learn the public URL, and a URL built from Host fails in the browser.
+// mount, and rewrites Host to a reserved name that never resolves. Like a real
+// proxy it forwards the public host in X-Forwarded-Host, so the server can learn
+// the host but never the prefix. A URL built from Host fails in the browser,
+// and one built from the forwarded host leaves the prefix and is recorded.
 const upstreamTarget = (resource: EndpointResource, incoming: IncomingMessage) => {
   const backend = resource.backend;
   const url = incoming.url ?? "/";
