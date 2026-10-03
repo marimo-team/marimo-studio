@@ -316,19 +316,29 @@ Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
 ```text
 marimo-studio view preview VIEW
   --runtime server|wasm|zero-python
-  --server URL [--exact] [--target PATH] [--json]
+  --server URL [--exact] [--browser-client ID] [--target PATH] [--json]
 ```
 
 Returns a URL string for the view in a top-level browser document. `--json`
-returns a JSON string. Open it with your preferred browser tool. The server
-must expose the requested runtime. Edit-mode Python previews require an open
+returns a JSON string. Open it with your preferred browser tool. The URL keeps
+the origin and path of `--server`, including a proxy path prefix. The CLI sends
+its own request to that server URL. When it reaches the server through a local
+address, open the same path beneath the browser's public root. The server must
+expose the requested runtime. Edit-mode Python previews require an open
 notebook session. Use `MARIMO_STUDIO_SERVER_URL` to supply the server URL and
-`MARIMO_STUDIO_ACCESS_TOKEN` to authenticate the request when needed. The browser
-requires its own normal server authentication.
+`MARIMO_STUDIO_ACCESS_TOKEN` to authenticate the request when needed. The
+browser requires its own normal server authentication.
 
-Use the stable URL while iterating and reload after builds. `--exact` requires
-a current build for the served profile (development in edit mode, production
-in run mode), then pins its presentation revision. Opening it returns HTTP 409
+`--browser-client` selects the Studio tab that a Python or Prepared preview
+follows. A Prepared preview always follows a Studio tab. Without
+`--browser-client`, it uses the only connected tab and fails when none is
+connected.
+
+On an edit-mode server, an open preview follows the development build of each
+source change and keeps its address. After the server restarts, the page reloads
+from that address. On a run-mode server, reload after a production build.
+`--exact` requires a current build for the served profile (development in edit
+mode, production in run mode), then pins its presentation revision. Opening it returns HTTP 409
 when the revision differs or view source is unbuilt or failed, even if the
 previous artifact is retained. The HTML attribute `data-marimo-studio-revision`
 identifies the committed presentation. It differs from the artifact revision returned by

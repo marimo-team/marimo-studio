@@ -41,11 +41,23 @@ then forwards them to the Studio process. Terminate
 [TLS](https://developer.mozilla.org/en-US/docs/Glossary/TLS), which encrypts the
 public connection, at the proxy. Forward HTTP plus
 [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
-connections so live notebook updates continue to work. Preserve the original
-host and scheme. Restrict the upstream port to trusted local or private-network
-clients.
+connections so live notebook updates continue to work. Studio builds every URL
+from the requested path, so the proxy may rewrite `Host`. Restrict the upstream
+port to trusted local or private-network clients.
 
-When the public URL includes a path prefix, pass the same value to marimo:
+### Serve beneath a path prefix
+
+Studio writes each page, redirect, and live-connection URL relative to the URL
+the browser requested, so a deployment can publish the notebook beneath a path
+prefix such as `https://example.com/occupancy/`. Configure marimo for the way
+the proxy forwards that prefix:
+
+| Proxy forwards `https://example.com/occupancy/studio/` as | marimo option           |
+| --------------------------------------------------------- | ----------------------- |
+| `/occupancy/studio/`                                      | `--base-url /occupancy` |
+| `/studio/`                                                | No base URL             |
+
+When the proxy keeps the prefix, pass the same value to marimo:
 
 ```console
 uvx --with marimo-studio marimo run /srv/analysis/analysis.py \
@@ -57,8 +69,26 @@ uvx --with marimo-studio marimo run /srv/analysis/analysis.py \
   --token-password-file /run/secrets/marimo-token
 ```
 
-The proxy must forward `/occupancy/` to that process without stripping the
-configured public path inconsistently.
+When the proxy strips the prefix, start marimo with no base URL. IDE servers
+publish a local port this way, and the prefix can change between sessions.
+[Posit Workbench](https://docs.posit.co/ide/server-pro/) publishes ports beneath
+`/s/<session>/p/<port>/` and strips that prefix.
+[jupyter-server-proxy](https://jupyter-server-proxy.readthedocs.io/) and
+[code-server](https://coder.com/docs/code-server/guide) strip it on
+`/proxy/<port>/`. Their `/proxy/absolute/<port>/` and `/absproxy/<port>/` routes
+keep the prefix and pair with `--base-url`.
+
+Open the public root with a trailing slash, such as
+`https://example.com/occupancy/`. Browsers resolve relative references against
+the requested directory, so configure the proxy to redirect
+`https://example.com/occupancy` to that directory.
+
+marimo's password form submits to the server root, which a stripping proxy does
+not forward. Open the notebook once with `?access_token=<token>`. Studio
+starts the session and removes the token with a redirect beneath the prefix, in
+edit and run mode. Starting marimo with `--no-token` also works, but it lets
+every account on the machine reach the notebook through its local port. Keep a
+token on shared hosts.
 
 Use `--allow-origins` when browser clients must connect from another explicit
 origin. Keep the list to origins that should receive notebook sessions.
