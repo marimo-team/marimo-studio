@@ -571,29 +571,26 @@ const closeNotebookSessions = async (
     return;
   }
   const headers = { "Marimo-Server-Token": admin.serverToken };
-  const running = await request.post(`${admin.apiRoot}/running_notebooks`, {
-    headers,
-  });
-  if (!running.ok()) {
-    throw new Error(`Could not list Marimo sessions: ${running.status()}`);
-  }
-  const inventory = sessionInventorySchema.parse(await running.json());
-  for (const file of inventory.files) {
-    const closed = await request.post(`${admin.apiRoot}/shutdown_session`, {
-      data: { sessionId: file.sessionId },
-      headers,
-    });
-    if (!closed.ok()) {
-      throw new Error(`Could not close Marimo session: ${closed.status()}`);
-    }
-  }
+  // A kernel connection that a closing page started can reach the server after
+  // a shutdown, and marimo starts a fresh kernel for its session id. Each pass
+  // closes whatever is still running.
   await expect
     .poll(async () => {
-      const response = await request.post(`${admin.apiRoot}/running_notebooks`, { headers });
-      if (!response.ok()) {
-        throw new Error(`Could not inspect Marimo sessions: ${response.status()}`);
+      const running = await request.post(`${admin.apiRoot}/running_notebooks`, { headers });
+      if (!running.ok()) {
+        throw new Error(`Could not list Marimo sessions: ${running.status()}`);
       }
-      return sessionInventorySchema.parse(await response.json()).files.length;
+      const { files } = sessionInventorySchema.parse(await running.json());
+      for (const file of files) {
+        const closed = await request.post(`${admin.apiRoot}/shutdown_session`, {
+          data: { sessionId: file.sessionId },
+          headers,
+        });
+        if (!closed.ok()) {
+          throw new Error(`Could not close Marimo session: ${closed.status()}`);
+        }
+      }
+      return files.length;
     })
     .toBe(0);
   if (releaseProjects) {
