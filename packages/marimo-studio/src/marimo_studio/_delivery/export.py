@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from time import monotonic
+from urllib.parse import quote
 
 from marimo_export.delivery import DeliveryResult, StagedDelivery, stage
 from marimo_export.errors import MarimoExportError
@@ -116,7 +117,8 @@ class _StaticViewPaths:
     @classmethod
     def of(cls, view_name: str, artifact: ViewArtifact) -> _StaticViewPaths:
         support = f"{SUPPORT_PATH}/views/{view_name}"
-        return cls(f"/{artifact.document.as_posix()}", support, f"{support}/config")
+        document = f"/{quote(artifact.document.as_posix())}"
+        return cls(document, support, f"{support}/config")
 
 
 DEFAULT_STATIC_RUNTIME: StaticRuntime = "zero-python"
