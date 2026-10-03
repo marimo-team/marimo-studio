@@ -69,11 +69,14 @@ export class ZeroPythonRuntimeController {
    */
   async replace(config: RuntimeConfig, data: ZeroPythonRuntimeData, signal: AbortSignal) {
     const previous = this.#refresh;
+    const refresh = this.#refreshFor(data, config);
     this.#config = config;
     this.#data = data;
-    this.#refresh = this.#refreshFor(data, config);
+    this.#refresh = refresh;
     await previous.dispose();
-    await this.#refresh.refresh(signal);
+    // A newer replacement can take over while the previous refresh settles.
+    // Refreshing this call's own revision is a no-op once that newer one disposes it.
+    await refresh.refresh(signal);
   }
 
   async start(signal: AbortSignal): Promise<void> {
