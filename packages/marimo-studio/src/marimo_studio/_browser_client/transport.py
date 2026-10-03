@@ -170,6 +170,17 @@ class _HttpExchange:
                     self._connection = None
 
 
+def server_request_url(
+    connection: StudioServerConnection,
+    path: str,
+    query: tuple[tuple[str, str], ...] = (),
+) -> str:
+    """Return the URL that a request for app path `path` addresses."""
+    parameters = (*connection.routing_query, *query)
+    suffix = f"?{urlencode(parameters)}" if parameters else ""
+    return f"{connection.server_url}{path}{suffix}"
+
+
 async def _request(
     connection: StudioServerConnection,
     path: str,
@@ -180,9 +191,7 @@ async def _request(
     timeout: float = 15.0,
     accept: str = "application/json",
 ) -> bytes:
-    parameters = (*connection.routing_query, *query)
-    suffix = f"?{urlencode(parameters)}" if parameters else ""
-    url = f"{connection.server_url.rstrip('/')}{path}{suffix}"
+    url = server_request_url(connection, path, query)
     headers = {"Accept": accept}
     data = None
     if body is not None:

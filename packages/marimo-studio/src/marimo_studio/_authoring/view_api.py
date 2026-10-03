@@ -151,18 +151,25 @@ class View:
         exact: bool = False,
         server: str | None = None,
         access_token: str = "",
+        browser_client: str = "",
     ) -> str:
         """Return a standalone view URL for the selected runtime.
 
-        Current-code-mode views infer their server. Saved views require
-        ``server``. ``exact=True`` requires a current build and returns a URL
-        constrained to its presentation revision. Open the URL with your browser
-        after this call finishes, then inspect the rendered application.
+        Current-code-mode views infer their server and follow the attached
+        Studio tab. Saved views require ``server``, and ``browser_client``
+        selects the Studio tab that a server or Prepared preview follows.
+        ``exact=True`` requires a current build and returns a URL constrained to
+        its presentation revision. Open the URL with your browser after this
+        call finishes, then inspect the rendered application.
         """
-        if access_token and server is None:
-            raise ValueError("access_token requires server")
+        if (access_token or browser_client) and server is None:
+            raise ValueError("access_token and browser_client require server")
         connection = (
-            studio_server_connection(server, access_token=access_token)
+            studio_server_connection(
+                server,
+                access_token=access_token,
+                browser_client=browser_client,
+            )
             if server is not None
             else self.workspace._connection()
         )
