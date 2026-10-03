@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { JsonValue } from "./runtime-config";
 
+import { resolveUrl } from "./url.ts";
 import { ownerGenerationSchema, viewNameSchema } from "./views.ts";
 
 const studioHostBaseSchema = z.object({
@@ -32,5 +33,19 @@ export const studioHostBootstrapSchema = z.discriminatedUnion("state", [
 
 export type StudioHostBootstrap = z.infer<typeof studioHostBootstrapSchema>;
 
-export const parseStudioHostBootstrap = (value: JsonValue): StudioHostBootstrap =>
-  studioHostBootstrapSchema.parse(value);
+/** Parse a host record and resolve its URLs against the document that carried it. */
+export const parseStudioHostBootstrap = (
+  value: JsonValue,
+  base: string | URL,
+): StudioHostBootstrap => {
+  const host = studioHostBootstrapSchema.parse(value);
+  return {
+    ...host,
+    urls: {
+      bootstrap: resolveUrl(host.urls.bootstrap, base),
+      editor: resolveUrl(host.urls.editor, base),
+      events: resolveUrl(host.urls.events, base),
+      views: resolveUrl(host.urls.views, base),
+    },
+  };
+};

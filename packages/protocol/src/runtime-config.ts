@@ -7,6 +7,7 @@ import {
   runtimeBindingsSchema,
 } from "./projections.ts";
 import { ownRecordSchema } from "./records.ts";
+import { resolveUrl } from "./url.ts";
 import { viewNameSchema } from "./views.ts";
 
 export type JsonValue =
@@ -55,6 +56,7 @@ export const runtimeEnvelopeSchema = z
     id: runtimeIdSchema,
     instance: z.string().min(1),
     data: ownRecordSchema(z.string(), z.unknown()),
+    urls: ownRecordSchema(z.string(), z.string().min(1)),
   })
   .strict();
 
@@ -88,14 +90,14 @@ const runtimeConfigFields = {
   mode: z.enum(["edit", "run"]),
 };
 
-export const runtimeConfigSchema = z
+const runtimeConfigSchema = z
   .object(runtimeConfigFields)
   .strict()
   .refine((config) => config.views.includes(config.view), {
     message: "The active view must be present in the view list.",
     path: ["view"],
   });
-export const mountConfigSchema = z
+const mountConfigSchema = z
   .object({
     supportUrl: z.string(),
     version: z.string(),
@@ -143,13 +145,31 @@ export const mountConfigSchema = z
     }
   });
 
+/** A runtime configuration whose URLs are absolute. */
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
+/** A mount record whose support URL is absolute. */
 export type MountConfig = z.infer<typeof mountConfigSchema>;
 
-export const parseRuntimeConfig = (value: JsonValue): RuntimeConfig => {
-  return runtimeConfigSchema.parse(value);
-};
+const resolveRuntimeConfigUrls = (config: RuntimeConfig, base: string | URL): RuntimeConfig => ({
+  ...config,
+  runtime: {
+    ...config.runtime,
+    urls: Object.fromEntries(
+      Object.entries(config.runtime.urls).map(([name, url]) => [name, resolveUrl(url, base)]),
+    ),
+  },
+  rootUrl: resolveUrl(config.rootUrl, base),
+  publicRootUrl: resolveUrl(config.publicRootUrl, base),
+  documentRootUrl: resolveUrl(config.documentRootUrl, base),
+  supportUrl: resolveUrl(config.supportUrl, base),
+});
 
-export const parseMountConfig = (value: JsonValue): MountConfig => {
-  return mountConfigSchema.parse(value);
+/** Parse a runtime configuration and resolve its URLs against the carrier's URL. */
+export const parseRuntimeConfig = (value: JsonValue, base: string | URL): RuntimeConfig =>
+  resolveRuntimeConfigUrls(runtimeConfigSchema.parse(value), base);
+
+/** Parse the mount record and resolve its support URL against the document base. */
+export const parseMountConfig = (value: JsonValue, base: string | URL): MountConfig => {
+  const mount = mountConfigSchema.parse(value);
+  return { ...mount, supportUrl: resolveUrl(mount.supportUrl, base) };
 };
