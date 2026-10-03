@@ -1,0 +1,27 @@
+apps/e2e/tests/proxied-directory.spec.ts
+  s_ba377188791481::t_573fb0648764c4 97,101
+apps/e2e/tests/proxied-mount.spec.ts
+  s_ba377188791481::t_573fb0648764c4 197
+apps/e2e/tests/provider-preview.spec.ts
+  s_ba377188791481::t_573fb0648764c4 8,52,55
+apps/e2e/tests/hosted-mount.spec.ts
+  s_ba377188791481::t_573fb0648764c4 129
+apps/e2e/tests/fixture.ts
+  s_ba377188791481::t_84b6042a46d79f 350-351
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a369261e34a1e99cc213a0113a907faca207429a",
+  "prompts": {},
+  "sessions": {
+    "s_ba377188791481": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2dd22cdb-f1fe-4241-bcc6-8055a96f7882",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
