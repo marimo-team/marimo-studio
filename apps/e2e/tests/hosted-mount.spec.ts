@@ -114,7 +114,12 @@ test("keeps an agent preview URL live through an authenticated hosted mount", as
   await expect(tab.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
   expect(new URL(tab.url()).pathname).toBe("/hosted/dashboard/");
 
-  const revisionSwap = expectPreviewRevisionSwap(browserDiagnostics, `${baseUrl()}/`, "dashboard");
+  const revisionSwap = await expectPreviewRevisionSwap(
+    browserDiagnostics,
+    tab,
+    `${baseUrl()}/`,
+    "dashboard",
+  );
   await writeFile(hostedDashboardHtmlPath, await readFile(hostedViewFixturePath));
 
   await expect(tab.getByRole("heading", { name: "Hosted mount lifecycle" })).toBeVisible({

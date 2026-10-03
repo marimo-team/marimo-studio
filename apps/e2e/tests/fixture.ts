@@ -349,16 +349,22 @@ export const recoverRequestAbort = async (capture: RequestAbortCapture): Promise
 // A rebuild swaps an open preview to the next revision. The swap retires the
 // previous revision's runtime reads and its live event stream. Recover before
 // closing the preview, which would end that stream whether or not the swap did.
-export const expectPreviewRevisionSwap = (
+export const expectPreviewRevisionSwap = async (
   diagnostics: BrowserDiagnostics,
+  preview: Page,
   root: string,
   view: string,
-): (() => Promise<void>) => {
+): Promise<() => Promise<void>> => {
   const { origin, pathname } = new URL(root);
   const reads = `^${RegExp.escape(pathname)}_marimo-studio/presentation/[^/]+/_marimo-studio/views/${view}/`;
-  const staleReads = diagnostics.expectResponse({
+  const revision = await preview.locator("html").getAttribute("data-marimo-studio-revision");
+  expect(revision).toBeTruthy();
+  // A retired read can lose its response body, so stale reads are matched by
+  // the revision they carry.
+  const staleReads = captureRetiringProjectionReads(preview.mainFrame(), revision!, diagnostics);
+  const staleManifest = diagnostics.expectResponse({
     status: 409,
-    path: new RegExp(`${reads}(?:values|outputs|zero-python/current)$`),
+    path: new RegExp(`${reads}zero-python/current$`),
     error: "stale-projection-binding",
     required: false,
   });
@@ -377,6 +383,7 @@ export const expectPreviewRevisionSwap = (
   });
   return async () => {
     staleReads.recovered();
+    staleManifest.recovered();
     retiredReads.recovered();
     await recoverRequestAbort(retiredStream);
   };

@@ -78,8 +78,9 @@ test("keeps an agent preview URL live on a directory server beneath a stripped p
   expect(new URL(tab.url()).pathname).toBe(viewPath);
   await expect(tab.getByRole("heading", { name: "Proxied report" })).toBeVisible();
 
-  const revisionSwap = expectPreviewRevisionSwap(
+  const revisionSwap = await expectPreviewRevisionSwap(
     browserDiagnostics,
+    tab,
     proxiedDirectoryUrl(),
     "report",
   );

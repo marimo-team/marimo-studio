@@ -180,7 +180,12 @@ for (const runtime of ["server", "wasm", "zero-python"] as const) {
     const viewPath = new URL(`${proxiedUrl()}dashboard/`).pathname;
     expect(new URL(tab.url()).pathname).toBe(viewPath);
 
-    const revisionSwap = expectPreviewRevisionSwap(browserDiagnostics, proxiedUrl(), "dashboard");
+    const revisionSwap = await expectPreviewRevisionSwap(
+      browserDiagnostics,
+      tab,
+      proxiedUrl(),
+      "dashboard",
+    );
     await writeFile(dashboardSourcePath(), await readFile(proxiedFixturePath("dashboard.html")));
 
     await expect(tab.getByRole("heading", { name: "Proxied dashboard" })).toBeVisible({

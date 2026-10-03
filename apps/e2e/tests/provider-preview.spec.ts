@@ -40,7 +40,7 @@ test("keeps a React view's preview URL live beneath a stripped proxy prefix", as
     await expect(tab.getByRole("heading", { name: "Gallery", exact: true })).toBeVisible();
     const viewPath = new URL(`${root}gallery/`).pathname;
 
-    const revisionSwap = expectPreviewRevisionSwap(diagnostics, root, "gallery");
+    const revisionSwap = await expectPreviewRevisionSwap(diagnostics, tab, root, "gallery");
     await writeFile(
       appSource,
       original.replace('const VIEW_HEADING = "Gallery";', 'const VIEW_HEADING = "Agent gallery";'),
