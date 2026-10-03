@@ -1,0 +1,19 @@
+apps/e2e/tests/fixture.ts
+  s_ba377188791481::t_461e20fd63641d 574-576,579-591
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6b82a6838e929f610c881d4462d3784fdd4b4375",
+  "prompts": {},
+  "sessions": {
+    "s_ba377188791481": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2dd22cdb-f1fe-4241-bcc6-8055a96f7882",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
