@@ -62,14 +62,13 @@ export const createSourceRemote = (
 ): SourceRemote => {
   const sourceUrl = (view: string, path: SourceDocumentPath) => {
     const encoded = path.split("/").map(encodeURIComponent).join("/");
-    return appendUrlPath(supportUrl(view), `source/${encoded}`, globalThis.location.href);
+    return appendUrlPath(supportUrl(view), `source/${encoded}`);
   };
   return {
     async project(view) {
-      const response = await fetch(
-        appendUrlPath(supportUrl(view), "project", globalThis.location.href),
-        { cache: "no-store" },
-      );
+      const response = await fetch(appendUrlPath(supportUrl(view), "project"), {
+        cache: "no-store",
+      });
       if (!response.ok) {
         throw new Error(
           await responseErrorMessage(response, `Could not inspect ${view} (${response.status})`),

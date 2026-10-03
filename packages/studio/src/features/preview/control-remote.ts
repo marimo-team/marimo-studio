@@ -16,7 +16,7 @@ export const fetchRuntimeControls = async (
   revision: string,
   signal?: AbortSignal,
 ): Promise<RuntimeControlSnapshot> => {
-  const url = new URL(appendUrlPath(supportUrl, "controls", globalThis.location.href));
+  const url = new URL(appendUrlPath(supportUrl, "controls"));
   url.searchParams.set(STUDIO_CLIENT_QUERY_PARAM, clientId);
   url.searchParams.set("revision", revision);
   const response = await fetch(url, {

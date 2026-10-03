@@ -126,6 +126,7 @@ export const runtimeConfig = (runtime: string) =>
       id: runtime,
       instance: `${runtime}-instance`,
       data: {},
+      urls: {},
     },
     rootUrl: "/",
     publicRootUrl: "/",

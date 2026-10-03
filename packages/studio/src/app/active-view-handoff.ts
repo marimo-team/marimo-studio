@@ -179,11 +179,7 @@ export const createActiveViewHandoffRemote = (
       lifecycle.signal.throwIfAborted();
       issuedHandoff += 1;
       const operationId = `active-view-${Date.now().toString(36)}-${issuedHandoff.toString(36)}`;
-      const url = appendUrlPath(
-        agentUrl,
-        `active-view-handoffs/${operationId}`,
-        globalThis.location.href,
-      );
+      const url = appendUrlPath(agentUrl, `active-view-handoffs/${operationId}`);
       const owner = new AbortController();
       const abortStage = () => owner.abort(signal?.reason);
       const abortLifecycle = () => owner.abort(lifecycle.signal.reason);

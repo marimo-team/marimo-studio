@@ -135,7 +135,7 @@ export const createViewActivationRemote =
             viewGeneration: owner.kind === "present" ? owner.viewGeneration : null,
           };
     await acknowledge(
-      appendUrlPath(agentUrl, `activations/${activation.generation}/ack`, globalThis.location.href),
+      appendUrlPath(agentUrl, `activations/${activation.generation}/ack`),
       serverToken,
       JSON.stringify(request),
       signal,

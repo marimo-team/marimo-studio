@@ -16,7 +16,7 @@ it("rolls back an uncommitted active-view handoff with the same ownership id", a
   const fetch = vi.fn<JsonFetch>(async () => new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -43,7 +43,7 @@ it("leaves a committed active-view handoff for stream promotion", async () => {
   const fetch = vi.fn<JsonFetch>(async () => new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -71,7 +71,7 @@ it("rolls back a handoff whose owner aborts during acquisition", async () => {
   vi.stubGlobal("fetch", fetch);
   const recover = vi.fn(async () => undefined);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
     recover,
@@ -96,7 +96,7 @@ it("releases view ownership when preview rollback fails", async () => {
   const fetch = vi.fn<JsonFetch>(async () => new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   const handoff = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -189,7 +189,7 @@ it("starts preview restoration before ownership release and awaits it afterward"
   });
   vi.stubGlobal("fetch", fetch);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -256,7 +256,7 @@ it("holds the next transition until ownership release reaches a terminal respons
   });
   vi.stubGlobal("fetch", fetch);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -299,7 +299,7 @@ it("recovers the committed view after a stale-owner release conflict", async () 
   vi.stubGlobal("fetch", fetch);
   const recover = vi.fn(async () => undefined);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
     recover,
@@ -321,7 +321,7 @@ it("recovers after rejected acquisition even when cleanup reports no owner", asy
   vi.stubGlobal("fetch", fetch);
   const recover = vi.fn(async () => undefined);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
     recover,
@@ -345,7 +345,7 @@ it("propagates nonretryable ownership release responses", async () => {
   );
   vi.stubGlobal("fetch", fetch);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -374,7 +374,7 @@ it("service disposal cancels ownership reconciliation without another retry", as
   });
   vi.stubGlobal("fetch", fetch);
   const remote = createActiveViewHandoffRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );

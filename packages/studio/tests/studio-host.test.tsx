@@ -18,6 +18,9 @@ import {
 } from "./fixtures.ts";
 import { deferred } from "./studio-test-support.ts";
 
+// Parsed Studio records hold absolute URLs.
+const studioUrl = (path: string): string => new URL(path, globalThis.location.origin).href;
+
 const host: StudioHostBootstrap = {
   schema: 1,
   state: "needs-view",
@@ -28,10 +31,10 @@ const host: StudioHostBootstrap = {
   serverInstance: "server-instance",
   serverToken: "token",
   urls: {
-    bootstrap: "/_marimo-studio/bootstrap",
-    editor: "/_marimo-studio/editor/?file=analysis.py",
-    events: "/_marimo-studio/dev/events",
-    views: "/_marimo-studio/views",
+    bootstrap: studioUrl("/_marimo-studio/bootstrap"),
+    editor: studioUrl("/_marimo-studio/editor/?file=analysis.py"),
+    events: studioUrl("/_marimo-studio/dev/events"),
+    views: studioUrl("/_marimo-studio/views"),
   },
 };
 
@@ -48,13 +51,13 @@ const ready: StudioBootstrap = {
   serverToken: host.serverToken,
   urls: {
     editor: host.urls.editor,
-    agent: "/_marimo-studio",
-    events: "/_marimo-studio/dev/events",
-    query: "/_marimo-studio/query",
-    studioPrefix: "/studio/",
-    viewPrefix: "/",
-    viewSupportPrefix: "/_marimo-studio/views",
-    views: "/_marimo-studio/views",
+    agent: studioUrl("/_marimo-studio"),
+    events: studioUrl("/_marimo-studio/dev/events"),
+    query: studioUrl("/_marimo-studio/query"),
+    studioPrefix: studioUrl("/studio/"),
+    viewPrefix: studioUrl("/"),
+    viewSupportPrefix: studioUrl("/_marimo-studio/views"),
+    views: studioUrl("/_marimo-studio/views"),
   },
   workspaceId: "workspace",
 };
@@ -215,6 +218,7 @@ it("retries first-view authoring options after a transient inventory failure", a
     <StudioHost
       host={host}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={vi.fn()}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
@@ -272,6 +276,7 @@ it("refreshes first-view ownership after a create conflict", async () => {
     <StudioHost
       host={{ ...host, generation: viewGeneration(9) }}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={vi.fn()}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
@@ -341,6 +346,7 @@ it("replaces an in-flight catalog retry after a create conflict", async () => {
     <StudioHost
       host={{ ...host, generation: viewGeneration(19) }}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={vi.fn()}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
@@ -389,6 +395,7 @@ it("shows first-view starter documents and unavailable recovery", async () => {
     <StudioHost
       host={host}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={vi.fn()}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
@@ -458,6 +465,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
     <StudioHost
       host={publicHost}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={publishBootstrap}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
@@ -502,8 +510,9 @@ it("preserves an active editor and its public query during first-view activation
     ...ready,
     urls: {
       ...ready.urls,
+      // The response addresses the live editor at /entry/editor/ from its own URL.
       editor:
-        "editor/?session_id=s_editor1&region=eu&marimo_studio_server=server-instance&file=analysis.py&marimo_studio_editor=editor-capability&marimo_studio_client=browser-client-1234",
+        "../entry/editor/?session_id=s_editor1&region=eu&marimo_studio_server=server-instance&file=analysis.py&marimo_studio_editor=editor-capability&marimo_studio_client=browser-client-1234",
     },
   };
   const bootstrapQueries: string[] = [];
@@ -521,15 +530,25 @@ it("preserves an active editor and its public query during first-view activation
 
   render(
     <StudioHost
-      host={activationHost}
+      host={{ ...activationHost, urls: { ...activationHost.urls, editor: editorFrame.src } }}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={publishBootstrap}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
   );
   await activateFirstView();
 
-  await vi.waitFor(() => expect(publishBootstrap).toHaveBeenCalledWith(configured));
+  // The editor reference resolves against the bootstrap response URL.
+  await vi.waitFor(() =>
+    expect(publishBootstrap).toHaveBeenCalledWith({
+      ...configured,
+      urls: {
+        ...configured.urls,
+        editor: new URL(configured.urls.editor, host.urls.bootstrap).href,
+      },
+    }),
+  );
   expect(new URLSearchParams(bootstrapQueries[0]).get("region")).toBe("eu");
   expect(new URL(globalThis.location.href).searchParams.get("region")).toBe("eu");
   expect(reload).not.toHaveBeenCalled();
@@ -560,6 +579,49 @@ it("preserves an active editor and its public query during first-view activation
     ),
   );
   expect(editorFrame.isConnected).toBe(true);
+  editorFrame.remove();
+});
+
+it("trusts the editor source resolved before history rebases relative attributes", async () => {
+  useActivationEvents();
+  vi.spyOn(PreviewDeck.prototype, "stageNavigation").mockReturnValue({
+    ready: Promise.resolve(true),
+    rollback: async () => undefined,
+  });
+  const configured = {
+    ...ready,
+    urls: {
+      ...ready.urls,
+      editor:
+        "../entry/editor/?session_id=s_editor1&marimo_studio_server=server-instance&file=analysis.py&marimo_studio_editor=editor-capability&marimo_studio_client=browser-client-1234",
+    },
+  };
+  vi.stubGlobal(
+    "fetch",
+    activationRequest(() => Response.json(configured)),
+  );
+  globalThis.history.replaceState({}, "", "/entry/");
+  const { editorFrame } = mountActiveEditor();
+  const editorSource = editorFrame.src;
+  // The server writes the editor frame with a relative `src`. A later history
+  // change rebases that attribute while the frame keeps its loaded document.
+  editorFrame.setAttribute("src", trustedEditorSource);
+  globalThis.history.replaceState({}, "", "/entry/studio/dashboard/");
+  expect(editorFrame.src).not.toBe(editorSource);
+  const publishBootstrap = vi.fn();
+
+  render(
+    <StudioHost
+      host={{ ...activationHost, urls: { ...activationHost.urls, editor: editorSource } }}
+      editorFrame={editorFrame}
+      editorSource={editorSource}
+      publishBootstrap={publishBootstrap}
+      brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+    />,
+  );
+  await activateFirstView();
+
+  await vi.waitFor(() => expect(publishBootstrap).toHaveBeenCalled());
   editorFrame.remove();
 });
 
@@ -596,8 +658,9 @@ it("retries first-view activation when the editor query changes during bootstrap
 
   render(
     <StudioHost
-      host={activationHost}
+      host={{ ...activationHost, urls: { ...activationHost.urls, editor: editorFrame.src } }}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={publishBootstrap}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
@@ -648,8 +711,9 @@ it.each(["document", "binding authority"] as const)(
 
     const rendered = render(
       <StudioHost
-        host={activationHost}
+        host={{ ...activationHost, urls: { ...activationHost.urls, editor: editorFrame.src } }}
         editorFrame={editorFrame}
+        editorSource={editorFrame.src}
         publishBootstrap={publishBootstrap}
         brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
       />,
@@ -715,8 +779,9 @@ it("fails closed when the editor query outlives the bounded bootstrap retries", 
 
   const rendered = render(
     <StudioHost
-      host={activationHost}
+      host={{ ...activationHost, urls: { ...activationHost.urls, editor: editorFrame.src } }}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={publishBootstrap}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
@@ -759,8 +824,9 @@ it.each([
 
   const rendered = render(
     <StudioHost
-      host={activationHost}
+      host={{ ...activationHost, urls: { ...activationHost.urls, editor: editorFrame.src } }}
       editorFrame={editorFrame}
+      editorSource={editorFrame.src}
       publishBootstrap={publishBootstrap}
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
