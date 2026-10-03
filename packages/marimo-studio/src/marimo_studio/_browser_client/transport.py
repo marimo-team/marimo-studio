@@ -178,7 +178,7 @@ def server_request_url(
     """Return the URL that a request for app path `path` addresses."""
     parameters = (*connection.routing_query, *query)
     suffix = f"?{urlencode(parameters)}" if parameters else ""
-    return f"{connection.server_url}{path}{suffix}"
+    return f"{connection.server_url.rstrip('/')}{path}{suffix}"
 
 
 async def _request(

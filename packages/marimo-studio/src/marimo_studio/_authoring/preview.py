@@ -55,8 +55,11 @@ async def preview_url(
     if (
         parts.scheme
         or parts.netloc
-        or not resolved.startswith(f"{connection.server_url}/")
+        or not resolved.startswith(f"{connection.server_url.rstrip('/')}/")
         or any(character.isspace() for character in target)
+        # Browsers read a backslash as `/` and `%2e` as `.`, which urljoin keeps.
+        or "\\" in parts.path
+        or "%2e" in parts.path.lower()
     ):
         raise ProtocolError("The Studio server returned an invalid preview URL.")
     current = await asyncio.to_thread(load_studio, notebook)

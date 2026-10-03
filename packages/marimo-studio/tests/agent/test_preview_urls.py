@@ -138,6 +138,9 @@ def test_preview_rejects_a_replaced_view_handle(
         "/dashboard/",
         "../../../../dashboard/",
         "../../../dashboard/\nmalformed",
+        # Browsers normalize these segments to `..` and leave the mount.
+        "..\\..\\..\\..\\dashboard/",
+        "../../../%2e%2e/dashboard/",
     ],
 )
 def test_preview_rejects_foreign_or_malformed_server_targets(
