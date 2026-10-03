@@ -102,3 +102,7 @@ test("prepared Python assets select every browser consumer", () => {
 test("Notebook Kit spec changes select their owning provider suite", () => {
   assert.deepEqual(selected("apps/e2e/tests/provider-notebook.spec.ts"), ["provider_browser"]);
 });
+
+test("provider preview spec changes select their owning provider suite", () => {
+  assert.deepEqual(selected("apps/e2e/tests/provider-preview.spec.ts"), ["provider_browser"]);
+});

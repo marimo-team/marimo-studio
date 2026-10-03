@@ -1,6 +1,6 @@
-import { runtimeConfigSchema } from "@marimo-studio/protocol/runtime-config";
+import { parseRuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
 
 import { studioClientId, studioEditorSessionId } from "./authoring-test-support.ts";
@@ -8,8 +8,11 @@ import {
   selectWorkspaceMode,
   editorSlider,
   expect,
+  expectPreviewRevisionSwap,
+  hostedDashboardHtmlPath,
   hostedOrigin,
   hostedViewFixturePath,
+  hostedWorkspaceNotebookPath,
   labeledSlider,
   previewFrame,
   recoverRequestAbort,
@@ -44,11 +47,9 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
     headers: { "Marimo-Studio-Preview-Session-Id": "s_export" },
   });
   expect(response.ok(), await response.text()).toBe(true);
-  const config = runtimeConfigSchema.parse(await response.json());
+  const config = parseRuntimeConfig(await response.json(), response.url());
   expect(config.runtime.id).toBe("zero-python");
-  const manifest = await page.request.get(
-    new URL(z.string().parse(config.runtime.data.manifestUrl), baseUrl()).href,
-  );
+  const manifest = await page.request.get(z.string().parse(config.runtime.urls.manifest));
   expect(manifest.ok(), await manifest.text()).toBe(true);
   expect(await manifest.json()).toMatchObject({
     schema: "marimo-studio.prepared.v1",
@@ -79,6 +80,53 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
   await expect(page.getByRole("status", { name: "View status" })).toContainText("Live");
   await recoverRequestAbort(retiredManifest);
   await recoverWorkspaceEventStream(replacedWorkspaceStream);
+});
+
+test("keeps an agent preview URL live through an authenticated hosted mount", async ({
+  browserDiagnostics,
+  page,
+  studioCli,
+}) => {
+  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    `${baseUrl()}/_marimo-studio/dev/events`,
+    1,
+  );
+  await page.goto(`${baseUrl()}/studio/?access_token=${accessToken}`);
+  await page.getByText("Add view", { exact: true }).click();
+  await page.getByRole("radio", { name: /^HTML document/ }).check();
+  await page.getByRole("button", { name: "Create view" }).click();
+  await waitForPreview(page);
+  await recoverWorkspaceEventStream(replacedWorkspaceStream);
+
+  // The CLI authenticates with its own credential. The URL carries no token,
+  // and the browser reuses the session it already holds.
+  const url = await studioCli.previewView(
+    hostedWorkspaceNotebookPath,
+    baseUrl(),
+    "dashboard",
+    "server",
+    { accessToken },
+  );
+  expect(url.startsWith(`${baseUrl()}/dashboard/?`)).toBe(true);
+  expect(new URL(url).searchParams.has("access_token")).toBe(false);
+  const tab = await page.context().newPage();
+  await tab.goto(url);
+  await expect(tab.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+  expect(new URL(tab.url()).pathname).toBe("/hosted/dashboard/");
+
+  const revisionSwap = expectPreviewRevisionSwap(browserDiagnostics, `${baseUrl()}/`, "dashboard");
+  await writeFile(hostedDashboardHtmlPath, await readFile(hostedViewFixturePath));
+
+  await expect(tab.getByRole("heading", { name: "Hosted mount lifecycle" })).toBeVisible({
+    timeout: 65_000,
+  });
+  const metric = tab.locator('[mo-value="metric"]');
+  await expect(metric).toHaveText("42");
+  await labeledSlider(tab.locator("body"), /^Hosted scale/).press("End");
+  await expect(metric).toHaveText("63");
+  expect(new URL(tab.url()).pathname).toBe("/hosted/dashboard/");
+  await tab.close();
+  await revisionSwap();
 });
 
 test("initializes and runs Studio through an authenticated hosted mount", async ({

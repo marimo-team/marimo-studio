@@ -12,6 +12,7 @@ export default defineConfig({
     "provider-runtime.spec.ts",
     "provider-reveal.spec.ts",
     "provider-notebook.spec.ts",
+    "provider-preview.spec.ts",
     "external-provider.spec.ts",
   ],
   timeout: process.platform === "win32" ? 180_000 : 90_000,
