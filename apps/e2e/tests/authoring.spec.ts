@@ -739,7 +739,10 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
       );
     }
 
+    // The address bar keeps the public preview URL. The presentation refreshes
+    // through its capability document.
     const exactPath = new RegExp(`^${RegExp.escape(new URL(exact.url()).pathname)}$`);
+    const exactDocumentPath = /^\/_marimo-studio\/presentation\/d\.[^/]+\/checkpoint-view\/$/;
     const liveStream = await liveEvents;
     const retiredLiveStream = browserDiagnostics.expectActiveRequestAbort({
       origin: studioOrigin(),
@@ -753,7 +756,7 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
     stopOutputTransitions.push(...staleOutputs.map((capture) => capture.seal));
     const staleRefresh = browserDiagnostics.expectResponse({
       status: 409,
-      path: exactPath,
+      path: exactDocumentPath,
       error: "presentation-revision-mismatch",
     });
     const staleConsole = browserDiagnostics.expectConsole({

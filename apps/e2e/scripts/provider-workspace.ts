@@ -111,7 +111,7 @@ export class ProviderWorkspace {
   #preparation = new PreparationProcessOwner();
   #services = new NotebookServices(providerConfigDirectory);
 
-  async prepare(views: readonly string[]) {
+  async prepare(views: readonly string[], editor = false) {
     await this.#services.prepare();
     for (const directory of [
       providerWorkspaceDirectory,
@@ -195,6 +195,28 @@ export class ProviderWorkspace {
     if (views.some((view) => view !== "dashboard" && view !== "slides")) {
       await this.#runServer(providerNotebookPath, e2eNetwork.provider.live);
     }
+    if (editor) {
+      await this.#editServer(providerNotebookPath, e2eNetwork.provider.proxiedEdit);
+    }
+  }
+
+  // The endpoint strips a random path prefix, so marimo runs without a base URL.
+  #editServer(notebook: string, endpoint: E2EEndpoint) {
+    return this.#services.start(
+      [
+        "python",
+        resolve(repositoryDirectory, "apps/e2e/scripts/_compat/server.py"),
+        "marimo",
+        "edit",
+        notebook,
+        "--no-sandbox",
+        "--headless",
+        "--no-token",
+      ],
+      endpoint,
+      "studio",
+      { serverUrl: endpoint.publicUrl, readyUrl: `${endpoint.publicUrl}/` },
+    );
   }
 
   #run(label: string, args: string[]) {

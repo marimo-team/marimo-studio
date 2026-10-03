@@ -1,3 +1,4 @@
+import { parseMountConfig, type MountConfig } from "@marimo-studio/protocol/runtime-config";
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
 import { deletedViewSchema, viewListSchema } from "@marimo-studio/protocol/views";
 import {
@@ -26,6 +27,9 @@ import {
   notebookPath,
   noDisplayNotebookPath,
   noDisplayStaticExportDirectory,
+  proxiedFixtureDirectory,
+  proxiedNotebookPath,
+  proxiedWorkspaceDirectory,
   workspaceDirectory,
 } from "../scripts/paths.ts";
 import { captureRetiringProjectionReads } from "./authoring-test-support.ts";
@@ -161,7 +165,28 @@ export const restoreHostedWorkspace = async () => {
   await removeTree(resolve(hostedWorkspaceDirectory, "__marimo__"));
 };
 
+export const restoreProxiedWorkspace = async () => {
+  await removeTree(resolve(proxiedWorkspaceDirectory, "__marimo__"));
+  await cp(resolve(proxiedFixtureDirectory, "notebook.py"), proxiedNotebookPath, { force: true });
+};
+
 export const hostedWorkspaceNotebookPath = hostedNotebookPath;
+export const proxiedFixturePath = (name: string) => resolve(proxiedFixtureDirectory, name);
+export const proxiedWorkspacePath = (...parts: string[]) =>
+  resolve(proxiedWorkspaceDirectory, ...parts);
+// Public roots of the proxied servers, each beneath its random path prefix.
+export const proxiedUrl = () => `${e2eNetwork.main.proxied.publicUrl}/`;
+export const proxiedRunUrl = () => `${e2eNetwork.main.proxiedRun.publicUrl}/`;
+export const proxiedDirectoryUrl = () => `${e2eNetwork.main.proxiedDirectory.publicUrl}/`;
+
+/** Read a presentation document's mount record as its runtime parses it. */
+export const presentationMount = async (root: Locator): Promise<MountConfig> => {
+  const { config, base } = await root.evaluate(() => ({
+    config: globalThis.__MARIMO_MOUNT_CONFIG__,
+    base: document.baseURI,
+  }));
+  return parseMountConfig(config, base);
+};
 
 export const readWorkspaceFile = (path: string) => readFile(path, "utf8");
 export const writeWorkspaceFile = (path: string, content: string) => writeFile(path, content);
@@ -321,6 +346,41 @@ export const recoverRequestAbort = async (capture: RequestAbortCapture): Promise
   }
 };
 
+// A rebuild swaps an open preview to the next revision. The swap retires the
+// previous revision's runtime reads and its live event stream.
+export const expectPreviewRevisionSwap = (
+  diagnostics: BrowserDiagnostics,
+  root: string,
+  view: string,
+): (() => Promise<void>) => {
+  const { origin, pathname } = new URL(root);
+  const reads = `^${RegExp.escape(pathname)}_marimo-studio/presentation/[^/]+/_marimo-studio/views/${view}/`;
+  const staleReads = diagnostics.expectResponse({
+    status: 409,
+    path: new RegExp(`${reads}(?:values|outputs|zero-python/current)$`),
+    error: "stale-projection-binding",
+    required: false,
+  });
+  const retiredReads = diagnostics.expectRequestFailure({
+    origin,
+    method: "POST",
+    path: new RegExp(`${reads}(?:values|outputs)$`),
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
+  const retiredStream = diagnostics.expectActiveRequestAbort({
+    origin,
+    method: "GET",
+    path: new RegExp(`${reads}dev/events$`),
+    status: 200,
+  });
+  return async () => {
+    staleReads.recovered();
+    retiredReads.recovered();
+    await recoverRequestAbort(retiredStream);
+  };
+};
+
 export const recoverResponseTransition = async (
   capture: ResponseTransitionCapture,
 ): Promise<void> => {
@@ -347,7 +407,7 @@ const sessionAdmin = async (page: Page): Promise<SessionAdmin | undefined> => {
   if (page.isClosed()) {
     return undefined;
   }
-  const bootstrapElement = page.locator("#marimo-studio-bootstrap");
+  const bootstrapElement = page.locator("#marimo-studio-workspace");
   if ((await bootstrapElement.count()) === 0) {
     return undefined;
   }
@@ -494,7 +554,11 @@ const releaseWorkspaceProjects = async (
   }
 };
 
-const closeNotebookSessions = async (page: Page, preparedAdmin?: SessionAdmin): Promise<void> => {
+const closeNotebookSessions = async (
+  page: Page,
+  preparedAdmin?: SessionAdmin,
+  releaseProjects = true,
+): Promise<void> => {
   const admin = preparedAdmin ?? (await sessionAdmin(page));
   const request = page.request;
   await Promise.all(
@@ -532,23 +596,43 @@ const closeNotebookSessions = async (page: Page, preparedAdmin?: SessionAdmin): 
       return sessionInventorySchema.parse(await response.json()).files.length;
     })
     .toBe(0);
-  await releaseWorkspaceProjects(request, admin);
+  if (releaseProjects) {
+    await releaseWorkspaceProjects(request, admin);
+  }
+};
+
+type BrowserWorkspace = "main" | "hosted" | "proxied" | "proxiedRun" | "proxiedDirectory";
+
+const browserWorkspace = (url: string): BrowserWorkspace => {
+  if (url.startsWith(`${hostedOrigin()}/`)) return "hosted";
+  if (url.startsWith(proxiedUrl())) return "proxied";
+  if (url.startsWith(proxiedRunUrl())) return "proxiedRun";
+  if (url.startsWith(proxiedDirectoryUrl())) return "proxiedDirectory";
+  return "main";
 };
 
 const cleanupBrowserWorkspace = async (
   page: Page,
   admin: SessionAdmin | undefined,
   managed: boolean,
-  hosted: boolean,
+  workspace: BrowserWorkspace,
 ): Promise<void> => {
+  // The proxied run and directory servers prepare their views once per worker.
+  // Cleanup closes notebook sessions and keeps those views.
+  if (workspace === "proxiedDirectory") {
+    await closeNotebookSessions(page, admin, false);
+    return;
+  }
   if (managed) {
     await closeNotebookSessions(page, admin);
   } else if (!page.isClosed()) {
     await page.close();
   }
-  if (hosted) {
+  if (workspace === "hosted") {
     await restoreHostedWorkspace();
-  } else {
+  } else if (workspace === "proxied") {
+    await restoreProxiedWorkspace();
+  } else if (workspace === "main") {
     await restoreWorkspace();
   }
 };
@@ -572,7 +656,14 @@ export const test = base.extend<
     studioCli: StudioCli;
   },
   {
-    services: readonly ("studio" | "hosted" | "static")[];
+    services: readonly (
+      | "studio"
+      | "hosted"
+      | "static"
+      | "proxied"
+      | "proxiedRun"
+      | "proxiedDirectory"
+    )[];
     mainWorkspace: MainWorkspace;
   }
 >({
@@ -627,12 +718,32 @@ export const test = base.extend<
     async ({ context, page }, use, testInfo) => {
       const observed = observeBrowserContext(context);
       const { messages } = observed;
+      // Prefix-mounted endpoints record every request outside their prefix.
+      const prefixed = [
+        e2eNetwork.main.proxied,
+        e2eNetwork.main.proxiedRun,
+        e2eNetwork.main.proxiedDirectory,
+      ];
+      const escapes = prefixed.map((endpoint) => endpoint.escapedRequests().length);
+      const escapedSince = (counts: number[]) =>
+        prefixed.flatMap((endpoint, index) =>
+          endpoint
+            .escapedRequests()
+            .slice(counts[index])
+            .map((request) => `request escaped ${endpoint.publicUrl}/: ${request}`),
+        );
 
       await use(observed);
 
+      messages.push(...escapedSince(escapes));
+      const settled = prefixed.map((endpoint) => endpoint.escapedRequests().length);
       const currentUrl = page.url();
-      const hosted = currentUrl.startsWith(`${hostedOrigin()}/`);
-      const managed = hosted || currentUrl.startsWith(`${studioOrigin()}/`);
+      const workspace = browserWorkspace(currentUrl);
+      const managed =
+        workspace === "hosted" ||
+        workspace === "proxied" ||
+        workspace === "proxiedDirectory" ||
+        currentUrl.startsWith(`${studioOrigin()}/`);
       const retirement =
         process.platform === "win32" && !page.isClosed()
           ? observed.expectPageRetirement(page)
@@ -664,8 +775,10 @@ export const test = base.extend<
         }
         expect(messages, "unexpected browser diagnostics").toEqual([]);
       } finally {
-        await cleanupBrowserWorkspace(page, admin, managed, hosted);
+        await cleanupBrowserWorkspace(page, admin, managed, workspace);
       }
+      // Pages that close during cleanup still belong to this test.
+      expect(escapedSince(settled), "requests escaped a proxy prefix during cleanup").toEqual([]);
     },
     { auto: true },
   ],

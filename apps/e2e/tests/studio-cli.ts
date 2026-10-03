@@ -17,6 +17,13 @@ const workspaceShowSchema = z.object({
   frame_selector: z.string(),
 });
 
+interface PreviewOptions {
+  /** Constrain the URL to the current built presentation revision. */
+  readonly exact?: boolean;
+  /** The token that the CLI sends to an authenticated server. */
+  readonly accessToken?: string;
+}
+
 export class StudioCli {
   readonly #processes = new PreparationProcessOwner();
 
@@ -39,8 +46,12 @@ export class StudioCli {
     ]);
   }
 
-  buildWorkspaceView(name: string, target = notebookPath) {
-    return this.#run(["view", "build", name, "--target", target, "--profile", "development"]);
+  buildWorkspaceView(
+    name: string,
+    target = notebookPath,
+    profile: "development" | "production" = "development",
+  ) {
+    return this.#run(["view", "build", name, "--target", target, "--profile", profile]);
   }
 
   async holdWorkspacePublication(name: string) {
@@ -87,24 +98,39 @@ export class StudioCli {
     return workspaceShowSchema.parse(JSON.parse(stdout));
   }
 
-  async previewWorkspaceView(
+  previewWorkspaceView(view: string, runtime: "server" | "wasm" | "zero-python", exact = false) {
+    return this.previewView(
+      notebookPath,
+      `${e2eNetwork.main.studio.origin}?file=notebook.py`,
+      view,
+      runtime,
+      { exact },
+    );
+  }
+
+  async previewView(
+    target: string,
+    server: string,
     view: string,
     runtime: "server" | "wasm" | "zero-python",
-    exact = false,
+    { exact = false, accessToken }: PreviewOptions = {},
   ) {
-    const { stdout } = await this.#run([
-      "view",
-      "preview",
-      view,
-      "--target",
-      notebookPath,
-      "--server",
-      `${e2eNetwork.main.studio.origin}?file=notebook.py`,
-      "--runtime",
-      runtime,
-      ...(exact ? ["--exact"] : []),
-      "--json",
-    ]);
+    const { stdout } = await this.#run(
+      [
+        "view",
+        "preview",
+        view,
+        "--target",
+        target,
+        "--server",
+        server,
+        "--runtime",
+        runtime,
+        ...(exact ? ["--exact"] : []),
+        "--json",
+      ],
+      accessToken === undefined ? {} : { MARIMO_STUDIO_ACCESS_TOKEN: accessToken },
+    );
     return z.string().url().parse(JSON.parse(stdout));
   }
 
@@ -113,12 +139,12 @@ export class StudioCli {
     return workspaceCheckSchema.parse(JSON.parse(stdout)).ok;
   }
 
-  #run(args: string[]) {
+  #run(args: string[], environment: Record<string, string> = {}) {
     return this.#processes.runCaptured(
       `marimo-studio ${args.join(" ")}`,
       "uv",
       ["run", "--frozen", "--group", "e2e", "marimo-studio", ...args],
-      { cwd: repositoryDirectory },
+      { cwd: repositoryDirectory, env: { ...process.env, ...environment } },
       { timeout: CLI_PROCESS_TIMEOUT },
     );
   }

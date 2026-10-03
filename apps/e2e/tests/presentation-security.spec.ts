@@ -8,6 +8,7 @@ import {
   expect,
   observeBrowserContext,
   presentationFrame,
+  presentationMount,
   PREVIEW_TIMEOUT,
   previewFrame,
   readWorkspaceFile,
@@ -196,9 +197,7 @@ test("keeps standalone navigation inside server-authored route authority", async
     expect(target.searchParams.get("file")).toBe("notebook.py");
     expect(target.searchParams.get("region")).toBe("apac");
     expect(target.searchParams.get("runtime")).toBeNull();
-    expect(
-      await presentation.locator("html").evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__.runtime),
-    ).toBe("server");
+    expect((await presentationMount(presentation.locator("html"))).runtime).toBe("server");
     expect(target.hash).toBe("#proof");
   } finally {
     const retirement = browserDiagnostics.expectPageRetirement(popout);
@@ -322,7 +321,7 @@ test("keeps authored scripts inside presentation authority", async ({
     try {
       parentReadable = Boolean(parent.document.querySelector("#marimo-studio-host"));
     } catch {}
-    const support = new URL(globalThis.__MARIMO_MOUNT_CONFIG__.supportUrl, location.href);
+    const support = new URL(globalThis.__MARIMO_MOUNT_CONFIG__.supportUrl, document.baseURI);
     const marker = "/_marimo-studio/views/";
     const boundary = support.pathname.indexOf(marker);
     if (boundary < 0) throw new Error("Presentation support URL is outside its capability");
@@ -399,18 +398,9 @@ test("keeps authored scripts inside presentation authority", async ({
     })(),
     href: location.href,
     nativeSessionId: globalThis.__MARIMO_STUDIO_SESSION_ID__,
-    mount: {
-      clientId: globalThis.__MARIMO_MOUNT_CONFIG__.clientId,
-      lifecycleId: globalThis.__MARIMO_MOUNT_CONFIG__.lifecycleId,
-      replay: globalThis.__MARIMO_MOUNT_CONFIG__.replay,
-      runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
-      runtimeExplicit: globalThis.__MARIMO_MOUNT_CONFIG__.runtimeExplicit,
-      runtimeSessionId: globalThis.__MARIMO_MOUNT_CONFIG__.runtimeSessionId,
-      sessionId: globalThis.__MARIMO_MOUNT_CONFIG__.sessionId,
-      supportUrl: globalThis.__MARIMO_MOUNT_CONFIG__.supportUrl,
-    },
   }));
-  expect(trusted.mount).toMatchObject({
+  const mount = await presentationMount(preview.locator("html"));
+  expect(mount).toMatchObject({
     clientId: expect.stringMatching(/^[A-Za-z0-9_-]{16,128}$/),
     lifecycleId: expect.any(Number),
     replay: false,
@@ -419,22 +409,18 @@ test("keeps authored scripts inside presentation authority", async ({
     runtimeSessionId: expect.stringMatching(/^s_[a-z0-9]{6}$/),
     sessionId: expect.stringMatching(/^s_[a-z0-9]+$/),
   });
-  expect(trusted.nativeSessionId).toBe(trusted.mount.runtimeSessionId);
-  expect(trusted.mount.supportUrl).toContain("/_marimo-studio/views/dashboard");
+  expect(trusted.nativeSessionId).toBe(mount.runtimeSessionId);
+  expect(mount.supportUrl).toContain("/_marimo-studio/views/dashboard");
   expect(trusted.descriptor).toEqual({ configurable: false, writable: false });
   expect(new URL(trusted.href).searchParams.get("runtime")).toBeNull();
   const configUrl = new URL(configuredRequest.url());
-  expect(configUrl.searchParams.get("marimo_studio_client")).toBe(trusted.mount.clientId);
-  expect(configuredRequest.headers()["marimo-studio-preview-session-id"]).toBe(
-    trusted.mount.sessionId,
-  );
-  expect(configuredRequest.headers()["marimo-session-id"]).toBe(trusted.mount.runtimeSessionId);
+  expect(configUrl.searchParams.get("marimo_studio_client")).toBe(mount.clientId);
+  expect(configuredRequest.headers()["marimo-studio-preview-session-id"]).toBe(mount.sessionId);
+  expect(configuredRequest.headers()["marimo-session-id"]).toBe(mount.runtimeSessionId);
   const socketUrl = new URL((await connected).url());
-  expect(socketUrl.searchParams.get("marimo_studio_client")).toBe(trusted.mount.clientId);
-  expect(socketUrl.searchParams.get("marimo_studio_lifecycle")).toBe(
-    String(trusted.mount.lifecycleId),
-  );
-  expect(socketUrl.searchParams.get("session_id")).toBe(trusted.mount.sessionId);
+  expect(socketUrl.searchParams.get("marimo_studio_client")).toBe(mount.clientId);
+  expect(socketUrl.searchParams.get("marimo_studio_lifecycle")).toBe(String(mount.lifecycleId));
+  expect(socketUrl.searchParams.get("session_id")).toBe(mount.sessionId);
   denied.recovered();
 });
 

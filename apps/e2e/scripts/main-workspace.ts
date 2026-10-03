@@ -1,5 +1,5 @@
-import { cp, mkdir, rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 import { copyFixtureProviderPackage } from "./fixture-provider-package.ts";
 import { e2eNetwork } from "./network.ts";
@@ -12,11 +12,30 @@ import {
   hostedNotebookPath,
   hostedWorkspaceDirectory,
   lazyNotebookPath,
+  proxiedDirectoryNotebookPath,
+  proxiedDirectoryWorkspaceDirectory,
+  proxiedFixtureDirectory,
+  proxiedNotebookPath,
+  proxiedRunNotebookPath,
+  proxiedRunWorkspaceDirectory,
+  proxiedWorkspaceDirectory,
   repositoryDirectory,
   staticExportDirectory,
   workspaceDirectory,
 } from "./paths.ts";
 import { PreparationProcessOwner } from "./preparation-process.ts";
+
+const workspaceDirectories = [
+  configDirectory,
+  workspaceDirectory,
+  hostedWorkspaceDirectory,
+  proxiedWorkspaceDirectory,
+  proxiedRunWorkspaceDirectory,
+  proxiedDirectoryWorkspaceDirectory,
+];
+
+/** The proxied run server authenticates browsers with this access token. */
+export const PROXIED_RUN_TOKEN = "studio-proxied-token";
 
 export class MainWorkspace {
   #preparation = new PreparationProcessOwner();
@@ -24,7 +43,7 @@ export class MainWorkspace {
 
   async prepare() {
     await this.#services.prepare();
-    for (const path of [configDirectory, workspaceDirectory, hostedWorkspaceDirectory]) {
+    for (const path of workspaceDirectories) {
       await rm(path, { force: true, recursive: true });
       await mkdir(path, { recursive: true });
     }
@@ -37,6 +56,9 @@ export class MainWorkspace {
       if (service === "studio") await this.#studio();
       else if (service === "hosted") await this.#hosted();
       else if (service === "static") await this.#static();
+      else if (service === "proxied") await this.#proxied();
+      else if (service === "proxiedRun") await this.#proxiedRun();
+      else if (service === "proxiedDirectory") await this.#proxiedDirectory();
       else throw new TypeError(`Unknown browser service ${service}`);
     }
   }
@@ -93,6 +115,117 @@ export class MainWorkspace {
     );
   }
 
+  // A path-prefixing proxy strips its mount before forwarding, so marimo runs
+  // without --base-url and never sees the public path.
+  async #proxied() {
+    await cp(resolve(proxiedFixtureDirectory, "notebook.py"), proxiedNotebookPath);
+    const endpoint = e2eNetwork.main.proxied;
+    await this.#services.start(
+      [
+        "python",
+        resolve(appDirectory, "scripts/_compat/server.py"),
+        "marimo",
+        "edit",
+        proxiedNotebookPath,
+        "--no-sandbox",
+        "--headless",
+        "--no-token",
+      ],
+      endpoint,
+      "studio",
+      { serverUrl: endpoint.publicUrl, readyUrl: `${endpoint.publicUrl}/` },
+    );
+  }
+
+  async #proxiedRun() {
+    await this.#prepareProxiedViews(proxiedRunNotebookPath);
+    const endpoint = e2eNetwork.main.proxiedRun;
+    await this.#services.start(
+      [
+        "python",
+        resolve(appDirectory, "scripts/_compat/server.py"),
+        "marimo",
+        "run",
+        proxiedRunNotebookPath,
+        "--no-sandbox",
+        "--headless",
+        "--token-password",
+        PROXIED_RUN_TOKEN,
+      ],
+      endpoint,
+      "process",
+      {
+        serverUrl: endpoint.publicUrl,
+        readyUrl: `${endpoint.publicUrl}/?access_token=${PROXIED_RUN_TOKEN}`,
+        authToken: PROXIED_RUN_TOKEN,
+      },
+    );
+  }
+
+  // A directory server routes each notebook through its `file` query. It uses
+  // marimo's server-sent event transport, so proxied tests cover both kernel
+  // transports beneath a prefix.
+  async #proxiedDirectory() {
+    await this.#prepareProxiedViews(proxiedDirectoryNotebookPath);
+    const endpoint = e2eNetwork.main.proxiedDirectory;
+    await this.#services.start(
+      [
+        "python",
+        resolve(appDirectory, "scripts/_compat/server.py"),
+        "marimo",
+        "edit",
+        dirname(proxiedDirectoryNotebookPath),
+        "--no-sandbox",
+        "--headless",
+        "--no-token",
+      ],
+      endpoint,
+      "studio",
+      {
+        environment: { MARIMO_SERVER_TRANSPORT: "sse" },
+        serverUrl: endpoint.publicUrl,
+        readyUrl: `${endpoint.publicUrl}/?file=notebook.py`,
+      },
+    );
+  }
+
+  async #prepareProxiedViews(notebook: string) {
+    await cp(resolve(proxiedFixtureDirectory, "notebook.py"), notebook);
+    for (const view of ["dashboard", "report"]) {
+      await this.#preparation.run(
+        `proxied ${view} view`,
+        "uv",
+        [
+          "run",
+          "--frozen",
+          "--group",
+          "e2e",
+          "marimo-studio",
+          "view",
+          "create",
+          view,
+          "--target",
+          notebook,
+          "--starter",
+          "marimo-studio/vanilla:default",
+        ],
+        {
+          cwd: repositoryDirectory,
+          env: { ...process.env, PYTHONUNBUFFERED: "1" },
+          stdio: ["ignore", "ignore", "inherit"],
+        },
+      );
+      const viewDirectory = resolve(dirname(notebook), "__marimo__/studio/notebook", view);
+      await writeFile(
+        resolve(viewDirectory, "index.html"),
+        await readFile(resolve(proxiedFixtureDirectory, `${view}.html`)),
+      );
+      if (view === "report") {
+        await cp(resolve(proxiedFixtureDirectory, "view.css"), resolve(viewDirectory, "view.css"));
+      }
+    }
+  }
+
   async #static() {
     await this.#preparation.run(
       "static fixture export",
@@ -147,7 +280,7 @@ export class MainWorkspace {
       .map((result) => result.reason);
     if (errors.length > 0) throw new AggregateError(errors, "Browser workspace shutdown failed");
     await Promise.all(
-      [configDirectory, workspaceDirectory, hostedWorkspaceDirectory].map((path) =>
+      workspaceDirectories.map((path) =>
         rm(path, { force: true, recursive: true, maxRetries: 20, retryDelay: 50 }),
       ),
     );

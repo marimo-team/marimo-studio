@@ -91,6 +91,46 @@ test.each(["main", "provider", "installed"] as const)(
   },
 );
 
+test("prefix-mounted endpoints strip a per-run mount and hide the public host", async () => {
+  const first = createE2ENetwork({ runId: "prefix-run", suite: "main", workerId: "0" });
+  const second = createE2ENetwork({ runId: "prefix-run", suite: "main", workerId: "1" });
+  const seen: { url?: string; host?: string }[] = [];
+  const server = createServer((incoming, response) => {
+    seen.push({ url: incoming.url, host: incoming.headers.host });
+    response.end("owned backend");
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = z.object({ port: z.number() }).parse(server.address()).port;
+  try {
+    await Promise.all([first.start(), second.start()]);
+    const endpoint = first.main.proxied;
+    const mount = new URL(endpoint.publicUrl).pathname;
+    expect(mount).toMatch(/^\/s\/[a-f\d]{8}\/p\/[a-f\d]{4}$/);
+    expect(new URL(second.main.proxied.publicUrl).pathname).not.toBe(mount);
+    expect(first.main.studio.publicUrl).toBe(first.main.studio.origin);
+    endpoint.bindBackend(port);
+    const get = (path: string) =>
+      new Promise<number | undefined>((resolve, reject) => {
+        const call = request({ host: "127.0.0.1", port: endpoint.port, path }, (response) => {
+          response.resume();
+          response.once("end", () => resolve(response.statusCode));
+        });
+        call.once("error", reject);
+        call.end();
+      });
+
+    expect(await get(`${mount}/studio/?file=notebook.py`)).toBe(200);
+    expect(await get("/studio/")).toBe(404);
+    expect(await get(mount)).toBe(404);
+    expect(seen).toEqual([{ url: "/studio/?file=notebook.py", host: `backend.invalid:${port}` }]);
+    expect(endpoint.escapedRequests()).toEqual(["GET /studio/", `GET ${mount}`]);
+  } finally {
+    await Promise.all([first.close(), second.close()]);
+    await close(server);
+  }
+});
+
 test("closing during startup releases listeners and prevents later acquisitions", async () => {
   const network = createE2ENetwork({ runId: "closing-run", suite: "provider", workerId: "0" });
   const starting = network.start();

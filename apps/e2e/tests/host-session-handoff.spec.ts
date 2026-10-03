@@ -1,4 +1,4 @@
-import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
+import { parseMountConfig } from "@marimo-studio/protocol/runtime-config";
 import { expect } from "@playwright/test";
 import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -154,17 +154,15 @@ for (const editRoot of ["marimo", "studio"] as const) {
       // notification. The replacement establishes fresh model state on its own
       // route, so each expectation names only the document being replaced.
       const expectRetiringModelNotification = async () => {
-        const mount = mountConfigSchema.parse(
-          await previewFrame(page)
-            .locator("html")
-            .evaluate(() => {
-              if (!("__MARIMO_MOUNT_CONFIG__" in globalThis)) {
-                throw new Error("The preview mount configuration is unavailable.");
-              }
-              return globalThis.__MARIMO_MOUNT_CONFIG__;
-            }),
-        );
-        const support = new URL(mount.supportUrl, server.serverUrl);
+        const mount = await previewFrame(page)
+          .locator("html")
+          .evaluate(() => {
+            if (!("__MARIMO_MOUNT_CONFIG__" in globalThis)) {
+              throw new Error("The preview mount configuration is unavailable.");
+            }
+            return { config: globalThis.__MARIMO_MOUNT_CONFIG__, base: document.baseURI };
+          });
+        const support = new URL(parseMountConfig(mount.config, mount.base).supportUrl);
         const boundary = support.pathname.indexOf("/_marimo-studio/views/");
         if (boundary < 0) throw new Error("The preview has no scoped support URL.");
         return diagnostics.expectRequestAbort({
