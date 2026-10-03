@@ -94,13 +94,14 @@ test("keeps an agent preview URL live on a directory server beneath a stripped p
     await expect(tab.getByRole("heading", { name: "Agent report" })).toBeVisible({
       timeout: 65_000,
     });
+    await expect(tab.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
     const live = new URL(tab.url());
     expect(live.pathname).toBe(viewPath);
     expect(live.searchParams.get("file")).toBe("notebook.py");
+    await revisionSwap();
     await tab.close();
   } finally {
     // The directory server keeps its views for the worker's other tests.
     await writeFile(source, original);
   }
-  await revisionSwap();
 });

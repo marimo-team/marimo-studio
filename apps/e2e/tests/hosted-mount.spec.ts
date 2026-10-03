@@ -125,8 +125,8 @@ test("keeps an agent preview URL live through an authenticated hosted mount", as
   await labeledSlider(tab.locator("body"), /^Hosted scale/).press("End");
   await expect(metric).toHaveText("63");
   expect(new URL(tab.url()).pathname).toBe("/hosted/dashboard/");
-  await tab.close();
   await revisionSwap();
+  await tab.close();
 });
 
 test("initializes and runs Studio through an authenticated hosted mount", async ({

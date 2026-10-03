@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { e2eNetwork } from "../scripts/network.ts";
 import { providerNotebookPath, providerWorkspaceDirectory } from "../scripts/paths.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
-import { expectPreviewRevisionSwap, labeledSlider, waitForPreview } from "./fixture.ts";
+import { expectPreviewRevisionSwap, waitForPreview } from "./fixture.ts";
 import { test } from "./provider-fixture.ts";
 import { StudioCli } from "./studio-cli.ts";
 
@@ -49,10 +49,10 @@ test("keeps a React view's preview URL live beneath a stripped proxy prefix", as
     await expect(tab.getByRole("heading", { name: "Agent gallery" })).toBeVisible({
       timeout: 120_000,
     });
+    await expect(tab.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
     expect(new URL(tab.url()).pathname).toBe(viewPath);
-    await labeledSlider(tab.locator("body"), /^Scale/).press("End");
-    await tab.close();
     await revisionSwap();
+    await tab.close();
     expect(endpoint.escapedRequests()).toEqual([]);
   } finally {
     await writeFile(appSource, original);

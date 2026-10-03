@@ -193,7 +193,7 @@ for (const runtime of ["server", "wasm", "zero-python"] as const) {
       await labeledSlider(tab.locator("body"), /^Proxied scale/).press("End");
       await expect(metric).toHaveText("63");
     }
-    await tab.close();
     await revisionSwap();
+    await tab.close();
   });
 }

@@ -347,7 +347,8 @@ export const recoverRequestAbort = async (capture: RequestAbortCapture): Promise
 };
 
 // A rebuild swaps an open preview to the next revision. The swap retires the
-// previous revision's runtime reads and its live event stream.
+// previous revision's runtime reads and its live event stream. Recover before
+// closing the preview, which would end that stream whether or not the swap did.
 export const expectPreviewRevisionSwap = (
   diagnostics: BrowserDiagnostics,
   root: string,
