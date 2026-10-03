@@ -1,0 +1,9 @@
+packages/marimo-studio/src/marimo_studio/_delivery/export.py
+  ai_agent 30,120-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4e5ba5d29ab5f58a1eee849262ee279e39e1d806",
+  "prompts": {}
+}
