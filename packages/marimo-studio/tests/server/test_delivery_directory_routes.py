@@ -235,10 +235,10 @@ def test_presentation_capability_binds_public_files_to_its_notebook(
             params={"access_token": "test-token", "file": "first.py"},
             follow_redirects=False,
         )
-        authenticated.get(login.headers["location"], follow_redirects=False)
-        config = authenticated.get(
-            "/_marimo-studio/views/dashboard/config?file=first.py"
-        ).json()
+        authenticated.get(_redirect_target(login), follow_redirects=False)
+        config = _runtime_config(
+            authenticated.get("/_marimo-studio/views/dashboard/config?file=first.py")
+        )
         capability_root = config["runtime"]["urls"]["transport"]
 
     with TestClient(app) as anonymous:

@@ -37,6 +37,12 @@ def test_reference_stays_relative(target: str) -> None:
     assert relative_url("/studio/dashboard/", target).startswith(("./", "../"))
 
 
+def test_reference_counts_an_empty_segment_as_browsers_do() -> None:
+    # Browsers keep empty segments: `../../` from `<mount>//studio/` resolves to
+    # `<mount>/`. urljoin collapses them, so it cannot serve as the oracle here.
+    assert relative_url("//studio/", "/_marimo-studio/x") == "../../_marimo-studio/x"
+
+
 def test_reference_keeps_an_empty_leading_segment_beneath_the_mount() -> None:
     # Browsers resolve `.//evil.example/` to `<mount>//evil.example/`.
     assert relative_url("/", "//evil.example/") == ".//evil.example/"
