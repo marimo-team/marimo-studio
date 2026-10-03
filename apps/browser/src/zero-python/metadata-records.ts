@@ -16,9 +16,9 @@ const boundedOutputName = (kind: "cell" | "output" | "value") =>
       (value) =>
         value.startsWith(`${kind}:`) && value.length > kind.length + 1 && bounded(value, 255),
     );
-const runtimeDataSchema = z.strictObject({
-  manifestUrl: z.string().min(1),
-  planDigest: digestSchema,
+const zeroPythonRuntimeSchema = z.object({
+  data: z.strictObject({ planDigest: digestSchema }),
+  urls: z.strictObject({ manifest: z.string().min(1) }),
 });
 const projectionMapSchema = (kind: "cell" | "output" | "value") =>
   losslessRecordSchema(boundedHostSelector, boundedOutputName(kind));
@@ -35,7 +35,7 @@ const studioManifestSchema = z.strictObject({
   plan_digest: digestSchema,
 });
 
-type UnparsedRuntimeData = Parameters<typeof runtimeDataSchema.safeParse>[0];
+type UnparsedRuntimeEnvelope = Parameters<typeof zeroPythonRuntimeSchema.safeParse>[0];
 type UnparsedStudioManifest = Parameters<typeof studioManifestSchema.safeParse>[0];
 
 export interface ZeroPythonRuntimeData {
@@ -63,14 +63,19 @@ export interface StudioPreparedContext {
   readonly view: string;
 }
 
-export const parseZeroPythonRuntimeData = (input: UnparsedRuntimeData): ZeroPythonRuntimeData => {
-  const parsed = runtimeDataSchema.safeParse(input);
+export const parseZeroPythonRuntimeData = (
+  runtime: UnparsedRuntimeEnvelope,
+): ZeroPythonRuntimeData => {
+  const parsed = zeroPythonRuntimeSchema.safeParse(runtime);
   if (!parsed.success) {
     throw new ZeroPythonRuntimeError("manifest_invalid", "Prepared runtime data is invalid.", {
       cause: parsed.error,
     });
   }
-  return Object.freeze(parsed.data);
+  return Object.freeze({
+    manifestUrl: parsed.data.urls.manifest,
+    planDigest: parsed.data.data.planDigest,
+  });
 };
 
 export const parseStudioPreparedManifest = (

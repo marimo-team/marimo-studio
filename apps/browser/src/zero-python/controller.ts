@@ -4,12 +4,15 @@ import type {
   PreparedStateController,
 } from "@marimo-team/marimo-export/prepared";
 
-import type { ZeroPythonRuntimeDependencies } from "./composition.ts";
 import type { StudioPreparedInteractions } from "./interactions.ts";
 import type { ZeroPythonRuntimeData } from "./metadata.ts";
 import type { StudioPreparedStateApi } from "./state-api.ts";
 
-import { createStudioPreparedComposition } from "./composition.ts";
+import {
+  createStudioPreparedComposition,
+  type StudioPreparedComposition,
+  type ZeroPythonRuntimeDependencies,
+} from "./composition.ts";
 import { zeroPythonFailure } from "./errors.ts";
 import { disposeStudioPreparedRuntime } from "./lifecycle.ts";
 
@@ -19,6 +22,9 @@ export class ZeroPythonRuntimeController {
   readonly #state: PreparedStateController;
   readonly #stateApi: StudioPreparedStateApi;
   readonly #interactions: StudioPreparedInteractions;
+  readonly #createRefresh: StudioPreparedComposition["createRefresh"];
+  #config: RuntimeConfig;
+  #data: ZeroPythonRuntimeData;
   #refresh: PreparedPublicationRefresh;
   #disposed = false;
   #disposal: Promise<void> | undefined;
@@ -29,16 +35,45 @@ export class ZeroPythonRuntimeController {
     root: HTMLElement,
     private readonly dependencies: ZeroPythonRuntimeDependencies,
   ) {
+    this.#config = config;
+    this.#data = data;
     const composition = createStudioPreparedComposition({
       root,
-      context: () => ({ config, data }),
+      context: () => ({ config: this.#config, data: this.#data }),
       dependencies,
       isDisposed: () => this.#disposed,
     });
     this.#state = composition.state;
     this.#interactions = composition.interactions;
     this.#stateApi = composition.stateApi;
-    this.#refresh = composition.createRefresh(data, config.runtime.instance);
+    this.#createRefresh = composition.createRefresh;
+    this.#refresh = this.#refreshFor(data, config);
+  }
+
+  #refreshFor(data: ZeroPythonRuntimeData, config: RuntimeConfig): PreparedPublicationRefresh {
+    // A superseded revision stops polling until its successor arrives.
+    const refresh = this.#createRefresh(data, config.runtime.instance, () => {
+      void refresh.dispose();
+    });
+    return refresh;
+  }
+
+  get manifestUrl(): string {
+    return this.#data.manifestUrl;
+  }
+
+  /**
+   * Follow a new presentation revision of the same Prepared instance. Its
+   * manifest URL carries the revision's capability, so the publication reopens
+   * beneath it while the current state stays mounted.
+   */
+  async replace(config: RuntimeConfig, data: ZeroPythonRuntimeData, signal: AbortSignal) {
+    const previous = this.#refresh;
+    this.#config = config;
+    this.#data = data;
+    this.#refresh = this.#refreshFor(data, config);
+    await previous.dispose();
+    await this.#refresh.refresh(signal);
   }
 
   async start(signal: AbortSignal): Promise<void> {

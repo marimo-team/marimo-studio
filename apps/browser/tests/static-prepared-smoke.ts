@@ -19,12 +19,13 @@ const config = JSON.parse(await readFile(configSource, "utf8")) as {
   readonly runtime?: {
     readonly id?: unknown;
     readonly data?: unknown;
+    readonly urls?: unknown;
   };
 };
 if (config.runtime?.id !== "zero-python") {
   throw new Error("The static runtime config must select Zero-Python.");
 }
-const runtime = parseZeroPythonRuntimeData(config.runtime.data);
+const runtime = parseZeroPythonRuntimeData(config.runtime);
 const metadata = parseStudioPreparedManifest(JSON.parse(await readFile(manifestSource, "utf8")));
 if (runtime.planDigest !== metadata.planDigest) {
   throw new Error("The runtime and prepared manifest plan digests differ.");

@@ -33,7 +33,8 @@ export const runtimeConfig = (): RuntimeContext["presentation"] => ({
   runtime: {
     id: ZERO_PYTHON_RUNTIME_ID,
     instance: "1".repeat(64),
-    data: { manifestUrl: "https://example.test/current", planDigest: "3".repeat(64) },
+    data: { planDigest: "3".repeat(64) },
+    urls: { manifest: "https://example.test/current" },
   },
   rootUrl: "/",
   publicRootUrl: "/",

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 
+import { StalePreparedBindingError } from "../src/zero-python/metadata-source.ts";
 import {
   parseStudioPreparedManifest,
   parseZeroPythonRuntimeData,
@@ -228,6 +229,23 @@ describe("Studio prepared metadata", () => {
     );
   });
 
+  it("reports a superseded presentation binding as a stale binding", async () => {
+    const source = new StudioPreparedManifestSource(
+      () => ({ view: "dashboard", planDigest: "3".repeat(64) }),
+      async () =>
+        Response.json(
+          { error: "stale-projection-binding", message: "Refreshing.", transient: true },
+          { status: 409 },
+        ),
+    );
+
+    const failure = await source
+      .fetch(new URL("https://example.test/current"))
+      .catch((cause: unknown) => cause);
+
+    expect(failure).toMatchObject({ cause: expect.any(StalePreparedBindingError) });
+  });
+
   it("rejects a stale manifest from another runtime binding", async () => {
     const selected = notebookExportFixture({ identity: "1".repeat(64), inputs: [{ mode: "one" }] });
     const stale = notebookExportFixture({ identity: "2".repeat(64), inputs: [{ mode: "two" }] });
@@ -300,19 +318,22 @@ describe("Studio prepared metadata", () => {
     await expect(fetchWithWrongDocument(exports[0]!)).resolves.toBeDefined();
   });
 
-  it("parses only the runtime locator and expected plan digest", () => {
+  it("parses only the manifest URL and expected plan digest", () => {
+    const manifest = "https://example.test/_marimo-studio/views/dashboard/zero-python/current";
     expect(
       parseZeroPythonRuntimeData({
-        manifestUrl: "./zero-python/current",
-        planDigest: "3".repeat(64),
+        data: { planDigest: "3".repeat(64) },
+        urls: { manifest },
       }),
-    ).toEqual({ manifestUrl: "./zero-python/current", planDigest: "3".repeat(64) });
+    ).toEqual({ manifestUrl: manifest, planDigest: "3".repeat(64) });
     expect(() =>
       parseZeroPythonRuntimeData({
-        manifestUrl: "./zero-python/current",
-        planDigest: "3".repeat(64),
-        view: "dashboard",
+        data: { planDigest: "3".repeat(64), view: "dashboard" },
+        urls: { manifest },
       }),
+    ).toThrow(/runtime data is invalid/);
+    expect(() =>
+      parseZeroPythonRuntimeData({ data: { planDigest: "3".repeat(64) }, urls: {} }),
     ).toThrow(/runtime data is invalid/);
   });
 });
