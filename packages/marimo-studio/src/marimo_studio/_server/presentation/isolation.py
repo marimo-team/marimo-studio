@@ -25,6 +25,7 @@ from htpy import (
     head,
     html,
     iframe,
+    link,
     meta,
     script,
     style,
@@ -40,7 +41,21 @@ PRESENTATION_SANDBOX = (
 )
 
 _BRIDGE = r"""(() => {
-  const config = Object.freeze(CONFIG);
+  // URL fields and the icon link are references from this document. Resolve
+  // them before the bridge rewrites history.
+  for (const icon of document.querySelectorAll('link[rel="icon"]')) {
+    icon.href = icon.href;
+  }
+  const source = JSON.parse(
+    document.getElementById("marimo-studio-wrapper-config").textContent,
+  );
+  const config = Object.freeze({
+    ...source,
+    fallbackUrl: new URL(source.fallbackUrl, location.href).href,
+    internalRootUrl: new URL(source.internalRootUrl, location.href).href,
+    publicRootUrl: new URL(source.publicRootUrl, location.href).href,
+    replayPathPrefix: new URL(source.replayRootUrl, location.href).pathname,
+  });
   const allowedViews = new Set(config.views);
   const privateQueryKeys = new Set(config.privateQueryKeys);
   const frameBlueprint = document.querySelector(
@@ -121,10 +136,7 @@ _BRIDGE = r"""(() => {
     value.lifecycleId > 0 &&
     boundedText(value.query, 16_384);
   const viewUrl = (root, view, source, routingQuery = "") => {
-    const target = new URL(
-      `${encodeURIComponent(view)}/`,
-      new URL(root, location.href),
-    );
+    const target = new URL(`${encodeURIComponent(view)}/`, root);
     const current = new URL(source, location.href);
     target.search = current.search;
     target.hash = current.hash;
@@ -134,10 +146,7 @@ _BRIDGE = r"""(() => {
     return target.toString();
   };
   const publicViewUrl = (view, query, hash) => {
-    const target = new URL(
-      `${encodeURIComponent(view)}/`,
-      new URL(config.publicRootUrl, location.href),
-    );
+    const target = new URL(`${encodeURIComponent(view)}/`, config.publicRootUrl);
     const publicParameters = new URLSearchParams(query);
     for (const key of privateQueryKeys) publicParameters.delete(key);
     const parameters = new URLSearchParams(config.routingQuery);
@@ -358,10 +367,7 @@ _BRIDGE = r"""(() => {
               event.data.documentUrl,
             ),
             supportUrl: viewUrl(
-              new URL(
-                "_marimo-studio/views/",
-                new URL(config.internalRootUrl, location.href),
-              ),
+              new URL("_marimo-studio/views/", config.internalRootUrl),
               event.data.view,
               event.data.supportUrl,
             ).replace(/\/$/, ""),
@@ -385,10 +391,8 @@ _BRIDGE = r"""(() => {
     addEventListener("popstate", () => {
       const targetView = [...allowedViews].find(
         (view) =>
-          new URL(
-            `${encodeURIComponent(view)}/`,
-            new URL(config.publicRootUrl, location.href),
-          ).pathname === location.pathname,
+          new URL(`${encodeURIComponent(view)}/`, config.publicRootUrl)
+            .pathname === location.pathname,
       );
       if (
         targetView === currentView &&
@@ -419,6 +423,8 @@ def isolated_presentation_document(
     child_url: str,
     internal_root_url: str,
     public_root_url: str,
+    replay_root_url: str,
+    icon_url: str,
     routing_query: str,
     view_name: str,
     views: Sequence[str],
@@ -435,13 +441,12 @@ def isolated_presentation_document(
         {
             "internalRootUrl": internal_root_url,
             "publicRootUrl": public_root_url,
+            "replayRootUrl": replay_root_url,
             "routingQuery": routing_query,
             "view": view_name,
             "views": list(views),
             "privateQueryKeys": list(private_query_keys),
             "fallbackUrl": child_url,
-            "replayPathPrefix": public_root_url.rstrip("/")
-            + "/_marimo-studio/presentation/d.",
             "replayEnabled": replay_enabled,
             "replayScope": replay_scope,
             "runtime": runtime,
@@ -449,7 +454,6 @@ def isolated_presentation_document(
         },
         separators=(",", ":"),
     ).replace("<", "\\u003c")
-    bridge = _BRIDGE.replace("CONFIG", config, 1)
     frame_allow = "clipboard-write; fullscreen *"
     frame_host: Node = (
         cast(
@@ -487,6 +491,7 @@ def isolated_presentation_document(
                                 content="width=device-width, initial-scale=1",
                             ),
                             title[title_text],
+                            link(rel="icon", href=icon_url),
                             style(nonce=nonce)[
                                 Markup(
                                     "html,body{height:100%;margin:0;overflow:hidden}"
@@ -500,7 +505,11 @@ def isolated_presentation_document(
                         node_list(
                             div(id="marimo-runtime-root", hidden=True),
                             frame_host,
-                            script(nonce=nonce)[Markup(bridge)],
+                            script(
+                                id="marimo-studio-wrapper-config",
+                                type="application/json",
+                            )[Markup(config)],
+                            script(nonce=nonce)[Markup(_BRIDGE)],
                         )
                     ],
                 )
@@ -517,6 +526,7 @@ def isolation_content_security_policy(nonce: str) -> str:
         "connect-src 'self'; "
         "form-action 'none'; "
         "frame-src 'self'; "
+        "img-src 'self'; "
         f"script-src 'nonce-{nonce}'; "
         f"style-src 'nonce-{nonce}'"
     )

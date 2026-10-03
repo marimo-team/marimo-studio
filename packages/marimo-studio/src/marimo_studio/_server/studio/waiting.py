@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import cast
 
-from htpy import Node, body, head, html, main, meta, p, script, span, style, title
+from htpy import Node, body, head, html, link, main, meta, p, script, span, style, title
 from markupsafe import Markup
 
 from marimo_studio._delivery.html import node_list, render
@@ -14,6 +14,7 @@ from marimo_studio._delivery.html import node_list, render
 def waiting_document(
     *,
     refresh_url: str,
+    icon_url: str,
     lifecycle_id: int | None = None,
     runtime: str = "server",
     view: str = "",
@@ -52,6 +53,7 @@ def waiting_document(
                         content="width=device-width, initial-scale=1",
                     ),
                     title["Starting notebook"],
+                    link(rel="icon", href=icon_url),
                     style[
                         Markup(
                             """
@@ -125,7 +127,10 @@ def waiting_document(
                                   """
                             + signal("marimo-studio:receiver-unready")
                             + """
-                                  location.replace(refreshUrl);
+                                  // A top-level page keeps its public address. A
+                                  // framed document follows its capability URL.
+                                  if (window.parent === window) location.reload();
+                                  else location.replace(refreshUrl);
                                   return;
                                 }
                               } catch {}

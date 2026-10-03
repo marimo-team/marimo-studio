@@ -161,9 +161,12 @@ class PresentationCapabilityHandler:
             and not session_model
         ):
             current = await self._current_revision_matches(route, location, context)
+            # Runtime reads that poll during a revision change wait for the
+            # next runtime configuration.
             if not current and route.target in {
                 f"{SUPPORT_PATH}/views/{route.view}/values",
                 f"{SUPPORT_PATH}/views/{route.view}/outputs",
+                f"{SUPPORT_PATH}/views/{route.view}/zero-python/current",
             }:
                 assert isinstance(connection, Request)
                 await _send_response(

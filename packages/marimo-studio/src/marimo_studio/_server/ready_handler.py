@@ -22,7 +22,7 @@ from marimo_studio._server.files import (
     close_artifact_response,
 )
 from marimo_studio._server.lifecycle_handler import (
-    presentation_events_url,
+    presentation_events_path,
     request_lifecycle_id,
 )
 from marimo_studio._server.notebook_scope import NotebookScope
@@ -40,6 +40,7 @@ from marimo_studio._server.presentation.capability import PresentationCapability
 from marimo_studio._server.presentation.ownership import studio_owned_request
 from marimo_studio._server.presentation.session import PresentationSession
 from marimo_studio._server.records import ServerContext, ServerLocation
+from marimo_studio._server.request_path import request_path
 from marimo_studio._server.routing import ArtifactAssetRoute, AuthoredViewRoute
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._server.security import SecurityPolicy
@@ -117,7 +118,6 @@ class ReadyWorkspaceHandler:
                 requested_view = route.request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
                 response = studio_landing_redirect(
                     route.request,
-                    route.location.base_url,
                     (
                         requested_view
                         if requested_view in workspace.views
@@ -187,13 +187,13 @@ class ReadyWorkspaceHandler:
                 route.relative,
                 error,
                 presentation.notebook,
-                base_url=route.location.base_url,
+                requested_path=request_path(route.request),
                 dev=route.context.dev,
                 edit_mode=route.context.mode == "edit",
                 structured=_accepts_json(route.request),
                 server_token=route.context.server_token,
                 routing_query=route.context.routing_query,
-                presentation_events_url=await presentation_events_url(
+                presentation_events_path=await presentation_events_path(
                     route.context,
                     presentation,
                     route.request_view,

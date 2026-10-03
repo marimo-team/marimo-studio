@@ -7,14 +7,15 @@
   "runtime": {
     "id": "server",
     "instance": "server-instance",
-    "data": {
-      "url": "/proxy/app/"
+    "data": {},
+    "urls": {
+      "transport": "../../../_marimo-studio/presentation/token/"
     }
   },
-  "rootUrl": "/proxy/app/",
-  "publicRootUrl": "/proxy/app/",
-  "documentRootUrl": "/proxy/app/",
-  "supportUrl": "/proxy/app/_marimo-studio/views/dashboard",
+  "rootUrl": "../../../",
+  "publicRootUrl": "../../../",
+  "documentRootUrl": "../../../",
+  "supportUrl": "../../../_marimo-studio/views/dashboard",
   "showCellLogs": true,
   "projectionTargets": {
     "cells": {

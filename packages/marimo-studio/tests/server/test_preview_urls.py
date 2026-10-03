@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import re
+import shutil
 from collections.abc import MutableMapping
+from html import unescape
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlsplit
+from unittest.mock import Mock
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 import pytest
 from marimo._server.workspace._directory import DirectoryWorkspace
@@ -12,6 +16,7 @@ from starlette.testclient import TestClient
 
 from marimo_studio._artifacts.lock import build_lock
 from marimo_studio._artifacts.publication import record_build_started
+from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.revisions import capture_source_snapshot
@@ -20,7 +25,14 @@ from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio.errors import ViewProjectError
 
 from ..app_helpers import configured, edit_mode, marimo_app, session_manager
-from .app_test_support import _editor_mount_value, _view_support_url
+from .app_test_support import (
+    _editor_mount_value,
+    _mount_support_url,
+    _redirect_target,
+    _resolved,
+    _runtime_config,
+    _view_support_url,
+)
 
 ENDPOINT = "/_marimo-studio/views/dashboard/preview"
 REVISION = "marimo_studio_revision"
@@ -65,9 +77,9 @@ def test_wasm_preview_opens_without_an_editor_or_browser_client(
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/plain")
         assert "no-store" in response.headers["cache-control"]
-        document = client.get(response.text)
+        document = client.get(_resolved(response, response.text))
         server = client.get(ENDPOINT, params={"runtime": "server"})
-        waiting = client.get(server.text)
+        waiting = client.get(_resolved(server, server.text))
     assert document.status_code == 200
     assert "<marimo-cell" in document.text
     assert 'id="marimo-studio-presentation"' not in document.text
@@ -96,14 +108,15 @@ def test_preview_preserves_mounted_directory_notebook_routing(
             params={"file": notebook_path.name, "runtime": "wasm"},
         )
         assert response.status_code == 200
-        parts = urlsplit(response.text)
+        target = _resolved(response, response.text)
+        parts = urlsplit(target)
         assert parts.path == "/parent/base/dashboard/"
         assert parse_qs(parts.query) == {
             "file": [notebook_path.name],
             "runtime": ["wasm"],
             "marimo_studio_unframed": ["1"],
         }
-        document = client.get(response.text)
+        document = client.get(target)
     assert document.status_code == 200
     assert _editor_mount_value(document.text, "runtime") == "wasm"
 
@@ -126,14 +139,16 @@ def test_preview_requires_normal_notebook_authentication(notebook_path: Path) ->
         )
         client.cookies.clear()
         browser_without_login = client.get(
-            authenticated.text,
+            _resolved(authenticated, authenticated.text),
             headers={"Accept": "text/html"},
             follow_redirects=False,
         )
     assert missing.status_code == 401
     assert authenticated.status_code == 200
     assert browser_without_login.status_code == 303
-    assert browser_without_login.headers["location"].startswith("/auth/login")
+    assert _redirect_target(browser_without_login).startswith(
+        "http://testserver/auth/login?"
+    )
     assert "secret" not in authenticated.text
 
 
@@ -169,9 +184,116 @@ def test_studio_redirects_stay_on_the_request_origin(
         )
 
     location = urlsplit(response.headers["location"])
+    target = urlsplit(_redirect_target(response))
     assert response.status_code == 307
-    assert (location.scheme, location.netloc, location.path) == ("", "", expected)
-    assert added_query <= parse_qs(location.query).keys()
+    assert (location.scheme, location.netloc) == ("", "")
+    assert target.path == expected
+    assert added_query <= parse_qs(target.query).keys()
+
+
+@pytest.mark.parametrize(
+    ("request_path", "expected_path"),
+    [
+        ("/", "/s/f3a9/p/77c1/studio/dashboard/"),
+        ("/dashboard/", "/s/f3a9/p/77c1/dashboard/"),
+        ("/studio/dashboard", "/s/f3a9/p/77c1/studio/dashboard/"),
+        # An encoded slash stays inside its segment when Studio counts depth.
+        ("/studio%2Fdashboard", "/s/f3a9/p/77c1/studio%2Fdashboard/"),
+    ],
+)
+def test_redirects_resolve_beneath_a_stripped_proxy_prefix(
+    notebook_path: Path,
+    request_path: str,
+    expected_path: str,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, token="secret")
+    edit_mode(app)
+    # The proxy removes its mount prefix before forwarding, so the server never
+    # sees /s/f3a9/p/77c1. The browser resolves Location against its own URL.
+    browser_url = f"https://workbench.example/s/f3a9/p/77c1{request_path}"
+
+    with TestClient(app) as client:
+        client.get("/?access_token=secret", follow_redirects=False)
+        response = client.get(request_path, follow_redirects=False)
+
+    target = urlsplit(urljoin(browser_url, response.headers["location"]))
+    assert response.status_code in {303, 307}
+    assert (target.scheme, target.netloc) == ("https", "workbench.example")
+    assert target.path == expected_path
+
+
+@pytest.mark.parametrize("mode", ["edit", "run"])
+@pytest.mark.parametrize(
+    ("request_path", "expected_path"),
+    [
+        ("/?access_token=secret", "/s/f3a9/p/77c1/"),
+        ("/dashboard/?access_token=secret&region=eu", "/s/f3a9/p/77c1/dashboard/"),
+        ("/", "/s/f3a9/p/77c1/auth/login"),
+        ("/dashboard/?region=eu", "/s/f3a9/p/77c1/auth/login"),
+    ],
+)
+def test_authentication_stays_beneath_a_stripped_proxy_prefix(
+    notebook_path: Path,
+    mode: str,
+    request_path: str,
+    expected_path: str,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, token="secret")
+    if mode == "edit":
+        edit_mode(app)
+    browser_url = f"https://workbench.example/s/f3a9/p/77c1{request_path}"
+
+    with TestClient(app) as client:
+        response = client.get(request_path, follow_redirects=False)
+
+    target = urljoin(browser_url, response.headers["location"])
+    parts = urlsplit(target)
+    assert response.status_code == 303
+    assert (parts.scheme, parts.netloc, parts.path) == (
+        "https",
+        "workbench.example",
+        expected_path,
+    )
+    query = parse_qs(parts.query)
+    assert "access_token" not in query
+    if parts.path.endswith("/auth/login"):
+        # Marimo returns to `next` once the browser is authenticated.
+        assert urljoin(target, query["next"][0]) == browser_url
+
+
+def test_redirects_resolve_beneath_a_base_url_and_a_stripped_proxy_prefix(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, path="/hosted")
+    edit_mode(app)
+    # The proxy strips /s/f3a9 and forwards marimo's --base-url path.
+    browser_url = "https://workbench.example/s/f3a9/hosted/studio/dashboard"
+
+    with TestClient(app) as client:
+        response = client.get("/hosted/studio/dashboard", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert urlsplit(urljoin(browser_url, response.headers["location"])).path == (
+        "/s/f3a9/hosted/studio/dashboard/"
+    )
+
+
+def test_bare_mount_path_redirects_into_its_directory(notebook_path: Path) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, path="/hosted")
+    edit_mode(app)
+    browser_url = "https://workbench.example/s/f3a9/hosted"
+
+    with TestClient(app) as client:
+        response = client.get("/hosted", follow_redirects=False)
+
+    assert response.status_code in {301, 307, 308}
+    assert urlsplit(urljoin(browser_url, response.headers["location"])).path == (
+        "/s/f3a9/hosted/"
+    )
 
 
 @pytest.mark.parametrize("mode", ["edit", "run"])
@@ -190,8 +312,10 @@ def test_exact_preview_opens_its_current_published_revision(
     with TestClient(app) as client:
         resolved = client.get(ENDPOINT, params={"runtime": "wasm", "exact": "1"})
         assert resolved.status_code == 200, resolved.text
-        revision = parse_qs(urlsplit(resolved.text).query)[REVISION][0]
-        document = client.get(resolved.text)
+        revision = parse_qs(urlsplit(_resolved(resolved, resolved.text)).query)[
+            REVISION
+        ][0]
+        document = client.get(_resolved(resolved, resolved.text))
         mismatch = client.get(
             "/dashboard/?" + urlencode({"runtime": "wasm", REVISION: "0" * 64}),
         )
@@ -231,11 +355,11 @@ def test_exact_preview_only_reads_matching_publication_during_an_active_build(
             assert resolved.json()["error"] == "preview-source-not-current"
             return
         assert resolved.status_code == 200, resolved.text
-        document = client.get(resolved.text)
+        document = client.get(_resolved(resolved, resolved.text))
         assert document.status_code == 200, document.text
         assert (
             document.headers["Marimo-Studio-Revision"]
-            == parse_qs(urlsplit(resolved.text).query)[REVISION][0]
+            == parse_qs(urlsplit(_resolved(resolved, resolved.text)).query)[REVISION][0]
         )
 
 
@@ -251,7 +375,7 @@ def test_exact_url_rejects_a_new_published_presentation(notebook_path: Path) -> 
     with TestClient(app) as client:
         first = client.get(ENDPOINT, params={"runtime": "wasm", "exact": "1"})
         assert first.status_code == 200
-        assert client.get(first.text).status_code == 200
+        assert client.get(_resolved(first, first.text)).status_code == 200
         source = project.root / "index.html"
         source.write_text(source.read_text() + "\n<!-- next publication -->\n")
         with build_view_project_sync(project):
@@ -259,13 +383,13 @@ def test_exact_url_rejects_a_new_published_presentation(notebook_path: Path) -> 
         second = client.get(ENDPOINT, params={"runtime": "wasm", "exact": "1"})
         assert second.status_code == 200, second.text
         assert second.text != first.text
-        stale = client.get(first.text)
-        current = client.get(second.text)
+        stale = client.get(_resolved(first, first.text))
+        current = client.get(_resolved(second, second.text))
     assert stale.status_code == 409
     assert current.status_code == 200
     assert (
         current.headers["Marimo-Studio-Revision"]
-        == parse_qs(urlsplit(second.text).query)[REVISION][0]
+        == parse_qs(urlsplit(_resolved(second, second.text)).query)[REVISION][0]
     )
 
 
@@ -378,6 +502,75 @@ def test_preview_url_requires_a_connected_studio_tab(
     assert "reload the notebook in Studio" in response.json()["message"]
 
 
+@pytest.mark.parametrize(
+    ("runtime", "client_id", "expected_client"),
+    [
+        ("zero-python", None, "browser-client-1234"),
+        ("zero-python", "browser-client-5678", "browser-client-5678"),
+        ("server", "browser-client-5678", "browser-client-5678"),
+        ("server", None, None),
+    ],
+)
+def test_preview_follows_the_studio_tab_its_runtime_needs(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: str,
+    client_id: str | None,
+    expected_client: str | None,
+) -> None:
+    from marimo_studio._delivery.urls import (
+        EDITOR_SESSION_QUERY_PARAM,
+        STUDIO_CLIENT_QUERY_PARAM,
+    )
+
+    configured(notebook_path)
+    update_notebook_config(
+        notebook_path,
+        lambda config: config.__setitem__("runtimes", ["server", "zero-python"]),
+    )
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+
+    async def select_target(_registry, *, session_id=None, client_id=None):
+        del session_id
+        return PeerTarget(client_id or "browser-client-1234", "s_123456", 1, None, 0)
+
+    monkeypatch.setattr(StudioClientRegistry, "select_target", select_target)
+    params = {"runtime": runtime}
+    if client_id is not None:
+        params[STUDIO_CLIENT_QUERY_PARAM] = client_id
+    with TestClient(app) as client:
+        response = client.get(ENDPOINT, params=params)
+
+    assert response.status_code == 200, response.text
+    query = parse_qs(urlsplit(_resolved(response, response.text)).query)
+    if expected_client is None:
+        assert STUDIO_CLIENT_QUERY_PARAM not in query
+        assert EDITOR_SESSION_QUERY_PARAM not in query
+    else:
+        assert query[STUDIO_CLIENT_QUERY_PARAM] == [expected_client]
+        assert query[EDITOR_SESSION_QUERY_PARAM] == ["s_123456"]
+
+
+def test_prepared_preview_requires_a_connected_studio_tab(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    update_notebook_config(
+        notebook_path,
+        lambda config: config.__setitem__("runtimes", ["server", "zero-python"]),
+    )
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+
+    with TestClient(app) as client:
+        response = client.get(ENDPOINT, params={"runtime": "zero-python"})
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "browser-client-unavailable"
+    assert "Prepared preview follows a Studio tab" in response.json()["message"]
+
+
 def test_session_bound_preview_retains_and_revalidates_its_editor(
     notebook_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -426,17 +619,21 @@ def test_session_bound_preview_retains_and_revalidates_its_editor(
             headers={"Marimo-Session-Id": session},
         )
         assert resolved.status_code == 200
-        query = parse_qs(urlsplit(resolved.text).query)
+        preview = _resolved(resolved, resolved.text)
+        query = parse_qs(urlsplit(preview).query)
         assert query[STUDIO_CLIENT_QUERY_PARAM] == [client_id]
         assert query[EDITOR_SESSION_QUERY_PARAM] == [session]
-        document = client.get(resolved.text)
+        document = client.get(preview)
         assert document.status_code == 200
         assert _editor_mount_value(document.text, "clientId") == client_id
-        support = _editor_mount_value(document.text, "supportUrl")
+        support = _mount_support_url(document)
         assert parse_qs(urlsplit(support).query)[EDITOR_SESSION_QUERY_PARAM] == [
             session
         ]
-        header_support = document.headers["Marimo-Studio-Support-Url"]
+        header_support = _resolved(
+            document, document.headers["Marimo-Studio-Support-Url"]
+        )
+        assert header_support == support
         assert parse_qs(urlsplit(header_support).query)[EDITOR_SESSION_QUERY_PARAM] == [
             session
         ]
@@ -451,12 +648,12 @@ def test_session_bound_preview_retains_and_revalidates_its_editor(
         }
         config = client.get(config_url, headers=headers)
         assert config.status_code == 200, config.text
-        next_support = config.json()["supportUrl"]
+        next_support = _runtime_config(config)["supportUrl"]
         assert parse_qs(urlsplit(next_support).query)[EDITOR_SESSION_QUERY_PARAM] == [
             session
         ]
         current_session = "s_newsession"
-        stale_document = client.get(resolved.text)
+        stale_document = client.get(preview)
         stale_support = client.get(
             _view_support_url({"supportUrl": next_support}, "config")
             + "&"
@@ -621,7 +818,7 @@ def test_exact_document_rejects_changed_source_without_retrying(
     with TestClient(app) as client:
         exact = client.get(ENDPOINT, params={"runtime": "wasm", "exact": "1"})
         assert exact.status_code == 200
-        previous = client.get(exact.text)
+        previous = client.get(_resolved(exact, exact.text))
         assert previous.status_code == 200
         source = project.root / "index.html"
         source.write_text(source.read_text() + "\n<!-- unpublished edit -->\n")
@@ -635,7 +832,7 @@ def test_exact_document_rejects_changed_source_without_retrying(
             assert "unpublished edit" not in retained.read_text(
                 retained.artifact.document
             )
-        response = client.get(exact.text)
+        response = client.get(_resolved(exact, exact.text))
     assert response.status_code == 409
     assert response.headers["Marimo-Studio-Error"] == "preview-source-not-current"
     assert 'data-marimo-studio-state="error"' in response.text
@@ -682,3 +879,73 @@ def test_stable_preview_renews_the_retained_document_after_a_failed_edit(
         repaired = client.get(url)
         assert repaired.status_code == 200
         assert repaired.headers["Marimo-Studio-Revision"] != revision
+
+
+_DOCUMENT_REFERENCE = re.compile(r'(?:href|src)="([^"]+)"|"(\.{1,2}/[^"]*)"')
+
+
+def _assert_beneath_prefix(html: str, browser_url: str) -> None:
+    references = [
+        unescape(match.group(1) or match.group(2))
+        for match in _DOCUMENT_REFERENCE.finditer(html)
+    ]
+    assert references
+    for reference in references:
+        assert urljoin(browser_url, reference).startswith(
+            "https://workbench.example/s/f3a9/p/77c1/"
+        ), reference
+
+
+def test_repair_document_stays_beneath_a_stripped_proxy_prefix(
+    notebook_path: Path,
+) -> None:
+    setup = prepare_view(notebook_path)
+    assert setup.workspace is not None
+    shutil.rmtree(setup.workspace.view_root)
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+
+    with TestClient(app) as client:
+        response = client.get("/dashboard/", headers={"Accept": "text/html"})
+
+    assert response.status_code == 409
+    _assert_beneath_prefix(
+        response.text, "https://workbench.example/s/f3a9/p/77c1/dashboard/"
+    )
+
+
+def test_waiting_document_stays_beneath_a_stripped_proxy_prefix(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        _client_id: str,
+    ) -> str:
+        return "s_123456"
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+        lambda _sessions, _context, session_id: session_id == "s_123456",
+    )
+    monkeypatch.setattr(
+        "marimo_studio._compat.server.session_state.PrivateSessionState.ensure_started",
+        lambda _sessions, _context, _session_id: False,
+    )
+
+    with TestClient(app) as client:
+        session_manager(app).get_session_by_file_key = Mock(return_value=object())
+        response = client.get(
+            "/dashboard/",
+            params={"marimo_studio_client": "browser-client-1234"},
+        )
+
+    assert response.status_code == 202
+    _assert_beneath_prefix(
+        response.text, "https://workbench.example/s/f3a9/p/77c1/dashboard/"
+    )

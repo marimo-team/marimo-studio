@@ -15,11 +15,11 @@ from marimo_studio._server.prepared_views import (
     PreparedViewRegistry,
     PreparedViewRequest,
 )
-from marimo_studio._server.presentation.capability import presentation_revision_url
+from marimo_studio._server.presentation.capability import presentation_revision_path
 from marimo_studio._server.presentation.service import PresentationSnapshot
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.progress import RuntimeProgressSink
-from marimo_studio.errors import PublicationUnavailableError
+from marimo_studio.errors import PublicationError, PublicationUnavailableError
 
 RuntimeAuthority = Literal["read", "edit"]
 
@@ -28,6 +28,7 @@ RuntimeAuthority = Literal["read", "edit"]
 class PreparedRuntimeState:
     instance: str
     data: dict[str, object]
+    paths: dict[str, str]
 
 
 class PublicationRuntimeProjector:
@@ -49,9 +50,16 @@ class PublicationRuntimeProjector:
         progress: RuntimeProgressSink | None = None,
     ) -> PreparedRuntimeState:
         if binding_id is None or client_id is None:
-            raise PublicationUnavailableError(
-                "The Prepared publication for this view is unavailable. "
-                "Open the view in Studio to prepare its current notebook state."
+            # Prepared states belong to one Studio tab's notebook session. A
+            # page without that binding cannot gain one by retrying.
+            raise PublicationError(
+                "The Prepared runtime follows one Studio tab, and this page is "
+                "not bound to one.",
+                code="zero-python-binding-unavailable",
+                hint=(
+                    "Open the view in Studio, or request its preview URL while "
+                    "Studio shows the notebook."
+                ),
             )
         if authority == "edit":
             if session_id is None or context.internal_url is None:
@@ -88,14 +96,14 @@ class PublicationRuntimeProjector:
                 )
         return PreparedRuntimeState(
             instance=selection.instance,
-            data={
-                "manifestUrl": _manifest_url(
+            data={"planDigest": selection.plan_digest},
+            paths={
+                "manifest": _manifest_path(
                     context,
                     snapshot,
                     client_id,
                     presentation_session_id,
                 ),
-                "planDigest": selection.plan_digest,
             },
         )
 
@@ -106,7 +114,7 @@ def publication_runtime_projector(
     return PublicationRuntimeProjector(publications)
 
 
-def _manifest_url(
+def _manifest_path(
     context: ServerContext,
     snapshot: PresentationSnapshot,
     client_id: str,
@@ -117,7 +125,7 @@ def _manifest_url(
             "The Prepared presentation session is unavailable."
         )
     return with_query(
-        presentation_revision_url(
+        presentation_revision_path(
             context,
             snapshot,
             presentation_session_id,

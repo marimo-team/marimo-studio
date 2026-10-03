@@ -22,7 +22,9 @@ from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
 from .app_test_support import (
     _editor_mount_value,
+    _mount_support_url,
     _presentation_frame_url,
+    _runtime_config,
     _studio_bootstrap,
     _view_support_url,
 )
@@ -38,7 +40,7 @@ def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -
         server_workspace = client.get("/studio/dashboard/")
 
     assert unavailable.status_code == 400
-    assert _studio_bootstrap(server_workspace.text)["runtimes"] == [
+    assert _studio_bootstrap(server_workspace)["runtimes"] == [
         {"id": "server", "label": "Python"},
     ]
 
@@ -49,13 +51,13 @@ def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -
     wasm_app = _marimo_app(studio.notebook)
     _edit_mode(wasm_app)
     with TestClient(wasm_app) as client:
-        config = client.get(
-            "/_marimo-studio/views/dashboard/config?runtime=wasm"
-        ).json()
+        config = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config?runtime=wasm")
+        )
         workspace = client.get("/studio/dashboard/")
 
     assert config["runtime"]["id"] == "wasm"
-    bootstrap = _studio_bootstrap(workspace.text)
+    bootstrap = _studio_bootstrap(workspace)
     assert bootstrap["runtimes"] == [
         {"id": "server", "label": "Python"},
         {"id": "wasm", "label": "Browser"},
@@ -106,6 +108,7 @@ def test_studio_runtime_config_binds_without_exposing_its_editor_session(
         presentation_session_id: str | None,
         runtime_session_id: str | None,
         *,
+        request_path: str,
         client_id: str | None = None,
         progress: object = None,
     ) -> dict[str, object]:
@@ -158,7 +161,7 @@ def test_studio_runtime_config_binds_without_exposing_its_editor_session(
             "/dashboard/",
             params={"marimo_studio_client": "browser-client-1234"},
         )
-        frame_url = _presentation_frame_url(document.text)
+        frame_url = _presentation_frame_url(document)
         invalid_frame = client.get(f"{frame_url}&marimo_studio_lifecycle=0")
         presentation = client.get(f"{frame_url}&marimo_studio_lifecycle=7")
         presentation_session_id = _editor_mount_value(
@@ -180,7 +183,7 @@ def test_studio_runtime_config_binds_without_exposing_its_editor_session(
         assert "lifecycleId" not in invalid_frame.text
         response = client.get(
             _view_support_url(
-                {"supportUrl": _editor_mount_value(presentation.text, "supportUrl")},
+                {"supportUrl": _mount_support_url(presentation)},
                 "config",
             ),
             params={
@@ -394,6 +397,7 @@ def test_studio_runtime_config_resolves_session_after_snapshot(
         presentation_session_id: str | None,
         runtime_session_id: str | None,
         *,
+        request_path: str,
         client_id: str | None = None,
         progress: object = None,
     ) -> dict[str, object]:
@@ -479,7 +483,7 @@ def test_wasm_runtime_keeps_code_stable_across_mount_declaration_changes(
     update_notebook_config(studio.notebook, enable_wasm)
     template = studio.views["dashboard"].root / "index.html"
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        first = client.get("/_marimo-studio/views/dashboard/config").json()
+        first = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         template.write_text(
             template.read_text(encoding="utf-8").replace(
                 '<marimo-output value="doubled"',
@@ -488,7 +492,7 @@ def test_wasm_runtime_keeps_code_stable_across_mount_declaration_changes(
             ),
             encoding="utf-8",
         )
-        second = client.get("/_marimo-studio/views/dashboard/config").json()
+        second = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         studio.notebook.write_text(
             studio.notebook.read_text(encoding="utf-8").replace(
                 "doubled = x * 2",
@@ -497,7 +501,7 @@ def test_wasm_runtime_keeps_code_stable_across_mount_declaration_changes(
             ),
             encoding="utf-8",
         )
-        third = client.get("/_marimo-studio/views/dashboard/config").json()
+        third = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
 
     assert first["runtime"]["instance"] == second["runtime"]["instance"]
     assert first["runtime"]["data"]["code"] == second["runtime"]["data"]["code"]
@@ -517,7 +521,7 @@ def test_projection_revision_survives_nonprojection_artifact_changes(
     document = studio.views["dashboard"].root / "index.html"
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        first = client.get("/_marimo-studio/views/dashboard/config").json()
+        first = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         source = document.read_text(encoding="utf-8")
         changed = source.replace("margin: 0;", "margin: 1px;", 1)
         assert changed != source
@@ -525,7 +529,7 @@ def test_projection_revision_survives_nonprojection_artifact_changes(
             changed,
             encoding="utf-8",
         )
-        second = client.get("/_marimo-studio/views/dashboard/config").json()
+        second = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
 
     assert first["revision"] != second["revision"]
     assert first["projectionRevision"] == second["projectionRevision"]
@@ -541,7 +545,7 @@ def test_unsigned_runtime_routes_reject_retained_revisions(
     headers = {"Marimo-Server-Token": server_token}
 
     with TestClient(app) as client:
-        retained = client.get("/_marimo-studio/views/dashboard/config").json()
+        retained = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         document.write_text(
             document.read_text(encoding="utf-8").replace(
                 "</body>",
@@ -550,7 +554,7 @@ def test_unsigned_runtime_routes_reject_retained_revisions(
             ),
             encoding="utf-8",
         )
-        current = client.get("/_marimo-studio/views/dashboard/config").json()
+        current = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         current_config = client.get(
             "/_marimo-studio/views/dashboard/config",
             params={"revision": current["revision"]},
@@ -607,9 +611,9 @@ def test_server_runtime_instance_changes_with_transport_token(
     manager = _session_manager(app)
 
     with TestClient(app) as client:
-        first = client.get("/_marimo-studio/views/dashboard/config").json()
+        first = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         manager._token_manager.skew_protection_token = SkewProtectionToken.random()
-        second = client.get("/_marimo-studio/views/dashboard/config").json()
+        second = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
 
     assert (
         first["runtime"]["data"]["capabilityToken"]
@@ -635,7 +639,7 @@ def test_server_runtime_instance_stays_stable_when_lookup_session_connects(
     )
 
     with TestClient(app) as client:
-        initial = client.get("/_marimo-studio/views/dashboard/config").json()
+        initial = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         connected = client.get(
             "/_marimo-studio/views/dashboard/config",
             headers={"Marimo-Session-Id": "s_123456"},

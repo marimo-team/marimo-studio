@@ -14,7 +14,6 @@ from starlette.requests import Request
 from starlette.types import Scope
 from starlette.websockets import WebSocket
 
-from marimo_studio._delivery.urls import public_url
 from marimo_studio._server.records import (
     ServerContext,
     ServerHandle,
@@ -108,7 +107,7 @@ def _internal_server_url(scope: Scope, base_url: str) -> str | None:
     elif host == "::":
         host = "::1"
     authority = f"[{host}]" if ":" in host else host
-    return f"http://{authority}:{port}{public_url(base_url, '/')}"
+    return f"http://{authority}:{port}{base_url.rstrip('/')}/"
 
 
 async def _server_location(
@@ -296,12 +295,12 @@ def _authorize_presentation_request(
 
 
 def _path_beneath(path: str, base: str) -> str | None:
+    # Studio routes live beneath the mount directory. Marimo redirects a request
+    # for the bare mount path to that directory.
     if not base:
-        return path
-    if path == base:
-        return "/"
+        return path if path.startswith("/") else None
     if path.startswith(f"{base}/"):
-        return path[len(base) :] or "/"
+        return path[len(base) :]
     return None
 
 
@@ -338,8 +337,7 @@ def config_manager_at_notebook(config_manager: Any, notebook: Path) -> Any:
 class PrivateServerGateway:
     """Read Marimo server state through the pinned release adapter."""
 
-    def base_url(self, scope: Scope) -> str | None:
-        return _server_base_url(scope)
+    login_path = "/auth/login"
 
     def mode(self, scope: Scope) -> ServerMode | None:
         return _server_mode(scope)
@@ -367,7 +365,10 @@ class PrivateServerGateway:
     def context(self, location: ServerLocation) -> ServerContext:
         return _server_context(location)
 
-    def relative_path(self, scope: Scope, base_url: str) -> str | None:
+    def relative_path(self, scope: Scope) -> str | None:
+        base_url = _server_base_url(scope)
+        if base_url is None:
+            return None
         return _relative_request_path(scope, base_url)
 
     def authorize_presentation(

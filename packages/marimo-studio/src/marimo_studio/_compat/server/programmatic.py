@@ -24,6 +24,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from marimo_studio._compat.patch import CompositeCloseHandle, ReversiblePatch
 from marimo_studio._compat.server.gateway import (
+    PrivateServerGateway,
     config_manager_at_notebook,
     effective_base_url,
 )
@@ -474,12 +475,14 @@ class _ProgrammaticApp:
             await self.app(scope, receive, send)
             return
 
+        login = PrivateServerGateway.login_path.encode()
+
         async def send_with_public_base(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers: list[tuple[bytes, bytes]] = []
                 for name, value in message.get("headers", []):
                     if name.lower() == b"location" and (
-                        value == b"/auth/login" or value.startswith(b"/auth/login?")
+                        value == login or value.startswith(login + b"?")
                     ):
                         value = (f"{public_base_url}{value.decode('latin-1')}").encode(
                             "latin-1"

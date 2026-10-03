@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
+from marimo_studio._delivery.urls import relative_url
 from marimo_studio.errors import RuntimeConfigTooLargeError
 
 RUNTIME_CONFIG_MAX_BYTES = 16 * 1024 * 1024
@@ -144,17 +145,21 @@ def runtime_projection_revision(
 
 @dataclass(frozen=True)
 class RuntimeConfigInputs:
-    """Environment-specific values used by one browser runtime document."""
+    """Environment-specific values used by one browser runtime document.
+
+    The `*_path` and `runtime_paths` fields are app paths. `to_dict()` writes
+    each one as a reference from the app path that serves the configuration.
+    """
 
     view: str
     views: tuple[str, ...]
     runtime_id: str
     runtime_instance: str
     runtime_data: Mapping[str, object]
-    root_url: str
-    public_root_url: str
-    document_root_url: str
-    support_url: str
+    runtime_paths: Mapping[str, str]
+    public_root_path: str
+    document_root_path: str
+    support_path: str
     projection_revision: str
     show_cell_logs: bool
     projection_targets: Mapping[str, object]
@@ -169,8 +174,8 @@ class RuntimeConfigInputs:
     mode: Literal["edit", "run"]
     presentation_session_id: str | None = None
 
-    def to_dict(self, *, revision: str) -> dict[str, object]:
-        """Return one detached runtime configuration payload."""
+    def to_dict(self, *, revision: str, base: str) -> dict[str, object]:
+        """Return one detached runtime configuration served from app path `base`."""
         payload: dict[str, object] = {
             "schema": 1,
             "revision": revision,
@@ -181,11 +186,15 @@ class RuntimeConfigInputs:
                 "id": self.runtime_id,
                 "instance": self.runtime_instance,
                 "data": dict(self.runtime_data),
+                "urls": {
+                    name: relative_url(base, path)
+                    for name, path in self.runtime_paths.items()
+                },
             },
-            "rootUrl": self.root_url,
-            "publicRootUrl": self.public_root_url,
-            "documentRootUrl": self.document_root_url,
-            "supportUrl": self.support_url,
+            "rootUrl": relative_url(base, "/"),
+            "publicRootUrl": relative_url(base, self.public_root_path),
+            "documentRootUrl": relative_url(base, self.document_root_path),
+            "supportUrl": relative_url(base, self.support_path),
             "showCellLogs": self.show_cell_logs,
             "projectionTargets": dict(self.projection_targets),
             "mounts": [dict(mount) for mount in self.mounts],

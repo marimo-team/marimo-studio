@@ -21,11 +21,12 @@ from marimo_studio._server.ports import ServerAdapters
 from marimo_studio._server.presentation.access import grant_capability_headers
 from marimo_studio._server.presentation.capability import (
     PresentationCapabilityRoute,
-    presentation_revision_url,
+    presentation_revision_path,
 )
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session import PresentationSession
 from marimo_studio._server.records import ServerContext, ServerLocation
+from marimo_studio._server.request_path import request_path
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.support import support_response
@@ -175,13 +176,13 @@ class LifecycleRouteHandler:
             route.relative,
             error,
             presentation.notebook,
-            base_url=route.location.base_url,
+            requested_path=request_path(route.request),
             dev=route.context.dev,
             edit_mode=route.context.mode == "edit",
             structured=_accepts_json(route.request),
             server_token=route.context.server_token,
             routing_query=route.context.routing_query,
-            presentation_events_url=await presentation_events_url(
+            presentation_events_path=await presentation_events_path(
                 route.context,
                 presentation,
                 route.request_view,
@@ -207,7 +208,7 @@ def request_lifecycle_id(request: Request) -> int | None:
     )
 
 
-async def presentation_events_url(
+async def presentation_events_path(
     context: ServerContext,
     presentation: NotebookPresentation,
     view_name: str,
@@ -219,7 +220,7 @@ async def presentation_events_url(
         snapshot = await presentation.latest_snapshot_async(view_name)
     except (MarimoStudioError, OSError):
         return None
-    return presentation_revision_url(
+    return presentation_revision_path(
         context,
         snapshot,
         session.session_id,

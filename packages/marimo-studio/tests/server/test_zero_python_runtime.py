@@ -24,6 +24,7 @@ from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgr
 from marimo_studio._workspace.metadata import update_notebook_config
 
 from ..app_helpers import configured, edit_mode, marimo_app
+from .app_test_support import _runtime_config
 
 
 def test_zero_python_runtime_uses_notebook_scoped_publication_owner(
@@ -62,7 +63,7 @@ def test_zero_python_runtime_uses_notebook_scoped_publication_owner(
         )
         if progress is not None:
             progress(RuntimeProgress("Capturing notebook states", 1, 3))
-        return PreparedRuntimeState("a" * 64, {"manifestUrl": "/prepared"})
+        return PreparedRuntimeState("a" * 64, {}, {"manifest": "/prepared"})
 
     monkeypatch.setattr(PublicationRuntimeProjector, "project", project)
     resolved = SimpleNamespace(runtime_cell_refs=lambda _cells: {"cell-ref": "cell-id"})
@@ -98,6 +99,7 @@ def test_zero_python_runtime_uses_notebook_scoped_publication_owner(
     assert result.runtime_id == "zero-python"
     assert result.instance == "a" * 64
     assert result.cell_refs == {"cell-ref": "cell-id"}
+    assert result.paths == {"manifest": "/prepared"}
     assert calls[0][3:] == (
         "edit",
         "s_editor",
@@ -210,14 +212,17 @@ def test_prepared_manifest_follows_the_browser_editor_binding(
             "/_marimo-studio/views/dashboard/config", params=params, headers=headers
         )
         assert configured_response.status_code == 200, configured_response.text
-        manifest_url = configured_response.json()["runtime"]["data"]["manifestUrl"]
+        manifest_url = _runtime_config(configured_response)["runtime"]["urls"][
+            "manifest"
+        ]
         assert parse_qs(urlsplit(manifest_url).query)["marimo_studio_client"] == [
             browser_client
         ]
         assert "s_abcdef" not in manifest_url
         manifest = client.get(manifest_url, headers={"Origin": "null"})
         assert manifest.json()["prepared"]["instance"] == "1" * 64
-        export_url = manifest.json()["prepared"]["export_url"]
+        # marimo-export resolves the export against the manifest URL.
+        export_url = urljoin(manifest_url, manifest.json()["prepared"]["export_url"])
         index_response = client.get(
             urljoin(export_url, "index.json"), headers={"Origin": "null"}
         )

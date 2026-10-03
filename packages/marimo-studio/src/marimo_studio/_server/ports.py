@@ -45,7 +45,8 @@ class EditorSessionIdentity:
 
 
 class ServerGateway(Protocol):
-    def base_url(self, scope: Scope) -> str | None: ...
+    login_path: str
+    """App path of the server's login page."""
 
     def mode(self, scope: Scope) -> ServerMode | None: ...
 
@@ -67,7 +68,7 @@ class ServerGateway(Protocol):
 
     def context(self, location: ServerLocation) -> ServerContext: ...
 
-    def relative_path(self, scope: Scope, base_url: str) -> str | None: ...
+    def relative_path(self, scope: Scope) -> str | None: ...
 
     def authorize_presentation(
         self,
@@ -87,7 +88,6 @@ class EditorRuntimeBootstrap(Protocol):
         send: Send,
         *,
         resource_path: str,
-        runtime_url: str,
         eager_runtime: bool,
         entrypoint_url: str | None = None,
         bound_editor: bool = True,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import MutableMapping
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,6 +23,8 @@ from .app_test_support import (
     _artifact_base,
     _editor_mount_value,
     _live_test_session,
+    _mount_support_url,
+    _presentation_fallback_url,
     _presentation_frame_url,
     _view_support_url,
 )
@@ -56,13 +57,6 @@ def _set_query_parameter(url: str, key: str, value: str | None) -> str:
     return urlunsplit((*parts[:3], urlencode(query), parts.fragment))
 
 
-def _wrapper_fallback_url(document: str) -> str:
-    marker = "const config = Object.freeze("
-    start = document.index(marker) + len(marker)
-    config, _end = json.JSONDecoder().raw_decode(document, start)
-    return cast(dict[str, str], config)["fallbackUrl"]
-
-
 def _set_session_preservation(notebook: Path, enabled: bool) -> None:
     def update(config: MutableMapping[str, object]) -> None:
         config["preserve_session"] = enabled
@@ -80,12 +74,12 @@ def test_document_renewal_cannot_rebind_its_native_runtime_session(
     _session_manager(app).get_session_by_file_key = lambda _file_key: live_session
     with TestClient(app) as client:
         shell = client.get("/dashboard/")
-        frame_url = _presentation_frame_url(shell.text)
+        frame_url = _presentation_frame_url(shell)
         assigned_runtime_session = parse_qs(urlsplit(frame_url).query)["session_id"][0]
         presentation = client.get(frame_url)
         presentation_session = _editor_mount_value(presentation.text, "sessionId")
         config_url = _view_support_url(
-            {"supportUrl": _editor_mount_value(presentation.text, "supportUrl")},
+            {"supportUrl": _mount_support_url(presentation)},
             "config",
         )
         accepted = client.get(
@@ -117,7 +111,7 @@ def test_document_renewal_carries_its_session_to_another_configured_view(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/dashboard/")
-        dashboard_document = client.get(_wrapper_fallback_url(dashboard.text))
+        dashboard_document = client.get(_presentation_fallback_url(dashboard))
         renewal = _editor_mount_value(dashboard_document.text, "renewalToken")
         runtime_session_id = _editor_mount_value(
             dashboard_document.text,
@@ -133,7 +127,7 @@ def test_document_renewal_carries_its_session_to_another_configured_view(
         )
         executive_config = client.get(
             _view_support_url(
-                {"supportUrl": _editor_mount_value(executive.text, "supportUrl")},
+                {"supportUrl": _mount_support_url(executive)},
                 "config",
             ),
             headers={
@@ -293,7 +287,7 @@ def test_stored_capability_replay_head_fails_closed(
             _set_query_parameter(renewal_url, "marimo_studio_resume", None)
         )
         stored_url = _set_query_parameter(
-            _wrapper_fallback_url(wrapper.text),
+            _presentation_fallback_url(wrapper),
             "marimo_studio_resume",
             "1",
         )
@@ -345,7 +339,7 @@ def test_signed_document_refresh_survives_token_authentication(
         )
         authenticated.get(established.headers["location"], follow_redirects=False)
         shell = authenticated.get("/dashboard/")
-        refresh_url = _presentation_frame_url(shell.text)
+        refresh_url = _presentation_frame_url(shell)
 
     with TestClient(app) as anonymous:
         refresh = anonymous.get(
@@ -367,14 +361,14 @@ def test_document_renewal_replaces_obsolete_revision_authority(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         loaded = client.get("/dashboard/")
-        loaded_document = client.get(_wrapper_fallback_url(loaded.text))
+        loaded_document = client.get(_presentation_fallback_url(loaded))
         session_id = _editor_mount_value(loaded_document.text, "sessionId")
         runtime_session_id = _editor_mount_value(
             loaded_document.text,
             "runtimeSessionId",
         )
         renewal = _editor_mount_value(loaded_document.text, "renewalToken")
-        support_url = _editor_mount_value(loaded_document.text, "supportUrl")
+        support_url = _mount_support_url(loaded_document)
         first_config_url = _view_support_url(
             {"supportUrl": support_url},
             "config",
@@ -387,8 +381,8 @@ def test_document_renewal_replaces_obsolete_revision_authority(
             },
         )
         first_payload = first.json()
-        first_root = first_payload["runtime"]["data"]["url"]
-        first_artifact = f"{_artifact_base(loaded_document.text)}index.html"
+        first_root = first_payload["runtime"]["urls"]["transport"]
+        first_artifact = f"{_artifact_base(loaded_document)}index.html"
         document.write_text(
             document.read_text(encoding="utf-8").replace(
                 "</body>",

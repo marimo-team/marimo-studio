@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urljoin
 
 import pytest
 from marimo_export.errors import IntegrityError
@@ -266,15 +267,21 @@ def test_immutable_export_url_is_shared_across_clients_and_revisions() -> None:
         assert response.body is not None
         manifests.append(json.loads(bytes(response.body)))
 
+    # marimo-export resolves the export against the manifest URL, so the export
+    # stays beside the manifest under any proxy prefix.
+    manifest_url = (
+        "https://workbench.example/s/f3a9/p/77c1/parent/base/_marimo-studio/"
+        "views/dashboard/zero-python/current?marimo_studio_client=client"
+    )
     expected = (
-        "http://testserver/parent/base/_marimo-studio/views/dashboard/"
-        f"zero-python/{selected.instance}/?"
+        "https://workbench.example/s/f3a9/p/77c1/parent/base/_marimo-studio/"
+        f"views/dashboard/zero-python/{selected.instance}/?"
         "file=nested%2Fanalysis.py&region=emea&region=apac&empty="
     )
-    assert [manifest["prepared"]["export_url"] for manifest in manifests] == [
-        expected,
-        expected,
-    ]
+    assert [
+        urljoin(manifest_url, manifest["prepared"]["export_url"])
+        for manifest in manifests
+    ] == [expected, expected]
     assert publications.current_calls == [
         ("dashboard", "s_abcdef", "a" * 64),
         ("dashboard", "s_ghijkl", "b" * 64),

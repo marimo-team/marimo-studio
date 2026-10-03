@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
@@ -136,6 +137,29 @@ def test_editor_document_framing_adds_configured_origins() -> None:
     ]
 
 
+def _mounted_runtime_config(document: str, base_uri: str) -> object:
+    scripts = [
+        script
+        for script in re.findall(r"<script[^>]*>(.*?)</script>", document, re.S)
+        if "__MARIMO_MOUNT_CONFIG__" in script
+    ]
+    assert len(scripts) == 1
+    program = f"""
+globalThis.window = globalThis;
+globalThis.document = {{ baseURI: {json.dumps(base_uri)} }};
+(0, eval)({json.dumps(scripts[0])});
+process.stdout.write(JSON.stringify(window.__MARIMO_MOUNT_CONFIG__.runtimeConfig));
+"""
+    completed = subprocess.run(
+        ["node", "--input-type=module"],
+        input=program,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
+
+
 def test_configured_editor_starts_its_runtime_without_user_action(
     notebook_path: Path,
 ) -> None:
@@ -144,7 +168,7 @@ def test_configured_editor_starts_its_runtime_without_user_action(
     _edit_mode(app)
     with TestClient(app) as client:
         workspace = client.get("/studio/")
-        editor_url = _studio_bootstrap(workspace.text)["urls"]["editor"]
+        editor_url = _studio_bootstrap(workspace)["urls"]["editor"]
         response = client.get(editor_url)
         head = client.head(editor_url)
 
@@ -152,9 +176,14 @@ def test_configured_editor_starts_its_runtime_without_user_action(
     assert response.headers["cache-control"] == "no-store"
     assert head.status_code == 200
     assert head.content == b""
-    assert _editor_mount_value(response.text, "runtimeConfig") == [
+    # A proxy can mount the server under a path prefix that the server never
+    # sees. The editor connects through the URL the browser loaded.
+    assert _mounted_runtime_config(
+        response.text,
+        "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/editor/?file=a.py#c",
+    ) == [
         {
-            "url": "http://testserver/_marimo-studio/editor/",
+            "url": "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/editor/",
             "lazy": False,
         }
     ]
@@ -179,7 +208,7 @@ def test_unconfigured_editor_keeps_its_runtime_lazy(
 
     with TestClient(app) as client:
         host = client.get("/")
-        response = client.get(_studio_host(host.text)["urls"]["editor"])
+        response = client.get(_studio_host(host)["urls"]["editor"])
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
@@ -200,10 +229,7 @@ def test_editor_rewrite_rejects_welcome_preload_shape_drift() -> None:
 """
 
     with pytest.raises(ProtocolError, match="welcome texture preloads changed"):
-        PrivateEditorRuntimeBootstrap().rewrite(
-            source,
-            runtime_url="http://testserver/_marimo-studio/editor/",
-        )
+        PrivateEditorRuntimeBootstrap().rewrite(source)
 
 
 @pytest.mark.parametrize(
@@ -654,7 +680,6 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
             receive,
             send,
             resource_path="/assets/RunButton-test.js",
-            runtime_url="http://testserver/_marimo-studio/editor/",
             eager_runtime=False,
         )
     )
@@ -759,7 +784,6 @@ def test_editor_root_rewrite_requires_a_complete_identity_response() -> None:
             receive,
             send,
             resource_path="/",
-            runtime_url="http://testserver/_marimo-studio/editor/",
             eager_runtime=False,
         )
     )

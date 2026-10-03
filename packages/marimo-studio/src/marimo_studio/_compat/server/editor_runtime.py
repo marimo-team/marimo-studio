@@ -7,7 +7,6 @@ import re
 from html import escape
 from importlib.resources import files
 from typing import cast
-from urllib.parse import urlsplit, urlunsplit
 
 from marimo._server.api.deps import AppState
 from starlette.requests import Request
@@ -198,6 +197,14 @@ _PROTECTED_QUERY_PARAM_HANDLERS = (
     b"for(let A of new Set(t.searchParams.keys()))marimoStudioRetainedQueryKeys.has(A)"
     b"||t.searchParams.delete(A);marimoStudioPushQuery(t)}};"
 )
+# Marimo derives its default runtime URL from the document base. This
+# JavaScript expression replaces the JSON runtime list in the mount script and
+# evaluates to that browser-resolved URL, so the editor connects through
+# whatever path prefix served the document.
+_EAGER_RUNTIME_EXPRESSION = (
+    '[{"url":(()=>{const url=new URL(document.baseURI);'
+    'url.search="";url.hash="";return url.href})(),"lazy":false}]'
+)
 _WELCOME_TEXTURE_PRELOADS = tuple(
     re.compile(
         rf'^[ \t]*<link rel="preload" href="\./assets/{texture}-'
@@ -219,7 +226,6 @@ class PrivateEditorRuntimeBootstrap:
         send: Send,
         *,
         resource_path: str,
-        runtime_url: str,
         eager_runtime: bool,
         entrypoint_url: str | None = None,
         bound_editor: bool = True,
@@ -278,7 +284,6 @@ class PrivateEditorRuntimeBootstrap:
             if document and _is_html(start):
                 rewritten = self.rewrite(
                     original,
-                    runtime_url=runtime_url,
                     eager_runtime=eager_runtime,
                     entrypoint_url=entrypoint_url,
                 )
@@ -360,7 +365,6 @@ class PrivateEditorRuntimeBootstrap:
         self,
         document: bytes,
         *,
-        runtime_url: str,
         eager_runtime: bool = True,
         entrypoint_url: str | None = None,
     ) -> bytes:
@@ -391,13 +395,13 @@ class PrivateEditorRuntimeBootstrap:
             "runtimeConfig",
         )
         if configured is None or configured == []:
-            runtime = [{"url": _runtime_url(runtime_url), "lazy": False}]
+            runtime = _EAGER_RUNTIME_EXPRESSION
         elif (
             isinstance(configured, list)
             and configured
             and isinstance(configured[0], dict)
         ):
-            runtime = [{**configured[0], "lazy": False}, *configured[1:]]
+            runtime = _json([{**configured[0], "lazy": False}, *configured[1:]])
         else:
             raise ProtocolError("Marimo's editor runtime configuration changed")
 
@@ -418,16 +422,15 @@ class PrivateEditorRuntimeBootstrap:
 
         updates = (
             (runtime_start, runtime_end, runtime),
-            (overrides_start, overrides_end, overrides),
+            (overrides_start, overrides_end, _json(overrides)),
         )
-        for start, end, value in sorted(updates, reverse=True):
-            replacement = json.dumps(
-                value,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
+        for start, end, replacement in sorted(updates, reverse=True):
             source = f"{source[:start]}{replacement}{source[end:]}"
         return source.encode()
+
+
+def _json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 def _strip_welcome_texture_preloads(source: str) -> str:
@@ -436,11 +439,6 @@ def _strip_welcome_texture_preloads(source: str) -> str:
         if count != 1:
             raise ProtocolError("Marimo's editor welcome texture preloads changed")
     return source
-
-
-def _runtime_url(value: str) -> str:
-    parts = urlsplit(value)
-    return urlunsplit((*parts[:3], "", ""))
 
 
 def _mount_value(

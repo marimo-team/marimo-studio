@@ -21,6 +21,7 @@ from ..app_helpers import set_shell as _set_shell
 from .app_test_support import (
     _live_test_session,
     _projection_request,
+    _runtime_config,
     _view_support_url,
 )
 
@@ -29,7 +30,7 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
     studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         headers = {
             "Marimo-Session-Id": config["presentationSessionId"],
         }
@@ -97,7 +98,7 @@ def test_wildcard_value_hosts_authorize_runtime_selectors(
     )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         site = next(item for item in config["mounts"] if item["kind"] == "value")
         projection = {"siteId": site["id"], "instanceId": "value-1", "target": "x"}
         response = client.post(
@@ -121,7 +122,7 @@ def test_value_requests_allow_repeated_instances_with_one_target(
     studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projections = [
             _projection_request(
                 config,
@@ -151,7 +152,7 @@ def test_output_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
     studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         headers = {
             "Marimo-Session-Id": config["presentationSessionId"],
         }
@@ -210,7 +211,7 @@ def test_output_requests_reject_duplicate_mounted_owners(
     )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         sites = [site for site in config["mounts"] if site["kind"] == "output"]
         active = [
             {
@@ -253,7 +254,7 @@ def test_projection_http_rejects_padded_wildcard_targets(
     _set_shell(studio, "dashboard", tag)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(
             config,
             kind,
@@ -293,7 +294,7 @@ def test_projection_http_rejects_unpaired_utf16_surrogates(
     studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(config, "value", "doubled")
         projection["target"] = "\ud800"
         response = client.post(
@@ -352,7 +353,7 @@ def test_projection_resolves_session_once(
     )
 
     with TestClient(app) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(config, kind, "doubled")
         body: dict[str, object] = {
             "projections": [projection],
@@ -433,7 +434,7 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
     )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(config, kind, "doubled")
         body: dict[str, object] = {
             "projections": [projection],
@@ -487,7 +488,7 @@ def test_projection_waits_for_the_live_session_binding(
         raise RuntimeSyncError("The live session is applying the saved notebook.")
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         monkeypatch.setattr(
             "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
             syncing_session,
@@ -538,7 +539,7 @@ def test_projection_retries_while_the_kernel_applies_the_current_binding(
     )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(config, kind, "doubled")
         body: dict[str, object] = {
             "projections": [projection],
@@ -563,9 +564,9 @@ def test_value_permissions_follow_the_browser_presentation_revision(
     studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        first = client.get("/_marimo-studio/views/dashboard/config").json()
+        first = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         _set_shell(studio, "dashboard", "<p>Updated dashboard</p>")
-        current = client.get("/_marimo-studio/views/dashboard/config").json()
+        current = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(first, "value", "doubled")
         in_flight = client.post(
             _view_support_url(first, "values"),
@@ -610,6 +611,30 @@ def test_value_permissions_follow_the_browser_presentation_revision(
     assert unpublished.json()["error"] == "presentation-capability-forbidden"
 
 
+def test_prepared_manifest_waits_for_the_next_presentation_revision(
+    notebook_path: Path,
+) -> None:
+    studio = published_dashboard(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        first = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        _set_shell(studio, "dashboard", "<p>Updated dashboard</p>")
+        current = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        # A Prepared runtime polls its revision-bound manifest until the
+        # next runtime configuration replaces it.
+        superseded = client.get(
+            f"{first['runtime']['urls']['transport']}"
+            "_marimo-studio/views/dashboard/zero-python/current",
+            headers={
+                "Marimo-Studio-Preview-Session-Id": first["presentationSessionId"]
+            },
+        )
+
+    assert first["revision"] != current["revision"]
+    assert superseded.status_code == 409
+    assert superseded.json()["error"] == "stale-projection-binding"
+
+
 def test_retained_value_revision_rejects_a_variable_moved_to_another_cell(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -628,7 +653,7 @@ def test_retained_value_revision_rejects_a_variable_moved_to_another_cell(
     )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        retained = client.get("/_marimo-studio/views/dashboard/config").json()
+        retained = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(retained, "value", "doubled")
         response = client.post(
             _view_support_url(retained, "values"),
@@ -669,7 +694,7 @@ def test_retained_value_revision_rejects_an_upstream_only_edit(
     )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        retained = client.get("/_marimo-studio/views/dashboard/config").json()
+        retained = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(retained, "value", "doubled")
         response = client.post(
             _view_support_url(retained, "values"),
@@ -717,7 +742,7 @@ def test_retained_value_revision_rejects_a_newly_resolved_reference(
     )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        retained = client.get("/_marimo-studio/views/dashboard/config").json()
+        retained = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         projection = _projection_request(retained, "value", "doubled")
         response = client.post(
             _view_support_url(retained, "values"),

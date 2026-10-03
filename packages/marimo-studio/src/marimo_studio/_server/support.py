@@ -17,7 +17,6 @@ from marimo_studio._delivery.urls import (
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
     SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
-    SUPPORT_PATH,
     WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
     WORKSPACE_STREAM_QUERY_PARAM,
 )
@@ -47,7 +46,6 @@ from marimo_studio._server.ports import (
 )
 from marimo_studio._server.presentation.capability import (
     PresentationCapability,
-    presentation_capability_url,
 )
 from marimo_studio._server.presentation.ports import KernelProjectionHost
 from marimo_studio._server.presentation.preview import preview_url_response
@@ -57,6 +55,7 @@ from marimo_studio._server.presentation.projection_routes import (
 )
 from marimo_studio._server.presentation.query_routes import query_response
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_path import request_path
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._server.runtime.routes import (
     available_runtime_options,
@@ -373,15 +372,13 @@ async def _bootstrap_response(
     return JSONResponse(
         studio_bootstrap_payload(
             studio,
-            context.base_url,
+            context,
             selected,
-            context.server_token,
-            context.file_key,
             request.query_params.multi_items(),
-            context.routing_query,
             available,
             client_id,
             native_session_id,
+            request_path=request_path(request),
         ),
         headers=NO_STORE,
     )
@@ -477,15 +474,6 @@ async def _view_response(
             route.removeprefix("zero-python/"),
             clients=notebook_scope.clients,
             allow_refresh=context.mode == "edit" and has_edit_access(request.scope),
-            public_path=(
-                presentation_capability_url(
-                    context,
-                    presentation_capability.token,
-                    f"{SUPPORT_PATH}/views/{view_name}/{route}",
-                )
-                if presentation_capability is not None
-                else None
-            ),
         )
     if route == "runtimes" and request.method == "GET":
         return await runtime_availability_response(

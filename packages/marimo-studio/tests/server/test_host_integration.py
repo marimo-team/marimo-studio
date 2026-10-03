@@ -4,9 +4,10 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 import pytest
+from starlette.requests import Request
 from starlette.routing import Mount
 from starlette.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
@@ -28,7 +29,7 @@ from marimo_studio.errors import WorkspaceGenerationConflictError
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
-from .app_test_support import _studio_bootstrap, _studio_host
+from .app_test_support import _redirect_target, _studio_bootstrap, _studio_host
 
 _EXPLICIT_HOST = StudioRoutePolicy(edit_root="marimo")
 
@@ -80,7 +81,7 @@ def test_explicit_host_enters_a_ready_workspace_through_studio(
         workspace = client.get("/studio/?session_id=s_studio")
 
     assert workspace.status_code == 200
-    assert _studio_bootstrap(workspace.text)["selectedView"] == studio.default_view
+    assert _studio_bootstrap(workspace)["selectedView"] == studio.default_view
 
 
 def test_explicit_host_handoff_uses_the_embedding_security_policy(
@@ -139,7 +140,7 @@ def test_studio_route_initializes_an_unconfigured_notebook(
 
     with TestClient(app) as client:
         page = client.get("/studio/?session_id=s_studio")
-        host = _studio_host(page.text)
+        host = _studio_host(page)
         inventory = client.get("/_marimo-studio/views").json()
         created = client.post(
             "/_marimo-studio/views",
@@ -157,7 +158,7 @@ def test_studio_route_initializes_an_unconfigured_notebook(
     assert inventory["views"] == []
     assert created.status_code == 201
     assert created.json() == {"schema": 1, "name": "dashboard"}
-    assert _studio_bootstrap(workspace.text)["selectedView"] == "dashboard"
+    assert _studio_bootstrap(workspace)["selectedView"] == "dashboard"
     assert tuple(load_studio(notebook_path).views) == ("dashboard",)
 
 
@@ -183,7 +184,7 @@ def test_first_save_route_binds_a_changed_query_to_its_signed_session(
     _edit_mode(app)
     session_id = "s_saved1"
     with TestClient(app) as client:
-        host = _studio_host(client.get("/").text)
+        host = _studio_host(client.get("/"))
         editor_query = parse_qs(urlsplit(host["urls"]["editor"]).query)
         context = cast(
             Any,
@@ -229,7 +230,7 @@ def test_first_save_route_binds_a_changed_query_to_its_signed_session(
         response = client.get(f"/?{urlencode(query)}")
 
     assert response.status_code == 200
-    resumed = _studio_host(response.text)
+    resumed = _studio_host(response)
     resumed_query = parse_qs(urlsplit(resumed["urls"]["editor"]).query)
     assert resumed_query["region"] == ["apac"]
     if preserved:
@@ -283,29 +284,43 @@ def test_explicit_host_preserves_run_root_and_studio_authentication(
 
     assert presentation.status_code == 200
     assert native_login.status_code == 303
-    assert native_login.headers["location"].startswith("/auth/login")
+    assert urlsplit(_redirect_target(native_login)).path == "/auth/login"
     assert studio_login.status_code == 303
-    login_query = parse_qs(urlsplit(studio_login.headers["location"]).query)
-    assert login_query["next"] == ["/studio/"]
+    login = _redirect_target(studio_login)
+    assert urlsplit(login).path == "/auth/login"
+    assert [urljoin(login, url) for url in parse_qs(urlsplit(login).query)["next"]] == [
+        "http://testserver/studio/"
+    ]
 
 
 @pytest.mark.parametrize("renamed_before_save", [False, True])
 @pytest.mark.parametrize(
-    ("referrer", "page_query"),
+    ("referrer", "fetch_site", "page_query"),
     [
-        (None, []),
+        (None, None, []),
         (
             "http://testserver/?file=saved.py&region=eu&tag=one&tag=two&empty=",
+            "same-origin",
             [("region", "eu"), ("tag", "one"), ("tag", "two"), ("empty", "")],
         ),
-        ("https://other.example/?region=eu", []),
-        ("http://[invalid/?region=eu", []),
+        # A path-prefixing proxy forwards a Host that differs from the page.
+        (
+            "https://workbench.example/s/f3a9/p/77c1/?file=saved.py&region=eu",
+            "same-origin",
+            [("region", "eu")],
+        ),
+        ("https://other.example/?region=eu", "cross-site", []),
+        ("https://studio.other.example/?region=eu", "same-site", []),
+        # Browsers send no Fetch Metadata to a plain HTTP LAN address.
+        ("http://10.0.0.5:2718/?file=saved.py&region=eu", None, [("region", "eu")]),
+        ("http://[invalid/?region=eu", "same-origin", []),
     ],
 )
 def test_native_save_hands_off_a_newly_named_notebook(
     notebook_path: Path,
     renamed_before_save: bool,
     referrer: str | None,
+    fetch_site: str | None,
     page_query: list[tuple[str, str]],
 ) -> None:
     reloads: list[str] = []
@@ -314,7 +329,10 @@ def test_native_save_hands_off_a_newly_named_notebook(
 
     async def downstream(scope: Scope, receive: Receive, send: Send) -> None:
         nonlocal named
-        del scope, receive
+        del receive
+        # Marimo serves the kernel API from a mounted router, which rewrites
+        # the routed scope in place.
+        scope.update(root_path="/api/kernel", path="/save")
         named = True
         await send({"type": "http.response.start", "status": 204, "headers": []})
         await send({"type": "http.response.body", "body": b""})
@@ -325,20 +343,26 @@ def test_native_save_hands_off_a_newly_named_notebook(
     async def send(_message: Message) -> None:
         return None
 
-    location_value = SimpleNamespace(notebook=notebook_path)
-    context_value = SimpleNamespace(
-        base_url="/api/kernel",
-        file_key=str(notebook_path),
-        mode="edit",
-        notebook=notebook_path,
-        server_token="server-token",
-    )
+    def location_value(request: Request) -> SimpleNamespace:
+        return SimpleNamespace(
+            notebook=notebook_path,
+            base_url=request.scope["root_path"],
+        )
 
-    async def location(_request: object) -> object:
-        return location_value
+    def context(location: SimpleNamespace) -> SimpleNamespace:
+        return SimpleNamespace(
+            base_url=location.base_url,
+            file_key=str(notebook_path),
+            mode="edit",
+            notebook=notebook_path,
+            server_token="server-token",
+        )
 
-    async def session_location(_request: object, _session_id: str) -> object:
-        return location_value if named else None
+    async def location(request: Request) -> object:
+        return location_value(request)
+
+    async def session_location(request: Request, _session_id: str) -> object:
+        return location_value(request) if named else None
 
     handled = asyncio.run(
         delegate_editor_request(
@@ -357,6 +381,11 @@ def test_native_save_hands_off_a_newly_named_notebook(
                     "headers": [
                         (b"marimo-session-id", b"s_123456"),
                         *([(b"referer", referrer.encode())] if referrer else []),
+                        *(
+                            [(b"sec-fetch-site", fetch_site.encode())]
+                            if fetch_site
+                            else []
+                        ),
                     ],
                     "server": ("testserver", 80),
                     "client": ("testclient", 1),
@@ -367,8 +396,7 @@ def test_native_save_hands_off_a_newly_named_notebook(
             server=cast(
                 Any,
                 SimpleNamespace(
-                    context=lambda _location: context_value,
-                    base_url=lambda _scope: "",
+                    context=context,
                     location=location,
                     session_location=session_location,
                 ),
@@ -397,7 +425,7 @@ def test_native_save_hands_off_a_newly_named_notebook(
     assert reloads == ["s_123456"]
     assert host_session_handoff_capability_matches(
         handoffs[0],
-        cast(Any, SimpleNamespace(**{**context_value.__dict__, "base_url": ""})),
+        cast(Any, context(SimpleNamespace(base_url=""))),
         "s_123456",
         page_query,
     )

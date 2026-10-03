@@ -27,7 +27,6 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_REPLAY_QUERY_PARAM,
     STUDIO_PATH,
     SUPPORT_PATH,
-    public_url,
 )
 from marimo_studio._server.auth import (
     authentication_required_response,
@@ -65,6 +64,7 @@ from marimo_studio._server.ready_handler import (
     ReadyWorkspaceHandler,
     ReadyWorkspaceRoute,
 )
+from marimo_studio._server.request_path import request_reference, with_request_path
 from marimo_studio._server.route_policy import (
     DEFAULT_STUDIO_ROUTE_POLICY,
     StudioRoutePolicy,
@@ -227,14 +227,11 @@ class PresentationMiddleware:
         if scope["type"] not in {"http", "websocket"}:
             await self.app(scope, receive, send)
             return
-        base_url = self._adapters.server.base_url(scope)
-        if base_url is None:
-            await self.app(scope, receive, send)
-            return
-        relative = self._adapters.server.relative_path(scope, base_url)
+        relative = self._adapters.server.relative_path(scope)
         if relative is None:
             await self.app(scope, receive, send)
             return
+        scope = with_request_path(scope, relative)
         mode = self._adapters.server.mode(scope)
         if mode is None:
             await self.app(scope, receive, send)
@@ -312,12 +309,18 @@ class PresentationMiddleware:
                 send,
             )
             return
-        if (
-            not presentation_access
-            and not has_read_access(scope)
-            and relative in {"", "/"}
-        ):
-            await self.app(scope, receive, send)
+        if not presentation_access and not has_read_access(scope) and relative == "/":
+            if request.method in {"GET", "HEAD"}:
+                # Marimo's login redirect addresses the server root. Studio
+                # sends the same redirect relative to the requested URL.
+                await _send_studio_response(
+                    authentication_redirect(request, self._adapters.server.login_path),
+                    scope,
+                    receive,
+                    send,
+                )
+            else:
+                await self.app(scope, receive, send)
             return
         authored = authored_view_route(relative)
         if (
@@ -325,10 +328,12 @@ class PresentationMiddleware:
             and not has_read_access(scope)
             and self._adapters.server.uses_file_routing(scope)
             and ("file" in request.query_params or authored is not None)
-            and relative not in {"", "/"}
+            and relative != "/"
             and could_handle(relative, mode)
         ):
-            response = authentication_redirect(request, base_url)
+            response = authentication_redirect(
+                request, self._adapters.server.login_path
+            )
             await _send_studio_response(response, scope, receive, send)
             return
 
@@ -342,7 +347,7 @@ class PresentationMiddleware:
         if location is None:
             if (
                 mode == "edit"
-                and relative in {"", "/"}
+                and relative == "/"
                 and has_read_access(scope)
                 and not has_access_token(scope)
                 and await self._adapters.editor_runtime.serve(
@@ -351,10 +356,9 @@ class PresentationMiddleware:
                     receive,
                     edit_document_send(send, self._resolve_security_policy(scope)),
                     resource_path=relative,
-                    runtime_url=str(request.url),
                     eager_runtime=False,
-                    entrypoint_url=public_url(
-                        base_url, f"{SUPPORT_PATH}/assets/notebook-entry.js"
+                    entrypoint_url=request_reference(
+                        request, f"{SUPPORT_PATH}/assets/notebook-entry.js"
                     ),
                 )
             ):
@@ -371,12 +375,9 @@ class PresentationMiddleware:
         if landing and request.method not in {"GET", "HEAD"}:
             await self.app(scope, receive, send)
             return
-        if landing and not has_read_access(scope):
-            await self.app(scope, receive, send)
-            return
-        if landing and has_access_token(scope):
+        if landing and (has_access_token(scope) or not has_read_access(scope)):
             await _send_studio_response(
-                authentication_redirect(request, location.base_url),
+                authentication_redirect(request, self._adapters.server.login_path),
                 scope,
                 receive,
                 send,
@@ -456,11 +457,11 @@ class PresentationMiddleware:
         if not presentation_access and (
             has_access_token(scope) or not has_read_access(scope)
         ):
-            if relative in {"", "/"} or relative.startswith(f"{SUPPORT_PATH}/assets/"):
+            if relative.startswith(f"{SUPPORT_PATH}/assets/"):
                 await self.app(scope, receive, send)
             else:
                 await _send_studio_response(
-                    authentication_redirect(request, location.base_url),
+                    authentication_redirect(request, self._adapters.server.login_path),
                     scope,
                     receive,
                     send,
@@ -490,7 +491,7 @@ class PresentationMiddleware:
             and presentation_session is None
             and request.method in {"GET", "HEAD"}
             and not landing
-            and (relative.endswith("/") or relative in {"", "/"})
+            and relative.endswith("/")
             and not relative.startswith(SUPPORT_PATH)
             and authored is None
             and selected_studio is None

@@ -142,10 +142,7 @@ class HostSessionTicket:
         context: ServerContext,
         session_id: str,
         query: Sequence[tuple[str, str]],
-        *,
-        public_base_url: str | None = None,
     ) -> HostSessionTicket:
-        base_url = context.base_url if public_base_url is None else public_base_url
         audience = json.dumps(
             (
                 _PURPOSE,
@@ -153,7 +150,7 @@ class HostSessionTicket:
                 server_instance_id(context.server_token),
                 str(context.notebook.resolve()),
                 context.file_key,
-                base_url,
+                context.base_url,
                 session_id,
                 canonical_public_query(query),
             ),

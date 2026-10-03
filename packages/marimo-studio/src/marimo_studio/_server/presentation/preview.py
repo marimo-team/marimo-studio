@@ -1,4 +1,4 @@
-"""Return ordinary view URLs with optional presentation preconditions."""
+"""Return view references with optional presentation preconditions."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from marimo_studio._delivery.urls import (
     PRESENTATION_REVISION_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
     UNFRAMED_QUERY_PARAM,
-    view_url,
+    view_path,
     with_query,
 )
 from marimo_studio._server.auth import forbidden_response, has_edit_access
@@ -20,6 +20,7 @@ from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_path import request_reference
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
@@ -82,15 +83,16 @@ async def preview_url_response(
             status_code=409,
         )
     query = [*context.routing_query, ("runtime", runtime), (UNFRAMED_QUERY_PARAM, "1")]
-    if context.mode == "edit" and session is not None and runtime != "wasm":
-        # A server preview follows the Studio tab bound to this session.
-        target = await notebook_scope.clients.session_target(session)
-        query.extend(
-            (
-                (STUDIO_CLIENT_QUERY_PARAM, target.client_id),
-                (EDITOR_SESSION_QUERY_PARAM, session),
+    if context.mode == "edit" and runtime != "wasm":
+        # Server and Prepared previews follow one Studio tab's notebook session.
+        binding = await _preview_binding(request, notebook_scope, session, runtime)
+        if binding is not None:
+            query.extend(
+                (
+                    (STUDIO_CLIENT_QUERY_PARAM, binding[0]),
+                    (EDITOR_SESSION_QUERY_PARAM, binding[1]),
+                )
             )
-        )
     if exact == "1":
         profile: BuildProfile = (
             "development" if context.mode == "edit" else "production"
@@ -102,5 +104,43 @@ async def preview_url_response(
     current = await asyncio.to_thread(load_studio, context.notebook)
     require_view_owner(current, view, owner)
     return PlainTextResponse(
-        with_query(view_url(context.base_url, view), query), headers=NO_STORE
+        request_reference(request, with_query(view_path(view), query)), headers=NO_STORE
+    )
+
+
+async def _preview_binding(
+    request: Request,
+    notebook_scope: NotebookScope,
+    session: str | None,
+    runtime: str,
+) -> tuple[str, str] | None:
+    """Return the Studio client and editor session that a preview follows.
+
+    Code mode names its session, and other callers may name a browser client.
+    A Prepared preview needs a tab, so it falls back to the only connected one.
+    """
+    clients = notebook_scope.clients
+    if session is not None:
+        return (await clients.session_target(session)).client_id, session
+    client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
+    if client_id is None and runtime != "zero-python":
+        return None
+    try:
+        target = await clients.select_target(client_id=client_id)
+    except AgentRequestError as error:
+        if client_id is not None or error.code != "browser-client-unavailable":
+            raise
+        raise _prepared_tab_unavailable() from error
+    if target.session_id is None:
+        raise _prepared_tab_unavailable()
+    return target.client_id, target.session_id
+
+
+def _prepared_tab_unavailable() -> AgentRequestError:
+    return AgentRequestError(
+        "browser-client-unavailable",
+        "A Prepared preview follows a Studio tab with a notebook session, and "
+        "none is connected for this notebook.",
+        status_code=409,
+        details={"hint": "Open the notebook in Studio, then request the URL."},
     )

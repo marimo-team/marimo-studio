@@ -26,6 +26,7 @@ from marimo_studio.errors import ProtocolError
 
 from ..app_helpers import published_dashboard, session_manager
 from ..helpers import notebook_source
+from .app_test_support import _runtime_config
 
 pytestmark = pytest.mark.native_process
 
@@ -51,8 +52,8 @@ def _spawned_value(value: str) -> str:
 
 
 def _start_kernel(client: TestClient, manager: Any) -> Thread:
-    config = client.get("/_marimo-studio/views/dashboard/config").json()
-    root = urlsplit(config["runtime"]["data"]["url"])
+    config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+    root = urlsplit(config["runtime"]["urls"]["transport"])
     websocket_url = (
         f"{root.path.rstrip('/')}/ws?session_id={config['presentationSessionId']}"
     )

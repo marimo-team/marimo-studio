@@ -13,10 +13,10 @@ from marimo_studio._delivery.urls import (
     EDITOR_SESSION_QUERY_PARAM,
     SERVER_INSTANCE_QUERY_PARAM,
     SUPPORT_PATH,
-    artifact_document_root_url,
-    artifact_view_url,
-    authored_view_root_url,
-    public_url,
+    artifact_document_root,
+    artifact_path,
+    authored_view_root_path,
+    relative_url,
     with_query,
 )
 from marimo_studio._projections.resolution import (
@@ -25,7 +25,7 @@ from marimo_studio._projections.resolution import (
 )
 from marimo_studio._projections.resolved import ProjectionDiagnostic
 from marimo_studio._server.presentation.capability import (
-    presentation_revision_url,
+    presentation_revision_path,
 )
 from marimo_studio._server.presentation.service import PresentationSnapshot
 from marimo_studio._server.records import ServerContext
@@ -34,7 +34,7 @@ from marimo_studio._server.runtime.progress import RuntimeProgressSink
 from marimo_studio._server.server_instance import server_instance_id
 
 
-def presentation_support_url(
+def presentation_support_path(
     context: ServerContext,
     snapshot: PresentationSnapshot,
     session_id: str,
@@ -42,9 +42,9 @@ def presentation_support_url(
     *,
     editor_session_id: str | None = None,
 ) -> str:
-    """Return revision-bound support authority for one presentation session."""
+    """Return the app path of revision-bound support for one presentation session."""
     return with_query(
-        presentation_revision_url(
+        presentation_revision_path(
             context,
             snapshot,
             session_id,
@@ -67,6 +67,7 @@ def render_presentation_document(
     snapshot: PresentationSnapshot,
     context: ServerContext,
     *,
+    request_path: str,
     marimo_version: str,
     runtime: str,
     runtime_explicit: bool,
@@ -78,37 +79,41 @@ def render_presentation_document(
     lifecycle_id: int | None = None,
     editor_session_id: str | None = None,
 ) -> str:
+    """Render the document served at app path `request_path`.
+
+    The document base points at the artifact revision. Runtime references
+    resolve against that base.
+    """
     view_name = snapshot.view_name
-    root_url = presentation_revision_url(
-        context,
-        snapshot,
-        session_id,
-        artifact_view_url(
-            "",
-            view_name,
-            snapshot.artifact.artifact_revision,
+    root = artifact_document_root(
+        presentation_revision_path(
+            context,
+            snapshot,
+            session_id,
+            artifact_path(view_name, snapshot.artifact.artifact_revision),
+            runtime_session_id=runtime_session_id if runtime == "server" else None,
         ),
-        runtime_session_id=runtime_session_id if runtime == "server" else None,
+        snapshot.artifact.document,
     )
-    root_url = artifact_document_root_url(root_url, snapshot.artifact.document)
-    support_url = presentation_support_url(
+    support = presentation_support_path(
         context,
         snapshot,
         session_id,
         runtime_session_id,
         editor_session_id=editor_session_id,
     )
+    assets = presentation_revision_path(
+        context,
+        snapshot,
+        session_id,
+        f"{SUPPORT_PATH}/assets",
+        runtime_session_id=runtime_session_id,
+    )
     return runtime_document(
         snapshot.document,
-        root_url=root_url,
-        support_url=support_url,
-        assets_url=presentation_revision_url(
-            context,
-            snapshot,
-            session_id,
-            f"{SUPPORT_PATH}/assets",
-            runtime_session_id=runtime_session_id,
-        ),
+        root_url=relative_url(request_path, root),
+        support_url=relative_url(root, support),
+        assets_url=relative_url(root, assets),
         dev=context.dev,
         revision=snapshot.revision,
         runtime=runtime,
@@ -121,6 +126,7 @@ def render_presentation_document(
         client_id=client_id,
         lifecycle_id=lifecycle_id,
         runtime_session_id=runtime_session_id if runtime == "server" else None,
+        icon_url=relative_url(root, "/favicon.ico"),
     )
 
 
@@ -134,6 +140,7 @@ async def build_runtime_config(
     presentation_session_id: str | None = None,
     runtime_session_id: str | None = None,
     *,
+    request_path: str,
     client_id: str | None = None,
     progress: RuntimeProgressSink | None = None,
 ) -> dict[str, object]:
@@ -177,24 +184,21 @@ async def build_runtime_config(
         runtime_cell_refs=projection.cell_refs,
         diagnostics=diagnostics,
     )
-    public_root_url = with_query(
-        public_url(context.base_url, "/"),
-        context.routing_query,
-    )
+    public_root = with_query("/", context.routing_query)
     inputs = RuntimeConfigInputs(
         view=view_name,
         views=tuple(resolved.workspace.views),
         runtime_id=projection.runtime_id,
         runtime_instance=projection.instance,
         runtime_data=projection.data,
-        root_url=public_url(context.base_url, "/"),
-        public_root_url=public_root_url,
-        document_root_url=(
-            authored_view_root_url(context.base_url, context.file_key)
+        runtime_paths=projection.paths,
+        public_root_path=public_root,
+        document_root_path=(
+            authored_view_root_path(context.file_key)
             if context.routing_query
-            else public_root_url
+            else public_root
         ),
-        support_url=presentation_support_url(
+        support_path=presentation_support_path(
             context,
             snapshot,
             capability_session_id,
@@ -215,7 +219,7 @@ async def build_runtime_config(
         mode=context.mode,
         presentation_session_id=capability_session_id,
     )
-    return inputs.to_dict(revision=snapshot.revision)
+    return inputs.to_dict(revision=snapshot.revision, base=request_path)
 
 
 def _browser_diagnostic(

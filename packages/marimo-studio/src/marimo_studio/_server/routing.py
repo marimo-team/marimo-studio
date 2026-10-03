@@ -62,7 +62,7 @@ def could_handle(relative: str, mode: str) -> bool:
     """Return whether a path can belong to Studio in the active mode."""
     if is_support_route(relative):
         return True
-    if relative in {"", "/"} and mode in {"edit", "run"}:
+    if relative == "/" and mode in {"edit", "run"}:
         return True
     parts = relative.strip("/").split("/")
     if is_studio_route(relative, mode):
@@ -76,7 +76,7 @@ def could_handle(relative: str, mode: str) -> bool:
 
 def document_view(relative: str, studio: StudioWorkspace, mode: str) -> str | None:
     """Resolve a presentation document path to its view name."""
-    if mode == "run" and relative in {"", "/"}:
+    if mode == "run" and relative == "/":
         return studio.default_view
     parts = relative.strip("/").split("/")
     if len(parts) == 1:
@@ -136,7 +136,7 @@ def is_studio_route(relative: str, mode: str) -> bool:
 
 def is_studio_landing(relative: str, mode: str) -> bool:
     """Return whether the request should enter the edit workspace."""
-    return mode == "edit" and relative in {"", "/"}
+    return mode == "edit" and relative == "/"
 
 
 def delegates_edit_root(
@@ -145,4 +145,4 @@ def delegates_edit_root(
     policy: StudioRoutePolicy,
 ) -> bool:
     """Return whether edit root belongs to the native Marimo application."""
-    return mode == "edit" and relative in {"", "/"} and policy.edit_root == "marimo"
+    return mode == "edit" and relative == "/" and policy.edit_root == "marimo"

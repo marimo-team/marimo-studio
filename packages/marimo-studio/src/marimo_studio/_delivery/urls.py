@@ -1,4 +1,13 @@
-"""Build Studio URLs beneath Marimo's public base path."""
+"""Build Studio app paths and the browser references that address them.
+
+An app path is a path-absolute reference beneath the server mount, such as
+`/studio/dashboard/` or `/_marimo-studio/editor/?file=notebook.py`. It may carry
+a query. Studio never writes the mount path into a browser URL.
+`relative_url()` turns an app path into a reference that climbs from the
+response that carries it to the mount root. The browser resolves that
+reference against the URL it requested, so one response works at `/`, beneath
+marimo's `--base-url`, and behind a proxy that adds or strips a path prefix.
+"""
 
 import base64
 from collections.abc import Sequence
@@ -47,31 +56,28 @@ PRIVATE_QUERY_KEYS = frozenset(
 )
 
 
-def public_url(base_url: str, path: str = "") -> str:
-    """Join a root-relative path to Marimo's public base URL."""
-    base_path = base_url.rstrip("/")
-    suffix = path if path.startswith("/") or not path else f"/{path}"
-    return f"{base_path}{suffix}" or "/"
+def relative_url(base: str, target: str) -> str:
+    """Return a reference to app path `target` that resolves against `base`.
 
-
-def same_origin_url(path: str, query: str = "") -> str:
-    """Return a path-only redirect target on the browser's origin.
-
-    The target omits the request Host, which a reverse proxy may rewrite.
+    `base` is the query-free, percent-encoded app path of the carrier: the
+    requested path for a response, or the document base for references inside
+    a document.
     """
-    # Browsers resolve a leading "//" as a network path on another host.
-    target = "/" + path.lstrip("/")
-    return f"{target}?{query}" if query else target
+    if not base.startswith("/") or not target.startswith("/"):
+        raise ValueError("Studio references join two app paths")
+    if "?" in base or "#" in base:
+        raise ValueError("A reference base is a path without a query or fragment")
+    depth = base[: base.rfind("/") + 1].count("/") - 1
+    root = "../" * depth if depth else "./"
+    return f"{root}{target[1:]}"
 
 
-def studio_url(base_url: str, view_name: str | None = None) -> str:
-    """Return the public Studio workspace URL."""
-    suffix = f"{STUDIO_PATH}/{view_name}/" if view_name else f"{STUDIO_PATH}/"
-    return public_url(base_url, suffix)
+def studio_path(view_name: str | None = None) -> str:
+    """Return the app path of the Studio workspace."""
+    return f"{STUDIO_PATH}/{view_name}/" if view_name else f"{STUDIO_PATH}/"
 
 
-def editor_url(
-    base_url: str,
+def editor_path(
     file_key: str,
     query: Sequence[tuple[str, str]] = (),
     client_id: str | None = None,
@@ -79,7 +85,7 @@ def editor_url(
     session_id: str | None = None,
     binding_capability: str | None = None,
 ) -> str:
-    """Return Marimo's native editor URL for one notebook."""
+    """Return the app path of Marimo's native editor for one notebook."""
     parameters = _notebook_query(query)
     parameters.append(("file", file_key))
     if client_id is not None:
@@ -90,10 +96,7 @@ def editor_url(
         parameters.append(("session_id", session_id))
     if binding_capability is not None:
         parameters.append((EDITOR_BINDING_CAPABILITY_QUERY_PARAM, binding_capability))
-    return with_query(
-        public_url(base_url, f"{SUPPORT_PATH}/editor/"),
-        parameters,
-    )
+    return with_query(f"{SUPPORT_PATH}/editor/", parameters)
 
 
 def with_notebook_query(
@@ -106,7 +109,7 @@ def with_notebook_query(
 
 
 def with_query(url: str, query: Sequence[tuple[str, str]]) -> str:
-    """Merge query parameters into a public URL."""
+    """Merge query parameters into a URL reference."""
     if not query:
         return url
     parts = urlsplit(url)
@@ -120,37 +123,30 @@ def _notebook_query(
     return [(key, value) for key, value in query if key not in PRIVATE_QUERY_KEYS]
 
 
-def view_url(base_url: str, view_name: str) -> str:
-    """Return the public standalone URL for a named view."""
-    return public_url(base_url, f"/{view_name}/")
+def view_path(view_name: str) -> str:
+    """Return the app path of a named view's standalone document."""
+    return f"/{view_name}/"
 
 
-def artifact_view_url(
-    base_url: str,
-    view_name: str,
-    artifact_revision: str,
-) -> str:
-    """Return the immutable browser base for one published view artifact."""
+def artifact_path(view_name: str, artifact_revision: str) -> str:
+    """Return the app path of one published view artifact."""
     revision = artifact_revision.removeprefix("sha256:")
-    return public_url(
-        base_url,
-        f"/{view_name}/_marimo-studio/artifacts/{revision}/",
-    )
+    return f"/{view_name}{SUPPORT_PATH}/artifacts/{revision}/"
 
 
-def artifact_document_root_url(root_url: str, document: PurePosixPath) -> str:
-    """Return the immutable browser base beside one artifact entry document."""
+def artifact_document_root(root: str, document: PurePosixPath) -> str:
+    """Return the directory that contains one artifact entry document."""
     parent = document.parent
     if parent == PurePosixPath("."):
-        return root_url
+        return root
     suffix = "/".join(quote(part, safe="") for part in parent.parts)
-    return f"{root_url.rstrip('/')}/{suffix}/"
+    return f"{root.rstrip('/')}/{suffix}/"
 
 
-def authored_view_root_url(base_url: str, file_key: str) -> str:
-    """Return the browser-native base for authored files in a directory app."""
+def authored_view_root_path(file_key: str) -> str:
+    """Return the app path that authored files in a directory app resolve against."""
     token = base64.urlsafe_b64encode(file_key.encode()).decode().rstrip("=")
-    return public_url(base_url, f"{SUPPORT_PATH}/notebooks/{token}/views/")
+    return f"{SUPPORT_PATH}/notebooks/{token}/views/"
 
 
 def authored_file_key(token: str) -> str | None:

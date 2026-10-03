@@ -14,7 +14,6 @@ from starlette.websockets import WebSocket
 from marimo_studio._delivery.urls import (
     HOST_SESSION_HANDOFF_QUERY_PARAM,
     SUPPORT_PATH,
-    public_url,
 )
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.auth import (
@@ -34,6 +33,7 @@ from marimo_studio._server.ports import (
     SessionState,
 )
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_path import request_reference
 from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.routing import delegates_edit_root, is_studio_route
 from marimo_studio._server.security import SecurityPolicy
@@ -186,7 +186,6 @@ class HostEntryHandler:
             receive,
             protected_send,
             resource_path="/",
-            runtime_url=str(Request(scope).url),
             eager_runtime=False,
             bound_editor=False,
         ):
@@ -403,13 +402,15 @@ def _handoff_response(
     payload = ticket.browser_config(transition)
     encoded = json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c")
     script_url = escape(
-        public_url(context.base_url, f"{SUPPORT_PATH}/assets/host-session-handoff.js"),
+        request_reference(request, f"{SUPPORT_PATH}/assets/host-session-handoff.js"),
         quote=True,
     )
+    icon_url = escape(request_reference(request, "/favicon.ico"), quote=True)
     return HTMLResponse(
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>Opening notebook</title></head><body>"
+        f'<title>Opening notebook</title><link rel="icon" href="{icon_url}">'
+        "</head><body>"
         '<p role="status">Opening notebook</p>'
         '<script id="marimo-studio-host-session" type="application/json">'
         f"{encoded}</script>"

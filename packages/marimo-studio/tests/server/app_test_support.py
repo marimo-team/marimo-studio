@@ -4,11 +4,26 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from html.parser import HTMLParser
 from types import SimpleNamespace
-from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from typing import Any, Protocol
+from urllib.parse import urljoin, urlsplit, urlunsplit
+
+
+class Response(Protocol):
+    """The response surface that Studio's URL helpers read."""
+
+    @property
+    def url(self) -> object: ...
+
+    @property
+    def text(self) -> str: ...
+
+    @property
+    def headers(self) -> Mapping[str, str]: ...
+
+    def json(self) -> Any: ...
 
 
 class _BootstrapParser(HTMLParser):
@@ -82,16 +97,43 @@ class _RuntimeScriptParser(HTMLParser):
             self.parts.append(data)
 
 
-def _studio_bootstrap(document: str) -> dict[str, Any]:
+def _resolved(response: Response, reference: str) -> str:
+    """Resolve a Studio reference against the URL that carried it."""
+    return urljoin(str(response.url), reference)
+
+
+def _redirect_target(response: Response) -> str:
+    return _resolved(response, response.headers["location"])
+
+
+def _resolved_urls(response: Response, record: dict[str, Any]) -> dict[str, Any]:
+    urls = {name: _resolved(response, url) for name, url in record["urls"].items()}
+    return {**record, "urls": urls}
+
+
+def _studio_bootstrap(response: Response) -> dict[str, Any]:
     parser = _BootstrapParser()
-    parser.feed(document)
-    return json.loads("".join(parser.parts))
+    parser.feed(response.text)
+    return _resolved_urls(response, json.loads("".join(parser.parts)))
 
 
-def _studio_host(document: str) -> dict[str, Any]:
+def _studio_host(response: Response) -> dict[str, Any]:
     parser = _BootstrapParser("marimo-studio-host")
-    parser.feed(document)
-    return json.loads("".join(parser.parts))
+    parser.feed(response.text)
+    return _resolved_urls(response, json.loads("".join(parser.parts)))
+
+
+def _runtime_config(response: Response) -> dict[str, Any]:
+    """Return a runtime configuration with URLs resolved as the browser does."""
+    config = response.json()
+    return {
+        **config,
+        "runtime": _resolved_urls(response, config["runtime"]),
+        **{
+            key: _resolved(response, config[key])
+            for key in ("rootUrl", "publicRootUrl", "documentRootUrl", "supportUrl")
+        },
+    }
 
 
 def _editor_mount_value(document: str, key: str) -> Any:
@@ -111,17 +153,25 @@ def _runtime_mount_script(document: str) -> str:
     return scripts[0]
 
 
-def _artifact_base(document: str) -> str:
-    match = re.search(r'<base href="([^"]+)">', document)
+def _artifact_base(response: Response) -> str:
+    match = re.search(r'<base href="([^"]+)">', response.text)
     assert match is not None
-    return match.group(1)
+    return _resolved(response, match.group(1))
 
 
-def _presentation_frame_url(document: str) -> str:
+def _mount_support_url(response: Response) -> str:
+    """Resolve the mount support URL against the document base."""
+    return urljoin(
+        _artifact_base(response),
+        _editor_mount_value(response.text, "supportUrl"),
+    )
+
+
+def _presentation_frame_url(response: Response) -> str:
     parser = _PresentationFrameParser()
-    parser.feed(document)
+    parser.feed(response.text)
     assert parser.src is not None
-    return parser.src
+    return _resolved(response, parser.src)
 
 
 def _presentation_frame_sandbox(document: str) -> frozenset[str]:
@@ -131,20 +181,27 @@ def _presentation_frame_sandbox(document: str) -> frozenset[str]:
     return parser.sandbox
 
 
-def _presentation_fallback_url(document: str) -> str:
-    encoded = re.search(r"const config = Object\.freeze\((\{[^\n]+\})\);", document)
-    assert encoded is not None
-    fallback = json.loads(encoded.group(1))["fallbackUrl"]
+def _presentation_wrapper_config(document: str) -> dict[str, Any]:
+    parser = _BootstrapParser("marimo-studio-wrapper-config")
+    parser.feed(document)
+    config = json.loads("".join(parser.parts))
+    assert isinstance(config, dict)
+    return config
+
+
+def _presentation_fallback_url(response: Response) -> str:
+    fallback = _presentation_wrapper_config(response.text)["fallbackUrl"]
     assert isinstance(fallback, str)
-    return fallback
+    return _resolved(response, fallback)
 
 
-def _assert_server_runtime(data: dict[str, Any], url: str) -> None:
-    capability = data["capabilityToken"]
+def _assert_server_runtime(runtime: dict[str, Any], url: str) -> None:
+    capability = runtime["data"]["capabilityToken"]
     assert isinstance(capability, str)
-    assert f"/_marimo-studio/presentation/{capability}/" in data["url"]
-    assert data["url"].startswith(url)
-    assert re.fullmatch(r"[0-9a-f]{64}", data["serverInstance"])
+    transport = runtime["urls"]["transport"]
+    assert f"/_marimo-studio/presentation/{capability}/" in transport
+    assert transport.startswith(url)
+    assert re.fullmatch(r"[0-9a-f]{64}", runtime["data"]["serverInstance"])
 
 
 def _projection_request(
