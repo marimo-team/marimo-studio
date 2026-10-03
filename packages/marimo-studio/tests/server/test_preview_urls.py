@@ -568,7 +568,7 @@ def test_prepared_preview_requires_a_connected_studio_tab(
 
     assert response.status_code == 409
     assert response.json()["error"] == "browser-client-unavailable"
-    assert "Prepared preview follows a Studio tab" in response.json()["message"]
+    assert "No Studio tab is connected" in response.json()["message"]
 
 
 def test_session_bound_preview_retains_and_revalidates_its_editor(

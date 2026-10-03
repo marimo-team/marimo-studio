@@ -15,6 +15,7 @@ from marimo_studio._delivery.urls import (
     view_path,
     with_query,
 )
+from marimo_studio._server.agent.workspace_presence import studio_tab_unavailable
 from marimo_studio._server.auth import forbidden_response, has_edit_access
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScope
@@ -130,17 +131,7 @@ async def _preview_binding(
     except AgentRequestError as error:
         if client_id is not None or error.code != "browser-client-unavailable":
             raise
-        raise _prepared_tab_unavailable() from error
+        raise studio_tab_unavailable() from error
     if target.session_id is None:
-        raise _prepared_tab_unavailable()
+        raise studio_tab_unavailable()
     return target.client_id, target.session_id
-
-
-def _prepared_tab_unavailable() -> AgentRequestError:
-    return AgentRequestError(
-        "browser-client-unavailable",
-        "A Prepared preview follows a Studio tab with a notebook session, and "
-        "none is connected for this notebook.",
-        status_code=409,
-        details={"hint": "Open the notebook in Studio, then request the URL."},
-    )
