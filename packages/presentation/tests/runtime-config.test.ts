@@ -22,7 +22,7 @@ import { wasmRuntimeDataSchema } from "../src/runtime/wasm-config.ts";
 import { symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "wasm",
@@ -39,18 +39,18 @@ const baseRuntimeConfig = {
     id: "server",
     instance: "server-instance",
     data: {
-      fileKey: "/workspace/notebook.py",
+      storageScope: "presentation-storage",
       capabilityToken: "presentation-capability",
       sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession: false,
-      url: "/proxy/app/",
     },
+    urls: { transport: "https://studio.test/proxy/app/" },
   },
-  rootUrl: "/proxy/app/",
-  publicRootUrl: "/proxy/app/",
-  documentRootUrl: "/proxy/app/",
-  supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+  rootUrl: "http://localhost:3000/proxy/app/",
+  publicRootUrl: "http://localhost:3000/proxy/app/",
+  documentRootUrl: "http://localhost:3000/proxy/app/",
+  supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard",
   showCellLogs: true,
   ...symbolicRuntimeFields,
   diagnostics: [],
@@ -78,6 +78,7 @@ const wasmRuntimeConfig = (): RuntimeConfig => ({
       executionCells: [{ id: "bootstrap", code: "pass" }],
       bootstrapCellId: "bootstrap",
     },
+    urls: {},
   },
 });
 
@@ -164,7 +165,7 @@ test("session restoration keeps the document revision", async () => {
 
   try {
     const error = await fetchRuntimeConfigForRevision(
-      "/_marimo-studio/views/dashboard",
+      "http://localhost:3000/_marimo-studio/views/dashboard",
       "presentation-revision",
     ).catch((cause: unknown) => cause);
     assert.ok(error instanceof RuntimeConfigRequestError);
@@ -189,7 +190,7 @@ test("revision refresh keeps the trusted runtime across mutable history", async 
 
   try {
     const refreshed = await fetchRuntimeConfigForRevision(
-      "/_marimo-studio/views/dashboard",
+      "http://localhost:3000/_marimo-studio/views/dashboard",
       "presentation-revision",
       undefined,
       "server",
@@ -244,9 +245,9 @@ test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
     );
 
   try {
-    const error = await fetchRuntimeConfig("/_marimo-studio/views/dashboard").catch(
-      (cause: unknown) => cause,
-    );
+    const error = await fetchRuntimeConfig(
+      "http://localhost:3000/_marimo-studio/views/dashboard",
+    ).catch((cause: unknown) => cause);
     assert.ok(error instanceof RuntimeConfigRequestError);
     assert.match(
       error.message,
@@ -293,7 +294,7 @@ test("runtime refresh targets frozen mount identity", async () => {
 
   try {
     await fetchRuntimeConfig(
-      "/_marimo-studio/views/dashboard",
+      "http://localhost:3000/_marimo-studio/views/dashboard",
       undefined,
       undefined,
       "s_view01",
@@ -362,7 +363,7 @@ test("runtime config retries a transient session mismatch", async () => {
   };
 
   try {
-    await fetchRuntimeConfigWithRetry("/_marimo-studio/views/dashboard");
+    await fetchRuntimeConfigWithRetry("http://localhost:3000/_marimo-studio/views/dashboard");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -389,7 +390,7 @@ test("fixed revision rejects an unavailable snapshot without retrying it", async
 
   try {
     const error = await fetchRuntimeConfigForRevision(
-      "/_marimo-studio/views/dashboard",
+      "http://localhost:3000/_marimo-studio/views/dashboard",
       "retired-revision",
     ).catch((cause: unknown) => cause);
     assert.ok(error instanceof RuntimeConfigRequestError);
@@ -412,7 +413,7 @@ test("runtime config retries a failed network request", async () => {
   };
 
   try {
-    await fetchRuntimeConfigWithRetry("/_marimo-studio/views/dashboard");
+    await fetchRuntimeConfigWithRetry("http://localhost:3000/_marimo-studio/views/dashboard");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -434,7 +435,7 @@ test("presentation commits advance current config while projection consumers fol
     ...baseRuntimeConfig,
     revision: "presentation-revision-2",
     view: "executive",
-    supportUrl: "/proxy/app/_marimo-studio/views/executive",
+    supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/executive",
   });
 
   assert.equal(getRuntimeConfig().revision, "presentation-revision-2");

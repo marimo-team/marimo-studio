@@ -7,7 +7,6 @@ const contracts = [
   "tests/cell-state.test.ts",
   "tests/cell-output-policy.test.ts",
   "tests/value-state.test.ts",
-  "tests/output-read-batcher.test.ts",
 ];
 
 export default defineConfig({

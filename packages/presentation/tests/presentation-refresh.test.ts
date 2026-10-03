@@ -11,11 +11,11 @@ import {
 
 const dashboard = {
   documentUrl: "/studio/dashboard/",
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
 };
 const executive = {
   documentUrl: "/studio/executive/",
-  supportUrl: "/_marimo-studio/views/executive",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/executive",
 };
 
 test("a revision identifies one published presentation across capability URLs", () => {
@@ -27,7 +27,7 @@ test("a revision identifies one published presentation across capability URLs", 
   assert.deepEqual(
     samePresentationRevision(current, {
       ...current,
-      supportUrl: "/_marimo-studio/views/other",
+      supportUrl: "http://localhost:3000/_marimo-studio/views/other",
     }),
     true,
   );

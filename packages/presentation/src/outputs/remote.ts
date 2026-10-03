@@ -50,7 +50,7 @@ const serverOutputTarget = (): ServerOutputTarget => {
     presentationSessionId: config.presentationSessionId,
     projectionRevision: config.projectionRevision,
     revision: config.revision,
-    url: appendUrlPath(config.supportUrl, "outputs", globalThis.location.href),
+    url: appendUrlPath(config.supportUrl, "outputs"),
   };
 };
 

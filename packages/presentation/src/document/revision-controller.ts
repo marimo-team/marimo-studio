@@ -35,6 +35,12 @@ export interface PresentationRevisionPolicy {
 }
 
 export interface PresentationRevisionOptions extends PresentationRevisionPolicy {
+  /**
+   * Whether a refresh writes its document URL into history. A framed document
+   * lives at a capability URL that its host resolves. A top-level page keeps
+   * its public address, which assigns a fresh presentation session on reload.
+   */
+  readonly addressFollowsDocument: boolean;
   applyRuntime(): "applied" | "pending" | "reload";
   reloadDocument(url: string): void;
   reloadRuntime(): void;
@@ -54,7 +60,7 @@ export interface RevisionDocumentPort {
     signal: AbortSignal,
     onTarget: (target: PresentationTarget) => void,
     historyMode: RevisionHistoryMode,
-    historyUrl: string,
+    historyUrl: string | null,
   ): Promise<DocumentRevisionCommit>;
 }
 
@@ -82,7 +88,14 @@ export class PresentationRevisionController {
     kind: RevisionOperationKind = "presentation",
     policy: PresentationRevisionPolicy = this.options,
   ): Promise<DocumentRevisionCommit | undefined> {
-    return await this.transitionWithHistory(documentUrl, supportUrl, kind, policy, "replace");
+    return await this.transitionWithHistory(
+      documentUrl,
+      supportUrl,
+      kind,
+      policy,
+      "replace",
+      this.options.addressFollowsDocument ? documentUrl : null,
+    );
   }
 
   async navigate(
@@ -123,7 +136,7 @@ export class PresentationRevisionController {
     kind: RevisionOperationKind,
     policy: PresentationRevisionPolicy,
     historyMode: RevisionHistoryMode,
-    historyUrl = documentUrl,
+    historyUrl: string | null,
   ): Promise<DocumentRevisionCommit | undefined> {
     let reloadPending = false;
     const transitionPolicy: PresentationRevisionPolicy = {
@@ -148,7 +161,9 @@ export class PresentationRevisionController {
         );
         if (commit.reloadDocument) {
           reloadPending = true;
-          this.options.reloadDocument(this.sessionReplay.preservedUrl(historyUrl));
+          this.options.reloadDocument(
+            this.sessionReplay.preservedUrl(historyUrl ?? globalThis.location.href),
+          );
           cancelFunctionTransition();
           return commit;
         }

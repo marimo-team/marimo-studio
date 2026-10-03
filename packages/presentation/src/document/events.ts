@@ -76,19 +76,29 @@ export const bindFragmentRestores = (): (() => void) => {
   return () => globalThis.removeEventListener("message", listener);
 };
 
+// EventSource closes for good when the server rejects the stream. A network
+// failure keeps it reconnecting.
+const EVENT_SOURCE_CLOSED = 2;
+
 export class DevelopmentEvents {
   private source: EventSource | undefined;
 
+  /**
+   * Subscribe to development events. `onRejected` runs when the server refuses
+   * the stream, with whether this stream was ready before.
+   */
   connect(
     url: string,
     onReady: (revision?: string | null) => void,
     onPresentation: () => void,
     onBuild: (build: PresentationBuild) => void = () => {},
     onDisconnected: () => void = () => {},
+    onRejected: (wasReady: boolean) => void = onDisconnected,
   ): void {
     this.close();
     const source = new EventSource(url);
     this.source = source;
+    let wasReady = false;
     const current = (operation: () => void) => {
       if (this.source === source) {
         operation();
@@ -97,9 +107,16 @@ export class DevelopmentEvents {
     source.addEventListener("ready", (event) => {
       const baseline =
         event instanceof MessageEvent ? parsePresentationBaseline(event.data) : undefined;
-      current(() => onReady(baseline?.revision));
+      current(() => {
+        wasReady = true;
+        onReady(baseline?.revision);
+      });
     });
-    source.addEventListener("error", () => current(onDisconnected));
+    source.addEventListener("error", () =>
+      current(() =>
+        source.readyState === EVENT_SOURCE_CLOSED ? onRejected(wasReady) : onDisconnected(),
+      ),
+    );
     source.addEventListener("change", (event) => {
       if (!(event instanceof MessageEvent)) {
         return;
@@ -264,7 +281,6 @@ export const bindViewNavigation = (
     }
     const navigation = viewNavigationForUrl({
       href,
-      origin: globalThis.location.origin,
       publicRootUrl: config.publicRootUrl,
       documentRootUrl: config.documentRootUrl,
       publicQuery: publicNotebookQuery(globalThis.location.search),

@@ -5,12 +5,15 @@ import { createServerOutputReader } from "../outputs/remote";
 import { getMountConfig } from "../runtime-config/index.ts";
 import { readServerValuesWithRetry } from "../values/remote";
 import { mountSharedRuntime } from "./runtime";
-import { serverRuntimeDataSchema, type ServerRuntimeData } from "./server-config";
+import { parseServerRuntime, type ServerRuntime } from "./server-config";
 import { createServerTransportURL } from "./transport";
 
 export type { ServerRuntimeData } from "./server-config";
 
-const serverTransport = (presentation: RuntimeContext["presentation"], data: ServerRuntimeData) => {
+const serverTransport = (
+  presentation: RuntimeContext["presentation"],
+  { data, urls }: ServerRuntime,
+) => {
   if (!presentation.presentationSessionId) {
     throw new Error("The server runtime requires a presentation session");
   }
@@ -24,7 +27,7 @@ const serverTransport = (presentation: RuntimeContext["presentation"], data: Ser
   return {
     kind: "server" as const,
     presentationSessionId: presentation.presentationSessionId,
-    url: new URL(data.url, globalThis.location.origin).toString(),
+    url: urls.transport,
     serverToken: data.capabilityToken,
     transformTransportURL: createServerTransportURL(
       presentation.mode === "edit",
@@ -37,7 +40,7 @@ const serverTransport = (presentation: RuntimeContext["presentation"], data: Ser
 
 export const mountServerRuntime = (
   context: RuntimeContext,
-  data: ServerRuntimeData,
+  runtime: ServerRuntime,
 ): RuntimeSession => {
   const initialMode = context.presentation.mode === "edit" ? "edit" : "read";
   const viewMode = context.presentation.mode === "edit" ? "present" : "read";
@@ -48,9 +51,9 @@ export const mountServerRuntime = (
     initialMode,
     viewMode,
     exposeSession: true,
-    transport: serverTransport(context.presentation, data),
+    transport: serverTransport(context.presentation, runtime),
     serverTransport(next) {
-      return serverTransport(next, serverRuntimeDataSchema.parse(next.runtime.data));
+      return serverTransport(next, parseServerRuntime(next.runtime));
     },
     updateQuery: async () => {},
     valueReader: () => (request, signal) => readServerValuesWithRetry(request, signal),

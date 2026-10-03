@@ -1,4 +1,5 @@
 import { PRESENTATION_REVISION_QUERY_PARAM } from "@marimo-studio/protocol/query";
+import { resolveUrl } from "@marimo-studio/protocol/url";
 import { flushSync } from "react-dom";
 
 import { projectionHosts } from "../projections/host-runtime.ts";
@@ -23,7 +24,10 @@ import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
 type RevisionHistoryMode = "push" | "replace";
 
-const commitHistory = (mode: RevisionHistoryMode, url: string): void => {
+const commitHistory = (mode: RevisionHistoryMode, url: string | null): void => {
+  if (url === null) {
+    return;
+  }
   if (mode === "push") {
     globalThis.history.pushState(globalThis.history.state, "", url);
   } else {
@@ -31,7 +35,10 @@ const commitHistory = (mode: RevisionHistoryMode, url: string): void => {
   }
 };
 
-const scrollToFragment = (url: string): void => {
+const scrollToFragment = (url: string | null): void => {
+  if (url === null) {
+    return;
+  }
   const hash = new URL(url, globalThis.location.href).hash;
   if (!hash) {
     return;
@@ -88,7 +95,7 @@ export class DocumentRevisionAdapter {
     signal: AbortSignal,
     onTarget: (target: PresentationTarget) => void,
     historyMode: RevisionHistoryMode = "replace",
-    historyUrl = nextDocumentUrl,
+    historyUrl: string | null = nextDocumentUrl,
   ): Promise<DocumentRevisionCommit> {
     let target = {
       documentUrl: nextDocumentUrl,
@@ -112,7 +119,11 @@ export class DocumentRevisionAdapter {
       if (discoveredSupportUrl) {
         target = {
           documentUrl: nextDocumentUrl,
-          supportUrl: discoveredSupportUrl,
+          // The header is a reference from the response's final URL.
+          supportUrl: resolveUrl(
+            discoveredSupportUrl,
+            response.url || new URL(nextDocumentUrl, globalThis.location.href),
+          ),
         };
         onTarget(target);
       }

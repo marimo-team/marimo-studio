@@ -43,7 +43,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root | undefined;
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
@@ -60,18 +60,18 @@ const baseConfig = {
     id: "server",
     instance: "server-instance",
     data: {
-      fileKey: "/workspace/notebook.py",
+      storageScope: "presentation-storage",
       capabilityToken: "presentation-capability",
       sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession: false,
-      url: "/",
     },
+    urls: { transport: "https://studio.test/" },
   },
-  rootUrl: "/",
-  publicRootUrl: "/",
-  documentRootUrl: "/",
-  supportUrl: "/_marimo-studio/views/dashboard",
+  rootUrl: "http://localhost:3000/",
+  publicRootUrl: "http://localhost:3000/",
+  documentRootUrl: "http://localhost:3000/",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   ...symbolicRuntimeFields,
   diagnostics: [],
   appConfig: {},

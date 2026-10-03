@@ -1,7 +1,11 @@
-import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import type { RuntimeProgress } from "@marimo-studio/protocol/runtime-progress";
 
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+import {
+  parseRuntimeConfig,
+  type JsonValue,
+  type RuntimeConfig,
+} from "@marimo-studio/protocol/runtime-config";
 import {
   RUNTIME_CONFIG_STREAM_MAX_LINE_BYTES,
   runtimeConfigPacketSchema,
@@ -21,8 +25,18 @@ const readPacket = (line: string) => {
   }
 };
 
+const readConfig = (value: JsonValue, base: string): RuntimeConfig => {
+  try {
+    return parseRuntimeConfig(value, base);
+  } catch {
+    throw streamError("Runtime configuration stream contained an invalid record.");
+  }
+};
+
+/** Read a configuration stream whose URLs resolve against `base`. */
 export const readRuntimeConfigStream = async (
   response: Response,
+  base: string,
   report: (progress: RuntimeProgress) => void,
   signal?: AbortSignal,
 ): Promise<RuntimeConfig> => {
@@ -61,7 +75,7 @@ export const readRuntimeConfigStream = async (
         if (lineBytes > 0 || pending.length > 0 || terminal === undefined) {
           throw streamError("Runtime configuration stream ended before completion.");
         }
-        if (terminal.type === "config") return terminal.config;
+        if (terminal.type === "config") return readConfig(terminal.config, base);
         const { type: _type, error, message, transient, hint, ...details } = terminal;
         throw new RuntimeConfigRequestError(
           message,

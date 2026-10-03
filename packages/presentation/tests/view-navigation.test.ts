@@ -9,9 +9,8 @@ import {
 const selection = (href: string, currentView = "novice", runtimeExplicit = false) =>
   viewNavigationForUrl({
     href,
-    origin: "https://example.test",
-    publicRootUrl: "/proxy/token/",
-    documentRootUrl: "/proxy/token/",
+    publicRootUrl: "https://example.test/proxy/token/",
+    documentRootUrl: "https://example.test/proxy/token/",
     publicQuery: "",
     unframed: false,
     trustedRuntime: { id: "server", explicit: runtimeExplicit },
@@ -24,9 +23,8 @@ const authoredRoot =
 const authoredSelection = (path: string) =>
   viewNavigationForUrl({
     href: `${authoredRoot}${path}`,
-    origin: "https://example.test",
-    publicRootUrl: "/proxy/token/?file=analysis.py",
-    documentRootUrl: new URL(authoredRoot).pathname,
+    publicRootUrl: "https://example.test/proxy/token/?file=analysis.py",
+    documentRootUrl: authoredRoot,
     publicQuery: "?region=eu",
     unframed: false,
     trustedRuntime: { id: "server", explicit: false },
@@ -37,9 +35,8 @@ const authoredSelection = (path: string) =>
 const relativeSelection = (href: string) =>
   viewNavigationForUrl({
     href,
-    origin: "https://example.test",
-    publicRootUrl: "/proxy/token/?file=analysis.py",
-    documentRootUrl: new URL(authoredRoot).pathname,
+    publicRootUrl: "https://example.test/proxy/token/?file=analysis.py",
+    documentRootUrl: authoredRoot,
     publicQuery: "?region=eu",
     unframed: false,
     trustedRuntime: { id: "server", explicit: false },
@@ -160,9 +157,8 @@ test("history navigation canonicalizes runtime before restore or query reload", 
   const historyNavigation = (href: string, mountedDocumentUrl: string, runtimeExplicit = false) =>
     viewHistoryNavigationForUrl({
       href,
-      origin: "https://example.test",
-      publicRootUrl: "/proxy/token/",
-      documentRootUrl: "/proxy/token/",
+      publicRootUrl: "https://example.test/proxy/token/",
+      documentRootUrl: "https://example.test/proxy/token/",
       publicQuery: "?region=apac",
       unframed: false,
       trustedRuntime: { id: "server", explicit: runtimeExplicit },
@@ -227,9 +223,8 @@ test("unframed navigation preserves delivery mode separately from notebook query
   ] as const) {
     const navigation = viewNavigationForUrl({
       href,
-      origin: "https://example.test",
-      publicRootUrl: "/proxy/?file=analysis.py",
-      documentRootUrl: "/proxy/",
+      publicRootUrl: "https://example.test/proxy/?file=analysis.py",
+      documentRootUrl: "https://example.test/proxy/",
       publicQuery: "?region=eu",
       trustedRuntime: { id: "wasm", explicit: true },
       unframed: true,
@@ -249,9 +244,8 @@ test("unframed navigation preserves delivery mode separately from notebook query
 
 test("same-view navigation keeps its exact checkpoint and cross-view navigation clears it", () => {
   const options = {
-    origin: "https://example.test",
-    publicRootUrl: "/proxy/?file=book.py&marimo_studio_revision=root-revision",
-    documentRootUrl: "/proxy/",
+    publicRootUrl: "https://example.test/proxy/?file=book.py&marimo_studio_revision=root-revision",
+    documentRootUrl: "https://example.test/proxy/",
     publicQuery: "?region=eu",
     unframed: true,
     trustedRuntime: { id: "wasm", explicit: true },
@@ -277,16 +271,15 @@ test("same-view navigation keeps its exact checkpoint and cross-view navigation 
 
 test("standalone links keep their admitted editor binding across views and ignore authored binding overrides", () => {
   const options = {
-    origin: "https://example.test",
-    publicRootUrl: "/proxy/?file=book.py",
-    documentRootUrl: "/proxy/",
+    publicRootUrl: "https://example.test/proxy/?file=book.py",
+    documentRootUrl: "https://example.test/proxy/",
     publicQuery: "?region=eu",
     unframed: true,
     trustedRuntime: { id: "server", explicit: true },
     views: ["novice", "expert"],
     currentView: "novice",
     clientId: "current-client",
-    supportUrl: "/support/novice?marimo_studio_editor_session=s_current",
+    supportUrl: "https://example.test/support/novice?marimo_studio_editor_session=s_current",
   };
   for (const href of [
     "?region=us",
@@ -303,13 +296,13 @@ test("navigation replaces untrusted editor parameters with only its admitted ide
   for (const binding of [
     {},
     { clientId: "current-client" },
-    { clientId: "current-client", supportUrl: "/support/novice" },
+    { clientId: "current-client", supportUrl: "https://example.test/support/novice" },
   ]) {
     const navigation = viewNavigationForUrl({
       href: "?region=us",
-      origin: "https://example.test",
-      publicRootUrl: "/proxy/?marimo_studio_client=stale&marimo_studio_editor_session=s_stale",
-      documentRootUrl: "/proxy/",
+      publicRootUrl:
+        "https://example.test/proxy/?marimo_studio_client=stale&marimo_studio_editor_session=s_stale",
+      documentRootUrl: "https://example.test/proxy/",
       publicQuery: "",
       trustedRuntime: { id: "server", explicit: true },
       unframed: true,

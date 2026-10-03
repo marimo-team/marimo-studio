@@ -15,7 +15,7 @@ import { markValueError } from "../src/values/hosts.ts";
 import { projectionRequest, projectionRuntimeConfig, runtimeConfig } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "wasm",
@@ -43,6 +43,7 @@ test("WASM evidence omits forged native session identity", () => {
         id: "wasm",
         instance: "wasm-instance",
         data: {},
+        urls: {},
       },
     }),
   );
@@ -58,6 +59,7 @@ test("WASM committed errors attest an explicit sessionless identity", async () =
       id: "wasm",
       instance: "wasm-instance",
       data: {},
+      urls: {},
     },
   });
   document.body.innerHTML = `

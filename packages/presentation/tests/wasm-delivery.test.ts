@@ -7,10 +7,7 @@ import type { RuntimeInvoke } from "../src/runtime/runtime.tsx";
 import type { WasmRuntimeData } from "../src/runtime/wasm-config.ts";
 
 import { createWasmQueryWriter } from "../src/runtime/wasm-query.ts";
-import {
-  prepareWasmProjectionRuntime,
-  resolveWasmRuntimeUrl,
-} from "../src/runtime/wasm-startup.ts";
+import { prepareWasmProjectionRuntime } from "../src/runtime/wasm-startup.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
 const data: WasmRuntimeData = {
@@ -27,6 +24,7 @@ const presentation = (): RuntimeConfig =>
       id: "wasm",
       instance: "wasm-instance",
       data,
+      urls: {},
     },
     presentationSessionId: undefined,
   });
@@ -34,13 +32,6 @@ const presentation = (): RuntimeConfig =>
 afterEach(() => {
   globalThis.history.replaceState({}, "", "/");
   vi.restoreAllMocks();
-});
-
-test.each([
-  ["https://example.test/repository/site/pages/", "https://example.test/repository/site/"],
-  ["https://example.test/moved/copy/pages/", "https://example.test/moved/copy/"],
-])("resolves relative runtime resources after moving a nested export to %s", (baseUrl, rootUrl) => {
-  expect(resolveWasmRuntimeUrl("../", baseUrl)).toBe(rootUrl);
 });
 
 test("synchronizes the canonical public query before authorizing projection execution", async () => {

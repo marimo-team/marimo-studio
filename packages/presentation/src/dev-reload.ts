@@ -1,5 +1,6 @@
 import type { PresentationBuild } from "@marimo-studio/protocol/development-events";
 import type {
+  NavigateViewMessage,
   ReceiverReadyMessage,
   ReceiverUnreadyMessage,
 } from "@marimo-studio/protocol/preview-messages";
@@ -182,8 +183,9 @@ const settleBuild = (): void => {
 
 const connectEvents = (): void => {
   const supportUrl = presentationRenewalSupportUrl(presentationRevisions.url, getSupportUrl());
+  const eventsUrl = appendUrlPath(supportUrl, "dev/events");
   developmentEvents.connect(
-    appendUrlPath(supportUrl, "dev/events", globalThis.location.href),
+    eventsUrl,
     reconcileBaseline,
     () => {
       if (globalThis.__MARIMO_STUDIO_RUNTIME_STATE__ === "failed") {
@@ -205,7 +207,79 @@ const connectEvents = (): void => {
         view: supportView(),
       });
     },
+    (wasReady) => {
+      if (wasReady && !ownedByStudio) {
+        void recoverRejectedStream(eventsUrl);
+        return;
+      }
+      developmentClaim ??= beginPresentationRefresh("development");
+      setPresentationRefreshState(developmentClaim, "error", {
+        scope: "presentation",
+        severity: "error",
+        code: "development-rejected",
+        message: "Live updates stopped because the server no longer accepts this page.",
+        hint: "Reload the page to reconnect.",
+        view: supportView(),
+      });
+    },
   );
+};
+
+// A rejected stream URL distinguishes a restarted server from a proxy that
+// answers while the server is away. Studio rejects a capability from an
+// earlier process with a readable 403. A proxy error carries no CORS grant.
+const probeStream = async (url: string): Promise<"accepted" | "rejected" | "unavailable"> => {
+  const request = new AbortController();
+  try {
+    const response = await fetch(url, { cache: "no-store", signal: request.signal });
+    if (response.ok) {
+      return "accepted";
+    }
+    return response.status === 403 ? "rejected" : "unavailable";
+  } catch {
+    return "unavailable";
+  } finally {
+    request.abort();
+  }
+};
+
+// The public view address assigns a fresh presentation session after a
+// restart, so a standalone page reloads it.
+const recoverRejectedStream = async (url: string): Promise<void> => {
+  developmentClaim ??= beginPresentationRefresh("development");
+  setPresentationRefreshState(developmentClaim, "loading", {
+    scope: "presentation",
+    severity: "warning",
+    code: "development-disconnected",
+    message: "Live updates disconnected. Reconnecting…",
+    hint: "Check that the Studio server is available.",
+    view: supportView(),
+  });
+  const schedule = new RefreshRetrySchedule();
+  let probe = await probeStream(url);
+  while (probe === "unavailable") {
+    await new Promise((resume) => setTimeout(resume, schedule.next()));
+    probe = await probeStream(url);
+  }
+  if (probe === "accepted") {
+    connectEvents();
+    return;
+  }
+  externalRefreshGate.cancel();
+  if (globalThis.parent === globalThis.window) {
+    globalThis.location.reload();
+    return;
+  }
+  const config = getRuntimeConfig();
+  const message: NavigateViewMessage = {
+    type: "marimo-studio:navigate-view",
+    runtime: config.runtime.id,
+    ...documentLifecycleEnvelope(),
+    view: config.view,
+    query: globalThis.location.search,
+    hash: globalThis.location.hash,
+  };
+  postToStudioParent(message);
 };
 
 const presentationChanged = (): void => {

@@ -17,7 +17,7 @@ import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
@@ -97,6 +97,29 @@ test("closed development streams ignore late events", () => {
   second?.emit("ready");
   assert.equal(second?.closed, true);
   assert.equal(ready.mock.calls.length, 1);
+});
+
+test("a rejected development stream reports whether it was ready", () => {
+  const disconnected = vi.fn();
+  const rejected = vi.fn();
+  const events = new DevelopmentEvents();
+  events.connect("/events", vi.fn(), vi.fn(), undefined, disconnected, rejected);
+  const source = EventSourceStub.instances[0]!;
+
+  Object.assign(source, { readyState: 0 });
+  source.emit("error");
+  source.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "r1" }));
+  Object.assign(source, { readyState: 2 });
+  source.emit("error");
+
+  expect(disconnected).toHaveBeenCalledOnce();
+  expect(rejected.mock.calls).toEqual([[true]]);
+
+  events.connect("/events", vi.fn(), vi.fn(), undefined, disconnected, rejected);
+  const fresh = EventSourceStub.instances[1]!;
+  Object.assign(fresh, { readyState: 2 });
+  fresh.emit("error");
+  expect(rejected.mock.calls).toEqual([[true], [false]]);
 });
 
 test("embedded same-view links delegate query and hash navigation to Studio", () => {

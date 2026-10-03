@@ -1,5 +1,10 @@
 import type { ProjectionKind } from "@marimo-studio/protocol/projections";
-import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
+
+import {
+  jsonValueSchema,
+  parseRuntimeConfig,
+  type RuntimeConfig,
+} from "@marimo-studio/protocol/runtime-config";
 
 import type { RuntimeProjectionRequest } from "../src/projections/resolution.ts";
 
@@ -55,18 +60,18 @@ export const runtimeConfig = (overrides: Partial<RuntimeConfig> = {}): RuntimeCo
     id: "server",
     instance: "server-instance",
     data: {
-      fileKey: "/workspace/notebook.py",
+      storageScope: "presentation-storage",
       capabilityToken: "presentation-capability",
       sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession: false,
-      url: "/proxy/app/",
     },
+    urls: { transport: "https://studio.test/proxy/app/" },
   },
-  rootUrl: "/proxy/app/",
-  publicRootUrl: "/proxy/app/",
-  documentRootUrl: "/proxy/app/",
-  supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+  rootUrl: "http://localhost:3000/proxy/app/",
+  publicRootUrl: "http://localhost:3000/proxy/app/",
+  documentRootUrl: "http://localhost:3000/proxy/app/",
+  supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard",
   presentationSessionId: "s_view01",
   showCellLogs: true,
   ...symbolicRuntimeFields,
@@ -129,3 +134,7 @@ export const projectionRuntimeConfig = (
     },
   });
 };
+
+/** Resolve a configuration's references as the browser does for its carrier. */
+export const resolvedRuntimeConfig = (config: RuntimeConfig, base: string | URL): RuntimeConfig =>
+  parseRuntimeConfig(jsonValueSchema.parse(config), base);

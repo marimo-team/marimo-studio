@@ -1,12 +1,14 @@
 import {
   parseMountConfig,
+  type JsonValue,
   type MountConfig,
   type ProjectionDiagnostic,
   type RuntimeConfig,
 } from "@marimo-studio/protocol/runtime-config";
 
-type Listener = () => void;
+import { initialDocumentBaseUrl } from "../document/base.ts";
 
+type Listener = () => void;
 const listeners = new Set<Listener>();
 const projectionListeners = new Set<Listener>();
 const cellListeners = new Set<Listener>();
@@ -23,7 +25,7 @@ export const getMountConfig = (): MountConfig => {
   if (mount) {
     return mount;
   }
-  mount = parseMountConfig(globalThis.__MARIMO_MOUNT_CONFIG__);
+  mount = parseMountConfig(globalThis.__MARIMO_MOUNT_CONFIG__, initialDocumentBaseUrl);
   return mount;
 };
 
@@ -104,5 +106,6 @@ export const subscribeRuntimeCellRefs = (listener: Listener): (() => void) => {
 };
 
 declare global {
-  var __MARIMO_MOUNT_CONFIG__: MountConfig;
+  /** The server-authored mount record. `getMountConfig()` parses it. */
+  var __MARIMO_MOUNT_CONFIG__: JsonValue;
 }

@@ -53,7 +53,6 @@ const publicViewUrl = (root: URL, view: string, query: string): URL => {
 
 export const viewNavigationForUrl = ({
   href,
-  origin,
   publicRootUrl,
   documentRootUrl,
   publicQuery,
@@ -66,7 +65,6 @@ export const viewNavigationForUrl = ({
   supportUrl,
 }: {
   href: string;
-  origin: string;
   publicRootUrl: string;
   documentRootUrl: string;
   publicQuery: string;
@@ -78,12 +76,12 @@ export const viewNavigationForUrl = ({
   clientId?: string;
   supportUrl?: string;
 }): ViewNavigation | undefined => {
-  const publicRoot = new URL(publicRootUrl, origin);
+  const publicRoot = new URL(publicRootUrl);
   const candidate = new URL(href, publicViewUrl(publicRoot, currentView, publicQuery));
   if (candidate.origin !== publicRoot.origin) {
     return undefined;
   }
-  const documentRoot = new URL(documentRootUrl, origin);
+  const documentRoot = new URL(documentRootUrl);
   const directView = views.find((name) => {
     const publicView = new URL(`${encodeURIComponent(name)}/`, publicRoot);
     const authoredView = new URL(`${encodeURIComponent(name)}/`, documentRoot);
@@ -125,9 +123,7 @@ export const viewHistoryNavigationForUrl = ({
   if (!navigation) {
     return undefined;
   }
-  const mountedQuery = publicNotebookQuery(
-    new URL(mountedDocumentUrl, navigationOptions.origin).search,
-  );
+  const mountedQuery = publicNotebookQuery(new URL(mountedDocumentUrl).search);
   const requestedQuery = publicNotebookQuery(new URL(navigation.documentUrl).search);
   return {
     navigation,
