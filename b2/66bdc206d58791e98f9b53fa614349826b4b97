@@ -1,0 +1,13 @@
+packages/marimo-studio/src/marimo_studio/_authoring/preview.py
+  ai_agent 58,60-62
+packages/marimo-studio/tests/agent/test_preview_urls.py
+  ai_agent 141-143
+packages/marimo-studio/src/marimo_studio/_browser_client/transport.py
+  ai_agent 181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b266bdc206d58791e98f9b53fa614349826b4b97",
+  "prompts": {}
+}
