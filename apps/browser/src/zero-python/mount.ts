@@ -64,7 +64,13 @@ export const mountZeroPythonRuntime = async (
       ) {
         return "reload";
       }
-      const data = parseZeroPythonRuntimeData(next.runtime);
+      let data: ReturnType<typeof parseZeroPythonRuntimeData>;
+      try {
+        data = parseZeroPythonRuntimeData(next.runtime);
+      } catch {
+        // A reload mounts the configuration again and reports its error.
+        return "reload";
+      }
       if (data.manifestUrl !== controller.manifestUrl) {
         void replace(next, data);
       }
