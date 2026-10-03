@@ -98,10 +98,11 @@ path-prefixing proxy in front of edit, run, and directory servers, and the
 provider suite's `proxiedEdit` endpoint fronts an edit server for framework
 views. Each publishes its backend beneath a random `/s/<id>/p/<id>` prefix,
 strips the prefix, rewrites `Host` to the unresolvable `backend.invalid`, and
-records requests outside the prefix. The browser fixture fails a test that sends
-such a request, including requests sent while its pages close. The run server
-requires an access token, and the directory server uses marimo's server-sent
-event transport.
+records requests outside the prefix. The main browser fixture fails a test whose
+requests leave the `proxied`, `proxiedRun`, or `proxiedDirectory` prefix,
+including requests sent while its pages close. `provider-preview.spec.ts` checks
+`proxiedEdit` itself. The run server requires an access token, and the directory
+server uses marimo's server-sent event transport.
 
 The pinned fixture launcher keeps native HTTP socket integration under
 `apps/e2e/scripts/_compat`. The Copilot case verifies persisted configuration

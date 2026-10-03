@@ -282,10 +282,10 @@ expose that runtime. Saved-workspace callers supply `server`, and the URL keeps
 its origin and path, including a proxy path prefix. A live code-mode view infers
 the local server address that marimo uses for callbacks, and follows the
 attached Studio tab. Behind a proxy, open the same path beneath the browser's
-public root. `access_token` authenticates the server request. `browser_client`
-selects the Studio tab that a Python or Prepared preview follows. Pass both
-together with `server`. The browser still needs the server's normal
-authentication.
+public root. `access_token` authenticates the server request. On an edit-mode
+server, `browser_client` selects the Studio tab that a Python or Prepared
+preview follows. Either one requires `server`. The browser still needs the
+server's normal authentication.
 
 The default URL follows the current presentation when opened or reloaded.
 `exact=True` requires current source to be built for the served profile

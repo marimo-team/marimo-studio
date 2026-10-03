@@ -329,10 +329,10 @@ notebook session. Use `MARIMO_STUDIO_SERVER_URL` to supply the server URL and
 `MARIMO_STUDIO_ACCESS_TOKEN` to authenticate the request when needed. The
 browser requires its own normal server authentication.
 
-`--browser-client` selects the Studio tab that a Python or Prepared preview
-follows. A Prepared preview always follows a Studio tab. Without
-`--browser-client`, it uses the only connected tab and fails when none is
-connected.
+On an edit-mode server, `--browser-client` selects the Studio tab that a
+preview follows. A Python preview follows a tab when you name one. A Prepared
+preview always follows a tab: without `--browser-client` it uses the only
+connected tab and fails when none is connected. Run-mode previews follow no tab.
 
 On an edit-mode server, an open preview follows the development build of each
 source change and keeps its address. After the server restarts, the page reloads

@@ -86,7 +86,9 @@ the requested directory, so configure the proxy to redirect
 marimo's password form submits to the server root, which a stripping proxy does
 not forward. Open the notebook once with `?access_token=<token>`. Studio
 starts the session and removes the token with a redirect beneath the prefix, in
-edit and run mode. Starting marimo with `--no-token` also works, but it lets
+edit and run mode. That first request carries the token in its query string,
+so proxy and server access logs can record it. Redact `access_token` from those
+logs. Starting marimo with `--no-token` also works, but it lets
 every account on the machine reach the notebook through its local port. Keep a
 token on shared hosts.
 
