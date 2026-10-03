@@ -1,0 +1,21 @@
+apps/e2e/unit/network.test.ts
+  s_ba377188791481::t_1f8e763b589f2d 94,97,99-103,119-125,133-141
+apps/e2e/scripts/network.ts
+  s_ba377188791481::t_1f8e763b589f2d 112-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bcf638ea1766cc2ab169d26a9e4499f6218eda4f",
+  "prompts": {},
+  "sessions": {
+    "s_ba377188791481": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2dd22cdb-f1fe-4241-bcc6-8055a96f7882",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
