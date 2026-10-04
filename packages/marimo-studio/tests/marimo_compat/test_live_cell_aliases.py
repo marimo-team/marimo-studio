@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import shutil
 import weakref
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -25,11 +26,13 @@ from marimo_studio._compat.server.notebook_save import (
     PrivateNotebookSaveTransform,
     _SourceTransformExtension,
 )
+from marimo_studio._composition import create_notebook_write_lock
 from marimo_studio._server.cell_alias_policy import CellAliasSourcePolicy
 from marimo_studio._server.records import ServerHandle, ServerLocation
 from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
 from marimo_studio.errors._internal import CompatibilityError
 
 from ..helpers import empty_notebook_source, replace_app_shell
@@ -390,6 +393,75 @@ def test_project_alias_write_failure_is_visible(
         )
 
     assert "x * 5" in notebook_path.read_text(encoding="utf-8")
+
+
+def _hold_notebook_lock(notebook: Path) -> None:
+    with create_notebook_write_lock()(notebook):
+        pass
+
+
+def _edited_cells(session: _Session) -> tuple[NotebookCell, ...]:
+    return tuple(
+        _cell_with_code(cell, cell.code.replace("x * 2", "x * 5"))
+        for cell in session.document.cells
+    )
+
+
+def test_live_save_completes_while_studio_holds_the_catalog_lock(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    _bind_cells(notebook_path, 2)
+    studio = load_studio(notebook_path)
+    manager = AppFileManager(notebook_path)
+    session = _Session(manager)
+    _enable_sync(notebook_path, session)
+    # A copied view needs an owner record, which a full catalog load writes
+    # under the catalog lock.
+    shutil.copytree(studio.view().root, studio.view_root / "copied")
+
+    with (
+        ThreadPoolExecutor(max_workers=1) as executor,
+        workspace_catalog_lock(studio.view_root),
+    ):
+        source = executor.submit(_save_cells, manager, _edited_cells(session))
+        assert "x * 5" in source.result(timeout=10)
+
+    current = load_studio(notebook_path)
+    assert current.cells["cell-2"] == resolve_studio(current).notebook.cells[1].ref
+
+
+def test_project_alias_commit_waits_outside_the_notebook_lock(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_project(notebook_path)
+    prepare_view(notebook_path)
+    _bind_cells(notebook_path, 2)
+    studio = load_studio(notebook_path)
+    manager = AppFileManager(notebook_path)
+    session = _Session(manager)
+    _enable_sync(notebook_path, session)
+    committing = Event()
+    write_bindings = cell_alias_policy._write_cell_bindings
+
+    def observed_write(*args: Any, **kwargs: Any) -> None:
+        committing.set()
+        write_bindings(*args, **kwargs)
+
+    monkeypatch.setattr(cell_alias_policy, "_write_cell_bindings", observed_write)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        with workspace_catalog_lock(studio.view_root):
+            saving = executor.submit(_save_cells, manager, _edited_cells(session))
+            assert committing.wait(timeout=10)
+            # A Studio catalog change takes the notebook lock inside the
+            # catalog lock while the save's commit waits for that catalog lock.
+            executor.submit(_hold_notebook_lock, notebook_path).result(timeout=10)
+        saving.result(timeout=10)
+
+    current = load_studio(notebook_path)
+    assert current.cells["cell-2"] == resolve_studio(current).notebook.cells[1].ref
 
 
 def test_live_edit_of_duplicate_cells_keeps_distinct_aliases(

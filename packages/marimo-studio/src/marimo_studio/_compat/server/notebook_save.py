@@ -75,27 +75,32 @@ class _SourceTransformExtension(EventAwareExtension):
                 # through the write so manifest edits cannot be overwritten.
                 # The native persisting save takes the same non-reentrant lock.
                 file_lock = notebook_file_lock(str(path)) if persist else nullcontext()
-                with manager._save_lock, file_lock:
-                    source = original_save_file(
-                        path,
-                        notebook=notebook,
-                        persist=False,
-                        previous_path=previous_path,
-                    )
-                    result = self._transform.transform(
-                        path,
-                        source,
-                        persist=persist,
-                        cells=_cells(self.session),
-                    )
-                    if not persist:
-                        return result.source
-                    if manager.content_matches_last_save(result.source):
-                        saved = cast(Any, manager)._last_saved_content or result.source
-                    else:
-                        manager.storage.write(path, result.source)
-                        manager._mark_content_as_last_save(result.source)
-                        saved = result.source
+                with manager._save_lock:
+                    with file_lock:
+                        source = original_save_file(
+                            path,
+                            notebook=notebook,
+                            persist=False,
+                            previous_path=previous_path,
+                        )
+                        result = self._transform.transform(
+                            path,
+                            source,
+                            persist=persist,
+                            cells=_cells(self.session),
+                        )
+                        if not persist:
+                            return result.source
+                        if manager.content_matches_last_save(result.source):
+                            saved = (
+                                cast(Any, manager)._last_saved_content or result.source
+                            )
+                        else:
+                            manager.storage.write(path, result.source)
+                            manager._mark_content_as_last_save(result.source)
+                            saved = result.source
+                    # Studio takes its own locks before the notebook lock, so
+                    # the commit may take them only after the notebook lock.
                     result.commit()
                     return saved
 

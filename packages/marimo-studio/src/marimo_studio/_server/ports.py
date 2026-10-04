@@ -180,6 +180,12 @@ class SessionReplay(Protocol):
 
 
 class SourceTransformSession(Protocol):
+    """Rewrite notebook source inside Marimo's save.
+
+    ``transform`` runs while Marimo holds the notebook lock and must not take
+    Studio locks. The returned ``commit`` runs after Marimo releases it.
+    """
+
     def transform(
         self,
         path: Path,

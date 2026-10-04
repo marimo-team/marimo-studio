@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
+from threading import Event
 
 import pytest
+from marimo._environments.script_metadata import notebook_file_lock
 
+import marimo_studio._notebook.locking as locking_module
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import WorkspaceGenerationConflictError
@@ -59,4 +65,37 @@ def test_make_default_rejects_handles_from_an_earlier_catalog(
 
     with pytest.raises(WorkspaceGenerationConflictError):
         asyncio.run(dashboard.make_default())
+    assert load_studio(notebook_path).default_view == "report"
+
+
+def test_make_default_waits_for_a_marimo_notebook_save(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace_with_report(notebook_path)
+    create_lock = locking_module.create_notebook_write_lock
+    waiting = Event()
+
+    def observed_lock() -> Callable[[Path], AbstractContextManager[None]]:
+        lock = create_lock()
+
+        @contextmanager
+        def wait_then_hold(path: Path) -> Iterator[None]:
+            waiting.set()
+            with lock(path):
+                yield
+
+        return wait_then_hold
+
+    monkeypatch.setattr(locking_module, "create_notebook_write_lock", observed_lock)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with notebook_file_lock(str(notebook_path)):
+            pending = executor.submit(
+                asyncio.run, workspace.view("report").make_default()
+            )
+            assert waiting.wait(timeout=10)
+            assert load_studio(notebook_path).default_view == "dashboard"
+        pending.result(timeout=10)
+
     assert load_studio(notebook_path).default_view == "report"

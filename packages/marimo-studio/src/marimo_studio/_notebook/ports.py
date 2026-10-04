@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -25,6 +26,16 @@ class LiveNotebookRunner(Protocol):
         value_max_bytes: int | None = None,
         source_generation: NotebookSourceGeneration | None = None,
     ) -> RuntimeProbe: ...
+
+
+class NotebookWriteLock(Protocol):
+    """Hold Marimo's cross-process lock for one saved notebook.
+
+    Marimo takes the same lock from its header read through its write, so a
+    Studio write under it cannot interleave with a notebook save.
+    """
+
+    def __call__(self, path: Path) -> AbstractContextManager[None]: ...
 
 
 class NotebookInspector(Protocol):

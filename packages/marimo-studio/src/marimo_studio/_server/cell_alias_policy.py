@@ -15,11 +15,12 @@ from marimo_studio._server.ports import SourceTransformSession
 from marimo_studio._server.records import SaveCell, SourceTransformResult
 from marimo_studio._workspace import discover_studio
 from marimo_studio._workspace.bindings import _write_cell_bindings
+from marimo_studio._workspace.config import discover_studio_definition
 from marimo_studio._workspace.metadata import (
     set_cell_bindings,
     updated_notebook_config_source,
 )
-from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.models import StudioDefinition
 from marimo_studio.errors import MarimoStudioError
 
 
@@ -89,15 +90,17 @@ class _CellAliasTransform(SourceTransformSession):
         self._aliases.clear()
         self._saved_live = ()
 
-    def _workspace(self) -> StudioWorkspace | None:
+    def _workspace(self) -> StudioDefinition | None:
+        # Marimo holds its notebook lock around ``transform``. Reading only the
+        # configuration keeps Studio's catalog lock out of that critical section.
         try:
-            return discover_studio(self._path)
+            return discover_studio_definition(self._path)
         except MarimoStudioError:
             return None
 
     def _refresh_aliases(
         self,
-        workspace: StudioWorkspace,
+        workspace: StudioDefinition,
         live: tuple[tuple[CellRef, str], ...],
     ) -> None:
         resolved: dict[str, _TrackedAlias] = {}
@@ -125,7 +128,7 @@ class _CellAliasTransform(SourceTransformSession):
         self,
         cells: tuple[SaveCell, ...],
     ) -> tuple[
-        StudioWorkspace | None,
+        StudioDefinition | None,
         dict[str, CellRef],
         tuple[str, ...],
         bool,

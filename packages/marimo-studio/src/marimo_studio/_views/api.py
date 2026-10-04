@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from marimo_studio._composition import create_notebook_write_lock
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._notebook.records import CellSelector
 from marimo_studio._views.create import prepare_view as _prepare_view
@@ -32,6 +33,7 @@ def bind_cell(
         alias,
         cell_selector,
         inspect_notebook=inspect_notebook,
+        lock_notebook=create_notebook_write_lock(),
         dry_run=dry_run,
         overwrite=overwrite,
     )
