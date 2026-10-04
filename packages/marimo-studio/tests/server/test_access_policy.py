@@ -27,13 +27,12 @@ from marimo_studio._server.studio.event_capability import (
 )
 from marimo_studio._server.support import events_response
 from marimo_studio._views.build import build_view_project_sync
-from marimo_studio._workspace.metadata import update_notebook_config
 
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
-from ..helpers import notebook_source
+from ..helpers import notebook_source, update_notebook_config
 from .app_test_support import (
     Response,
     _redirect_target,

@@ -7,11 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generic, TypeVar
 
-from marimo_studio._filesystem.io import (
-    read_file_snapshot_with_identity,
-    reject_mutable_symlinks,
-)
-from marimo_studio._filesystem.secure import FileIdentity
+from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._workspace.config import (
     default_view_writes,
     studio_definition_from_source,
@@ -29,12 +25,12 @@ class WorkspaceConfigSnapshot(Generic[_TStudio]):
 
     studio: _TStudio
     source: str
-    config_identity: FileIdentity
+    config_identity: Version
     notebook_source: str | None
-    notebook_identity: FileIdentity | None
+    notebook_identity: Version | None
 
     @property
-    def expected_identities(self) -> dict[Path, FileIdentity]:
+    def expected_identities(self) -> dict[Path, Version]:
         expected = {self.studio.config_path: self.config_identity}
         if self.notebook_identity is not None:
             expected[self.studio.notebook] = self.notebook_identity
@@ -44,7 +40,7 @@ class WorkspaceConfigSnapshot(Generic[_TStudio]):
         self,
         views: Collection[str],
         default_view: str,
-    ) -> tuple[dict[Path, str], dict[Path, FileIdentity | None]]:
+    ) -> tuple[dict[Path, str], dict[Path, Version | None]]:
         """Plan the owner and configuration writes for a changed view catalog.
 
         ``views`` names every view after the change. Run it under the workspace
@@ -57,10 +53,10 @@ class WorkspaceConfigSnapshot(Generic[_TStudio]):
         )
 
 
-def _source_and_identity(path: Path, root: Path) -> tuple[str, FileIdentity]:
-    payload, _mode, identity = read_file_snapshot_with_identity(path, root=root)
+def _source_and_identity(tree: FileTree, path: Path) -> tuple[str, Version]:
+    snapshot = tree.read(path)
     try:
-        return payload.decode("utf-8"), identity
+        return snapshot.content.decode("utf-8"), snapshot.version
     except UnicodeDecodeError as error:
         raise ConfigurationError(f"Workspace file is not UTF-8 text: {path}") from error
 
@@ -89,16 +85,10 @@ def snapshot_workspace_config(
     require_catalog_generation: bool = False,
 ) -> WorkspaceConfigSnapshot[_TStudio]:
     """Read configuration identities and confirm them through a fresh load."""
-    paths = {studio.config_path}
-    if include_notebook:
-        paths.add(studio.notebook)
-    reject_mutable_symlinks(studio.root, paths)
-    source, config_identity = _source_and_identity(
-        studio.config_path,
-        studio.root,
-    )
+    tree = FileTree(studio.root)
+    source, config_identity = _source_and_identity(tree, studio.config_path)
     source_studio = studio_definition_from_source(studio.config_path, source)
-    notebook_identity: FileIdentity | None = None
+    notebook_identity: Version | None = None
     notebook_source: str | None = None
     if include_notebook:
         if studio.notebook == studio.config_path:
@@ -106,23 +96,18 @@ def snapshot_workspace_config(
             notebook_identity = config_identity
         else:
             notebook_source, notebook_identity = _source_and_identity(
-                studio.notebook,
-                studio.root,
+                tree, studio.notebook
             )
 
     current = reload_studio(studio.config_path)
-    _confirmed_source, confirmed_config = _source_and_identity(
-        studio.config_path,
-        studio.root,
-    )
-    confirmed_notebook: FileIdentity | None = None
+    _confirmed_source, confirmed_config = _source_and_identity(tree, studio.config_path)
+    confirmed_notebook: Version | None = None
     if include_notebook:
         if studio.notebook == studio.config_path:
             confirmed_notebook = confirmed_config
         else:
             _confirmed_notebook_source, confirmed_notebook = _source_and_identity(
-                studio.notebook,
-                studio.root,
+                tree, studio.notebook
             )
     generation_changed = require_catalog_generation and (
         not isinstance(studio, StudioWorkspace)

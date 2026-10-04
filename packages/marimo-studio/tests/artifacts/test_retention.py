@@ -13,8 +13,6 @@ from pathlib import Path
 import pytest
 
 import marimo_studio._artifacts.retention as retention_module
-import marimo_studio._views.remove as workspace_views
-from marimo_studio._artifacts.lock import acquire_file_lock, release_file_lock
 from marimo_studio._artifacts.paths import artifact_root
 from marimo_studio._artifacts.repository import read_build_state
 from marimo_studio._artifacts.retention import (
@@ -22,6 +20,7 @@ from marimo_studio._artifacts.retention import (
     prune_artifacts,
     prune_artifacts_locked,
 )
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.remove import delete_view
@@ -320,33 +319,20 @@ def test_deletion_closes_view_local_lock_before_rename(
     with publish_artifact_lease(project, "development"):
         pass
     lock_path = artifact_root(project) / ".publication.lock"
-    replace = workspace_views.SecureDirectory.replace
+    publish = FileTree.publish
     observed = False
 
-    def checked_replace(
-        filesystem: workspace_views.SecureDirectory,
-        source: Path,
-        destination: Path,
-    ) -> None:
+    def checked_publish(tree: FileTree, source: Path, destination: Path) -> None:
         nonlocal observed
         if Path(source) == project.root:
-            descriptor = os.open(lock_path, os.O_RDWR)
-            acquired = False
-            try:
-                acquired = acquire_file_lock(descriptor, blocking=False)
+            with FileTree(project.root).lock(
+                lock_path, blocking=False, create=False
+            ) as acquired:
                 assert acquired
-                observed = True
-            finally:
-                if acquired:
-                    release_file_lock(descriptor)
-                os.close(descriptor)
-        replace(filesystem, source, destination)
+            observed = True
+        publish(tree, source, destination)
 
-    monkeypatch.setattr(
-        workspace_views.SecureDirectory,
-        "replace",
-        checked_replace,
-    )
+    monkeypatch.setattr(FileTree, "publish", checked_publish)
 
     delete_view(load_studio(notebook_path), project.name)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from types import MappingProxyType
 
 from marimo_studio._artifacts.inputs import (
@@ -12,8 +12,7 @@ from marimo_studio._artifacts.inputs import (
     project_input_state,
     project_revision_snapshot,
 )
-from marimo_studio._filesystem._secure_types import FileIdentity
-from marimo_studio._filesystem.io import read_file_snapshot_with_identity
+from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._notebook.ports import NotebookInspector
 from marimo_studio._notebook.records import CellRef, NotebookSpec
 from marimo_studio._notebook.source_snapshot import inspect_notebook_source
@@ -56,7 +55,7 @@ class PreparedExistingView:
 class SavedNotebook:
     notebook: NotebookSpec
     source: str
-    identity: FileIdentity
+    identity: Version
 
 
 @dataclass(frozen=True)
@@ -65,7 +64,7 @@ class PreparedStarter:
     provider: ViewProvider
     provider_starter: ProviderStarter
     observed_studio: StudioDefinition | None
-    observed_config_identity: FileIdentity | None
+    observed_config_identity: Version | None
     observed_notebook: NotebookSpec
     planned_notebook: NotebookSpec
     planned_source: str
@@ -78,7 +77,7 @@ class ValidatedViewCreation:
     saved_notebook: SavedNotebook
     config_snapshot: WorkspaceConfigSnapshot[StudioDefinition] | None
     studio: StudioDefinition | None
-    config_identity: FileIdentity | None
+    config_identity: Version | None
     selected: str
     default_view: str
     view_root: Path
@@ -89,8 +88,8 @@ class ValidatedViewCreation:
 class ViewCreationPlan:
     transaction_root: Path
     writes: Mapping[Path, str | bytes]
-    expected_identities: Mapping[Path, FileIdentity | None]
-    claimed_directories: Mapping[Path, tuple[PurePosixPath, ...]]
+    expected_identities: Mapping[Path, Version | None]
+    new_directories: tuple[Path, ...]
     notebook: Path
     config_path: Path
     name: str
@@ -107,15 +106,15 @@ class _ConfigurationTransition:
     transaction_root: Path
     config_path: Path
     write: tuple[Path, str] | None
-    expected_identities: dict[Path, FileIdentity | None]
+    expected_identities: dict[Path, Version | None]
 
 
 @dataclass(frozen=True)
 class _NewProjectWrites:
     writes: dict[Path, str | bytes]
     manifests: dict[Path, str]
-    expected_identities: dict[Path, FileIdentity | None]
-    claimed_directories: dict[Path, tuple[PurePosixPath, ...]]
+    expected_identities: dict[Path, Version | None]
+    new_directories: tuple[Path, ...]
     documents: dict[str, tuple[Path, ...]]
 
 
@@ -190,7 +189,7 @@ def prepare_starter(
     notebook_path: Path,
     saved: SavedNotebook,
     studio: StudioDefinition | None,
-    config_identity: FileIdentity | None,
+    config_identity: Version | None,
     view_root: Path,
     default_view: str,
     view_names: tuple[str, ...],
@@ -384,7 +383,7 @@ def _configuration_transition(
     studio = validated.studio
     saved = validated.saved_notebook
     notebook_path = validated.notebook_path
-    expected: dict[Path, FileIdentity | None] = {}
+    expected: dict[Path, Version | None] = {}
     if studio is None or studio.uses_notebook_config:
         expected[notebook_path] = saved.identity
         configured = configured_notebook_source(
@@ -439,8 +438,8 @@ def _new_project_writes(
 ) -> _NewProjectWrites:
     writes: dict[Path, str | bytes] = {}
     manifests: dict[Path, str] = {}
-    expected: dict[Path, FileIdentity | None] = {}
-    claimed: dict[Path, tuple[PurePosixPath, ...]] = {}
+    expected: dict[Path, Version | None] = {}
+    new_directories: list[Path] = []
     documents: dict[str, tuple[Path, ...]] = {}
     if prepared is None:
         if validated.new_views:
@@ -448,7 +447,7 @@ def _new_project_writes(
                 "The view catalog changed while starter files were prepared. "
                 "Run the operation again."
             )
-        return _NewProjectWrites(writes, manifests, expected, claimed, documents)
+        return _NewProjectWrites(writes, manifests, expected, (), documents)
 
     for view_name in validated.new_views:
         plan = prepared.plans.get(view_name)
@@ -459,7 +458,7 @@ def _new_project_writes(
             )
         project_root = validated.view_root / view_name
         manifest = project_root / "view.toml"
-        claimed[project_root] = (PurePosixPath("view.toml"), *plan.files.keys())
+        new_directories.append(project_root)
         documents[view_name] = (
             manifest,
             *(project_root / path for path in prepared.starter.documents),
@@ -477,7 +476,9 @@ def _new_project_writes(
         )
         expected[owner_path] = owner_identity
         writes[owner_path] = owner_source
-    return _NewProjectWrites(writes, manifests, expected, claimed, documents)
+    return _NewProjectWrites(
+        writes, manifests, expected, tuple(new_directories), documents
+    )
 
 
 def _selected_view(
@@ -561,13 +562,13 @@ def _workspace_ignore_source(source: str) -> str:
     return prefix + "".join(f"{rule}\n" for rule in missing)
 
 
-def _optional_text_snapshot(path: Path) -> tuple[str, FileIdentity | None]:
+def _optional_text_snapshot(path: Path) -> tuple[str, Version | None]:
     try:
-        payload, _mode, identity = read_file_snapshot_with_identity(path)
+        snapshot = FileTree(path.parent).read(path)
     except FileNotFoundError:
         return "", None
     try:
-        return payload.decode("utf-8"), identity
+        return snapshot.content.decode("utf-8"), snapshot.version
     except UnicodeDecodeError as error:
         raise ConfigurationError(f"Workspace file is not UTF-8 text: {path}") from error
 
@@ -656,7 +657,7 @@ def build_view_creation_plan(
         transaction_root=transition.transaction_root,
         writes=MappingProxyType(writes),
         expected_identities=MappingProxyType(expected),
-        claimed_directories=MappingProxyType(projects.claimed_directories),
+        new_directories=projects.new_directories,
         notebook=validated.notebook_path,
         config_path=transition.config_path,
         name=validated.selected,

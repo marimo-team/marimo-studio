@@ -11,9 +11,10 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
+import marimo_studio._views.rename as rename_module
 import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio._cli import cli
-from marimo_studio._filesystem.secure import SecureDirectory
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import (
     ConfigurationError,
@@ -42,28 +43,26 @@ def _fail_moving(
     before_move: Callable[[Path], None] | None = None,
     error: OSError | None = None,
 ) -> None:
-    move = SecureDirectory.rename_if_absent
+    move = FileTree.publish
 
-    def rename_if_absent(filesystem: SecureDirectory, source: Path, target: Path):
+    def publish(tree: FileTree, source: Path, target: Path) -> None:
         if source.name == source_name:
             if before_move is not None:
                 before_move(target)
             if error is not None:
                 raise error
-        return move(filesystem, source, target)
+        move(tree, source, target)
 
-    monkeypatch.setattr(SecureDirectory, "rename_if_absent", rename_if_absent)
+    monkeypatch.setattr(FileTree, "publish", publish)
 
 
-def _fail_syncing(monkeypatch: pytest.MonkeyPatch, paths: set[Path]) -> None:
-    sync = SecureDirectory.sync_parent
+def _fail_after_moving_to(monkeypatch: pytest.MonkeyPatch, target_name: str) -> None:
+    generation = rename_module.directory_generation
 
-    def sync_parent(filesystem: SecureDirectory, path: Path) -> None:
-        if path in paths:
-            raise OSError(errno.EIO, "Input/output error")
-        sync(filesystem, path)
+    def changed_after_move(path: Path) -> str:
+        return "changed" if path.name == target_name else generation(path)
 
-    monkeypatch.setattr(SecureDirectory, "sync_parent", sync_parent)
+    monkeypatch.setattr(rename_module, "directory_generation", changed_after_move)
 
 
 def _around_transaction(
@@ -201,22 +200,16 @@ def test_a_rename_that_cannot_move_the_folder_keeps_the_old_name(
     assert _catalog(notebook_path) == before
 
 
-@pytest.mark.parametrize(
-    "failed_syncs",
-    [{"summary"}, {"summary", "report"}],
-    ids=["new-folder", "new-and-restored-folder"],
-)
 def test_a_rename_that_fails_after_the_move_restores_the_project(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    failed_syncs: set[str],
 ) -> None:
     workspace = _workspace_with_report(notebook_path)
     root = load_studio(notebook_path).view_root
     before = _catalog(notebook_path)
-    _fail_syncing(monkeypatch, {root / name for name in failed_syncs})
+    _fail_after_moving_to(monkeypatch, "summary")
 
-    with pytest.raises(ViewRenameError, match="keeps its old name"):
+    with pytest.raises(ConfigurationError, match="changed before its rename"):
         asyncio.run(workspace.view("report").rename("summary"))
 
     monkeypatch.undo()
@@ -293,7 +286,7 @@ def test_a_rename_that_cannot_move_back_is_repaired_by_selecting_the_default(
 ) -> None:
     workspace = _workspace_with_report(notebook_path)
     root = load_studio(notebook_path).view_root
-    _fail_syncing(monkeypatch, {root / "overview"})
+    _fail_after_moving_to(monkeypatch, "overview")
     _fail_moving(monkeypatch, "overview", error=PermissionError(13, "Access denied"))
 
     with pytest.raises(WorkspaceMutationError) as failed:

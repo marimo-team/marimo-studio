@@ -1,13 +1,16 @@
-"""Protect workspace and artifact files during concurrent changes.
+"""Read and change workspace and artifact files through contained trees.
 
-Studio reads source, writes manifests, publishes artifacts, and rolls back
-multi-file operations while editors or other processes may change nearby
-paths. This package holds the containing directory open, rejects symbolic links
-and Windows reparse points, limits recursive work, and replaces complete files
-atomically.
+``files.FileTree`` owns every file change under one root. ``read`` returns
+content with an opaque ``Version``. ``write`` accepts an expected ``Version``
+or ``ABSENT``, ``remove`` accepts an expected ``Version`` or ``TreeVersion``,
+``publish`` moves a staged entry onto a name that must stay absent, and
+``lock`` holds a cross-process lock file. Each verb refuses a path that leaves
+its root or crosses a symlink or Windows junction, and uses the strongest
+primitive the filesystem offers. Callers state preconditions with versions and
+never handle temporary names, syncs, or displaced copies.
 
-Basic writes replace a complete file under the stable parent that Studio
-opened. Revision-aware Source saves additionally compare the file the caller
-read, and multi-file workspace transactions retain enough identity to restore
-or quarantine their own changes after failure.
+Provider builds are the only lower-privilege writers. ``FileTree.ingest``
+copies their output through directory handles into a directory that only
+Studio writes, so publication and serving never read a tree that a build can
+change.
 """

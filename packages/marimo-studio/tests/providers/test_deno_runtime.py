@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
@@ -10,7 +11,6 @@ import pytest
 
 from marimo_studio._artifacts.limits import FileBudget
 from marimo_studio._artifacts.paths import artifact_root
-from marimo_studio._filesystem import io as workspace_files
 from marimo_studio._processes.provider_runner import ProviderCommandError
 from marimo_studio._processes.supervisor import ProcessResult
 from marimo_studio._views.inspection import (
@@ -450,7 +450,7 @@ def test_public_asset_merge_stops_at_the_combined_output_limit(
         FileBudget(max_files=2, max_file_bytes=1024, max_total_bytes=4096),
     )
     visited = 0
-    scan = workspace_files.os.scandir
+    scan = os.scandir
 
     class CountingEntries:
         def __init__(self, entries: Any) -> None:
@@ -480,7 +480,7 @@ def test_public_asset_merge_stops_at_the_combined_output_limit(
             else entries
         )
 
-    monkeypatch.setattr(workspace_files.os, "scandir", count_entries)
+    monkeypatch.setattr(os, "scandir", count_entries)
 
     with pytest.raises(ValueError, match="more than 2 entries"):
         copy_public_assets(work, output)

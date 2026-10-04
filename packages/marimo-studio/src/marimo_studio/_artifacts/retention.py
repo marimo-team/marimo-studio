@@ -21,7 +21,7 @@ import re
 import tempfile
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from threading import Lock
@@ -36,7 +36,6 @@ from marimo_studio._artifacts.paths import (
     assert_secure_path,
     ensure_secure_directory,
     normalized_artifact_path,
-    open_secure_file,
     read_secure_bytes,
 )
 from marimo_studio._artifacts.records import ArtifactFile, ViewArtifact, ViewBuildState
@@ -46,11 +45,7 @@ from marimo_studio._artifacts.repository import (
     revision_root,
     write_profile_state,
 )
-from marimo_studio._filesystem.file_lock import (
-    acquire_file_lock,
-    release_file_lock,
-)
-from marimo_studio._filesystem.secure import secure_directory
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._workspace.mutation_lock import (
     artifact_lease_lock,
     view_mutation_lock,
@@ -98,8 +93,6 @@ def _verified_snapshot(
     except BaseException:
         snapshot.close()
         raise
-    finally:
-        source.close()
 
 
 def _pins_root(project: ViewProject) -> Path:
@@ -141,13 +134,6 @@ def _existing_artifact_root(project: ViewProject) -> Path | None:
     return root
 
 
-def _close_locked_descriptor(descriptor: int) -> None:
-    try:
-        release_file_lock(descriptor)
-    finally:
-        os.close(descriptor)
-
-
 def _live_pin_revisions(
     project: ViewProject,
     *,
@@ -166,34 +152,27 @@ def _live_pin_revisions(
             "Artifact pins directory",
             final_kind="directory",
         )
+    tree = FileTree(project.root)
     live: dict[str, set[int]] = {}
-    with secure_directory(root) as pins:
-        for directory in pins.children():
-            if _DIGEST.fullmatch(directory.name) is None:
-                raise ConfigurationError(
-                    f"Artifact pin revision is invalid: {directory}"
+    for directory in tree.children(root):
+        if _DIGEST.fullmatch(directory.name) is None:
+            raise ConfigurationError(f"Artifact pin revision is invalid: {directory}")
+        for pin in tree.children(directory):
+            holder = _PIN.fullmatch(pin.name)
+            if holder is None:
+                raise ConfigurationError(f"Artifact pin name is invalid: {pin}")
+            # A pin whose holder exited unlocks, so a lock attempt that
+            # succeeds identifies a stale pin.
+            with tree.lock(pin, blocking=False, create=False) as stale:
+                pass
+            if stale:
+                tree.remove(pin)
+            else:
+                live.setdefault(f"sha256:{directory.name}", set()).add(
+                    int(holder.group(1))
                 )
-            with secure_directory(directory) as revision_pins:
-                for pin in revision_pins.children():
-                    holder = _PIN.fullmatch(pin.name)
-                    if holder is None:
-                        raise ConfigurationError(f"Artifact pin name is invalid: {pin}")
-                    descriptor = revision_pins.open_file(pin, os.O_RDWR)
-                    acquired = False
-                    try:
-                        acquired = acquire_file_lock(descriptor, blocking=False)
-                    finally:
-                        if not acquired:
-                            os.close(descriptor)
-                    if not acquired:
-                        live.setdefault(f"sha256:{directory.name}", set()).add(
-                            int(holder.group(1))
-                        )
-                    else:
-                        _close_locked_descriptor(descriptor)
-                        revision_pins.unlink(pin)
-            with suppress(OSError):
-                pins.rmdir(directory)
+        with suppress(OSError):
+            tree.remove_empty_directory(directory)
     return live
 
 
@@ -207,16 +186,16 @@ def _prune_quarantine_locked(project: ViewProject) -> None:
         "Artifact quarantine directory",
         final_kind="directory",
     )
-    with secure_directory(root) as filesystem:
-        for path in filesystem.children():
-            if _QUARANTINE.fullmatch(path.name) is None:
-                raise ConfigurationError(f"Artifact quarantine name is invalid: {path}")
-            try:
-                filesystem.remove_tree(path)
-            except OSError:
-                # Open Windows descriptors can retain the physical generation.
-                # Their lease close retries this cleanup through artifact pruning.
-                continue
+    tree = FileTree(project.root)
+    for path in tree.children(root):
+        if _QUARANTINE.fullmatch(path.name) is None:
+            raise ConfigurationError(f"Artifact quarantine name is invalid: {path}")
+        try:
+            tree.remove(path)
+        except OSError:
+            # Open Windows descriptors can retain the physical generation.
+            # Their lease close retries this cleanup through artifact pruning.
+            continue
 
 
 def quarantine_artifact_revision_locked(
@@ -238,8 +217,7 @@ def quarantine_artifact_revision_locked(
     ensure_secure_directory(project.root, root, "Artifact quarantine directory")
     destination = root / f"{digest}-{uuid.uuid4().hex}"
     assert_secure_path(project.root, destination, "Artifact quarantine revision")
-    with secure_directory(project.root) as filesystem:
-        filesystem.replace(source, destination)
+    FileTree(project.root).replace(source, destination)
     return destination
 
 
@@ -277,14 +255,12 @@ def prune_artifacts_locked(project: ViewProject) -> None:
             "Artifact revisions directory",
             final_kind="directory",
         )
-        with secure_directory(revisions) as filesystem:
-            for path in filesystem.children():
-                if _DIGEST.fullmatch(path.name) is None:
-                    raise ConfigurationError(
-                        f"Artifact revision name is invalid: {path}"
-                    )
-                if f"sha256:{path.name}" not in protected:
-                    filesystem.remove_tree(path)
+        tree = FileTree(project.root)
+        for path in tree.children(revisions):
+            if _DIGEST.fullmatch(path.name) is None:
+                raise ConfigurationError(f"Artifact revision name is invalid: {path}")
+            if f"sha256:{path.name}" not in protected:
+                tree.remove(path)
     except FileNotFoundError:
         return
 
@@ -333,14 +309,11 @@ class _ArtifactPin:
 
     project: ViewProject
     path: Path
-    descriptor: int
+    held: ExitStack
     closed: bool = False
 
     def _release(self) -> None:
-        descriptor = self.descriptor
-        self.descriptor = -1
-        if descriptor >= 0:
-            _close_locked_descriptor(descriptor)
+        self.held.close()
 
     def close(self) -> None:
         if self.closed:
@@ -367,11 +340,10 @@ class _ArtifactPin:
                     final_kind="file",
                 )
                 self._release()
-                with secure_directory(self.project.root) as filesystem:
-                    with suppress(FileNotFoundError):
-                        filesystem.unlink(self.path)
-                    with suppress(OSError):
-                        filesystem.rmdir(self.path.parent)
+                tree = FileTree(self.project.root)
+                tree.remove(self.path)
+                with suppress(OSError):
+                    tree.remove_empty_directory(self.path.parent)
                 prune_artifacts_locked(self.project)
         except (ConfigurationError, OSError):
             if not _project_root_missing(self.project):
@@ -399,24 +371,17 @@ def _pin_revision_locked(
     assert_secure_path(project.root, root, "Artifact pins directory")
     assert_secure_path(project.root, directory, "Artifact revision pins")
     assert_secure_path(project.root, path, "Artifact pin")
+    tree = FileTree(project.root)
+    held = ExitStack()
     try:
-        with secure_directory(project.root) as filesystem:
-            filesystem.ensure_directory(root)
-            filesystem.ensure_directory(directory)
-            descriptor = filesystem.create_file(path)
-            try:
-                os.write(descriptor, f"{os.getpid()}\n".encode())
-                os.fsync(descriptor)
-                if not acquire_file_lock(descriptor, blocking=True):
-                    raise RuntimeError("Blocking artifact lease lock was not acquired")
-            except BaseException:
-                os.close(descriptor)
-                with suppress(FileNotFoundError):
-                    filesystem.unlink(path)
-                raise
+        held.enter_context(tree.lock(path))
     except OSError as error:
+        with suppress(OSError):
+            tree.remove(path)
+        if isinstance(error, ConfigurationError):
+            raise
         raise ConfigurationError(f"Could not create artifact pin: {path}") from error
-    return _ArtifactPin(project, path, descriptor)
+    return _ArtifactPin(project, path, held)
 
 
 @dataclass
@@ -559,16 +524,17 @@ class ArtifactLease:
                     f"Artifact file is absent from its manifest: {relative.as_posix()}"
                 )
             try:
-                source = open_secure_file(
-                    self.artifact.root,
-                    self.artifact.root.joinpath(*relative.parts),
-                    "Artifact file",
-                )
+                with FileTree(self.artifact.root).reader(
+                    self.artifact.root.joinpath(*relative.parts)
+                ) as (source, _state):
+                    snapshot = _verified_snapshot(source, record)
+            except ArtifactIntegrityError:
+                raise
             except (OSError, ConfigurationError) as error:
                 raise _integrity_error(relative) from error
             return LeasedArtifactFile(
                 self,
-                _verified_snapshot(source, record),
+                snapshot,
                 relative,
                 record.size,
                 record.sha256,

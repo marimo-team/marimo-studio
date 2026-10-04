@@ -17,13 +17,8 @@ from __future__ import annotations
 from contextlib import ExitStack, nullcontext
 from pathlib import Path
 
-from marimo_studio._filesystem._secure_types import (
-    FileIdentity,
-)
-from marimo_studio._filesystem.io import (
-    read_file_snapshot_with_identity,
-    reject_mutable_symlinks,
-)
+from marimo_studio._filesystem.files import FileTree, Version
+from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._notebook.ports import NotebookInspector
 from marimo_studio._notebook.source_snapshot import inspect_notebook_source
 from marimo_studio._views.creation_plan import (
@@ -77,14 +72,10 @@ from marimo_studio.view_providers._host.requirements import (
 )
 
 
-def _text_snapshot(
-    path: Path,
-    *,
-    root: Path | None = None,
-) -> tuple[str, FileIdentity]:
-    payload, _mode, identity = read_file_snapshot_with_identity(path, root=root)
+def _text_snapshot(path: Path) -> tuple[str, Version]:
+    snapshot = FileTree(path.parent).read(path)
     try:
-        return payload.decode("utf-8"), identity
+        return snapshot.content.decode("utf-8"), snapshot.version
     except UnicodeDecodeError as error:
         raise ConfigurationError(f"Workspace file is not UTF-8 text: {path}") from error
 
@@ -194,7 +185,8 @@ def _validate_view_creation(
         raise ViewExistsError(selected)
     default_view = studio.default_view if studio is not None else selected
     workspace_root = studio.root if studio is not None else notebook_path.parent
-    reject_mutable_symlinks(workspace_root, {view_root})
+    # stat refuses a view root reached through a link before plain path checks.
+    FileTree(workspace_root).stat(view_root)
     _reject_workspace_ignore_shape(view_root)
     view_names = tuple(dict.fromkeys((default_view, selected)))
     _reject_manifestless_view_directories(view_root, view_names)
@@ -223,12 +215,12 @@ def _commit_view_creation_plan(plan: ViewCreationPlan) -> StudioWorkspace:
             plan.transaction_root,
             plan.writes,
             expected=plan.expected_identities,
-            claimed_directories=plan.claimed_directories,
+            new_directories=plan.new_directories,
         )
         if plan.writes
         else nullcontext()
     )
-    with transaction:
+    with notebook_write_lock(plan.notebook, plan.writes), transaction:
         return load_studio(plan.notebook)
 
 

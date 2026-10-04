@@ -29,7 +29,7 @@ notebook configuration
 | `_notebook`                | Saved notebook inspection and cell identity                |
 | `_projections`             | Notebook symbols, target resolution, values, and evidence  |
 | `_prepared`                | View bindings, export specifications, and manifests        |
-| `_filesystem`              | Secure path operations and bounded tree traversal          |
+| `_filesystem`              | Contained file verbs, locks, and build-output ingestion    |
 | `_processes`               | Supervision, cancellation, and output bounds               |
 | `_authoring`               | Shared workspace and view application operations           |
 | `_browser_client`          | Studio activation, protocol, and transport                 |

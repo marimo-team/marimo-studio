@@ -3,23 +3,27 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterator, Mapping
-from contextlib import ExitStack, contextmanager
-from pathlib import Path, PurePosixPath
+from contextlib import contextmanager
+from pathlib import Path
 
-from marimo_studio._filesystem._secure_types import (
+from marimo_studio._filesystem.errors import UnsafePathError
+from marimo_studio._filesystem.files import (
+    ABSENT,
     ConditionalWriteError,
-    SecureFileError,
-)
-from marimo_studio._filesystem.io import (
-    atomic_write_bytes,
-    read_file_snapshot_with_identity,
-)
-from marimo_studio._filesystem.secure import (
-    FileIdentity,
-    SecureDirectory,
-    secure_directory,
+    Expectation,
+    FileTree,
+    Snapshot,
+    TreeVersion,
+    Version,
 )
 from marimo_studio.errors import ConfigurationError, WorkspaceMutationError
+
+
+def _changed(path: Path) -> ConfigurationError:
+    return ConfigurationError(
+        f"Workspace path changed before the transaction committed: {path}. "
+        "Run the operation again."
+    )
 
 
 def _add_error_note(error: BaseException, note: str) -> None:
@@ -32,254 +36,88 @@ def _add_error_note(error: BaseException, note: str) -> None:
     error.__notes__ = notes  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def _claimed_root_for_path(
-    path: Path,
-    claimed_filesystems: Mapping[Path, SecureDirectory],
-) -> Path | None:
-    roots = tuple(root for root in claimed_filesystems if root in path.parents)
-    if not roots:
-        return None
-    return max(roots, key=lambda candidate: len(candidate.parts))
+def _owning_directory(path: Path, directories: Collection[Path]) -> Path | None:
+    owners = [directory for directory in directories if directory in path.parents]
+    return max(owners, key=lambda item: len(item.parts)) if owners else None
 
 
-def _owner_for_path(
-    path: Path,
-    filesystem: SecureDirectory,
-    claimed_filesystems: Mapping[Path, SecureDirectory],
-) -> SecureDirectory:
-    root = _claimed_root_for_path(path, claimed_filesystems)
-    return filesystem if root is None else claimed_filesystems[root]
-
-
-def _rollback(
-    filesystem: SecureDirectory,
-    snapshots: Mapping[Path, tuple[bytes, int] | None],
-    directories: Mapping[Path, FileIdentity],
-    written_files: Mapping[Path, FileIdentity],
-    claimed_filesystems: Mapping[Path, SecureDirectory],
-    close_claimed_owners: Callable[[], None],
-) -> None:
-    failures: list[tuple[Path, Exception]] = []
-    blocked_directories: set[Path] = set()
-
-    def record_file_failure(path: Path, error: Exception) -> None:
-        failures.append((path, error))
-        blocked_directories.update(
-            directory for directory in directories if directory in path.parents
-        )
-
-    def record_directory_failure(path: Path, error: Exception) -> None:
-        failures.append((path, error))
-        blocked_directories.update(
-            directory for directory in directories if directory in path.parents
-        )
-
-    for path, snapshot in snapshots.items():
-        identity = written_files.get(path)
-        if identity is None:
-            continue
-        owner = _owner_for_path(path, filesystem, claimed_filesystems)
-        try:
-            quarantine = owner.quarantine_if_identity(path, identity)
-        except FileNotFoundError:
-            if snapshot is not None:
-                content, mode = snapshot
-                try:
-                    owner.restore_file_if_absent(path, content, mode)
-                except Exception as error:
-                    record_file_failure(path, error)
-        except Exception as error:
-            record_file_failure(path, error)
-        else:
-            restored = snapshot is None
-            if snapshot is not None:
-                content, mode = snapshot
-                try:
-                    owner.restore_file_if_absent(path, content, mode)
-                except Exception as error:
-                    record_file_failure(
-                        path,
-                        RuntimeError(
-                            f"Rollback file was preserved at {quarantine}: {error}"
-                        ),
-                    )
-                else:
-                    restored = True
-            if restored:
-                try:
-                    owner.unlink(quarantine)
-                except Exception as error:
-                    record_file_failure(path, error)
-
-    def rollback_directory(directory: Path, owner: SecureDirectory) -> None:
-        if directory in blocked_directories:
-            return
-        try:
-            quarantine = owner.quarantine_directory_if_identity(
-                directory,
-                directories[directory],
-            )
-        except FileNotFoundError:
-            pass
-        except Exception as error:
-            record_directory_failure(directory, error)
-        else:
-            try:
-                owner.rmdir(quarantine)
-            except Exception as error:
-                record_directory_failure(directory, error)
-
-    claimed_roots = set(claimed_filesystems)
-    claimed_children = tuple(
-        directory
-        for directory in directories
-        if directory not in claimed_roots
-        and any(root in directory.parents for root in claimed_roots)
-    )
-    outer_directories = tuple(
-        directory
-        for directory in directories
-        if directory not in claimed_roots and directory not in claimed_children
-    )
-    for directory in sorted(
-        claimed_children,
-        key=lambda path: len(path.parts),
-        reverse=True,
-    ):
-        owner = _owner_for_path(directory, filesystem, claimed_filesystems)
-        rollback_directory(directory, owner)
-    try:
-        close_claimed_owners()
-    except Exception as error:
-        for directory in claimed_roots:
-            record_directory_failure(directory, error)
-            blocked_directories.add(directory)
-    for directory in sorted(
-        claimed_roots,
-        key=lambda path: len(path.parts),
-        reverse=True,
-    ):
-        rollback_directory(directory, filesystem)
-    for directory in sorted(
-        outer_directories,
-        key=lambda path: len(path.parts),
-        reverse=True,
-    ):
-        rollback_directory(directory, filesystem)
-    if failures:
-        details = "\n".join(f"- {path}: {error}" for path, error in failures)
-        raise RuntimeError(f"Workspace rollback failures:\n{details}") from failures[0][
-            1
-        ]
-
-
-def _current_identity(
-    filesystem: SecureDirectory,
-    path: Path,
-) -> FileIdentity | None:
-    try:
-        return filesystem.file_identity(path)
-    except FileNotFoundError:
-        return None
-
-
-def _require_identities(
-    filesystem: SecureDirectory,
-    expected: Mapping[Path, FileIdentity | None],
-    *,
-    known: Mapping[Path, FileIdentity | None] | None = None,
-) -> None:
-    for path, identity in expected.items():
-        current = known.get(path) if known is not None and path in known else None
-        if known is None or path not in known:
-            current = _current_identity(filesystem, path)
-        if current != identity:
-            raise ConfigurationError(
-                f"Workspace file changed before the transaction committed: {path}. "
-                "Run the operation again."
-            )
-
-
-def _require_owned_identities(
-    filesystem: SecureDirectory,
-    claimed_filesystems: Mapping[Path, SecureDirectory],
-    expected: Mapping[Path, FileIdentity | None],
-) -> None:
-    for path, identity in expected.items():
-        owner = _owner_for_path(path, filesystem, claimed_filesystems)
-        _require_identities(owner, {path: identity})
-
-
-def _require_absent_entries(
-    filesystem: SecureDirectory,
-    paths: Collection[Path],
-) -> None:
-    for path in paths:
-        if filesystem.entry_exists(path):
-            raise ConfigurationError(
-                f"Workspace path was recreated before the transaction committed: "
-                f"{path}. Run the operation again."
-            )
-
-
-def _require_directory_identities(
-    filesystem: SecureDirectory,
-    expected: Mapping[Path, FileIdentity],
-) -> None:
-    for path, identity in expected.items():
-        if filesystem.directory_identity(path) != identity:
-            raise ConfigurationError(
-                f"Workspace directory changed before the transaction committed: "
-                f"{path}. Run the operation again."
-            )
-
-
-def _expected_tree_paths(
-    files: tuple[PurePosixPath, ...],
-) -> frozenset[str]:
-    paths = {"."}
+def _entry_count(directory: Path, files: Collection[Path]) -> int:
+    entries: set[Path] = set()
     for file in files:
-        paths.add(file.as_posix())
-        paths.update(
-            parent.as_posix() for parent in file.parents if parent != PurePosixPath(".")
-        )
-    return frozenset(paths)
+        entries.add(file)
+        entries.update(parent for parent in file.parents if directory in parent.parents)
+    return len(entries)
 
 
-def _require_directory_catalog(
-    filesystem: SecureDirectory,
-    directory: Path,
-    files: tuple[PurePosixPath, ...],
-    *,
-    expected_root: FileIdentity,
-) -> tuple[tuple[object, ...], ...]:
+def _tree_version(tree: FileTree, directory: Path, entries: int) -> TreeVersion | None:
+    # A tree that gained entries or a link no longer matches what was published.
     try:
-        identity = filesystem.directory_tree_identity(
-            directory,
-            max_entries=len(_expected_tree_paths(files)),
+        return tree.tree_version(directory, max_entries=entries)
+    except UnsafePathError:
+        return None
+
+
+class _Undo:
+    """Record each committed change so a failure can restore prior state."""
+
+    def __init__(self, tree: FileTree) -> None:
+        self._tree = tree
+        self._steps: list[tuple[Path, Callable[[], None]]] = []
+
+    def ensure_directory(self, directory: Path) -> None:
+        """Create missing directories through ``directory`` and undo each one.
+
+        Each level is created and recorded before the next, so a failure
+        deeper in the chain still removes the levels this transaction created.
+        """
+        current = self._tree.root
+        for component in directory.relative_to(self._tree.root).parts:
+            current /= component
+            for created in self._tree.ensure_directory(current):
+                self._steps.append(
+                    (created, lambda path=created: self._remove_created(path))
+                )
+
+    def _remove_created(self, directory: Path) -> None:
+        # A created directory that gained entries holds someone else's files.
+        if not self._tree.remove_empty_directory(directory) and self._tree.exists(
+            directory
+        ):
+            raise ConditionalWriteError(
+                f"Directory gained entries before rollback: {directory}"
+            )
+
+    def published(self, directory: Path, version: TreeVersion) -> None:
+        self._steps.append(
+            (directory, lambda: self._tree.remove(directory, expect=version))
         )
-    except SecureFileError as error:
-        raise ConfigurationError(
-            f"Workspace directory changed before the transaction committed: "
-            f"{directory}. Run the operation again."
-        ) from error
-    root = identity[0] if identity else None
-    root_matches = root == (
-        ".",
-        expected_root.mode,
-        expected_root.device,
-        expected_root.inode,
-    )
-    if (
-        identity is None
-        or not root_matches
-        or {str(entry[0]) for entry in identity} != set(_expected_tree_paths(files))
-    ):
-        raise ConfigurationError(
-            f"Workspace directory changed before the transaction committed: "
-            f"{directory}. Run the operation again."
-        )
-    return identity
+
+    def wrote(self, path: Path, previous: Snapshot | None, written: Version) -> None:
+        def restore() -> None:
+            if previous is None:
+                self._tree.remove(path, expect=written)
+            else:
+                self._tree.write(
+                    path,
+                    previous.content,
+                    expect=written,
+                    mode=previous.mode,
+                )
+
+        self._steps.append((path, restore))
+
+    def rollback(self) -> None:
+        failures: list[tuple[Path, Exception]] = []
+        for path, restore in reversed(self._steps):
+            try:
+                restore()
+            except Exception as error:
+                failures.append((path, error))
+        if failures:
+            details = "\n".join(f"- {path}: {error}" for path, error in failures)
+            raise RuntimeError(
+                f"Workspace rollback failures:\n{details}"
+            ) from failures[0][1]
 
 
 @contextmanager
@@ -287,152 +125,103 @@ def write_file_transaction(
     root: Path,
     writes: Mapping[Path, str | bytes],
     *,
-    expected: Mapping[Path, FileIdentity | None] | None = None,
-    expected_absent_entries: Collection[Path] = (),
-    expected_directories: Mapping[Path, FileIdentity] | None = None,
-    claimed_directories: Mapping[Path, tuple[PurePosixPath, ...]] | None = None,
+    expected: Mapping[Path, Version | None] | None = None,
+    new_directories: Collection[Path] = (),
 ) -> Iterator[None]:
-    """Conditionally write files and restore prior state after a failure."""
-    paths = set(writes)
-    read_set = dict(expected or {})
-    directory_claims = dict(claimed_directories or {})
-    directory_read_set = dict(expected_directories or {})
-    with secure_directory(root) as filesystem, ExitStack() as ownership:
-        snapshots: dict[Path, tuple[bytes, int] | None] = {}
-        initial_identities: dict[Path, FileIdentity | None] = {}
-        for path in paths:
-            try:
-                payload, mode, identity = read_file_snapshot_with_identity(
-                    path,
-                    filesystem=filesystem,
-                )
-            except FileNotFoundError:
-                snapshots[path] = None
-                initial_identities[path] = None
-            else:
-                snapshots[path] = (payload, mode)
-                initial_identities[path] = identity
-        _require_identities(
-            filesystem,
-            read_set,
-            known=initial_identities,
-        )
-        _require_absent_entries(filesystem, expected_absent_entries)
-        _require_directory_identities(filesystem, directory_read_set)
-        directories: dict[Path, FileIdentity] = {}
-        claimed_filesystems: dict[Path, SecureDirectory] = {}
-        written_files: dict[Path, FileIdentity] = {}
+    """Write related files under ``root`` and restore prior state after a failure.
+
+    ``expected`` maps a path to the version the caller read, or to ``None``
+    when the path must stay absent. Expectations hold before the first write
+    and again after the ``with`` body. A written path with an expectation
+    commits only while it still matches. Every directory in
+    ``new_directories`` must be absent. Its files from ``writes`` are staged
+    together and published with one rename.
+
+    A failed write, failed expectation, or exception in the body restores
+    everything this transaction committed. Content that changed after this
+    transaction wrote it stays in place, and the rollback error names it.
+    """
+    tree = FileTree(root)
+    expectations = dict(expected or {})
+    staged: dict[Path, dict[Path, bytes]] = {
+        directory: {} for directory in new_directories
+    }
+    direct: dict[Path, bytes] = {}
+    for path, content in writes.items():
+        payload = content.encode("utf-8") if isinstance(content, str) else content
+        owner = _owning_directory(path, new_directories)
+        if owner is None:
+            direct[path] = payload
+        else:
+            staged[owner][path] = payload
+    previous: dict[Path, Snapshot | None] = {}
+    for path in direct:
         try:
-            for directory in directory_claims:
-                filesystem.ensure_parent(directory, directories)
+            previous[path] = tree.read(path)
+        except FileNotFoundError:
+            previous[path] = None
+    for path, version in expectations.items():
+        if path in previous:
+            snapshot = previous[path]
+            current = snapshot.version if snapshot is not None else None
+        else:
+            current = tree.version(path)
+        if current != version:
+            raise _changed(path)
+    undo = _Undo(tree)
+    committed = {
+        path: version for path, version in expectations.items() if path not in writes
+    }
+    published: dict[Path, tuple[TreeVersion, int]] = {}
+    try:
+        for directory, files in sorted(
+            staged.items(), key=lambda item: len(item[0].parts)
+        ):
+            undo.ensure_directory(directory.parent)
+            entries = _entry_count(directory, files)
+            with tree.temporary_directory(directory.parent) as staging:
+                for path, payload in files.items():
+                    target = staging / path.relative_to(directory)
+                    tree.ensure_directory(target.parent)
+                    tree.write(target, payload)
+                # A rename keeps every inode, so the staged tree's version is
+                # the published tree's version.
+                version = tree.tree_version(staging, max_entries=entries)
+                if version is None:
+                    raise _changed(directory)
                 try:
-                    directories[directory] = filesystem.create_directory(directory)
+                    tree.publish(staging, directory)
                 except FileExistsError as error:
-                    raise ConfigurationError(
-                        "Workspace directory changed before the transaction "
-                        f"committed: {directory}. Run the operation again."
-                    ) from error
-                claimed = ownership.enter_context(secure_directory(directory))
-                claimed.ensure_attached(directories[directory])
-                claimed_filesystems[directory] = claimed
-            for path, content in writes.items():
-                owner = _owner_for_path(path, filesystem, claimed_filesystems)
-                claimed_root = _claimed_root_for_path(path, claimed_filesystems)
-                if claimed_root is not None:
-                    owner.ensure_attached(directories[claimed_root])
-                owner.ensure_parent(path, directories)
-                payload = (
-                    content.encode("utf-8") if isinstance(content, str) else content
-                )
-                if path not in read_set:
-                    written_files[path] = atomic_write_bytes(
-                        path,
-                        payload,
-                        filesystem=owner,
-                    )
-                    if claimed_root is not None:
-                        owner.ensure_attached(directories[claimed_root])
-                    continue
-                expected_identity = read_set[path]
-                try:
-                    if expected_identity is None:
-                        written_files[path] = owner.write_file_if_absent(
-                            path,
-                            payload,
-                        )
-                    else:
-                        written_files[path] = owner.replace_file_if_identity(
-                            path,
-                            payload,
-                            expected_identity,
-                        )
-                except ConditionalWriteError as write_error:
-                    if write_error.committed is not None:
-                        written_files[path] = write_error.committed
-                    raise
-                if claimed_root is not None:
-                    owner.ensure_attached(directories[claimed_root])
-            committed_trees: dict[Path, tuple[tuple[object, ...], ...]] = {}
-            for directory, files in directory_claims.items():
-                claimed = claimed_filesystems[directory]
-                claimed.ensure_attached(directories[directory])
-                claimed_files = {
-                    directory.joinpath(*relative.parts): written_files[
-                        directory.joinpath(*relative.parts)
-                    ]
-                    for relative in files
-                }
-                _require_identities(claimed, claimed_files)
-                committed_trees[directory] = _require_directory_catalog(
-                    filesystem,
-                    directory,
-                    files,
-                    expected_root=directories[directory],
-                )
-                claimed.ensure_attached(directories[directory])
-            committed = {
-                path: identity
-                for path, identity in read_set.items()
-                if path not in written_files
-            }
-            committed.update(written_files)
-            yield
-            _require_absent_entries(filesystem, expected_absent_entries)
-            _require_directory_identities(filesystem, directory_read_set)
-            for directory, identity in committed_trees.items():
-                claimed = claimed_filesystems[directory]
-                claimed.ensure_attached(directories[directory])
-                current = _require_directory_catalog(
-                    filesystem,
-                    directory,
-                    directory_claims[directory],
-                    expected_root=directories[directory],
-                )
-                claimed.ensure_attached(directories[directory])
-                if current != identity:
-                    raise ConfigurationError(
-                        "Workspace directory changed before the transaction "
-                        f"committed: {directory}. Run the operation again."
-                    )
-            _require_owned_identities(filesystem, claimed_filesystems, committed)
-            for directory, claimed in claimed_filesystems.items():
-                claimed.ensure_attached(directories[directory])
-        except BaseException as error:
+                    raise _changed(directory) from error
+            undo.published(directory, version)
+            published[directory] = (version, entries)
+        for path, payload in direct.items():
+            undo.ensure_directory(path.parent)
+            expect: Expectation = None
+            if path in expectations:
+                expectation = expectations[path]
+                expect = ABSENT if expectation is None else expectation
             try:
-                _rollback(
-                    filesystem,
-                    snapshots,
-                    directories,
-                    written_files,
-                    claimed_filesystems,
-                    ownership.close,
-                )
-            except BaseException as rollback_error:
-                _add_error_note(
-                    error,
-                    f"Workspace rollback also failed: {rollback_error}",
-                )
-            raise
+                written = tree.write(path, payload, expect=expect)
+            except ConditionalWriteError as error:
+                if error.committed is not None:
+                    undo.wrote(path, previous[path], error.committed)
+                raise
+            undo.wrote(path, previous[path], written)
+            committed[path] = written
+        yield
+        for path, version in committed.items():
+            if tree.version(path) != version:
+                raise _changed(path)
+        for directory, (version, entries) in published.items():
+            if _tree_version(tree, directory, entries) != version:
+                raise _changed(directory)
+    except BaseException as error:
+        try:
+            undo.rollback()
+        except BaseException as rollback_error:
+            _add_error_note(error, f"Workspace rollback also failed: {rollback_error}")
+        raise
 
 
 @contextmanager
@@ -441,9 +230,8 @@ def workspace_transaction(
     root: Path,
     writes: Mapping[Path, str | bytes],
     *,
-    expected: Mapping[Path, FileIdentity | None],
-    expected_directories: Mapping[Path, FileIdentity] | None = None,
-    claimed_directories: Mapping[Path, tuple[PurePosixPath, ...]] | None = None,
+    expected: Mapping[Path, Version | None],
+    new_directories: Collection[Path] = (),
 ) -> Iterator[None]:
     """Run one named workspace mutation as a file transaction.
 
@@ -455,8 +243,7 @@ def workspace_transaction(
             root,
             writes,
             expected=expected,
-            expected_directories=expected_directories,
-            claimed_directories=claimed_directories,
+            new_directories=new_directories,
         ):
             yield
     except ConditionalWriteError as error:

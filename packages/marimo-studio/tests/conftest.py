@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ctypes
+import errno
 import json
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -8,6 +11,7 @@ import marimo
 import pytest
 
 import marimo_studio._delivery.assets as assets_module
+import marimo_studio._filesystem._publish as publish
 from marimo_studio._compat.layout import (
     MARIMO_FRONTEND_PATCH_SHA256,
     MARIMO_RELEASE_COMMIT,
@@ -15,6 +19,54 @@ from marimo_studio._compat.layout import (
 from marimo_studio.view_providers._bundled._deno import runtime as deno_runtime
 
 from .helpers import notebook_source
+
+
+def _reject_exclusive_flag(*_args: object) -> int:
+    ctypes.set_errno(errno.EINVAL)
+    return -1
+
+
+def _reject_hard_link(*_args: object, **_kwargs: object) -> None:
+    raise OSError(errno.EIO, "hard links unavailable")
+
+
+@pytest.fixture(
+    params=[
+        "native",
+        pytest.param(
+            "nfs",
+            marks=pytest.mark.skipif(
+                os.name == "nt", reason="Windows renames refuse existing paths"
+            ),
+        ),
+        pytest.param(
+            "object-storage",
+            marks=pytest.mark.skipif(
+                os.name == "nt", reason="Windows renames refuse existing paths"
+            ),
+        ),
+    ]
+)
+def filesystem_shape(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> str:
+    """Run a test on each filesystem shape that Studio supports.
+
+    NFS, FUSE, WSL drive mounts, and gVisor host mounts reject
+    RENAME_NOREPLACE with EINVAL. Object-storage FUSE mounts also refuse hard
+    links, here with EIO as rclone reports it.
+    """
+    shape = str(request.param)
+    if shape != "native":
+        monkeypatch.setattr(
+            publish,
+            "_native_exclusive_rename",
+            lambda: (_reject_exclusive_flag, 1),
+        )
+    if shape == "object-storage":
+        monkeypatch.setattr(publish.os, "link", _reject_hard_link)
+    return shape
 
 
 @pytest.fixture(autouse=True, scope="session")

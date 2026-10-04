@@ -90,6 +90,26 @@ available to its Python environment. The Browser runtime requires
 can reach. [Run or export a view](../guide/run-and-share.md) defines those
 runtime and delivery boundaries.
 
+### Workspace storage
+
+Studio keeps the notebook, its configuration, and every view project in the
+notebook workspace. Each change uses an atomic rename and compares stable file
+identities, so the workspace must live on storage that provides both:
+
+| Platform        | Supported workspace storage                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| Linux and macOS | Local disks, NFSv3, NFSv4, and [gVisor](https://gvisor.dev/) sandbox mounts |
+| Windows         | NTFS, ReFS, and SMB shares                                                  |
+| WSL 2           | The Linux disk and Windows drives mounted under `/mnt`                      |
+
+Object-storage mounts such as [s3fs](https://github.com/s3fs-fuse/s3fs-fuse)
+and [rclone](https://rclone.org/commands/rclone_mount/) rewrite file timestamps
+when Studio reads a file and can drop file content when a directory is renamed.
+exFAT and FAT32 drives renumber a file when it is renamed. Studio treats those
+changes as concurrent edits and stops the operation. Copy the workspace to
+supported storage before opening it, or let the hosting platform copy it into
+the session and save it back afterwards.
+
 ## Runtime and delivery matrix
 
 | Delivery             | Python `server` | Browser `wasm` | Prepared `zero-python` |

@@ -20,11 +20,8 @@ from typing import Any
 
 import tomlkit
 
-from marimo_studio._filesystem._secure_types import ConditionalWriteError
-from marimo_studio._filesystem.io import (
-    read_file_snapshot_with_identity,
-    reject_mutable_symlinks,
-)
+from marimo_studio._filesystem.files import ConditionalWriteError, FileTree
+from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.paths import (
     PORTABLE_PATH_COMPONENT_MAX_BYTES,
     validate_portable_path_component,
@@ -348,16 +345,16 @@ def discover_views(
 ) -> dict[str, ViewProject]:
     if not view_root.is_dir():
         return {}
+    tree = FileTree(view_root)
     views: dict[str, ViewProject] = {}
     for directory in sorted(view_root.iterdir(), key=lambda path: path.name):
-        if directory.is_symlink():
-            reject_mutable_symlinks(view_root, {directory})
-        if not directory.is_dir() or not (directory / "view.toml").is_file():
+        # Staged view projects publish under their name with one rename.
+        if is_temporary_name(directory.name):
             continue
-        reject_mutable_symlinks(
-            view_root,
-            {directory, directory / "view.toml"},
-        )
+        if not tree.is_directory(directory) or not tree.is_file(
+            directory / "view.toml"
+        ):
+            continue
         try:
             validate_view_name(directory.name)
         except InvalidViewNameError as error:
@@ -393,7 +390,7 @@ def _studio_definition(
         else config_path
     )
     view_root = _configured_view_root(config_path, notebook, data)
-    reject_mutable_symlinks(config_path.parent, {view_root})
+    FileTree(config_path.parent).stat(view_root)
     default_view = data.get("default")
     if not isinstance(default_view, str):
         raise ConfigurationError("default must name a view")
@@ -490,26 +487,21 @@ def load_studio_definition(
         config_path, _data = _load_config(Path(target or ".").expanduser())
     except FileNotFoundError as error:
         raise WorkspaceGenerationConflictError() from error
+    tree = FileTree(config_path.parent)
     try:
-        payload, _mode, identity = read_file_snapshot_with_identity(
-            config_path,
-            root=config_path.parent,
-        )
-        source = payload.decode("utf-8")
+        snapshot = tree.read(config_path)
+        source = snapshot.content.decode("utf-8")
         definition = studio_definition_from_source(config_path, source)
-        _confirmed, _confirmed_mode, confirmed_identity = (
-            read_file_snapshot_with_identity(
-                config_path,
-                root=config_path.parent,
-            )
-        )
+        confirmed = tree.version(config_path)
     except FileNotFoundError as error:
         raise WorkspaceGenerationConflictError() from error
     except UnicodeDecodeError as error:
         raise ConfigurationError(
             f"Workspace file is not UTF-8 text: {config_path}"
         ) from error
-    if confirmed_identity != identity:
+    if confirmed is None:
+        raise WorkspaceGenerationConflictError()
+    if confirmed != snapshot.version:
         raise ConfigurationError(
             "Studio configuration changed while it was loaded. Run the operation again."
         )

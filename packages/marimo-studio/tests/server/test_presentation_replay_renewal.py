@@ -13,12 +13,12 @@ from marimo_studio._server.presentation.capability import (
     PresentationCapability,
     parse_presentation_capability,
 )
-from marimo_studio._workspace.metadata import update_notebook_config
 
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
+from ..helpers import update_notebook_config
 from .app_test_support import (
     _artifact_base,
     _editor_mount_value,

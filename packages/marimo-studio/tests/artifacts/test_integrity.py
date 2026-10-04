@@ -13,7 +13,6 @@ from typing import Any, cast
 import pytest
 
 import marimo_studio._artifacts.inputs as artifact_inputs
-import marimo_studio._artifacts.paths as artifact_paths_module
 import marimo_studio._artifacts.repository as artifact_repository
 import marimo_studio._views.build as build_module
 from marimo_studio._artifacts.inputs import project_revision
@@ -29,6 +28,7 @@ from marimo_studio._artifacts.repository import (
     read_published_artifact,
 )
 from marimo_studio._artifacts.retention import lease_published_artifact
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.project_manifest import load_view_project
@@ -214,7 +214,7 @@ def test_artifact_document_budget_is_checked_before_its_payload_is_read(
     document = root / "index.html"
     with document.open("wb") as stream:
         stream.truncate(ARTIFACT_OUTPUT_BUDGET.max_file_bytes + 1)
-    open_secure_file = artifact_paths_module.open_secure_file
+    reader = FileTree.reader
 
     class PayloadTrap:
         def __init__(self, stream: Any) -> None:
@@ -229,11 +229,12 @@ def test_artifact_document_budget_is_checked_before_its_payload_is_read(
         def close(self) -> None:
             self.stream.close()
 
-    monkeypatch.setattr(
-        artifact_paths_module,
-        "open_secure_file",
-        lambda owner, path, label: PayloadTrap(open_secure_file(owner, path, label)),
-    )
+    @contextmanager
+    def trapped_reader(tree: FileTree, path: Path) -> Iterator[tuple[Any, Any]]:
+        with reader(tree, path) as (stream, state):
+            yield PayloadTrap(stream), state
+
+    monkeypatch.setattr(FileTree, "reader", trapped_reader)
 
     with pytest.raises(ConfigurationError, match="limit"):
         artifact_repository.validate_document(root, PurePosixPath("index.html"))
@@ -260,11 +261,7 @@ def test_artifact_output_budgets_reject_provider_results(
         project,
         {PurePosixPath("asset.txt"): b"asset"},
     )
-    monkeypatch.setattr(
-        artifact_paths_module,
-        "ARTIFACT_OUTPUT_BUDGET",
-        budget,
-    )
+    monkeypatch.setattr(artifact_repository, "ARTIFACT_OUTPUT_BUDGET", budget)
 
     with pytest.raises(ViewProjectError, match=message):
         publish_artifact_lease(project, "development")

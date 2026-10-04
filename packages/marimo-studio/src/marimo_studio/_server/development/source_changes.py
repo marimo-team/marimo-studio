@@ -13,6 +13,7 @@ from typing import Literal
 from marimo_studio._artifacts.inputs import project_revision
 from marimo_studio._artifacts.limits import PROJECT_INPUT_BUDGET
 from marimo_studio._artifacts.paths import artifact_root, digest_secure_file
+from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.tree import bounded_tree_entries
 from marimo_studio._prepared.state_space import state_space_path
 from marimo_studio._processes.cancellation import current_provider_cancellation
@@ -34,7 +35,7 @@ _WatchKey = tuple[Literal["root", "view"], Path]
 _FileStamp = str | tuple[int, int, int, int]
 _TreeStamp = _FileStamp | Literal["directory", "missing", "symlink"]
 _StructuralStamp = tuple[tuple[str, _FileStamp | Literal["symlink"]], ...]
-_StatStamp = tuple[int, int, int, int, int] | Literal["missing"]
+_StatStamp = tuple[int, int, int, int, int, str] | Literal["missing"]
 
 
 @dataclass(frozen=True)
@@ -395,6 +396,9 @@ def _optional_stamp(path: Path) -> _FileStamp:
 def _stat_stamp(path: Path) -> _StatStamp:
     try:
         state = path.lstat()
+        # NFSv4.2 keeps a directory's mtime when a child is created, so the
+        # entry names carry additions and removals.
+        names = sorted(os.listdir(path)) if stat.S_ISDIR(state.st_mode) else ()
     except OSError:
         return "missing"
     return (
@@ -403,6 +407,7 @@ def _stat_stamp(path: Path) -> _StatStamp:
         state.st_ctime_ns,
         state.st_size,
         state.st_ino,
+        hashlib.sha256("\0".join(names).encode()).hexdigest(),
     )
 
 
@@ -447,7 +452,9 @@ def _view_catalog(studio: StudioWorkspace) -> _StructuralStamp:
         directories = tuple(
             path
             for path in studio.view_root.iterdir()
-            if path.is_dir() and not path.is_symlink()
+            if path.is_dir()
+            and not path.is_symlink()
+            and not is_temporary_name(path.name)
         )
     except OSError:
         return ()

@@ -22,9 +22,8 @@ from marimo_studio._compat.server.session_cache import (
     PrivateSessionCachePublication,
 )
 from marimo_studio._composition import create_server_adapters
-from marimo_studio._filesystem import _secure_operations as secure_operations
-from marimo_studio._filesystem.io import read_text
-from marimo_studio._filesystem.secure import FileIdentity
+from marimo_studio._filesystem import files as files_module
+from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio.errors import ConfigurationError
 
 
@@ -84,12 +83,12 @@ def _multiprocess_writer(
     result: Connection,
 ) -> None:
     native_session_cache.serialize_session_view = cast(Any, _serialized_view)
-    publish = session_cache_module.atomic_write_text
+    publish = FileTree.write
     completed = 0
     commits = 0
     commit_synchronized = False
-    rename = secure_operations.os.rename
-    replace = secure_operations.os.replace
+    rename = files_module.os.rename
+    replace = files_module.os.replace
 
     def commit(operation: Any, *args: Any, **kwargs: Any) -> Any:
         nonlocal commit_synchronized, commits
@@ -108,19 +107,19 @@ def _multiprocess_writer(
         return commit(replace, *args, **kwargs)
 
     def count_publication(
+        tree: FileTree,
         path: Path,
-        content: str,
-        *,
-        root: Path | None = None,
-    ) -> FileIdentity:
+        content: bytes,
+        **options: Any,
+    ) -> Version:
         nonlocal completed
-        published = publish(path, content, root=root)
+        published = publish(tree, path, content, **options)
         completed += 1
         return published
 
-    cast(Any, session_cache_module).atomic_write_text = count_publication
-    cast(Any, secure_operations.os).rename = commit_rename
-    cast(Any, secure_operations.os).replace = commit_replace
+    cast(Any, FileTree).write = count_publication
+    cast(Any, files_module.os).rename = commit_rename
+    cast(Any, files_module.os).replace = commit_replace
     publication = PrivateSessionCachePublication()
     handle = publication.open()
     view = _ExportingView(marker, exports)
@@ -142,8 +141,8 @@ def _multiprocess_writer(
             )
         )
     finally:
-        cast(Any, secure_operations.os).rename = rename
-        cast(Any, secure_operations.os).replace = replace
+        cast(Any, files_module.os).rename = rename
+        cast(Any, files_module.os).replace = replace
         result.close()
 
 
@@ -205,10 +204,10 @@ def test_session_cache_multi_process_writers_publish_complete_json(
         while not all(event.is_set() for event in commit_ready):
             if time.monotonic() >= deadline:
                 pytest.fail("session-cache writers did not reach the commit barrier")
-            document = json.loads(read_text(path))
+            document = json.loads(Path(path).read_text(encoding="utf-8"))
             _assert_complete_snapshot(document, exports)
             reads += 1
-        document = json.loads(read_text(path))
+        document = json.loads(Path(path).read_text(encoding="utf-8"))
         assert document == {"writer": "initial"}
         reads += 1
         first_commit.wait(timeout=10)
@@ -216,7 +215,7 @@ def test_session_cache_multi_process_writers_publish_complete_json(
             if time.monotonic() >= deadline:
                 pytest.fail("session-cache writer processes did not finish")
             try:
-                document = json.loads(read_text(path))
+                document = json.loads(Path(path).read_text(encoding="utf-8"))
                 _assert_complete_snapshot(document, exports)
             except (AssertionError, json.JSONDecodeError) as error:
                 failures.append(str(error))
@@ -246,7 +245,7 @@ def test_session_cache_multi_process_writers_publish_complete_json(
         "short": (exports, exports, exports, True),
         "long": (exports, exports, exports, True),
     }
-    final = json.loads(read_text(path))
+    final = json.loads(Path(path).read_text(encoding="utf-8"))
     _assert_complete_snapshot(final, exports)
     assert final["writer"] in {"short", "long"}
     assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
@@ -271,18 +270,18 @@ def test_session_cache_preserves_export_order_interval_and_error_policy(
         events.append(("serialized", view.generation))
         return {"generation": view.generation}
 
-    def publish(destination: Path, content: str) -> object:
+    def publish(_tree: FileTree, destination: Path, content: bytes) -> object:
         events.append(("published", json.loads(content)["generation"]))
         if view.generation == 2:
             raise OSError("disk stopped")
-        destination.write_text(content, encoding="utf-8")
+        destination.write_bytes(content)
         return object()
 
     async def sleep(interval: float) -> None:
         events.append(("slept", interval))
 
     monkeypatch.setattr(native_session_cache, "serialize_session_view", serialize)
-    monkeypatch.setattr(session_cache_module, "atomic_write_text", publish)
+    monkeypatch.setattr(FileTree, "write", publish)
     monkeypatch.setattr(session_cache_module.asyncio, "sleep", sleep)
     caplog.set_level("ERROR", logger="marimo")
     handle = PrivateSessionCachePublication().open()
@@ -318,8 +317,8 @@ def test_session_cache_cancellation_waits_for_publication(
     writer = _writer(path, view)
     if async_path:
         writer.path = AsyncPath(path)
-    rename = secure_operations.os.rename
-    replace = secure_operations.os.replace
+    rename = files_module.os.rename
+    replace = files_module.os.replace
 
     def commit(operation: Any, *args: Any, **kwargs: Any) -> Any:
         entered.set()
@@ -338,14 +337,16 @@ def test_session_cache_cancellation_waits_for_publication(
     monkeypatch.setattr(
         native_session_cache, "serialize_session_view", _serialized_view
     )
-    monkeypatch.setattr(secure_operations.os, "rename", commit_rename)
-    monkeypatch.setattr(secure_operations.os, "replace", commit_replace)
+    monkeypatch.setattr(files_module.os, "rename", commit_rename)
+    monkeypatch.setattr(files_module.os, "replace", commit_replace)
     handle = PrivateSessionCachePublication().open()
 
     async def cancel() -> None:
         writer.start()
         assert await asyncio.to_thread(entered.wait, 10)
-        assert json.loads(read_text(path)) == {"writer": "published"}
+        assert json.loads(Path(path).read_text(encoding="utf-8")) == {
+            "writer": "published"
+        }
         assert len(tuple(tmp_path.iterdir())) == 2
         assert writer.task is not None
         writer.task.cancel()
@@ -360,7 +361,7 @@ def test_session_cache_cancellation_waits_for_publication(
             await writer.task
         assert writer.running is False
         assert finished.is_set()
-        assert json.loads(read_text(path))["writer"] == "short"
+        assert json.loads(Path(path).read_text(encoding="utf-8"))["writer"] == "short"
         assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
 
     try:
@@ -386,13 +387,13 @@ def test_session_cache_path_writer_captures_on_loop_and_publishes_in_thread(
         serialization_threads.append(threading.get_ident())
         return _serialized_view(view, **kwargs)
 
-    def publish(destination: Path, content: str) -> object:
+    def publish(_tree: FileTree, destination: Path, content: bytes) -> object:
         publications.append((destination, threading.get_ident()))
-        destination.write_text(content, encoding="utf-8")
+        destination.write_bytes(content)
         return object()
 
     monkeypatch.setattr(native_session_cache, "serialize_session_view", serialize)
-    monkeypatch.setattr(session_cache_module, "atomic_write_text", publish)
+    monkeypatch.setattr(FileTree, "write", publish)
     handle = PrivateSessionCachePublication().open()
     try:
         asyncio.run(writer.run())
@@ -402,7 +403,7 @@ def test_session_cache_path_writer_captures_on_loop_and_publishes_in_thread(
     assert serialization_threads == [loop_thread]
     assert [destination for destination, _thread in publications] == [path]
     assert publications[0][1] != loop_thread
-    assert json.loads(read_text(path))["writer"] == "short"
+    assert json.loads(Path(path).read_text(encoding="utf-8"))["writer"] == "short"
 
 
 def test_session_cache_reports_failure_before_propagating_cancellation(
@@ -429,15 +430,17 @@ def test_session_cache_reports_failure_before_propagating_cancellation(
     monkeypatch.setattr(
         native_session_cache, "serialize_session_view", _serialized_view
     )
-    monkeypatch.setattr(secure_operations.os, "rename", reject_replace)
-    monkeypatch.setattr(secure_operations.os, "replace", reject_replace)
+    monkeypatch.setattr(files_module.os, "rename", reject_replace)
+    monkeypatch.setattr(files_module.os, "replace", reject_replace)
     caplog.set_level("ERROR", logger="marimo")
     handle = PrivateSessionCachePublication().open()
 
     async def cancel() -> None:
         writer.start()
         assert await asyncio.to_thread(entered.wait, 10)
-        assert json.loads(read_text(path)) == {"writer": "published"}
+        assert json.loads(Path(path).read_text(encoding="utf-8")) == {
+            "writer": "published"
+        }
         assert len(tuple(tmp_path.iterdir())) == 2
         assert writer.task is not None
         writer.task.cancel()
@@ -459,9 +462,9 @@ def test_session_cache_reports_failure_before_propagating_cancellation(
         release.set()
         handle.close()
 
-    assert json.loads(read_text(path)) == {"writer": "published"}
+    assert json.loads(Path(path).read_text(encoding="utf-8")) == {"writer": "published"}
     assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
-    assert "Write error: Could not replace mutable workspace file" in caplog.text
+    assert f"Write error: Could not write {path}" in caplog.text
 
 
 def test_server_composition_reference_counts_and_restores_session_cache_patch() -> None:

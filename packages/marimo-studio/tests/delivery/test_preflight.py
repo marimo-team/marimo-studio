@@ -9,21 +9,19 @@ from marimo_studio._delivery.portability import (
     verify_projection_portability,
 )
 from marimo_studio._delivery.preflight import preflight_static_bundle
-from marimo_studio._filesystem.secure import secure_directory
 from marimo_studio.view_providers import MountDeclaration, SourceLocation
 
 
 def _preflight(
     root: Path,
 ):
-    with secure_directory(root) as filesystem:
-        return preflight_static_bundle(
-            filesystem,
-            view="dashboard",
-            runtime="wasm",
-            document=PurePosixPath("index.html"),
-            projections=(),
-        )
+    return preflight_static_bundle(
+        root,
+        view="dashboard",
+        runtime="wasm",
+        document=PurePosixPath("index.html"),
+        projections=(),
+    )
 
 
 def test_static_preflight_resolves_html_css_module_and_worker_references(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import PurePosixPath
 
-from marimo_studio._filesystem.io import reject_mutable_symlinks
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     PROVIDER_API_VERSION,
@@ -50,10 +50,10 @@ def _guidance_documents(project: ViewProject) -> tuple[SourceDocument, ...]:
     documents: list[SourceDocument] = []
     for relative in (_AGENT_INSTRUCTIONS_PATH, _OPTIONAL_DESIGN_PATH):
         path = project.root / relative
-        if not path.exists():
+        tree = FileTree(project.root)
+        if not tree.exists(path):
             continue
-        reject_mutable_symlinks(project.root, {path})
-        if not path.is_file():
+        if not tree.is_file(path):
             raise ConfigurationError(f"Vanilla guidance is unavailable: {relative}")
         documents.append(SourceDocument(relative, "markdown", "edit"))
     return tuple(documents)

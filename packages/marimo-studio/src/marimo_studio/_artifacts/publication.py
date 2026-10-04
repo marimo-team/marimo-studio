@@ -1,9 +1,10 @@
 """Convert provider-built browser files into a current immutable publication.
 
-Provider output is a candidate, not trusted application state. Studio detaches
-its files from provider scratch space, enforces file and path limits, validates
-the entry document and complete manifest, and computes a content-addressed
-revision from the browser files and notebook mount declarations.
+Provider output is a candidate, not trusted application state. Studio copies
+its files out of provider scratch space into a directory that only Studio
+writes, enforces file and path limits, validates the entry document and
+complete manifest, and computes a content-addressed revision from the browser
+files and notebook mount declarations.
 
 Studio makes the candidate current for the selected build profile only after it
 is complete and the caller confirms that the live project still matches the
@@ -31,7 +32,6 @@ from marimo_studio._artifacts.codec import (
 from marimo_studio._artifacts.inputs import ProjectSnapshot, snapshot_project
 from marimo_studio._artifacts.lock import artifact_lock
 from marimo_studio._artifacts.paths import (
-    artifact_files,
     artifact_root,
     assert_secure_path,
     ensure_secure_directory,
@@ -42,16 +42,14 @@ from marimo_studio._artifacts.records import (
     ArtifactPublication,
     ArtifactRevision,
     ArtifactRevisionSnapshot,
-    ArtifactTreeIdentity,
     ViewArtifact,
     ViewBuildState,
 )
 from marimo_studio._artifacts.repository import (
     artifact_from_publication,
     artifact_tree_identity,
-    detach_public_files,
+    ingest_publication_files,
     prepare_control_directories,
-    prepare_publication_candidate,
     profile_pointer,
     read_artifact_revision_snapshot,
     read_profile_state,
@@ -67,8 +65,7 @@ from marimo_studio._artifacts.retention import (
     prune_artifacts_locked,
     quarantine_artifact_revision_locked,
 )
-from marimo_studio._filesystem.io import atomic_write_text
-from marimo_studio._filesystem.secure import secure_directory
+from marimo_studio._filesystem.files import ABSENT, FileTree, TreeVersion
 from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
@@ -100,7 +97,7 @@ class ArtifactCandidate:
 class PreparedArtifactPublication:
     publication_root: Path
     manifest: ArtifactManifest
-    identity: ArtifactTreeIdentity
+    identity: TreeVersion
 
 
 class ArtifactCommitRejected(Exception):
@@ -112,12 +109,7 @@ class ArtifactCommitRejected(Exception):
 
 
 def _remove_profile_pointer(project: ViewProject, profile: BuildProfile) -> None:
-    pointer = profile_pointer(project, profile)
-    with (
-        secure_directory(project.root) as filesystem,
-        suppress(FileNotFoundError),
-    ):
-        filesystem.unlink(pointer)
+    FileTree(project.root).remove(profile_pointer(project, profile))
 
 
 def _cancelled_commit() -> ArtifactCommitRejected:
@@ -235,13 +227,12 @@ def capture_artifact_candidate(
     generation_root = (
         artifact_root(project) / ".staging" / f"candidate-{secrets.token_hex(16)}"
     )
-    with secure_directory(project.root) as filesystem:
-        filesystem.create_directory(generation_root)
+    tree = FileTree(project.root)
+    tree.create_directory(generation_root)
     try:
         captured = snapshot_project(project, inspection, generation_root / "project")
         files_root = artifact_root(captured.project) / "build" / "files"
-        with secure_directory(generation_root) as filesystem:
-            filesystem.ensure_directory(files_root)
+        tree.ensure_directory(files_root)
         cache_root = artifact_root(project) / ".cache"
         ensure_secure_directory(project.root, cache_root, "Artifact provider cache")
         assert_secure_path(
@@ -252,11 +243,8 @@ def capture_artifact_candidate(
         )
         yield ArtifactCandidate(generation_root, captured, files_root, cache_root)
     finally:
-        try:
-            with secure_directory(project.root) as filesystem:
-                filesystem.remove_tree(generation_root)
-        except OSError:
-            pass
+        with suppress(OSError):
+            tree.remove(generation_root)
 
 
 def restore_cached_artifact(
@@ -350,7 +338,9 @@ def prepare_artifact_publication(
     project_revision: str,
     started: float,
 ) -> PreparedArtifactPublication:
-    """Validate and detach one candidate before its receipt transaction."""
+    """Validate and copy one candidate before its receipt transaction."""
+    tree = FileTree(project.root)
+    publication_root = candidate.generation_root / "publication"
     try:
         assert_secure_path(
             project.root,
@@ -370,16 +360,11 @@ def prepare_artifact_publication(
             report.document.as_posix(),
             "Artifact document path",
         )
-        detach_public_files(candidate.files_root)
-        validate_document(candidate.files_root, document)
-        files = artifact_files(candidate.files_root)
+        tree.create_directory(publication_root)
+        published_files = publication_root / "files"
+        files = ingest_publication_files(project, candidate.files_root, published_files)
+        validate_document(published_files, document)
         manifest = artifact_manifest(document.as_posix(), files, inspection.mounts)
-        publication_root = candidate.generation_root / "publication"
-        prepare_publication_candidate(
-            candidate.generation_root,
-            candidate.files_root,
-            publication_root,
-        )
     except (OSError, ConfigurationError, ViewProjectError) as error:
         record_build_failure(
             project,
@@ -396,38 +381,15 @@ def prepare_artifact_publication(
             project_revision,
         )
     try:
-        atomic_write_text(
+        tree.write(
             publication_root / "artifact.json",
-            encode_json(artifact_manifest_dict(manifest), pretty=True),
-            root=project.root,
+            encode_json(artifact_manifest_dict(manifest), pretty=True).encode("utf-8"),
+            expect=ABSENT,
         )
-    except (OSError, ConfigurationError) as error:
-        record_build_failure(
-            project,
-            profile,
-            (
-                ProjectDiagnostic(
-                    code="artifact-publication-failed",
-                    severity="error",
-                    message=str(error),
-                    hint="Restore the artifact directory and build the view again.",
-                ),
-            ),
-            started,
-            project_revision,
-        )
-    try:
-        identity_before = artifact_tree_identity(project, publication_root)
-        published_files = publication_root / "files"
-        if identity_before is None or artifact_files(published_files) != manifest.files:
-            raise ConfigurationError("Artifact publication changed before commit.")
-        validate_document(published_files, manifest.document)
         identity = artifact_tree_identity(project, publication_root)
-        if identity is None or identity != identity_before:
-            raise ConfigurationError(
-                "Artifact publication changed while it was verified."
-            )
-    except (OSError, ConfigurationError, ViewProjectError) as error:
+        if identity is None:
+            raise ConfigurationError("Artifact publication was removed before commit.")
+    except (OSError, ConfigurationError) as error:
         record_build_failure(
             project,
             profile,
@@ -468,36 +430,36 @@ def publish_artifact_candidate(
         with artifact_lock(project) as acquired:
             if not acquired:
                 raise RuntimeError("Blocking artifact lock was not acquired")
-            with secure_directory(project.root) as filesystem:
-                destination = revision_root(project, manifest.artifact_revision)
-                assert_secure_path(project.root, destination, "Artifact revision")
-                existing: ArtifactRevision | None = None
-                if destination.exists():
-                    current_identity = artifact_tree_identity(project, destination)
-                    existing = (
-                        existing_snapshot.revision
-                        if existing_snapshot is not None
-                        and current_identity == existing_snapshot.identity
-                        else None
+            tree = FileTree(project.root)
+            destination = revision_root(project, manifest.artifact_revision)
+            assert_secure_path(project.root, destination, "Artifact revision")
+            existing: ArtifactRevision | None = None
+            if destination.exists():
+                current_identity = artifact_tree_identity(project, destination)
+                existing = (
+                    existing_snapshot.revision
+                    if existing_snapshot is not None
+                    and current_identity == existing_snapshot.identity
+                    else None
+                )
+                if existing is None:
+                    quarantine = quarantine_artifact_revision_locked(
+                        project,
+                        manifest.artifact_revision,
                     )
-                    if existing is None:
-                        quarantine = quarantine_artifact_revision_locked(
-                            project,
-                            manifest.artifact_revision,
-                        )
-                        try:
-                            filesystem.replace(publication_root, destination)
-                        except BaseException:
-                            filesystem.replace(quarantine, destination)
-                            raise
-                    elif existing.manifest != manifest:
-                        raise ConfigurationError(
-                            f"Artifact revision collision for view {project.name!r}"
-                        )
-                    else:
-                        filesystem.remove_tree(publication_root)
+                    try:
+                        tree.replace(publication_root, destination)
+                    except BaseException:
+                        tree.replace(quarantine, destination)
+                        raise
+                elif existing.manifest != manifest:
+                    raise ConfigurationError(
+                        f"Artifact revision collision for view {project.name!r}"
+                    )
                 else:
-                    filesystem.replace(publication_root, destination)
+                    tree.remove(publication_root)
+            else:
+                tree.replace(publication_root, destination)
             installed_identity = artifact_tree_identity(project, destination)
             expected_identity = (
                 existing_snapshot.identity

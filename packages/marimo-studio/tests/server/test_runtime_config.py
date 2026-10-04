@@ -12,7 +12,6 @@ import marimo_studio._delivery.runtime_config as runtime_config_module
 from marimo_studio import create_asgi_app
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.presentation.service import NotebookPresentation
-from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio.errors._internal import RuntimeStartupError
 from marimo_studio.view_providers import BuildProfile
 
@@ -20,6 +19,7 @@ from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
+from ..helpers import update_notebook_config
 from .app_test_support import (
     _editor_mount_value,
     _mount_support_url,

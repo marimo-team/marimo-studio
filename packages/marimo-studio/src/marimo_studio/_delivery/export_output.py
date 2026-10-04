@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import marimo_studio._delivery.assets as _assets
-from marimo_studio._filesystem.secure import secure_directory
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import StaticExportError
@@ -53,8 +53,7 @@ def ensure_output_parent(output: Path) -> None:
         existing = existing.parent
     try:
         if existing != output.parent:
-            with secure_directory(existing) as ancestor:
-                ancestor.ensure_directory(output.parent)
+            FileTree(existing).ensure_directory(output.parent)
     except OSError as error:
         raise_process_cleanup(error)
         raise StaticExportError(

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from marimo_studio._filesystem.io import atomic_write_text, read_text
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._workspace.generation import view_name_generation
 from marimo_studio._workspace.mutation_lock import view_mutation_lock
 from marimo_studio.errors import (
@@ -65,7 +65,7 @@ def read_publication_hold(root: Path) -> PublicationHold | None:
     """Read current, expired, or released coordination for this incarnation."""
     path = publication_hold_path(root)
     try:
-        text = read_text(path, root=root.parent)
+        text = FileTree(root.parent).read(path).content.decode("utf-8")
     except FileNotFoundError:
         return None
     except UnicodeDecodeError as error:
@@ -115,20 +115,17 @@ def read_publication_hold(root: Path) -> PublicationHold | None:
 
 
 def _write_hold(root: Path, hold: PublicationHold) -> None:
-    atomic_write_text(
+    record = {
+        "schema": 1,
+        "token": hold.token,
+        "owner": hold.owner,
+        "generation": hold.generation,
+        "expires_at": hold.expires_at,
+        "released": hold.released,
+    }
+    FileTree(root.parent).write(
         publication_hold_path(root),
-        json.dumps(
-            {
-                "schema": 1,
-                "token": hold.token,
-                "owner": hold.owner,
-                "generation": hold.generation,
-                "expires_at": hold.expires_at,
-                "released": hold.released,
-            }
-        )
-        + "\n",
-        root=root.parent,
+        (json.dumps(record) + "\n").encode("utf-8"),
     )
 
 

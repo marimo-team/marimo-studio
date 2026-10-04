@@ -19,8 +19,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
-import stat
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -66,10 +64,7 @@ from marimo_studio._delivery.runtime_config import (
     runtime_projection_revision,
 )
 from marimo_studio._delivery.urls import SUPPORT_PATH, relative_url
-from marimo_studio._filesystem.secure import (
-    SecureDirectory,
-    secure_directory,
-)
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._prepared.static import (
     StaticPublication,
     StaticPublicationSource,
@@ -430,56 +425,29 @@ def _asset_files(
     assets: list[_AssetCopy] = []
     budget = FileBudgetTracker(ARTIFACT_OUTPUT_BUDGET, owner.capitalize())
     try:
-        with secure_directory(source) as filesystem:
-            files = filesystem.regular_file_sizes(
-                max_entries=ARTIFACT_OUTPUT_BUDGET.max_files,
-            )
-            for path, expected_size in files:
-                relative = path.relative_to(filesystem.root)
-                if (
-                    include is not None
-                    and PurePosixPath(relative.as_posix()) not in include
-                ):
-                    continue
-                budget.add(relative.as_posix(), expected_size)
-                descriptor = filesystem.open_file(path)
-                try:
-                    before = os.fstat(descriptor)
-                    payload = bytearray()
-                    remaining = expected_size
-                    while remaining:
-                        chunk = os.read(descriptor, min(1024 * 1024, remaining))
-                        if not chunk:
-                            break
-                        payload.extend(chunk)
-                        remaining -= len(chunk)
-                    grew = bool(os.read(descriptor, 1))
-                    after = os.fstat(descriptor)
-                finally:
-                    os.close(descriptor)
-                if (
-                    before.st_dev != after.st_dev
-                    or before.st_ino != after.st_ino
-                    or before.st_mode != after.st_mode
-                    or before.st_size != after.st_size
-                    or before.st_mtime_ns != after.st_mtime_ns
-                    or before.st_ctime_ns != after.st_ctime_ns
-                    or len(payload) != expected_size
-                    or grew
-                ):
-                    raise StaticExportError(
-                        f"Static export source changed while it was read: {path}"
-                    )
-                captured = bytes(payload)
-                asset = _AssetCopy(
-                    destination=destination / relative,
-                    owner=owner,
-                    sha256=hashlib.sha256(captured).hexdigest(),
-                    mode=stat.S_IMODE(before.st_mode),
+        tree = FileTree(source)
+        files = tree.regular_files(source, max_entries=ARTIFACT_OUTPUT_BUDGET.max_files)
+        for path, expected_size in files:
+            relative = path.relative_to(tree.root)
+            if (
+                include is not None
+                and PurePosixPath(relative.as_posix()) not in include
+            ):
+                continue
+            budget.add(relative.as_posix(), expected_size)
+            snapshot = tree.read(path, max_bytes=ARTIFACT_OUTPUT_BUDGET.max_file_bytes)
+            if len(snapshot.content) != expected_size:
+                raise StaticExportError(
+                    f"Static export source changed while it was read: {path}"
                 )
-                consume(asset, captured)
-                assets.append(asset)
-            filesystem.ensure_attached()
+            asset = _AssetCopy(
+                destination=destination / relative,
+                owner=owner,
+                sha256=hashlib.sha256(snapshot.content).hexdigest(),
+                mode=snapshot.mode,
+            )
+            consume(asset, snapshot.content)
+            assets.append(asset)
     except StaticExportError:
         raise
     except MarimoStudioError as error:
@@ -528,7 +496,7 @@ def _asset_plan(
     closure: _assets.BrowserEntryClosure | None,
     include_manifest: bool,
     include_config: bool,
-    filesystem: SecureDirectory | None = None,
+    bundle: FileTree | None = None,
 ) -> tuple[_AssetCopy, ...]:
     artifact = lease.artifact
     try:
@@ -564,17 +532,17 @@ def _asset_plan(
                 "Marimo or Studio route. Rename the view asset."
             )
         _claim_asset(files, directories, asset.destination, asset.owner)
-        if filesystem is not None:
-            destination = filesystem.root / asset.destination
-            filesystem.ensure_parent(destination)
+        if bundle is not None:
+            destination = bundle.root / asset.destination
+            bundle.ensure_directory(destination.parent)
             if asset.artifact_path is not None:
                 try:
                     content = lease.read_bytes(asset.artifact_path)
                 except MarimoStudioError as error:
                     raise StaticExportError(str(error)) from error
-                filesystem.atomic_write(destination, content, mode=0o644)
+                bundle.write(destination, content, mode=0o644)
             elif payload is not None and asset.mode is not None:
-                filesystem.atomic_write(destination, payload, mode=asset.mode)
+                bundle.write(destination, payload, mode=asset.mode)
             else:
                 raise RuntimeError("Static export asset has no captured payload")
         copies.append(asset)
@@ -616,7 +584,7 @@ def _asset_plan(
 
 
 def _write_bundle(
-    filesystem: SecureDirectory,
+    bundle: FileTree,
     adapters: ExportAdapters,
     studio: StudioWorkspace,
     resolved: ResolvedStudio,
@@ -629,7 +597,7 @@ def _write_bundle(
     runtime: StaticRuntime,
     publication: StaticPublication | None,
 ) -> int:
-    output = filesystem.root
+    output = bundle.root
     artifact = lease.artifact
     manifest: bytes | None = None
     if runtime == "wasm":
@@ -665,21 +633,21 @@ def _write_bundle(
         closure=closure,
         include_manifest=manifest is not None,
         include_config=config is not None,
-        filesystem=filesystem,
+        bundle=bundle,
     )
 
     entrypoint = output.joinpath(*artifact.document.parts)
-    filesystem.ensure_parent(entrypoint)
-    filesystem.atomic_write(entrypoint, rendered.encode(), mode=0o644)
+    bundle.ensure_directory(entrypoint.parent)
+    bundle.write(entrypoint, rendered.encode(), mode=0o644)
     if config is not None:
         config_path = view_support / "config"
-        filesystem.ensure_parent(config_path)
-        filesystem.atomic_write(config_path, config, mode=0o644)
+        bundle.ensure_directory(config_path.parent)
+        bundle.write(config_path, config, mode=0o644)
     if manifest is not None:
         manifest_path = view_support / "zero-python" / "current"
-        filesystem.ensure_parent(manifest_path)
-        filesystem.atomic_write(manifest_path, manifest, mode=0o644)
-    filesystem.atomic_write(output / ".nojekyll", b"", mode=0o644)
+        bundle.ensure_directory(manifest_path.parent)
+        bundle.write(manifest_path, manifest, mode=0o644)
+    bundle.write(output / ".nojekyll", b"", mode=0o644)
     try:
         lease.verify()
         project = provider_registry().validate_project(studio.views[view_name])
@@ -714,7 +682,6 @@ def _write_bundle(
             "The static export sources changed while the bundle was written. "
             "Run the export again."
         )
-    filesystem.ensure_attached()
     return len(assets) + 2 + int(config is not None) + int(manifest is not None)
 
 
@@ -961,21 +928,20 @@ def _export_to_delivery(
                     runtime=runtime,
                 ),
             )
-            with secure_directory(delivery.path) as bundle_files:
-                files = _write_bundle(
-                    bundle_files,
-                    adapters,
-                    studio,
-                    resolved,
-                    selected,
-                    lease,
-                    document,
-                    notebook_source,
-                    notebook_stamp,
-                    config_stamp,
-                    runtime,
-                    publication,
-                )
+            files = _write_bundle(
+                FileTree(delivery.path),
+                adapters,
+                studio,
+                resolved,
+                selected,
+                lease,
+                document,
+                notebook_source,
+                notebook_stamp,
+                config_stamp,
+                runtime,
+                publication,
+            )
             files += _materialize_publication(delivery, selected, publication)
             _emit_progress(
                 progress,
@@ -997,14 +963,13 @@ def _export_to_delivery(
                     runtime=runtime,
                 ),
             )
-            with secure_directory(delivery.path) as bundle_files:
-                preflight = preflight_static_bundle(
-                    bundle_files,
-                    view=selected,
-                    runtime=runtime,
-                    document=artifact.document,
-                    projections=portability,
-                )
+            preflight = preflight_static_bundle(
+                delivery.path,
+                view=selected,
+                runtime=runtime,
+                document=artifact.document,
+                projections=portability,
+            )
             _emit_progress(
                 progress,
                 StaticExportProgress.from_step(

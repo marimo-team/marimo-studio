@@ -10,7 +10,7 @@ from marimo_export import StateSpace
 from marimo_export.errors import SpecError
 from marimo_export.wire import canonical_json_sha256
 
-from marimo_studio._filesystem.io import read_file_snapshot
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio.errors import ConfigurationError, PublicationError
 
 STATE_SPACE_FILE = "states.yaml"
@@ -36,7 +36,7 @@ def state_space_path(view_root: Path) -> Path:
 def load_state_space_source(view_root: Path) -> StateSpaceSource:
     path = state_space_path(view_root)
     try:
-        content, _mode = read_file_snapshot(path, root=view_root)
+        content = FileTree(view_root).read(path).content
     except FileNotFoundError:
         digest = canonical_json_sha256({"state_space": None})
         return StateSpaceSource(path, None, digest)

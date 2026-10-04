@@ -23,12 +23,12 @@ from marimo_studio._views.publication_hold import (
     publication_hold_path,
     release_publication_hold,
 )
-from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import InspectionRequest, ProjectInput
 from marimo_studio.view_providers._host import provider_registry
 
 from ..app_helpers import created_one_view
+from ..helpers import update_notebook_config
 from ..source_change_test_support import counting_registry as _counting_registry
 
 

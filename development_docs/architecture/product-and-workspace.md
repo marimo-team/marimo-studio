@@ -103,28 +103,35 @@ browser identity.
 Call `Workspace.view(name)` to operate an existing project.
 
 Creation validates the notebook and starter before writing. Under the workspace
-catalog lock, one file transaction claims and pins each new view directory,
-writes its provider files, and keeps the project undiscoverable until
-`view.toml` publishes the complete project. The same transaction writes the
-fresh per-name owner and any missing generated-state rules in the workspace
-`.gitignore`.
+catalog lock, one file transaction writes each new view project into a
+temporary sibling directory, then publishes it under its name with one rename
+that refuses an existing name. Discovery skips temporary siblings, so readers
+never observe a partial project. The same transaction writes the fresh per-name
+owner and any missing generated-state rules in the workspace `.gitignore`.
 
 The first view is complete before notebook-local PEP 723 metadata declares the
 workspace. Existing workspaces receive required configuration before the new
 `view.toml` becomes discoverable. Readers therefore observe the prior workspace
 or the complete new catalog.
 
-The transaction carries the file identities read during planning and expected
+The transaction carries the file versions read during planning and expected
 absence for new paths. Conditional replacement rejects concurrent notebook,
 configuration, or project-file changes before the catalog commits. A failed
 condition restores files already written by the transaction and preserves the
 concurrent edit.
 
-Each new view directory is claimed while absent and held through a stable
-directory owner. Every child write uses that owner. The root incarnation and
-complete file catalog are verified before and after workspace materialization,
-so creation cannot adopt a replacement directory or unknown files from a
-competing writer.
+A transaction that rewrites the notebook header holds Marimo's notebook lock,
+which Marimo's own save takes from its header read through its write. A
+notebook save that starts during the transaction waits, then reads the new
+header before it writes. Transactions take that lock inside the catalog lock.
+While Marimo holds it, Studio's save transform reads only the Studio
+configuration. Cell bindings in a project configuration file commit after
+Marimo releases the lock, so a save never waits for a Studio lock while it
+holds the notebook lock.
+
+After the transaction body, each published project tree must still match the
+version recorded when it was renamed into place, so creation cannot adopt a
+replacement directory or unknown files from a competing writer.
 
 The created view starts in `unbuilt` state. Inspection and build are explicit
 operations after the transaction commits.

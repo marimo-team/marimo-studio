@@ -15,6 +15,7 @@ of the authored files.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -35,7 +36,7 @@ from marimo_studio._artifacts.paths import (
     normalized_artifact_path,
     verified_secure_file,
 )
-from marimo_studio._filesystem.secure import SecureDirectory, secure_directory
+from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._filesystem.tree import bounded_tree_entries
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio.errors import ConfigurationError
@@ -71,7 +72,7 @@ class ProjectInputFileState:
 class ProjectInputState:
     paths: tuple[PurePosixPath, ...]
     files: Mapping[PurePosixPath, ProjectInputFileState]
-    directories: Mapping[PurePosixPath, tuple[int, int, int, int, int]]
+    directories: Mapping[PurePosixPath, Version]
     absent: tuple[PurePosixPath, ...]
 
 
@@ -294,14 +295,22 @@ def _manifest_path(project: ViewProject) -> PurePosixPath:
         ) from error
 
 
-def _input_state_with_owner(
+def _entry_state(tree: FileTree, path: Path) -> os.stat_result:
+    state = tree.stat(path)
+    if state is None:
+        raise FileNotFoundError(errno.ENOENT, "View project input is unavailable", path)
+    return state
+
+
+def project_input_state(
     project: ViewProject,
     inspection: ProjectInspection,
-    files: SecureDirectory,
+    *,
     observed: ProjectInputState | None = None,
     allow_missing_manifest: bool = False,
 ) -> ProjectInputState:
-    files.ensure_attached()
+    """Capture bounded input metadata without reading file contents."""
+    tree = FileTree(project.root)
     if observed is None:
         input_paths, directory_paths, absent = _input_catalog(project, inspection)
         manifest = _manifest_path(project)
@@ -319,37 +328,28 @@ def _input_state_with_owner(
     else:
         paths = observed.paths
         directory_paths = tuple(observed.directories)
-        missing: list[PurePosixPath] = []
-        for relative in observed.absent:
-            try:
-                present = files.entry_exists(project.root.joinpath(*relative.parts))
-            except FileNotFoundError:
-                present = False
-            if not present:
-                missing.append(relative)
-        absent = tuple(missing)
-    directories: dict[PurePosixPath, tuple[int, int, int, int, int]] = {}
+        absent = tuple(
+            relative
+            for relative in observed.absent
+            if not tree.exists(project.root.joinpath(*relative.parts))
+        )
+    # A directory version digests entry names, so an added input file is
+    # detected even where creating a child leaves the directory mtime alone.
+    directories: dict[PurePosixPath, Version] = {}
     for relative in directory_paths:
         path = project.root.joinpath(*relative.parts)
-        with secure_directory(path) as directory:
-            directory.ensure_attached()
-            state = path.stat(follow_symlinks=False)
-            directory.ensure_attached()
-        directories[relative] = (
-            state.st_dev,
-            state.st_ino,
-            state.st_mode,
-            state.st_mtime_ns,
-            state.st_ctime_ns,
-        )
+        if not stat.S_ISDIR(_entry_state(tree, path).st_mode):
+            raise ConfigurationError(f"View project input is not a directory: {path}")
+        version = tree.version(path)
+        if version is None:
+            raise FileNotFoundError(
+                errno.ENOENT, "View project input is unavailable", path
+            )
+        directories[relative] = version
     states: dict[PurePosixPath, ProjectInputFileState] = {}
     for relative in paths:
         path = project.root.joinpath(*relative.parts)
-        descriptor = files.open_file(path)
-        try:
-            state = os.fstat(descriptor)
-        finally:
-            os.close(descriptor)
+        state = _entry_state(tree, path)
         if not stat.S_ISREG(state.st_mode):
             raise ConfigurationError(f"View project input is not a file: {path}")
         states[relative] = ProjectInputFileState(
@@ -360,29 +360,9 @@ def _input_state_with_owner(
             state.st_mtime_ns,
             state.st_ctime_ns,
         )
-    files.ensure_attached()
     return ProjectInputState(
         paths, MappingProxyType(states), MappingProxyType(directories), absent
     )
-
-
-def project_input_state(
-    project: ViewProject,
-    inspection: ProjectInspection,
-    *,
-    files: SecureDirectory | None = None,
-    observed: ProjectInputState | None = None,
-    allow_missing_manifest: bool = False,
-) -> ProjectInputState:
-    """Capture bounded input metadata without reading file contents."""
-    if files is not None:
-        return _input_state_with_owner(
-            project, inspection, files, observed, allow_missing_manifest
-        )
-    with secure_directory(project.root) as owner:
-        return _input_state_with_owner(
-            project, inspection, owner, observed, allow_missing_manifest
-        )
 
 
 def project_revision_snapshot(
@@ -443,31 +423,24 @@ def snapshot_project(
 ) -> ProjectSnapshot:
     """Copy declared project inputs into a private build root."""
     assert_secure_path(project.root, snapshot_root, "View input snapshot")
-    with secure_directory(project.root) as project_files:
-        project_files.ensure_directory(snapshot_root)
-    assert_secure_path(
-        project.root,
-        snapshot_root,
-        "View input snapshot",
-        final_kind="directory",
-    )
+    tree = FileTree(project.root)
+    tree.ensure_directory(snapshot_root)
     manifest_relative = _manifest_path(project)
     before = project_input_state(project, inspection)
     entries = tuple(_input_entry(project, path) for path in before.paths)
     budget = FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project inputs")
     budget.require_count(len(entries))
     input_digests: dict[PurePosixPath, bytes] = {}
-    with secure_directory(snapshot_root) as snapshot_files:
-        for relative, source, label in entries:
-            destination = snapshot_root.joinpath(*relative.parts)
-            snapshot_files.ensure_parent(destination)
-            with os.fdopen(snapshot_files.create_file(destination), "wb") as output:
-                input_digests[relative] = _capture_entry(
-                    project.root,
-                    (relative, source, label),
-                    budget,
-                    output,
-                )
+    for relative, source, label in entries:
+        destination = snapshot_root.joinpath(*relative.parts)
+        tree.ensure_directory(destination.parent)
+        with tree.create(destination) as output:
+            input_digests[relative] = _capture_entry(
+                project.root,
+                (relative, source, label),
+                budget,
+                output,
+            )
     manifest = snapshot_root.joinpath(*manifest_relative.parts)
     options = cast(
         Mapping[str, JsonValue],

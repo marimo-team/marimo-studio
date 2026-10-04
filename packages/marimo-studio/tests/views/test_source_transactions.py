@@ -13,7 +13,7 @@ from threading import Barrier, Event, get_ident
 import pytest
 
 import marimo_studio._artifacts.inputs as artifact_inputs
-import marimo_studio._filesystem.secure as secure_files
+import marimo_studio._filesystem.files as files
 import marimo_studio._views.sources as sources_module
 import marimo_studio._workspace.config as workspace_config
 import marimo_studio._workspace.mutation_lock as mutation_lock_module
@@ -21,6 +21,8 @@ from marimo_studio._artifacts.inputs import (
     ProjectRevisionSnapshot,
     project_revision,
 )
+from marimo_studio._filesystem.files import FileTree
+from marimo_studio._filesystem.names import TemporaryKind
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact
 from marimo_studio._views.inspection import inspection_request
@@ -105,7 +107,8 @@ def test_source_commit_holds_the_catalog_owner_through_replacement(
 ) -> None:
     studio = _studio(notebook_path)
     current = read_source(studio, "dashboard", SOURCE_PATH)
-    replace_file = secure_files.SecureDirectory.replace_file_if_identity
+    source = studio.views["dashboard"].root / SOURCE_PATH
+    write = FileTree.write
     catalog_waiting = Event()
     mutation_finished = Event()
     sibling = None
@@ -127,17 +130,14 @@ def test_source_commit_holds_the_catalog_owner_through_replacement(
 
     with ThreadPoolExecutor(max_workers=1) as executor:
 
-        def replace_while_sibling_waits(*args, **kwargs):
+        def write_while_sibling_waits(tree, path, *args, **kwargs):
             nonlocal sibling
-            sibling = executor.submit(create_sibling)
-            assert catalog_waiting.wait(timeout=2)
-            return replace_file(*args, **kwargs)
+            if path == source and sibling is None:
+                sibling = executor.submit(create_sibling)
+                assert catalog_waiting.wait(timeout=2)
+            return write(tree, path, *args, **kwargs)
 
-        monkeypatch.setattr(
-            secure_files.SecureDirectory,
-            "replace_file_if_identity",
-            replace_while_sibling_waits,
-        )
+        monkeypatch.setattr(FileTree, "write", write_while_sibling_waits)
 
         written = write_source(
             studio,
@@ -190,25 +190,17 @@ def test_source_commit_preserves_an_external_edit(
     current = read_source(studio, "dashboard", SOURCE_PATH)
     path = studio.views["dashboard"].root / SOURCE_PATH
     external = _document("external edit")
-    claim = secure_files.SecureDirectory.quarantine_if_identity
+    move_aside = files.move_aside
     edited = False
 
-    def edit_then_claim(
-        filesystem: secure_files.SecureDirectory,
-        selected: Path,
-        expected: secure_files.FileIdentity,
-    ) -> Path:
+    def edit_then_move(entry: files.Entry, kind: TemporaryKind) -> files.Entry:
         nonlocal edited
-        if selected == path and not edited:
+        if entry.path == path and not edited:
             edited = True
             path.write_text(external, encoding="utf-8")
-        return claim(filesystem, selected, expected)
+        return move_aside(entry, kind)
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "quarantine_if_identity",
-        edit_then_claim,
-    )
+    monkeypatch.setattr(files, "move_aside", edit_then_move)
 
     with pytest.raises(SourceConflictError):
         write_source(
@@ -229,25 +221,17 @@ def test_source_conflict_omits_revision_when_the_source_disappears(
     studio = _studio(notebook_path)
     current = read_source(studio, "dashboard", SOURCE_PATH)
     path = studio.views["dashboard"].root / SOURCE_PATH
-    claim = secure_files.SecureDirectory.quarantine_if_identity
+    move_aside = files.move_aside
     removed = False
 
-    def remove_then_claim(
-        filesystem: secure_files.SecureDirectory,
-        selected: Path,
-        expected: secure_files.FileIdentity,
-    ) -> Path:
+    def remove_then_move(entry: files.Entry, kind: TemporaryKind) -> files.Entry:
         nonlocal removed
-        if selected == path and not removed:
+        if entry.path == path and not removed:
             removed = True
             path.unlink()
-        return claim(filesystem, selected, expected)
+        return move_aside(entry, kind)
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "quarantine_if_identity",
-        remove_then_claim,
-    )
+    monkeypatch.setattr(files, "move_aside", remove_then_move)
 
     with pytest.raises(SourceConflictError) as captured:
         write_source(
@@ -280,7 +264,7 @@ def test_source_commit_preserves_the_file_mode(notebook_path: Path) -> None:
     assert stat.S_IMODE(path.stat().st_mode) == 0o664
 
 
-def test_source_commit_preserves_recovery_after_identity_failure(
+def test_source_commit_preserves_recovery_after_cleanup_failure(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -288,24 +272,17 @@ def test_source_commit_preserves_recovery_after_identity_failure(
     path = studio.views["dashboard"].root / SOURCE_PATH
     current = read_source(studio, "dashboard", SOURCE_PATH)
     replacement = _document("browser edit")
-    identity = secure_files.SecureDirectory.file_identity
+    remove_entry = files._remove_entry
     failed = False
 
-    def fail_committed_identity(
-        filesystem: secure_files.SecureDirectory,
-        selected: Path,
-    ) -> secure_files.FileIdentity:
+    def refuse_first_cleanup(entry: files.Entry) -> None:
         nonlocal failed
-        if selected == path and not failed:
+        if not failed and entry.path.name.startswith(".marimo-studio-aside-"):
             failed = True
-            raise PermissionError("identity unavailable")
-        return identity(filesystem, selected)
+            raise PermissionError("cleanup unavailable")
+        remove_entry(entry)
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "file_identity",
-        fail_committed_identity,
-    )
+    monkeypatch.setattr(files, "_remove_entry", refuse_first_cleanup)
 
     with pytest.raises(SourceConflictError) as error:
         write_source(
@@ -322,7 +299,7 @@ def test_source_commit_preserves_recovery_after_identity_failure(
         == current.content
     )
     assert path.read_text(encoding="utf-8") == replacement
-    assert not tuple(path.parent.glob(".marimo-studio-cas-*"))
+    assert not tuple(path.parent.glob(".marimo-studio-write-*"))
 
 
 def test_source_save_is_not_blocked_by_a_provider_build(

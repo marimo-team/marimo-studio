@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
+from marimo_studio._filesystem.files import TreeVersion
 from marimo_studio.view_providers import (
     BuildProfile,
     MountDeclaration,
@@ -14,7 +15,6 @@ from marimo_studio.view_providers import (
 from marimo_studio.view_providers._host.records import ProviderProvenance
 
 ViewBuildPhase = Literal["unbuilt", "building", "failed", "published", "stale"]
-ArtifactTreeIdentity = tuple[tuple[object, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ class ArtifactRevisionSnapshot:
     """One content-verified revision and its cheap filesystem identity."""
 
     revision: ArtifactRevision
-    identity: ArtifactTreeIdentity
+    identity: TreeVersion
 
 
 @dataclass(frozen=True)

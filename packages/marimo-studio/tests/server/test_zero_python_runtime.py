@@ -21,9 +21,9 @@ from marimo_studio._server.publication_runtime import (
 from marimo_studio._server.records import ServerContext, ServerHandle
 from marimo_studio._server.runtime.catalog import ZeroPythonRuntime
 from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgressSink
-from marimo_studio._workspace.metadata import update_notebook_config
 
 from ..app_helpers import configured, edit_mode, marimo_app
+from ..helpers import update_notebook_config
 from .app_test_support import _runtime_config
 
 

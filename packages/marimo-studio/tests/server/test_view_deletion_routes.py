@@ -14,9 +14,9 @@ from starlette.testclient import TestClient
 
 import marimo_studio._server.studio.retirement as retirement_service
 import marimo_studio._server.studio.routes as studio_api_module
-import marimo_studio._views.remove as workspace_views
 import marimo_studio.agent as agent
 import marimo_studio.authoring as authoring
+from marimo_studio._filesystem.files import FileTree, TreeVersion, Version
 from marimo_studio._server.development.coordinator import (
     DevelopmentCoordinator,
 )
@@ -306,16 +306,18 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-    remove_tree = workspace_views.SecureDirectory.remove_tree
+    remove = FileTree.remove
 
     def reject_retained_handles(
-        filesystem: workspace_views.SecureDirectory,
+        tree: FileTree,
         path: Path,
+        *,
+        expect: Version | TreeVersion | None = None,
     ) -> None:
         pins = tuple(path.glob("**/.artifacts/.pins/*/*"))
         if pins:
             raise PermissionError(f"retained artifact handle: {pins[0]}")
-        remove_tree(filesystem, path)
+        remove(tree, path, expect=expect)
 
     with TestClient(app) as client:
         _serve(client, scopes, "operations")
@@ -323,11 +325,7 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
         retained_pins = tuple(
             (studio.view_root / "operations").glob(".artifacts/.pins/*/*")
         )
-        monkeypatch.setattr(
-            workspace_views.SecureDirectory,
-            "remove_tree",
-            reject_retained_handles,
-        )
+        monkeypatch.setattr(FileTree, "remove", reject_retained_handles)
         removed = _delete_owned_view(client, "operations", headers, owner)
 
     assert retained_pins

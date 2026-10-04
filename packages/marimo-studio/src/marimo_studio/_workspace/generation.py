@@ -7,9 +7,10 @@ import stat
 from collections.abc import Mapping
 from pathlib import Path
 
-from marimo_studio._filesystem.io import read_bytes
+from marimo_studio._filesystem.errors import UnsafePathError
+from marimo_studio._filesystem.files import FileTree
+from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.paths import validate_portable_path_component
-from marimo_studio._filesystem.secure import secure_directory
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_NAMES,
     VIEW_NAME_MAX_BYTES,
@@ -32,9 +33,12 @@ def _digest(value: object) -> str:
 
 def directory_generation(path: Path) -> str:
     """Return an opaque identity for one directory incarnation."""
-    with secure_directory(path.parent) as filesystem:
-        owner = filesystem.directory_owner(path)
-    return _digest(owner)
+    state = FileTree(path.parent).stat(path)
+    if state is None:
+        raise FileNotFoundError(path)
+    if not stat.S_ISDIR(state.st_mode):
+        raise UnsafePathError(f"Path is not a directory: {path}")
+    return _digest((state.st_dev, state.st_ino, state.st_mode))
 
 
 def unconfigured_catalog_generation(notebook: Path) -> str:
@@ -80,7 +84,9 @@ def provider_free_catalog_generation(studio: StudioDefinition) -> str:
     """Return a catalog owner while one or more manifests need repair."""
     records: list[tuple[str, str, str, str | None]] = []
     for entry in sorted(studio.view_root.iterdir(), key=lambda path: path.name):
-        if entry.name in {".locks", VIEW_OWNER_DIRECTORY}:
+        if entry.name in {".locks", VIEW_OWNER_DIRECTORY} or is_temporary_name(
+            entry.name
+        ):
             continue
         state = entry.lstat()
         kind = (
@@ -108,7 +114,7 @@ def provider_free_catalog_generation(studio: StudioDefinition) -> str:
         manifest = entry / VIEW_MANIFEST
         if kind == "directory" and manifest.is_file() and not manifest.is_symlink():
             manifest_digest = hashlib.sha256(
-                read_bytes(manifest, root=entry),
+                FileTree(entry).read(manifest).content,
             ).hexdigest()
         records.append((entry.name, kind, owner, manifest_digest))
     return _digest(

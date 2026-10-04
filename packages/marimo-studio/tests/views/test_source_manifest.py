@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.sources as sources_module
+from marimo_studio._filesystem.files import Expectation, FileTree, Version
 from marimo_studio._views.sources import read_source, write_source
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import SourceConflictError, SourceValidationError
@@ -146,26 +146,24 @@ def test_manifest_commit_preserves_an_external_edit(
     current = read_source(studio, "dashboard", "view.toml")
     manifest = studio.views["dashboard"].manifest
     external = current.content + "# external edit\n"
-    replace = secure_files.SecureDirectory.replace_file_if_identity
+    write = FileTree.write
     edited = False
 
-    def edit_then_replace(
-        files: secure_files.SecureDirectory,
+    def edit_then_write(
+        tree: FileTree,
         path: Path,
         content: bytes,
-        expected: secure_files.FileIdentity,
-    ) -> None:
+        *,
+        expect: Expectation = None,
+        mode: int | None = None,
+    ) -> Version:
         nonlocal edited
         if path == manifest and not edited:
             edited = True
             manifest.write_text(external, encoding="utf-8")
-        replace(files, path, content, expected)
+        return write(tree, path, content, expect=expect, mode=mode)
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "replace_file_if_identity",
-        edit_then_replace,
-    )
+    monkeypatch.setattr(FileTree, "write", edit_then_write)
 
     with pytest.raises(SourceConflictError):
         write_source(

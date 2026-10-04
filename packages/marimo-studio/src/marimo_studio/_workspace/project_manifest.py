@@ -8,7 +8,7 @@ from typing import cast
 
 import tomlkit
 
-from marimo_studio._filesystem.io import reject_mutable_symlinks
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._workspace.toml import read_toml
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
@@ -104,8 +104,7 @@ def encode_view_manifest(
 def load_view_project(root: Path) -> ViewProject:
     """Load one required ``view.toml`` from a named view directory."""
     manifest = root / VIEW_MANIFEST
-    reject_mutable_symlinks(root.parent, {root, manifest})
-    if not manifest.is_file():
+    if not FileTree(root.parent).is_file(manifest):
         raise ConfigurationError(f"View project manifest is missing: {manifest}")
     provider, options = decode_view_manifest(read_toml(manifest), manifest)
     return ViewProject(

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import errno
 import re
 import secrets
+import stat
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -11,11 +13,9 @@ from pathlib import Path
 
 import tomlkit
 
-from marimo_studio._filesystem._secure_types import FileIdentity
-from marimo_studio._filesystem.io import (
-    read_file_snapshot_with_identity,
-    reject_mutable_symlinks,
-)
+from marimo_studio._filesystem.errors import UnsafePathError
+from marimo_studio._filesystem.files import FileTree, Version
+from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.paths import validate_portable_path_component
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_NAMES,
@@ -34,9 +34,6 @@ VIEW_OWNER_DIRECTORY = ".owners"
 _VIEW_OWNER_SCHEMA = 1
 _VIEW_OWNER_SUFFIX = ".toml"
 _VIEW_OWNER_GENERATION = re.compile(r"[0-9a-f]{64}")
-_VIEW_OWNER_TRANSACTION = re.compile(
-    r"\.marimo-studio-(?:cas|restore|rollback)-[0-9a-f]{32}"
-)
 
 
 class _ViewOwnerTransactionInProgress(Exception):
@@ -116,21 +113,18 @@ def _validated_record_name(path: Path) -> str:
 def view_owner_snapshot(
     view_root: Path,
     name: str,
-) -> tuple[ViewOwner | None, FileIdentity | None]:
+) -> tuple[ViewOwner | None, Version | None]:
     """Read one optional owner and its exact file identity."""
     path = view_owner_path(view_root, name)
     try:
-        payload, _mode, identity = read_file_snapshot_with_identity(
-            path,
-            root=view_root.parent,
-        )
+        snapshot = FileTree(view_root.parent).read(path)
     except FileNotFoundError:
         return None, None
     try:
-        source = payload.decode("utf-8")
+        source = snapshot.content.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ConfigurationError(f"View owner is not UTF-8 text: {path}") from error
-    return decode_view_owner(source, path), identity
+    return decode_view_owner(source, path), snapshot.version
 
 
 def load_view_owner(view_root: Path, name: str) -> ViewOwner:
@@ -148,7 +142,7 @@ def view_owner_transition(
     name: str,
     *,
     present: bool,
-) -> tuple[Path, str, FileIdentity | None]:
+) -> tuple[Path, str, Version | None]:
     """Plan a fresh incarnation against the current owner identity."""
     path = view_owner_path(view_root, name)
     _owner, identity = view_owner_snapshot(view_root, name)
@@ -157,18 +151,25 @@ def view_owner_transition(
 
 def _owner_snapshots(
     view_root: Path,
-) -> dict[str, tuple[ViewOwner, FileIdentity]]:
+) -> dict[str, tuple[ViewOwner, Version]]:
     owners_root = view_root / VIEW_OWNER_DIRECTORY
-    if not owners_root.exists():
+    tree = FileTree(view_root.parent)
+    if not tree.exists(owners_root):
         return {}
-    reject_mutable_symlinks(view_root.parent, {view_root, owners_root})
-    if not owners_root.is_dir():
+    if not tree.is_directory(owners_root):
         raise ConfigurationError(f"View owner path is not a directory: {owners_root}")
-    owners: dict[str, tuple[ViewOwner, FileIdentity]] = {}
-    for path in sorted(owners_root.iterdir(), key=lambda candidate: candidate.name):
-        if _VIEW_OWNER_TRANSACTION.fullmatch(path.name) is not None:
+    owners: dict[str, tuple[ViewOwner, Version]] = {}
+    for path in tree.children(owners_root):
+        if is_temporary_name(path.name):
             raise _ViewOwnerTransactionInProgress(path)
-        if path.is_symlink() or not path.is_file():
+        try:
+            state = tree.stat(path)
+        except UnsafePathError as error:
+            raise ConfigurationError(f"Unexpected view owner record: {path}") from error
+        if state is None:
+            # A concurrent catalog change removed the record after listing.
+            raise FileNotFoundError(errno.ENOENT, "View owner record was removed", path)
+        if not stat.S_ISREG(state.st_mode):
             raise ConfigurationError(f"Unexpected view owner record: {path}")
         name = _validated_record_name(path)
         owner, identity = view_owner_snapshot(view_root, name)
@@ -221,7 +222,7 @@ def reconcile_view_owners(
 def view_owner_writes(
     view_root: Path,
     names: set[str],
-) -> tuple[dict[Path, str], dict[Path, FileIdentity | None]]:
+) -> tuple[dict[Path, str], dict[Path, Version | None]]:
     """Plan owner records for a catalog whose views are exactly ``names``.
 
     A name without a present owner gets a fresh present owner, and a present
@@ -239,10 +240,10 @@ def view_owner_writes(
 def _view_owner_writes(
     view_root: Path,
     names: set[str],
-) -> tuple[dict[Path, str], dict[Path, FileIdentity | None]]:
+) -> tuple[dict[Path, str], dict[Path, Version | None]]:
     owners = _owner_snapshots(view_root)
     writes: dict[Path, str] = {}
-    expected: dict[Path, FileIdentity | None] = {}
+    expected: dict[Path, Version | None] = {}
     for name in sorted(names):
         current = owners.get(name)
         if current is not None and current[0].present:

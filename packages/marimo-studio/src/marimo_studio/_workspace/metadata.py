@@ -13,7 +13,7 @@ from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import NormalizedName, canonicalize_name
 from tomlkit import TOMLDocument
 
-from marimo_studio._filesystem.io import atomic_write_text, read_text
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._notebook.records import CellRef
 from marimo_studio._workspace.python_project import owning_project
 from marimo_studio._workspace.python_requirement import (
@@ -73,9 +73,13 @@ def _document(source: str, path: Path) -> TOMLDocument | None:
         ) from error
 
 
+def _read_source(path: Path) -> str:
+    return FileTree(path.parent).read(path).content.decode("utf-8")
+
+
 def read_notebook_metadata(path: Path) -> TOMLDocument | None:
     """Return a notebook's PEP 723 document."""
-    return _document(read_text(path), path)
+    return _document(_read_source(path), path)
 
 
 def _notebook_config(
@@ -483,7 +487,7 @@ def configured_notebook_source(
     source: str | None = None,
 ) -> str:
     """Return notebook source with the package dependency and view configuration."""
-    source = read_text(path) if source is None else source
+    source = _read_source(path) if source is None else source
     provider_requirements = tuple(provider_requirements)
     document = _document(source, path) or tomlkit.document()
     package_python = _package_python_requirement()
@@ -530,16 +534,6 @@ def configured_notebook_source(
         )
     set_cell_bindings(config, cell_bindings or {})
     return _replace_metadata(source, path, document)
-
-
-def update_notebook_config(
-    path: Path,
-    update: Callable[[MutableMapping[str, Any]], None],
-) -> None:
-    """Mutate the notebook-local marimo-studio table atomically."""
-    source = read_text(path)
-    updated = updated_notebook_config_source(path, source, update)
-    atomic_write_text(path, updated, root=path.parent)
 
 
 def _studio_config(

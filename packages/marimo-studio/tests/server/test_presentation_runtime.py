@@ -28,7 +28,6 @@ from marimo_studio._server.presentation.capability import (
 from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio._workspace.models import StudioWorkspace
 
 from ..app_helpers import configured as _configured
@@ -36,7 +35,7 @@ from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
 from ..app_helpers import set_shell as _set_shell
-from ..helpers import notebook_source
+from ..helpers import notebook_source, update_notebook_config
 from .app_test_support import (
     _live_test_session,
     _presentation_fallback_url,

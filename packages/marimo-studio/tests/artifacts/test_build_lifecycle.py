@@ -25,6 +25,7 @@ from marimo_studio._artifacts.repository import (
     read_published_artifact,
 )
 from marimo_studio._artifacts.retention import ArtifactLease, lease_published_artifact
+from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.inspection import inspection_request
@@ -194,7 +195,7 @@ def test_build_content_hashing_finishes_before_the_mutation_lock(
     inside_lock = False
     mutation_lock = build_module.view_mutation_lock
     capture_entry = inputs_module._capture_entry
-    publication_files = publication_module.artifact_files
+    publication_files = publication_module.ingest_publication_files
     repository_files = repository_module.artifact_files
 
     @contextmanager
@@ -223,7 +224,7 @@ def test_build_content_hashing_finishes_before_the_mutation_lock(
     monkeypatch.setattr(inputs_module, "_capture_entry", observed_capture)
     monkeypatch.setattr(
         publication_module,
-        "artifact_files",
+        "ingest_publication_files",
         observed_publication_files,
     )
     monkeypatch.setattr(
@@ -383,19 +384,16 @@ def test_manifest_write_failure_records_a_failed_attempt_and_keeps_last_good(
     project = _project(tmp_path)
     first = publish_artifact(project, "development")
     _change_document(project, "next generation")
-    atomic_write_text = publication_module.atomic_write_text
+    write = FileTree.write
 
     def fail_manifest(
-        path: Path,
-        content: str,
-        *,
-        root: Path | None = None,
-    ) -> None:
+        tree: FileTree, path: Path, content: bytes, **options: Any
+    ) -> Version:
         if path.name == "artifact.json":
             raise OSError("artifact manifest write failed")
-        atomic_write_text(path, content, root=root)
+        return write(tree, path, content, **options)
 
-    monkeypatch.setattr(publication_module, "atomic_write_text", fail_manifest)
+    monkeypatch.setattr(FileTree, "write", fail_manifest)
 
     with pytest.raises(ViewProjectError, match="artifact manifest write failed"):
         publish_artifact(project, "development")

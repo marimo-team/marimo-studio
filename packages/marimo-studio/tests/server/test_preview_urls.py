@@ -21,10 +21,10 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.revisions import capture_source_snapshot
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio.errors import ViewProjectError
 
 from ..app_helpers import configured, edit_mode, marimo_app, session_manager
+from ..helpers import update_notebook_config
 from .app_test_support import (
     _editor_mount_value,
     _mount_support_url,
