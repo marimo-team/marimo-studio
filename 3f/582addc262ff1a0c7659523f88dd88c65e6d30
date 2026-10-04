@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/filesystem/test_windows_locks.py
+  s_bb821737bc18cd::t_460507929c25d3 1-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3f582addc262ff1a0c7659523f88dd88c65e6d30",
+  "prompts": {},
+  "sessions": {
+    "s_bb821737bc18cd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "43388b97-b943-4100-9eb5-4d686c173e8f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
