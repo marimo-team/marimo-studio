@@ -104,7 +104,15 @@ def encode_view_manifest(
 def load_view_project(root: Path) -> ViewProject:
     """Load one required ``view.toml`` from a named view directory."""
     manifest = root / VIEW_MANIFEST
-    if not FileTree(root.parent).is_file(manifest):
+    try:
+        present = FileTree(root.parent).is_file(manifest)
+    except ConfigurationError:
+        raise
+    except OSError as error:
+        raise ConfigurationError(
+            f"View project manifest is unavailable: {manifest}"
+        ) from error
+    if not present:
         raise ConfigurationError(f"View project manifest is missing: {manifest}")
     provider, options = decode_view_manifest(read_toml(manifest), manifest)
     return ViewProject(

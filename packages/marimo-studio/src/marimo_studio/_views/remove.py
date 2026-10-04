@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 from contextlib import suppress
 from pathlib import Path
@@ -115,6 +116,7 @@ def _delete_view_locked(
             raise ViewNotFoundError(name, available=tuple(current.views))
         staging_root = current.view_root.parent / temporary_name("stage")
         tree.create_directory(staging_root)
+        staging_state = tree.stat(staging_root)
         staged = staging_root / name
         candidate = staging_root / _TOMBSTONE_CANDIDATE
         tombstone_token = secrets.token_hex(16)
@@ -130,6 +132,16 @@ def _delete_view_locked(
                 expect=ABSENT,
             )
             tombstone = tree.version(candidate)
+            # The view moves into the staging directory this deletion created.
+            current_staging = tree.stat(staging_root)
+            if (
+                staging_state is None
+                or current_staging is None
+                or not os.path.samestat(staging_state, current_staging)
+            ):
+                raise ConfigurationError(
+                    f"View deletion staging changed before {name!r} moved into it"
+                )
             tree.publish(target, staged)
             if tree.version(staged) != target_version:
                 raise ConfigurationError(

@@ -58,21 +58,28 @@ def acquire(descriptor: int, *, blocking: bool) -> bool:
         import msvcrt
 
         # msvcrt locks byte ranges, so the lock file needs one byte to lock.
+        # Another process that already locked that byte refuses this write,
+        # and the lock below then waits for it or reports it busy.
         if os.fstat(descriptor).st_size == 0:
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            os.write(descriptor, b"\0")
-            os.fsync(descriptor)
+            try:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                os.write(descriptor, b"\0")
+                os.fsync(descriptor)
+            except PermissionError:
+                pass
         mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
         while True:
             os.lseek(descriptor, 0, os.SEEK_SET)
             try:
                 msvcrt.locking(descriptor, mode, 1)
             except OSError as error:
-                if not blocking:
+                # LK_NBLCK reports a held lock as EACCES. LK_LOCK gives up
+                # after ten one-second retries with EDEADLK.
+                if not blocking and error.errno == errno.EACCES:
                     return False
-                # LK_LOCK gives up after ten one-second retries.
-                if error.errno != errno.EDEADLK:
-                    raise
+                if blocking and error.errno == errno.EDEADLK:
+                    continue
+                raise
             else:
                 return True
 

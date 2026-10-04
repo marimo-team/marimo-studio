@@ -10,6 +10,7 @@ from marimo_studio._notebook.cell_refs import (
     safe_cell_ref_matches,
     safe_cell_ref_updates,
 )
+from marimo_studio._notebook.ports import NotebookWriteLock
 from marimo_studio._notebook.records import CellRef
 from marimo_studio._server.ports import SourceTransformSession
 from marimo_studio._server.records import SaveCell, SourceTransformResult
@@ -38,8 +39,14 @@ def _live_refs(cells: tuple[SaveCell, ...]) -> tuple[tuple[CellRef, str], ...]:
 
 
 class _CellAliasTransform(SourceTransformSession):
-    def __init__(self, path: Path, cells: tuple[SaveCell, ...]) -> None:
+    def __init__(
+        self,
+        path: Path,
+        cells: tuple[SaveCell, ...],
+        lock_notebook: NotebookWriteLock,
+    ) -> None:
         self._path = path
+        self._lock_notebook = lock_notebook
         self._aliases: dict[str, _TrackedAlias] = {}
         self._saved_live = _live_refs(cells)
         workspace = self._workspace()
@@ -72,7 +79,13 @@ class _CellAliasTransform(SourceTransformSession):
 
         def commit() -> None:
             if changed and workspace is not None and not workspace.uses_notebook_config:
-                _write_cell_bindings(workspace, bindings, remove=removed)
+                _write_cell_bindings(
+                    workspace,
+                    bindings,
+                    remove=removed,
+                    notebook_source=updated,
+                    lock_notebook=self._lock_notebook,
+                )
             if changed:
                 for alias in removed:
                     self._aliases.pop(alias, None)
@@ -167,6 +180,9 @@ class _CellAliasTransform(SourceTransformSession):
 class CellAliasSourcePolicy:
     """Create alias transforms for configured Studio notebooks."""
 
+    def __init__(self, lock_notebook: NotebookWriteLock) -> None:
+        self._lock_notebook = lock_notebook
+
     def open(
         self,
         path: Path,
@@ -176,4 +192,6 @@ class CellAliasSourcePolicy:
             workspace = discover_studio(path)
         except MarimoStudioError:
             return None
-        return _CellAliasTransform(path, cells) if workspace is not None else None
+        if workspace is None:
+            return None
+        return _CellAliasTransform(path, cells, self._lock_notebook)

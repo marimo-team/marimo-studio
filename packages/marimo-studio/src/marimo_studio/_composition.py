@@ -133,7 +133,9 @@ def create_server_adapters() -> ServerAdapters:
 
     sessions = PrivateExistingSessionAttachment()
     replay = PrivateSessionReplay()
-    persistence = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
+    persistence = PrivateNotebookSaveTransform(
+        CellAliasSourcePolicy(create_notebook_write_lock())
+    )
     peer_commands = PrivatePeerCommandRelay()
     session_cache = PrivateSessionCachePublication()
     usage = PrivateUsageRoute()

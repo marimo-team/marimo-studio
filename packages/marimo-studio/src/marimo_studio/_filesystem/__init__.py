@@ -10,7 +10,7 @@ primitive the filesystem offers. Callers state preconditions with versions and
 never handle temporary names, syncs, or displaced copies.
 
 Provider builds are the only lower-privilege writers. ``FileTree.ingest``
-copies their output through directory handles into a directory that only
-Studio writes, so publication and serving never read a tree that a build can
-change.
+copies their regular files, refusing links and special files, into a
+directory that only Studio writes, so publication and serving never read a
+tree that a build can change.
 """

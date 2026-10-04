@@ -94,7 +94,10 @@ def test_make_default_waits_for_a_marimo_notebook_save(
             pending = executor.submit(
                 asyncio.run, workspace.view("report").make_default()
             )
-            assert waiting.wait(timeout=10)
+            if not waiting.wait(timeout=10):
+                if pending.done():
+                    pending.result()
+                pytest.fail("make_default did not request the notebook write lock")
             assert load_studio(notebook_path).default_view == "dashboard"
         pending.result(timeout=10)
 

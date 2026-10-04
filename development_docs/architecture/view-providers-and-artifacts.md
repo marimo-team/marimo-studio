@@ -244,19 +244,23 @@ and mutation.
 systems, each verb opens the root and walks to the target's parent through
 directory descriptors opened with `O_NOFOLLOW`, then acts on the leaf relative
 to that descriptor. A swapped ancestor either fails the walk or leaves the
-operation in the directory it resolved. Windows offers no descriptor-relative
-file API, so each verb checks the path for symlinks and junctions before it
-acts.
+operation in the directory it resolved. A tree binds to the root directory its
+first verb opens, so a multi-step operation refuses to continue once the root
+path names another directory. Windows offers no descriptor-relative file API, so
+each verb checks the path for symlinks and junctions before it acts. A junction
+that replaces a checked ancestor between that check and the operation is not
+refused.
 
-| Verb                 | Primitive                                                                       |
-| -------------------- | ------------------------------------------------------------------------------- |
-| `read`               | Bounded read that returns content with an opaque `Version`                      |
-| `write`              | Same-directory temporary file, `fsync`, then replace                            |
-| `write(expect=...)`  | Move the current file aside, compare its `Version`, publish or restore          |
-| `remove(expect=...)` | Move the entry aside, compare its `Version` or `TreeVersion`, delete or restore |
-| `publish`            | Rename onto a name that must stay absent                                        |
-| `lock`               | `flock` or `msvcrt` byte-range lock on a persistent lock file                   |
-| `ingest`             | Descriptor-relative copy of provider output into a new directory                |
+| Verb                    | Primitive                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `read`                  | Bounded read that returns content with an opaque `Version`                                                              |
+| `write`                 | Same-directory temporary file, `fsync`, then replace                                                                    |
+| `write(expect=ABSENT)`  | Publish the new file while its name stays absent                                                                        |
+| `write(expect=version)` | Move the current file aside, compare its `Version`, publish or restore                                                  |
+| `remove(expect=...)`    | Move the entry aside, compare its `Version` or `TreeVersion`, delete or restore                                         |
+| `publish`               | Move an entry onto a name that must stay absent                                                                         |
+| `lock`                  | `flock` or `msvcrt` byte-range lock on a persistent lock file                                                           |
+| `ingest`                | Copy provider output into a new directory, through directory descriptors on POSIX and held directory handles on Windows |
 
 `publish` uses `renameat2(RENAME_NOREPLACE)` on Linux and
 `renameatx_np(RENAME_EXCL)` on macOS. NFS, WSL drive mounts, and gVisor host
@@ -264,8 +268,9 @@ mounts reject that flag with `EINVAL`. There, a file publishes through an
 exclusive hard link and a directory through an empty placeholder that the rename
 replaces. On Windows, `MoveFileExW` renames whichever entry its source handle
 opened, so concurrent renames of one path can all succeed. Studio renames
-through a handle that withholds delete sharing, so a competing rename of the
-same entry waits until the first one completes.
+through a handle that withholds delete sharing. A competing rename of the same
+entry gets a sharing violation, which Studio retries for about one second before
+it reports the entry as busy.
 
 Provider builds are the lower-privilege writers, because a Deno build may write
 only beneath its staging root. `ingest` copies their regular files into a

@@ -53,9 +53,12 @@ def swapped(
 def test_a_read_uses_the_directory_it_resolved(
     tree: FileTree, swapped: tuple[Path, Path]
 ) -> None:
-    snapshot = tree.read(tree.root / "views" / "dashboard" / "index.html")
+    path = tree.root / "views" / "dashboard" / "index.html"
+
+    snapshot = tree.read(path)
 
     assert snapshot.content == b"inside"
+    assert path.read_bytes() == b"outside"
 
 
 def test_a_write_lands_in_the_directory_it_resolved(

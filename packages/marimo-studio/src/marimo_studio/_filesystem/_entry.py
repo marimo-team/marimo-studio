@@ -38,6 +38,18 @@ _Result = TypeVar("_Result")
 NAME_SURROGATE: Final = 0x20000000
 
 
+def changed(before: os.stat_result, after: os.stat_result) -> bool:
+    """Return whether one open file's identity, size, or timestamps moved."""
+    return (
+        before.st_dev != after.st_dev
+        or before.st_ino != after.st_ino
+        or before.st_mode != after.st_mode
+        or before.st_size != after.st_size
+        or before.st_mtime_ns != after.st_mtime_ns
+        or before.st_ctime_ns != after.st_ctime_ns
+    )
+
+
 def is_link(state: os.stat_result) -> bool:
     """Return whether an ``lstat`` result names a path-redirecting entry."""
     if stat.S_ISLNK(state.st_mode):
@@ -96,7 +108,10 @@ def open_directory(name: str | Path, *, path: Path, parent: int | None = None) -
                 f"Path ancestor is not a directory: {path}"
             ) from error
         raise
-    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+    try:
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise UnsafePathError(f"Path is not a directory: {path}")
+    except BaseException:
         os.close(descriptor)
-        raise UnsafePathError(f"Path is not a directory: {path}")
+        raise
     return descriptor

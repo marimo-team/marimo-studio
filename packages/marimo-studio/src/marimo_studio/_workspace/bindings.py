@@ -141,18 +141,26 @@ def _write_cell_bindings(
     bindings: Mapping[str, CellRef],
     *,
     remove: Iterable[str] = (),
+    notebook_source: str,
+    lock_notebook: NotebookWriteLock,
 ) -> None:
     """Persist live cell bindings into a project configuration file.
 
-    A Marimo save calls this after it releases the notebook lock. The write
-    commits only while the configuration still matches ``studio``.
+    A Marimo save calls this after it releases the notebook lock, with the
+    source it saved. The bindings commit only while the notebook still holds
+    that source, because a later save binds its own cells, and only while the
+    configuration still matches ``studio``.
     """
-    with workspace_catalog_lock(studio.view_root):
+    with workspace_catalog_lock(studio.view_root), lock_notebook(studio.notebook):
         snapshot = snapshot_workspace_config(
             studio,
             reload_studio=load_studio_definition,
             include_notebook=True,
         )
+        # Marimo writes text with the platform's line endings.
+        saved = snapshot.notebook_source
+        if saved is None or saved.splitlines() != notebook_source.splitlines():
+            return
         if snapshot.studio.config_generation != studio.config_generation:
             raise WorkspaceGenerationConflictError()
         _commit_cell_bindings(snapshot, bindings, remove=remove, lock_notebook=None)

@@ -9,6 +9,7 @@ import os
 import stat
 import sys
 from collections.abc import Callable
+from contextlib import suppress
 
 from marimo_studio._filesystem._entry import Entry, retry_while_shared
 from marimo_studio._filesystem.errors import UnsafePathError
@@ -172,7 +173,10 @@ def _link_or_claim(
         # collision or the real error when the link failed for another reason.
         _claim_then_rename(source_fd, source, destination_fd, destination)
         return
-    os.unlink(source, dir_fd=source_fd)
+    # The destination is published once the link exists. A source name that
+    # survives a failed unlink is the caller's temporary, which it removes.
+    with suppress(OSError):
+        os.unlink(source, dir_fd=source_fd)
 
 
 def _rename_exclusive(source: Entry, destination: Entry, fallback: _Fallback) -> None:

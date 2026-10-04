@@ -5,6 +5,7 @@ import os
 import stat
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,11 @@ import marimo_studio._filesystem._entry as entries_module
 import marimo_studio._filesystem._windows as windows
 import marimo_studio._filesystem.files as files
 import marimo_studio._filesystem.names as names
-from marimo_studio._filesystem.errors import FileAccessError, UnsafePathError
+from marimo_studio._filesystem.errors import (
+    ConcurrentChangeError,
+    FileAccessError,
+    UnsafePathError,
+)
 from marimo_studio._filesystem.files import ABSENT, ConditionalWriteError, FileTree
 from marimo_studio._filesystem.paths import validate_portable_path_component
 
@@ -316,6 +321,21 @@ def test_ensure_directory_refuses_a_file_in_the_way(tree: FileTree) -> None:
         tree.ensure_directory(tree.root / "studio" / "analysis")
 
 
+def test_a_tree_refuses_a_root_replaced_after_its_first_verb(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    tree = FileTree(root)
+    tree.write(root / "view.toml", b"first")
+    root.rename(tmp_path / "retired")
+    root.mkdir()
+
+    with pytest.raises(ConcurrentChangeError, match="Root changed"):
+        tree.write(root / "view.toml", b"second")
+
+    assert entries(root) == set()
+    assert (tmp_path / "retired" / "view.toml").read_bytes() == b"first"
+
+
 @pytest.mark.parametrize("kind", ["write", "aside", "stage"])
 def test_temporary_names_are_portable_path_components(
     kind: names.TemporaryKind,
@@ -400,7 +420,20 @@ for round_ in range(rounds):
 
 def _line(worker: subprocess.Popen[str]) -> str:
     assert worker.stdout is not None
-    return worker.stdout.readline().strip()
+    # Windows pipes cannot be polled, so a thread bounds the read.
+    reader = ThreadPoolExecutor(max_workers=1)
+    try:
+        return reader.submit(worker.stdout.readline).result(timeout=60).strip()
+    finally:
+        reader.shutdown(wait=False)
+
+
+def _finish(worker: subprocess.Popen[str]) -> tuple[str, str]:
+    try:
+        return worker.communicate(timeout=60)
+    except subprocess.TimeoutExpired:
+        worker.kill()
+        return worker.communicate()
 
 
 @pytest.mark.native_process
@@ -450,7 +483,7 @@ def test_concurrent_versioned_writes_admit_one_writer(
         # Release writers still waiting on later rounds after a failed round.
         for round_ in range(rounds):
             (root / f"go-{round_}").write_bytes(b"")
-        results = [worker.communicate(timeout=60) for worker in workers]
+        results = [_finish(worker) for worker in workers]
     assert all(worker.returncode == 0 for worker in workers), [
         stderr for _stdout, stderr in results
     ]

@@ -36,7 +36,7 @@ from marimo_studio._artifacts.paths import (
     normalized_artifact_path,
     verified_secure_file,
 )
-from marimo_studio._filesystem.files import FileTree, Version
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.tree import bounded_tree_entries
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio.errors import ConfigurationError
@@ -72,7 +72,7 @@ class ProjectInputFileState:
 class ProjectInputState:
     paths: tuple[PurePosixPath, ...]
     files: Mapping[PurePosixPath, ProjectInputFileState]
-    directories: Mapping[PurePosixPath, Version]
+    directories: Mapping[PurePosixPath, tuple[int, int, int, str]]
     absent: tuple[PurePosixPath, ...]
 
 
@@ -333,19 +333,26 @@ def project_input_state(
             for relative in observed.absent
             if not tree.exists(project.root.joinpath(*relative.parts))
         )
-    # A directory version digests entry names, so an added input file is
-    # detected even where creating a child leaves the directory mtime alone.
-    directories: dict[PurePosixPath, Version] = {}
+    # Entry names catch an added input file even where creating a child leaves
+    # the directory mtime alone. Studio's artifact state is outside the inputs.
+    artifacts = artifact_root(project)
+    directories: dict[PurePosixPath, tuple[int, int, int, str]] = {}
     for relative in directory_paths:
         path = project.root.joinpath(*relative.parts)
-        if not stat.S_ISDIR(_entry_state(tree, path).st_mode):
+        state = _entry_state(tree, path)
+        if not stat.S_ISDIR(state.st_mode):
             raise ConfigurationError(f"View project input is not a directory: {path}")
-        version = tree.version(path)
-        if version is None:
-            raise FileNotFoundError(
-                errno.ENOENT, "View project input is unavailable", path
-            )
-        directories[relative] = version
+        names = sorted(
+            os.fsencode(child.name)
+            for child in tree.children(path)
+            if child != artifacts
+        )
+        directories[relative] = (
+            state.st_dev,
+            state.st_ino,
+            state.st_mode,
+            hashlib.sha256(b"\0".join(names)).hexdigest(),
+        )
     states: dict[PurePosixPath, ProjectInputFileState] = {}
     for relative in paths:
         path = project.root.joinpath(*relative.parts)

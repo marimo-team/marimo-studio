@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -43,15 +44,23 @@ def test_a_lock_held_by_another_process_refuses_this_process(tree: FileTree) -> 
         stdout=subprocess.PIPE,
         text=True,
     )
+    reader = ThreadPoolExecutor(max_workers=1)
     try:
         assert holder.stdout is not None
-        assert holder.stdout.readline().strip() == "held"
+        held = reader.submit(holder.stdout.readline)
+        assert held.result(timeout=30).strip() == "held"
         with tree.lock(path, blocking=False) as acquired:
             assert acquired is False
     finally:
+        reader.shutdown(wait=False)
         assert holder.stdin is not None
         holder.stdin.close()
-        holder.wait(timeout=30)
+        try:
+            holder.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            holder.kill()
+            holder.wait()
+            raise
 
     with tree.lock(path, blocking=False) as acquired:
         assert acquired is True

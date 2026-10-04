@@ -63,7 +63,11 @@ def _mutation_lock(
             return
         with ExitStack() as owner:
             try:
-                acquired = owner.enter_context(tree.lock(lock_path, blocking=blocking))
+                # A lock file removed or replaced while held no longer
+                # excluded other processes from this mutation.
+                acquired = owner.enter_context(
+                    tree.lock(lock_path, blocking=blocking, require_held=True)
+                )
             except ConfigurationError:
                 raise
             except OSError as error:
@@ -73,19 +77,11 @@ def _mutation_lock(
             if not acquired:
                 yield False
                 return
-            state = tree.stat(lock_path)
             held.add(lock_path)
             try:
                 yield True
             finally:
                 held.discard(lock_path)
-            # A lock file removed or replaced while held no longer excluded
-            # other processes from this mutation.
-            current = tree.stat(lock_path)
-            if state is None or current is None or not os.path.samestat(state, current):
-                raise ConfigurationError(
-                    f"View mutation lock changed while held: {lock_path}"
-                )
     finally:
         thread_lock.release()
 

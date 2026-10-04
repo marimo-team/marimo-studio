@@ -223,6 +223,8 @@ def test_live_alias_update_rejects_an_intervening_same_alias_edit(
         workspace_bindings._write_cell_bindings(
             studio,
             {"cell-2": desired},
+            notebook_source=notebook_path.read_text(encoding="utf-8"),
+            lock_notebook=create_notebook_write_lock(),
         )
 
     assert load_studio(pyproject).cells["cell-2"] == external
@@ -245,6 +247,30 @@ def test_live_alias_update_requires_its_observed_configuration(
         workspace_bindings._write_cell_bindings(
             studio,
             {"cell-2": desired},
+            notebook_source=notebook_path.read_text(encoding="utf-8"),
+            lock_notebook=create_notebook_write_lock(),
         )
 
     assert load_studio(pyproject).cells["cell-2"] == desired
+
+
+def test_live_alias_update_leaves_bindings_to_a_newer_save(
+    notebook_path: Path,
+) -> None:
+    pyproject = _project_configuration(notebook_path)
+    prepare_view(notebook_path)
+    studio = load_studio_definition(pyproject)
+    observed = studio.cells["cell-2"]
+    saved = notebook_path.read_text(encoding="utf-8")
+    newer = saved.replace("x * 2", "x * 3")
+    assert newer != saved
+    notebook_path.write_text(newer, encoding="utf-8")
+
+    workspace_bindings._write_cell_bindings(
+        studio,
+        {"cell-2": CellRef("a" * 64, "b" * 64)},
+        notebook_source=saved,
+        lock_notebook=create_notebook_write_lock(),
+    )
+
+    assert load_studio(pyproject).cells["cell-2"] == observed

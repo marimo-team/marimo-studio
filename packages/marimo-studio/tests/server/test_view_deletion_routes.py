@@ -330,6 +330,7 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
 
     assert retained_pins
     assert removed.status_code == 200
+    assert "cleanup" not in removed.json()
     assert not (studio.view_root / "operations").exists()
 
 

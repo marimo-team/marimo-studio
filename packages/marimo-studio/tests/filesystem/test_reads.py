@@ -34,7 +34,7 @@ def test_read_returns_content_mode_and_a_version_of_that_content(
     assert first.version == tree.read(path, max_bytes=1024).version
     assert first.version == tree.version(path)
 
-    path.write_bytes(b"import marimo as mo\n")
+    path.write_bytes(b"import pandas\n")
 
     assert tree.version(path) != first.version
 

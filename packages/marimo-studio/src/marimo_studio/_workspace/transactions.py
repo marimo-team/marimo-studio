@@ -134,14 +134,18 @@ def write_file_transaction(
     when the path must stay absent. Expectations hold before the first write
     and again after the ``with`` body. A written path with an expectation
     commits only while it still matches. Every directory in
-    ``new_directories`` must be absent. Its files from ``writes`` are staged
-    together and published with one rename.
+    ``new_directories`` must be absent and must not contain another one. Its
+    files from ``writes`` are staged together and published in one step.
 
     A failed write, failed expectation, or exception in the body restores
     everything this transaction committed. Content that changed after this
     transaction wrote it stays in place, and the rollback error names it.
     """
     tree = FileTree(root)
+    for directory in new_directories:
+        # Each published tree is verified whole, so one cannot hold another.
+        if any(other in directory.parents for other in new_directories):
+            raise ValueError(f"New directories must not nest: {directory}")
     expectations = dict(expected or {})
     staged: dict[Path, dict[Path, bytes]] = {
         directory: {} for directory in new_directories

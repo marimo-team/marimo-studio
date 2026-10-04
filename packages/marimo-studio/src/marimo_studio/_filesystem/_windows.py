@@ -94,12 +94,12 @@ def _open_handle(
     get_information.restype = wintypes.BOOL
     if not get_information(handle, ctypes.byref(information)):
         error = cast(Any, ctypes).get_last_error()
-        kernel32.CloseHandle(handle)
+        close_handle(handle)
         raise UnsafePathError(error, f"Could not inspect {label.lower()}: {path}")
     if information.file_attributes & _FILE_ATTRIBUTE_REPARSE_POINT and (
         _reparse_tag(kernel32, handle) & NAME_SURROGATE
     ):
-        kernel32.CloseHandle(handle)
+        close_handle(handle)
         raise UnsafePathError(f"{label} is a symlink or junction: {path}")
     return int(handle)
 
@@ -144,7 +144,7 @@ def open_directory_handle(path: Path) -> int:
     """
     return _open_handle(
         path,
-        _FILE_LIST_DIRECTORY,
+        _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES,
         _FILE_FLAG_BACKUP_SEMANTICS,
         "Directory",
         share=_FILE_SHARE_READ_WRITE,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import errno
 import re
 import secrets
 import stat
@@ -167,8 +166,7 @@ def _owner_snapshots(
         except UnsafePathError as error:
             raise ConfigurationError(f"Unexpected view owner record: {path}") from error
         if state is None:
-            # A concurrent catalog change removed the record after listing.
-            raise FileNotFoundError(errno.ENOENT, "View owner record was removed", path)
+            raise ConfigurationError(f"View owner changed while it was loaded: {path}")
         if not stat.S_ISREG(state.st_mode):
             raise ConfigurationError(f"Unexpected view owner record: {path}")
         name = _validated_record_name(path)
@@ -188,10 +186,12 @@ def reconcile_view_owners(
     """Adopt external names and tombstone names observed as absent."""
     if not view_root.is_dir() and not names:
         return names
+    # Outside the catalog lock, a record that is being written or removed
+    # sends reconciliation under the lock, where the same checks are final.
     try:
         if not _view_owner_writes(view_root, names)[0]:
             return names
-    except _ViewOwnerTransactionInProgress:
+    except (_ViewOwnerTransactionInProgress, ConfigurationError, FileNotFoundError):
         pass
     with workspace_catalog_lock(view_root):
         current_names = refresh_names() if refresh_names is not None else names

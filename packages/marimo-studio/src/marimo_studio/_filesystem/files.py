@@ -28,6 +28,7 @@ from marimo_studio._filesystem._entry import (
     DESCRIPTORS,
     FILE_FLAGS,
     Entry,
+    changed,
     is_link,
     open_directory,
     retry_while_shared,
@@ -142,17 +143,6 @@ def _directory_version(state: os.stat_result, names: list[str]) -> Version:
         state.st_mode,
         0,
         digest.digest(),
-    )
-
-
-def _changed(before: os.stat_result, after: os.stat_result) -> bool:
-    return (
-        before.st_dev != after.st_dev
-        or before.st_ino != after.st_ino
-        or before.st_mode != after.st_mode
-        or before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or before.st_ctime_ns != after.st_ctime_ns
     )
 
 
@@ -295,7 +285,7 @@ def _entry_reader(entry: Entry) -> Iterator[tuple[BinaryIO, os.stat_result]]:
     stream = os.fdopen(descriptor, "rb")
     try:
         yield stream, before
-        if _changed(before, os.fstat(stream.fileno())):
+        if changed(before, os.fstat(stream.fileno())):
             raise ConcurrentChangeError(f"File changed while it was read: {entry.path}")
     finally:
         stream.close()
@@ -344,6 +334,7 @@ def _entry_tree_version(entry: Entry, max_entries: int) -> TreeVersion:
                         state.st_mtime_ns,
                         state.st_ctime_ns,
                         state.st_size,
+                        state.st_dev,
                         state.st_ino,
                     )
                 )
@@ -419,13 +410,34 @@ class FileTree:
     """Operate on files contained in one root directory.
 
     Paths are absolute and must stay under ``root``. A path that crosses a
-    symlink or a Windows junction raises ``UnsafePathError``.
+    symlink or a Windows junction raises ``UnsafePathError``. The first verb
+    that opens ``root`` binds the tree to that directory, and later verbs raise
+    ``ConcurrentChangeError`` once ``root`` names a different directory.
     """
 
     def __init__(self, root: Path) -> None:
         if ".." in Path(root).parts:
             raise UnsafePathError(f"Root must not include parent segments: {root}")
         self.root = Path(os.path.abspath(root))
+        self._identity: tuple[int, int] | None = None
+
+    def _bind(self, state: os.stat_result) -> None:
+        identity = (state.st_dev, state.st_ino)
+        if self._identity is None:
+            self._identity = identity
+        elif identity != self._identity:
+            raise ConcurrentChangeError(
+                f"Root changed while it was in use: {self.root}"
+            )
+
+    def _open_root(self) -> int:
+        descriptor = open_directory(self.root, path=self.root)
+        try:
+            self._bind(os.fstat(descriptor))
+        except BaseException:
+            os.close(descriptor)
+            raise
+        return descriptor
 
     def _target(self, path: Path, *, allow_root: bool = False) -> Path:
         if ".." in Path(path).parts:
@@ -447,13 +459,16 @@ class FileTree:
         """
         target = self._target(path, allow_root=allow_root)
         if target == self.root:
+            state = _lstat(Entry(target, None))
+            if state is not None and stat.S_ISDIR(state.st_mode) and not is_link(state):
+                self._bind(state)
             yield Entry(target, None)
             return
         if not DESCRIPTORS:
             self._check_ancestors(target)
             yield Entry(target, None)
             return
-        descriptor = open_directory(self.root, path=self.root)
+        descriptor = self._open_root()
         try:
             current = self.root
             for component in target.relative_to(self.root).parts[:-1]:
@@ -480,10 +495,19 @@ class FileTree:
                 raise UnsafePathError(f"Path crosses a symlink: {current}")
             if not stat.S_ISDIR(state.st_mode):
                 raise UnsafePathError(f"Path ancestor is not a directory: {current}")
+            if current == self.root:
+                self._bind(state)
 
     @contextmanager
     def _directory(self, path: Path) -> Iterator[int | Path]:
         """Yield one directory as an open descriptor, or as a path on Windows."""
+        if DESCRIPTORS and self._target(path, allow_root=True) == self.root:
+            descriptor = self._open_root()
+            try:
+                yield descriptor
+            finally:
+                os.close(descriptor)
+            return
         with (
             self._locate(path, allow_root=True) as entry,
             _entry_directory(entry) as directory,
@@ -667,7 +691,9 @@ class FileTree:
                 else:
                     self._swap(temporary, target, expect, version)
             finally:
-                with suppress(FileNotFoundError):
+                # A leftover temporary name never fails a committed write, and
+                # discovery skips it.
+                with suppress(OSError):
                     os.unlink(temporary.name, dir_fd=temporary.parent)
             _sync(target)
         return version
@@ -798,7 +824,7 @@ class FileTree:
         if not DESCRIPTORS:
             return self._create_windows_through(target)
         created: list[Path] = []
-        descriptor = open_directory(self.root, path=self.root)
+        descriptor = self._open_root()
         try:
             current = self.root
             for component in target.relative_to(self.root).parts:
@@ -916,6 +942,7 @@ class FileTree:
         *,
         blocking: bool = True,
         create: bool = True,
+        require_held: bool = False,
     ) -> Iterator[bool]:
         """Hold an exclusive cross-process lock on one persistent lock file.
 
@@ -923,7 +950,8 @@ class FileTree:
         the lock, or when ``create`` is false and the lock file is absent. The
         lock file stays in place so every owner locks the same inode. Raises
         ``ConcurrentChangeError`` when the lock file was replaced before the
-        lock was acquired.
+        lock was acquired, and with ``require_held`` also when it was removed
+        or replaced while the block ran.
         """
         target = self._target(path)
         if create:
@@ -951,22 +979,26 @@ class FileTree:
                 yield False
                 return
             try:
-                self._require_lock_inode(target, opened)
+                self._require_lock_inode(
+                    target, opened, "Lock file was replaced before it was acquired"
+                )
                 yield True
+                if require_held:
+                    self._require_lock_inode(
+                        target, opened, "Lock file changed while held"
+                    )
             finally:
                 _locks.release(descriptor)
         finally:
             os.close(descriptor)
 
-    def _require_lock_inode(self, target: Path, opened: os.stat_result) -> None:
+    def _require_lock_inode(
+        self, target: Path, opened: os.stat_result, message: str
+    ) -> None:
         # A lock taken on an unlinked or replaced inode excludes nobody.
         try:
             current = self.stat(target)
-        except UnsafePathError as error:
-            raise ConcurrentChangeError(
-                f"Lock file was replaced before it was acquired: {target}"
-            ) from error
+        except OSError as error:
+            raise ConcurrentChangeError(f"{message}: {target}") from error
         if current is None or not os.path.samestat(current, opened):
-            raise ConcurrentChangeError(
-                f"Lock file was replaced before it was acquired: {target}"
-            )
+            raise ConcurrentChangeError(f"{message}: {target}")

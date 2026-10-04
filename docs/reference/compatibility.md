@@ -93,14 +93,17 @@ runtime and delivery boundaries.
 ### Workspace storage
 
 Studio keeps the notebook, its configuration, and every view project in the
-notebook workspace. Each change uses an atomic rename and compares stable file
-identities, so the workspace must live on storage that provides both:
+notebook workspace. Each change publishes its result in one atomic step that
+never replaces an existing name: an exclusive rename, or a hard link or empty
+placeholder where the filesystem has no exclusive rename. Each change also
+compares stable file identities, so the workspace must live on storage that
+provides both:
 
-| Platform        | Supported workspace storage                                                 |
-| --------------- | --------------------------------------------------------------------------- |
-| Linux and macOS | Local disks, NFSv3, NFSv4, and [gVisor](https://gvisor.dev/) sandbox mounts |
-| Windows         | NTFS, ReFS, and SMB shares                                                  |
-| WSL 2           | The Linux disk and Windows drives mounted under `/mnt`                      |
+| Platform        | Supported workspace storage                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| Linux and macOS | Local ext4, XFS, Btrfs, or APFS disks, NFSv3 and NFSv4 shares, and [gVisor](https://gvisor.dev/) sandbox mounts |
+| Windows         | NTFS, ReFS, and SMB shares                                                                                      |
+| WSL 2           | The Linux disk and NTFS drives mounted under `/mnt`                                                             |
 
 Object-storage mounts such as [s3fs](https://github.com/s3fs-fuse/s3fs-fuse)
 and [rclone](https://rclone.org/commands/rclone_mount/) rewrite file timestamps

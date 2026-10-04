@@ -91,6 +91,12 @@ def verified_secure_file(
                     f"{label} must use one revision-owned inode: {path}"
                 )
             yield stream, state
+            # A link added while the file was read would let another name
+            # change the revision later.
+            if require_single_link and os.fstat(stream.fileno()).st_nlink != 1:
+                raise ConfigurationError(
+                    f"{label} must use one revision-owned inode: {path}"
+                )
     except UnsafePathError as error:
         raise _unsafe(label, error) from error
     except ConfigurationError:
@@ -176,6 +182,10 @@ def artifact_paths(root: Path) -> tuple[PurePosixPath, ...]:
         files = tree.regular_files(root, max_entries=ARTIFACT_OUTPUT_BUDGET.max_files)
     except UnsafePathError as error:
         raise _unsafe("Artifact files", error) from error
+    except ConfigurationError:
+        raise
+    except OSError as error:
+        raise ConfigurationError(f"Could not inspect artifact files: {root}") from error
     relatives = [path.relative_to(tree.root).as_posix() for path, _size in files]
     budget = FileBudgetTracker(ARTIFACT_OUTPUT_BUDGET, "Artifact output")
     for relative in relatives:

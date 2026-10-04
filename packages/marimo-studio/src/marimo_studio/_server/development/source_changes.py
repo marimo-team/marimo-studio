@@ -407,7 +407,7 @@ def _stat_stamp(path: Path) -> _StatStamp:
         state.st_ctime_ns,
         state.st_size,
         state.st_ino,
-        hashlib.sha256("\0".join(names).encode()).hexdigest(),
+        hashlib.sha256(b"\0".join(map(os.fsencode, names))).hexdigest(),
     )
 
 

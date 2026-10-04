@@ -103,11 +103,11 @@ browser identity.
 Call `Workspace.view(name)` to operate an existing project.
 
 Creation validates the notebook and starter before writing. Under the workspace
-catalog lock, one file transaction writes each new view project into a
-temporary sibling directory, then publishes it under its name with one rename
-that refuses an existing name. Discovery skips temporary siblings, so readers
-never observe a partial project. The same transaction writes the fresh per-name
-owner and any missing generated-state rules in the workspace `.gitignore`.
+catalog lock, one file transaction writes each new view project into a temporary
+sibling directory, then publishes it under its name in one step that never
+replaces an existing name. Discovery skips temporary siblings, so readers never
+observe a partial project. The same transaction writes the fresh per-name owner
+and any missing generated-state rules in the workspace `.gitignore`.
 
 The first view is complete before notebook-local PEP 723 metadata declares the
 workspace. Existing workspaces receive required configuration before the new

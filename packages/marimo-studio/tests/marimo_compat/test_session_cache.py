@@ -166,6 +166,7 @@ def test_session_cache_multi_process_writers_publish_complete_json(
     exports = 80
     path = tmp_path / "session.json"
     path.write_text(json.dumps({"writer": "initial"}), encoding="utf-8")
+    tree = FileTree(path.parent)
     context = multiprocessing.get_context("spawn")
     start = context.Event()
     ready = (context.Event(), context.Event())
@@ -204,10 +205,10 @@ def test_session_cache_multi_process_writers_publish_complete_json(
         while not all(event.is_set() for event in commit_ready):
             if time.monotonic() >= deadline:
                 pytest.fail("session-cache writers did not reach the commit barrier")
-            document = json.loads(Path(path).read_text(encoding="utf-8"))
+            document = json.loads(tree.read(path).content.decode("utf-8"))
             _assert_complete_snapshot(document, exports)
             reads += 1
-        document = json.loads(Path(path).read_text(encoding="utf-8"))
+        document = json.loads(tree.read(path).content.decode("utf-8"))
         assert document == {"writer": "initial"}
         reads += 1
         first_commit.wait(timeout=10)
@@ -215,7 +216,7 @@ def test_session_cache_multi_process_writers_publish_complete_json(
             if time.monotonic() >= deadline:
                 pytest.fail("session-cache writer processes did not finish")
             try:
-                document = json.loads(Path(path).read_text(encoding="utf-8"))
+                document = json.loads(tree.read(path).content.decode("utf-8"))
                 _assert_complete_snapshot(document, exports)
             except (AssertionError, json.JSONDecodeError) as error:
                 failures.append(str(error))
@@ -245,7 +246,7 @@ def test_session_cache_multi_process_writers_publish_complete_json(
         "short": (exports, exports, exports, True),
         "long": (exports, exports, exports, True),
     }
-    final = json.loads(Path(path).read_text(encoding="utf-8"))
+    final = json.loads(tree.read(path).content.decode("utf-8"))
     _assert_complete_snapshot(final, exports)
     assert final["writer"] in {"short", "long"}
     assert {item.name for item in tmp_path.iterdir()} == {"session.json"}

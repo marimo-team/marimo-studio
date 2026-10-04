@@ -451,6 +451,22 @@ def test_a_file_added_to_a_published_directory_is_kept_and_named(
     assert str(view) in _notes(raised.value)
 
 
+def test_nested_new_directories_are_refused(root: Path) -> None:
+    views = root / "views"
+
+    with (
+        pytest.raises(ValueError, match="must not nest"),
+        write_file_transaction(
+            root,
+            {views / "dashboard" / "view.toml": b"x"},
+            new_directories=(views, views / "dashboard"),
+        ),
+    ):
+        pytest.fail("nested new directories must fail before the body")
+
+    assert not views.exists()
+
+
 def test_a_failed_staging_write_leaves_no_directory(
     root: Path,
     monkeypatch: pytest.MonkeyPatch,

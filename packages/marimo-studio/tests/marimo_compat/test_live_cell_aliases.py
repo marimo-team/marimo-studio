@@ -106,7 +106,9 @@ def _enable_sync(
     notebook: Path,
     session: _Session,
 ) -> PrivateNotebookSaveTransform:
-    adapter = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
+    adapter = PrivateNotebookSaveTransform(
+        CellAliasSourcePolicy(create_notebook_write_lock())
+    )
     adapter.enable(_location(notebook, _Manager(session)))
     return adapter
 
@@ -656,7 +658,9 @@ def test_session_detach_waits_for_in_flight_save(notebook_path: Path) -> None:
 def test_listener_attaches_sessions_created_after_enable(notebook_path: Path) -> None:
     prepare_view(notebook_path)
     manager = _Manager()
-    adapter = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
+    adapter = PrivateNotebookSaveTransform(
+        CellAliasSourcePolicy(create_notebook_write_lock())
+    )
     adapter.enable(_location(notebook_path, manager))
     session = _Session(AppFileManager(notebook_path))
 

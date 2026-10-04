@@ -7,8 +7,9 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+import marimo_studio._filesystem.ingest as ingest_module
 from marimo_studio._filesystem.budgets import FileBudget
-from marimo_studio._filesystem.errors import UnsafePathError
+from marimo_studio._filesystem.errors import ConcurrentChangeError, UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.ingest import IngestedFile
 from marimo_studio.errors import ConfigurationError
@@ -135,6 +136,53 @@ def test_a_refused_ingest_releases_the_destination(tmp_path: Path) -> None:
     # Windows refuses to delete a file that a leaked descriptor holds open.
     FileTree(tmp_path).remove(destination)
     assert not destination.exists()
+
+
+def test_ingest_bounds_the_directories_it_copies(tmp_path: Path) -> None:
+    staging = tmp_path / "staging"
+    for index in range(9):
+        (staging / f"empty-{index}").mkdir(parents=True)
+
+    with pytest.raises(ConfigurationError, match="directories"):
+        _ingest(tmp_path, staging, tmp_path / "publication")
+
+
+def test_ingest_bounds_directory_nesting(tmp_path: Path) -> None:
+    staging = tmp_path / "staging"
+    nested = staging.joinpath(*["d"] * 65)
+    nested.mkdir(parents=True)
+    budget = FileBudget(max_files=100, max_file_bytes=1024, max_total_bytes=4096)
+
+    with pytest.raises(ConfigurationError, match="nests deeper"):
+        FileTree(tmp_path).ingest(
+            staging, tmp_path / "publication", budget=budget, label="Build output"
+        )
+
+
+def test_ingest_refuses_a_file_rewritten_while_it_is_copied(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    staging = _staging(tmp_path)
+    document = staging / "index.html"
+    read = ingest_module.os.read
+    rewritten = False
+
+    def read_then_rewrite(descriptor: int, size: int) -> bytes:
+        nonlocal rewritten
+        chunk = read(descriptor, size)
+        if not rewritten and chunk.startswith(b"<script"):
+            # A build process still running rewrites the file in place.
+            rewritten = True
+            document.write_bytes(chunk.upper())
+        return chunk
+
+    monkeypatch.setattr(ingest_module.os, "read", read_then_rewrite)
+
+    with pytest.raises(ConcurrentChangeError):
+        _ingest(tmp_path, staging, tmp_path / "publication")
+
+    assert rewritten
 
 
 def test_ingest_refuses_a_symlinked_build_output_root(tmp_path: Path) -> None:
