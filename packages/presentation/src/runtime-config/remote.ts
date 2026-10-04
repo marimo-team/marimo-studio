@@ -40,7 +40,7 @@ export const fetchRuntimeConfig = async (
     mounted: mount.runtime === "server" ? mount.runtimeSessionId : undefined,
     server: mount.runtime === "server",
   });
-  const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
+  const url = new URL(appendUrlPath(supportUrl, "config"));
   url.searchParams.set("runtime", runtime);
   if (revision) {
     url.searchParams.set("revision", revision);
@@ -102,10 +102,12 @@ export const fetchRuntimeConfig = async (
         detail.details,
       );
     }
+    // A redirected response carries references from its final URL.
+    const base = response.url || url.href;
     const config =
       response.headers.get("content-type")?.split(";", 1)[0]?.trim() === RUNTIME_CONFIG_STREAM_TYPE
-        ? await readRuntimeConfigStream(response, operation.report, signal)
-        : parseRuntimeConfig(await responseJson(response));
+        ? await readRuntimeConfigStream(response, base, operation.report, signal)
+        : parseRuntimeConfig(await responseJson(response), base);
     if (config.runtime.id !== runtime) {
       throw new RuntimeConfigRequestError(
         `The server selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,

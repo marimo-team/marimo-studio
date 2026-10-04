@@ -6,7 +6,7 @@ import type { DocumentRevisionCommit } from "../src/document/revision-document.t
 import { DevelopmentViewTransition } from "../src/document/development-view-transition.ts";
 
 const commit = (supportChanged = false): DocumentRevisionCommit => ({
-  target: { documentUrl: "/report/", supportUrl: "/support/report" },
+  target: { documentUrl: "/report/", supportUrl: "http://localhost:3000/support/report" },
   supportChanged,
   reloadDocument: false,
 });

@@ -31,9 +31,9 @@ from marimo_studio._delivery.urls import (
     STUDIO_CLIENT_QUERY_PARAM,
     SUPPORT_PATH,
     WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
-    editor_url,
-    public_url,
-    studio_url,
+    editor_path,
+    relative_url,
+    studio_path,
     with_notebook_query,
     with_query,
 )
@@ -53,36 +53,33 @@ StudioHostState = Literal["unconfigured", "needs-view", "ready"]
 
 def studio_bootstrap_payload(
     config: StudioWorkspace,
-    base_url: str,
+    context: ServerContext,
     selected: str,
-    server_token: str,
-    file_key: str,
     query: Sequence[tuple[str, str]],
-    routing_query: Sequence[tuple[str, str]],
     runtimes: tuple[tuple[str, str], ...],
     client_id: str,
     native_session_id: str,
+    *,
+    request_path: str,
 ) -> dict[str, object]:
-    """Build the ready-workspace contract for one stable browser client."""
-    root_url = public_url(base_url, "/")
-    support_url = public_url(base_url, SUPPORT_PATH)
-    server_instance = server_instance_id(server_token)
+    """Build the ready-workspace contract served from app path `request_path`."""
+    server_instance = server_instance_id(context.server_token)
     events_capability = workspace_events_capability(
-        server_token,
-        file_key,
-        base_url,
+        context.server_token,
+        context.file_key,
+        context.base_url,
         client_id,
     )
     binding_capability = editor_binding_capability(
-        server_token,
-        file_key,
-        base_url,
+        context.server_token,
+        context.file_key,
+        context.base_url,
         client_id,
         native_session_id,
     )
 
-    def routed(url: str) -> str:
-        return with_query(url, routing_query)
+    def routed(path: str) -> str:
+        return relative_url(request_path, with_query(path, context.routing_query))
 
     workspace_id = hashlib.sha256(str(config.notebook).encode()).hexdigest()[:16]
     return {
@@ -100,18 +97,20 @@ def studio_bootstrap_payload(
             else runtimes[0][0]
         ),
         "urls": {
-            "editor": editor_url(
-                base_url,
-                file_key,
-                query,
-                client_id,
-                server_instance,
-                native_session_id,
-                binding_capability,
+            "editor": relative_url(
+                request_path,
+                editor_path(
+                    context.file_key,
+                    query,
+                    client_id,
+                    server_instance,
+                    native_session_id,
+                    binding_capability,
+                ),
             ),
-            "agent": routed(support_url),
+            "agent": routed(SUPPORT_PATH),
             "events": with_query(
-                routed(f"{support_url}/dev/events"),
+                routed(f"{SUPPORT_PATH}/dev/events"),
                 (
                     (STUDIO_CLIENT_QUERY_PARAM, client_id),
                     (ACTIVE_VIEW_QUERY_PARAM, selected),
@@ -122,70 +121,70 @@ def studio_bootstrap_payload(
                     ),
                 ),
             ),
-            "query": routed(f"{support_url}/query"),
-            "studioPrefix": routed(studio_url(base_url)),
-            "viewPrefix": routed(root_url),
-            "viewSupportPrefix": routed(f"{support_url}/views"),
-            "views": routed(f"{support_url}/views"),
+            "query": routed(f"{SUPPORT_PATH}/query"),
+            "studioPrefix": routed(studio_path()),
+            "viewPrefix": routed("/"),
+            "viewSupportPrefix": routed(f"{SUPPORT_PATH}/views"),
+            "views": routed(f"{SUPPORT_PATH}/views"),
         },
         "workspaceId": workspace_id,
         "clientId": client_id,
         "serverInstance": server_instance,
-        "serverToken": server_token,
+        "serverToken": context.server_token,
     }
 
 
 def studio_document(
     context: ServerContext,
     query: Sequence[tuple[str, str]],
-    routing_query: Sequence[tuple[str, str]],
     runtimes: tuple[tuple[str, str], ...],
     client_id: str,
     native_session_id: str,
     *,
+    request_path: str,
     state: StudioHostState,
     config: StudioWorkspace | None = None,
     selected: str | None = None,
     default_view: str | None = None,
     generation: str | None = None,
 ) -> str:
-    """Return the stable editor host and optional ready-workspace bootstrap."""
+    """Return the stable editor host served from app path `request_path`."""
     notebook = context.notebook
-    base_url = context.base_url
-    server_token = context.server_token
-    file_key = context.file_key
     server_instance = server_instance_id(context.server_token)
     events_capability = workspace_events_capability(
-        server_token,
-        file_key,
-        base_url,
+        context.server_token,
+        context.file_key,
+        context.base_url,
         client_id,
     )
     binding_capability = editor_binding_capability(
-        server_token,
-        file_key,
-        base_url,
+        context.server_token,
+        context.file_key,
+        context.base_url,
         client_id,
         native_session_id,
     )
-    support_url = public_url(base_url, SUPPORT_PATH)
     host_session = HostSessionTicket.issue(
         context,
         native_session_id,
         query,
     )
 
-    def routed(url: str) -> str:
-        return with_query(url, routing_query)
+    def reference(path: str) -> str:
+        return relative_url(request_path, path)
 
-    native_editor_url = editor_url(
-        base_url,
-        file_key,
-        query,
-        client_id,
-        server_instance,
-        native_session_id,
-        binding_capability,
+    def routed(path: str) -> str:
+        return reference(with_query(path, context.routing_query))
+
+    native_editor_url = reference(
+        editor_path(
+            context.file_key,
+            query,
+            client_id,
+            server_instance,
+            native_session_id,
+            binding_capability,
+        )
     )
     client_query = (
         (STUDIO_CLIENT_QUERY_PARAM, client_id),
@@ -205,22 +204,24 @@ def studio_document(
         "notebook": {"name": notebook.name},
         "clientId": client_id,
         "serverInstance": server_instance,
-        "serverToken": server_token,
+        "serverToken": context.server_token,
         "urls": {
-            "bootstrap": with_query(
-                with_notebook_query(
-                    f"{support_url}/bootstrap",
-                    query,
-                    routing_query,
-                ),
-                (*client_query, *editor_query),
+            "bootstrap": reference(
+                with_query(
+                    with_notebook_query(
+                        f"{SUPPORT_PATH}/bootstrap",
+                        query,
+                        context.routing_query,
+                    ),
+                    (*client_query, *editor_query),
+                )
             ),
             "editor": native_editor_url,
             "events": with_query(
-                routed(f"{support_url}/dev/events"),
+                routed(f"{SUPPORT_PATH}/dev/events"),
                 events_query,
             ),
-            "views": routed(f"{support_url}/views"),
+            "views": routed(f"{SUPPORT_PATH}/views"),
         },
     }
     if state == "needs-view":
@@ -233,15 +234,13 @@ def studio_document(
         assert config is not None and selected is not None
         bootstrap = studio_bootstrap_payload(
             config,
-            base_url,
+            context,
             selected,
-            server_token,
-            file_key,
             query,
-            routing_query,
             runtimes,
             client_id,
             native_session_id,
+            request_path=request_path,
         )
 
     fallback = (
@@ -265,8 +264,11 @@ def studio_document(
                         content="width=device-width, initial-scale=1",
                     ),
                     title[f"{notebook.name} · Studio"],
-                    link(rel="icon", href=public_url(base_url, "/favicon.ico")),
-                    link(rel="stylesheet", href=f"{support_url}/assets/studio.css"),
+                    link(rel="icon", href=reference("/favicon.ico")),
+                    link(
+                        rel="stylesheet",
+                        href=reference(f"{SUPPORT_PATH}/assets/studio.css"),
+                    ),
                     *(
                         (Markup(context.trusted_html_head),)
                         if context.trusted_html_head
@@ -313,7 +315,10 @@ def studio_document(
                             ".",
                         )
                     ],
-                    script(type="module", src=f"{support_url}/assets/studio.js"),
+                    script(
+                        type="module",
+                        src=reference(f"{SUPPORT_PATH}/assets/studio.js"),
+                    ),
                 )
             ],
         )

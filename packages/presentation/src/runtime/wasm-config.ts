@@ -1,3 +1,5 @@
+import type { RuntimeEnvelope } from "@marimo-studio/protocol/runtime-config";
+
 import { z } from "zod";
 
 export const wasmExecutionCellSchema = z.strictObject({
@@ -33,3 +35,9 @@ export const wasmRuntimeDataSchema = z
 
 export type WasmExecutionCell = z.infer<typeof wasmExecutionCellSchema>;
 export type WasmRuntimeData = z.infer<typeof wasmRuntimeDataSchema>;
+
+/** Parse the Browser runtime envelope, which carries data and no URLs. */
+export const parseWasmRuntime = (runtime: RuntimeEnvelope): WasmRuntimeData => {
+  z.strictObject({}).parse(runtime.urls);
+  return wasmRuntimeDataSchema.parse(runtime.data);
+};

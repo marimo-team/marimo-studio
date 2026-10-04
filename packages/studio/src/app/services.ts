@@ -66,7 +66,7 @@ export const createStudioServices = (
     syncQuery: routes.syncQuery,
     syncEditorQuery: (query, operationId, writeGeneration, signal) =>
       syncEditorQuery(
-        routes.endpoint(bootstrap.urls.query),
+        bootstrap.urls.query,
         bootstrap.serverToken,
         bootstrap.clientId,
         query,
@@ -127,7 +127,7 @@ export const createStudioServices = (
   views = new ViewController(
     bootstrap.selectedView,
     [...bootstrap.views],
-    createViewRemote(routes.endpoint(bootstrap.urls.views), bootstrap.serverToken),
+    createViewRemote(bootstrap.urls.views, bootstrap.serverToken),
     (view, landing, navigation, signal, owner) =>
       transition.select(view, landing, navigation, signal, owner),
     () => source.prepareViewChange(),
@@ -143,18 +143,18 @@ export const createStudioServices = (
     },
   );
   const workspaceEvents = new WorkspaceEventCoordinator({
-    eventsUrl: routes.endpoint(bootstrap.urls.events),
+    eventsUrl: bootstrap.urls.events,
     views,
     preview,
     source,
     acknowledge: createViewActivationRemote(
-      routes.endpoint(bootstrap.urls.agent),
+      bootstrap.urls.agent,
       bootstrap.serverToken,
       bootstrap.clientId,
     ),
   });
   activeViewHandoff = createActiveViewHandoffRemote(
-    routes.endpoint(bootstrap.urls.agent),
+    bootstrap.urls.agent,
     bootstrap.serverToken,
     bootstrap.clientId,
     (view, signal) => workspaceEvents.recoverActiveView(view, signal),

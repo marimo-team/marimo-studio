@@ -25,7 +25,7 @@ const runtimeId = (): string =>
 
 export const supportView = (supportUrl = getSupportUrl()): string => {
   try {
-    const path = new URL(supportUrl, globalThis.location.origin).pathname;
+    const path = new URL(supportUrl).pathname;
     const value = path.split("/").filter(Boolean).at(-1);
     return value ? decodeURIComponent(value) : "";
   } catch {

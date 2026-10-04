@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import re
 import secrets
 from collections.abc import Sequence
@@ -33,10 +31,9 @@ from marimo_studio._delivery.urls import (
     SUPPORT_PATH,
     UNFRAMED_QUERY_PARAM,
     WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
-    public_url,
-    same_origin_url,
-    studio_url,
-    view_url,
+    relative_url,
+    studio_path,
+    view_path,
     with_notebook_query,
     with_query,
 )
@@ -44,9 +41,11 @@ from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.headers import DOCUMENT_HEADERS, edit_document_headers
 from marimo_studio._server.ports import SessionReplay, SessionState
 from marimo_studio._server.presentation.capability import (
+    PRESENTATION_PATH,
     PRESENTATION_RESPONSE_HEADERS,
-    presentation_renewal_url,
-    presentation_revision_url,
+    presentation_renewal_path,
+    presentation_revision_path,
+    presentation_storage_scope,
 )
 from marimo_studio._server.presentation.isolation import (
     PRESENTATION_SANDBOX,
@@ -58,7 +57,7 @@ from marimo_studio._server.presentation.ownership import (
     studio_owned_request,
 )
 from marimo_studio._server.presentation.payload import (
-    presentation_support_url,
+    presentation_support_path,
     render_presentation_document,
 )
 from marimo_studio._server.presentation.service import NotebookPresentation
@@ -68,6 +67,7 @@ from marimo_studio._server.presentation.session import (
 )
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_path import request_path, request_reference
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.server_instance import server_instance_id
@@ -83,37 +83,45 @@ from marimo_studio._workspace.models import DEFAULT_VIEW_NAME, StudioWorkspace
 from marimo_studio.errors import AgentRequestError, MarimoStudioError
 
 
-def authentication_redirect(request: Request, base_url: str) -> Response:
+def authentication_redirect(request: Request, login_path: str) -> Response:
     """Redirect a Studio page request through Marimo authentication."""
+    path = request_path(request)
+    query = request.query_params.multi_items()
     if "access_token" in request.query_params:
-        stripped = request.url.remove_query_params("access_token")
-        target = same_origin_url(stripped.path, stripped.query)
+        stripped = [(key, value) for key, value in query if key != "access_token"]
+        target = request_reference(request, with_query(path, stripped))
     else:
-        next_url = same_origin_url(request.url.path, request.url.query)
-        login = public_url(base_url, "/auth/login")
-        target = f"{login}?{urlencode({'next': next_url})}"
+        next_url = relative_url(login_path, with_query(path, query))
+        target = request_reference(
+            request, with_query(login_path, [("next", next_url)])
+        )
     return RedirectResponse(target, status_code=303, headers=DOCUMENT_HEADERS)
 
 
 def page_redirect(request: Request, relative: str, page: bool) -> Response | None:
     """Canonicalize page routes with a trailing slash."""
-    if not page or relative in {"", "/"} or relative.endswith("/"):
+    if not page or relative.endswith("/"):
         return None
-    target = same_origin_url(request.url.path + "/", request.url.query)
+    target = request_reference(
+        request,
+        with_query(f"{request_path(request)}/", request.query_params.multi_items()),
+    )
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
 
 def studio_landing_redirect(
     request: Request,
-    base_url: str,
     view_name: str,
     routing_query: Sequence[tuple[str, str]] = (),
 ) -> Response:
     """Redirect the edit root to its configured Studio workspace."""
-    target = with_notebook_query(
-        studio_url(base_url, view_name),
-        request.query_params.multi_items(),
-        routing_query,
+    target = request_reference(
+        request,
+        with_notebook_query(
+            studio_path(view_name),
+            request.query_params.multi_items(),
+            routing_query,
+        ),
     )
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
@@ -124,25 +132,15 @@ def authored_document_redirect(
     view_name: str,
 ) -> Response:
     """Canonicalize an authored document route to its public view URL."""
-    target = with_notebook_query(
-        view_url(context.base_url, view_name),
-        request.query_params.multi_items(),
-        context.routing_query,
+    target = request_reference(
+        request,
+        with_notebook_query(
+            view_path(view_name),
+            request.query_params.multi_items(),
+            context.routing_query,
+        ),
     )
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
-
-
-def _replay_storage_scope(
-    context: ServerContext,
-) -> str:
-    payload = "\0".join(
-        (
-            "marimo-studio-wrapper-replay-v1",
-            context.file_key,
-            context.base_url,
-        )
-    ).encode()
-    return hmac.new(context.server_token.encode(), payload, hashlib.sha256).hexdigest()
 
 
 async def document_response(
@@ -174,7 +172,7 @@ async def document_response(
             status_code=400,
         )
     client_id: str | None = None
-    selected = None if context.mode == "run" and relative in {"", "/"} else view_name
+    selected = None if context.mode == "run" and relative == "/" else view_name
     if expected_revisions:
         snapshot = await presentation.current_published_snapshot_async(
             view_name, profile="development" if context.mode == "edit" else "production"
@@ -261,12 +259,15 @@ async def document_response(
     headers = {
         **DOCUMENT_HEADERS,
         "Marimo-Studio-Revision": snapshot.revision,
-        "Marimo-Studio-Support-Url": presentation_support_url(
-            context,
-            snapshot,
-            presentation_session.session_id,
-            presentation_session.runtime_session_id,
-            editor_session_id=request.query_params.get(EDITOR_SESSION_QUERY_PARAM),
+        "Marimo-Studio-Support-Url": request_reference(
+            request,
+            presentation_support_path(
+                context,
+                snapshot,
+                presentation_session.session_id,
+                presentation_session.runtime_session_id,
+                editor_session_id=request.query_params.get(EDITOR_SESSION_QUERY_PARAM),
+            ),
         ),
     }
     if request.method == "HEAD":
@@ -287,19 +288,27 @@ async def document_response(
         }
         return HTMLResponse(
             isolated_presentation_document(
-                child_url=_presentation_document_url(
+                child_url=request_reference(
                     request,
-                    context,
-                    snapshot.view_name,
-                    presentation_session,
+                    _presentation_document_path(
+                        request,
+                        context,
+                        snapshot.view_name,
+                        presentation_session,
+                    ),
                 ),
-                internal_root_url=presentation_revision_url(
-                    context,
-                    snapshot,
-                    presentation_session.session_id,
-                    runtime_session_id=presentation_session.runtime_session_id,
+                internal_root_url=request_reference(
+                    request,
+                    presentation_revision_path(
+                        context,
+                        snapshot,
+                        presentation_session.session_id,
+                        runtime_session_id=presentation_session.runtime_session_id,
+                    ),
                 ),
-                public_root_url=public_url(context.base_url, "/"),
+                public_root_url=request_reference(request, "/"),
+                replay_root_url=request_reference(request, f"{PRESENTATION_PATH}/d."),
+                icon_url=request_reference(request, "/favicon.ico"),
                 routing_query=urlencode(context.routing_query),
                 view_name=snapshot.view_name,
                 views=tuple(snapshot.resolved.workspace.views),
@@ -310,7 +319,9 @@ async def document_response(
                     and runtime.id == "server"
                 ),
                 replay_scope=(
-                    _replay_storage_scope(context) if context.mode == "run" else None
+                    presentation_storage_scope(context)
+                    if context.mode == "run"
+                    else None
                 ),
                 runtime=runtime.id,
                 runtime_explicit=runtime_explicit,
@@ -327,6 +338,7 @@ async def document_response(
         render_presentation_document(
             snapshot,
             context,
+            request_path=request_path(request),
             marimo_version=marimo_version,
             runtime=runtime.id,
             runtime_explicit=runtime_explicit,
@@ -375,10 +387,10 @@ def studio_response(
         studio_document(
             context,
             request.query_params.multi_items(),
-            context.routing_query,
             runtimes,
             client_id,
             native_session_id,
+            request_path=request_path(request),
             state="ready",
             config=studio,
             selected=selected,
@@ -409,10 +421,10 @@ def initialization_response(
         studio_document(
             context,
             request.query_params.multi_items(),
-            context.routing_query,
             runtimes,
             client_id,
             native_session_id,
+            request_path=request_path(request),
             state="needs-view",
             default_view=default_view,
             generation=generation,
@@ -447,9 +459,12 @@ def unconfigured_response(
     )
     if first_save:
         return RedirectResponse(
-            with_query(
-                studio_url(context.base_url, DEFAULT_VIEW_NAME),
-                request.query_params.multi_items(),
+            request_reference(
+                request,
+                with_query(
+                    studio_path(DEFAULT_VIEW_NAME),
+                    request.query_params.multi_items(),
+                ),
             ),
             status_code=307,
             headers=edit_document_headers(security_policy),
@@ -458,10 +473,10 @@ def unconfigured_response(
         studio_document(
             context,
             request.query_params.multi_items(),
-            context.routing_query,
             runtimes,
             client_id,
             native_session_id,
+            request_path=request_path(request),
             state="unconfigured",
         ),
         headers=edit_document_headers(security_policy),
@@ -503,13 +518,13 @@ def error_response(
     error: MarimoStudioError,
     notebook: Path,
     *,
-    base_url: str,
+    requested_path: str,
     dev: bool,
     edit_mode: bool,
     structured: bool,
     server_token: str,
     routing_query: Sequence[tuple[str, str]] = (),
-    presentation_events_url: str | None = None,
+    presentation_events_path: str | None = None,
     lifecycle_id: int | None = None,
     runtime: str = "server",
     security_policy: SecurityPolicy,
@@ -565,17 +580,20 @@ def error_response(
             repair_document(
                 message,
                 hint,
-                with_query(
-                    presentation_events_url
-                    or public_url(base_url, f"{SUPPORT_PATH}/dev/events"),
-                    (
-                        *routing_query,
+                relative_url(
+                    requested_path,
+                    with_query(
+                        presentation_events_path or f"{SUPPORT_PATH}/dev/events",
                         (
-                            SERVER_INSTANCE_QUERY_PARAM,
-                            server_instance_id(server_token),
+                            *routing_query,
+                            (
+                                SERVER_INSTANCE_QUERY_PARAM,
+                                server_instance_id(server_token),
+                            ),
                         ),
                     ),
                 ),
+                icon_url=relative_url(requested_path, "/favicon.ico"),
                 code=code,
                 lifecycle_id=lifecycle_id,
                 runtime=runtime,
@@ -606,12 +624,16 @@ def _waiting_response(
         return Response(status_code=202, headers=headers)
     return HTMLResponse(
         waiting_document(
-            refresh_url=_presentation_document_url(
+            refresh_url=request_reference(
                 request,
-                context,
-                view_name,
-                presentation_session,
+                _presentation_document_path(
+                    request,
+                    context,
+                    view_name,
+                    presentation_session,
+                ),
             ),
+            icon_url=request_reference(request, "/favicon.ico"),
             lifecycle_id=_positive_int(
                 request.query_params.get(DOCUMENT_LIFECYCLE_QUERY_PARAM)
             ),
@@ -623,19 +645,19 @@ def _waiting_response(
     )
 
 
-def _presentation_document_url(
+def _presentation_document_path(
     request: Request,
     context: ServerContext,
     view_name: str,
     presentation_session: PresentationSession,
 ) -> str:
     return with_query(
-        presentation_renewal_url(
+        presentation_renewal_path(
             context,
             view_name,
             presentation_session.session_id,
             presentation_session.runtime_session_id,
-            f"/{view_name}/",
+            view_path(view_name),
         ),
         (
             *(

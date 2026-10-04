@@ -22,7 +22,7 @@ import {
 import { readiness } from "../src/readiness.ts";
 
 const commit = (overrides: Partial<DocumentRevisionCommit> = {}): DocumentRevisionCommit => ({
-  target: { documentUrl: "/report/", supportUrl: "/support/report" },
+  target: { documentUrl: "/report/", supportUrl: "http://localhost:3000/support/report" },
   supportChanged: false,
   reloadDocument: false,
   ...overrides,
@@ -35,6 +35,7 @@ const documentPort = (replace: RevisionDocumentPort["replace"]): RevisionDocumen
 });
 
 const options = () => ({
+  addressFollowsDocument: true,
   applyRuntime: vi.fn<() => "applied" | "pending" | "reload">(() => "applied"),
   reloadDocument: vi.fn(),
   reloadRuntime: vi.fn(),
@@ -72,7 +73,7 @@ const projectedCaller = () => {
 
 test("user navigation pushes history while presentation refresh replaces it", async () => {
   readiness.start();
-  const histories: [string, string][] = [];
+  const histories: [string, string | null][] = [];
   const adapter = documentPort(
     async (_document, _support, _signal, _target, historyMode, historyUrl) => {
       histories.push([historyMode, historyUrl]);
@@ -88,6 +89,28 @@ test("user navigation pushes history while presentation refresh replaces it", as
     ["push", "/report/"],
     ["replace", "/report/"],
   ]);
+});
+
+test("a top-level page keeps its public address through refreshes and reloads", async () => {
+  readiness.start();
+  const histories: [string, string | null][] = [];
+  const adapter = documentPort(
+    async (_document, _support, _signal, _target, historyMode, historyUrl) => {
+      histories.push([historyMode, historyUrl]);
+      return commit({ reloadDocument: histories.length === 2 });
+    },
+  );
+  const settings = { ...options(), addressFollowsDocument: false };
+  const controller = new PresentationRevisionController(adapter, settings, sessionReplay());
+
+  await controller.transition("/signed/report/", "/support/report");
+  await controller.transition("/signed/report/", "/support/report");
+
+  assert.deepEqual(histories, [
+    ["replace", null],
+    ["replace", null],
+  ]);
+  assert.deepEqual(settings.reloadDocument.mock.calls, [[globalThis.location.href]]);
 });
 
 test("a newer revision cancels and supersedes an in-flight transition", async () => {
@@ -475,7 +498,7 @@ test("a failed revision publishes one presentation failure", async () => {
 
 test("a document reload bypasses the mounted runtime handoff", async () => {
   readiness.start();
-  const target = { documentUrl: "/report/", supportUrl: "/support/report" };
+  const target = { documentUrl: "/report/", supportUrl: "http://localhost:3000/support/report" };
   const adapter = documentPort(async () =>
     commit({ target, supportChanged: true, reloadDocument: true }),
   );
@@ -494,7 +517,10 @@ test("a navigation reload uses its public history URL", async () => {
   readiness.start();
   const adapter = documentPort(async () =>
     commit({
-      target: { documentUrl: "/signed/report/", supportUrl: "/support/report" },
+      target: {
+        documentUrl: "/signed/report/",
+        supportUrl: "http://localhost:3000/support/report",
+      },
       reloadDocument: true,
     }),
   );

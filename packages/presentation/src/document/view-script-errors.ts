@@ -2,11 +2,11 @@ import { artifactPublicPathSchema } from "@marimo-studio/protocol/source-documen
 
 import { readiness } from "../readiness.ts";
 import { configuredView } from "../rendered-view-state.ts";
+import { initialDocumentBaseUrl } from "./base.ts";
 
-// Capture the server-authored base and URL before Studio rewrites the query or
-// marimo points <base> at its API root. View scripts load from this base, and
-// inline module scripts report this URL.
-const viewBase = document.baseURI;
+// View scripts load from the initial base, and inline module scripts report
+// the page URL captured before Studio rewrites the query.
+const viewBase = initialDocumentBaseUrl;
 const pageUrl = document.URL.split("#")[0];
 
 const viewSource = (url: string): string | undefined => {

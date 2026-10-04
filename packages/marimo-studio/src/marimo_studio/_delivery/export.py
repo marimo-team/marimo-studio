@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from time import monotonic
+from urllib.parse import quote
 
 from marimo_export.delivery import DeliveryResult, StagedDelivery, stage
 from marimo_export.errors import MarimoExportError
@@ -64,6 +65,7 @@ from marimo_studio._delivery.runtime_config import (
     encode_runtime_config,
     runtime_projection_revision,
 )
+from marimo_studio._delivery.urls import SUPPORT_PATH, relative_url
 from marimo_studio._filesystem.secure import (
     SecureDirectory,
     secure_directory,
@@ -101,7 +103,24 @@ from marimo_studio.errors import (
 )
 from marimo_studio.view_providers._host import provider_registry
 
-SUPPORT_ROOT = Path("_marimo-studio")
+SUPPORT_ROOT = Path(SUPPORT_PATH.removeprefix("/"))
+
+
+@dataclass(frozen=True)
+class _StaticViewPaths:
+    """App paths of one exported view beneath the static site root."""
+
+    document: str
+    support: str
+    config: str
+
+    @classmethod
+    def of(cls, view_name: str, artifact: ViewArtifact) -> _StaticViewPaths:
+        support = f"{SUPPORT_PATH}/views/{view_name}"
+        document = f"/{quote(artifact.document.as_posix())}"
+        return cls(document, support, f"{support}/config")
+
+
 DEFAULT_STATIC_RUNTIME: StaticRuntime = "zero-python"
 DEFAULT_PREPARE_TIMEOUT = 30.0
 
@@ -223,13 +242,7 @@ def _wasm_runtime_config(
         notebook_source,
     )
     cell_refs = resolved.runtime_cell_refs(None)
-    document_parent = artifact.document.parent
-    root_prefix = (
-        "./"
-        if document_parent == PurePosixPath(".")
-        else "../" * len(document_parent.parts)
-    )
-    support_url = f"{root_prefix}{SUPPORT_ROOT.as_posix()}/views/{view_name}"
+    paths = _StaticViewPaths.of(view_name, artifact)
     marimo_config = adapters.runtime_config(studio.notebook)
     targets = projection_targets(resolved.symbols, artifact.mounts)
     mounts = tuple(site.to_dict() for site in artifact.mounts)
@@ -255,10 +268,10 @@ def _wasm_runtime_config(
         runtime_id="wasm",
         runtime_instance=projection.instance,
         runtime_data=projection.runtime_data(),
-        root_url=root_prefix,
-        public_root_url=root_prefix,
-        document_root_url=root_prefix,
-        support_url=support_url,
+        runtime_paths={},
+        public_root_path="/",
+        document_root_path="/",
+        support_path=paths.support,
         projection_revision=projection_revision,
         show_cell_logs=studio.show_cell_logs,
         projection_targets=targets,
@@ -272,7 +285,7 @@ def _wasm_runtime_config(
         dev=False,
         mode="run",
     )
-    runtime_fields = inputs.to_dict(revision="")
+    runtime_fields = inputs.to_dict(revision="", base=paths.config)
     runtime_fields.pop("revision")
     canonical_runtime = json.dumps(
         runtime_fields,
@@ -286,12 +299,12 @@ def _wasm_runtime_config(
         artifact.artifact_revision,
         canonical_runtime,
     )
-    config = inputs.to_dict(revision=revision)
+    config = inputs.to_dict(revision=revision, base=paths.config)
     rendered = runtime_document(
         document,
         root_url="./",
-        support_url=support_url,
-        assets_url=f"{root_prefix}{SUPPORT_ROOT.as_posix()}/assets",
+        support_url=relative_url(paths.document, paths.support),
+        assets_url=relative_url(paths.document, f"{SUPPORT_PATH}/assets"),
         dev=False,
         revision=revision,
         runtime="wasm",
@@ -319,13 +332,7 @@ def _zero_python_runtime_config(
     publication: StaticPublication,
 ) -> tuple[str, bytes, bytes, _assets.BrowserEntryClosure]:
     cell_refs = resolved.runtime_cell_refs(None)
-    document_parent = artifact.document.parent
-    root_prefix = (
-        "./"
-        if document_parent == PurePosixPath(".")
-        else "../" * len(document_parent.parts)
-    )
-    support_url = f"{root_prefix}{SUPPORT_ROOT.as_posix()}/views/{view_name}"
+    paths = _StaticViewPaths.of(view_name, artifact)
     mounts = tuple(site.to_dict() for site in artifact.mounts)
     targets = projection_targets(resolved.symbols, artifact.mounts)
     policy = projection_policy()
@@ -350,14 +357,11 @@ def _zero_python_runtime_config(
         views=(view_name,),
         runtime_id="zero-python",
         runtime_instance=publication.instance,
-        runtime_data={
-            "manifestUrl": f"{support_url}/zero-python/current",
-            "planDigest": publication.plan_digest,
-        },
-        root_url=root_prefix,
-        public_root_url=root_prefix,
-        document_root_url=root_prefix,
-        support_url=support_url,
+        runtime_data={"planDigest": publication.plan_digest},
+        runtime_paths={"manifest": f"{paths.support}/zero-python/current"},
+        public_root_path="/",
+        document_root_path="/",
+        support_path=paths.support,
         projection_revision=projection_revision,
         show_cell_logs=studio.show_cell_logs,
         projection_targets=targets,
@@ -371,7 +375,7 @@ def _zero_python_runtime_config(
         dev=False,
         mode="run",
     )
-    runtime_fields = inputs.to_dict(revision="")
+    runtime_fields = inputs.to_dict(revision="", base=paths.config)
     runtime_fields.pop("revision")
     revision = _digest(
         view_name,
@@ -385,7 +389,7 @@ def _zero_python_runtime_config(
             sort_keys=True,
         ),
     )
-    config = inputs.to_dict(revision=revision)
+    config = inputs.to_dict(revision=revision, base=paths.config)
     closure = _assets.browser_entry_closure("zero-python")
     runtime_root = _assets.runtime_assets_path()
     entry = closure.script.relative_to(runtime_root).as_posix()
@@ -393,8 +397,8 @@ def _zero_python_runtime_config(
     rendered = runtime_document(
         document,
         root_url="./",
-        support_url=support_url,
-        assets_url=f"{root_prefix}{SUPPORT_ROOT.as_posix()}/assets",
+        support_url=relative_url(paths.document, paths.support),
+        assets_url=relative_url(paths.document, f"{SUPPORT_PATH}/assets"),
         dev=False,
         revision=revision,
         runtime="zero-python",

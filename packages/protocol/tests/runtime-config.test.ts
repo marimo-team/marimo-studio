@@ -35,17 +35,17 @@ const baseRuntimeConfig = {
     id: "server",
     instance: "server-instance",
     data: {
-      fileKey: "/workspace/notebook.py",
+      storageScope: "presentation-storage",
       capabilityToken: "presentation-capability",
       serverInstance: "server-instance",
       preserveSession: false,
-      url: "/proxy/app/",
     },
+    urls: { transport: "https://hub.example/proxy/app/_marimo-studio/presentation/token/" },
   },
-  rootUrl: "/proxy/app/",
-  publicRootUrl: "/proxy/app/",
-  documentRootUrl: "/proxy/app/",
-  supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+  rootUrl: "https://hub.example/proxy/app/",
+  publicRootUrl: "https://hub.example/proxy/app/",
+  documentRootUrl: "https://hub.example/proxy/app/",
+  supportUrl: "https://hub.example/proxy/app/_marimo-studio/views/dashboard",
   showCellLogs: true,
   ...symbolicRuntimeFields,
   diagnostics: [diagnostic],
@@ -63,13 +63,19 @@ const runtimeConfig = (overrides: RuntimeConfigOverrides = {}) => ({
   ...overrides,
 });
 
+// Runtime configuration URLs resolve against the response that carried them.
+const configUrl = "https://hub.example/proxy/app/_marimo-studio/views/dashboard/config";
+
 test("runtime configuration accepts the browser contract", () => {
-  const parsed = parseRuntimeConfig(runtimeConfig());
+  const parsed = parseRuntimeConfig(runtimeConfig(), configUrl);
   assert.deepEqual(JSON.parse(JSON.stringify(parsed)), baseRuntimeConfig);
   assert.equal(Object.getPrototypeOf(parsed.projectionTargets.cells), null);
   assert.equal(Object.getPrototypeOf(parsed.projectionTargets.variables), null);
   assert.equal(Object.getPrototypeOf(parsed.runtimeBindings.cellRefs), null);
-  assert.equal(parseRuntimeConfig(runtimeConfig({ showCellLogs: false })).showCellLogs, false);
+  assert.equal(
+    parseRuntimeConfig(runtimeConfig({ showCellLogs: false }), configUrl).showCellLogs,
+    false,
+  );
 });
 
 test("cell mounts accept native names and configured aliases", () => {
@@ -83,17 +89,40 @@ test("cell mounts accept native names and configured aliases", () => {
         },
       ],
     }),
+    configUrl,
   );
 
   assert.deepEqual(parsed.mounts[0]?.allowedTargets, targets);
 });
 
-test("runtime configuration accepts the Python delivery fixture", () => {
+test("runtime configuration resolves the Python delivery fixture beneath a proxy prefix", () => {
   const fixture = JSON.parse(
     readFileSync(new URL("../fixtures/runtime-config.json", import.meta.url), "utf8"),
   );
+  // The proxy strips /s/f3a9/p/77c1 before the server sees the request.
+  const parsed = parseRuntimeConfig(
+    fixture,
+    "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views/dashboard/config",
+  );
 
-  assert.deepEqual(JSON.parse(JSON.stringify(parseRuntimeConfig(fixture))), fixture);
+  assert.deepEqual(
+    {
+      rootUrl: parsed.rootUrl,
+      publicRootUrl: parsed.publicRootUrl,
+      documentRootUrl: parsed.documentRootUrl,
+      supportUrl: parsed.supportUrl,
+      runtimeUrls: { ...parsed.runtime.urls },
+    },
+    {
+      rootUrl: "https://workbench.example/s/f3a9/p/77c1/",
+      publicRootUrl: "https://workbench.example/s/f3a9/p/77c1/",
+      documentRootUrl: "https://workbench.example/s/f3a9/p/77c1/",
+      supportUrl: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views/dashboard",
+      runtimeUrls: {
+        transport: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/presentation/token/",
+      },
+    },
+  );
 });
 
 test("runtime configuration preserves prototype-named projection targets", () => {
@@ -127,6 +156,7 @@ test("runtime configuration preserves prototype-named projection targets", () =>
         cellRefs: Object.fromEntries(refs.map((ref, index) => [ref, `runtime-${index}`])),
       },
     }),
+    configUrl,
   );
 
   names.forEach((name, index) => {
@@ -195,20 +225,45 @@ test("runtime configuration rejects malformed contracts", () => {
   const { showCellLogs: _, ...withoutLogPreference } = runtimeConfig();
   malformed.push(withoutLogPreference);
 
-  malformed.forEach((config) => assert.throws(() => parseRuntimeConfig(config)));
+  malformed.forEach((config) => assert.throws(() => parseRuntimeConfig(config, configUrl)));
+});
+
+// Mount URLs resolve against the document base that the server wrote.
+const documentBase =
+  "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/presentation/r.token/dashboard/_marimo-studio/artifacts/revision/";
+
+test("mount configuration resolves its support URL against the document base", () => {
+  const parsed = parseMountConfig(
+    {
+      supportUrl:
+        "../../../../../../../_marimo-studio/presentation/r.token/_marimo-studio/views/dashboard",
+      version: "test-version",
+      revision: "presentation-revision",
+      runtime: "server",
+      runtimeExplicit: false,
+      replay: false,
+    },
+    documentBase,
+  );
+
+  assert.equal(
+    parsed.supportUrl,
+    "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/presentation/r.token/_marimo-studio/views/dashboard",
+  );
 });
 
 test("mount configuration validates injected document data", () => {
   const mount = {
-    supportUrl: "/_marimo-studio/views/dashboard",
+    supportUrl: "https://workbench.example/_marimo-studio/views/dashboard",
     version: "test-version",
     revision: "presentation-revision",
     runtime: "server",
     runtimeExplicit: false,
     replay: false,
   };
+  const parse = (value: JsonValue) => parseMountConfig(value, documentBase);
 
-  assert.deepEqual(parseMountConfig(mount), mount);
+  assert.deepEqual(parse(mount), mount);
   const owned = {
     ...mount,
     clientId: "client-123456789",
@@ -217,20 +272,15 @@ test("mount configuration validates injected document data", () => {
     renewalToken: "d.valid",
     replay: true,
   };
-  assert.deepEqual(parseMountConfig(owned), owned);
-  assert.throws(() => parseMountConfig({ ...mount, lifecycleId: 0 }));
-  assert.throws(() => parseMountConfig({ ...mount, runtimeSessionId: "forged" }));
-  assert.equal(
-    parseMountConfig({ ...mount, clientId: "client-123456789" }).clientId,
-    "client-123456789",
-  );
-  assert.throws(() => parseMountConfig({ ...mount, clientId: "short" }));
-  assert.throws(() => parseMountConfig({ ...mount, clientId: "client invalid!!" }));
-  assert.throws(() => parseMountConfig({ ...mount, lifecycleId: 7 }));
-  assert.throws(() =>
-    parseMountConfig({ ...mount, runtime: "wasm", runtimeSessionId: "s_abc123" }),
-  );
-  assert.throws(() => parseMountConfig({ ...mount, replay: true }));
-  assert.throws(() => parseMountConfig({ ...mount, renewalToken: "forged" }));
-  assert.throws(() => parseMountConfig({ ...mount, unexpected: true }));
+  assert.deepEqual(parse(owned), owned);
+  assert.throws(() => parse({ ...mount, lifecycleId: 0 }));
+  assert.throws(() => parse({ ...mount, runtimeSessionId: "forged" }));
+  assert.equal(parse({ ...mount, clientId: "client-123456789" }).clientId, "client-123456789");
+  assert.throws(() => parse({ ...mount, clientId: "short" }));
+  assert.throws(() => parse({ ...mount, clientId: "client invalid!!" }));
+  assert.throws(() => parse({ ...mount, lifecycleId: 7 }));
+  assert.throws(() => parse({ ...mount, runtime: "wasm", runtimeSessionId: "s_abc123" }));
+  assert.throws(() => parse({ ...mount, replay: true }));
+  assert.throws(() => parse({ ...mount, renewalToken: "forged" }));
+  assert.throws(() => parse({ ...mount, unexpected: true }));
 });

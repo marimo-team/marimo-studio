@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import re
 from collections.abc import Iterator
 from typing import Any, cast
 
@@ -12,6 +10,8 @@ from starlette.requests import Request
 from marimo_studio._server.presentation.access import send_capability_app
 from marimo_studio._server.presentation.isolation import isolated_presentation_document
 from marimo_studio._server.presentation.ownership import studio_owned_request
+
+from .app_test_support import _presentation_wrapper_config
 
 
 def test_presentation_client_disconnect_finishes_native_delegation() -> None:
@@ -136,9 +136,11 @@ def test_presentation_websocket_close_ignores_a_closed_transport() -> None:
 
 def test_isolated_presentation_binds_navigation_to_server_configuration() -> None:
     document = isolated_presentation_document(
-        child_url="/_marimo-studio/presentation/token/dashboard/",
-        internal_root_url="/_marimo-studio/presentation/token/",
-        public_root_url="/base/",
+        child_url="../_marimo-studio/presentation/token/dashboard/",
+        internal_root_url="../_marimo-studio/presentation/token/",
+        public_root_url="../",
+        replay_root_url="../_marimo-studio/presentation/d.",
+        icon_url="../favicon.ico",
         routing_query="file=notebook.py",
         view_name="dashboard",
         views=("dashboard", "report"),
@@ -148,18 +150,15 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
         title_text="Dashboard",
         nonce="test-nonce",
     )
-    encoded = re.search(r"const config = Object\.freeze\((\{[^\n]+\})\);", document)
-
-    assert encoded is not None
-    assert json.loads(encoded.group(1)) == {
-        "internalRootUrl": "/_marimo-studio/presentation/token/",
-        "publicRootUrl": "/base/",
+    assert _presentation_wrapper_config(document) == {
+        "internalRootUrl": "../_marimo-studio/presentation/token/",
+        "publicRootUrl": "../",
+        "replayRootUrl": "../_marimo-studio/presentation/d.",
         "routingQuery": "file=notebook.py",
         "view": "dashboard",
         "views": ["dashboard", "report"],
         "privateQueryKeys": ["file", "session_id"],
-        "fallbackUrl": "/_marimo-studio/presentation/token/dashboard/",
-        "replayPathPrefix": "/base/_marimo-studio/presentation/d.",
+        "fallbackUrl": "../_marimo-studio/presentation/token/dashboard/",
         "replayEnabled": False,
         "replayScope": None,
         "runtime": "server",
@@ -167,16 +166,18 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
     }
     assert (
         'id="marimo-studio-presentation" '
-        'src="/_marimo-studio/presentation/token/dashboard/"'
+        'src="../_marimo-studio/presentation/token/dashboard/"'
     ) in document
     assert 'allow="clipboard-write; fullscreen *"' in document
 
 
 def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() -> None:
     document = isolated_presentation_document(
-        child_url="/_marimo-studio/presentation/token/dashboard/",
-        internal_root_url="/_marimo-studio/presentation/token/",
-        public_root_url="/base/",
+        child_url="../_marimo-studio/presentation/token/dashboard/",
+        internal_root_url="../_marimo-studio/presentation/token/",
+        public_root_url="../",
+        replay_root_url="../_marimo-studio/presentation/d.",
+        icon_url="../favicon.ico",
         routing_query="file=notebook.py",
         view_name="dashboard",
         views=("dashboard",),
@@ -194,9 +195,7 @@ def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() ->
     assert 'data-frame-sandbox="allow-downloads allow-forms allow-modals ' in document
     assert 'data-frame-allow="clipboard-write; fullscreen *"' in document
 
-    encoded = re.search(r"const config = Object\.freeze\((\{[^\n]+\})\);", document)
-    assert encoded is not None
-    config = json.loads(encoded.group(1))
+    config = _presentation_wrapper_config(document)
     assert config["runtime"] == "server"
     assert config["runtimeExplicit"] is True
 

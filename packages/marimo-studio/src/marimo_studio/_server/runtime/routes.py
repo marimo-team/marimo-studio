@@ -32,6 +32,7 @@ from marimo_studio._server.presentation.payload import build_runtime_config
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_path import request_path
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._server.runtime.progress import RuntimeProgressSink
 from marimo_studio._server.runtime.stream import (
@@ -217,6 +218,7 @@ async def runtime_config_response(
                 lookup_session_id if client_id is not None else None,
                 presentation_session_id,
                 runtime_session_id,
+                request_path=request_path(request),
                 client_id=client_id,
                 progress=progress,
             )

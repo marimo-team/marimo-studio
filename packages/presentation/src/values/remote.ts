@@ -30,7 +30,7 @@ export class ValueRequestError extends Error {
 const decodeServerValues = createValueDecoder();
 
 const valueResourceBaseUrl = (supportUrl: string): URL => {
-  const url = new URL(supportUrl, globalThis.location.href);
+  const url = new URL(supportUrl);
   const marker = "/_marimo-studio/views/";
   const markerIndex = url.pathname.lastIndexOf(marker);
   if (markerIndex < 0) {
@@ -68,7 +68,7 @@ export const readServerValues = async (
     }
     let response: Response;
     try {
-      response = await fetch(appendUrlPath(config.supportUrl, "values", globalThis.location.href), {
+      response = await fetch(appendUrlPath(config.supportUrl, "values"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

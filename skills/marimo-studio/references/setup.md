@@ -61,6 +61,9 @@ marimo-studio view preview dashboard --target notebook.py \
   --runtime server --server http://127.0.0.1:8000
 ```
 
+The URL keeps the origin and path of `--server`. Behind a proxy path prefix,
+the user's browser opens the same path beneath its public root.
+
 Inside code mode, use `marimo_studio.agent.current_workspace()` to bind the
 current notebook and Studio browser client. A missing host connection requires
 an open Studio editor connected to that notebook. Reading or building saved

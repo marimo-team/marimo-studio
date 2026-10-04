@@ -11,9 +11,9 @@ export const createZeroPythonRuntime = (
 ): PresentationRuntime =>
   definePresentationRuntime({
     id: ZERO_PYTHON_RUNTIME_ID,
-    async mount(context, data) {
+    async mount(context) {
       const { mountZeroPythonRuntime } = await import("./mount.ts");
-      return mountZeroPythonRuntime(context, data, dependencies);
+      return mountZeroPythonRuntime(context, dependencies);
     },
   });
 

@@ -6,6 +6,7 @@ import {
   labeledSlider,
   observeBrowserContext,
   presentationFrame,
+  presentationMount,
   readWorkspaceFile,
   recoverRequestAbort,
   restoreWorkspace,
@@ -51,8 +52,7 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
       timeout: remaining(),
     });
   };
-  const mountedRuntime = () =>
-    rendered.locator("html").evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__.runtime);
+  const mountedRuntime = async () => (await presentationMount(rendered.locator("html"))).runtime;
 
   try {
     await server.waitUntilReady(
@@ -152,12 +152,10 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
     await expect(rendered.locator("html")).toBeAttached();
     const initial = await rendered.locator("html").evaluate(() => ({
       readyState: document.readyState,
-      runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
-      runtimeExplicit: globalThis.__MARIMO_MOUNT_CONFIG__.runtimeExplicit,
       state: document.documentElement.dataset.marimoStudioState,
     }));
-    expect(initial).toMatchObject({
-      readyState: "complete",
+    expect(initial.readyState).toBe("complete");
+    expect(await presentationMount(rendered.locator("html"))).toMatchObject({
       runtime: "wasm",
       runtimeExplicit: true,
     });
@@ -178,11 +176,7 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
     });
     retirement.recovered();
     await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?runtime=wasm`);
-    const mounted = await rendered.locator("html").evaluate(() => ({
-      runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
-      runtimeExplicit: globalThis.__MARIMO_MOUNT_CONFIG__.runtimeExplicit,
-    }));
-    expect(mounted).toEqual({
+    expect(await presentationMount(rendered.locator("html"))).toMatchObject({
       runtime: "wasm",
       runtimeExplicit: true,
     });

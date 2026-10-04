@@ -182,8 +182,13 @@ def runtime_document(
     runtime_session_id: str | None = None,
     runtime_entry: str = "runtime.js",
     runtime_styles: tuple[str, ...] = ("runtime.css",),
+    icon_url: str | None = None,
 ) -> str:
-    """Inject one presentation runtime into an authored view document."""
+    """Inject one presentation runtime into an authored view document.
+
+    `icon_url` declares the server's favicon ahead of authored head content,
+    so an authored icon still takes precedence.
+    """
     parser = HTMLDocumentParser()
     parser.feed(document)
     validate_html_document(parser, "HTML document")
@@ -201,6 +206,7 @@ def runtime_document(
 
     head_content = (
         f"\n{base(href=root_url)}\n"
+        + (f"{link(rel='icon', href=icon_url)}\n" if icon_url is not None else "")
         + render(
             runtime_head(
                 support_url=support_url,

@@ -45,7 +45,7 @@ def test_display_recovers_after_retained_artifact_files_are_removed(
     with TestClient(app) as client:
         first = client.get(url)
         assert first.status_code == 200
-        asset = urljoin(_artifact_base(first.text), "style.css")
+        asset = urljoin(_artifact_base(first), "style.css")
         assert client.get(asset).status_code == 200
         retained = lease_published_artifact(project, "development")
         assert retained is not None
@@ -57,12 +57,11 @@ def test_display_recovers_after_retained_artifact_files_are_removed(
         missing = client.get(url)
         assert missing.status_code == 200, missing.text
         assert (
-            client.get(urljoin(_artifact_base(missing.text), "style.css")).status_code
-            == 200
+            client.get(urljoin(_artifact_base(missing), "style.css")).status_code == 200
         )
         recovered = client.get(url)
         assert recovered.status_code == 200
-        stylesheet = client.get(urljoin(_artifact_base(recovered.text), "style.css"))
+        stylesheet = client.get(urljoin(_artifact_base(recovered), "style.css"))
     assert stylesheet.status_code == 200
     assert "rgb(12, 34, 56)" in stylesheet.text
 

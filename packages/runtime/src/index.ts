@@ -13,11 +13,10 @@ export interface RuntimeSession {
   dispose(): void;
 }
 
-export type RuntimeData = Readonly<RuntimeConfig["runtime"]["data"]>;
-
 export interface PresentationRuntime {
   readonly id: string;
-  mount(context: RuntimeContext, data: RuntimeData): Promise<RuntimeSession>;
+  /** Mount the runtime. It validates `context.presentation.runtime` itself. */
+  mount(context: RuntimeContext): Promise<RuntimeSession>;
 }
 
 export interface RuntimeRegistry {

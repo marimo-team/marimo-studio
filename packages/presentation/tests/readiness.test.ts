@@ -18,7 +18,7 @@ import { valueCellPhase } from "../src/runtime/value-cell-state.ts";
 import { projectionRequest, projectionRuntimeConfig } from "./runtime-fixtures.ts";
 
 const mountConfig = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",

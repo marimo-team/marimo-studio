@@ -51,13 +51,23 @@ marimo-studio view preview dashboard --target notebook.py \
   --runtime server --server http://127.0.0.1:8000
 ```
 
+The returned URL keeps the origin and path of the server URL that produced it.
+A code-mode URL uses the local address that marimo gives code mode. When the
+user's browser reaches the server through a proxy path prefix, give them the
+same path beneath their public root, such as
+`https://ide.example/s/f3a9/p/8000/dashboard/?runtime=server`. A Prepared
+preview follows a Studio tab. Pass `--browser-client` when more than one is
+connected.
+
 `show()` activates the user's Studio tab. That tab renders the view in a
 sandboxed frame with an opaque origin, so scripts running in the Studio tab
 cannot read the frame's document. Inspect it with frame-aware browser
 automation, or open the standalone URL. Wait for the frame's requested
 navigation before checking readiness: its previous document may still be
-visible. Once the standalone page is open,
-iterate by building and reloading its stable URL. For a checkpoint,
+visible. On an edit-mode server, an open standalone page follows the
+development build of each source change and keeps its address, so the user can
+watch the view while you edit. On a run-mode server, build the production
+profile and reload. For a checkpoint,
 request `exact=True` or `--exact` after building the served profile. Opening an
 exact URL returns HTTP 409 if its revision differs or current view source is
 unbuilt or failed, even while the previous artifact remains available.

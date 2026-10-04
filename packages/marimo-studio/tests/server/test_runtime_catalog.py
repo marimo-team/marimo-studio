@@ -119,7 +119,7 @@ def test_runtime_registry_runs_provider_on_the_event_loop_owner(
             self, *_args: object, client_id: str | None = None, progress: object = None
         ) -> RuntimeProjection:
             projection_threads.append(threading.get_ident())
-            return RuntimeProjection("server", "instance", {}, {})
+            return RuntimeProjection("server", "instance", {}, {}, {})
 
     provider = RecordingProvider()
     registry = RuntimeRegistry((cast(RuntimeProvider, provider),))
@@ -170,7 +170,7 @@ def test_server_runtime_instance_stays_stable_across_binding_generations(
 
     monkeypatch.setattr(
         catalog_module,
-        "presentation_revision_url",
+        "presentation_revision_path",
         lambda *_args, **_kwargs: "/",
     )
     monkeypatch.setattr(
@@ -345,7 +345,7 @@ def test_runtime_registry_close_rejects_an_inflight_server_capture(
 
     monkeypatch.setattr(
         catalog_module,
-        "presentation_revision_url",
+        "presentation_revision_path",
         lambda *_args, **_kwargs: "/",
     )
     monkeypatch.setattr(
@@ -405,7 +405,7 @@ def test_server_runtime_waits_for_saved_cell_execution(
             )
 
     monkeypatch.setattr(
-        catalog_module, "presentation_revision_url", lambda *_args, **_kwargs: "/"
+        catalog_module, "presentation_revision_path", lambda *_args, **_kwargs: "/"
     )
     monkeypatch.setattr(
         catalog_module, "presentation_revision_capability", lambda *_args: "capability"

@@ -5,7 +5,7 @@ from collections.abc import MutableMapping
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 import pytest
 from starlette.requests import Request
@@ -34,7 +34,12 @@ from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
 from ..helpers import notebook_source
-from .app_test_support import _studio_host
+from .app_test_support import (
+    Response,
+    _redirect_target,
+    _runtime_config,
+    _studio_host,
+)
 
 
 def test_edit_workspace_mutations_require_the_current_server_token(
@@ -101,7 +106,7 @@ def test_run_mode_keeps_studio_source_mutations_read_only(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
         project = client.get("/_marimo-studio/views/dashboard/project")
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         headers = {"Marimo-Server-Token": config["runtime"]["data"]["capabilityToken"]}
         write = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
@@ -321,15 +326,19 @@ def test_marimo_authentication_owns_document_login(
             "/executive/?access_token=test-token&region=emea",
             follow_redirects=False,
         )
-        page = client.get(establish.headers["location"])
+        page = client.get(_redirect_target(establish))
         protected = client.get("/_marimo-studio/views/executive/config")
 
+    login = _redirect_target(named)
     assert named.status_code == 303
-    assert named.headers["location"].startswith("/auth/login")
-    login_query = parse_qs(urlsplit(named.headers["location"]).query)
-    assert login_query["next"] == ["/executive/?region=emea"]
+    assert urlsplit(login).path == "/auth/login"
+    # Marimo redirects to `next` from the login page after authentication.
+    next_url = parse_qs(urlsplit(login).query)["next"]
+    assert [urljoin(login, url) for url in next_url] == [
+        "http://testserver/executive/?region=emea"
+    ]
     assert establish.status_code == 303
-    assert establish.headers["location"] == "/executive/?region=emea"
+    assert _redirect_target(establish) == "http://testserver/executive/?region=emea"
     assert "session=" in establish.headers["set-cookie"]
     assert page.status_code == 200
     assert protected.status_code == 200
@@ -350,20 +359,22 @@ def test_edit_mode_public_pages_use_marimo_authentication(
             "/?access_token=test-token",
             follow_redirects=False,
         )
-        landing = client.get(establish.headers["location"], follow_redirects=False)
-        page = client.get(landing.headers["location"])
+        landing = client.get(_redirect_target(establish), follow_redirects=False)
+        page = client.get(_redirect_target(landing))
 
-    workspace_login = parse_qs(urlsplit(workspace.headers["location"]).query)
-    view_login = parse_qs(urlsplit(view.headers["location"]).query)
+    def login_next(response: Response) -> list[str]:
+        login = _redirect_target(response)
+        return [urljoin(login, url) for url in parse_qs(urlsplit(login).query)["next"]]
+
     assert workspace.status_code == 303
-    assert workspace_login["next"] == ["/studio/executive/"]
+    assert login_next(workspace) == ["http://testserver/studio/executive/"]
     assert view.status_code == 303
-    assert view_login["next"] == ["/executive/"]
+    assert login_next(view) == ["http://testserver/executive/"]
     assert establish.status_code == 303
-    assert establish.headers["location"] == "/"
+    assert _redirect_target(establish) == "http://testserver/"
     assert "session=" in establish.headers["set-cookie"]
     assert landing.status_code == 307
-    assert landing.headers["location"] == "/studio/dashboard/"
+    assert _redirect_target(landing) == "http://testserver/studio/dashboard/"
     assert page.status_code == 200
 
 
@@ -384,7 +395,7 @@ def test_authentication_precedes_project_diagnostics(
     assert root.status_code == 303
     assert support.status_code == 303
     assert all(
-        response.headers["location"].startswith("/auth/login")
+        urlsplit(_redirect_target(response)).path == "/auth/login"
         for response in (root, support)
     )
 
@@ -504,7 +515,7 @@ def test_edit_mode_hosts_an_unconfigured_notebook_without_intercepting_run_mode(
     assert page.status_code == 200
     assert editor.status_code == 200
     assert "marimo-studio-host" not in page.text
-    assert _studio_host(editor.text)["state"] == "unconfigured"
+    assert _studio_host(editor)["state"] == "unconfigured"
     assert 'id="marimo-studio-editor"' in editor.text
     assert support.status_code == 404
     assert missing.status_code == 404

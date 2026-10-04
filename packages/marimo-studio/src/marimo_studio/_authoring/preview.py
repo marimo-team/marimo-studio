@@ -6,8 +6,12 @@ import asyncio
 from pathlib import Path
 from urllib.parse import quote, urljoin, urlsplit
 
-from marimo_studio._browser_client.transport import StudioServerConnection, request_text
-from marimo_studio._delivery.urls import SUPPORT_PATH
+from marimo_studio._browser_client.transport import (
+    StudioServerConnection,
+    request_text,
+    server_request_url,
+)
+from marimo_studio._delivery.urls import STUDIO_CLIENT_QUERY_PARAM, SUPPORT_PATH
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.ownership import (
     ObservedViewOwner,
@@ -40,20 +44,24 @@ async def preview_url(
         ("catalog_generation", owner.catalog_generation),
         ("view_generation", owner.view_generation or ""),
     ]
-    target = await request_text(
-        connection,
-        f"{SUPPORT_PATH}/views/{quote(view, safe='')}/preview",
-        query=tuple(query),
-    )
+    if connection.browser_client:
+        query.append((STUDIO_CLIENT_QUERY_PARAM, connection.browser_client))
+    path = f"{SUPPORT_PATH}/views/{quote(view, safe='')}/preview"
+    target = await request_text(connection, path, query=tuple(query))
     parts = urlsplit(target)
+    # The server answers with a reference from the requested URL, so the result
+    # keeps any path prefix in the server URL.
+    resolved = urljoin(server_request_url(connection, path), target)
     if (
         parts.scheme
         or parts.netloc
-        or not parts.path.startswith("/")
-        or target.startswith("//")
+        or not resolved.startswith(f"{connection.server_url.rstrip('/')}/")
         or any(character.isspace() for character in target)
+        # Browsers read a backslash as `/` and `%2e` as `.`, which urljoin keeps.
+        or "\\" in parts.path
+        or "%2e" in parts.path.lower()
     ):
         raise ProtocolError("The Studio server returned an invalid preview URL.")
     current = await asyncio.to_thread(load_studio, notebook)
     require_view_owner(current, view, owner)
-    return urljoin(connection.server_url, target)
+    return resolved

@@ -8,7 +8,7 @@ import {
   UNFRAMED_QUERY_PARAM,
 } from "@marimo-studio/protocol/query";
 
-import { documentBase } from "./document/base";
+import { documentBase, initialDocumentBaseUrl } from "./document/base";
 import {
   activeDocumentLifecycleId,
   documentLifecycleEnvelope,
@@ -66,10 +66,9 @@ declare global {
 }
 
 const browser = window;
-const viewBaseUrl = document.baseURI;
 // Marimo's server client points <base> at the API root during health checks.
 // Keep relative authored assets anchored to the active view directory.
-documentBase.start(viewBaseUrl);
+documentBase.start(initialDocumentBaseUrl);
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
 const documentLifetime = new AbortController();
 onFinalPageHide(() => documentLifetime.abort(new PresentationDocumentRetiredError()));
@@ -136,7 +135,6 @@ const bindRuntimeNavigation = (
     const config = getRuntimeConfig();
     const historyNavigation = viewHistoryNavigationForUrl({
       href: globalThis.location.href,
-      origin: globalThis.location.origin,
       publicRootUrl: config.publicRootUrl,
       documentRootUrl: config.documentRootUrl,
       publicQuery: publicNotebookQuery(globalThis.location.search),

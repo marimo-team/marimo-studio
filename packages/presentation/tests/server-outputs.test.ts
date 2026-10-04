@@ -12,7 +12,7 @@ import {
 import { projectionRequest, symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "revision-a",
   runtime: "server",
@@ -37,18 +37,18 @@ const config = {
     id: "server",
     instance: "server-instance",
     data: {
-      fileKey: "/workspace/notebook.py",
+      storageScope: "presentation-storage",
       capabilityToken: "presentation-capability",
       sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession: false,
-      url: "/",
     },
+    urls: { transport: "https://studio.test/" },
   },
-  rootUrl: "/",
-  publicRootUrl: "/",
-  documentRootUrl: "/",
-  supportUrl: "/_marimo-studio/views/dashboard",
+  rootUrl: "http://localhost:3000/",
+  publicRootUrl: "http://localhost:3000/",
+  documentRootUrl: "http://localhost:3000/",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   presentationSessionId: "s_view01",
   ...symbolicRuntimeFields,
   diagnostics: [],
@@ -129,7 +129,7 @@ test("discards canceled queued output work before dispatch", async () => {
     ...config,
     revision: "revision-b",
     view: "executive",
-    supportUrl: "/_marimo-studio/views/executive",
+    supportUrl: "http://localhost:3000/_marimo-studio/views/executive",
     runtime: {
       ...config.runtime,
       data: { ...config.runtime.data, capabilityToken: "next-capability" },

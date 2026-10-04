@@ -6,7 +6,7 @@ import { waitForReceiverAdmission } from "../src/document/receiver-admission.ts"
 import { PresentationDocumentRetiredError } from "../src/document/session-startup.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "revision-old",
   runtime: "server",

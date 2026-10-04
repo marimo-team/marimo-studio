@@ -21,6 +21,7 @@ from marimo_studio import create_asgi_app
 from marimo_studio._processes.supervisor import ProcessCleanupError
 
 from ..app_helpers import published_dashboard, session_manager
+from ..server.app_test_support import _runtime_config
 
 
 def _spawned_value(value: str) -> str:
@@ -28,8 +29,8 @@ def _spawned_value(value: str) -> str:
 
 
 def _start_kernel(client: TestClient, manager: Any) -> Thread:
-    config = client.get("/_marimo-studio/views/dashboard/config").json()
-    root = urlsplit(config["runtime"]["data"]["url"])
+    config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+    root = urlsplit(config["runtime"]["urls"]["transport"])
     websocket_url = (
         f"{root.path.rstrip('/')}/ws?session_id={config['presentationSessionId']}"
     )

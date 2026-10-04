@@ -17,17 +17,20 @@ export const test = base.extend<
       | "web"
       | "dashboard"
     )[];
+    /** Serve the provider notebook with `marimo edit` beneath a stripped prefix. */
+    providerEditor: boolean;
     providerWorkspace: ProviderWorkspace;
   }
 >({
   providerViews: [["overview", "gallery", "story"], { scope: "worker", option: true }],
+  providerEditor: [false, { scope: "worker", option: true }],
   providerWorkspace: [
-    async ({ providerViews, network: _network }, use) =>
+    async ({ providerViews, providerEditor, network: _network }, use) =>
       withExportRepository(resolve(providerConfigDirectory, "export-repository"), async () => {
         const workspace = new ProviderWorkspace();
         const failures: unknown[] = [];
         try {
-          await workspace.prepare(providerViews);
+          await workspace.prepare(providerViews, providerEditor);
           await use(workspace);
         } catch (error) {
           failures.push(error);

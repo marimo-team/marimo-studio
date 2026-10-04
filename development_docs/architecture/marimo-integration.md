@@ -237,6 +237,9 @@ view source should never depend on a transient runtime ID.
 - Trusted server-level `html_head`
 - Opaque server handle
 
+The gateway also names Marimo's login page through `login_path`, which
+Studio's authentication redirects address.
+
 `PresentationMiddleware` consumes those records and delegates native Marimo
 paths before dispatching Studio work. Read [Server routing and
 security](server-routing-and-security.md) for route recognition, workspace

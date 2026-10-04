@@ -1,4 +1,4 @@
-import { studioBootstrapSchema } from "@marimo-studio/protocol/studio-bootstrap";
+import { parseStudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import { expect, type Frame, type FrameLocator, type Page, type Request } from "@playwright/test";
 import { z } from "zod";
 
@@ -18,11 +18,11 @@ export const readViewRevision = (source: string): string => {
 };
 
 export const readStudioBootstrap = async (page: Page) => {
-  const source = await page.locator("#marimo-studio-bootstrap").textContent();
+  const source = await page.locator("#marimo-studio-workspace").textContent();
   if (!source) {
     throw new Error("Studio bootstrap is unavailable");
   }
-  return studioBootstrapSchema.parse(JSON.parse(source));
+  return parseStudioBootstrap(JSON.parse(source), page.url());
 };
 
 export const studioClientId = async (page: Page): Promise<string> =>

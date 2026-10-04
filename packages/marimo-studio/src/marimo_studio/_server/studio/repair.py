@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import cast
 
-from htpy import Node, body, h1, head, html, main, meta, p, script, style, title
+from htpy import Node, body, h1, head, html, link, main, meta, p, script, style, title
 from markupsafe import Markup
 
 from marimo_studio._delivery.html import node_list, render
@@ -16,6 +16,7 @@ def repair_document(
     hint: str,
     events_url: str,
     *,
+    icon_url: str,
     code: str = "configuration-error",
     lifecycle_id: int | None = None,
     runtime: str = "server",
@@ -39,6 +40,7 @@ def repair_document(
                         content="width=device-width, initial-scale=1",
                     ),
                     title[heading],
+                    link(rel="icon", href=icon_url),
                     style[
                         Markup(
                             """

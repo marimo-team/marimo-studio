@@ -20,7 +20,7 @@ export const mountConfiguredRuntime = async (
 ): Promise<RuntimeSession> => {
   const generation = ++mountGeneration;
   const runtime = registry.get(config.runtime.id);
-  const mounted = await runtime.mount({ presentation: config, root }, config.runtime.data);
+  const mounted = await runtime.mount({ presentation: config, root });
   if (generation !== mountGeneration) {
     mounted.dispose();
     throw new RuntimeMountCancelledError();

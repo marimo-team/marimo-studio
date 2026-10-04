@@ -35,9 +35,9 @@ export interface SessionEnvironment {
 const navigationTypeSchema = z.enum(["navigate", "reload", "back_forward"]);
 
 interface ServerSessionConfig {
-  fileKey: string;
   preserve: boolean;
   sessionId: string;
+  storageScope: string;
 }
 
 const serverSessionConfig = (config: RuntimeConfig): ServerSessionConfig | undefined => {
@@ -49,7 +49,7 @@ const serverSessionConfig = (config: RuntimeConfig): ServerSessionConfig | undef
     return undefined;
   }
   return {
-    fileKey: parsed.data.fileKey,
+    storageScope: parsed.data.storageScope,
     preserve: parsed.data.preserveSession,
     sessionId: parsed.data.sessionId,
   };
@@ -90,7 +90,7 @@ const browserEnvironment = (): SessionEnvironment => {
 
 const storagePrefix = (config: RuntimeConfig): string => {
   const runtime = serverSessionConfig(config);
-  return `marimo-studio:session:v1:server:${runtime?.fileKey ?? "unknown"}`;
+  return `marimo-studio:session:v1:server:${runtime?.storageScope ?? "unknown"}`;
 };
 
 const publicQueryIdentity = (url: URL): string => {

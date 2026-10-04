@@ -162,7 +162,7 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
         views_before = client.get("/_marimo-studio/views")
         before_payload = views_before.json()
         initializer = client.get("/")
-        host = _studio_host(initializer.text)
+        host = _studio_host(initializer)
         created = _create_owned_view(
             client,
             definition.default_view,

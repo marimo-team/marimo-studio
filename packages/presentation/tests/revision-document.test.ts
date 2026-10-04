@@ -25,12 +25,12 @@ import {
   subscribeRuntimeConfig,
 } from "../src/runtime-config/index.ts";
 import { useRuntimeProjectionConfig } from "../src/runtime/use-runtime-config.ts";
-import { runtimeConfig } from "./runtime-fixtures.ts";
+import { resolvedRuntimeConfig, runtimeConfig } from "./runtime-fixtures.ts";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/support/old",
+  supportUrl: "http://localhost:3000/support/old",
   version: "test-version",
   revision: "revision-old",
   runtime: "server",
@@ -145,7 +145,7 @@ test("a failed history push restores document, styles, runtime, and URL identity
   const next = runtimeConfig({
     revision: "revision-new",
     projectionRevision: "b".repeat(64),
-    supportUrl: "/support/new",
+    supportUrl: "http://localhost:3000/support/new",
   });
   vi.stubGlobal(
     "fetch",
@@ -276,7 +276,7 @@ test("runtime subscribers observe the committed document", async () => {
   const next = runtimeConfig({
     revision: "revision-new",
     projectionRevision: "b".repeat(64),
-    supportUrl: "/support/new",
+    supportUrl: "http://localhost:3000/support/new",
   });
   vi.stubGlobal(
     "fetch",
@@ -323,7 +323,7 @@ test("projection owners commit before document replacement resolves", async () =
   const next = runtimeConfig({
     revision: "revision-new",
     projectionRevision: "b".repeat(64),
-    supportUrl: "/support/new",
+    supportUrl: "http://localhost:3000/support/new",
   });
   commitRuntimeConfig(previous);
   vi.stubGlobal(
@@ -377,8 +377,14 @@ test("same-revision subscriber failure restores config, support, URL, and histor
   const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
   document.body.innerHTML = '<main id="app-shell">Current shell</main>';
   setSupportUrl("/support/old");
-  const previous = runtimeConfig({ revision: "revision-old", supportUrl: "/support/old" });
-  const refreshed = runtimeConfig({ revision: "revision-old", supportUrl: "/support/new" });
+  const previous = runtimeConfig({
+    revision: "revision-old",
+    supportUrl: "http://localhost:3000/support/old",
+  });
+  const refreshed = runtimeConfig({
+    revision: "revision-old",
+    supportUrl: "http://localhost:3000/support/new",
+  });
   commitRuntimeConfig(previous);
   const previousUrl = globalThis.location.href;
   const previousHistoryLength = globalThis.history.length;
@@ -423,8 +429,13 @@ test("fragment scrolling cannot invalidate a committed same-revision navigation"
     </main>
   `;
   setSupportUrl("/support/old");
-  const refreshed = runtimeConfig({ revision: "revision-old", supportUrl: "/support/new" });
-  commitRuntimeConfig(runtimeConfig({ revision: "revision-old", supportUrl: "/support/old" }));
+  const refreshed = runtimeConfig({
+    revision: "revision-old",
+    supportUrl: "http://localhost:3000/support/new",
+  });
+  commitRuntimeConfig(
+    runtimeConfig({ revision: "revision-old", supportUrl: "http://localhost:3000/support/old" }),
+  );
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -456,8 +467,8 @@ test("fragment scrolling cannot invalidate a committed same-revision navigation"
     ),
   ).resolves.toMatchObject({ reloadDocument: false });
 
-  expect(getSupportUrl()).toBe("/support/new");
-  expect(getRuntimeConfig()).toEqual(refreshed);
+  expect(getSupportUrl()).toBe(new URL("/support/new", globalThis.location.href).href);
+  expect(getRuntimeConfig()).toEqual(resolvedRuntimeConfig(refreshed, globalThis.location.href));
   expect(globalThis.location.hash).toBe("#details");
   expect(details.scrollIntoView).toHaveBeenCalledOnce();
 });
@@ -508,7 +519,7 @@ test("a superseded candidate revision is rejected before runtime commit", async 
   commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
   const candidate = runtimeConfig({
     revision: "revision-candidate",
-    supportUrl: "/support/candidate",
+    supportUrl: "http://localhost:3000/support/candidate",
   });
   vi.stubGlobal(
     "fetch",
@@ -553,7 +564,10 @@ test("a structural shell edit reloads an unchanged authored script", async () =>
   document.body.innerHTML = '<main id="app-shell"><button id="run">Run</button></main>';
   setSupportUrl("/support/old");
   commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
-  const next = runtimeConfig({ revision: "revision-new", supportUrl: "/support/new" });
+  const next = runtimeConfig({
+    revision: "revision-new",
+    supportUrl: "http://localhost:3000/support/new",
+  });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -604,7 +618,7 @@ test("a stylesheet-only revision keeps the authored shell and rendered projectio
   host.append(rendered);
   const next = runtimeConfig({
     revision: "revision-new",
-    supportUrl: "/support/new",
+    supportUrl: "http://localhost:3000/support/new",
   });
   vi.stubGlobal(
     "fetch",
@@ -651,7 +665,10 @@ test("a scriptless structural edit morphs an unchanged projection topology", asy
   const rendered = document.createElement("strong");
   rendered.textContent = "Rendered report";
   host.append(rendered);
-  const next = runtimeConfig({ revision: "revision-new", supportUrl: "/support/new" });
+  const next = runtimeConfig({
+    revision: "revision-new",
+    supportUrl: "http://localhost:3000/support/new",
+  });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -763,6 +780,42 @@ test("an exact refresh rejects another revision before replacing its retained pr
   expect(fetch).toHaveBeenCalledOnce();
   expect(document.querySelector("#app-shell")?.textContent).toBe("Retained report");
   expect(document.documentElement.dataset.marimoStudioRevision).toBe("revision-old");
+});
+
+test("a refresh resolves the support header against the document response URL", async () => {
+  const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
+  document.body.innerHTML = '<main id="app-shell">Retained report</main>';
+  commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
+  const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
+  const response = Response.json(
+    { error: "provider-input-invalid", message: "The provider could not read its input." },
+    {
+      status: 409,
+      headers: { "Marimo-Studio-Support-Url": "../_marimo-studio/views/dashboard" },
+    },
+  );
+  // A redirect moved the document beneath a deeper path than the request.
+  Object.defineProperty(response, "url", {
+    value: "http://localhost:3000/s/f3a9/p/77c1/dashboard/",
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => response),
+  );
+  const onTarget = vi.fn();
+
+  await expect(
+    adapter.replace(
+      "http://localhost:3000/dashboard/",
+      "/support/new",
+      new AbortController().signal,
+      onTarget,
+    ),
+  ).rejects.toMatchObject({ code: "provider-input-invalid" });
+  expect(onTarget).toHaveBeenCalledWith({
+    documentUrl: "http://localhost:3000/dashboard/",
+    supportUrl: "http://localhost:3000/s/f3a9/p/77c1/_marimo-studio/views/dashboard",
+  });
 });
 
 test("standalone renewal retains its admitted editor without claiming a workspace frame lifecycle", () => {

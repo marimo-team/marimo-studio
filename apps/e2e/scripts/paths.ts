@@ -31,6 +31,9 @@ export const createE2EPaths = (root: string, { runId, suite, workerId }: E2ENetw
     providerStaticRoot: resolve(resultRoot, "provider-static"),
     providerConfigDirectory: resolve(resultRoot, "provider-config"),
     hostedWorkspaceDirectory: resolve(resultRoot, "workspaces", "hosted"),
+    proxiedWorkspaceDirectory: resolve(resultRoot, "workspaces", "proxied"),
+    proxiedRunWorkspaceDirectory: resolve(resultRoot, "workspaces", "proxied-run"),
+    proxiedDirectoryWorkspaceDirectory: resolve(resultRoot, "workspaces", "proxied-directory"),
   });
 };
 
@@ -72,3 +75,13 @@ export const providerRevealStaticDirectory = resolve(providerStaticRoot, "reveal
 export const hostedFixtureDirectory = resolve(appDirectory, "fixtures-hosted");
 export const hostedWorkspaceDirectory = mutable.hostedWorkspaceDirectory;
 export const hostedNotebookPath = resolve(hostedWorkspaceDirectory, "notebook.py");
+export const proxiedFixtureDirectory = resolve(appDirectory, "fixtures-proxied");
+export const proxiedWorkspaceDirectory = mutable.proxiedWorkspaceDirectory;
+export const proxiedNotebookPath = resolve(proxiedWorkspaceDirectory, "notebook.py");
+export const proxiedRunWorkspaceDirectory = mutable.proxiedRunWorkspaceDirectory;
+export const proxiedRunNotebookPath = resolve(proxiedRunWorkspaceDirectory, "notebook.py");
+export const proxiedDirectoryWorkspaceDirectory = mutable.proxiedDirectoryWorkspaceDirectory;
+export const proxiedDirectoryNotebookPath = resolve(
+  proxiedDirectoryWorkspaceDirectory,
+  "notebook.py",
+);

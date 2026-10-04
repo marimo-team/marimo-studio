@@ -13,7 +13,7 @@ describe("editor query synchronization", () => {
     vi.stubGlobal("fetch", fetch);
 
     const result = await syncEditorQuery(
-      "/_marimo-studio/query",
+      "http://localhost:3000/_marimo-studio/query",
       "token",
       "browser-client-1234",
       "region=emea",
@@ -22,7 +22,7 @@ describe("editor query synchronization", () => {
     );
 
     expect(fetch).toHaveBeenCalledWith(
-      "/_marimo-studio/query",
+      "http://localhost:3000/_marimo-studio/query",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({

@@ -6,7 +6,7 @@ import os
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import cast
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import pytest
 from marimo_export import open_export
@@ -36,6 +36,9 @@ from marimo_studio.view_providers import BuildProfile, ViewProject
 from ..artifact_test_support import add_provider_outputs
 from ..helpers import replace_app_shell
 from .export_test_support import configure_export_view
+
+# Browsers resolve runtime configuration URLs against the configuration file.
+_CONFIG_URL = "https://pages.example/site/_marimo-studio/views/dashboard/config"
 
 _PREPARE_TIMEOUT = 120.0
 
@@ -104,9 +107,13 @@ def test_export_view_writes_a_complete_static_bundle(
     assert result.output == output
     assert result.files == sum(1 for path in output.rglob("*") if path.is_file())
     assert config["runtime"]["id"] == "wasm"
-    assert config["rootUrl"] == "./"
-    assert config["publicRootUrl"] == "./"
-    assert config["supportUrl"] == "./_marimo-studio/views/dashboard"
+    assert urljoin(_CONFIG_URL, config["rootUrl"]) == "https://pages.example/site/"
+    assert urljoin(_CONFIG_URL, config["publicRootUrl"]) == (
+        "https://pages.example/site/"
+    )
+    assert urljoin(_CONFIG_URL, config["supportUrl"]) == (
+        "https://pages.example/site/_marimo-studio/views/dashboard"
+    )
     assert config["showCellLogs"] is load_studio(notebook_path).show_cell_logs
     assert config["projectionTargets"]["cells"]["cell-2"]["status"] == "ready"
     assert config["projectionTargets"]["variables"]["doubled"]["status"] == "ready"
@@ -388,9 +395,13 @@ def test_export_preserves_nested_vanilla_local_sources(
     assert result.document.as_posix() == "pages/index.html"
     assert result.entrypoint == output / "pages" / "index.html"
     _assert_document_resources_resolve(result.entrypoint)
-    assert config["rootUrl"] == "../"
-    assert config["publicRootUrl"] == "../"
-    assert config["supportUrl"] == "../_marimo-studio/views/dashboard"
+    assert urljoin(_CONFIG_URL, config["rootUrl"]) == "https://pages.example/site/"
+    assert urljoin(_CONFIG_URL, config["publicRootUrl"]) == (
+        "https://pages.example/site/"
+    )
+    assert urljoin(_CONFIG_URL, config["supportUrl"]) == (
+        "https://pages.example/site/_marimo-studio/views/dashboard"
+    )
     assert (
         output.joinpath("pages/app.js").read_bytes()
         == pages.joinpath("app.js").read_bytes()

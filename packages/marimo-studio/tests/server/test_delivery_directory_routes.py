@@ -17,7 +17,7 @@ from marimo_studio import create_asgi_app
 from marimo_studio._delivery.urls import (
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
     SERVER_INSTANCE_QUERY_PARAM,
-    authored_view_root_url,
+    authored_view_root_path,
 )
 from marimo_studio._server.security import Origin, SecurityPolicy
 from marimo_studio._server.studio.event_capability import (
@@ -34,6 +34,9 @@ from .app_test_support import (
     _assert_server_runtime,
     _projection_request,
     _projection_targets,
+    _redirect_target,
+    _resolved_urls,
+    _runtime_config,
     _studio_host,
 )
 
@@ -74,8 +77,12 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     update_notebook_config(studio.notebook, configure)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        dashboard = client.get("/_marimo-studio/views/dashboard/config").json()
-        executive = client.get("/_marimo-studio/views/executive/config").json()
+        dashboard = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config")
+        )
+        executive = _runtime_config(
+            client.get("/_marimo-studio/views/executive/config")
+        )
         cell = client.get("/_marimo-studio/views/executive/cells/result")
         views = client.get("/_marimo-studio/views").json()
 
@@ -135,12 +142,12 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
         )
     )
     server_token = str(manager.skew_protection_token)
-    authored_root = authored_view_root_url("", "first.py")
+    authored_root = authored_view_root_path("first.py")
 
     with TestClient(app) as client:
-        config = client.get(
-            "/_marimo-studio/views/dashboard/config?file=first.py"
-        ).json()
+        config = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config?file=first.py")
+        )
         projection = _projection_request(config, "value", "doubled")
         cross_notebook_value = client.post(
             "/_marimo-studio/views/dashboard/values?file=first.py",
@@ -180,17 +187,17 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
     for response in (cross_notebook_value, cross_notebook_output):
         assert response.status_code == 409
         assert response.json()["error"] == "unknown-session"
-    assert config["rootUrl"] == "/"
-    assert config["publicRootUrl"] == "/?file=first.py"
-    assert config["documentRootUrl"] == authored_root
-    _assert_server_runtime(config["runtime"]["data"], "/")
+    assert config["rootUrl"] == "http://testserver/"
+    assert config["publicRootUrl"] == "http://testserver/?file=first.py"
+    assert config["documentRootUrl"] == f"http://testserver{authored_root}"
+    _assert_server_runtime(config["runtime"], "http://testserver/")
     assert config["runtime"]["data"]["file"] == "first.py"
     assert created.status_code == 201
     assert created.json() == {"schema": 1, "name": "detail"}
     assert marimo_resource.status_code == 200
     assert authored_document.status_code == 307
-    assert authored_document.headers["location"] == (
-        "/dashboard/?file=first.py&region=us"
+    assert _redirect_target(authored_document) == (
+        "http://testserver/dashboard/?file=first.py&region=us"
     )
 
 
@@ -228,11 +235,11 @@ def test_presentation_capability_binds_public_files_to_its_notebook(
             params={"access_token": "test-token", "file": "first.py"},
             follow_redirects=False,
         )
-        authenticated.get(login.headers["location"], follow_redirects=False)
-        config = authenticated.get(
-            "/_marimo-studio/views/dashboard/config?file=first.py"
-        ).json()
-        capability_root = config["runtime"]["data"]["url"]
+        authenticated.get(_redirect_target(login), follow_redirects=False)
+        config = _runtime_config(
+            authenticated.get("/_marimo-studio/views/dashboard/config?file=first.py")
+        )
+        capability_root = config["runtime"]["urls"]["transport"]
 
     with TestClient(app) as anonymous:
         direct = anonymous.get(
@@ -263,23 +270,27 @@ def test_mounted_directory_routes_preserve_notebook_identity(tmp_path: Path) -> 
     )
     parent = Starlette(routes=[Mount("/parent", app=child)])
     file_key = "nested/analysis.py"
-    authored_root = authored_view_root_url("/parent/base", file_key)
+    authored_root = f"/parent/base{authored_view_root_path(file_key)}"
 
     with TestClient(parent) as client:
-        config = client.get(
-            f"/parent/base/_marimo-studio/views/dashboard/config?file={file_key}"
-        ).json()
+        config = _runtime_config(
+            client.get(
+                f"/parent/base/_marimo-studio/views/dashboard/config?file={file_key}"
+            )
+        )
         authored_document = client.get(
             f"{authored_root}dashboard/?region=us",
             follow_redirects=False,
         )
 
-    assert config["rootUrl"] == "/parent/base/"
-    assert config["publicRootUrl"] == ("/parent/base/?file=nested%2Fanalysis.py")
-    _assert_server_runtime(config["runtime"]["data"], "/parent/base/")
+    assert config["rootUrl"] == "http://testserver/parent/base/"
+    assert config["publicRootUrl"] == (
+        "http://testserver/parent/base/?file=nested%2Fanalysis.py"
+    )
+    _assert_server_runtime(config["runtime"], "http://testserver/parent/base/")
     assert config["runtime"]["data"]["file"] == file_key
-    assert authored_document.headers["location"] == (
-        "/parent/base/dashboard/?file=nested%2Fanalysis.py&region=us"
+    assert _redirect_target(authored_document) == (
+        "http://testserver/parent/base/dashboard/?file=nested%2Fanalysis.py&region=us"
     )
 
 
@@ -301,7 +312,7 @@ def test_mounted_directory_host_promotes_with_canonical_urls(tmp_path: Path) -> 
 
     with TestClient(parent) as client:
         document = client.get(f"/parent/base/?file={file_key}&region=eu")
-        host = _studio_host(document.text)
+        host = _studio_host(document)
         created = client.post(
             host["urls"]["views"],
             headers={"Marimo-Server-Token": host["serverToken"]},
@@ -320,7 +331,7 @@ def test_mounted_directory_host_promotes_with_canonical_urls(tmp_path: Path) -> 
     assert created.status_code == 201
     assert ready.status_code == 200
     assert stale.status_code == 204
-    bootstrap = ready.json()
+    bootstrap = _resolved_urls(ready, ready.json())
     assert bootstrap["clientId"] == host["clientId"]
     assert bootstrap["selectedView"] == "dashboard"
     workspace_query = {
@@ -413,7 +424,7 @@ def test_directory_auth_precedes_notebook_configuration(tmp_path: Path) -> None:
 
     assert all(response.status_code == 303 for response in responses)
     assert all(
-        response.headers["location"].startswith("/auth/login?")
+        _redirect_target(response).startswith("http://testserver/auth/login?")
         for response in responses
     )
     assert all(response.status_code == 401 for response in json_responses)
@@ -443,7 +454,7 @@ def test_editor_launcher_navigation_uses_the_public_mount(
             params=query,
             follow_redirects=False,
         )
-    target = urlsplit(response.headers["location"])
+    target = urlsplit(_redirect_target(response))
     assert response.status_code == 307
     assert target.path == "/parent/base/"
     assert parse_qs(target.query) == {

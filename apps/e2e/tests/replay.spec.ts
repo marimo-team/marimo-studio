@@ -4,6 +4,7 @@ import {
   expect,
   labeledSlider,
   presentationFrame,
+  presentationMount,
   readWorkspaceFile,
   recoverRequestAbort,
   test,
@@ -100,12 +101,10 @@ test("trusted wrapper retains its server-selected runtime", async ({ page }) => 
     await page.reload();
     await waitForRunMode();
     await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?runtime=server`);
+    expect((await presentationMount(rendered.locator("html"))).runtime).toBe("server");
     expect(
-      await rendered.locator("html").evaluate(() => ({
-        runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
-        sessionId: globalThis.__MARIMO_STUDIO_SESSION_ID__,
-      })),
-    ).toEqual({ runtime: "server", sessionId });
+      await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
+    ).toBe(sessionId);
   } finally {
     try {
       await page.close();

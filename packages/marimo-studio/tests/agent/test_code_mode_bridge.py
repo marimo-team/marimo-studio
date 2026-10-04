@@ -312,8 +312,7 @@ def _adapters(location: Any, *, directory: bool = False) -> ServerAdapters:
         server_token=_SERVER_TOKEN,
     )
     server = SimpleNamespace(
-        base_url=lambda _scope: "",
-        relative_path=lambda scope, _base: scope["path"],
+        relative_path=lambda scope: scope["path"],
         mode=lambda _scope: "edit",
         location=resolve_location,
         session_location=resolve_session_location,

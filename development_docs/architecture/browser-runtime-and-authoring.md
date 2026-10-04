@@ -69,7 +69,9 @@ Runtime configuration carries:
 
 - Presentation revision, projection revision, and selected view
 - Selected runtime and runtime instance
-- Runtime-specific connection or worker data
+- Runtime-specific connection or worker data, plus runtime URLs such as the
+  Server transport root and the Prepared manifest
+- Root, public root, document root, and support URLs
 - Precomputed projection targets and dependency closures
 - Artifact mount declarations
 - Projection policy and semantic-to-runtime cell bindings
@@ -77,10 +79,16 @@ Runtime configuration carries:
 - Marimo app, user, and override configuration
 - Development and mode state
 
-Studio bootstrap carries the runtime catalog used by authoring controls.
+Studio bootstrap carries the runtime catalog used by authoring controls. The
+server writes it into `#marimo-studio-bootstrap`. Studio publishes the open
+workspace record, with absolute URLs, to `#marimo-studio-workspace` for browser
+automation.
 
 `_delivery/runtime_config.py` serializes this record for live Server and static
-export delivery. The shared JSON fixture is parsed by the Zod protocol tests.
+export delivery. Each URL is a reference from the configuration's own URL, and
+`parseRuntimeConfig()` resolves them when the browser reads the record. See
+[Public URLs](server-routing-and-security.md#public-urls). The shared JSON
+fixture is parsed by the Zod protocol tests.
 
 The presentation revision identifies the exact page snapshot used for browser
 requests and evidence. The projection revision identifies the notebook,
@@ -216,16 +224,18 @@ Prepared runtimes:
 
 ```text
 register runtime ID
-  -> mount RuntimeContext and runtime data
+  -> mount RuntimeContext
   -> update complete RuntimeConfig
   -> update public query
   -> dispose
 ```
 
-`PresentationRuntime.mount()` returns a `RuntimeSession` with `id`, optional
-native `sessionId`, `update()`, `updateQuery()`, and `dispose()`. `update()`
-returns `applied` or `reload`. A later mount cancels and disposes an earlier
-mount that resolves out of order.
+`PresentationRuntime.mount(context)` validates its own envelope in
+`context.presentation.runtime`, which carries runtime `data` and resolved
+`urls`. It returns a `RuntimeSession` with `id`, optional native `sessionId`,
+`update()`, `updateQuery()`, and `dispose()`. `update()` returns `applied` or
+`reload`. A later mount cancels and disposes an earlier mount that resolves out
+of order.
 
 Presentation owns projection host connection, control synchronization, frame
 bridging, navigation, readiness, and document transactions. Runtime
@@ -267,7 +277,11 @@ The browser runs no Python for this runtime.
 
 `apps/browser/src/zero-python` composes export's `PreparedStateController` and
 `PreparedPublicationRefresh` with Studio manifest validation, control input,
-state API, and host rendering. Export owns requested-state supersession and
+state API, and host rendering. The manifest URL carries the presentation
+revision's capability. A new revision of the same Prepared instance replaces
+the refresh, and the publication reopens beneath the new URL with the current
+state mounted. A refresh that reads a superseded revision stops polling until
+its successor arrives. Export owns requested-state supersession and
 rollback coordination. Studio's presentation transaction commits model replay,
 UI values, and visible projection hosts together. The native model graph stays
 inside `packages/marimo-frontend`.

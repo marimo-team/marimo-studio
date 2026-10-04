@@ -1,7 +1,7 @@
 import type { Socket } from "node:net";
 import type { Duplex } from "node:stream";
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Agent, createServer, request, type IncomingMessage, type ServerResponse } from "node:http";
 import { z } from "zod";
 
@@ -19,6 +19,9 @@ const endpointNames = {
     "runInterruption",
     "hostSession",
     "sandbox",
+    "proxied",
+    "proxiedRun",
+    "proxiedDirectory",
   ],
   provider: [
     "live",
@@ -29,9 +32,20 @@ const endpointNames = {
     "reveal",
     "notebook",
     "notebookPrepared",
+    "proxiedEdit",
   ],
   installed: ["edit", "fresh", "static", "run"],
 } as const;
+
+// These endpoints model a path-prefixing reverse proxy, such as an IDE server
+// that publishes a local port beneath a per-session path and strips that path
+// before forwarding.
+const prefixMountedEndpoints: ReadonlySet<string> = new Set([
+  "proxied",
+  "proxiedRun",
+  "proxiedDirectory",
+  "proxiedEdit",
+]);
 
 const identitySchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/, {
   message: "Network identity must be a nonempty portable identifier",
@@ -49,6 +63,10 @@ export interface E2EEndpoint {
   readonly hostname: string;
   readonly port: number;
   readonly origin: string;
+  /** The public URL of the backend's root, without a trailing slash. */
+  readonly publicUrl: string;
+  /** Requests that arrived outside the endpoint's path prefix. */
+  escapedRequests(): readonly string[];
   bindBackend(port: number): () => void;
 }
 interface EndpointResource {
@@ -57,6 +75,8 @@ interface EndpointResource {
   sockets: Set<Socket>;
   port: number;
   backend: { port: number; agent: Agent } | undefined;
+  mountPath: string;
+  escapes: string[];
 }
 type NetworkState = "new" | "starting" | "running" | "closing" | "closed";
 
@@ -88,6 +108,29 @@ const forwardedHeaders = (incoming: IncomingMessage) => {
   };
 };
 
+// A prefix-mounted endpoint forwards only paths beneath its mount, removes the
+// mount, and rewrites Host to a reserved name that never resolves. Like a real
+// proxy it forwards the public host in X-Forwarded-Host, so the server can learn
+// the host but never the prefix. A URL built from Host fails in the browser,
+// and one built from the forwarded host leaves the prefix and is recorded.
+const upstreamTarget = (resource: EndpointResource, incoming: IncomingMessage) => {
+  const backend = resource.backend;
+  const url = incoming.url ?? "/";
+  if (backend === undefined) return undefined;
+  if (!resource.mountPath) {
+    return { backend, path: url, headers: forwardedHeaders(incoming) };
+  }
+  if (!url.startsWith(`${resource.mountPath}/`)) {
+    resource.escapes.push(`${incoming.method ?? "GET"} ${url}`);
+    return undefined;
+  }
+  return {
+    backend,
+    path: url.slice(resource.mountPath.length),
+    headers: { ...forwardedHeaders(incoming), host: `backend.invalid:${backend.port}` },
+  };
+};
+
 const forwardResponse = (upstream: IncomingMessage, response: ServerResponse) => {
   response.writeHead(upstream.statusCode ?? 502, upstream.headers);
   upstream.on("error", () => response.destroy());
@@ -99,20 +142,20 @@ const proxyRequest = (
   incoming: IncomingMessage,
   response: ServerResponse,
 ) => {
-  const backend = resource.backend;
-  if (backend === undefined) {
+  const target = upstreamTarget(resource, incoming);
+  if (target === undefined) {
     response.writeHead(404, { "content-type": "text/plain" });
-    response.end("No backend is bound to this endpoint.");
+    response.end("No backend is bound to this endpoint path.");
     return;
   }
   const upstream = request(
     {
-      agent: backend.agent,
-      headers: forwardedHeaders(incoming),
+      agent: target.backend.agent,
+      headers: target.headers,
       hostname: "127.0.0.1",
       method: incoming.method,
-      path: incoming.url,
-      port: backend.port,
+      path: target.path,
+      port: target.backend.port,
     },
     (upstreamResponse) => forwardResponse(upstreamResponse, response),
   );
@@ -136,18 +179,18 @@ const proxyUpgrade = (
   socket: Duplex,
   head: Buffer,
 ) => {
-  const backend = resource.backend;
-  if (backend === undefined) {
+  const target = upstreamTarget(resource, incoming);
+  if (target === undefined) {
     socket.destroy();
     return;
   }
   const upstream = request({
-    agent: backend.agent,
-    headers: forwardedHeaders(incoming),
+    agent: target.backend.agent,
+    headers: target.headers,
     hostname: "127.0.0.1",
     method: incoming.method,
-    path: incoming.url,
-    port: backend.port,
+    path: target.path,
+    port: target.backend.port,
   });
   let upgraded = false;
   let fallbackResponse: IncomingMessage | undefined;
@@ -214,6 +257,10 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
       sockets: new Set(),
       port: 0,
       backend: undefined,
+      mountPath: prefixMountedEndpoints.has(name)
+        ? `/s/${randomBytes(4).toString("hex")}/p/${randomBytes(2).toString("hex")}`
+        : "",
+      escapes: [],
     };
     if (group === suite) owned.push(resource);
     return Object.freeze({
@@ -226,6 +273,11 @@ export const createE2ENetwork = (input: E2ENetworkIdentity) => {
         requireRunning(group);
         return `http://127.0.0.1:${resource.port}`;
       },
+      get publicUrl() {
+        requireRunning(group);
+        return `http://127.0.0.1:${resource.port}${resource.mountPath}`;
+      },
+      escapedRequests: () => [...resource.escapes],
       bindBackend(port: number) {
         requireRunning(group);
         if (!Number.isInteger(port) || port < 1 || port > 65535 || port === resource.port) {

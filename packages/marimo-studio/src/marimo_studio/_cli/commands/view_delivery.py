@@ -178,6 +178,7 @@ def show(
     is_flag=True,
     help="Constrain the URL to the current built presentation revision.",
 )
+@browser_client_option
 @json_option
 def preview(
     view_name: str,
@@ -185,6 +186,7 @@ def preview(
     server_url: str,
     runtime: str,
     exact: bool,
+    browser_client: str | None,
     json_output: bool,
 ) -> None:
     """Print a standalone view URL to open with your preferred browser."""
@@ -192,6 +194,7 @@ def preview(
         connection = studio_server_connection(
             server_url,
             access_token=os.environ.get("MARIMO_STUDIO_ACCESS_TOKEN", ""),
+            browser_client=browser_client or "",
         )
     except ProtocolError as error:
         raise click.BadParameter(str(error), param_hint="--server") from error

@@ -1,21 +1,21 @@
 import { definePresentationRuntime, type PresentationRuntime } from "@marimo-studio/runtime";
 
-import { serverRuntimeDataSchema } from "./server-config";
-import { wasmRuntimeDataSchema } from "./wasm-config";
+import { parseServerRuntime } from "./server-config";
+import { parseWasmRuntime } from "./wasm-config";
 
 export const serverRuntime: PresentationRuntime = definePresentationRuntime({
   id: "server",
-  async mount(context, data) {
-    const config = serverRuntimeDataSchema.parse(data);
+  async mount(context) {
+    const runtime = parseServerRuntime(context.presentation.runtime);
     const { mountServerRuntime } = await import("./server");
-    return mountServerRuntime(context, config);
+    return mountServerRuntime(context, runtime);
   },
 });
 
 export const wasmRuntime: PresentationRuntime = definePresentationRuntime({
   id: "wasm",
-  async mount(context, data) {
-    const config = wasmRuntimeDataSchema.parse(data);
+  async mount(context) {
+    const config = parseWasmRuntime(context.presentation.runtime);
     const marker = document.createElement("marimo-wasm");
     marker.hidden = true;
     marker.setAttribute("aria-hidden", "true");

@@ -1,9 +1,13 @@
-import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { e2eNetwork } from "../scripts/network.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
-import { labeledSlider, presentationFrame, WASM_PREVIEW_TIMEOUT } from "./fixture.ts";
+import {
+  labeledSlider,
+  presentationFrame,
+  presentationMount,
+  WASM_PREVIEW_TIMEOUT,
+} from "./fixture.ts";
 import { test } from "./provider-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 
@@ -159,9 +163,7 @@ const exerciseRuntime = async (
   const root =
     runtimeLabel === "Server" ? presentationFrame(page).locator("html") : page.locator("html");
   await waitForRuntime(root, runtimeLabel === "static WebAssembly" ? WASM_PREVIEW_TIMEOUT : 65_000);
-  const mount = mountConfigSchema.parse(
-    await root.evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__),
-  );
+  const mount = await presentationMount(root);
   expect(mount.runtime).toBe(runtimeLabel === "Server" ? "server" : "wasm");
   await expectNotebookContent(root, heading);
   await diagnostics.close();

@@ -22,7 +22,8 @@ from marimo_studio._notebook.records import CellRef
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.capability import (
     presentation_revision_capability,
-    presentation_revision_url,
+    presentation_revision_path,
+    presentation_storage_scope,
 )
 from marimo_studio._server.publication_runtime import PublicationRuntimeProjector
 from marimo_studio._server.records import ServerContext
@@ -47,6 +48,8 @@ class RuntimeProjection:
     instance: str
     data: dict[str, object]
     cell_refs: dict[str, str]
+    # App paths that the runtime configuration serializes as browser references.
+    paths: dict[str, str]
 
 
 class RuntimeProvider(Protocol):
@@ -184,12 +187,6 @@ class ServerRuntime:
                 binding_id or "",
             ),
             data={
-                "url": presentation_revision_url(
-                    context,
-                    snapshot,
-                    presentation_session_id,
-                    runtime_session_id=runtime_session_id,
-                ),
                 "capabilityToken": presentation_revision_capability(
                     context,
                     snapshot,
@@ -198,11 +195,19 @@ class ServerRuntime:
                 ),
                 "sessionId": runtime_session_id,
                 "serverInstance": server_instance_id(context.server_token),
-                "fileKey": context.file_key,
+                "storageScope": presentation_storage_scope(context),
                 "preserveSession": snapshot.resolved.workspace.preserve_session,
                 **({"file": context.file_key} if context.routing_query else {}),
             },
             cell_refs=bindings,
+            paths={
+                "transport": presentation_revision_path(
+                    context,
+                    snapshot,
+                    presentation_session_id,
+                    runtime_session_id=runtime_session_id,
+                ),
+            },
         )
 
 
@@ -250,6 +255,7 @@ class WasmRuntime:
             instance=projection.instance,
             data=projection.runtime_data(),
             cell_refs=bindings,
+            paths={},
         )
 
 
@@ -303,6 +309,7 @@ class ZeroPythonRuntime:
             instance=prepared.instance,
             data=prepared.data,
             cell_refs=snapshot.resolved.runtime_cell_refs(None),
+            paths=prepared.paths,
         )
 
 

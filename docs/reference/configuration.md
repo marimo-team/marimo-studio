@@ -48,10 +48,16 @@ while marimo retains the notebook session. See
 for shared state and runtime boundaries.
 
 Authentication, public base paths, WebSockets, and framing remain server and
-reverse-proxy concerns. A host must forward the complete configured marimo base
-path, including `/studio/`, `/_marimo-studio/`, named views, revision-qualified
-artifacts, native HTTP routes, and WebSockets. Its framing policy must admit the
-outer host, the Studio document, and Studio's nested native editor.
+reverse-proxy concerns. A host must forward every path beneath the notebook's
+public root, including `/studio/`, `/_marimo-studio/`, named views,
+revision-qualified artifacts, native HTTP routes, WebSockets, and server-sent
+event streams. Its framing
+policy must admit the outer host, the Studio document, and Studio's nested
+native editor.
+
+Studio addresses its routes relative to the requested page, so the public root
+can sit beneath marimo's `--base-url`, a proxy path prefix, or both. See
+[Serve beneath a path prefix](../guide/deploy.md#serve-beneath-a-path-prefix).
 
 ## Notebook settings
 

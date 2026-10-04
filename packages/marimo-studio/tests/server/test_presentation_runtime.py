@@ -41,6 +41,7 @@ from .app_test_support import (
     _live_test_session,
     _presentation_fallback_url,
     _presentation_frame_url,
+    _runtime_config,
 )
 
 
@@ -55,10 +56,8 @@ def test_presentation_publishes_default_and_view_owned_lens_scopes(
         )
     )
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        dashboard = client.get(_presentation_fallback_url(client.get("/").text))
-        executive = client.get(
-            _presentation_fallback_url(client.get("/executive/").text)
-        )
+        dashboard = client.get(_presentation_fallback_url(client.get("/")))
+        executive = client.get(_presentation_fallback_url(client.get("/executive/")))
     assert 'data-marimo-lens-scope="article, section,' in dashboard.text
     assert 'data-marimo-lens-scope=".card, header"' in executive.text
     assert executive.text.count("data-marimo-lens-scope=") == 1
@@ -83,7 +82,7 @@ def test_presentation_preserves_foreign_shell_closing_syntax(
         + '<a id="after-shell">After</a></body></html>'
     )
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        page = client.get(_presentation_fallback_url(client.get("/").text))
+        page = client.get(_presentation_fallback_url(client.get("/")))
     assert page.status_code == 200
     closed_shells: list[str] = []
 
@@ -123,12 +122,12 @@ def test_deleted_named_cell_keeps_the_view_live_until_repaired(
             encoding="utf-8",
         )
         page = client.get("/")
-        presentation = client.get(_presentation_fallback_url(page.text))
-        broken = client.get("/_marimo-studio/views/dashboard/config").json()
+        presentation = client.get(_presentation_fallback_url(page))
+        broken = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         fragment = client.get("/_marimo-studio/views/dashboard/cells/imports")
 
         notebook.write_text(configured_source, encoding="utf-8")
-        repaired = client.get("/_marimo-studio/views/dashboard/config").json()
+        repaired = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
 
     assert page.status_code == 200
     assert presentation.status_code == 200
@@ -198,7 +197,7 @@ def test_view_project_error_has_a_repair_diagnostic(notebook_path: Path) -> None
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config")
         page = client.get("/")
-        presentation = client.get(_presentation_fallback_url(page.text))
+        presentation = client.get(_presentation_fallback_url(page))
     with TestClient(edit_app) as client:
         project = client.get("/_marimo-studio/views/dashboard/project").json()
 
@@ -231,7 +230,7 @@ def test_edit_view_keeps_last_good_artifact_during_source_repairs(
 
     with TestClient(app) as client:
         page = client.get("/dashboard/")
-        presentation = client.get(_presentation_frame_url(page.text))
+        presentation = client.get(_presentation_frame_url(page))
         project = client.get("/_marimo-studio/views/dashboard/project").json()
 
     assert page.status_code == 200
@@ -409,8 +408,12 @@ def test_anonymous_bindings_wait_for_live_cell_identities(
         pending = client.get("/_marimo-studio/views/dashboard/config")
         session.document.cells = rows
         session.session_view.last_executed_code = {row.id: row.code for row in rows}
-        dashboard = client.get("/_marimo-studio/views/dashboard/config").json()
-        executive = client.get("/_marimo-studio/views/executive/config").json()
+        dashboard = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config")
+        )
+        executive = _runtime_config(
+            client.get("/_marimo-studio/views/executive/config")
+        )
 
     assert pending.status_code == 200
     assert pending.json()["runtimeBindings"]["cellRefs"] == {}
@@ -437,7 +440,9 @@ def test_presentation_revision_tracks_view_and_entry_identity(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/")
-        dashboard_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        dashboard_config = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config")
+        )
         executive = client.get("/executive/")
         template.write_text(
             shared.replace("color: black", "color: navy"),
@@ -445,7 +450,9 @@ def test_presentation_revision_tracks_view_and_entry_identity(
         )
         deadline = time.monotonic() + 2
         while True:
-            edited_config = client.get("/_marimo-studio/views/dashboard/config").json()
+            edited_config = _runtime_config(
+                client.get("/_marimo-studio/views/dashboard/config")
+            )
             if (
                 edited_config["revision"] != dashboard_config["revision"]
                 or time.monotonic() >= deadline
@@ -454,7 +461,9 @@ def test_presentation_revision_tracks_view_and_entry_identity(
             time.sleep(0.05)
         edited = client.get("/")
         adjacent.write_text("not a declared Vanilla input", encoding="utf-8")
-        adjacent_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        adjacent_config = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config")
+        )
 
     dashboard_revision = dashboard.headers["Marimo-Studio-Revision"]
     edited_revision = edited.headers["Marimo-Studio-Revision"]
@@ -525,14 +534,16 @@ def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> Non
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/")
-        dashboard_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        dashboard_config = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config")
+        )
 
         def select_executive(config: MutableMapping[str, object]) -> None:
             config["default"] = "executive"
 
         update_notebook_config(studio.notebook, select_executive)
         executive = client.get("/")
-        config = client.get("/_marimo-studio/views/executive/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/executive/config"))
 
     dashboard_support = urlsplit(dashboard.headers["Marimo-Studio-Support-Url"])
     executive_support = urlsplit(executive.headers["Marimo-Studio-Support-Url"])

@@ -29,6 +29,8 @@ from .app_test_support import (
     _editor_mount_value,
     _presentation_fallback_url,
     _presentation_frame_sandbox,
+    _presentation_wrapper_config,
+    _runtime_config,
     _runtime_mount_script,
 )
 
@@ -41,8 +43,8 @@ def test_run_mode_serves_default_and_named_view_documents(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         default = client.get("/")
         named = client.get("/executive/")
-        default_document = client.get(_presentation_fallback_url(default.text))
-        named_document = client.get(_presentation_fallback_url(named.text))
+        default_document = client.get(_presentation_fallback_url(default))
+        named_document = client.get(_presentation_fallback_url(named))
         native_editor = client.get("/_marimo-studio/editor/")
 
     assert default.status_code == 200
@@ -74,11 +76,9 @@ def test_run_wasm_uses_the_trusted_wrapper_without_session_preservation(
             params={"runtime": "wasm"},
             follow_redirects=False,
         )
-        child = client.get(_presentation_fallback_url(wrapper.text))
+        child = client.get(_presentation_fallback_url(wrapper))
 
-    marker = "const config = Object.freeze("
-    start = wrapper.text.index(marker) + len(marker)
-    wrapper_config, _end = json.JSONDecoder().raw_decode(wrapper.text, start)
+    wrapper_config = _presentation_wrapper_config(wrapper.text)
 
     assert wrapper.status_code == 200
     assert "location" not in wrapper.headers
@@ -116,8 +116,8 @@ def test_run_preserved_session_ignores_forged_studio_frame_identity(
                 DOCUMENT_LIFECYCLE_QUERY_PARAM: "7",
             },
         )
-        raw_capability = client.get(_presentation_fallback_url(response.text))
-        capability_artifact_base = _artifact_base(raw_capability.text)
+        raw_capability = client.get(_presentation_fallback_url(response))
+        capability_artifact_base = _artifact_base(raw_capability)
         artifact_html = client.get(f"{capability_artifact_base}index.html")
         direct_artifact_base = (
             "/dashboard/_marimo-studio/artifacts/"
@@ -167,18 +167,12 @@ def test_run_wrapper_freezes_the_validated_runtime_selection(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         implicit = client.get("/dashboard/")
-        implicit_runtime = client.get(_presentation_fallback_url(implicit.text))
+        implicit_runtime = client.get(_presentation_fallback_url(implicit))
         explicit = client.get("/dashboard/", params={"runtime": "wasm"})
-        explicit_runtime = client.get(_presentation_fallback_url(explicit.text))
+        explicit_runtime = client.get(_presentation_fallback_url(explicit))
         unavailable = client.get("/dashboard/", params={"runtime": "forged"})
 
-    marker = "const config = Object.freeze("
-
-    def wrapper_config(document: str) -> dict[str, object]:
-        start = document.index(marker) + len(marker)
-        config, _end = json.JSONDecoder().raw_decode(document, start)
-        assert isinstance(config, dict)
-        return config
+    wrapper_config = _presentation_wrapper_config
 
     assert wrapper_config(implicit.text)["runtime"] == "server"
     assert wrapper_config(implicit.text)["runtimeExplicit"] is False
@@ -251,7 +245,7 @@ def test_run_mode_builds_and_serves_the_production_profile(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         wrapper = client.get("/")
-        response = client.get(_presentation_fallback_url(wrapper.text))
+        response = client.get(_presentation_fallback_url(wrapper))
 
     assert response.status_code == 200
     assert 'data-build-profile="production"' in response.text
@@ -264,7 +258,7 @@ def test_run_mode_reports_runtimes_for_the_served_production_view(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         wrapper = client.get("/")
-        document = client.get(_presentation_fallback_url(wrapper.text))
+        document = client.get(_presentation_fallback_url(wrapper))
         runtimes = client.get("/_marimo-studio/views/dashboard/runtimes")
 
     assert runtimes.status_code == 200
@@ -275,10 +269,10 @@ def test_mutable_studio_errors_are_not_cached(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         missing_view = client.get("/_marimo-studio/views/missing/project")
         unsupported_source_method = client.post(
-            f"{config['runtime']['data']['url']}"
+            f"{config['runtime']['urls']['transport']}"
             "_marimo-studio/views/dashboard/source/index.html",
         )
 
@@ -297,8 +291,8 @@ def test_view_entry_changes_refresh_the_presentation(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         before_wrapper = client.get("/")
-        before = client.get(_presentation_fallback_url(before_wrapper.text))
-        before_entry = f"{_artifact_base(before.text)}index.html"
+        before = client.get(_presentation_fallback_url(before_wrapper))
+        before_entry = f"{_artifact_base(before)}index.html"
         source = client.get(before_entry)
         not_modified = client.get(
             before_entry,
@@ -314,8 +308,8 @@ def test_view_entry_changes_refresh_the_presentation(
         deadline = time.monotonic() + 2
         while True:
             after_wrapper = client.get("/")
-            after = client.get(_presentation_fallback_url(after_wrapper.text))
-            after_entry = f"{_artifact_base(after.text)}index.html"
+            after = client.get(_presentation_fallback_url(after_wrapper))
+            after_entry = f"{_artifact_base(after)}index.html"
             if after_entry != before_entry or time.monotonic() >= deadline:
                 break
             time.sleep(0.05)
@@ -339,7 +333,7 @@ def test_view_entry_changes_refresh_the_presentation(
         )
         cross_session = client.get(
             re.sub(
-                r"(r\.[^.]+\.[^.]+\.)s_[a-z0-9]{6}\.",
+                r"(r\.[^.]*\.[^.]+\.)s_[a-z0-9]{6}\.",
                 r"\1s_other1.",
                 before_entry,
                 count=1,
@@ -356,8 +350,8 @@ def test_view_entry_changes_refresh_the_presentation(
         deadline = time.monotonic() + 2
         while True:
             newest_wrapper = client.get("/")
-            newest = client.get(_presentation_fallback_url(newest_wrapper.text))
-            newest_entry = f"{_artifact_base(newest.text)}index.html"
+            newest = client.get(_presentation_fallback_url(newest_wrapper))
+            newest_entry = f"{_artifact_base(newest)}index.html"
             if newest_entry != after_entry or time.monotonic() >= deadline:
                 break
             time.sleep(0.05)
@@ -453,7 +447,7 @@ def test_runtime_injection_uses_structural_html_tags(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         wrapper = client.get("/")
-        response = client.get(_presentation_fallback_url(wrapper.text))
+        response = client.get(_presentation_fallback_url(wrapper))
 
     assert response.status_code == 200
     assert '<script>const headMarker = "</head>";</script>' in response.text
@@ -494,8 +488,12 @@ def test_run_mode_serves_the_configured_wasm_runtime_and_source(
     configured = studio.notebook.read_bytes()
     with TestClient(create_asgi_app(studio.notebook)) as client:
         page = client.get("/")
-        dashboard = client.get("/_marimo-studio/views/dashboard/config").json()
-        executive = client.get("/_marimo-studio/views/executive/config").json()
+        dashboard = _runtime_config(
+            client.get("/_marimo-studio/views/dashboard/config")
+        )
+        executive = _runtime_config(
+            client.get("/_marimo-studio/views/executive/config")
+        )
 
     assert unavailable.status_code == 400
     assert unavailable.json()["error"] == "runtime-unavailable"

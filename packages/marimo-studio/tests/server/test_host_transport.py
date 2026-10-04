@@ -25,6 +25,7 @@ from marimo_studio._server.presentation.admission import (
     NativeSessionAdmission,
 )
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_path import with_request_path
 from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.studio.session_handoff import (
@@ -156,21 +157,25 @@ class _TransportHarness:
 
 
 def _scope(path: str, *, query: str) -> Scope:
-    return cast(
-        Scope,
-        {
-            "type": "http",
-            "method": "GET",
-            "scheme": "http",
-            "path": path,
-            "raw_path": path.encode(),
-            "root_path": "",
-            "query_string": query.encode(),
-            "headers": [],
-            "auth": SimpleNamespace(scopes=("read", "edit")),
-            "server": ("testserver", 80),
-            "client": ("testclient", 1),
-        },
+    # The Studio middleware records the requested path before host entry runs.
+    return with_request_path(
+        cast(
+            Scope,
+            {
+                "type": "http",
+                "method": "GET",
+                "scheme": "http",
+                "path": path,
+                "raw_path": path.encode(),
+                "root_path": "",
+                "query_string": query.encode(),
+                "headers": [],
+                "auth": SimpleNamespace(scopes=("read", "edit")),
+                "server": ("testserver", 80),
+                "client": ("testclient", 1),
+            },
+        ),
+        path,
     )
 
 

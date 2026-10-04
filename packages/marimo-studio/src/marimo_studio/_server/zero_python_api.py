@@ -6,7 +6,7 @@ import mimetypes
 import re
 from collections.abc import Callable
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import urlencode
 
 from marimo_export.errors import MarimoExportError
 from marimo_export.manifest import (
@@ -36,7 +36,6 @@ async def zero_python_response(
     *,
     clients: StudioClientRegistry,
     allow_refresh: bool,
-    public_path: str | None = None,
 ) -> Response:
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
@@ -60,26 +59,16 @@ async def zero_python_response(
         )
         if selection is None:
             return _publication_unavailable()
-        current = urlsplit(str(request.url))
-        current_path = public_path or current.path
         export_query = urlencode(
             [
                 (name, value)
-                for name, value in parse_qsl(
-                    current.query,
-                    keep_blank_values=True,
-                )
+                for name, value in request.query_params.multi_items()
                 if name not in {STUDIO_CLIENT_QUERY_PARAM, "revision"}
             ]
         )
-        export_url = urlunsplit(
-            (
-                current.scheme,
-                current.netloc,
-                f"{current_path.removesuffix('/current')}/{selection.instance}/",
-                export_query,
-                "",
-            )
+        # marimo-export resolves the export against this manifest's URL.
+        export_url = f"./{selection.instance}/" + (
+            f"?{export_query}" if export_query else ""
         )
         try:
             manifest = prepared_manifest_bytes(selection.manifest(export_url))

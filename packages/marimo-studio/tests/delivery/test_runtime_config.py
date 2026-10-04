@@ -46,11 +46,11 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
         views=("dashboard", "executive"),
         runtime_id="server",
         runtime_instance="server-instance",
-        runtime_data={"url": "/proxy/app/"},
-        root_url="/proxy/app/",
-        public_root_url="/proxy/app/",
-        document_root_url="/proxy/app/",
-        support_url="/proxy/app/_marimo-studio/views/dashboard",
+        runtime_data={},
+        runtime_paths={"transport": "/_marimo-studio/presentation/token/"},
+        public_root_path="/",
+        document_root_path="/",
+        support_path="/_marimo-studio/views/dashboard",
         projection_revision="a" * 64,
         show_cell_logs=True,
         projection_targets={
@@ -102,7 +102,13 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
 
     expected = json.loads(_FIXTURE.read_text(encoding="utf-8"))
 
-    assert inputs.to_dict(revision="presentation-revision") == expected
+    assert (
+        inputs.to_dict(
+            revision="presentation-revision",
+            base="/_marimo-studio/views/dashboard/config",
+        )
+        == expected
+    )
 
 
 def test_runtime_config_exposes_only_embedded_runtime_settings() -> None:
@@ -112,10 +118,10 @@ def test_runtime_config_exposes_only_embedded_runtime_settings() -> None:
         runtime_id="wasm",
         runtime_instance="runtime-instance",
         runtime_data={},
-        root_url="./",
-        public_root_url="./",
-        document_root_url="./",
-        support_url="./_marimo-studio/views/dashboard",
+        runtime_paths={},
+        public_root_path="/",
+        document_root_path="/",
+        support_path="/_marimo-studio/views/dashboard",
         projection_revision="a" * 64,
         show_cell_logs=False,
         projection_targets={"cells": {}, "variables": {}},
@@ -182,7 +188,10 @@ def test_runtime_config_exposes_only_embedded_runtime_settings() -> None:
         mode="run",
     )
 
-    payload = inputs.to_dict(revision="presentation-revision")
+    payload = inputs.to_dict(
+        revision="presentation-revision",
+        base="/_marimo-studio/views/dashboard/config",
+    )
 
     assert payload["userConfig"] == {
         "display": {

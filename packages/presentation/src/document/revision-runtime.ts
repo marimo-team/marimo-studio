@@ -57,6 +57,7 @@ export const createPresentationRevisions = (
   activeController = new PresentationRevisionController(
     new DocumentRevisionAdapter(presentationSessionId, sessionId),
     {
+      addressFollowsDocument: globalThis.parent !== globalThis.window,
       applyRuntime: () => updateConfiguredRuntime(getRuntimeConfig()),
       reloadDocument: (url) => globalThis.location.assign(url),
       reloadRuntime: () => globalThis.location.reload(),

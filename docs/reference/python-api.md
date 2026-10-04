@@ -179,6 +179,7 @@ await view.preview_url(
     exact: bool = False,
     server: str | None = None,
     access_token: str = "",
+    browser_client: str = "",
 ) -> str
 await view.hold_publication(*, owner: str, ttl: float = 300.0) -> PublicationHold
 await view.release_publication(token: str) -> PublicationHold | None
@@ -277,10 +278,14 @@ build leaves the last successful artifact for that profile available.
 
 Returns the running view's URL in a top-level browser document. Choose
 `runtime="server"`, `"wasm"`, or `"zero-python"` explicitly. The server must
-expose that runtime. Saved-workspace callers supply `server`, while a live
-code-mode view can infer it. `access_token` authenticates the server request.
-Pass `access_token` together with `server`. The browser still needs the server's
-normal authentication.
+expose that runtime. Saved-workspace callers supply `server`, and the URL keeps
+its origin and path, including a proxy path prefix. A live code-mode view infers
+the local server address that marimo uses for callbacks, and follows the
+attached Studio tab. Behind a proxy, open the same path beneath the browser's
+public root. `access_token` authenticates the server request. On an edit-mode
+server, `browser_client` selects the Studio tab that a Python or Prepared
+preview follows. Either one requires `server`. The browser still needs the
+server's normal authentication.
 
 The default URL follows the current presentation when opened or reloaded.
 `exact=True` requires current source to be built for the served profile

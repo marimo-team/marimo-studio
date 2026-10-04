@@ -4,12 +4,12 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { fetchRuntimeConfig, RuntimeConfigRequestError } from "../src/runtime-config/index.ts";
 import { runtimeProgress, RuntimeProgressStore } from "../src/runtime-config/progress.ts";
-import { runtimeConfig } from "./runtime-fixtures.ts";
+import { resolvedRuntimeConfig, runtimeConfig } from "./runtime-fixtures.ts";
 
 const encoder = new TextEncoder();
 const headers = { "content-type": "application/x-ndjson" };
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
@@ -18,6 +18,13 @@ globalThis.__MARIMO_MOUNT_CONFIG__ = {
 };
 
 afterEach(() => vi.unstubAllGlobals());
+
+// The browser resolves configuration URLs against the configuration request.
+const resolvedConfig = () =>
+  resolvedRuntimeConfig(
+    runtimeConfig(),
+    new URL("/_marimo-studio/views/dashboard/config", globalThis.location.href),
+  );
 
 test("reports streamed work before configuration completes and releases the reader", async () => {
   let controller!: ReadableStreamDefaultController<Uint8Array>;
@@ -41,7 +48,9 @@ test("reports streamed work before configuration completes and releases the read
     if (progress) reported();
   });
   try {
-    const configuration = fetchRuntimeConfig("/_marimo-studio/views/dashboard");
+    const configuration = fetchRuntimeConfig(
+      "http://localhost:3000/_marimo-studio/views/dashboard",
+    );
     const packet = encoder.encode(
       JSON.stringify({
         type: "progress",
@@ -58,7 +67,7 @@ test("reports streamed work before configuration completes and releases the read
       encoder.encode(JSON.stringify({ type: "config", config: runtimeConfig() }) + "\n"),
     );
     controller.close();
-    await expect(configuration).resolves.toEqual(runtimeConfig());
+    await expect(configuration).resolves.toEqual(resolvedConfig());
     expect(updates.at(-1)).toBeNull();
     expect(cancelled).not.toHaveBeenCalled();
     expect(response.body?.locked).toBe(false);
@@ -85,7 +94,9 @@ test("preserves streamed error details after successful HTTP headers", async () 
       ),
     ),
   );
-  await expect(fetchRuntimeConfig("/_marimo-studio/views/dashboard")).rejects.toMatchObject({
+  await expect(
+    fetchRuntimeConfig("http://localhost:3000/_marimo-studio/views/dashboard"),
+  ).rejects.toMatchObject({
     code: "runtime-sync-pending",
     message: "Waiting for the current notebook.",
     hint: "Keep this preview open.",
@@ -114,9 +125,9 @@ test.each([
   ["oversized", " ".repeat(16 * 1_024 * 1_024 + 65_537)],
 ])("rejects a %s configuration stream", async (_name, body) => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { headers })));
-  await expect(fetchRuntimeConfig("/_marimo-studio/views/dashboard")).rejects.toBeInstanceOf(
-    RuntimeConfigRequestError,
-  );
+  await expect(
+    fetchRuntimeConfig("http://localhost:3000/_marimo-studio/views/dashboard"),
+  ).rejects.toBeInstanceOf(RuntimeConfigRequestError);
 });
 
 test("cancels a pending stream when its request is aborted", async () => {
@@ -124,7 +135,10 @@ test("cancels a pending stream when its request is aborted", async () => {
   const body = new ReadableStream<Uint8Array>({ cancel: cancelled });
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { headers })));
   const lifetime = new AbortController();
-  const configuration = fetchRuntimeConfig("/_marimo-studio/views/dashboard", lifetime.signal);
+  const configuration = fetchRuntimeConfig(
+    "http://localhost:3000/_marimo-studio/views/dashboard",
+    lifetime.signal,
+  );
   const failure = expect(configuration).rejects.toMatchObject({ name: "AbortError" });
   await Promise.resolve();
   lifetime.abort();
@@ -136,8 +150,12 @@ test("retired progress cannot update or clear its successor", () => {
   const progress = new RuntimeProgressStore();
   const updates = vi.fn();
   const unsubscribe = progress.subscribe(updates);
-  const first = progress.begin("server", "/first/config", "revision-1");
-  const second = progress.begin("custom-runtime", "/second/config", "revision-2");
+  const first = progress.begin("server", "http://localhost:3000/first/config", "revision-1");
+  const second = progress.begin(
+    "custom-runtime",
+    "http://localhost:3000/second/config",
+    "revision-2",
+  );
   second.report({ message: "Loading model", completed: 4, total: 8 });
   updates.mockClear();
   first.report({ message: "Old work", completed: 1, total: 2 });
@@ -146,7 +164,7 @@ test("retired progress cannot update or clear its successor", () => {
   second.close();
   expect(updates).toHaveBeenCalledExactlyOnceWith({
     runtime: "custom-runtime",
-    supportUrl: "/second/config",
+    supportUrl: "http://localhost:3000/second/config",
     revision: "revision-2",
     progress: null,
   });
@@ -174,7 +192,9 @@ test("retries configuration after its response stream disconnects", async () => 
     if (progress) reported();
   });
   try {
-    const request = fetchRuntimeConfigWithRetry("/_marimo-studio/views/dashboard");
+    const request = fetchRuntimeConfigWithRetry(
+      "http://localhost:3000/_marimo-studio/views/dashboard",
+    );
     controller.enqueue(
       encoder.encode(
         JSON.stringify({ type: "progress", progress: { message: "Preparing" } }) + "\n",
@@ -182,7 +202,7 @@ test("retries configuration after its response stream disconnects", async () => 
     );
     await received;
     controller.error(new TypeError("Connection closed"));
-    await expect(request).resolves.toEqual(runtimeConfig());
+    await expect(request).resolves.toEqual(resolvedConfig());
     expect(fetch).toHaveBeenCalledTimes(2);
   } finally {
     unsubscribe();

@@ -24,6 +24,9 @@ from .app_test_support import (
     _artifact_base,
     _assert_server_runtime,
     _presentation_fallback_url,
+    _redirect_target,
+    _resolved,
+    _runtime_config,
     _studio_bootstrap,
 )
 
@@ -49,7 +52,9 @@ def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:
     with TestClient(parent) as client:
         page = client.get("/parent/base/")
         named = client.get("/parent/base/executive/")
-        config = client.get("/parent/base/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(
+            client.get("/parent/base/_marimo-studio/views/dashboard/config")
+        )
         studio_asset = client.get("/parent/base/_marimo-studio/assets/studio.css")
         relative_cell = client.get(
             "/parent/base/dashboard/_marimo-studio/views/dashboard/cells/result"
@@ -58,20 +63,22 @@ def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:
             "/parent/base/dashboard/public/sample.txt",
             headers={"X-Notebook-Id": quote(str(studio.notebook), safe="")},
         )
-        child = client.get(_presentation_fallback_url(page.text))
+        child = client.get(_presentation_fallback_url(page))
 
     assert page.status_code == 200
     assert named.status_code == 200
     assert child.status_code == 200
     assert re.fullmatch(
-        r"/parent/base/_marimo-studio/presentation/[^/]+/dashboard/"
-        r"_marimo-studio/artifacts/[0-9a-f]{64}/",
-        _artifact_base(child.text),
+        r"http://testserver/parent/base/_marimo-studio/presentation/[^/]+/"
+        r"dashboard/_marimo-studio/artifacts/[0-9a-f]{64}/",
+        _artifact_base(child),
     )
-    assert "/parent/base/_marimo-studio/presentation/" in page.text
+    assert _presentation_fallback_url(page).startswith(
+        "http://testserver/parent/base/_marimo-studio/presentation/"
+    )
     assert "/_marimo-studio/assets/runtime.js" in child.text
-    assert config["rootUrl"] == "/parent/base/"
-    _assert_server_runtime(config["runtime"]["data"], "/parent/base/")
+    assert config["rootUrl"] == "http://testserver/parent/base/"
+    _assert_server_runtime(config["runtime"], "http://testserver/parent/base/")
     support_url = urlsplit(config["supportUrl"])
     assert support_url.path.endswith("/_marimo-studio/views/dashboard")
     assert parse_qs(support_url.query)[SERVER_INSTANCE_QUERY_PARAM] == [
@@ -95,7 +102,9 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
     with TestClient(parent) as client:
         landing = client.get("/parent/base/", follow_redirects=False)
         workspace = client.get("/parent/base/studio/executive/")
-        config = client.get("/parent/base/_marimo-studio/views/executive/config").json()
+        config = _runtime_config(
+            client.get("/parent/base/_marimo-studio/views/executive/config")
+        )
         outside = [
             client.get("/parent/", follow_redirects=False),
             client.get("/parent/studio/dashboard/", follow_redirects=False),
@@ -103,21 +112,27 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
         ]
 
     assert landing.status_code == 307
-    assert landing.headers["location"] == "/parent/base/studio/dashboard/"
+    assert (
+        _redirect_target(landing) == "http://testserver/parent/base/studio/dashboard/"
+    )
     assert workspace.status_code == 200
-    bootstrap = _studio_bootstrap(workspace.text)
+    bootstrap = _studio_bootstrap(workspace)
     editor_url = urlsplit(bootstrap["urls"]["editor"])
     editor_query = parse_qs(editor_url.query)
-    assert 'href="/parent/base/favicon.ico"' in workspace.text
+    icon = re.search(r'<link rel="icon" href="([^"]+)">', workspace.text)
+    assert icon is not None
+    assert _resolved(workspace, icon.group(1)) == (
+        "http://testserver/parent/base/favicon.ico"
+    )
     assert editor_url.path == "/parent/base/_marimo-studio/editor/"
     assert editor_query["file"] == [str(studio.notebook)]
     assert editor_query["marimo_studio_client"] == [bootstrap["clientId"]]
     assert editor_query[SERVER_INSTANCE_QUERY_PARAM] == [bootstrap["serverInstance"]]
     assert re.fullmatch(r"[A-Za-z0-9_-]{16,128}", bootstrap["clientId"])
-    assert bootstrap["urls"]["viewPrefix"] == "/parent/base/"
-    assert bootstrap["urls"]["studioPrefix"] == "/parent/base/studio/"
-    assert config["rootUrl"] == "/parent/base/"
-    _assert_server_runtime(config["runtime"]["data"], "/parent/base/")
+    assert bootstrap["urls"]["viewPrefix"] == "http://testserver/parent/base/"
+    assert bootstrap["urls"]["studioPrefix"] == "http://testserver/parent/base/studio/"
+    assert config["rootUrl"] == "http://testserver/parent/base/"
+    _assert_server_runtime(config["runtime"], "http://testserver/parent/base/")
     assert all(response.status_code == 404 for response in outside)
 
 
@@ -138,7 +153,7 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
         )
         head = client.head("/", follow_redirects=False)
         post = client.post("/", follow_redirects=False)
-        landing_workspace = client.get(landing.headers["location"])
+        landing_workspace = client.get(_redirect_target(landing))
         default_workspace = client.get("/studio/")
         workspace_redirect = client.get(
             "/studio/executive?layout=preview",
@@ -151,7 +166,7 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
         )
         waiting = client.get("/executive/")
         missing_view = client.get("/studio/missing/")
-        landing_bootstrap = _studio_bootstrap(landing_workspace.text)
+        landing_bootstrap = _studio_bootstrap(landing_workspace)
         editor = client.get(landing_bootstrap["urls"]["editor"])
         forged_editor = client.get(expected_editor)
 
@@ -159,8 +174,8 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
         view = client.get("/executive/")
 
     assert landing.status_code == 307
-    assert landing.headers["location"] == (
-        "/studio/dashboard/?region=emea&region=apac&empty="
+    assert _redirect_target(landing) == (
+        "http://testserver/studio/dashboard/?region=emea&region=apac&empty="
     )
     landing_editor = "/_marimo-studio/editor/?" + urlencode(
         [
@@ -185,21 +200,21 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
         actual_query[EDITOR_BINDING_CAPABILITY_QUERY_PARAM][0],
     )
     assert head.status_code == 307
-    assert head.headers["location"] == "/studio/dashboard/"
+    assert _redirect_target(head) == "http://testserver/studio/dashboard/"
     assert post.status_code == 405
     assert editor.status_code == 200
     assert editor.headers["content-security-policy"] == "frame-ancestors 'self'"
     assert forged_editor.status_code == 403
     assert default_workspace.status_code == 200
     assert workspace_redirect.status_code == 307
-    assert workspace_redirect.headers["location"] == (
-        "/studio/executive/?layout=preview"
+    assert _redirect_target(workspace_redirect) == (
+        "http://testserver/studio/executive/?layout=preview"
     )
     assert workspace.status_code == 200
     for document in (landing_workspace, default_workspace, workspace):
         assert document.headers["content-security-policy"] == "frame-ancestors 'self'"
     assert view_redirect.status_code == 307
-    assert view_redirect.headers["location"] == "/executive/?region=emea"
+    assert _redirect_target(view_redirect) == "http://testserver/executive/?region=emea"
     assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
     assert 'role="status"' in waiting.text
@@ -207,7 +222,7 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert missing_view.status_code == 404
     assert view.status_code == 200
     workspace_sessions = {
-        parse_qs(urlsplit(_studio_bootstrap(response.text)["urls"]["editor"]).query)[
+        parse_qs(urlsplit(_studio_bootstrap(response)["urls"]["editor"]).query)[
             "session_id"
         ][0]
         for response in (landing_workspace, default_workspace, workspace)
@@ -229,7 +244,7 @@ def test_edit_documents_allow_configured_embed_origins(
 
     with TestClient(app) as client:
         workspace = client.get("/studio/")
-        editor = client.get(_studio_bootstrap(workspace.text)["urls"]["editor"])
+        editor = client.get(_studio_bootstrap(workspace)["urls"]["editor"])
 
     expected = (
         "frame-ancestors 'self' http://localhost:55021 https://notebooks.example.com"
@@ -251,7 +266,7 @@ def test_edit_documents_allow_host_declared_parent_origins(
 
     with TestClient(app) as client:
         workspace = client.get("/studio/")
-        editor = client.get(_studio_bootstrap(workspace.text)["urls"]["editor"])
+        editor = client.get(_studio_bootstrap(workspace)["urls"]["editor"])
 
     expected = "frame-ancestors 'self' http://localhost:5175"
     assert workspace.headers["content-security-policy"] == expected
@@ -296,7 +311,7 @@ def test_direct_native_editor_enables_cell_alias_sync(
 
     with TestClient(app) as client:
         workspace = client.get("/studio/")
-        response = client.get(_studio_bootstrap(workspace.text)["urls"]["editor"])
+        response = client.get(_studio_bootstrap(workspace)["urls"]["editor"])
         forged = client.get(forged_editor)
 
     assert response.status_code == 200
@@ -327,7 +342,7 @@ def test_editor_reload_requires_its_signed_session_identity(
 
     with TestClient(app) as client:
         workspace = client.get("/studio/")
-        editor_url = _studio_bootstrap(workspace.text)["urls"]["editor"]
+        editor_url = _studio_bootstrap(workspace)["urls"]["editor"]
         opened = client.get(editor_url)
         parts = urlsplit(editor_url)
         query = parse_qs(parts.query)

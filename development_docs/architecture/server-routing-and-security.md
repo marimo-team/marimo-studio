@@ -79,6 +79,44 @@ View names exclude Studio and Marimo route roots. Artifact public paths exclude
 `_marimo-studio`, `@file`, `public`, and `public-files-sw.js` as their first
 component.
 
+## Public URLs
+
+A proxy can publish the server beneath a path prefix that the server never
+sees, so Studio leaves the mount path out of browser URLs. Builders in
+`_delivery/urls.py` return app paths beneath the mount, such as
+`/studio/dashboard/`. `relative_url(base, target)` turns an app path into a
+reference that climbs from its carrier's directory to the mount root.
+
+The middleware records each request's app path in the ASGI scope before
+capability, alias, and editor routing rewrite the path. The recorded path keeps
+the browser's percent-encoding from `raw_path`, so an encoded slash stays inside
+its segment when Studio counts directory depth. `request_reference()` builds
+references from that recorded path. Marimo's `base_url` stays routing and
+capability identity.
+
+| Carrier                            | Resolution base                                 | Studio surfaces                                                 |
+| ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
+| `Location` header                  | Requested URL                                   | Trailing slash, landing, session assignment, authentication     |
+| HTML attribute or inline config    | Document URL, or `<base>` in presentation pages | Studio document, presentation wrapper, handoff, waiting, repair |
+| JSON record                        | Response or document URL                        | Host, bootstrap, mount, and runtime configuration               |
+| `Marimo-Studio-Support-Url` header | Response URL                                    | Presentation revision swaps                                     |
+| Prepared manifest `export_url`     | Manifest URL                                    | Live and static Prepared publications                           |
+| Preview URL text                   | Requested URL                                   | `marimo-studio view preview` and the authoring preview API      |
+
+The protocol parsers resolve record URLs when they read a record, against the
+response URL or the document base, so browser code holds absolute URLs that
+survive history changes. Code that receives a record URL treats it as absolute
+and fails on a relative one. Runtime-specific URLs travel in `runtime.urls`,
+which the runtime configuration parser resolves with the record. The native
+editor derives its eager runtime URL from `document.baseURI`, as Marimo does for
+its default runtime. Top-level presentation pages keep their public address
+through revision swaps, so a reload after a server restart assigns a fresh
+presentation session.
+
+Studio sends Marimo's token and login redirects for `/` itself, relative to the
+requested URL, in edit and run mode. Marimo's password form posts to the server
+root.
+
 ## Authentication and mutation authority
 
 Marimo places `read` and `edit` scopes on the ASGI request. Presentation
@@ -121,9 +159,14 @@ Provider-authored pages receive two signed capability forms:
 
 The handler validates the signature, target, method, scope type, view,
 presentation session header, runtime mode, and runtime-session assignment.
-Revision-bound value and output requests receive a transient
+Revision-bound value, output, and Prepared manifest requests receive a
 `stale-projection-binding` response when the page needs refreshed bindings.
 Other stale or invalid capabilities fail closed.
+
+Tokens carry a notebook's `file` routing key on a directory server. A
+single-notebook server resolves its notebook without one, so its tokens carry no
+server path. Browser storage uses an opaque `storageScope` derived from the
+notebook, base URL, and server process.
 
 Standalone previews subscribe to development events through renewal authority.
 The subscription survives publication changes so a delayed or reconnecting tab
@@ -218,3 +261,5 @@ Protect routing and security with route-level and live tests:
   security policy boundaries.
 - Close the application while sessions, provider work, and artifact leases are
   active.
+- Run edit and run mode behind a proxy that strips a random path prefix and
+  rewrites `Host`. Fail when any browser request leaves the prefix.

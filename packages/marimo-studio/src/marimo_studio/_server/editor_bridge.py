@@ -22,7 +22,6 @@ from marimo_studio._delivery.urls import (
     PRIVATE_QUERY_KEYS,
     SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
-    public_url,
     with_query,
 )
 from marimo_studio._server.auth import has_edit_access
@@ -46,6 +45,7 @@ from marimo_studio._server.request_body import (
     bounded_body_error_response,
     read_bounded_body,
 )
+from marimo_studio._server.request_path import request_reference
 from marimo_studio._server.routing import native_editor_target
 from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.server_instance import server_instance_id
@@ -100,7 +100,6 @@ async def delegate_editor_request(
             receive,
             send,
             resource_path=relative,
-            runtime_url=str(Request(scope, receive).url),
             eager_runtime=False,
             bound_editor=False,
         )
@@ -132,13 +131,16 @@ async def delegate_editor_request(
             # Native home and new-notebook actions are relative to the embedded
             # editor. Send their new document through the public entry point.
             await RedirectResponse(
-                with_query(
-                    public_url(server.base_url(scope) or "", "/"),
-                    [
-                        (key, value)
-                        for key, value in connection.query_params.multi_items()
-                        if key == "file" or key not in PRIVATE_QUERY_KEYS
-                    ],
+                request_reference(
+                    connection,
+                    with_query(
+                        "/",
+                        [
+                            (key, value)
+                            for key, value in connection.query_params.multi_items()
+                            if key == "file" or key not in PRIVATE_QUERY_KEYS
+                        ],
+                    ),
                 ),
                 status_code=307,
                 headers=NO_STORE,
@@ -261,7 +263,6 @@ async def delegate_editor_request(
                 receive,
                 delegated_send,
                 resource_path=editor_target,
-                runtime_url=str(connection.url),
                 eager_runtime=workspace is not None,
             )
         if not served:
@@ -280,7 +281,6 @@ async def delegate_editor_request(
             receive,
             send,
             resource_path=_RESTART_ROUTE,
-            runtime_url=str(Request(scope).url),
             eager_runtime=False,
             bound_editor=False,
         )
@@ -315,7 +315,6 @@ async def delegate_editor_request(
             return False
         session_id = request.headers.get("Marimo-Session-Id")
         location = await server.location(request)
-        request_base_url = server.base_url(scope)
         status: int | None = None
 
         async def track_response(message: Message) -> None:
@@ -325,7 +324,9 @@ async def delegate_editor_request(
                 status = value if isinstance(value, int) else None
             await send(message)
 
-        await app(scope, receive, track_response)
+        # Marimo's mounted API router rewrites the routed scope in place. The
+        # saved notebook resolves from the request that the browser sent.
+        await app(dict(scope), receive, track_response)
         if status is not None and 200 <= status < 300 and session_id is not None:
             saved_location = await server.session_location(request, session_id)
             if saved_location is not None:
@@ -341,11 +342,6 @@ async def delegate_editor_request(
                         context,
                         session_id,
                         _save_page_query(request),
-                        public_base_url=(
-                            context.base_url
-                            if request_base_url is None
-                            else request_base_url
-                        ),
                     ).capability,
                 )
         return True
@@ -465,13 +461,15 @@ def _query_value(connection: HTTPConnection, key: str) -> str | None:
 def _save_page_query(request: Request) -> list[tuple[str, str]]:
     query = request.query_params.multi_items()
     referrer = request.headers.get("referer")
-    if referrer is None:
+    # Fetch Metadata names a cross-origin initiator, whose page query belongs to
+    # another site. Browsers send it to secure and loopback origins only, so a
+    # save over plain HTTP keeps the referrer query.
+    site = request.headers.get("sec-fetch-site", "same-origin")
+    if referrer is None or site != "same-origin":
         return query
     try:
         page = urlsplit(referrer)
     except ValueError:
-        return query
-    if page.scheme != request.url.scheme or page.netloc != request.url.netloc:
         return query
     # Native save requests omit the page query. The referrer follows query
     # changes made after the notebook session opened.

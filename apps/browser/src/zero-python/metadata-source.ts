@@ -6,11 +6,42 @@ import type {
 } from "@marimo-team/marimo-export/prepared";
 
 import { fetchPreparedManifestDocument } from "@marimo-team/marimo-export/prepared";
+import { z } from "zod";
 
 import type { StudioPreparedContext, StudioPreparedManifest } from "./metadata-records.ts";
 
 import { parseStudioPreparedManifest } from "./metadata-records.ts";
 import { validateStudioPreparedManifest } from "./metadata-validation.ts";
+
+/** The presentation revision moved on while this manifest URL was in use. */
+export class StalePreparedBindingError extends Error {
+  constructor() {
+    super("The presentation is refreshing its notebook bindings.");
+    this.name = "StalePreparedBindingError";
+  }
+}
+
+const staleBindingSchema = z.object({ error: z.literal("stale-projection-binding") });
+
+const isStaleBinding = async (response: Response): Promise<boolean> =>
+  response.status === 409 &&
+  staleBindingSchema.safeParse(
+    await response
+      .clone()
+      .json()
+      .catch(() => null),
+  ).success;
+
+const bindingAwareFetch =
+  (fetcher: typeof globalThis.fetch): typeof globalThis.fetch =>
+  async (input, init) => {
+    const response = await fetcher(input, init);
+    if (await isStaleBinding(response)) {
+      await response.body?.cancel();
+      throw new StalePreparedBindingError();
+    }
+    return response;
+  };
 
 export class StudioPreparedManifestSource {
   readonly #metadata = new WeakMap<PreparedExportManifest, StudioPreparedManifest>();
@@ -29,7 +60,7 @@ export class StudioPreparedManifestSource {
     const metadata = parseStudioPreparedManifest(
       await fetchPreparedManifestDocument(url, {
         ...options,
-        fetch: options.fetch ?? this.fetcher,
+        fetch: bindingAwareFetch(options.fetch ?? this.fetcher),
       }),
     );
     validateStudioPreparedManifest(

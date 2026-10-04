@@ -102,7 +102,7 @@ def test_repair_document_uses_the_embedding_security_policy(tmp_path: Path) -> N
         "/studio/",
         ConfigurationError("Invalid workspace"),
         tmp_path / "notebook.py",
-        base_url="",
+        requested_path="/studio/",
         dev=True,
         edit_mode=True,
         structured=False,

@@ -32,6 +32,8 @@ import { workspaceEventsUrl } from "./workspace-event-coordinator.ts";
 
 interface StudioHostProps extends StudioOptions {
   editorFrame: HTMLIFrameElement;
+  /** The editor frame's `src`, resolved before history changes rebase it. */
+  editorSource: string;
   host: StudioHostBootstrap;
   initialBootstrap?: StudioBootstrap;
   publishBootstrap: (bootstrap: StudioBootstrap) => void;
@@ -80,7 +82,7 @@ interface EditorSnapshot {
 }
 
 const editorAuthority = (source: string): string => {
-  const url = new URL(source, globalThis.location.href);
+  const url = new URL(source);
   return `${url.origin}${url.pathname}\0${normalizedParameters(url.search, (key) => EDITOR_AUTHORITY_QUERY_KEYS.has(key))}`;
 };
 
@@ -115,7 +117,7 @@ const validateConfiguredEditor = (
   active: EditorSnapshot,
   source: string,
 ): void => {
-  const configured = new URL(source, globalThis.location.href);
+  const configured = new URL(source);
   if (
     editorAuthority(configured.href) !== trusted ||
     normalizedParameters(publicNotebookQuery(configured.search)) !== active.publicState
@@ -125,7 +127,7 @@ const validateConfiguredEditor = (
 };
 
 const withPublicQuery = (source: string, query: string): URL => {
-  const url = new URL(source, globalThis.location.href);
+  const url = new URL(source);
   const existing = new Set(new URLSearchParams(publicNotebookQuery(url.search)).keys());
   for (const key of existing) {
     url.searchParams.delete(key);
@@ -138,6 +140,7 @@ const withPublicQuery = (source: string, query: string): URL => {
 
 export const StudioHost = ({
   editorFrame,
+  editorSource,
   host,
   initialBootstrap,
   publishBootstrap,
@@ -207,7 +210,7 @@ export const StudioHost = ({
       setMessage(undefined);
       setOpening(true);
       try {
-        const trustedEditor = trustedEditorAuthority(host.urls.editor, editorFrame.src);
+        const trustedEditor = trustedEditorAuthority(host.urls.editor, editorSource);
         let activeEditor = trustedEditor
           ? retainedEditorSnapshot(editorFrame, trustedEditor)
           : undefined;
@@ -215,13 +218,13 @@ export const StudioHost = ({
         for (let queryAttempt = 0; queryAttempt < EDITOR_QUERY_ATTEMPTS; queryAttempt += 1) {
           const url = activeEditor
             ? withPublicQuery(host.urls.bootstrap, activeEditor.publicQuery)
-            : new URL(host.urls.bootstrap, globalThis.location.href);
+            : new URL(host.urls.bootstrap);
           url.searchParams.set("marimo_studio_view", view);
           const response = await fetch(url, { cache: "no-store" });
           if (!response.ok) {
             throw new Error(await responseError(response));
           }
-          const candidate = parseStudioBootstrap(await responseJson(response));
+          const candidate = parseStudioBootstrap(await responseJson(response), response.url || url);
           if (!activeEditor || !trustedEditor) {
             ready = candidate;
             break;
@@ -264,7 +267,7 @@ export const StudioHost = ({
         return false;
       }
     },
-    [editorFrame, host.urls.bootstrap, host.urls.editor, publishBootstrap],
+    [editorFrame, editorSource, host.urls.bootstrap, host.urls.editor, publishBootstrap],
   );
 
   useEffect(() => {

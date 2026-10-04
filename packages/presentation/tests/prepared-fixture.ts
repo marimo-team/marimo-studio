@@ -12,11 +12,12 @@ export const preparedRuntimeConfig = {
     id: "zero-python",
     instance: "prepared-instance",
     data: {},
+    urls: {},
   },
-  rootUrl: "/",
-  publicRootUrl: "/",
-  documentRootUrl: "/",
-  supportUrl: "/_marimo-studio/views/dashboard",
+  rootUrl: "http://localhost:3000/",
+  publicRootUrl: "http://localhost:3000/",
+  documentRootUrl: "http://localhost:3000/",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   projectionTargets: {
     cells: {},
     variables: {

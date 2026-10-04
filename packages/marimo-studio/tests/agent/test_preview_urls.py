@@ -23,20 +23,23 @@ def test_saved_view_resolves_a_plain_url_with_connection_routing(
 
     async def request(connection, path, *, query):
         calls.append((connection, path, dict(query)))
-        return "/base/dashboard/?file=analysis.py&runtime=wasm&marimo_studio_unframed=1"
+        return (
+            "../../../dashboard/?file=analysis.py&runtime=wasm&marimo_studio_unframed=1"
+        )
 
     monkeypatch.setattr("marimo_studio._authoring.preview.request_text", request)
+    # The server URL can carry a proxy prefix that the Studio server never sees.
     url = asyncio.run(
         view.preview_url(
             runtime="wasm",
-            server="https://studio.example/base/?file=analysis.py",
+            server="https://workbench.example/s/f3a9/p/77c1/?file=analysis.py",
             access_token="secret",
             exact=True,
         )
     )
-    assert (
-        url
-        == "https://studio.example/base/dashboard/?file=analysis.py&runtime=wasm&marimo_studio_unframed=1"
+    assert url == (
+        "https://workbench.example/s/f3a9/p/77c1/dashboard/"
+        "?file=analysis.py&runtime=wasm&marimo_studio_unframed=1"
     )
     connection, path, query = calls[0]
     assert connection.auth_token == "secret"
@@ -49,6 +52,28 @@ def test_saved_view_resolves_a_plain_url_with_connection_routing(
         "catalog_generation": view.catalog_generation,
         "view_generation": view.generation,
     }
+
+
+def test_saved_view_preview_names_the_studio_tab_it_follows(
+    notebook_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = authoring.open_workspace(notebook_path)
+    view = asyncio.run(workspace.create_view("dashboard"))
+    queries = []
+
+    async def request(_connection, _path, *, query):
+        queries.append(dict(query))
+        return "../../../dashboard/?runtime=zero-python&marimo_studio_unframed=1"
+
+    monkeypatch.setattr("marimo_studio._authoring.preview.request_text", request)
+    asyncio.run(
+        view.preview_url(
+            runtime="zero-python",
+            server="http://localhost:2718",
+            browser_client="browser-client-1234",
+        )
+    )
+    assert queries[0]["marimo_studio_client"] == "browser-client-1234"
 
 
 def test_current_view_infers_its_attached_server(
@@ -68,7 +93,7 @@ def test_current_view_infers_its_attached_server(
     async def request(actual, path, *, query):
         assert actual is connection
         assert dict(query)["runtime"] == "server"
-        return "/dashboard/?runtime=server&marimo_studio_unframed=1"
+        return "../../../dashboard/?runtime=server&marimo_studio_unframed=1"
 
     monkeypatch.setattr("marimo_studio._authoring.preview.request_text", request)
     url = asyncio.run(
@@ -95,7 +120,7 @@ def test_preview_rejects_a_replaced_view_handle(
         nonlocal requested
         requested = True
         replace()
-        return "/dashboard/?runtime=wasm&marimo_studio_unframed=1"
+        return "../../../dashboard/?runtime=wasm&marimo_studio_unframed=1"
 
     if when == "before-request":
         replace()
@@ -110,8 +135,12 @@ def test_preview_rejects_a_replaced_view_handle(
     [
         "https://elsewhere.example/dashboard/",
         "//elsewhere.example/dashboard/",
-        "dashboard/",
-        "/dashboard/\nmalformed",
+        "/dashboard/",
+        "../../../../dashboard/",
+        "../../../dashboard/\nmalformed",
+        # Browsers normalize these segments to `..` and leave the mount.
+        "..\\..\\..\\..\\dashboard/",
+        "../../../%2e%2e/dashboard/",
     ],
 )
 def test_preview_rejects_foreign_or_malformed_server_targets(
@@ -125,7 +154,9 @@ def test_preview_rejects_foreign_or_malformed_server_targets(
 
     monkeypatch.setattr("marimo_studio._authoring.preview.request_text", request)
     with pytest.raises(ProtocolError, match="invalid preview URL"):
-        asyncio.run(view.preview_url(runtime="wasm", server="http://localhost:2718"))
+        asyncio.run(
+            view.preview_url(runtime="wasm", server="http://localhost:2718/base")
+        )
 
 
 def test_saved_view_needs_an_explicit_server(notebook_path: Path) -> None:
@@ -133,8 +164,10 @@ def test_saved_view_needs_an_explicit_server(notebook_path: Path) -> None:
     view = asyncio.run(workspace.create_view("dashboard"))
     with pytest.raises(ProtocolError, match="Provide server"):
         asyncio.run(view.preview_url(runtime="wasm"))
-    with pytest.raises(ValueError, match="access_token requires server"):
+    with pytest.raises(ValueError, match="require server"):
         asyncio.run(view.preview_url(runtime="wasm", access_token="secret"))
+    with pytest.raises(ValueError, match="require server"):
+        asyncio.run(view.preview_url(runtime="zero-python", browser_client="c" * 24))
 
 
 def test_fresh_view_captures_its_owner_before_contacting_the_server(
@@ -153,7 +186,7 @@ def test_fresh_view_captures_its_owner_before_contacting_the_server(
         retired = root.with_name("retired-dashboard")
         root.rename(retired)
         shutil.copytree(retired, root)
-        return "/dashboard/?runtime=wasm&marimo_studio_unframed=1"
+        return "../../../dashboard/?runtime=wasm&marimo_studio_unframed=1"
 
     monkeypatch.setattr("marimo_studio._authoring.preview.request_text", request)
     with pytest.raises(ViewGenerationConflictError):

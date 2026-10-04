@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from marimo_studio._delivery.urls import SUPPORT_PATH, authored_file_key, public_url
+from marimo_studio._delivery.urls import SUPPORT_PATH, authored_file_key
 from marimo_studio._server.presentation.isolation import PRESENTATION_SANDBOX
 from marimo_studio._server.records import ServerContext
 
@@ -48,7 +48,10 @@ class PresentationIdentity(Protocol):
 _VIEW_PATTERN = r"[a-z][a-z0-9-]*"
 _SESSION_PATTERN = r"s_[a-z0-9]{6}"
 _REVISION_PATTERN = r"[0-9a-f]{64}"
-_FILE_PATTERN = r"[A-Za-z0-9_-]{1,1024}"
+# Directory servers route notebooks by their relative `file` key. A
+# single-notebook server resolves its notebook without one, so its tokens leave
+# the key out and carry no server filesystem path.
+_FILE_PATTERN = r"[A-Za-z0-9_-]{0,1024}"
 _RENEWAL_TOKEN_PATTERN = re.compile(
     rf"d\.(?P<file>{_FILE_PATTERN})\."
     rf"(?P<view>{_VIEW_PATTERN})\."
@@ -95,7 +98,7 @@ class PresentationCapability:
 
     kind: CapabilityKind
     token: str
-    file_key: str
+    file_key: str | None
     view: str
     session_id: str
     runtime_session_id: str | None = None
@@ -115,7 +118,7 @@ class PresentationCapabilityRoute:
         return self.capability.token
 
     @property
-    def file_key(self) -> str:
+    def file_key(self) -> str | None:
         return self.capability.file_key
 
     @property
@@ -134,7 +137,7 @@ def presentation_renewal_capability(
     runtime_session_id: str,
 ) -> str:
     """Mint document authority for one server-assigned runtime session."""
-    file_token = _file_token(context.file_key)
+    file_token = _file_token(context)
     unsigned = f"d.{file_token}.{view_name}.{session_id}.{runtime_session_id}"
     signature = _signature(
         context,
@@ -156,7 +159,7 @@ def presentation_revision_capability(
     artifact_revision = snapshot.artifact.artifact_revision.removeprefix("sha256:")
     runtime_session = runtime_session_id or "p"
     unsigned = (
-        f"r.{_file_token(context.file_key)}.{snapshot.view_name}.{session_id}."
+        f"r.{_file_token(context)}.{snapshot.view_name}.{session_id}."
         f"{runtime_session}.{snapshot.revision}.{artifact_revision}"
     )
     signature = _signature(
@@ -171,16 +174,15 @@ def presentation_revision_capability(
     return f"{unsigned}.{signature}"
 
 
-def presentation_renewal_url(
+def presentation_renewal_path(
     context: ServerContext,
     view_name: str,
     session_id: str,
     runtime_session_id: str,
     target: str = "/",
 ) -> str:
-    """Return the document-only URL for one presentation session."""
-    return presentation_capability_url(
-        context,
+    """Return the document-only app path for one presentation session."""
+    return presentation_capability_path(
         presentation_renewal_capability(
             context,
             view_name,
@@ -191,7 +193,7 @@ def presentation_renewal_url(
     )
 
 
-def presentation_revision_url(
+def presentation_revision_path(
     context: ServerContext,
     snapshot: PresentationIdentity,
     session_id: str,
@@ -199,9 +201,8 @@ def presentation_revision_url(
     *,
     runtime_session_id: str | None = None,
 ) -> str:
-    """Return the revision-bound URL for one presentation runtime."""
-    return presentation_capability_url(
-        context,
+    """Return the revision-bound app path for one presentation runtime."""
+    return presentation_capability_path(
         presentation_revision_capability(
             context,
             snapshot,
@@ -210,6 +211,18 @@ def presentation_revision_url(
         ),
         target,
     )
+
+
+def presentation_storage_scope(context: ServerContext) -> str:
+    """Return the browser storage namespace of this notebook's presentations.
+
+    The value names one notebook mount in one server process without exposing
+    its file path, so servers that share an origin keep separate state.
+    """
+    payload = "\0".join(
+        ("marimo-studio-presentation-storage-v1", context.file_key, context.base_url)
+    ).encode()
+    return hmac.new(context.server_token.encode(), payload, hashlib.sha256).hexdigest()
 
 
 def parse_presentation_capability(token: str) -> PresentationCapability | None:
@@ -242,7 +255,7 @@ def capability_matches(
     context: ServerContext,
 ) -> bool:
     """Validate a capability against the resolved notebook process."""
-    if capability.file_key != context.file_key:
+    if capability.file_key != (context.file_key if context.routing_query else None):
         return False
     expected = (
         presentation_renewal_capability(
@@ -374,8 +387,9 @@ def _parsed_capability(
     token: str,
     match: re.Match[str],
 ) -> PresentationCapability | None:
-    file_key = authored_file_key(match.group("file"))
-    if file_key is None:
+    file_token = match.group("file")
+    file_key = authored_file_key(file_token) if file_token else None
+    if file_token and file_key is None:
         return None
     return PresentationCapability(
         kind=kind,
@@ -393,8 +407,10 @@ def _parsed_capability(
     )
 
 
-def _file_token(file_key: str) -> str:
-    return base64.urlsafe_b64encode(file_key.encode()).decode().rstrip("=")
+def _file_token(context: ServerContext) -> str:
+    if not context.routing_query:
+        return ""
+    return base64.urlsafe_b64encode(context.file_key.encode()).decode().rstrip("=")
 
 
 def _signature(
@@ -434,7 +450,7 @@ def _revision_token(
     if capability.revision is None or capability.artifact_revision is None:
         return None
     unsigned = (
-        f"r.{_file_token(context.file_key)}.{capability.view}."
+        f"r.{_file_token(context)}.{capability.view}."
         f"{capability.session_id}.{capability.runtime_session_id or 'p'}."
         f"{capability.revision}."
         f"{capability.artifact_revision}"
@@ -451,6 +467,7 @@ def _revision_token(
     return f"{unsigned}.{signature}"
 
 
-def presentation_capability_url(context: ServerContext, token: str, target: str) -> str:
+def presentation_capability_path(token: str, target: str) -> str:
+    """Return the app path of `target` beneath one signed presentation namespace."""
     suffix = target if target.startswith("/") else f"/{target}"
-    return public_url(context.base_url, f"{PRESENTATION_PATH}/{token}{suffix}")
+    return f"{PRESENTATION_PATH}/{token}{suffix}"

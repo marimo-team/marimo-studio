@@ -56,8 +56,8 @@ def test_large_artifact_get_streams_bounded_chunks_and_head_releases_lease(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         page = client.get("/")
-        presentation = client.get(_presentation_fallback_url(page.text))
-        asset_url = f"{_artifact_base(presentation.text)}large.bin"
+        presentation = client.get(_presentation_fallback_url(page))
+        asset_url = f"{_artifact_base(presentation)}large.bin"
         head = client.head(asset_url)
         chunks_after_head = len(chunk_sizes)
         downloaded = client.get(asset_url)
@@ -103,8 +103,8 @@ def test_large_artifact_stream_does_not_block_unrelated_requests(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         page = client.get("/")
-        presentation = client.get(_presentation_fallback_url(page.text))
-        asset_url = f"{_artifact_base(presentation.text)}large.bin"
+        presentation = client.get(_presentation_fallback_url(page))
+        asset_url = f"{_artifact_base(presentation)}large.bin"
         with ThreadPoolExecutor(max_workers=1) as executor:
             download = executor.submit(client.get, asset_url)
             assert started.wait(timeout=2)
@@ -141,8 +141,8 @@ def test_nested_vanilla_entry_keeps_sibling_files_private(notebook_path: Path) -
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         page = client.get("/")
-        presentation = client.get(_presentation_fallback_url(page.text))
-        base = _artifact_base(presentation.text)
+        presentation = client.get(_presentation_fallback_url(page))
+        base = _artifact_base(presentation)
         asset = client.get(f"{base}app.js")
 
     assert page.status_code == 200

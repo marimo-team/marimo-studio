@@ -20,6 +20,7 @@ from marimo_studio._server.presentation.session import (
 )
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_path import with_request_path
 
 
 def _assignment_context(mode: Literal["edit", "run"] = "run") -> ServerContext:
@@ -28,6 +29,7 @@ def _assignment_context(mode: Literal["edit", "run"] = "run") -> ServerContext:
         SimpleNamespace(
             base_url="",
             file_key="notebook.py",
+            routing_query=(),
             mode=mode,
             notebook=Path("/workspace/notebook.py"),
             server_token="server-token",
@@ -37,18 +39,21 @@ def _assignment_context(mode: Literal["edit", "run"] = "run") -> ServerContext:
 
 def _assignment_request(query: str = "") -> Request:
     return Request(
-        {
-            "type": "http",
-            "http_version": "1.1",
-            "method": "GET",
-            "scheme": "http",
-            "path": "/dashboard/",
-            "raw_path": b"/dashboard/",
-            "query_string": query.removeprefix("?").encode(),
-            "headers": [],
-            "client": ("test", 123),
-            "server": ("test", 80),
-        }
+        with_request_path(
+            {
+                "type": "http",
+                "http_version": "1.1",
+                "method": "GET",
+                "scheme": "http",
+                "path": "/dashboard/",
+                "raw_path": b"/dashboard/",
+                "query_string": query.removeprefix("?").encode(),
+                "headers": [],
+                "client": ("test", 123),
+                "server": ("test", 80),
+            },
+            "/dashboard/",
+        )
     )
 
 
@@ -713,6 +718,7 @@ def test_authority_key_uses_the_gateway_canonical_notebook_without_resolving() -
         SimpleNamespace(
             base_url="",
             file_key="notebook.py",
+            routing_query=(),
             mode="run",
             notebook=CanonicalNotebook(),
         ),

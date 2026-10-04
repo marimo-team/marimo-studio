@@ -1,3 +1,9 @@
+/**
+ * The base this document loaded with. Server-authored references resolve
+ * against it, even after marimo repoints `<base>` or Studio rewrites history.
+ */
+export const initialDocumentBaseUrl = document.baseURI;
+
 export const resolveDocumentBase = (source: Document, documentUrl: string): string => {
   const href = source.querySelector("base")?.getAttribute("href") ?? documentUrl;
   return new URL(href, new URL(documentUrl, globalThis.location.href)).href;

@@ -24,14 +24,23 @@ const readJson = (selector: string): JsonValue => {
   return jsonValueSchema.parse(JSON.parse(source));
 };
 
-const readBootstrap = () => parseStudioBootstrap(readJson("#marimo-studio-bootstrap"));
+// Studio records and the document's own URL attributes are references from
+// this document. Resolve them before the workspace rewrites history.
+const documentUrl = document.baseURI;
+for (const icon of document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')) {
+  icon.setAttribute("href", icon.href);
+}
 
+const readBootstrap = () => parseStudioBootstrap(readJson("#marimo-studio-bootstrap"), documentUrl);
+
+// Browser automation reads the open workspace here, with absolute URLs. The
+// server-authored #marimo-studio-bootstrap record stays as served.
 const publishBootstrap = (bootstrap: ReturnType<typeof parseStudioBootstrap>): void => {
   document.documentElement.dataset.marimoStudioState = "ready";
-  let element = document.querySelector<HTMLScriptElement>("#marimo-studio-bootstrap");
+  let element = document.querySelector<HTMLScriptElement>("#marimo-studio-workspace");
   if (!element) {
     element = document.createElement("script");
-    element.id = "marimo-studio-bootstrap";
+    element.id = "marimo-studio-workspace";
     element.type = "application/json";
     document.body.append(element);
   }
@@ -63,13 +72,17 @@ const showStartupError = (root: HTMLElement, cause: unknown): void => {
 export const startStudio = (options: StudioOptions): void => {
   const root = required<HTMLElement>("#marimo-studio-root");
   try {
-    const host = parseStudioHostBootstrap(readJson("#marimo-studio-host"));
+    const host = parseStudioHostBootstrap(readJson("#marimo-studio-host"), documentUrl);
     const editorFrame = required<HTMLIFrameElement>("#marimo-studio-editor");
     const initialBootstrap = host.state === "ready" ? readBootstrap() : undefined;
+    if (initialBootstrap) {
+      publishBootstrap(initialBootstrap);
+    }
     createRoot(root).render(
       <StudioHost
         host={host}
         editorFrame={editorFrame}
+        editorSource={editorFrame.src}
         initialBootstrap={initialBootstrap}
         publishBootstrap={publishBootstrap}
         {...options}

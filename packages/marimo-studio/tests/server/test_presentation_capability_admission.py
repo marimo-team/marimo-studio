@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -16,6 +17,11 @@ from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
 from marimo_studio._server.agent.workspace_presence import studio_tab_unavailable
 from marimo_studio._server.ports import SessionOwner
 from marimo_studio._server.presentation import access as presentation_access
+from marimo_studio._server.presentation.capability import (
+    capability_matches,
+    parse_presentation_capability,
+    presentation_renewal_capability,
+)
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
@@ -28,8 +34,10 @@ from ..app_helpers import session_manager as _session_manager
 from .app_test_support import (
     _editor_mount_value,
     _live_test_session,
+    _mount_support_url,
     _presentation_fallback_url,
     _presentation_frame_url,
+    _runtime_config,
     _view_support_url,
 )
 
@@ -56,7 +64,7 @@ def test_preview_event_subscription_survives_publication_with_renewal_authority(
     monkeypatch.setattr("marimo_studio._server.support.change_events", scoped_events)
     with TestClient(app) as client:
         shell = client.get("/dashboard/")
-        presentation = client.get(_presentation_frame_url(shell.text))
+        presentation = client.get(_presentation_frame_url(shell))
         renewal = _editor_mount_value(presentation.text, "renewalToken")
         root = f"/_marimo-studio/presentation/{renewal}/"
         instance = server_instance_id(str(_session_manager(app).skew_protection_token))
@@ -202,14 +210,14 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
             urlsplit(initial.headers["location"]).query
         )
         shell = client.get(initial.headers["location"])
-        frame_url = _presentation_frame_url(shell.text)
+        frame_url = _presentation_frame_url(shell)
         assert WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM not in parse_qs(
             urlsplit(frame_url).query
         )
         runtime_session_id = parse_qs(urlsplit(frame_url).query)["session_id"][0]
         presentation = client.get(frame_url)
         session_id = _editor_mount_value(presentation.text, "sessionId")
-        support_url = _editor_mount_value(presentation.text, "supportUrl")
+        support_url = _mount_support_url(presentation)
         runtime_config = client.get(
             _view_support_url({"supportUrl": support_url}, "config"),
             headers={
@@ -219,7 +227,7 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
         )
         payload = runtime_config.json()
         capability = payload["runtime"]["data"]["capabilityToken"]
-        capability_root = payload["runtime"]["data"]["url"]
+        capability_root = payload["runtime"]["urls"]["transport"]
         outputs = client.post(
             _view_support_url(payload, "outputs"),
             headers={"Marimo-Session-Id": session_id},
@@ -360,7 +368,7 @@ def test_stale_native_capability_does_not_begin_admission(
 
     monkeypatch.setattr(SessionIdAllocator, "authorize", track_authorize)
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        stale = client.get("/_marimo-studio/views/dashboard/config").json()
+        stale = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         document.write_text(
             document.read_text(encoding="utf-8").replace(
                 "</body>",
@@ -369,8 +377,8 @@ def test_stale_native_capability_does_not_begin_admission(
             ),
             encoding="utf-8",
         )
-        current = client.get("/_marimo-studio/views/dashboard/config").json()
-        root = urlsplit(stale["runtime"]["data"]["url"])
+        current = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        root = urlsplit(stale["runtime"]["urls"]["transport"])
         websocket_url = (
             f"{root.path.rstrip('/')}/ws?session_id={stale['presentationSessionId']}"
         )
@@ -401,8 +409,8 @@ def test_edit_capability_native_transport_requires_kiosk_mode(
     _edit_mode(app)
 
     with TestClient(app) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
-        root = urlsplit(config["runtime"]["data"]["url"])
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        root = urlsplit(config["runtime"]["urls"]["transport"])
         query = f"session_id={config['presentationSessionId']}"
         if kiosk is not None:
             query += f"&kiosk={kiosk}"
@@ -440,11 +448,11 @@ def test_capability_rejects_a_preclaimed_runtime(
 
     with TestClient(app) as client:
         wrapper = client.get("/dashboard/")
-        document = client.get(_presentation_fallback_url(wrapper.text))
+        document = client.get(_presentation_fallback_url(wrapper))
         runtime_session_id = _editor_mount_value(document.text, "runtimeSessionId")
         presentation_session_id = _editor_mount_value(document.text, "sessionId")
         support_url = _view_support_url(
-            {"supportUrl": _editor_mount_value(document.text, "supportUrl")},
+            {"supportUrl": _mount_support_url(document)},
             "config",
         )
         foreign_session = _live_test_session(
@@ -525,9 +533,9 @@ def test_claim_inserted_after_authorize_remains_a_fresh_connector_expectation(
     monkeypatch.setattr(SessionIdAllocator, "authorize", inject_claim)
     monkeypatch.setattr(SessionIdAllocator, "cancel_admission", track_cancel)
     with TestClient(app) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         runtime_session_id = config["runtime"]["data"]["sessionId"]
-        root = urlsplit(config["runtime"]["data"]["url"])
+        root = urlsplit(config["runtime"]["urls"]["transport"])
         websocket_url = (
             f"{root.path.rstrip('/')}/ws?session_id={config['presentationSessionId']}"
         )
@@ -562,23 +570,25 @@ def test_native_widget_resources_retain_edit_session_authority_across_revisions(
 
     monkeypatch.setattr(presentation_access, "_send_capability_app", native)
     with TestClient(app) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         document = studio.views["dashboard"].root / "index.html"
         document.write_text(
             document.read_text(encoding="utf-8") + "\n<p>New revision</p>",
             encoding="utf-8",
         )
-        current = client.get("/_marimo-studio/views/dashboard/config").json()
+        current = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         assert config["revision"] != current["revision"]
         headers = {"Marimo-Session-Id": config["presentationSessionId"]}
-        asset = client.get(config["runtime"]["data"]["url"] + "@file/tool.js")
+        asset = client.get(config["runtime"]["urls"]["transport"] + "@file/tool.js")
         assert asset.status_code == (204 if edit else 403)
         model = {
             "modelId": "tool-model",
             "message": {"method": "custom", "content": {}},
             "buffers": [],
         }
-        model_url = config["runtime"]["data"]["url"] + "api/kernel/set_model_value"
+        model_url = (
+            config["runtime"]["urls"]["transport"] + "api/kernel/set_model_value"
+        )
         assert client.post(model_url, headers=headers, json=model).status_code == (
             204 if edit else 403
         )
@@ -589,10 +599,12 @@ def test_native_widget_resources_retain_edit_session_authority_across_revisions(
             == 403
         )
         control_url = (
-            config["runtime"]["data"]["url"] + "api/kernel/set_ui_element_value"
+            config["runtime"]["urls"]["transport"] + "api/kernel/set_ui_element_value"
         )
         assert client.post(control_url, headers=headers, json={}).status_code == 403
-        function_url = config["runtime"]["data"]["url"] + "api/kernel/function_call"
+        function_url = (
+            config["runtime"]["urls"]["transport"] + "api/kernel/function_call"
+        )
         assert client.post(function_url, headers=headers, json={}).status_code == 403
         token = config["runtime"]["data"]["capabilityToken"]
         forged = token[:-1] + ("0" if token[-1] != "0" else "1")
@@ -603,3 +615,41 @@ def test_native_widget_resources_retain_edit_session_authority_across_revisions(
             == 403
         )
     assert forwarded == (["/@file/tool.js", model] if edit else [])
+
+
+@pytest.mark.parametrize(
+    ("file_key", "routing_query", "carried_key"),
+    [
+        ("/srv/analysis/notebook.py", (), None),
+        (
+            "reports/notebook.py",
+            (("file", "reports/notebook.py"),),
+            "reports/notebook.py",
+        ),
+    ],
+)
+def test_presentation_tokens_carry_only_public_notebook_routing(
+    file_key: str,
+    routing_query: tuple[tuple[str, str], ...],
+    carried_key: str | None,
+) -> None:
+    context = cast(
+        ServerContext,
+        SimpleNamespace(
+            base_url="",
+            file_key=file_key,
+            mode="run",
+            notebook=Path("/srv/analysis/notebook.py"),
+            routing_query=routing_query,
+            server_token="server-token",
+        ),
+    )
+
+    token = presentation_renewal_capability(
+        context, "dashboard", "s_abc123", "s_def456"
+    )
+    capability = parse_presentation_capability(token)
+
+    assert capability is not None
+    assert capability.file_key == carried_key
+    assert capability_matches(capability, context)

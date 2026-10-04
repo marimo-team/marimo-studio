@@ -10,7 +10,7 @@ import {
 import { symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
@@ -27,18 +27,18 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
     id: "server",
     instance: "server-instance",
     data: {
-      fileKey: "/workspace/analysis.py",
+      storageScope: "presentation-storage",
       capabilityToken: "presentation-capability",
       sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession,
-      url: "/",
     },
+    urls: { transport: "https://studio.test/" },
   },
-  rootUrl: "/",
-  publicRootUrl: "/",
-  documentRootUrl: "/",
-  supportUrl: "/_marimo-studio/views/dashboard",
+  rootUrl: "http://localhost:3000/",
+  publicRootUrl: "http://localhost:3000/",
+  documentRootUrl: "http://localhost:3000/",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   showCellLogs: true,
   ...symbolicRuntimeFields,
   diagnostics: [],
@@ -61,6 +61,7 @@ const wasmConfig = (): RuntimeConfig => ({
       executionCells: [{ id: "bootstrap", code: "pass" }],
       bootstrapCellId: "bootstrap",
     },
+    urls: {},
   },
 });
 

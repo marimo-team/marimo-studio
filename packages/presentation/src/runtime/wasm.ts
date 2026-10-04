@@ -25,7 +25,7 @@ import { type WasmRuntimeData, wasmRuntimeDataSchema } from "./wasm-config";
 import { createWasmMountedProjectionPreparation } from "./wasm-mounted-projections";
 import { createWasmProjectionExecutor } from "./wasm-projection-execution";
 import { createWasmQueryWriter } from "./wasm-query";
-import { prepareWasmProjectionRuntime, resolveWasmRuntimeUrl } from "./wasm-startup";
+import { prepareWasmProjectionRuntime } from "./wasm-startup";
 
 const configureProjections = async (
   invoke: RuntimeInvoke,
@@ -170,7 +170,7 @@ export const mountWasmRuntime = (
       code: data.code,
       filename: data.filename,
       version: data.version,
-      url: resolveWasmRuntimeUrl(context.presentation.rootUrl),
+      url: context.presentation.rootUrl,
       waitForReady(workerInitialized, invoke, executeCells) {
         return awaitWasmStartup(
           initialization.wait(workerInitialized, async (signal) => {

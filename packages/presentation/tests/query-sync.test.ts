@@ -7,7 +7,7 @@ import { commitRuntimeConfig, getSupportUrl, setSupportUrl } from "../src/runtim
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "wasm",

@@ -16,6 +16,7 @@ import type { ZeroPythonRuntimeData } from "./metadata.ts";
 import type { ZeroPythonProjectionLoaders } from "./projections.ts";
 
 import { StudioPreparedInteractions } from "./interactions.ts";
+import { StalePreparedBindingError } from "./metadata-source.ts";
 import { StudioPreparedManifestSource } from "./metadata.ts";
 import { StudioPreparedRenderer } from "./renderer.ts";
 import { StudioPreparedStateApi } from "./state-api.ts";
@@ -47,7 +48,8 @@ export interface StudioPreparedComposition {
   readonly interactions: StudioPreparedInteractions;
   readonly createRefresh: (
     data: ZeroPythonRuntimeData,
-    expectedInstance?: string,
+    expectedInstance: string,
+    onStale: () => void,
   ) => PreparedPublicationRefresh;
 }
 
@@ -95,11 +97,11 @@ export const createStudioPreparedComposition = (options: {
     state,
     stateApi,
     interactions,
-    createRefresh: (data, expectedInstance) =>
+    createRefresh: (data, expectedInstance, onStale) =>
       new PreparedPublicationRefresh(
-        new URL(data.manifestUrl, globalThis.location.href),
+        new URL(data.manifestUrl),
         state,
-        refreshOptions(source, options, expectedInstance),
+        refreshOptions(source, options, expectedInstance, onStale),
       ),
   };
 };
@@ -107,9 +109,10 @@ export const createStudioPreparedComposition = (options: {
 const refreshOptions = (
   source: StudioPreparedManifestSource,
   options: Parameters<typeof createStudioPreparedComposition>[0],
-  expectedInstance?: string,
+  expectedInstance: string,
+  onStale: () => void,
 ): PreparedPublicationRefreshOptions => {
-  let initialInstance = expectedInstance;
+  let initialInstance: string | undefined = expectedInstance;
   const base = {
     dependencies: {
       async fetchManifest(url: URL, fetchOptions?: Parameters<typeof source.fetch>[1]) {
@@ -119,6 +122,11 @@ const refreshOptions = (
       },
     },
     onError: (error: PreparedRefreshFailure) => {
+      // The next runtime configuration replaces this refresh.
+      if (error instanceof Error && error.cause instanceof StalePreparedBindingError) {
+        onStale();
+        return;
+      }
       if (!options.isDisposed()) {
         console.warn(
           "Prepared runtime publication refresh failed. Retaining current state.",

@@ -23,7 +23,7 @@ it("acknowledges an activation with its browser identity", async () => {
   );
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -54,7 +54,7 @@ it("binds an activation acknowledgement to its observed view owner", async () =>
   );
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -95,7 +95,7 @@ it("acknowledges a catalog-owned absent view name", async () => {
   );
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -147,7 +147,7 @@ it("retries when an activation acknowledgement body stalls", async () => {
   });
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -176,7 +176,7 @@ it("retries an activation acknowledgement while the browser binding settles", as
   fetch.mockResolvedValueOnce(Response.json({ schema: 1, outcome: "applied" }, { status: 200 }));
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -198,7 +198,7 @@ it("does not retry a rejected activation acknowledgement", async () => {
   );
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );
@@ -221,7 +221,7 @@ it("reports uncertainty when every acknowledgement response is lost", async () =
   });
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
-    "/_marimo-studio",
+    "http://localhost:3000/_marimo-studio",
     "server-token",
     "browser-client-1234",
   );

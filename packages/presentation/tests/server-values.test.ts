@@ -14,7 +14,7 @@ import { ARROW_FINGERPRINT, arrowBytes } from "./arrow-fixture.ts";
 import { projectionRequest, symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
-  supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+  supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
@@ -33,18 +33,18 @@ const config = {
     id: "server",
     instance: "server-instance",
     data: {
-      fileKey: "/workspace/notebook.py",
+      storageScope: "presentation-storage",
       capabilityToken: "presentation-capability",
       sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession: false,
-      url: "/proxy/app/",
     },
+    urls: { transport: "https://studio.test/proxy/app/" },
   },
-  rootUrl: "/proxy/app/",
-  publicRootUrl: "/proxy/app/",
-  documentRootUrl: "/proxy/app/",
-  supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+  rootUrl: "http://localhost:3000/proxy/app/",
+  publicRootUrl: "http://localhost:3000/proxy/app/",
+  documentRootUrl: "http://localhost:3000/proxy/app/",
+  supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard",
   presentationSessionId: "s_view01",
   showCellLogs: true,
   ...symbolicRuntimeFields,

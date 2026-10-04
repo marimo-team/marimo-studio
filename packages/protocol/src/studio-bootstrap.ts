@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { runtimeIdSchema, type JsonValue } from "./runtime-config";
+import { resolveUrl } from "./url.ts";
 import { viewNameSchema } from "./views.ts";
 
 export const studioRuntimeSchema = z.object({
@@ -76,5 +77,24 @@ export const studioBootstrapSchema = z
 export type StudioRuntime = z.infer<typeof studioRuntimeSchema>;
 export type StudioBootstrap = z.infer<typeof studioBootstrapSchema>;
 
-export const parseStudioBootstrap = (value: JsonValue): StudioBootstrap =>
-  studioBootstrapSchema.parse(value);
+/**
+ * Parse a workspace bootstrap and resolve its URLs against the response or
+ * document that carried it.
+ */
+export const parseStudioBootstrap = (value: JsonValue, base: string | URL): StudioBootstrap => {
+  const bootstrap = studioBootstrapSchema.parse(value);
+  const { urls } = bootstrap;
+  return {
+    ...bootstrap,
+    urls: {
+      editor: resolveUrl(urls.editor, base),
+      agent: resolveUrl(urls.agent, base),
+      events: resolveUrl(urls.events, base),
+      query: resolveUrl(urls.query, base),
+      studioPrefix: resolveUrl(urls.studioPrefix, base),
+      viewPrefix: resolveUrl(urls.viewPrefix, base),
+      viewSupportPrefix: resolveUrl(urls.viewSupportPrefix, base),
+      views: resolveUrl(urls.views, base),
+    },
+  };
+};

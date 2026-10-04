@@ -66,17 +66,14 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
       name,
       view_generation: viewGeneration,
     } satisfies DeleteViewRequest;
-    const response = await fetch(
-      appendUrlPath(viewsUrl, encodeURIComponent(name), globalThis.location.href),
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          "Marimo-Server-Token": serverToken,
-        },
-        body: JSON.stringify(request),
+    const response = await fetch(appendUrlPath(viewsUrl, encodeURIComponent(name)), {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "Marimo-Server-Token": serverToken,
       },
-    );
+      body: JSON.stringify(request),
+    });
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Could not remove view"));
     }

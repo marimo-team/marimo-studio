@@ -12,7 +12,7 @@ it("targets control configuration at the active editor session", async () => {
 
   await expect(
     fetchRuntimeControls(
-      "/_marimo-studio/views/dashboard",
+      "http://localhost:3000/_marimo-studio/views/dashboard",
       "browser-client-1234",
       "s_123456",
       "revision-1",

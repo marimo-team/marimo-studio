@@ -22,7 +22,7 @@ afterEach(() => {
 
 test("publishes the frame bridge before admitting a prepared runtime that is ready during mount", () => {
   globalThis.__MARIMO_MOUNT_CONFIG__ = {
-    supportUrl: "/_marimo-studio/views/dashboard",
+    supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
     version: "test",
     revision: "presentation-revision",
     runtime: "zero-python",
@@ -32,7 +32,7 @@ test("publishes the frame bridge before admitting a prepared runtime that is rea
     lifecycleId: 4,
   };
   commitRuntimeConfig(
-    runtimeConfig({ runtime: { id: "zero-python", instance: "prepared", data: {} } }),
+    runtimeConfig({ runtime: { id: "zero-python", instance: "prepared", data: {}, urls: {} } }),
   );
   setActiveDocumentLifecycleId(4);
   const parent = { postMessage: vi.fn() };
@@ -64,7 +64,7 @@ test("publishes the frame bridge before admitting a prepared runtime that is rea
 
 test("advertises semantic bindings for registered controls in the active snapshot", () => {
   globalThis.__MARIMO_MOUNT_CONFIG__ = {
-    supportUrl: "/_marimo-studio/views/dashboard",
+    supportUrl: "http://localhost:3000/_marimo-studio/views/dashboard",
     version: "test",
     revision: "presentation-revision",
     runtime: "zero-python",
@@ -74,7 +74,7 @@ test("advertises semantic bindings for registered controls in the active snapsho
     lifecycleId: 4,
   };
   commitRuntimeConfig(
-    runtimeConfig({ runtime: { id: "zero-python", instance: "prepared", data: {} } }),
+    runtimeConfig({ runtime: { id: "zero-python", instance: "prepared", data: {}, urls: {} } }),
   );
   setActiveDocumentLifecycleId(4);
   const parent = { postMessage: vi.fn() };
@@ -113,7 +113,7 @@ test("uses distinct frame generations when randomUUID is unavailable", async () 
   });
   vi.stubGlobal("crypto", { getRandomValues });
   globalThis.__MARIMO_MOUNT_CONFIG__ = {
-    supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+    supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard",
     version: "test",
     revision: "presentation-revision",
     runtime: "wasm",
@@ -128,6 +128,7 @@ test("uses distinct frame generations when randomUUID is unavailable", async () 
         id: "wasm",
         instance: "wasm-instance",
         data: {},
+        urls: {},
       },
     }),
   );
@@ -269,7 +270,7 @@ test("opaque WASM frames synchronize controls and navigation through document id
     dispose: disposeControls,
   };
   globalThis.__MARIMO_MOUNT_CONFIG__ = {
-    supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+    supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard",
     version: "test",
     revision: "presentation-revision",
     runtime: "wasm",
@@ -284,6 +285,7 @@ test("opaque WASM frames synchronize controls and navigation through document id
         id: "wasm",
         instance: "wasm-instance",
         data: {},
+        urls: {},
       },
     }),
   );
@@ -393,7 +395,7 @@ test("acquires a control endpoint that becomes available after bridge startup", 
   const connect = vi.fn<() => ControlEndpoint | undefined>();
   connect.mockReturnValueOnce(undefined).mockReturnValue(endpoint);
   globalThis.__MARIMO_MOUNT_CONFIG__ = {
-    supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+    supportUrl: "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard",
     version: "test",
     revision: "presentation-revision",
     runtime: "wasm",
@@ -408,6 +410,7 @@ test("acquires a control endpoint that becomes available after bridge startup", 
         id: "wasm",
         instance: "wasm-instance",
         data: {},
+        urls: {},
       },
     }),
   );

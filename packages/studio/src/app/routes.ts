@@ -20,17 +20,13 @@ export class StudioRoutes {
     const query = navigation?.query ?? this.notebookQuery;
     const selected = selectRuntimeInUrl(
       this.withNotebookQuery(
-        appendUrlPath(
-          this.bootstrap.urls.viewPrefix,
-          `${encodeURIComponent(view)}/`,
-          globalThis.location.href,
-        ),
+        appendUrlPath(this.bootstrap.urls.viewPrefix, `${encodeURIComponent(view)}/`),
         query,
       ),
       runtime,
       this.bootstrap.defaultRuntime,
     );
-    const url = new URL(selected, globalThis.location.href);
+    const url = new URL(selected);
     url.searchParams.set(STUDIO_CLIENT_QUERY_PARAM, this.bootstrap.clientId);
     url.searchParams.set(SERVER_INSTANCE_QUERY_PARAM, this.bootstrap.serverInstance);
     url.hash = navigation?.hash ?? "";
@@ -44,26 +40,16 @@ export class StudioRoutes {
 
   studio = (view: string): string =>
     this.withNotebookQuery(
-      appendUrlPath(
-        this.bootstrap.urls.studioPrefix,
-        `${encodeURIComponent(view)}/`,
-        globalThis.location.href,
-      ),
+      appendUrlPath(this.bootstrap.urls.studioPrefix, `${encodeURIComponent(view)}/`),
     );
 
   support = (view: string): string => {
     const url = new URL(
-      appendUrlPath(
-        this.bootstrap.urls.viewSupportPrefix,
-        encodeURIComponent(view),
-        globalThis.location.href,
-      ),
+      appendUrlPath(this.bootstrap.urls.viewSupportPrefix, encodeURIComponent(view)),
     );
     url.searchParams.set(SERVER_INSTANCE_QUERY_PARAM, this.bootstrap.serverInstance);
     return url.toString();
   };
-
-  endpoint = (url: string): string => new URL(url, globalThis.location.href).toString();
 
   syncQuery = (query: string): void => {
     const next = publicNotebookQuery(query);

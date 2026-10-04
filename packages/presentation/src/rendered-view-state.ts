@@ -26,10 +26,7 @@ export const configuredView = (): string => {
   }
   try {
     return decodeURIComponent(
-      new URL(getSupportUrl(), globalThis.location.origin).pathname
-        .split("/")
-        .filter(Boolean)
-        .at(-1) ?? "",
+      new URL(getSupportUrl()).pathname.split("/").filter(Boolean).at(-1) ?? "",
     );
   } catch {
     return "";

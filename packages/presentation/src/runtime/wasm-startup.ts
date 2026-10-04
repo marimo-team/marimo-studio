@@ -45,11 +45,6 @@ const requestProjectionBridge = async (invoke: RuntimeInvoke, signal?: AbortSign
     ),
   );
 
-export const resolveWasmRuntimeUrl = (
-  rootUrl: string,
-  documentBaseUrl = globalThis.document.baseURI,
-): string => new URL(rootUrl, documentBaseUrl).toString();
-
 export const prepareWasmProjectionRuntime = async ({
   authorizeProjections,
   config,

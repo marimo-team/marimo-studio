@@ -1,6 +1,6 @@
 import type { RuntimeRegistry } from "@marimo-studio/runtime";
 
-import { documentBase } from "./document/base.ts";
+import { documentBase, initialDocumentBaseUrl } from "./document/base.ts";
 import { onFinalPageHide } from "./document/page-lifecycle.ts";
 import { startQuerySync } from "./document/query-sync.ts";
 import { watchViewScriptErrors } from "./document/view-script-errors.ts";
@@ -26,7 +26,7 @@ export const startStaticPresentation = (registry: RuntimeRegistry): void => {
   const lifetime = new AbortController();
   window.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
   onFinalPageHide(watchViewScriptErrors());
-  documentBase.start(document.baseURI);
+  documentBase.start(initialDocumentBaseUrl);
   startQuerySync();
   onFinalPageHide(() => {
     lifetime.abort(new DOMException("Static presentation retired", "AbortError"));

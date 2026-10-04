@@ -13,36 +13,60 @@ const payload = {
   clientId: "browser-client-1234",
   serverInstance: "server-instance",
   urls: {
-    editor: "/_marimo-studio/editor/?file=analysis.py",
-    agent: "/_marimo-studio",
-    events: "/_marimo-studio/dev/events",
-    query: "/_marimo-studio/query",
-    studioPrefix: "/studio/",
-    viewPrefix: "/",
-    viewSupportPrefix: "/_marimo-studio/views",
-    views: "/_marimo-studio/views",
+    editor: "../../_marimo-studio/editor/?file=analysis.py",
+    agent: "../../_marimo-studio",
+    events: "../../_marimo-studio/dev/events",
+    query: "../../_marimo-studio/query",
+    studioPrefix: "../../studio/",
+    viewPrefix: "../../",
+    viewSupportPrefix: "../../_marimo-studio/views",
+    views: "../../_marimo-studio/views",
   },
   workspaceId: "workspace",
   serverToken: "token",
 };
 
+// A proxy serves the workspace beneath a prefix that the server never sees.
+const documentUrl = "https://workbench.example/s/f3a9/p/77c1/studio/dashboard/";
+
 describe("Studio bootstrap", () => {
-  it("accepts the versioned document contract", () => {
-    expect(parseStudioBootstrap(payload)).toEqual(payload);
+  it("resolves its URLs against the document that carried it", () => {
+    expect(parseStudioBootstrap(payload, documentUrl)).toEqual({
+      ...payload,
+      urls: {
+        editor: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/editor/?file=analysis.py",
+        agent: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio",
+        events: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/dev/events",
+        query: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/query",
+        studioPrefix: "https://workbench.example/s/f3a9/p/77c1/studio/",
+        viewPrefix: "https://workbench.example/s/f3a9/p/77c1/",
+        viewSupportPrefix: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views",
+        views: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views",
+      },
+    });
   });
 
   it("rejects selected views and runtimes outside their declared lists", () => {
-    expect(() => parseStudioBootstrap({ ...payload, selectedView: "missing" })).toThrow();
-    expect(() => parseStudioBootstrap({ ...payload, defaultRuntime: "wasm" })).toThrow();
+    expect(() =>
+      parseStudioBootstrap({ ...payload, selectedView: "missing" }, documentUrl),
+    ).toThrow();
+    expect(() =>
+      parseStudioBootstrap({ ...payload, defaultRuntime: "wasm" }, documentUrl),
+    ).toThrow();
   });
 
   it("rejects duplicate view and runtime identities", () => {
-    expect(() => parseStudioBootstrap({ ...payload, views: ["dashboard", "dashboard"] })).toThrow();
     expect(() =>
-      parseStudioBootstrap({
-        ...payload,
-        runtimes: [payload.runtimes[0], payload.runtimes[0]],
-      }),
+      parseStudioBootstrap({ ...payload, views: ["dashboard", "dashboard"] }, documentUrl),
+    ).toThrow();
+    expect(() =>
+      parseStudioBootstrap(
+        {
+          ...payload,
+          runtimes: [payload.runtimes[0], payload.runtimes[0]],
+        },
+        documentUrl,
+      ),
     ).toThrow();
   });
 });
