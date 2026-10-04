@@ -23,13 +23,12 @@ from marimo_studio._server.security import Origin, SecurityPolicy
 from marimo_studio._server.studio.event_capability import (
     workspace_events_capability,
 )
-from marimo_studio._workspace.metadata import update_notebook_config
 
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
-from ..helpers import notebook_source
+from ..helpers import notebook_source, update_notebook_config
 from .app_test_support import (
     _assert_server_runtime,
     _projection_request,

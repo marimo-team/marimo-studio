@@ -17,7 +17,7 @@ from marimo_studio._artifacts.codec import (
     profile_state_dict,
     read_json,
 )
-from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET, FileBudgetTracker
+from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._artifacts.lock import artifact_lock, build_lock
 from marimo_studio._artifacts.paths import (
     artifact_files,
@@ -26,19 +26,19 @@ from marimo_studio._artifacts.paths import (
     ensure_secure_directory,
     normalized_artifact_path,
     read_secure_bytes,
+    validated_artifact_paths,
 )
 from marimo_studio._artifacts.records import (
+    ArtifactFile,
     ArtifactProfileState,
     ArtifactPublication,
     ArtifactRevision,
     ArtifactRevisionSnapshot,
     ArtifactStateSnapshot,
-    ArtifactTreeIdentity,
     ViewArtifact,
     ViewBuildState,
 )
-from marimo_studio._filesystem.io import atomic_write_text
-from marimo_studio._filesystem.secure import secure_directory
+from marimo_studio._filesystem.files import FileTree, TreeVersion
 from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
@@ -111,10 +111,8 @@ def write_profile_state(project: ViewProject, state: ArtifactProfileState) -> No
     )
     pointer = profile_pointer(project, state.profile)
     assert_secure_path(project.root, pointer, "Artifact profile receipt")
-    atomic_write_text(
-        pointer,
-        encode_json(profile_state_dict(state)),
-        root=project.root,
+    FileTree(project.root).write(
+        pointer, encode_json(profile_state_dict(state)).encode("utf-8")
     )
 
 
@@ -132,22 +130,15 @@ def write_profile_state_if_active(
     pending = staging / f"receipt-{state.profile}-{secrets.token_hex(16)}.json"
     assert_secure_path(project.root, pointer, "Artifact profile receipt")
     assert_secure_path(project.root, pending, "Artifact pending profile receipt")
-    atomic_write_text(
-        pending,
-        encode_json(profile_state_dict(state)),
-        root=project.root,
-    )
+    tree = FileTree(project.root)
+    tree.write(pending, encode_json(profile_state_dict(state)).encode("utf-8"))
 
     def commit() -> None:
-        with secure_directory(project.root) as filesystem:
-            filesystem.replace(pending, pointer)
+        tree.replace(pending, pointer)
 
     def discard_pending() -> None:
-        with (
-            suppress(OSError, ConfigurationError),
-            secure_directory(project.root) as filesystem,
-        ):
-            filesystem.unlink(pending)
+        with suppress(OSError):
+            tree.remove(pending)
 
     try:
         committed = control.commit_if_active(commit)
@@ -162,9 +153,9 @@ def write_profile_state_if_active(
 def recover_staging(project: ViewProject) -> None:
     staging = artifact_root(project) / ".staging"
     ensure_secure_directory(project.root, staging, "Artifact staging directory")
-    with secure_directory(staging) as filesystem:
-        for path in filesystem.children():
-            filesystem.remove_tree(path)
+    tree = FileTree(project.root)
+    for path in tree.children(staging):
+        tree.remove(path)
 
 
 def prepare_control_directories(project: ViewProject) -> None:
@@ -187,35 +178,31 @@ def prepare_control_directories(project: ViewProject) -> None:
     recover_staging(project)
 
 
-def prepare_publication_candidate(
-    generation_root: Path,
+def ingest_publication_files(
+    project: ViewProject,
     files_root: Path,
-    publication_root: Path,
-) -> Path:
-    """Detach public files from the private provider snapshot and scratch tree."""
-    with secure_directory(generation_root) as filesystem:
-        filesystem.create_directory(publication_root)
-        published_files = publication_root / "files"
-        filesystem.replace(files_root, published_files)
-        for path in filesystem.children():
-            if path != publication_root:
-                filesystem.remove_tree(path)
-    return published_files
+    destination: Path,
+) -> tuple[ArtifactFile, ...]:
+    """Copy provider output into a new revision files directory.
 
-
-def detach_public_files(files_root: Path) -> None:
-    """Copy provider files onto revision-owned inodes before hashing."""
-    budget = FileBudgetTracker(ARTIFACT_OUTPUT_BUDGET, "Artifact output")
-    with secure_directory(files_root) as filesystem:
-        files = filesystem.regular_file_sizes(
-            max_entries=ARTIFACT_OUTPUT_BUDGET.max_files,
+    The provider can still reach ``files_root``, so publication reads, hashes,
+    and serves only the Studio-owned copy at ``destination``.
+    """
+    ingested = {
+        item.path.as_posix(): item
+        for item in FileTree(project.root).ingest(
+            files_root,
+            destination,
+            budget=ARTIFACT_OUTPUT_BUDGET,
+            label="Artifact output",
         )
-        if not files:
-            raise ConfigurationError("Artifact contains no browser files")
-        for path, size in files:
-            budget.add(path.relative_to(files_root).as_posix(), size)
-        for path, size in files:
-            filesystem.replace_with_copy(path, expected_size=size)
+    }
+    return tuple(
+        ArtifactFile(
+            path, ingested[path.as_posix()].digest, ingested[path.as_posix()].size
+        )
+        for path in validated_artifact_paths(ingested)
+    )
 
 
 def artifact_from_publication(
@@ -293,16 +280,12 @@ def read_artifact_revision(
     return ArtifactRevision(files_root, manifest)
 
 
-def artifact_tree_identity(
-    project: ViewProject,
-    root: Path,
-) -> ArtifactTreeIdentity | None:
+def artifact_tree_identity(project: ViewProject, root: Path) -> TreeVersion | None:
     """Capture bounded artifact metadata without reading file contents."""
-    with secure_directory(project.root) as filesystem:
-        return filesystem.directory_tree_identity(
-            root,
-            max_entries=ARTIFACT_OUTPUT_BUDGET.max_files + 2,
-        )
+    return FileTree(project.root).tree_version(
+        root,
+        max_entries=ARTIFACT_OUTPUT_BUDGET.max_files + 2,
+    )
 
 
 def read_artifact_revision_snapshot(

@@ -6,9 +6,8 @@ from pathlib import Path
 
 import pytest
 
-import marimo_studio._filesystem.secure as secure_files
+import marimo_studio._filesystem.files as files
 import marimo_studio._workspace.config as workspace_config
-import marimo_studio._workspace.mutation_lock as mutation_locks
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._views.resolve import resolve_studio
@@ -218,109 +217,39 @@ def test_workspace_lock_creation_cannot_follow_a_raced_view_root(
     view_root = tmp_path / "views"
     external = tmp_path / "external"
     external.mkdir()
-    ensure = secure_files.SecureDirectory.ensure_directory
+    open_directory = files.open_directory
     raced = False
 
-    def replace_root_then_create(
-        filesystem: secure_files.SecureDirectory,
-        path: Path,
-    ) -> tuple[Path, ...]:
+    def swap_root_after_open(
+        name: str | Path, *, path: Path, parent: int | None = None
+    ) -> int:
         nonlocal raced
+        descriptor = open_directory(name, path=path, parent=parent)
         if path == view_root and not raced:
             raced = True
+            view_root.rename(tmp_path / "views-retired")
             view_root.symlink_to(external, target_is_directory=True)
-        return ensure(filesystem, path)
+        return descriptor
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "ensure_directory",
-        replace_root_then_create,
-    )
+    monkeypatch.setattr(files, "open_directory", swap_root_after_open)
 
     with (
-        pytest.raises(ConfigurationError, match="mutation lock"),
+        pytest.raises(ConfigurationError, match="symlink"),
         workspace_catalog_lock(view_root),
     ):
         pytest.fail("raced workspace lock must not be acquired")
 
+    assert raced
     assert tuple(external.iterdir()) == ()
 
 
-@pytest.mark.skipif(
-    os.name == "nt", reason="Windows prevents replacement while the lock is held"
-)
-def test_workspace_lock_rejects_a_replaced_lockfile_after_acquisition(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    view_root = tmp_path / "views"
-    acquire = mutation_locks._acquire_file_lock
-    replaced = False
-
-    def acquire_then_replace(descriptor: int, *, blocking: bool) -> bool:
-        nonlocal replaced
-        acquired = acquire(descriptor, blocking=blocking)
-        lock = view_root / ".locks" / ".catalog.lock"
-        lock.unlink()
-        lock.write_text("replacement", encoding="utf-8")
-        replaced = True
-        return acquired
-
-    monkeypatch.setattr(
-        mutation_locks,
-        "_acquire_file_lock",
-        acquire_then_replace,
-    )
-
-    with (
-        pytest.raises(ConfigurationError, match="changed before acquisition"),
-        workspace_catalog_lock(view_root),
-    ):
-        pytest.fail("replaced lockfile must not be trusted")
-
-
-@pytest.mark.skipif(
-    os.name == "nt", reason="Windows prevents removal while the lock is held"
-)
 def test_workspace_lock_reports_a_removed_control_directory_while_held(
     tmp_path: Path,
 ) -> None:
     view_root = tmp_path / "views"
 
     with (
-        pytest.raises(ConfigurationError, match="changed while held") as raised,
+        pytest.raises(ConfigurationError, match="changed while held"),
         workspace_catalog_lock(view_root),
     ):
         shutil.rmtree(view_root / ".locks")
-
-    assert isinstance(raised.value.__cause__, FileNotFoundError)
-
-
-@pytest.mark.skipif(
-    os.name != "nt", reason="Windows enforces byte-range locks across file handles"
-)
-def test_workspace_lock_blocks_replacement_while_held_on_windows(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    view_root = tmp_path / "views"
-    acquire = mutation_locks._acquire_file_lock
-    blocked = False
-
-    def acquire_then_attempt_replacement(descriptor: int, *, blocking: bool) -> bool:
-        nonlocal blocked
-        acquired = acquire(descriptor, blocking=blocking)
-        lock = view_root / ".locks" / ".catalog.lock"
-        with pytest.raises(PermissionError):
-            lock.unlink()
-        blocked = True
-        return acquired
-
-    monkeypatch.setattr(
-        mutation_locks,
-        "_acquire_file_lock",
-        acquire_then_attempt_replacement,
-    )
-
-    with workspace_catalog_lock(view_root):
-        assert blocked

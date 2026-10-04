@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._workspace.config import (
     default_view_writes,
     discover_views,
@@ -40,10 +41,14 @@ def set_default_view(
                 raise ViewNotFoundError(name, available=views)
         else:
             require_owned_view(materialize_studio_workspace(current), name, owner)
-        with workspace_transaction(
-            "Default view selection",
-            current.root,
-            default_view_writes(current, snapshot.source, name),
-            expected=snapshot.expected_identities,
+        writes = default_view_writes(current, snapshot.source, name)
+        with (
+            notebook_write_lock(current.notebook, writes),
+            workspace_transaction(
+                "Default view selection",
+                current.root,
+                writes,
+                expected=snapshot.expected_identities,
+            ),
         ):
             return load_studio(current.config_path)

@@ -132,12 +132,14 @@ while the provider retains ownership of inspection and build behavior.
 
 Studio discovers inputs from the live project, copies them into a private
 snapshot, and treats the snapshot inspection as the build authority. The
-provider writes a candidate beneath its supplied staging root.
+provider writes a candidate beneath its supplied staging root. Studio copies the
+candidate's regular files into a new directory that only Studio writes, then
+validates, hashes, and publishes that copy.
 
 Core validates:
 
 - path containment and normalized public paths
-- symlinks and hard-link detachment
+- symlinks and special files in provider output
 - input and output size budgets
 - reserved routes
 - the entry document and complete file catalog
@@ -238,17 +240,46 @@ workspace. A competing local process may replace a path with a symlink, a
 Windows reparse point, another file, or another directory between validation
 and mutation.
 
-On POSIX systems, `_filesystem/secure.py` holds parent descriptors and uses
-descriptor-relative operations with no-follow flags. On Windows, it holds
-native directory handles and rejects reparse points before leaf access. Atomic
-writes use same-directory temporary files and identity-checked rollback.
+`_filesystem.files.FileTree` owns every file change under one root. On POSIX
+systems, each verb opens the root and walks to the target's parent through
+directory descriptors opened with `O_NOFOLLOW`, then acts on the leaf relative
+to that descriptor. A swapped ancestor either fails the walk or leaves the
+operation in the directory it resolved. A tree binds to the root directory its
+first verb opens, so a multi-step operation refuses to continue once the root
+path names another directory. Windows offers no descriptor-relative file API, so
+each verb checks the path for symlinks and junctions before it acts. A junction
+that replaces a checked ancestor between that check and the operation is not
+refused.
 
-The boundary supports Linux, macOS, and Windows filesystems with the required
-descriptor or native-handle primitives. It does not defend against a process
-that can modify Studio's memory, descriptors, or executable code. The custom
-code is limited to stable-parent access, regular-file identity, atomic replace,
-and rollback recovery because Python's portable file APIs do not provide that
-combined contract.
+| Verb                    | Primitive                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `read`                  | Bounded read that returns content with an opaque `Version`                                                              |
+| `write`                 | Same-directory temporary file, `fsync`, then replace                                                                    |
+| `write(expect=ABSENT)`  | Publish the new file while its name stays absent                                                                        |
+| `write(expect=version)` | Move the current file aside, compare its `Version`, publish or restore                                                  |
+| `remove(expect=...)`    | Move the entry aside, compare its `Version` or `TreeVersion`, delete or restore                                         |
+| `publish`               | Move an entry onto a name that must stay absent                                                                         |
+| `lock`                  | `flock` or `msvcrt` byte-range lock on a persistent lock file                                                           |
+| `ingest`                | Copy provider output into a new directory, through directory descriptors on POSIX and held directory handles on Windows |
+
+`publish` uses `renameat2(RENAME_NOREPLACE)` on Linux and
+`renameatx_np(RENAME_EXCL)` on macOS. NFS, WSL drive mounts, and gVisor host
+mounts reject that flag with `EINVAL`. There, a file publishes through an
+exclusive hard link and a directory through an empty placeholder that the rename
+replaces. On Windows, `MoveFileExW` renames whichever entry its source handle
+opened, so concurrent renames of one path can all succeed. Studio renames
+through a handle that withholds delete sharing. A competing rename of the same
+entry gets a sharing violation, which Studio retries for about one second before
+it reports the entry as busy.
+
+Provider builds are the lower-privilege writers, because a Deno build may write
+only beneath its staging root. `ingest` copies their regular files into a
+directory that only Studio writes and rejects symlinks and special files, so
+publication and serving never read a tree that a build can still change.
+
+The threat model covers concurrent path replacement by local processes. A
+process that can modify Studio's memory, descriptors, or executable code is
+outside it.
 
 ## Failure behavior
 

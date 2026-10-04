@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 import marimo_studio._workspace.config as workspace_config
+from marimo_studio._filesystem.files import FileTree, Snapshot, Version
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
@@ -84,20 +86,26 @@ def test_configuration_load_reports_a_replacement_conflict(
     missing_read: int,
 ) -> None:
     prepare_view(notebook_path)
-    original = workspace_config.read_file_snapshot_with_identity
     reads = 0
     claimed = notebook_path.with_suffix(".rollback")
 
-    def read_snapshot(path: Path, *, root: Path):
+    def counted(path: Path) -> None:
         nonlocal reads
-        reads += 1
-        if reads == missing_read:
-            notebook_path.rename(claimed)
-        return original(path, root=root)
+        if path == notebook_path:
+            reads += 1
+            if reads == missing_read:
+                notebook_path.rename(claimed)
 
-    monkeypatch.setattr(
-        workspace_config, "read_file_snapshot_with_identity", read_snapshot
-    )
+    class CountingTree(FileTree):
+        def read(self, path: Path, **options: Any) -> Snapshot:
+            counted(path)
+            return super().read(path, **options)
+
+        def version(self, path: Path) -> Version | None:
+            counted(path)
+            return super().version(path)
+
+    monkeypatch.setattr(workspace_config, "FileTree", CountingTree)
     try:
         with pytest.raises(WorkspaceGenerationConflictError):
             workspace_config.load_studio_definition(notebook_path)

@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 from contextlib import suppress
 from pathlib import Path
 
 from marimo_studio._artifacts.retention import artifact_exclusion_guard
-from marimo_studio._filesystem._secure_names import temporary_sibling_name
-from marimo_studio._filesystem.io import (
-    atomic_write_bytes,
-    read_bytes,
-    reject_mutable_symlinks,
-)
-from marimo_studio._filesystem.secure import (
-    FileIdentity,
-    SecureDirectory,
-    secure_directory,
-)
+from marimo_studio._filesystem.files import ABSENT, FileTree, Version
+from marimo_studio._filesystem.names import temporary_name
+from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
 from marimo_studio._workspace.models import StudioWorkspace
@@ -36,93 +29,55 @@ _TOMBSTONE_MARKER = ".marimo-studio-tombstone"
 _VIEW_DELETION_MAX_ENTRIES = 100_000
 
 
-def _require_directory_owner(
-    filesystem: SecureDirectory,
-    path: Path,
-    expected: FileIdentity,
-) -> None:
-    current = filesystem.directory_identity(path)
-    if (
-        current.device != expected.device
-        or current.inode != expected.inode
-        or current.mode != expected.mode
-    ):
-        raise ConfigurationError(
-            f"View deletion staging owner changed before commit: {path}"
-        )
-
-
 def _remove_owned_tombstone(
-    filesystem: SecureDirectory,
+    tree: FileTree,
     target: Path,
-    expected: FileIdentity,
+    expected: Version,
     token: str,
 ) -> bool:
-    if not filesystem.entry_exists(target):
+    if not tree.exists(target):
         return True
     try:
-        marker = read_bytes(target / _TOMBSTONE_MARKER, root=target).decode("ascii")
-        current = filesystem.directory_identity(target)
+        marker = tree.read(target / _TOMBSTONE_MARKER).content.decode("ascii")
     except (OSError, UnicodeError):
         return False
-    if marker != token or current != expected:
+    if marker != token:
         return False
     try:
-        quarantine = filesystem.quarantine_directory_if_identity(target, expected)
-    except OSError:
-        return False
-    try:
-        filesystem.remove_tree(quarantine)
-        filesystem.sync_parent(target)
+        tree.remove(target, expect=expected)
     except OSError:
         return False
     return True
 
 
-def _remove_empty_staging_root(
-    filesystem: SecureDirectory,
-    staging_root: Path,
-) -> None:
-    identity = filesystem.directory_identity(staging_root)
-    quarantine = filesystem.quarantine_directory_if_identity(staging_root, identity)
-    filesystem.rmdir(quarantine)
-    filesystem.sync_parent(staging_root)
-
-
 def _restore_staged_view(
-    filesystem: SecureDirectory,
+    tree: FileTree,
     staged: Path,
     target: Path,
     candidate: Path,
     staging_root: Path,
-    tombstone_identity: FileIdentity | None,
+    tombstone: Version | None,
     tombstone_token: str,
 ) -> Path | None:
-    if not filesystem.entry_exists(staged):
-        if filesystem.entry_exists(candidate):
-            filesystem.remove_tree(candidate)
+    if not tree.exists(staged):
+        tree.remove(candidate)
         with suppress(OSError):
-            _remove_empty_staging_root(filesystem, staging_root)
+            tree.remove_empty_directory(staging_root)
         return None
-    if tombstone_identity is not None and not _remove_owned_tombstone(
-        filesystem,
+    if tombstone is not None and not _remove_owned_tombstone(
+        tree,
         target,
-        tombstone_identity,
+        tombstone,
         tombstone_token,
     ):
         return staged
     try:
-        filesystem.rename_if_absent(staged, target)
+        tree.publish(staged, target)
     except OSError:
         return staged
-    filesystem.sync_parent(staged)
-    filesystem.sync_parent(target)
-    if filesystem.entry_exists(candidate):
-        with suppress(OSError):
-            filesystem.remove_tree(candidate)
-            filesystem.sync_parent(candidate)
     with suppress(OSError):
-        _remove_empty_staging_root(filesystem, staging_root)
+        tree.remove(candidate)
+        tree.remove_empty_directory(staging_root)
     return None
 
 
@@ -145,11 +100,8 @@ def _delete_view_locked(
     project = require_owned_view(current, name, owner)
     require_removable(current, name)
     target = current.view_root / name
-    reject_mutable_symlinks(
-        current.root,
-        {current.config_path, current.view_root.parent, target},
-    )
-    if not target.is_dir() or not (target / "view.toml").is_file():
+    tree = FileTree(current.root)
+    if not tree.is_directory(target) or not tree.is_file(target / "view.toml"):
         raise ViewNotFoundError(name, available=tuple(current.views))
 
     remaining = tuple(view for view in current.views if view != name)
@@ -157,74 +109,69 @@ def _delete_view_locked(
         remaining,
         remaining[0] if current.default_view == name else current.default_view,
     )
-    with (
-        artifact_exclusion_guard(project),
-        secure_directory(current.root) as filesystem,
-    ):
-        expected = filesystem.directory_tree_identity(
-            target,
-            max_entries=_VIEW_DELETION_MAX_ENTRIES,
-        )
-        if expected is None:
+    with artifact_exclusion_guard(project):
+        expected = tree.tree_version(target, max_entries=_VIEW_DELETION_MAX_ENTRIES)
+        target_version = tree.version(target)
+        if expected is None or target_version is None:
             raise ViewNotFoundError(name, available=tuple(current.views))
-        target_identity = filesystem.directory_identity(target)
-        staging_root = current.view_root.parent / temporary_sibling_name("delete")
-        staging_identity = filesystem.create_directory(staging_root)
-        filesystem.sync_parent(staging_root)
+        staging_root = current.view_root.parent / temporary_name("stage")
+        tree.create_directory(staging_root)
+        staging_state = tree.stat(staging_root)
         staged = staging_root / name
         candidate = staging_root / _TOMBSTONE_CANDIDATE
         tombstone_token = secrets.token_hex(16)
-        tombstone_identity: FileIdentity | None = None
+        tombstone: Version | None = None
         updated: StudioWorkspace | None = None
         try:
-            filesystem.create_directory(candidate)
-            atomic_write_bytes(
+            # A tombstone holds the name while the catalog transaction runs,
+            # so a restore never meets a directory created in the meantime.
+            tree.create_directory(candidate)
+            tree.write(
                 candidate / _TOMBSTONE_MARKER,
                 tombstone_token.encode("ascii"),
-                filesystem=filesystem,
+                expect=ABSENT,
             )
-            filesystem.sync_parent(candidate / _TOMBSTONE_MARKER)
-            tombstone_identity = filesystem.directory_identity(candidate)
-            filesystem.sync_parent(candidate)
-            _require_directory_owner(filesystem, staging_root, staging_identity)
-            filesystem.replace(target, staged)
-            filesystem.sync_parent(target)
-            filesystem.sync_parent(staged)
-            if filesystem.directory_identity(staged) != target_identity:
+            tombstone = tree.version(candidate)
+            # The view moves into the staging directory this deletion created.
+            current_staging = tree.stat(staging_root)
+            if (
+                staging_state is None
+                or current_staging is None
+                or not os.path.samestat(staging_state, current_staging)
+            ):
+                raise ConfigurationError(
+                    f"View deletion staging changed before {name!r} moved into it"
+                )
+            tree.publish(target, staged)
+            if tree.version(staged) != target_version:
                 raise ConfigurationError(
                     f"View {name!r} changed before deletion committed"
                 )
             try:
-                filesystem.rename_if_absent(candidate, target)
+                tree.publish(candidate, target)
             except FileExistsError as error:
                 raise ViewDeletionError(recovery=staged) from error
-            if filesystem.directory_identity(target) != tombstone_identity:
+            if tombstone is None or tree.version(target) != tombstone:
                 raise ViewDeletionError(recovery=staged)
-            filesystem.sync_parent(candidate)
-            filesystem.sync_parent(target)
             if (
-                filesystem.directory_tree_identity(
-                    staged,
-                    max_entries=_VIEW_DELETION_MAX_ENTRIES,
-                )
+                tree.tree_version(staged, max_entries=_VIEW_DELETION_MAX_ENTRIES)
                 != expected
             ):
                 raise ConfigurationError(
                     f"View {name!r} changed before deletion committed"
                 )
-            with workspace_transaction(
-                "View deletion",
-                current.root,
-                writes,
-                expected=transaction_identities,
-                expected_directories={target: tombstone_identity},
+            with (
+                notebook_write_lock(current.notebook, writes),
+                workspace_transaction(
+                    "View deletion",
+                    current.root,
+                    writes,
+                    expected={**transaction_identities, target: tombstone},
+                ),
             ):
                 updated = load_studio(current.config_path)
                 if (
-                    filesystem.directory_tree_identity(
-                        staged,
-                        max_entries=_VIEW_DELETION_MAX_ENTRIES,
-                    )
+                    tree.tree_version(staged, max_entries=_VIEW_DELETION_MAX_ENTRIES)
                     != expected
                 ):
                     raise ConfigurationError(
@@ -232,12 +179,12 @@ def _delete_view_locked(
                     )
         except BaseException as error:
             recovery = _restore_staged_view(
-                filesystem,
+                tree,
                 staged,
                 target,
                 candidate,
                 staging_root,
-                tombstone_identity,
+                tombstone,
                 tombstone_token,
             )
             if recovery is not None:
@@ -245,49 +192,16 @@ def _delete_view_locked(
             if isinstance(error, OSError):
                 raise ViewDeletionError() from error
             raise
-        if updated is None:
+        if updated is None or tombstone is None:
             raise RuntimeError("View deletion did not produce an updated workspace")
         try:
-            assert tombstone_identity is not None
-            if not _remove_owned_tombstone(
-                filesystem,
-                target,
-                tombstone_identity,
-                tombstone_token,
-            ):
+            if not _remove_owned_tombstone(tree, target, tombstone, tombstone_token):
                 raise ViewDeletionError(
                     cleanup=staging_root,
                     committed_workspace=updated,
                 )
-            if (
-                filesystem.directory_tree_identity(
-                    staged,
-                    max_entries=_VIEW_DELETION_MAX_ENTRIES,
-                )
-                != expected
-            ):
-                raise ViewDeletionError(
-                    cleanup=staging_root,
-                    committed_workspace=updated,
-                )
-            quarantine = filesystem.quarantine_directory_if_identity(
-                staged,
-                target_identity,
-            )
-            if (
-                filesystem.directory_tree_identity(
-                    quarantine,
-                    max_entries=_VIEW_DELETION_MAX_ENTRIES,
-                )
-                != expected
-            ):
-                raise ViewDeletionError(
-                    cleanup=staging_root,
-                    committed_workspace=updated,
-                )
-            filesystem.remove_tree(quarantine)
-            filesystem.sync_parent(staged)
-            _remove_empty_staging_root(filesystem, staging_root)
+            tree.remove(staged, expect=expected)
+            tree.remove_empty_directory(staging_root)
         except ViewDeletionError:
             raise
         except OSError as error:

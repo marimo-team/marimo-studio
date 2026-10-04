@@ -11,7 +11,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from marimo_studio._filesystem.io import read_text
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio.errors import ConfigurationError
 
 
@@ -26,4 +26,4 @@ def parse_toml(source: str, path: Path) -> dict[str, Any]:
 def read_toml(path: Path) -> dict[str, Any]:
     if path.is_symlink():
         raise ConfigurationError(f"Configuration is a symlink: {path}")
-    return parse_toml(read_text(path, root=path.parent), path)
+    return parse_toml(FileTree(path.parent).read(path).content.decode("utf-8"), path)

@@ -14,6 +14,7 @@ import pytest
 import marimo_studio._workspace.config as workspace_config
 import marimo_studio._workspace.generation as workspace_generation
 import marimo_studio._workspace.view_owners as owner_module
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
@@ -152,7 +153,7 @@ def test_owner_catalog_waits_for_an_in_flight_transaction_record(
 ) -> None:
     prepare_view(notebook_path)
     observed = load_studio(notebook_path)
-    temporary = observed.view_root / ".owners" / (".marimo-studio-restore-" + "a" * 32)
+    temporary = observed.view_root / ".owners" / (".marimo-studio-aside-" + "a" * 32)
     temporary.write_text("transaction snapshot", encoding="utf-8")
     catalog_lock = owner_module.workspace_catalog_lock
 
@@ -291,7 +292,7 @@ def test_view_owner_rejects_invalid_records(tmp_path: Path, source: str) -> None
         "api.toml",
         f"{'a' * 241}.toml",
         "notes.txt",
-        ".marimo-studio-restore-" + "a" * 32,
+        ".marimo-studio-aside-" + "a" * 32,
     ),
 )
 def test_owner_catalog_rejects_unowned_record_names(
@@ -402,3 +403,29 @@ def test_provider_free_catalog_does_not_adopt_an_invalid_sibling_name(
     workspace_generation.provider_free_catalog_generation(definition)
 
     assert not view_owner_path(studio.view_root, "Bad").exists()
+
+
+def test_owner_reconciliation_retries_a_record_removed_while_listed(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    record = view_owner_path(studio.view_root, "dashboard")
+    stat = FileTree.stat
+    vanished = False
+
+    def vanish_once(tree: FileTree, path: Path) -> os.stat_result | None:
+        # A concurrent catalog change removes the record after it was listed.
+        nonlocal vanished
+        if path == record and not vanished:
+            vanished = True
+            return None
+        return stat(tree, path)
+
+    monkeypatch.setattr(FileTree, "stat", vanish_once)
+
+    names = owner_module.reconcile_view_owners(studio.view_root, {"dashboard"})
+
+    assert names == {"dashboard"}
+    assert vanished

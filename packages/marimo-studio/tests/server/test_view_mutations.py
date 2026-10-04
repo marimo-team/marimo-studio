@@ -14,11 +14,11 @@ from starlette.testclient import TestClient
 
 import marimo_studio._server.studio.routes as studio_api_module
 from marimo_studio import create_asgi_app
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
-from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio.errors import WorkspaceGenerationConflictError
 from marimo_studio.view_providers import ProjectDiagnostic, SourceLocation
 from marimo_studio.view_providers._host import provider_registry
@@ -27,6 +27,7 @@ from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
+from ..helpers import update_notebook_config
 from ._view_mutation_test_support import _create_owned_view
 from .app_test_support import (
     _studio_host,
@@ -586,13 +587,13 @@ def test_project_read_recovers_when_the_owner_catalog_disappears(
     _edit_mode(app)
     owners = studio.view_root / ".owners"
     load = studio_api_module.load_studio
-    iterdir = Path.iterdir
+    children = FileTree.children
     armed = False
     removed = False
 
-    def remove_owners_after_observation(path: Path):
+    def remove_owners_after_observation(tree: FileTree, path: Path) -> tuple[Path, ...]:
         nonlocal removed
-        entries = iterdir(path)
+        entries = children(tree, path)
         if armed and path == owners and not removed:
             removed = True
             shutil.rmtree(owners)
@@ -606,7 +607,7 @@ def test_project_read_recovers_when_the_owner_catalog_disappears(
         finally:
             armed = False
 
-    monkeypatch.setattr(Path, "iterdir", remove_owners_after_observation)
+    monkeypatch.setattr(FileTree, "children", remove_owners_after_observation)
     monkeypatch.setattr(studio_api_module, "load_studio", raced_load)
 
     with TestClient(app) as client:

@@ -1,9 +1,25 @@
 from __future__ import annotations
 
+import os
 import re
+from collections.abc import Callable, MutableMapping
 from pathlib import Path
+from typing import Any
 
 import marimo
+
+
+def link_directory(target: Path, link: Path) -> None:
+    """Point ``link`` at ``target`` as a symlink, or as a junction on Windows.
+
+    Creating a junction needs no Windows privilege, unlike a symlink.
+    """
+    if os.name == "nt":
+        import _winapi
+
+        _winapi.CreateJunction(str(target), str(link))
+        return
+    link.symlink_to(target, target_is_directory=True)
 
 
 def replace_app_shell(document: str, content: str) -> str:
@@ -106,3 +122,18 @@ def notebook_source(marker: Path, *, dependencies: tuple[str, ...] = ()) -> str:
         'if __name__ == "__main__":\n'
         "    app.run()\n"
     )
+
+
+def update_notebook_config(
+    path: Path,
+    update: Callable[[MutableMapping[str, Any]], None],
+) -> None:
+    """Rewrite the notebook-local marimo-studio table with an atomic save."""
+    from marimo_studio._workspace.metadata import updated_notebook_config_source
+
+    source = path.read_text(encoding="utf-8")
+    temporary = path.with_name(f".{path.name}.edit")
+    temporary.write_text(
+        updated_notebook_config_source(path, source, update), encoding="utf-8"
+    )
+    os.replace(temporary, path)

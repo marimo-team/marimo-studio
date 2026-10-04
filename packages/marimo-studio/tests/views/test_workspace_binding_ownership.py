@@ -9,10 +9,12 @@ import pytest
 
 import marimo_studio._workspace.bindings as workspace_bindings
 import marimo_studio._workspace.transactions as workspace_transactions
+from marimo_studio._composition import create_notebook_write_lock
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._notebook.records import CellRef, NotebookSpec
 from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio.errors import (
     BindingError,
     ConfigurationError,
@@ -121,6 +123,7 @@ def test_bind_cell_inspects_the_captured_notebook_source(
         "captured-result",
         1,
         inspect_notebook=inspect_with_live_aba,
+        lock_notebook=create_notebook_write_lock(),
     )
 
     assert inspected_paths[0] != notebook_path
@@ -139,24 +142,6 @@ def test_stale_workspace_cannot_bind_into_a_replacement_catalog(
 
     with pytest.raises(WorkspaceGenerationConflictError):
         bind_cell(observed, "result", 1)
-
-    assert "result" not in load_studio(notebook_path).cells
-
-
-def test_live_alias_update_rejects_a_replacement_catalog(
-    notebook_path: Path,
-) -> None:
-    prepare_view(notebook_path)
-    observed = load_studio(notebook_path)
-    retired = observed.view_root.with_name("retired-studio")
-    observed.view_root.rename(retired)
-    shutil.copytree(retired, observed.view_root)
-
-    with pytest.raises(WorkspaceGenerationConflictError):
-        workspace_bindings._write_cell_bindings(
-            observed,
-            {"result": CellRef("a" * 64, "b" * 64)},
-        )
 
     assert "result" not in load_studio(notebook_path).cells
 
@@ -225,7 +210,7 @@ def test_live_alias_update_rejects_an_intervening_same_alias_edit(
 ) -> None:
     pyproject = _project_configuration(notebook_path)
     prepare_view(notebook_path)
-    studio = load_studio(pyproject)
+    studio = load_studio_definition(pyproject)
     observed = studio.cells["cell-2"]
     external = CellRef("a" * 64, "b" * 64)
     desired = CellRef("c" * 64, "d" * 64)
@@ -238,17 +223,19 @@ def test_live_alias_update_rejects_an_intervening_same_alias_edit(
         workspace_bindings._write_cell_bindings(
             studio,
             {"cell-2": desired},
+            notebook_source=notebook_path.read_text(encoding="utf-8"),
+            lock_notebook=create_notebook_write_lock(),
         )
 
     assert load_studio(pyproject).cells["cell-2"] == external
 
 
-def test_live_alias_update_requires_its_observed_catalog(
+def test_live_alias_update_requires_its_observed_configuration(
     notebook_path: Path,
 ) -> None:
     pyproject = _project_configuration(notebook_path)
     prepare_view(notebook_path)
-    studio = load_studio(pyproject)
+    studio = load_studio_definition(pyproject)
     observed = studio.cells["cell-2"]
     desired = CellRef("a" * 64, "b" * 64)
     pyproject.write_text(
@@ -260,6 +247,30 @@ def test_live_alias_update_requires_its_observed_catalog(
         workspace_bindings._write_cell_bindings(
             studio,
             {"cell-2": desired},
+            notebook_source=notebook_path.read_text(encoding="utf-8"),
+            lock_notebook=create_notebook_write_lock(),
         )
 
     assert load_studio(pyproject).cells["cell-2"] == desired
+
+
+def test_live_alias_update_leaves_bindings_to_a_newer_save(
+    notebook_path: Path,
+) -> None:
+    pyproject = _project_configuration(notebook_path)
+    prepare_view(notebook_path)
+    studio = load_studio_definition(pyproject)
+    observed = studio.cells["cell-2"]
+    saved = notebook_path.read_text(encoding="utf-8")
+    newer = saved.replace("x * 2", "x * 3")
+    assert newer != saved
+    notebook_path.write_text(newer, encoding="utf-8")
+
+    workspace_bindings._write_cell_bindings(
+        studio,
+        {"cell-2": CellRef("a" * 64, "b" * 64)},
+        notebook_source=saved,
+        lock_notebook=create_notebook_write_lock(),
+    )
+
+    assert load_studio(pyproject).cells["cell-2"] == observed

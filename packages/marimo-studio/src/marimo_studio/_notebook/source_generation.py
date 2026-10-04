@@ -7,7 +7,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from marimo_studio._filesystem.io import read_bytes
+from marimo_studio._filesystem.errors import ConcurrentChangeError
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio.errors import ConfigurationError
 
 
@@ -66,8 +67,14 @@ def capture_notebook_source_generation(
     """Return stable file state for the expected saved notebook source."""
     try:
         before = os.stat(path)
-        payload = read_bytes(path, root=path.parent)
+        payload = FileTree(path.parent).read(path).content
         after = os.stat(path)
+    except ConcurrentChangeError as error:
+        raise ConfigurationError(
+            f"Notebook changed during inspection: {path}. Retry the request."
+        ) from error
+    except ConfigurationError:
+        raise
     except OSError as error:
         raise ConfigurationError(
             f"Notebook changed during inspection: {path}. Retry the request."

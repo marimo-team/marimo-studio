@@ -16,14 +16,11 @@ from marimo_studio._delivery.urls import (
     STUDIO_CLIENT_QUERY_PARAM,
 )
 from marimo_studio._views.api import prepare_view
-from marimo_studio._workspace.metadata import (
-    read_notebook_metadata,
-    update_notebook_config,
-)
+from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio.view_providers._host import provider_registry
 
 from ..app_helpers import configured as _configured
-from ..helpers import empty_notebook_source
+from ..helpers import empty_notebook_source, update_notebook_config
 from .app_test_support import (
     _artifact_base,
     _editor_mount_value,

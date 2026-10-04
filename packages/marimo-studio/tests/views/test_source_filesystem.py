@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import marimo_studio._views.sources as sources_module
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.sources import read_source, write_source
 from marimo_studio.errors import (
     ConfigurationError,
@@ -101,7 +102,7 @@ def test_source_read_rejects_a_symlink_swapped_before_open(
     document = studio.views["dashboard"].root / SOURCE_PATH
     external = tmp_path / "secret.txt"
     external.write_text("SECRET", encoding="utf-8")
-    open_file = sources_module.os.open
+    open_file = os.open
     swapped = False
 
     def replace_then_open(
@@ -118,7 +119,7 @@ def test_source_read_rejects_a_symlink_swapped_before_open(
             document.symlink_to(external)
         return open_file(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(sources_module.os, "open", replace_then_open)
+    monkeypatch.setattr(os, "open", replace_then_open)
 
     with pytest.raises(SourceNotFoundError):
         read_source(studio, "dashboard", SOURCE_PATH)
@@ -140,7 +141,7 @@ def test_source_read_rejects_a_swapped_view_root(
     external = tmp_path / "external-view"
     external.mkdir()
     (external / SOURCE_PATH).write_text("SECRET", encoding="utf-8")
-    open_file = sources_module.os.open
+    open_file = os.open
     swapped = False
 
     def replace_root_then_open(
@@ -157,7 +158,7 @@ def test_source_read_rejects_a_swapped_view_root(
             project.root.symlink_to(external, target_is_directory=True)
         return open_file(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(sources_module.os, "open", replace_root_then_open)
+    monkeypatch.setattr(os, "open", replace_root_then_open)
 
     with pytest.raises(ConfigurationError):
         read_source(studio, "dashboard", SOURCE_PATH)
@@ -180,19 +181,19 @@ def test_manifest_read_rejects_a_root_swapped_after_validation(
     external = tmp_path / "external-view"
     external.mkdir()
     (external / "view.toml").write_text("SECRET", encoding="utf-8")
-    is_dir = Path.is_dir
+    is_directory = FileTree.is_directory
     swapped = False
 
-    def validate_then_swap(path: Path) -> bool:
+    def validate_then_swap(tree: FileTree, path: Path) -> bool:
         nonlocal swapped
-        result = is_dir(path)
+        result = is_directory(tree, path)
         if path == root and result and not swapped:
             swapped = True
             root.rename(retired)
             root.symlink_to(external, target_is_directory=True)
         return result
 
-    monkeypatch.setattr(Path, "is_dir", validate_then_swap)
+    monkeypatch.setattr(FileTree, "is_directory", validate_then_swap)
 
     with pytest.raises(
         (ConfigurationError, SourceNotFoundError, ViewGenerationConflictError)
@@ -217,7 +218,7 @@ def test_source_write_keeps_its_commit_inside_a_swapped_view_root(
     external = tmp_path / "external-view"
     external.mkdir()
     (external / SOURCE_PATH).write_text("SECRET", encoding="utf-8")
-    open_file = sources_module.os.open
+    open_file = os.open
     swapped = False
 
     def replace_root_before_temporary(
@@ -229,7 +230,7 @@ def test_source_write_keeps_its_commit_inside_a_swapped_view_root(
     ) -> int:
         nonlocal swapped
         if (
-            str(path).startswith(".marimo-studio-cas-")
+            str(path).startswith(".marimo-studio-write-")
             and dir_fd is not None
             and not swapped
         ):
@@ -238,7 +239,7 @@ def test_source_write_keeps_its_commit_inside_a_swapped_view_root(
             project.root.symlink_to(external, target_is_directory=True)
         return open_file(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(sources_module.os, "open", replace_root_before_temporary)
+    monkeypatch.setattr(os, "open", replace_root_before_temporary)
 
     with pytest.raises(ConfigurationError):
         write_source(

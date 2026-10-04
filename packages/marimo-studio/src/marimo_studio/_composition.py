@@ -32,6 +32,7 @@ from marimo_studio._delivery.ports import ExportAdapters
 from marimo_studio._notebook.ports import (
     EnvironmentFlagBuilder,
     LiveNotebookRunner,
+    NotebookWriteLock,
     StaticNotebookLoader,
 )
 from marimo_studio._server.cell_alias_policy import CellAliasSourcePolicy
@@ -132,7 +133,9 @@ def create_server_adapters() -> ServerAdapters:
 
     sessions = PrivateExistingSessionAttachment()
     replay = PrivateSessionReplay()
-    persistence = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
+    persistence = PrivateNotebookSaveTransform(
+        CellAliasSourcePolicy(create_notebook_write_lock())
+    )
     peer_commands = PrivatePeerCommandRelay()
     session_cache = PrivateSessionCachePublication()
     usage = PrivateUsageRoute()
@@ -186,6 +189,14 @@ def create_static_notebook_loader() -> StaticNotebookLoader:
     from marimo_studio._compat.notebook import load_static_notebook
 
     return load_static_notebook
+
+
+def create_notebook_write_lock() -> NotebookWriteLock:
+    """Construct Marimo's notebook lock for Studio's own notebook writes."""
+    validate_marimo_release()
+    from marimo_studio._compat.notebook import notebook_write_lock
+
+    return notebook_write_lock
 
 
 def create_runtime_probe() -> LiveNotebookRunner:

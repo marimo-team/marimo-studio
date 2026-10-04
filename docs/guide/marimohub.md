@@ -29,6 +29,13 @@ notebook as a plain marimo app. See the hub's
 [configuration reference](https://marimohub.docs.marimo.io/configuration) for
 the setting.
 
+Studio edits view projects inside the sandbox workspace, so that workspace must
+use [supported storage](../reference/compatibility.md#workspace-storage). Hub
+backends that copy the workspace into the sandbox meet that requirement. The
+Cloudflare backend mounts the workspace bucket into the sandbox with
+[s3fs](https://github.com/s3fs-fuse/s3fs-fuse) instead, and Studio stops view
+creation and builds there with a concurrent-change error.
+
 The hub page frames the notebook from another origin. marimohub's notebook
 bridge declares the hub origin with a `data-parent-origin` script attribute, and
 Studio adds that origin to the `frame-ancestors` policy of the workspace and its

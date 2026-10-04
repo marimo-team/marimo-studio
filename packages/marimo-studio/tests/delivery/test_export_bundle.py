@@ -5,7 +5,7 @@ import math
 import os
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
-from typing import cast
+from typing import Any, cast
 from urllib.parse import urljoin, urlsplit
 
 import pytest
@@ -23,6 +23,7 @@ from marimo_studio._delivery.browser_ports import (
 from marimo_studio._delivery.export import export_view
 from marimo_studio._delivery.ports import ExportAdapters, StaticRuntimeConfig
 from marimo_studio._delivery.progress import StaticExportProgress
+from marimo_studio._filesystem.files import FileTree, Snapshot
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import (
@@ -315,20 +316,12 @@ def test_export_public_assets_reject_symlink_swaps(
     outside.mkdir()
     outside_source = outside / "sample.txt"
     outside_source.write_text("outside asset", encoding="utf-8")
-    open_file = export_module.SecureDirectory.open_file
+    read = FileTree.read
     swapped = False
 
-    def swap_before_open(
-        filesystem: export_module.SecureDirectory,
-        path: Path,
-        flags: int = os.O_RDONLY,
-    ) -> int:
+    def swap_before_read(tree: FileTree, path: Path, **options: Any) -> Snapshot:
         nonlocal swapped
-        if (
-            filesystem.root == public.absolute()
-            and path.name == "sample.txt"
-            and not swapped
-        ):
+        if tree.root == public.absolute() and path.name == "sample.txt" and not swapped:
             swapped = True
             if swap == "leaf":
                 source.rename(nested / "retired.txt")
@@ -336,12 +329,12 @@ def test_export_public_assets_reject_symlink_swaps(
             else:
                 nested.rename(public / "retired")
                 nested.symlink_to(outside, target_is_directory=True)
-        return open_file(filesystem, path, flags)
+        return read(tree, path, **options)
 
-    monkeypatch.setattr(export_module.SecureDirectory, "open_file", swap_before_open)
+    monkeypatch.setattr(FileTree, "read", swap_before_read)
     output = tmp_path / "site"
 
-    with pytest.raises(StaticExportError, match="static export source"):
+    with pytest.raises(StaticExportError, match="symlink"):
         export_view(notebook_path, output, runtime="wasm")
 
     assert swapped

@@ -20,7 +20,7 @@ from marimo._session.state import serialize as native_session_cache
 from marimo._session.state.serialize import SessionCacheWriter
 
 from marimo_studio._compat.patch import CallbackCloseHandle, ReversiblePatch
-from marimo_studio._filesystem.io import atomic_write_text
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._processes.ownership import (
     propagate_cancellation,
     settle_ownership_outcome,
@@ -53,7 +53,9 @@ def _run_replacement(_native_run: Any) -> Any:
                         failure,
                         cancellation,
                     ) = await settle_ownership_outcome(
-                        asyncio.to_thread(atomic_write_text, path, content)
+                        asyncio.to_thread(
+                            FileTree(path.parent).write, path, content.encode()
+                        )
                     )
                     if failure is not None:
                         native_session_cache.LOGGER.error(f"Write error: {failure}")

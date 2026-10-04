@@ -14,7 +14,7 @@ from marimo_studio._filesystem.budgets import (
     PROJECT_INPUT_BUDGET,
     FileBudgetTracker,
 )
-from marimo_studio._filesystem.io import read_bytes, reject_mutable_symlinks
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     MountDeclaration,
@@ -243,8 +243,7 @@ def vanilla_entry_document(
 ) -> SourceDocument:
     """Validate and return the editable Vanilla entry document."""
     absolute_entry = project.root.joinpath(*entry.parts)
-    reject_mutable_symlinks(project.root, {absolute_entry})
-    if not absolute_entry.is_file():
+    if not FileTree(project.root).is_file(absolute_entry):
         raise ConfigurationError(f"Vanilla entry document is unavailable: {entry}")
     return SourceDocument(entry, "html", "edit")
 
@@ -388,7 +387,7 @@ def _literal_mount(
 def _entry_content(project: ViewProject, entry: PurePosixPath) -> str:
     path = project.root.joinpath(*entry.parts)
     try:
-        return read_bytes(path, root=project.root).decode("utf-8")
+        return FileTree(project.root).read(path).content.decode("utf-8")
     except UnicodeError as error:
         raise ConfigurationError(
             f"Vanilla entry document must be readable UTF-8 text: {entry}"
@@ -507,7 +506,7 @@ def _read_source(
 ) -> _Source:
     path = project.root.joinpath(*edge.document.path.parts)
     try:
-        payload = read_bytes(path, root=project.root)
+        payload = FileTree(project.root).read(path).content
         content = payload.decode("utf-8")
     except FileNotFoundError as error:
         raise _resource_error(

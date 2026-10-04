@@ -16,40 +16,40 @@ notebook configuration
 
 ## Ownership
 
-| Owner                      | Responsibility                                             |
-| -------------------------- | ---------------------------------------------------------- |
-| `_workspace`               | Notebook configuration, manifests, and transactions        |
-| `_views`                   | View creation, Source capabilities, inspection, and builds |
-| `view_providers`           | Public provider records and document rules                 |
-| `view_providers._host`     | Entry-point discovery, conformance, and contained calls    |
-| `view_providers._bundled`  | Starter files, source analysis, and candidate builds       |
-| `_artifacts`               | Snapshots, immutable revisions, leases, and profile state  |
-| `_validation`              | Static and runtime evidence plus repair issues             |
-| `_delivery`                | Live and static runtime composition                        |
-| `_notebook`                | Saved notebook inspection and cell identity                |
-| `_projections`             | Notebook symbols, target resolution, values, and evidence  |
-| `_prepared`                | View bindings, export specifications, and manifests        |
-| `_filesystem`              | Secure path operations and bounded tree traversal          |
-| `_processes`               | Supervision, cancellation, and output bounds               |
-| `_authoring`               | Shared workspace and view application operations           |
-| `_browser_client`          | Studio activation, protocol, and transport                 |
-| `authoring`                | Saved-notebook public authoring interfaces                 |
-| `agent`                    | Current-code-mode public authoring interfaces              |
-| `_cli`                     | Command parsing, environment re-entry, diagnostics, output |
-| `_server`                  | HTTP policy, notebook scope, sessions, and coordination    |
-| `errors`                   | Stable domain error codes and recovery details             |
-| `_composition.py`          | Concrete Python adapter construction                       |
-| `_entrypoints.py`          | Marimo middleware and kernel plugin entry points           |
-| `_compat`                  | Private Marimo Python imports and reversible integration   |
-| `_release_checks`          | Browser asset budgets and package metadata checks          |
-| `packages/protocol`        | Serializable browser records                               |
-| `packages/runtime`         | Runtime registry and mounted-session interface             |
-| `packages/presentation`    | One published document and its mount lifecycle             |
-| `packages/studio`          | Workspace, Source sessions, view selection, preview frames |
-| `packages/marimo-frontend` | Private Marimo frontend imports and named adapters         |
-| `apps/browser`             | Browser composition                                        |
-| `apps/docs`                | VitePress navigation, examples, build, and verification    |
-| `apps/e2e`                 | Live acceptance                                            |
+| Owner                      | Responsibility                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `_workspace`               | Notebook configuration, manifests, and transactions                             |
+| `_views`                   | View creation, Source capabilities, inspection, and builds                      |
+| `view_providers`           | Public provider records and document rules                                      |
+| `view_providers._host`     | Entry-point discovery, conformance, and contained calls                         |
+| `view_providers._bundled`  | Starter files, source analysis, and candidate builds                            |
+| `_artifacts`               | Snapshots, immutable revisions, leases, and profile state                       |
+| `_validation`              | Static and runtime evidence plus repair issues                                  |
+| `_delivery`                | Live and static runtime composition                                             |
+| `_notebook`                | Saved notebook inspection and cell identity                                     |
+| `_projections`             | Notebook symbols, target resolution, values, and evidence                       |
+| `_prepared`                | View bindings, export specifications, and manifests                             |
+| `_filesystem`              | Contained file verbs, locks, bounded tree discovery, and build-output ingestion |
+| `_processes`               | Supervision, cancellation, and output bounds                                    |
+| `_authoring`               | Shared workspace and view application operations                                |
+| `_browser_client`          | Studio activation, protocol, and transport                                      |
+| `authoring`                | Saved-notebook public authoring interfaces                                      |
+| `agent`                    | Current-code-mode public authoring interfaces                                   |
+| `_cli`                     | Command parsing, environment re-entry, diagnostics, output                      |
+| `_server`                  | HTTP policy, notebook scope, sessions, and coordination                         |
+| `errors`                   | Stable domain error codes and recovery details                                  |
+| `_composition.py`          | Concrete Python adapter construction                                            |
+| `_entrypoints.py`          | Marimo middleware and kernel plugin entry points                                |
+| `_compat`                  | Private Marimo Python imports and reversible integration                        |
+| `_release_checks`          | Browser asset budgets and package metadata checks                               |
+| `packages/protocol`        | Serializable browser records                                                    |
+| `packages/runtime`         | Runtime registry and mounted-session interface                                  |
+| `packages/presentation`    | One published document and its mount lifecycle                                  |
+| `packages/studio`          | Workspace, Source sessions, view selection, preview frames                      |
+| `packages/marimo-frontend` | Private Marimo frontend imports and named adapters                              |
+| `apps/browser`             | Browser composition                                                             |
+| `apps/docs`                | VitePress navigation, examples, build, and verification                         |
+| `apps/e2e`                 | Live acceptance                                                                 |
 
 The contributor guide and detailed architecture pages link to this table as
 the canonical ownership map.

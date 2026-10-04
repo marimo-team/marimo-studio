@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 import pytest
 
 import marimo_studio._artifacts.publication as publication_module
-import marimo_studio._filesystem.secure as secure_files
+import marimo_studio._filesystem.files as files
 from marimo_studio._artifacts.codec import read_json
 from marimo_studio._artifacts.paths import (
     artifact_root,
@@ -43,6 +42,30 @@ from ..artifact_test_support import (
 )
 
 _MAX_COMPONENT_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES
+
+
+def _swap_after_open(
+    monkeypatch: pytest.MonkeyPatch,
+    directory: Path,
+    external: Path,
+) -> list[Path]:
+    """Replace ``directory`` with a symlink once an operation has opened it.
+
+    Returns the list that receives the retired directory after the swap.
+    """
+    open_directory = files.open_directory
+    retired: list[Path] = []
+
+    def swap(name: str | Path, *, path: Path, parent: int | None = None) -> int:
+        descriptor = open_directory(name, path=path, parent=parent)
+        if path == directory and not retired:
+            retired.append(directory.with_name(f"{directory.name}-retired"))
+            directory.rename(retired[0])
+            directory.symlink_to(external, target_is_directory=True)
+        return descriptor
+
+    monkeypatch.setattr(files, "open_directory", swap)
+    return retired
 
 
 @pytest.mark.supported_python
@@ -117,80 +140,62 @@ def test_publication_detaches_provider_hardlinks_from_cache(
         assert artifact_file.read_bytes() == expected
 
 
-def test_publication_rejects_a_hardlink_added_after_detachment(
+def test_provider_output_changed_after_ingestion_does_not_reach_the_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = _project(tmp_path)
-    detach = publication_module.detach_public_files
-    external_source = tmp_path / "late-artifact-source.html"
-    linked = False
+    ingest = publication_module.ingest_publication_files
+    changed = False
 
-    def detach_then_link(files_root: Path) -> None:
-        nonlocal linked
-        detach(files_root)
-        candidate = files_root / "index.html"
-        external_source.write_bytes(candidate.read_bytes())
-        candidate.unlink()
-        try:
-            os.link(external_source, candidate)
-        except OSError as error:
-            pytest.skip(f"Hard links are unavailable: {error}")
-        linked = True
+    def ingest_then_change(*arguments: Any) -> Any:
+        nonlocal changed
+        ingested = ingest(*arguments)
+        _project_view, files_root, _destination = arguments
+        (files_root / "index.html").write_text("changed later", encoding="utf-8")
+        changed = True
+        return ingested
 
     monkeypatch.setattr(
-        publication_module,
-        "detach_public_files",
-        detach_then_link,
+        publication_module, "ingest_publication_files", ingest_then_change
     )
 
-    with pytest.raises(ViewProjectError, match="revision-owned inode"):
-        publish_artifact(project, "development")
+    with publish_artifact_lease(project, "development") as lease:
+        published = (lease.artifact.root / "index.html").read_text(encoding="utf-8")
+        lease.verify()
 
-    assert linked
-    assert read_published_artifact(project, "development") is None
+    assert changed
+    assert published != "changed later"
 
 
 @pytest.mark.skipif(
     os.name == "nt", reason="symlink creation needs elevated Windows access"
 )
-def test_detachment_cannot_mutate_a_raced_external_files_root(
+def test_ingestion_copies_the_files_root_it_opened(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = _project(tmp_path)
     external = tmp_path / "external"
     external.mkdir()
-    external_file = external / "index.html"
-    external_file.write_text("external", encoding="utf-8")
-    inventory = secure_files.SecureDirectory.regular_file_sizes
-    raced = False
+    (external / "index.html").write_text("external", encoding="utf-8")
+    copy_tree = files.copy_tree
+    roots: list[Path] = []
 
-    def replace_files_root_after_inventory(
-        filesystem: secure_files.SecureDirectory,
-        *,
-        max_entries: int,
-    ) -> tuple[tuple[Path, int], ...]:
-        nonlocal raced
-        files = inventory(filesystem, max_entries=max_entries)
-        if filesystem.root.name == "files" and not raced:
-            raced = True
-            retired = filesystem.root.with_name("provider-files")
-            filesystem.root.rename(retired)
-            filesystem.root.symlink_to(external, target_is_directory=True)
-        return files
+    def swap_files_root_then_copy(source: Any, destination: Any, **options: Any) -> Any:
+        files_root = next(project.root.rglob("build/files"))
+        files_root.rename(files_root.with_name("provider-files"))
+        files_root.symlink_to(external, target_is_directory=True)
+        roots.append(files_root)
+        return copy_tree(source, destination, **options)
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "regular_file_sizes",
-        replace_files_root_after_inventory,
-    )
+    monkeypatch.setattr(files, "copy_tree", swap_files_root_then_copy)
 
-    with pytest.raises(ViewProjectError, match="Could not open Artifact document"):
-        publish_artifact(project, "development")
+    artifact = publish_artifact(project, "development")
 
-    assert raced
-    assert external_file.read_text(encoding="utf-8") == "external"
+    assert roots
+    assert (artifact.root / "index.html").read_text(encoding="utf-8") != "external"
+    assert (external / "index.html").read_text(encoding="utf-8") == "external"
 
 
 @pytest.mark.skipif(
@@ -223,7 +228,7 @@ def test_artifact_publication_rejects_symlinked_control_directories(
 @pytest.mark.skipif(
     os.name == "nt", reason="symlink creation needs elevated Windows access"
 )
-def test_cache_creation_cannot_follow_a_raced_artifact_symlink(
+def test_cache_creation_stays_in_the_control_root_it_opened(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -232,34 +237,12 @@ def test_cache_creation_cannot_follow_a_raced_artifact_symlink(
     control.mkdir()
     external = tmp_path / "external"
     external.mkdir()
-    ensure = secure_files.SecureDirectory.ensure_directory
-    raced = False
+    retired = _swap_after_open(monkeypatch, control, external)
 
-    def replace_control_then_create(
-        filesystem: secure_files.SecureDirectory,
-        path: Path,
-    ) -> tuple[Path, ...]:
-        nonlocal raced
-        if not raced:
-            raced = True
-            control.rmdir()
-            control.symlink_to(external, target_is_directory=True)
-        return ensure(filesystem, path)
+    ensure_secure_directory(project.root, control / ".cache", "Artifact provider cache")
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "ensure_directory",
-        replace_control_then_create,
-    )
-
-    with pytest.raises(ConfigurationError, match="Could not create"):
-        ensure_secure_directory(
-            project.root,
-            control / ".cache",
-            "Artifact provider cache",
-        )
-
-    assert raced
+    assert retired
+    assert (retired[0] / ".cache").is_dir()
     assert tuple(external.iterdir()) == ()
 
 
@@ -271,34 +254,14 @@ def test_artifact_lock_creation_cannot_follow_a_raced_control_root(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = _project(tmp_path)
-    control = artifact_root(project)
     external = tmp_path / "external"
     external.mkdir()
-    open_lock = secure_files.SecureDirectory.open_or_create_file
-    raced = False
-
-    def replace_control_then_open(
-        filesystem: secure_files.SecureDirectory,
-        path: Path,
-        mode: int = 0o600,
-    ) -> int:
-        nonlocal raced
-        if path.parent == control and not raced:
-            raced = True
-            shutil.rmtree(control)
-            control.symlink_to(external, target_is_directory=True)
-        return open_lock(filesystem, path, mode)
-
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "open_or_create_file",
-        replace_control_then_open,
-    )
+    retired = _swap_after_open(monkeypatch, artifact_root(project), external)
 
     with pytest.raises((ConfigurationError, ViewProjectError)):
         publish_artifact(project, "development")
 
-    assert raced
+    assert retired
     assert tuple(external.iterdir()) == ()
 
 
@@ -310,34 +273,20 @@ def test_artifact_pin_creation_cannot_follow_a_raced_revision_directory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = _project(tmp_path)
-    publish_artifact(project, "development")
+    artifact = publish_artifact(project, "development")
     external = tmp_path / "external"
     external.mkdir()
-    create_pin = secure_files.SecureDirectory.create_file
-    raced = False
-
-    def replace_revision_then_create(
-        filesystem: secure_files.SecureDirectory,
-        path: Path,
-        mode: int = 0o600,
-    ) -> int:
-        nonlocal raced
-        if ".pins" in path.parts and not raced:
-            raced = True
-            path.parent.rmdir()
-            path.parent.symlink_to(external, target_is_directory=True)
-        return create_pin(filesystem, path, mode)
-
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "create_file",
-        replace_revision_then_create,
+    pins = (
+        artifact_root(project)
+        / ".pins"
+        / artifact.artifact_revision.removeprefix("sha256:")
     )
+    retired = _swap_after_open(monkeypatch, pins, external)
 
-    with pytest.raises(ConfigurationError, match="artifact pin"):
+    with pytest.raises(ConfigurationError, match="symlink"):
         lease_published_artifact(project, "development")
 
-    assert raced
+    assert retired
     assert tuple(external.iterdir()) == ()
 
 
@@ -349,34 +298,16 @@ def test_artifact_install_cannot_follow_a_raced_revisions_root(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = _project(tmp_path)
-    revisions = artifact_root(project) / "revisions"
     external = tmp_path / "external"
     external.mkdir()
-    replace = secure_files.SecureDirectory.replace
-    raced = False
-
-    def replace_revisions_then_install(
-        filesystem: secure_files.SecureDirectory,
-        source: Path,
-        destination: Path,
-    ) -> None:
-        nonlocal raced
-        if destination.parent == revisions and not raced:
-            raced = True
-            revisions.rmdir()
-            revisions.symlink_to(external, target_is_directory=True)
-        replace(filesystem, source, destination)
-
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "replace",
-        replace_revisions_then_install,
+    retired = _swap_after_open(
+        monkeypatch, artifact_root(project) / "revisions", external
     )
 
     with pytest.raises((ConfigurationError, ViewProjectError)):
         publish_artifact(project, "development")
 
-    assert raced
+    assert retired
     assert tuple(external.iterdir()) == ()
 
 
@@ -443,7 +374,7 @@ def test_artifact_input_read_keeps_an_open_parent_when_project_root_is_swapped(
     external = tmp_path / "external-view"
     external.mkdir()
     (external / "index.html").write_text("SECRET", encoding="utf-8")
-    open_file = secure_files.os.open
+    open_file = files.os.open
     swapped = False
 
     def replace_root_then_open(
@@ -460,7 +391,7 @@ def test_artifact_input_read_keeps_an_open_parent_when_project_root_is_swapped(
             project.root.symlink_to(external, target_is_directory=True)
         return open_file(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(secure_files.os, "open", replace_root_then_open)
+    monkeypatch.setattr(files.os, "open", replace_root_then_open)
 
     payload = read_secure_bytes(project.root, source, "View project input")
 
@@ -491,7 +422,7 @@ def test_artifact_control_read_keeps_its_parent_when_project_root_is_swapped(
     replacement = external / relative
     replacement.parent.mkdir(parents=True)
     replacement.write_text('{"secret":true}', encoding="utf-8")
-    open_file = secure_files.os.open
+    open_file = files.os.open
     swapped = False
 
     def replace_root_then_open(
@@ -508,7 +439,7 @@ def test_artifact_control_read_keeps_its_parent_when_project_root_is_swapped(
             project.root.symlink_to(external, target_is_directory=True)
         return open_file(selected, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(secure_files.os, "open", replace_root_then_open)
+    monkeypatch.setattr(files.os, "open", replace_root_then_open)
 
     value = read_json(project.root, path, f"artifact {control}")
 

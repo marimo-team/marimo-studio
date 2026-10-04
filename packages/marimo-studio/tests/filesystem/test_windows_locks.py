@@ -1,4 +1,4 @@
-"""Exercise platform-specific artifact file locking behavior."""
+"""Exercise the Windows byte-range lock retries behind FileTree.lock."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import marimo_studio._filesystem.file_lock as lock_module
+import marimo_studio._filesystem._locks as lock_module
 
 
 def _use_windows_lock(
@@ -54,7 +54,7 @@ def test_windows_empty_lock_file_is_initialized_before_acquisition(
     )
     monkeypatch.setitem(sys.modules, "msvcrt", windows)
 
-    assert lock_module.acquire_file_lock(17, blocking=True)
+    assert lock_module.acquire(17, blocking=True)
     assert operations == [
         ("seek", 17, 0, 0),
         ("write", 17, b"\0"),
@@ -78,24 +78,25 @@ def test_windows_blocking_lock_retries_until_acquired(
 
     windows = _use_windows_lock(monkeypatch, locking)
 
-    assert lock_module.acquire_file_lock(17, blocking=True)
+    assert lock_module.acquire(17, blocking=True)
 
 
-def test_windows_blocking_lock_propagates_permanent_error(
+@pytest.mark.parametrize("blocking", [True, False])
+def test_windows_lock_propagates_a_permanent_error(
     monkeypatch: pytest.MonkeyPatch,
+    blocking: bool,
 ) -> None:
     attempts = 0
 
-    def locking(_descriptor: int, mode: int, _size: int) -> None:
+    def locking(_descriptor: int, _mode: int, _size: int) -> None:
         nonlocal attempts
-        assert mode == windows.LK_LOCK
         attempts += 1
         raise OSError(errno.EBADF, "invalid descriptor")
 
-    windows = _use_windows_lock(monkeypatch, locking)
+    _use_windows_lock(monkeypatch, locking)
 
     with pytest.raises(OSError, match="invalid descriptor"):
-        lock_module.acquire_file_lock(17, blocking=True)
+        lock_module.acquire(17, blocking=blocking)
     assert attempts == 1
 
 
@@ -108,9 +109,9 @@ def test_windows_nonblocking_lock_returns_after_first_contention(
         nonlocal attempts
         assert mode == windows.LK_NBLCK
         attempts += 1
-        raise OSError("contended")
+        raise OSError(errno.EACCES, "contended")
 
     windows = _use_windows_lock(monkeypatch, locking)
 
-    assert not lock_module.acquire_file_lock(17, blocking=False)
+    assert not lock_module.acquire(17, blocking=False)
     assert attempts == 1

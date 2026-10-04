@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from contextlib import AbstractContextManager
 from hashlib import sha256
 from pathlib import Path
 
@@ -14,6 +15,13 @@ from marimo_studio.errors import (
     NotebookSourceError,
     ProtocolError,
 )
+
+
+def notebook_write_lock(path: Path) -> AbstractContextManager[None]:
+    """Return Marimo's cross-process lock for one saved notebook."""
+    from marimo._environments.script_metadata import notebook_file_lock
+
+    return notebook_file_lock(str(path))
 
 
 def run_guard_line(source: str) -> int | None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractContextManager, contextmanager
@@ -15,7 +16,6 @@ from starlette.testclient import TestClient
 import marimo_studio._server.studio.routes as studio_routes
 import marimo_studio._views.sources as sources_module
 from marimo_studio._artifacts.inputs import ProjectInputState
-from marimo_studio._filesystem.secure import SecureDirectory
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace import load_studio
@@ -165,10 +165,12 @@ def test_waiting_put_revalidates_access_from_another_provider_input(
     assert source.read_text(encoding="utf-8") == original_content
 
 
-def test_policy_change_after_target_replacement_rolls_back_the_source(
+def _put_while_the_policy_changes(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    change_policy: Callable[[Path], None],
+) -> tuple[int, str, Path, str]:
+    """PUT a source edit and change the policy input before its final check."""
     provider = _InputAccessProvider()
     registry = ProviderRegistry((candidate("source-policy", provider),))
     install_registry(monkeypatch, registry)
@@ -191,15 +193,13 @@ def test_policy_change_after_target_replacement_rolls_back_the_source(
     def pause_final_validation(
         selected: ViewProject,
         inspection: ProjectInspection,
-        *,
-        files: SecureDirectory | None = None,
     ) -> ProjectInputState:
         nonlocal state_calls
         state_calls += 1
         if state_calls == 2:
             replacement_committed.wait(timeout=5)
             release_validation.wait(timeout=5)
-        return input_state(selected, inspection, files=files)
+        return input_state(selected, inspection)
 
     monkeypatch.setattr(sources_module, "project_input_state", pause_final_validation)
 
@@ -216,12 +216,49 @@ def test_policy_change_after_target_replacement_rolls_back_the_source(
             },
         )
         replacement_committed.wait(timeout=5)
-        policy.write_text("read\n", encoding="utf-8")
+        change_policy(policy)
         release_validation.wait(timeout=5)
         response = pending.result(timeout=5)
 
-    assert response.status_code == 412
-    assert response.json()["error"] == "source-conflict"
+    return response.status_code, response.json()["error"], source, original_content
+
+
+def test_policy_change_after_target_replacement_rolls_back_the_source(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def restrict(policy: Path) -> None:
+        policy.write_text("read\n", encoding="utf-8")
+
+    status, error, source, original_content = _put_while_the_policy_changes(
+        notebook_path, monkeypatch, restrict
+    )
+
+    assert (status, error) == (412, "source-conflict")
+    assert source.read_text(encoding="utf-8") == original_content
+
+
+def test_policy_link_after_target_replacement_rolls_back_the_source(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    outside = tmp_path / "outside-policy.txt"
+    outside.write_text("edit\n", encoding="utf-8")
+    link = tmp_path / "policy-link"
+    try:
+        link.symlink_to(outside)
+    except OSError as error:
+        pytest.skip(f"Symbolic links are unavailable: {error}")
+
+    def link_policy(policy: Path) -> None:
+        os.replace(link, policy)
+
+    status, error, source, original_content = _put_while_the_policy_changes(
+        notebook_path, monkeypatch, link_policy
+    )
+
+    assert (status, error) == (412, "source-conflict")
     assert source.read_text(encoding="utf-8") == original_content
 
 

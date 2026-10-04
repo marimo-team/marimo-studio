@@ -15,8 +15,6 @@ unsaved buffer and retry against the latest source.
 from __future__ import annotations
 
 import hashlib
-import os
-import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -29,16 +27,12 @@ from marimo_studio._artifacts.inputs import (
     project_revision_snapshot,
 )
 from marimo_studio._artifacts.limits import PROJECT_INPUT_BUDGET
-from marimo_studio._filesystem._secure_types import (
-    ConditionalWriteError,
-    FileIdentity,
-    SecureFileError,
+from marimo_studio._filesystem.errors import (
+    ConcurrentChangeError,
+    FileTooLargeError,
+    UnsafePathError,
 )
-from marimo_studio._filesystem.io import reject_mutable_symlinks
-from marimo_studio._filesystem.secure import (
-    open_contained_file,
-    secure_directory,
-)
+from marimo_studio._filesystem.files import ConditionalWriteError, FileTree, Version
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace.config import (
@@ -162,7 +156,7 @@ def _read_snapshot(
     studio: StudioWorkspace,
     project: ViewProject,
     spec: SourceDocumentSpec,
-) -> tuple[ViewDocument, FileIdentity]:
+) -> tuple[ViewDocument, Version]:
     return _read_document_snapshot(studio, project.name, project.root, spec)
 
 
@@ -180,7 +174,7 @@ def _read_document_snapshot(
     view_name: str,
     root: Path,
     spec: SourceDocumentSpec,
-) -> tuple[ViewDocument, FileIdentity]:
+) -> tuple[ViewDocument, Version]:
     expected_root = (studio.view_root / view_name).absolute()
     if root.absolute() != expected_root:
         raise SourceNotFoundError(
@@ -188,50 +182,26 @@ def _read_document_snapshot(
         )
     path = root.joinpath(*spec.path.parts)
     try:
-        reject_mutable_symlinks(studio.notebook.parent, {path})
-    except ConfigurationError as error:
-        raise SourceNotFoundError(
-            f"{spec.path.as_posix()} is unavailable in view {view_name!r}."
+        snapshot = FileTree(studio.notebook.parent).read(
+            path, max_bytes=SOURCE_DOCUMENT_MAX_BYTES
+        )
+        content = snapshot.content.decode("utf-8")
+    except FileTooLargeError as error:
+        raise SourceTooLargeError(
+            f"{spec.path.as_posix()} in view {view_name!r} exceeds the "
+            f"{SOURCE_DOCUMENT_MAX_BYTES}-byte source limit."
         ) from error
-    try:
-        descriptor = open_contained_file(studio.notebook.parent, path)
+    except ConcurrentChangeError as error:
+        raise SourceNotFoundError(
+            f"{spec.path.as_posix()} changed while Studio read it."
+        ) from error
     except OSError as error:
         raise SourceNotFoundError(
             f"{spec.path.as_posix()} is unavailable in view {view_name!r}."
         ) from error
-    try:
-        with os.fdopen(descriptor, "rb") as stream:
-            before = os.fstat(stream.fileno())
-            if not stat.S_ISREG(before.st_mode):
-                raise SourceNotFoundError(
-                    f"{spec.path.as_posix()} is not a regular source document."
-                )
-            payload = stream.read(SOURCE_DOCUMENT_MAX_BYTES + 1)
-            after = os.fstat(stream.fileno())
-        if len(payload) > SOURCE_DOCUMENT_MAX_BYTES:
-            raise SourceTooLargeError(
-                f"{spec.path.as_posix()} in view {view_name!r} exceeds the "
-                f"{SOURCE_DOCUMENT_MAX_BYTES}-byte source limit."
-            )
-        if (
-            before.st_dev != after.st_dev
-            or before.st_ino != after.st_ino
-            or before.st_mode != after.st_mode
-            or before.st_size != after.st_size
-            or before.st_mtime_ns != after.st_mtime_ns
-            or before.st_ctime_ns != after.st_ctime_ns
-        ):
-            raise SourceNotFoundError(
-                f"{spec.path.as_posix()} changed while Studio read it."
-            )
-        content = payload.decode("utf-8")
     except UnicodeDecodeError as error:
         raise SourceEncodingError(
             f"{spec.path.as_posix()} in view {view_name!r} must be UTF-8 text."
-        ) from error
-    except OSError as error:
-        raise SourceNotFoundError(
-            f"{spec.path.as_posix()} is unavailable in view {view_name!r}."
         ) from error
     return (
         ViewDocument(
@@ -241,14 +211,7 @@ def _read_document_snapshot(
             content,
             _revision(content),
         ),
-        FileIdentity(
-            before.st_dev,
-            before.st_ino,
-            before.st_mode,
-            before.st_size,
-            hashlib.sha256(payload).digest(),
-            False,
-        ),
+        snapshot.version,
     )
 
 
@@ -258,9 +221,9 @@ def _manifest_root(studio: StudioDefinition, view_name: str) -> Path:
     except ConfigurationError as error:
         raise SourceNotFoundError(f"Unknown view {view_name!r}.") from error
     root = studio.view_root / view_name
-    manifest = root / VIEW_MANIFEST_PATH.name
-    reject_mutable_symlinks(studio.notebook.parent, {studio.view_root, root, manifest})
-    if root.is_symlink() or not root.is_dir():
+    tree = FileTree(studio.notebook.parent)
+    tree.stat(root / VIEW_MANIFEST_PATH.name)
+    if not tree.is_directory(root):
         raise SourceNotFoundError(f"Unknown view {view_name!r}.")
     return root.absolute()
 
@@ -275,7 +238,7 @@ def _read_view_manifest_locked(
 def _read_view_manifest_snapshot_locked(
     studio: StudioDefinition,
     view_name: str,
-) -> tuple[ViewDocument, FileIdentity]:
+) -> tuple[ViewDocument, Version]:
     return _read_document_snapshot(
         studio,
         view_name,
@@ -525,26 +488,19 @@ def write_view_manifest(
         )
         manifest = root / VIEW_MANIFEST_PATH.name
         try:
-            with secure_directory(root) as files:
-                if (
-                    expected_generation is not None
-                    or expected_catalog_generation is not None
-                ):
-                    studio = _reload_source_owner(
-                        studio,
-                        view_name,
-                        expected_catalog_generation=expected_catalog_generation,
-                        expected_generation=expected_generation,
-                    )
-                    if _manifest_root(studio, view_name) != root:
-                        raise WorkspaceGenerationConflictError()
-                files.ensure_attached()
-                files.replace_file_if_identity(
-                    manifest,
-                    content.encode(),
-                    expected_identity,
+            if (
+                expected_generation is not None
+                or expected_catalog_generation is not None
+            ):
+                studio = _reload_source_owner(
+                    studio,
+                    view_name,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
                 )
-                files.ensure_attached()
+                if _manifest_root(studio, view_name) != root:
+                    raise WorkspaceGenerationConflictError()
+            FileTree(root).write(manifest, content.encode(), expect=expected_identity)
         except ConditionalWriteError as error:
             raise SourceConflictError(
                 VIEW_MANIFEST_PATH.as_posix(),
@@ -815,60 +771,48 @@ def write_project_source(
         if content == current.content:
             return current
         path = current_project.root.joinpath(*current.path.parts)
+        tree = FileTree(current_project.root)
         try:
-            with secure_directory(current_project.root) as files:
-                try:
-                    current_input_state = project_input_state(
-                        current_project,
-                        prepared.inspection,
-                        files=files,
-                    )
-                except (ConfigurationError, OSError, ValueError) as error:
-                    raise SourceConflictError(
-                        current.path.as_posix(), current.revision
-                    ) from error
-                if current_input_state != input_state:
-                    raise SourceConflictError(current.path.as_posix(), current.revision)
-                written_identity = files.replace_file_if_identity(
-                    path,
-                    content.encode(),
-                    expected_identity,
+            try:
+                current_input_state = project_input_state(
+                    current_project,
+                    prepared.inspection,
                 )
-                try:
-                    final_input_state = project_input_state(
-                        current_project,
-                        prepared.inspection,
-                        files=files,
-                    )
-                    if not _authorization_inputs_match(
-                        input_state,
-                        final_input_state,
-                        current.path,
-                    ):
-                        raise SourceConflictError(
-                            current.path.as_posix(), current.revision
-                        )
-                except (
-                    ConfigurationError,
-                    OSError,
-                    SourceConflictError,
-                    ValueError,
-                ) as error:
-                    if isinstance(error, SecureFileError):
-                        try:
-                            files.ensure_attached()
-                        except SecureFileError:
-                            raise ConfigurationError(str(error)) from error
-                    files.replace_file_if_identity(
-                        path,
-                        current.content.encode(),
-                        written_identity,
-                    )
-                    if isinstance(error, SourceConflictError):
-                        raise
-                    raise SourceConflictError(
-                        current.path.as_posix(), current.revision
-                    ) from error
+            except (ConfigurationError, OSError, ValueError) as error:
+                raise SourceConflictError(
+                    current.path.as_posix(), current.revision
+                ) from error
+            if current_input_state != input_state:
+                raise SourceConflictError(current.path.as_posix(), current.revision)
+            written_identity = tree.write(
+                path, content.encode(), expect=expected_identity
+            )
+            try:
+                final_input_state = project_input_state(
+                    current_project,
+                    prepared.inspection,
+                )
+                if not _authorization_inputs_match(
+                    input_state,
+                    final_input_state,
+                    current.path,
+                ):
+                    raise SourceConflictError(current.path.as_posix(), current.revision)
+            except (
+                ConfigurationError,
+                OSError,
+                SourceConflictError,
+                ValueError,
+            ) as error:
+                # The restore resolves the view root again. A root that no
+                # longer resolves safely raises UnsafePathError and keeps the
+                # committed edit where it landed.
+                tree.write(path, current.content.encode(), expect=written_identity)
+                if isinstance(error, SourceConflictError):
+                    raise
+                raise SourceConflictError(
+                    current.path.as_posix(), current.revision
+                ) from error
         except ConditionalWriteError as error:
             raise SourceConflictError(
                 current.path.as_posix(),
@@ -882,6 +826,8 @@ def write_project_source(
                     str(error.recovery) if error.recovery is not None else None
                 ),
             ) from error
+        except UnsafePathError:
+            raise
         except OSError as error:
             raise SourceConflictError(
                 current.path.as_posix(),

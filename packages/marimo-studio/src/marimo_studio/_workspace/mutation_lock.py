@@ -9,14 +9,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from weakref import WeakValueDictionary
 
-from marimo_studio._filesystem.file_lock import (
-    acquire_file_lock as _acquire_file_lock,
-)
-from marimo_studio._filesystem.file_lock import (
-    release_file_lock as _release_file_lock,
-)
-from marimo_studio._filesystem.io import reject_mutable_symlinks
-from marimo_studio._filesystem.secure import SecureDirectory, secure_directory
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._workspace.models import VIEW_PATTERN
 from marimo_studio.errors import ConfigurationError
 
@@ -47,20 +40,6 @@ def _held_paths() -> set[Path]:
     return _HELD.paths
 
 
-def _require_lock_owner(
-    filesystem: SecureDirectory,
-    lock_path: Path,
-    expected: tuple[int, int, int],
-    phase: str,
-) -> None:
-    try:
-        current = filesystem.file_owner(lock_path)
-    except OSError as error:
-        raise ConfigurationError(f"View mutation lock {phase}: {lock_path}") from error
-    if current != expected:
-        raise ConfigurationError(f"View mutation lock {phase}: {lock_path}")
-
-
 @contextmanager
 def _mutation_lock(
     view_root: Path,
@@ -69,10 +48,10 @@ def _mutation_lock(
     blocking: bool = True,
 ) -> Generator[bool, None, None]:
     root = view_root.absolute()
-    control = root / ".locks"
-    boundary = Path(root.anchor)
-    lock_path = control / filename
-    reject_mutable_symlinks(boundary, {root, control, lock_path})
+    lock_path = root / ".locks" / filename
+    # The lock tree starts at the filesystem anchor so a link anywhere above
+    # the view root is refused before the lock file is created.
+    tree = FileTree(Path(root.anchor))
     thread_lock = _thread_lock(lock_path)
     if not thread_lock.acquire(blocking=blocking):
         yield False
@@ -82,45 +61,27 @@ def _mutation_lock(
         if lock_path in held:
             yield True
             return
-        owner = ExitStack()
-        try:
-            filesystem = owner.enter_context(secure_directory(boundary))
-            filesystem.ensure_directory(root)
-            filesystem.ensure_directory(control)
-            descriptor = filesystem.open_or_create_file(lock_path)
-        except OSError as error:
-            owner.close()
-            raise ConfigurationError(
-                f"Could not open view mutation lock: {lock_path}"
-            ) from error
-        acquired = False
-        try:
-            acquired = _acquire_file_lock(descriptor, blocking=blocking)
+        with ExitStack() as owner:
+            try:
+                # A lock file removed or replaced while held no longer
+                # excluded other processes from this mutation.
+                acquired = owner.enter_context(
+                    tree.lock(lock_path, blocking=blocking, require_held=True)
+                )
+            except ConfigurationError:
+                raise
+            except OSError as error:
+                raise ConfigurationError(
+                    f"Could not open view mutation lock: {lock_path}"
+                ) from error
             if not acquired:
                 yield False
                 return
-            lock_state = os.fstat(descriptor)
-            lock_owner = (lock_state.st_dev, lock_state.st_ino, lock_state.st_mode)
-            _require_lock_owner(
-                filesystem,
-                lock_path,
-                lock_owner,
-                "changed before acquisition",
-            )
             held.add(lock_path)
-            yield True
-            _require_lock_owner(
-                filesystem,
-                lock_path,
-                lock_owner,
-                "changed while held",
-            )
-        finally:
-            held.discard(lock_path)
-            if acquired:
-                _release_file_lock(descriptor)
-            os.close(descriptor)
-            owner.close()
+            try:
+                yield True
+            finally:
+                held.discard(lock_path)
     finally:
         thread_lock.release()
 

@@ -9,15 +9,15 @@ transaction. A failure restores every file and moves the directory back.
 from __future__ import annotations
 
 import errno
-from contextlib import suppress
 from pathlib import Path
 
 from marimo_studio._artifacts.retention import artifact_exclusion_guard
-from marimo_studio._filesystem.io import reject_mutable_symlinks
-from marimo_studio._filesystem.secure import SecureDirectory, secure_directory
+from marimo_studio._filesystem.files import FileTree
+from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._views.publication_hold import require_unheld
 from marimo_studio._workspace.config import load_studio, validate_view_name
 from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
+from marimo_studio._workspace.generation import directory_generation
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.mutation_lock import (
     view_mutation_lock,
@@ -64,31 +64,28 @@ def rename_view(
         require_rename_target(current, name, new_name)
         source = current.view_root / name
         target = current.view_root / new_name
-        reject_mutable_symlinks(
-            current.root,
-            {current.config_path, current.view_root, source},
-        )
+        tree = FileTree(current.root)
+        tree.stat(source)
         writes, expected = snapshot.catalog_writes(
             [new_name if view == name else view for view in current.views],
             new_name if current.default_view == name else current.default_view,
         )
-        with (
-            artifact_exclusion_guard(project),
-            secure_directory(current.root) as filesystem,
-        ):
+        with artifact_exclusion_guard(project):
             moved = False
             try:
-                with workspace_transaction(
-                    "View rename",
-                    current.root,
-                    writes,
-                    expected=expected,
+                with (
+                    notebook_write_lock(current.notebook, writes),
+                    workspace_transaction(
+                        "View rename",
+                        current.root,
+                        writes,
+                        expected=expected,
+                    ),
                 ):
                     try:
-                        source_owner = filesystem.directory_owner(source)
-                        filesystem.rename_if_absent(source, target)
+                        source_generation = directory_generation(source)
+                        tree.publish(source, target)
                         moved = True
-                        filesystem.sync_parent(target)
                     except FileExistsError as error:
                         raise ViewExistsError(new_name) from error
                     except FileNotFoundError as error:
@@ -98,7 +95,7 @@ def rename_view(
                         ) from error
                     except OSError as error:
                         raise _rename_error(name, new_name, error) from error
-                    if filesystem.directory_owner(target) != source_owner:
+                    if directory_generation(target) != source_generation:
                         raise ConfigurationError(
                             f"View {name!r} changed before its rename committed. "
                             "Run the operation again."
@@ -108,7 +105,7 @@ def rename_view(
                 # The transaction restored every file, including when its
                 # post-commit checks fail. Return the project to the name those
                 # files describe.
-                if moved and not _moved_back(filesystem, target, source):
+                if moved and not _moved_back(tree, target, source):
                     raise WorkspaceMutationError(
                         "View rename",
                         recovery=target,
@@ -124,13 +121,9 @@ def _rename_error(name: str, new_name: str, error: OSError) -> ViewRenameError:
     return ViewRenameError(name, new_name, error.strerror or str(error), busy=busy)
 
 
-def _moved_back(filesystem: SecureDirectory, target: Path, source: Path) -> bool:
+def _moved_back(tree: FileTree, target: Path, source: Path) -> bool:
     try:
-        filesystem.rename_if_absent(target, source)
+        tree.publish(target, source)
     except OSError:
         return False
-    # The project is back at the name the restored files describe. A failed
-    # directory sync leaves only the durability of that rename open.
-    with suppress(OSError):
-        filesystem.sync_parent(source)
     return True

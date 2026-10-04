@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, MutableMapping
-from typing import Any
+from contextlib import AbstractContextManager, nullcontext
+from typing import Any, TypeVar
 
-from marimo_studio._notebook.ports import NotebookInspector
+from marimo_studio._notebook.ports import NotebookInspector, NotebookWriteLock
 from marimo_studio._notebook.records import CellRef, CellSelector, resolve_cell
 from marimo_studio._notebook.source_snapshot import inspect_notebook_source
-from marimo_studio._workspace.config import load_studio, updated_studio_config_source
+from marimo_studio._workspace.config import (
+    load_studio,
+    load_studio_definition,
+    updated_studio_config_source,
+)
 from marimo_studio._workspace.config_snapshot import (
     WorkspaceConfigSnapshot,
     snapshot_workspace_config,
@@ -27,14 +32,18 @@ from marimo_studio._workspace.transactions import workspace_transaction
 from marimo_studio.errors import (
     BindingError,
     ConfigurationError,
+    WorkspaceGenerationConflictError,
 )
+
+_TStudio = TypeVar("_TStudio", bound=StudioDefinition)
 
 
 def _commit_cell_bindings(
-    snapshot: WorkspaceConfigSnapshot[StudioWorkspace],
+    snapshot: WorkspaceConfigSnapshot[_TStudio],
     bindings: Mapping[str, CellRef],
     *,
     remove: Iterable[str] = (),
+    lock_notebook: NotebookWriteLock | None,
 ) -> None:
     source = cell_bindings_source(
         snapshot.studio,
@@ -44,11 +53,19 @@ def _commit_cell_bindings(
     )
     path = snapshot.studio.config_path
     writes = {path: source} if source != snapshot.source else {}
-    with workspace_transaction(
-        "Cell binding",
-        snapshot.studio.root,
-        writes,
-        expected=snapshot.expected_identities,
+    notebook_lock: AbstractContextManager[None] = nullcontext()
+    if snapshot.studio.notebook in writes:
+        if lock_notebook is None:
+            raise RuntimeError("Notebook bindings need Marimo's notebook lock")
+        notebook_lock = lock_notebook(snapshot.studio.notebook)
+    with (
+        notebook_lock,
+        workspace_transaction(
+            "Cell binding",
+            snapshot.studio.root,
+            writes,
+            expected=snapshot.expected_identities,
+        ),
     ):
         pass
 
@@ -59,6 +76,7 @@ def bind_cell(
     cell_selector: CellSelector,
     *,
     inspect_notebook: NotebookInspector,
+    lock_notebook: NotebookWriteLock,
     dry_run: bool = False,
     overwrite: bool = False,
 ) -> BindingResult:
@@ -106,7 +124,7 @@ def bind_cell(
         )
         if dry_run:
             return result
-        _commit_cell_bindings(snapshot, {alias: cell.ref})
+        _commit_cell_bindings(snapshot, {alias: cell.ref}, lock_notebook=lock_notebook)
         updated = load_studio(current.config_path)
         return BindingResult(
             alias=result.alias,
@@ -119,31 +137,33 @@ def bind_cell(
 
 
 def _write_cell_bindings(
-    studio: StudioWorkspace,
+    studio: StudioDefinition,
     bindings: Mapping[str, CellRef],
     *,
     remove: Iterable[str] = (),
+    notebook_source: str,
+    lock_notebook: NotebookWriteLock,
 ) -> None:
-    """Persist cell bindings through the workspace configuration owner."""
-    removed = tuple(remove)
-    with workspace_catalog_lock(studio.view_root):
+    """Persist live cell bindings into a project configuration file.
+
+    A Marimo save calls this after it releases the notebook lock, with the
+    source it saved. The bindings commit only while the notebook still holds
+    that source, because a later save binds its own cells, and only while the
+    configuration still matches ``studio``.
+    """
+    with workspace_catalog_lock(studio.view_root), lock_notebook(studio.notebook):
         snapshot = snapshot_workspace_config(
             studio,
-            reload_studio=load_studio,
+            reload_studio=load_studio_definition,
             include_notebook=True,
-            require_catalog_generation=True,
         )
-        desired: dict[str, CellRef | None] = {alias: None for alias in removed}
-        desired.update(bindings)
-        if any(
-            snapshot.studio.cells.get(alias) not in {studio.cells.get(alias), value}
-            for alias, value in desired.items()
-        ):
-            raise ConfigurationError(
-                "Cell bindings changed before the update committed. "
-                "Run the operation again."
-            )
-        _commit_cell_bindings(snapshot, bindings, remove=removed)
+        # Marimo writes text with the platform's line endings.
+        saved = snapshot.notebook_source
+        if saved is None or saved.splitlines() != notebook_source.splitlines():
+            return
+        if snapshot.studio.config_generation != studio.config_generation:
+            raise WorkspaceGenerationConflictError()
+        _commit_cell_bindings(snapshot, bindings, remove=remove, lock_notebook=None)
 
 
 def cell_bindings_source(

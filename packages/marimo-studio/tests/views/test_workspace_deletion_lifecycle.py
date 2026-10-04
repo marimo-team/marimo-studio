@@ -12,11 +12,11 @@ from typing import Any
 
 import pytest
 
-import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.remove as workspace_views
 import marimo_studio._workspace.generation as workspace_generation
 import marimo_studio._workspace.mutation_lock as mutation_locks
 import marimo_studio._workspace.transactions as workspace_transactions
+from marimo_studio._filesystem.files import FileTree, TreeVersion, Version
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
 from marimo_studio._views.sources import read_source
@@ -33,6 +33,7 @@ from marimo_studio.errors import (
     WorkspaceGenerationConflictError,
 )
 
+from ..helpers import link_directory
 from ._workspace_lifecycle_support import (
     _project_configuration,
     _write_before_transaction,
@@ -199,7 +200,7 @@ def test_view_deletion_reports_recovery_when_tombstone_cleanup_fails(
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     load = workspace_views.load_studio
-    remove_tree = workspace_views.SecureDirectory.remove_tree
+    remove = FileTree.remove
     calls = 0
 
     def fail_updated_workspace(path: Path) -> StudioWorkspace:
@@ -210,19 +211,17 @@ def test_view_deletion_reports_recovery_when_tombstone_cleanup_fails(
         return load(path)
 
     def fail_tombstone_cleanup(
-        filesystem: workspace_views.SecureDirectory,
+        tree: FileTree,
         path: Path,
+        *,
+        expect: Version | TreeVersion | None = None,
     ) -> None:
         if path.joinpath(".marimo-studio-tombstone").is_file():
             raise PermissionError("simulated Windows handle")
-        remove_tree(filesystem, path)
+        remove(tree, path, expect=expect)
 
     monkeypatch.setattr(workspace_views, "load_studio", fail_updated_workspace)
-    monkeypatch.setattr(
-        workspace_views.SecureDirectory,
-        "remove_tree",
-        fail_tombstone_cleanup,
-    )
+    monkeypatch.setattr(FileTree, "remove", fail_tombstone_cleanup)
 
     with pytest.raises(ViewDeletionError) as captured:
         delete_view(studio, "dashboard")
@@ -240,36 +239,30 @@ def test_view_deletion_restores_before_candidate_cleanup(
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     target = studio.views["executive"].root
-    rename = workspace_views.SecureDirectory.rename_if_absent
-    remove_tree = workspace_views.SecureDirectory.remove_tree
+    publish = FileTree.publish
+    remove = FileTree.remove
 
     def fail_tombstone_publication(
-        filesystem: workspace_views.SecureDirectory,
+        tree: FileTree,
         source: Path,
         destination: Path,
     ) -> None:
         if source.name == ".tombstone" and destination == target:
             raise PermissionError("simulated tombstone publication failure")
-        rename(filesystem, source, destination)
+        publish(tree, source, destination)
 
     def fail_candidate_cleanup(
-        filesystem: workspace_views.SecureDirectory,
+        tree: FileTree,
         path: Path,
+        *,
+        expect: Version | TreeVersion | None = None,
     ) -> None:
         if path.name == ".tombstone":
             raise PermissionError("simulated candidate cleanup failure")
-        remove_tree(filesystem, path)
+        remove(tree, path, expect=expect)
 
-    monkeypatch.setattr(
-        workspace_views.SecureDirectory,
-        "rename_if_absent",
-        fail_tombstone_publication,
-    )
-    monkeypatch.setattr(
-        workspace_views.SecureDirectory,
-        "remove_tree",
-        fail_candidate_cleanup,
-    )
+    monkeypatch.setattr(FileTree, "publish", fail_tombstone_publication)
+    monkeypatch.setattr(FileTree, "remove", fail_candidate_cleanup)
 
     with pytest.raises(ViewDeletionError):
         delete_view(studio, "executive")
@@ -288,21 +281,17 @@ def test_view_deletion_preserves_a_source_edit_at_the_commit_boundary(
     target = studio.views["executive"].root
     document = target / "index.html"
     changed = "<!doctype html><title>concurrent edit</title>\n"
-    replace = secure_files.SecureDirectory.replace
+    publish = FileTree.publish
     edited = False
 
-    def edit_then_replace(
-        filesystem: secure_files.SecureDirectory,
-        source: Path,
-        destination: Path,
-    ) -> None:
+    def edit_then_move(tree: FileTree, source: Path, destination: Path) -> None:
         nonlocal edited
         if source == target and not edited:
             edited = True
             document.write_text(changed, encoding="utf-8")
-        replace(filesystem, source, destination)
+        publish(tree, source, destination)
 
-    monkeypatch.setattr(secure_files.SecureDirectory, "replace", edit_then_replace)
+    monkeypatch.setattr(FileTree, "publish", edit_then_move)
 
     with pytest.raises(ConfigurationError, match="changed before deletion"):
         delete_view(studio, "executive")
@@ -395,26 +384,19 @@ def test_view_deletion_reports_a_target_removed_before_its_claim(
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     target = studio.views["executive"].root
-    identity = secure_files.SecureDirectory.directory_tree_identity
+    tree_version = FileTree.tree_version
     removed = False
 
-    def remove_then_identify(
-        filesystem: secure_files.SecureDirectory,
-        path: Path,
-        *,
-        max_entries: int,
-    ) -> tuple[tuple[object, ...], ...] | None:
+    def remove_then_version(
+        tree: FileTree, path: Path, *, max_entries: int
+    ) -> TreeVersion | None:
         nonlocal removed
         if path == target and not removed:
             removed = True
             shutil.rmtree(target)
-        return identity(filesystem, path, max_entries=max_entries)
+        return tree_version(tree, path, max_entries=max_entries)
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "directory_tree_identity",
-        remove_then_identify,
-    )
+    monkeypatch.setattr(FileTree, "tree_version", remove_then_version)
 
     with pytest.raises(ViewNotFoundError):
         delete_view(studio, "executive")
@@ -429,21 +411,23 @@ def test_view_deletion_keeps_partial_cleanup_outside_the_workspace(
     prepare_view(notebook_path)
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
-    remove_tree = workspace_views.SecureDirectory.remove_tree
+    remove = FileTree.remove
     removed: list[Path] = []
 
     def fail_cleanup(
-        filesystem: workspace_views.SecureDirectory,
+        tree: FileTree,
         path: Path,
+        *,
+        expect: Version | TreeVersion | None = None,
     ) -> None:
         if any(child.name == "view.toml" for child in path.rglob("*")):
             victim = next(child for child in path.rglob("*") if child.is_file())
             removed.append(victim)
-            filesystem.unlink(victim)
+            victim.unlink()
             raise PermissionError("simulated Windows handle")
-        remove_tree(filesystem, path)
+        remove(tree, path, expect=expect)
 
-    monkeypatch.setattr(workspace_views.SecureDirectory, "remove_tree", fail_cleanup)
+    monkeypatch.setattr(FileTree, "remove", fail_cleanup)
 
     with pytest.raises(ViewDeletionError, match="cleanup is incomplete") as captured:
         delete_view(studio, "dashboard")
@@ -455,6 +439,28 @@ def test_view_deletion_keeps_partial_cleanup_outside_the_workspace(
     cleanup = captured.value.cleanup
     assert cleanup is not None and cleanup.is_dir()
     assert removed and not removed[0].exists()
+
+
+def test_view_deletion_removes_generated_links_without_following_them(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
+    studio = load_studio(notebook_path)
+    runtime = tmp_path / "deno-install"
+    runtime.mkdir()
+    (runtime / "node").write_bytes(b"runtime")
+    # Provider caches link to toolchains outside the view, as Deno does.
+    cache = studio.view("dashboard").root / ".artifacts" / ".cache"
+    cache.mkdir(parents=True)
+    link_directory(runtime, cache / "node_compat_bin")
+
+    updated = delete_view(studio, "dashboard")
+
+    assert tuple(updated.views) == ("executive",)
+    assert not (studio.view_root / "dashboard").exists()
+    assert (runtime / "node").read_bytes() == b"runtime"
 
 
 def test_view_deletion_rejects_a_symlinked_view_directory(
@@ -496,27 +502,20 @@ def test_view_deletion_cannot_follow_a_raced_workspace_root(
         if path.is_file()
     }
     retired = studio.view_root.with_name(f"{studio.view_root.name}-retired")
-    identity = secure_files.SecureDirectory.directory_tree_identity
+    tree_version = FileTree.tree_version
     raced = False
 
-    def replace_workspace_then_identify(
-        filesystem: secure_files.SecureDirectory,
-        path: Path,
-        *,
-        max_entries: int,
-    ) -> tuple[tuple[object, ...], ...] | None:
+    def replace_workspace_then_version(
+        tree: FileTree, path: Path, *, max_entries: int
+    ) -> TreeVersion | None:
         nonlocal raced
         if path == target and not raced:
             raced = True
             studio.view_root.rename(retired)
             studio.view_root.symlink_to(external, target_is_directory=True)
-        return identity(filesystem, path, max_entries=max_entries)
+        return tree_version(tree, path, max_entries=max_entries)
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "directory_tree_identity",
-        replace_workspace_then_identify,
-    )
+    monkeypatch.setattr(FileTree, "tree_version", replace_workspace_then_version)
 
     try:
         with pytest.raises((ConfigurationError, OSError)):

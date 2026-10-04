@@ -22,7 +22,7 @@ from types import TracebackType
 from marimo_studio._artifacts.inputs import project_revision_snapshot
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.retention import ArtifactLease, lease_published_artifact
-from marimo_studio._filesystem.io import read_bytes
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._views.build import publish_view
 from marimo_studio._views.inspection import inspect_view_project_sync
@@ -91,7 +91,7 @@ def _selected_views(
 
 def _presentation_source(studio: StudioWorkspace) -> tuple[str, tuple[object, ...]]:
     paths = tuple(dict.fromkeys((studio.config_path, studio.notebook)))
-    contents = {path: read_bytes(path, root=path.parent) for path in paths}
+    contents = {path: FileTree(path.parent).read(path).content for path in paths}
     try:
         notebook_source = contents[studio.notebook].decode("utf-8")
     except UnicodeDecodeError as error:

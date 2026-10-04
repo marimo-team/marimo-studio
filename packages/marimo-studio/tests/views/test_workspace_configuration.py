@@ -8,10 +8,9 @@ import pytest
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
-from marimo_studio._workspace.metadata import (
-    update_notebook_config,
-)
 from marimo_studio.errors import ConfigurationError
+
+from ..helpers import update_notebook_config
 
 
 def test_notebooks_with_the_same_parent_have_independent_presentations(

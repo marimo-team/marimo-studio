@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
 
 from marimo_studio._cli import cli
+from marimo_studio._filesystem.files import FileTree, Snapshot
 from marimo_studio.errors import ConfigurationError
 
 
@@ -106,12 +108,13 @@ def test_dependency_doctor_reports_dependencies_when_studio_discovery_fails(
         )
     elif configuration == "removed":
 
-        def missing_snapshot(*_args: object, **_kwargs: object) -> None:
-            raise FileNotFoundError(project)
+        class RemovedConfiguration(FileTree):
+            def read(self, path: Path, **options: Any) -> Snapshot:
+                if path == project:
+                    raise FileNotFoundError(project)
+                return super().read(path, **options)
 
-        monkeypatch.setattr(
-            config_module, "read_file_snapshot_with_identity", missing_snapshot
-        )
+        monkeypatch.setattr(config_module, "FileTree", RemovedConfiguration)
     view = tmp_path / "__marimo__" / "studio" / "analysis" / "dashboard"
     view.mkdir(parents=True)
     (view / "view.toml").write_text('schema = 1\nprovider = "marimo-studio/vanilla"\n')

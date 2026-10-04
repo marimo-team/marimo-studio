@@ -14,11 +14,11 @@ from typing import Any
 import marimo
 import pytest
 
-import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.create as create_module
 import marimo_studio._views.creation_plan as creation_plan_module
 import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio import inspect_notebook
+from marimo_studio._filesystem.files import Expectation, FileTree, Version
 from marimo_studio._views.api import create_view, prepare_view
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.remove import delete_view
@@ -141,25 +141,23 @@ def test_first_view_publishes_a_complete_workspace_to_readers(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    replace_file = secure_files.SecureDirectory.replace_file_if_identity
+    write = FileTree.write
     observed: list[StudioWorkspace] = []
 
     def observe_configuration_publication(
-        filesystem: secure_files.SecureDirectory,
+        tree: FileTree,
         path: Path,
         content: bytes,
-        expected: secure_files.FileIdentity,
-    ) -> secure_files.FileIdentity:
-        committed = replace_file(filesystem, path, content, expected)
+        *,
+        expect: Expectation = None,
+        mode: int | None = None,
+    ) -> Version:
+        committed = write(tree, path, content, expect=expect, mode=mode)
         if path == notebook_path:
             observed.append(load_studio(notebook_path))
         return committed
 
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "replace_file_if_identity",
-        observe_configuration_publication,
-    )
+    monkeypatch.setattr(FileTree, "write", observe_configuration_publication)
 
     prepared = prepare_view(notebook_path)
 
@@ -521,7 +519,9 @@ def test_view_directory_created_before_transaction_is_preserved(
         occupy_view_directory,
     )
 
-    with pytest.raises(ConfigurationError, match="directory changed"):
+    with pytest.raises(
+        ConfigurationError, match="changed before the transaction committed"
+    ):
         prepare_view(notebook_path)
 
     assert sentinel.read_text(encoding="utf-8") == "concurrent"

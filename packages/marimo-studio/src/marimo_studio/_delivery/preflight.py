@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Literal
@@ -10,7 +9,8 @@ from urllib.parse import unquote, urlsplit
 
 from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._delivery.portability import ProjectionPortability, StaticRuntime
-from marimo_studio._filesystem.secure import SecureDirectory, SecureFileError
+from marimo_studio._filesystem.errors import ConcurrentChangeError
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio.view_providers import SourceLocation
 from marimo_studio.view_providers._css_resources import css_resource_urls
 from marimo_studio.view_providers._document import HTMLDocumentParser
@@ -89,39 +89,11 @@ def _position(source: str, offset: int) -> tuple[int, int]:
     return line, offset - previous
 
 
-def _read_text(
-    filesystem: SecureDirectory,
-    path: Path,
-    size: int,
-) -> str:
-    descriptor = filesystem.open_file(path)
-    try:
-        before = os.fstat(descriptor)
-        if before.st_size != size:
-            raise SecureFileError(f"Static preflight source changed: {path}")
-        payload = bytearray()
-        remaining = size
-        while remaining:
-            chunk = os.read(descriptor, min(1024 * 1024, remaining))
-            if not chunk:
-                raise SecureFileError(f"Static preflight source changed: {path}")
-            payload.extend(chunk)
-            remaining -= len(chunk)
-        if os.read(descriptor, 1):
-            raise SecureFileError(f"Static preflight source changed: {path}")
-        after = os.fstat(descriptor)
-        if (
-            before.st_dev != after.st_dev
-            or before.st_ino != after.st_ino
-            or before.st_mode != after.st_mode
-            or before.st_size != after.st_size
-            or before.st_mtime_ns != after.st_mtime_ns
-            or before.st_ctime_ns != after.st_ctime_ns
-        ):
-            raise SecureFileError(f"Static preflight source changed: {path}")
-    finally:
-        os.close(descriptor)
-    return bytes(payload).decode("utf-8")
+def _read_text(tree: FileTree, path: Path, size: int) -> str:
+    content = tree.read(path).content
+    if len(content) != size:
+        raise ConcurrentChangeError(f"Static preflight source changed: {path}")
+    return content.decode("utf-8")
 
 
 def _normalized_local_path(
@@ -392,7 +364,7 @@ def _css_issues(
 
 
 def preflight_static_bundle(
-    filesystem: SecureDirectory,
+    root: Path,
     *,
     view: str,
     runtime: StaticRuntime,
@@ -400,11 +372,10 @@ def preflight_static_bundle(
     projections: tuple[ProjectionPortability, ...],
 ) -> StaticPreflightReport:
     """Verify local browser references in the exact staged export tree."""
-    inventory = filesystem.regular_file_sizes(
-        max_entries=ARTIFACT_OUTPUT_BUDGET.max_files,
-    )
+    tree = FileTree(root)
+    inventory = tree.regular_files(root, max_entries=ARTIFACT_OUTPUT_BUDGET.max_files)
     sizes = {
-        PurePosixPath(path.relative_to(filesystem.root).as_posix()): size
+        PurePosixPath(path.relative_to(tree.root).as_posix()): size
         for path, size in inventory
     }
     available = frozenset(sizes)
@@ -447,8 +418,8 @@ def preflight_static_bundle(
             )
             continue
         try:
-            source = _read_text(filesystem, filesystem.root / relative, size)
-        except (OSError, UnicodeError, SecureFileError) as error:
+            source = _read_text(tree, root / relative, size)
+        except (OSError, UnicodeError) as error:
             issues.append(
                 StaticPreflightIssue(
                     "static-source-unreadable",
@@ -470,7 +441,6 @@ def preflight_static_bundle(
             found, count = _javascript_issues(relative, source, available)
         issues.extend(found)
         references += count
-    filesystem.ensure_attached()
     return StaticPreflightReport(
         view=view,
         runtime=runtime,

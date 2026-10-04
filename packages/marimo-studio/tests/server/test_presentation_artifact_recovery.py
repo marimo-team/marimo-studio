@@ -14,9 +14,9 @@ from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.metadata import update_notebook_config
 
 from ..app_helpers import configured, edit_mode, marimo_app
+from ..helpers import update_notebook_config
 from .app_test_support import _artifact_base
 
 
