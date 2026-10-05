@@ -124,7 +124,7 @@ def test_runtime_check_scopes_values_to_the_selected_view(
         if projection.request.target == "doubled.missing"
     )
 
-    assert captured["variables"] == ("doubled.missing",)
+    assert captured["value_selector_groups"] == (("doubled.missing",),)
     assert {result.name for result in results if result.status == "fail"} == {
         "runtime-cell:result",
         "runtime-value:doubled.missing",
@@ -212,7 +212,7 @@ def test_runtime_check_reports_rich_output_format_failures(
     )
     failure = next(result for result in results if result.status == "fail")
 
-    assert captured["variables"] == ()
+    assert captured["value_selector_groups"] == ()
     assert captured["output_selector_groups"] == (("doubled",),)
     assert failure.name == "runtime-output:doubled"
     assert failure.code == "output-format-error"
@@ -482,3 +482,17 @@ def test_selected_view_check_isolated_from_other_templates(
 
     assert all(result.status == "pass" for result in selected.checks)
     assert any(result.status == "fail" for result in all_views.checks)
+
+
+@pytest.mark.native_process
+def test_runtime_check_passes_json_values_from_the_worker(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    _shell(studio, "dashboard", '<span mo-value="doubled"></span>')
+
+    results = asyncio.run(
+        check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
+    )
+
+    value = next(result for result in results if result.name == "runtime-value:doubled")
+    assert value.status == "pass"

@@ -982,7 +982,7 @@ def test_runtime_inspection_requests_only_selected_cells_and_values(
     )
 
     assert captured["cell_ids"] == (result.cells[0].runtime_id,)
-    assert captured["variables"] == result.cells[0].definitions
+    assert captured["value_selector_groups"] == (result.cells[0].definitions,)
     assert all(cell.code is None for cell in result.notebook.cells)
 
 

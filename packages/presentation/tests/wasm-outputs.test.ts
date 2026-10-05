@@ -51,7 +51,6 @@ describe("WebAssembly output reads", () => {
         projections: [projectionWireRequest(df)],
         active_projections: [projectionWireRequest(df)],
         consumer_id: "preview-a",
-        max_output_bytes: 1_000_000,
       },
     });
   });

@@ -9,7 +9,6 @@ import type {
 
 import { errorMessage } from "../errors.ts";
 
-const MAX_VALUE_BYTES = 1_000_000;
 const retryableResourceStatus = (status: number): boolean =>
   status === 404 ||
   status === 408 ||
@@ -75,12 +74,6 @@ const readArrowBytes = async (
   signal?: AbortSignal,
   baseUrl: string | URL = globalThis.location.href,
 ): Promise<Uint8Array<ArrayBuffer>> => {
-  if (descriptor.byteLength > MAX_VALUE_BYTES) {
-    throw new ValueDecodeError(
-      "value-too-large",
-      `The Arrow IPC value exceeds the ${MAX_VALUE_BYTES}-byte limit.`,
-    );
-  }
   let buffer: ArrayBuffer;
   try {
     const dataUrl = descriptor.dataUrl.startsWith("data:")

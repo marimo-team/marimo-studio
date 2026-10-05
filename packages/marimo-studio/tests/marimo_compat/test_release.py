@@ -191,7 +191,7 @@ def test_browser_projection_bootstrap_executes_in_the_native_kernel(
         probe_runtime_in_worker(
             projected,
             cell_ids=(projection.bootstrap_cell_id,),
-            variables=(),
+            value_selector_groups=(),
             timeout=10,
             show_tracebacks=True,
         )

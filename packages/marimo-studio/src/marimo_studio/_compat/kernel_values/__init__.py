@@ -16,9 +16,6 @@ from marimo_studio._compat.kernel_values.kernel import (
     probe_selector_lease as probe_selector_lease,
 )
 from marimo_studio._compat.kernel_values.models import (
-    DEFAULT_MAX_VALUE_BYTES as DEFAULT_MAX_VALUE_BYTES,
-)
-from marimo_studio._compat.kernel_values.models import (
     FUNCTION_NAME as FUNCTION_NAME,
 )
 from marimo_studio._compat.kernel_values.models import (

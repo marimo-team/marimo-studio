@@ -19,11 +19,11 @@ class LiveNotebookRunner(Protocol):
         path: Path,
         *,
         cell_ids: tuple[str, ...],
-        variables: tuple[str, ...],
+        value_selector_groups: tuple[tuple[str, ...], ...],
         output_selector_groups: tuple[tuple[str, ...], ...],
         show_tracebacks: bool,
         timeout: float,
-        value_max_bytes: int | None = None,
+        max_json_bytes: int | None = None,
         source_generation: NotebookSourceGeneration | None = None,
     ) -> RuntimeProbe: ...
 

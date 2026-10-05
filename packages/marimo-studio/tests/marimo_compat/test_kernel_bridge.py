@@ -389,7 +389,6 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
                         **authorized_value_arguments(
                             "revision-1", (projection,), "preview-a"
                         ),
-                        "max_value_bytes": 1_000,
                     }
                 ),
             )
@@ -424,7 +423,6 @@ default = "dashboard"
                         **authorized_value_arguments(
                             "revision-1", (projection,), "preview-a"
                         ),
-                        "max_value_bytes": 1_000,
                     }
                 ),
             )
@@ -444,7 +442,6 @@ default = "dashboard"
                         **authorized_value_arguments(
                             "revision-1", (projection,), "preview-a"
                         ),
-                        "max_value_bytes": 1_000,
                     }
                 ),
             )
@@ -453,7 +450,6 @@ default = "dashboard"
             forged_value = {
                 **authorized_value_arguments("revision-1", (projection,), "preview-a"),
                 "authorization": "0" * 64,
-                "max_value_bytes": 1_000,
             }
             rejected_value = cast(dict[str, Any], read(forged_value))
             assert rejected_value["errors"]["*"]["code"] == (

@@ -23,7 +23,6 @@ from marimo_studio._compat.kernel_values.authorization import (
     probe_value_arguments,
 )
 from marimo_studio._compat.kernel_values.models import (
-    DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
     NAMESPACE,
     OUTPUT_FUNCTION_NAME,
@@ -33,8 +32,11 @@ from marimo_studio._compat.kernel_values.representations import (
     JSON_CODEC,
 )
 from marimo_studio._projections.runtime_records import (
+    MAX_OUTPUT_BYTES,
+    VALUE_LIMITS,
     OutputRenderResult,
     RenderedOutput,
+    ValueLimits,
     ValueReadError,
     ValueReadResult,
 )
@@ -280,15 +282,12 @@ def _attach_output_cleanup(
                         function_call_id=RequestId(uuid4().hex),
                         namespace=NAMESPACE,
                         function_name=OUTPUT_FUNCTION_NAME,
-                        args={
-                            **authorized_output_arguments(
-                                revision,
-                                (),
-                                (),
-                                consumer_id,
-                            ),
-                            "max_output_bytes": DEFAULT_MAX_VALUE_BYTES,
-                        },
+                        args=authorized_output_arguments(
+                            revision,
+                            (),
+                            (),
+                            consumer_id,
+                        ),
                     ),
                     from_consumer_id=None,
                 )
@@ -323,10 +322,7 @@ def _attach_value_cleanup(
                         function_call_id=RequestId(uuid4().hex),
                         namespace=NAMESPACE,
                         function_name=FUNCTION_NAME,
-                        args={
-                            **authorized_value_arguments(revision, (), consumer_id),
-                            "max_value_bytes": DEFAULT_MAX_VALUE_BYTES,
-                        },
+                        args=authorized_value_arguments(revision, (), consumer_id),
                     ),
                     from_consumer_id=None,
                 )
@@ -344,9 +340,8 @@ def _parse_result(
     value: object,
     *,
     expected_selectors: frozenset[str] | None = None,
-    max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+    limits: ValueLimits = VALUE_LIMITS,
 ) -> ValueReadResult:
-    limit = max(1, min(max_value_bytes, DEFAULT_MAX_VALUE_BYTES))
     if not isinstance(value, dict):
         raise ProjectionUnavailable(
             "invalid-value-response",
@@ -375,7 +370,8 @@ def _parse_result(
             transient=False,
         ) from error
     values: dict[str, object] = {}
-    total = 0
+    json_bytes = 0
+    arrow_bytes = 0
     for selector, item in raw_values.items():
         if not isinstance(selector, str) or not isinstance(item, dict):
             raise ProjectionUnavailable(
@@ -404,10 +400,10 @@ def _parse_result(
             else:
                 valid_json = (
                     fingerprint == f"sha256:{sha256(encoded_json).hexdigest()}"
-                    and len(encoded_json) <= limit
+                    and len(encoded_json) <= limits.json_value_bytes
                 )
                 if valid_json:
-                    total += len(encoded_json)
+                    json_bytes += len(encoded_json)
             valid = set(item) == {"codec", "fingerprint", "value"} and valid_json
         elif codec == ARROW_IPC_CODEC:
             data_url = item.get("dataUrl")
@@ -418,10 +414,10 @@ def _parse_result(
                 and (data_url.startswith("data:") or data_url.startswith("./@file/"))
                 and not isinstance(byte_length, bool)
                 and isinstance(byte_length, int)
-                and 0 < byte_length <= limit
+                and 0 < byte_length <= limits.arrow_value_bytes
             ):
                 valid = True
-                total += byte_length
+                arrow_bytes += byte_length
             else:
                 valid = False
         else:
@@ -432,7 +428,7 @@ def _parse_result(
                 "The kernel returned an invalid encoded value.",
                 transient=False,
             )
-        if total > limit:
+        if json_bytes > limits.json_read_bytes or arrow_bytes > limits.arrow_read_bytes:
             raise ProjectionUnavailable(
                 "invalid-value-response",
                 "The kernel value response exceeds its aggregate byte limit.",
@@ -471,7 +467,7 @@ def _parse_result(
             "The kernel returned values outside the authorized request.",
             transient=False,
         )
-    if len(encoded_response) > limit:
+    if len(encoded_response) > limits.response_bytes:
         raise ProjectionUnavailable(
             "invalid-value-response",
             "The kernel value response exceeds its byte limit.",
@@ -674,7 +670,6 @@ async def read_session_values(
     *,
     consumer_id: str,
     timeout: float | None = 5.0,
-    max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES,
 ) -> ValueReadResult:
     """Read exact selectors through a Marimo session's command queue."""
     from marimo._types.ids import ConsumerId
@@ -688,21 +683,17 @@ async def read_session_values(
     result = await _invoke_session_function(
         session,
         function_name=FUNCTION_NAME,
-        args={
-            **authorized_value_arguments(
-                revision,
-                projections,
-                consumer_id,
-                active_projections,
-            ),
-            "max_value_bytes": max_value_bytes,
-        },
+        args=authorized_value_arguments(
+            revision,
+            projections,
+            consumer_id,
+            active_projections,
+        ),
         consumer_id=consumer_id,
         timeout=timeout,
         parser=lambda value: _parse_result(
             value,
             expected_selectors=expected_selectors,
-            max_value_bytes=max_value_bytes,
         ),
         operation="value",
     )
@@ -718,7 +709,7 @@ async def render_session_outputs(
     *,
     consumer_id: str,
     timeout: float = 5.0,
-    max_output_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+    max_output_bytes: int = MAX_OUTPUT_BYTES,
 ) -> OutputRenderResult:
     """Render exact selectors through a Marimo session's command queue."""
     from marimo._types.ids import ConsumerId
@@ -753,7 +744,7 @@ async def read_probe_values(
     *,
     consumer_id: str,
     timeout: float = 5.0,
-    max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+    max_json_bytes: int | None = None,
 ) -> ValueReadResult:
     """Read selectors granted by one internal runtime probe lease."""
     expected_selectors = frozenset(specifications)
@@ -762,14 +753,14 @@ async def read_probe_values(
         function_name=FUNCTION_NAME,
         args={
             **probe_value_arguments(specifications, consumer_id),
-            "max_value_bytes": max_value_bytes,
+            "max_json_bytes": max_json_bytes,
         },
         consumer_id=consumer_id,
         timeout=timeout,
         parser=lambda value: _parse_result(
             value,
             expected_selectors=expected_selectors,
-            max_value_bytes=max_value_bytes,
+            limits=VALUE_LIMITS.capped(max_json_bytes),
         ),
         operation="value",
     )
@@ -784,7 +775,7 @@ async def render_probe_outputs(
     *,
     consumer_id: str,
     timeout: float = 5.0,
-    max_output_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+    max_output_bytes: int = MAX_OUTPUT_BYTES,
 ) -> OutputRenderResult:
     """Render selectors granted by one internal runtime probe lease."""
     result = await _invoke_session_function(

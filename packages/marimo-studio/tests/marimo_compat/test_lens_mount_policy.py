@@ -134,7 +134,7 @@ def _lens_state(notebook: Path) -> dict[str, object]:
         probe_runtime_in_worker(
             notebook,
             cell_ids=(),
-            variables=("lens_state.live", "lens_state.automatic"),
+            value_selector_groups=(("lens_state.live", "lens_state.automatic"),),
             timeout=30,
         )
     )

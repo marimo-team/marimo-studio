@@ -3,10 +3,52 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
-MAX_RUNTIME_VALUE_BYTES = 1_000_000
+MAX_OUTPUT_BYTES = 1_000_000
+
+
+@dataclass(frozen=True)
+class ValueLimits:
+    """Encoded byte limits for the projected values of one value read.
+
+    A value read carries the values that a view projects from one producer
+    cell. JSON values share the JSON budget, and Arrow values share the
+    larger Arrow budget.
+    """
+
+    json_value_bytes: int = 1_000_000
+    json_read_bytes: int = 1_000_000
+    arrow_value_bytes: int = 64 * 1024 * 1024
+    arrow_read_bytes: int = 128 * 1024 * 1024
+
+    @property
+    def response_bytes(self) -> int:
+        """Bound one serialized read response.
+
+        Arrow values reach the response as base64 data URLs in the Browser
+        runtime and in kernels without shared memory. A second JSON budget
+        covers descriptors, selector keys, and error messages.
+        """
+        return 2 * self.json_read_bytes + 4 * -(-self.arrow_read_bytes // 3)
+
+    def capped(self, max_json_bytes: int | None) -> ValueLimits:
+        """Lower the JSON value limit to a caller's cap."""
+        if max_json_bytes is None:
+            return self
+        return replace(
+            self,
+            json_value_bytes=min(self.json_value_bytes, max(1, max_json_bytes)),
+        )
+
+
+VALUE_LIMITS = ValueLimits()
+# The Browser runtime passes Arrow values from its worker as base64 text, and
+# a 132 MB read crashed Chromium. One read there carries one maximum value.
+BROWSER_VALUE_LIMITS = replace(
+    VALUE_LIMITS, arrow_read_bytes=VALUE_LIMITS.arrow_value_bytes
+)
 
 
 @dataclass(frozen=True)

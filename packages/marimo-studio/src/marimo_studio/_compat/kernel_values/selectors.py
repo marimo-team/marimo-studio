@@ -5,12 +5,17 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 
-from marimo_studio._compat.kernel_values.models import DEFAULT_MAX_VALUE_BYTES
 from marimo_studio._compat.kernel_values.representations import (
+    JSON_CODEC,
     EncodedValue,
     ValueEncoder,
 )
-from marimo_studio._projections.runtime_records import ValueReadError, ValueReadResult
+from marimo_studio._projections.runtime_records import (
+    VALUE_LIMITS,
+    ValueLimits,
+    ValueReadError,
+    ValueReadResult,
+)
 from marimo_studio._projections.values import (
     parse_value_reference,
     resolve_value_reference,
@@ -55,8 +60,7 @@ def _read_values(
     specifications: Mapping[str, SelectorSpec],
     active_specifications: Mapping[str, SelectorSpec] | None = None,
     *,
-    max_value_bytes: int,
-    max_response_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+    limits: ValueLimits = VALUE_LIMITS,
     consumer_id: str = "",
     revision: str = "",
     encoder: ValueEncoder | None = None,
@@ -76,7 +80,8 @@ def _read_values(
     values: dict[str, object] = {}
     errors: dict[str, ValueReadError] = {}
     prepared: list[tuple[str, EncodedValue]] = []
-    total = 0
+    json_read = 0
+    arrow_read = 0
 
     def fail(selector: str, error: ValueReadError) -> None:
         encoder.release_selector(
@@ -123,23 +128,18 @@ def _read_values(
             consumer_id=consumer_id,
             revision=revision,
             selector=selector,
-            max_value_bytes=max_value_bytes,
+            limits=limits,
+            json_read=json_read,
+            arrow_read=arrow_read,
         )
         if error is not None:
             fail(selector, error)
             continue
         assert encoded is not None
-        if total + encoded.byte_length > max_response_bytes:
-            encoder.discard(encoded)
-            fail(
-                selector,
-                ValueReadError(
-                    "response-too-large",
-                    "The value response exceeds the aggregate byte limit.",
-                ),
-            )
-            continue
-        total += encoded.byte_length
+        if encoded.payload["codec"] == JSON_CODEC:
+            json_read += encoded.byte_length
+        else:
+            arrow_read += encoded.byte_length
         values[selector] = encoded.payload
         prepared.append((selector, encoded))
     result = ValueReadResult(values, errors)
@@ -149,7 +149,7 @@ def _read_values(
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    if len(payload.encode("utf-8")) <= max_response_bytes:
+    if len(payload.encode("utf-8")) <= limits.response_bytes:
         for index, (selector, encoded) in enumerate(prepared):
             try:
                 if encoded.resource is None:

@@ -252,12 +252,6 @@ test("Arrow verification failures stay local to their selectors", async () => {
         dataUrl: "/corrupt.arrow",
         byteLength: 4,
       },
-      oversized: {
-        codec: "arrow-ipc-v1",
-        fingerprint: `sha256:${"2".repeat(64)}`,
-        dataUrl: "/oversized.arrow",
-        byteLength: 1_000_001,
-      },
     },
     errors: {},
   });
@@ -266,7 +260,6 @@ test("Arrow verification failures stay local to their selectors", async () => {
   expect(decoded.errors.mismatch?.code).toBe("value-fingerprint-mismatch");
   expect(decoded.errors.wrongSize?.code).toBe("value-size-mismatch");
   expect(decoded.errors.corrupt?.code).toBe("value-decode-failed");
-  expect(decoded.errors.oversized?.code).toBe("value-too-large");
 });
 
 test("aborting an Arrow resource read aborts the value read", async () => {
