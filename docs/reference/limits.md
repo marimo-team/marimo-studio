@@ -88,7 +88,7 @@ target.
 | One rendered output request set                   |   100 selectors | Capability or protocol error               |
 | Browser client response                           | 5,000,000 bytes | Live request failure                       |
 
-The Python and Browser runtimes enforce the value rows. A value read carries
+The Python and Browser runtimes enforce the value limits. A value read carries
 the values that a view projects from one producer cell, and `marimo-studio
 check` reads them the same way. Eager pandas, Polars, and PyArrow tables travel
 as
