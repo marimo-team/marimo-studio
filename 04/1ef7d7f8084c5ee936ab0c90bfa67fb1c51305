@@ -1,0 +1,19 @@
+LEARNINGS.md
+  s_bf7e7cec5c8862::t_20dd62b4a25075 1-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "041ef7d7f8084c5ee936ab0c90bfa67fb1c51305",
+  "prompts": {},
+  "sessions": {
+    "s_bf7e7cec5c8862": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7154978-40d9-4331-97a2-6fc004a7e2de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
