@@ -7,11 +7,17 @@ class _ArrowMaterializationRequired(ValueError):
     pass
 
 
-def _dataframe_ipc(value: object) -> bytes | None:
+class _ArrowValueTooLarge(ValueError):
+    pass
+
+
+def _dataframe_ipc(value: object, max_bytes: int) -> bytes | None:
     """Return an uncompressed Arrow stream or None for a non-tabular value.
 
-    The browser notebook embeds this function and its materialization error
-    directly. Keep runtime dependencies inside the function.
+    Raises ``_ArrowValueTooLarge`` once the stream passes ``max_bytes``, so an
+    oversized table never reaches memory in full. The browser notebook embeds
+    this function and its errors directly. Keep runtime dependencies inside
+    the function.
     """
     import io
     import sys
@@ -19,12 +25,44 @@ def _dataframe_ipc(value: object) -> bytes | None:
 
     from marimo._plugins.ui._impl.tables.utils import get_table_manager_or_none
 
+    # Collect stream chunks and join them once. On macOS, a growing
+    # io.BytesIO kept each large value's buffer resident in the kernel.
+    class Chunks(io.RawIOBase):
+        def __init__(self) -> None:
+            self.parts: list[bytes] = []
+            self.size = 0
+
+        def writable(self) -> bool:
+            return True
+
+        def write(self, data: Any) -> int:
+            size = memoryview(data).nbytes
+            self.size += size
+            if self.size > max_bytes:
+                raise _ArrowValueTooLarge
+            self.parts.append(bytes(data))
+            return size
+
+    def collect(write: Any) -> bytes:
+        output = Chunks()
+        try:
+            write(output)
+        except Exception:
+            # Polars wraps writer errors, so the byte count decides.
+            if output.size > max_bytes:
+                raise _ArrowValueTooLarge from None
+            raise
+        return b"".join(output.parts)
+
     def write_stream(table: Any, pyarrow: Any) -> bytes:
-        output = io.BytesIO()
-        options = pyarrow.ipc.IpcWriteOptions(compression=None)
-        with pyarrow.ipc.new_stream(output, table.schema, options=options) as writer:
-            writer.write_table(table)
-        return output.getvalue()
+        def write(output: Chunks) -> None:
+            options = pyarrow.ipc.IpcWriteOptions(compression=None)
+            with pyarrow.ipc.new_stream(
+                output, table.schema, options=options
+            ) as writer:
+                writer.write_table(table)
+
+        return collect(write)
 
     manager = get_table_manager_or_none(value)
     if manager is not None and manager.type in {"pandas", "polars"}:
@@ -36,9 +74,11 @@ def _dataframe_ipc(value: object) -> bytes | None:
                 raise TypeError(
                     "Polars Object columns cannot be serialized as Arrow IPC"
                 )
-            output = io.BytesIO()
-            dataframe.write_ipc_stream(output, compression="uncompressed")
-            return output.getvalue()
+            return collect(
+                lambda output: dataframe.write_ipc_stream(
+                    output, compression="uncompressed"
+                )
+            )
         import pyarrow
 
         try:

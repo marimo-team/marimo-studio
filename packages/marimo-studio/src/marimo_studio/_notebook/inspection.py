@@ -31,7 +31,7 @@ from marimo_studio.errors import ConfigurationError
 
 _PREVIEW_LINES = 8
 _PREVIEW_CHARS = 600
-_RUNTIME_VALUE_BYTES = 64 * 1024
+_RUNTIME_JSON_BYTES = 64 * 1024
 
 
 def _revision(static: StaticNotebook, cells: tuple[CellSpec, ...]) -> str:
@@ -189,11 +189,7 @@ async def inspect_runtime(
         limit=limit,
     )
     cells = _attach_selected_code(static, selected) if include_code else selected
-    variables = tuple(
-        dict.fromkeys(
-            definition for cell in selected for definition in cell.definitions
-        )
-    )
+    value_groups = tuple(cell.definitions for cell in selected if cell.definitions)
     source_generation = capture_notebook_source_generation(
         notebook.path,
         static.source_revision,
@@ -201,11 +197,11 @@ async def inspect_runtime(
     runtime = await create_runtime_probe()(
         notebook.path,
         cell_ids=tuple(cell.runtime_id for cell in selected),
-        variables=variables,
+        value_selector_groups=value_groups,
         output_selector_groups=(),
         show_tracebacks=True,
         timeout=runtime_timeout,
-        value_max_bytes=_RUNTIME_VALUE_BYTES,
+        max_json_bytes=_RUNTIME_JSON_BYTES,
         source_generation=source_generation,
     )
     require_notebook_source_generation(notebook.path, source_generation)

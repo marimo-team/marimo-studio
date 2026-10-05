@@ -124,7 +124,7 @@ def test_runtime_check_scopes_values_to_the_selected_view(
         if projection.request.target == "doubled.missing"
     )
 
-    assert captured["variables"] == ("doubled.missing",)
+    assert captured["value_selector_groups"] == (("doubled.missing",),)
     assert {result.name for result in results if result.status == "fail"} == {
         "runtime-cell:result",
         "runtime-value:doubled.missing",
@@ -212,7 +212,7 @@ def test_runtime_check_reports_rich_output_format_failures(
     )
     failure = next(result for result in results if result.status == "fail")
 
-    assert captured["variables"] == ()
+    assert captured["value_selector_groups"] == ()
     assert captured["output_selector_groups"] == (("doubled",),)
     assert failure.name == "runtime-output:doubled"
     assert failure.code == "output-format-error"

@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
 from marimo._runtime.virtual_file import VirtualFile, random_filename
+from marimo._runtime.virtual_file.storage import SharedMemoryStorage
 
 from marimo_studio._compat.kernel_values.arrow import (
     _ArrowMaterializationRequired,
+    _ArrowValueTooLarge,
     _dataframe_ipc,
 )
-from marimo_studio._projections.runtime_records import ValueReadError
+from marimo_studio._projections.runtime_records import ValueLimits, ValueReadError
 
 JSON_CODEC = "json-v1"
 ARROW_IPC_CODEC = "arrow-ipc-v1"
@@ -27,6 +30,22 @@ class EncodedValue:
     resource: VirtualFile | None = None
     resource_key: tuple[str, str, str] | None = None
     reused_resource: bool = False
+
+
+def _fits_shared_memory(context: Any, size: int) -> bool:
+    """Return whether a virtual file of ``size`` bytes fits the kernel's storage.
+
+    Marimo writes shared memory through an mmap, and a full Linux tmpfs such
+    as a container's default 64 MiB ``/dev/shm`` kills the kernel with SIGBUS
+    instead of raising. Values that do not fit travel as data URLs.
+    """
+    if not isinstance(context.virtual_file_registry.storage, SharedMemoryStorage):
+        return True
+    try:
+        stats = os.statvfs("/dev/shm")
+    except (AttributeError, OSError):
+        return True
+    return size <= stats.f_bavail * stats.f_frsize
 
 
 def _fingerprint(data: bytes) -> str:
@@ -62,14 +81,29 @@ class ValueEncoder:
         consumer_id: str,
         revision: str,
         selector: str,
-        max_value_bytes: int,
+        limits: ValueLimits,
+        json_read: int = 0,
+        arrow_read: int = 0,
     ) -> tuple[EncodedValue | None, ValueReadError | None]:
+        """Encode one value after ``json_read`` and ``arrow_read`` bytes."""
+        arrow_limit = min(
+            limits.arrow_value_bytes, limits.arrow_read_bytes - arrow_read
+        )
         try:
-            ipc = _dataframe_ipc(value)
+            ipc = _dataframe_ipc(value, arrow_limit)
         except _ArrowMaterializationRequired:
             return None, ValueReadError(
                 "arrow-materialization-required",
                 f"Materialize selector {selector!r} before projecting it.",
+            )
+        except _ArrowValueTooLarge:
+            if arrow_limit < limits.arrow_value_bytes:
+                return None, _read_too_large("Arrow", limits.arrow_read_bytes)
+            return None, ValueReadError(
+                "value-too-large",
+                f"Selector {selector!r} encodes more than {arrow_limit:,} bytes "
+                "of Arrow IPC. Filter or aggregate the table in the notebook, "
+                "or split it into per-item values.",
             )
         except (ImportError, ModuleNotFoundError) as error:
             return None, ValueReadError(
@@ -87,12 +121,12 @@ class ValueEncoder:
                 consumer_id=consumer_id,
                 revision=revision,
                 selector=selector,
-                max_value_bytes=max_value_bytes,
-            )
+            ), None
         return self._prepare_json(
             value,
             selector=selector,
-            max_value_bytes=max_value_bytes,
+            limits=limits,
+            json_read=json_read,
         )
 
     def _prepare_json(
@@ -100,7 +134,8 @@ class ValueEncoder:
         value: object,
         *,
         selector: str,
-        max_value_bytes: int,
+        limits: ValueLimits,
+        json_read: int,
     ) -> tuple[EncodedValue | None, ValueReadError | None]:
         try:
             text = json.dumps(
@@ -118,11 +153,15 @@ class ValueEncoder:
                 ),
             )
         encoded = text.encode("utf-8")
-        if len(encoded) > max_value_bytes:
+        if len(encoded) > limits.json_value_bytes:
             return None, ValueReadError(
                 "value-too-large",
-                f"Selector {selector!r} exceeds the {max_value_bytes}-byte limit.",
+                f"Selector {selector!r} encodes {len(encoded):,} bytes of JSON, "
+                f"above the {limits.json_value_bytes:,}-byte limit. Return the "
+                "data as a pandas, Polars, or PyArrow table to send it as Arrow.",
             )
+        if json_read + len(encoded) > limits.json_read_bytes:
+            return None, _read_too_large("JSON", limits.json_read_bytes)
         return (
             EncodedValue(
                 payload={
@@ -142,14 +181,7 @@ class ValueEncoder:
         consumer_id: str,
         revision: str,
         selector: str,
-        max_value_bytes: int,
-    ) -> tuple[EncodedValue | None, ValueReadError | None]:
-        size = len(ipc)
-        if size > max_value_bytes:
-            return None, ValueReadError(
-                "value-too-large",
-                f"Selector {selector!r} exceeds the {max_value_bytes}-byte limit.",
-            )
+    ) -> EncodedValue:
         fingerprint = _fingerprint(ipc)
         key = (consumer_id, revision, selector)
         current = self._resources.get(key)
@@ -160,6 +192,7 @@ class ValueEncoder:
             resource = (
                 VirtualFile.create_and_register(ipc, "arrow")
                 if self._context is not None
+                and _fits_shared_memory(self._context, len(ipc))
                 else VirtualFile(
                     random_filename("arrow"),
                     ipc,
@@ -167,20 +200,17 @@ class ValueEncoder:
                 )
             )
             reused = False
-        return (
-            EncodedValue(
-                payload={
-                    "codec": ARROW_IPC_CODEC,
-                    "fingerprint": fingerprint,
-                    "dataUrl": resource.url,
-                    "byteLength": size,
-                },
-                byte_length=size,
-                resource=resource,
-                resource_key=key,
-                reused_resource=reused,
-            ),
-            None,
+        return EncodedValue(
+            payload={
+                "codec": ARROW_IPC_CODEC,
+                "fingerprint": fingerprint,
+                "dataUrl": resource.url,
+                "byteLength": len(ipc),
+            },
+            byte_length=len(ipc),
+            resource=resource,
+            resource_key=key,
+            reused_resource=reused,
         )
 
     def commit(self, encoded: EncodedValue) -> None:
@@ -197,7 +227,13 @@ class ValueEncoder:
                 if not encoded.reused_resource:
                     self._release(resource)
                 raise
-        self._resources[key] = (str(encoded.payload["fingerprint"]), resource)
+        if resource.url.startswith("data:"):
+            # A data URL carries the whole value, so keeping it buys no reuse.
+            self._resources.pop(key, None)
+            return
+        # The registry stores the bytes. Keep a handle without the buffer.
+        handle = VirtualFile(resource.filename, b"", url=resource.url)
+        self._resources[key] = (str(encoded.payload["fingerprint"]), handle)
 
     def discard(self, encoded: EncodedValue) -> None:
         if encoded.resource is not None and not encoded.reused_resource:
@@ -254,3 +290,11 @@ class ValueEncoder:
         if resource.url.startswith("data:") or self._context is None:
             return
         self._context.virtual_file_registry.remove(resource)
+
+
+def _read_too_large(codec: str, limit: int) -> ValueReadError:
+    return ValueReadError(
+        "response-too-large",
+        f"{codec} values read from one cell exceed the {limit:,}-byte limit. "
+        "Project fewer or smaller values from that cell.",
+    )

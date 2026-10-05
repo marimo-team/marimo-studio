@@ -105,11 +105,11 @@ def test_runtime_request_maps_excessive_nesting_to_a_protocol_error(
                 "schema": 1,
                 "notebook": str(tmp_path / "analysis.py"),
                 "cellIds": [],
-                "variables": [],
+                "valueSelectorGroups": [],
                 "outputSelectorGroups": [],
                 "showTracebacks": False,
                 "timeout": 1,
-                "valueMaxBytes": 1024,
+                "maxJsonBytes": 1024,
                 "sourceGeneration": _nested_value(100),
             }
         ),

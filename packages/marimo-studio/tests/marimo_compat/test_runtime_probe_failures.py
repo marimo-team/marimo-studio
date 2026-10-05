@@ -43,7 +43,7 @@ def test_runtime_probe_preserves_session_creation_failures(
             probe_runtime_in_worker(
                 notebook_path,
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
             )
         )
 
@@ -106,7 +106,7 @@ def test_runtime_probe_stops_a_session_launched_past_its_startup_timeout(
             probe_runtime_in_worker(
                 notebook_path,
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 timeout=0.05,
             )
         )

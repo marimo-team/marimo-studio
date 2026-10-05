@@ -109,6 +109,10 @@ the complete projection budget.
 | `json-v1`      | `null`, boolean, number, string, array, or object        | `marimoValue` returns the decoded JSON-compatible value                        |
 | `arrow-ipc-v1` | [Flechette](https://github.com/uwdata/flechette) `Table` | `marimoValue` returns the table with its source bytes and fingerprint attached |
 
+A `json-v1` value encodes within 1,000,000 bytes and an `arrow-ipc-v1` value
+within 64 MiB. See [Runtime payloads](limits.md#runtime-payloads) for the
+per-read budgets.
+
 Studio decodes Arrow tables with Flechette's default extraction options.
 Integer columns, including 64-bit integers, read as numbers, and reading a
 64-bit value beyond `Number.MAX_SAFE_INTEGER` throws. Booleans and strings keep

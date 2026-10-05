@@ -41,7 +41,8 @@ def dataframe_value(scale):
         }
     )
     empty_dataframe = pl.DataFrame(schema={"value": pl.Int64, "label": pl.String})
-    return dataframe_value, empty_dataframe
+    large_dataframe = pl.DataFrame({"value": range(scale.value * 250_000)})
+    return dataframe_value, empty_dataframe, large_dataframe
 
 
 @app.cell
@@ -59,6 +60,8 @@ def slow_metric`,
           '      <output id="projected-table-summary" data-marimo-lens-inputs="projected-table"></output>\n' +
           '      <span id="empty-table" hidden mo-value="empty_dataframe"></span>\n' +
           '      <output id="empty-table-summary"></output>\n' +
+          '      <span id="large-table" hidden mo-value="large_dataframe"></span>\n' +
+          '      <output id="large-table-summary"></output>\n' +
           '      <marimo-output id="rich-summary-output"',
       )
       .replace(
@@ -68,6 +71,8 @@ def slow_metric`,
       const tableSummary = document.querySelector("#projected-table-summary");
       const emptyHost = document.querySelector("#empty-table");
       const emptySummary = document.querySelector("#empty-table-summary");
+      const largeHost = document.querySelector("#large-table");
+      const largeSummary = document.querySelector("#large-table-summary");
       const renderTable = (table) => {
         const first = table.get(0);
         const second = table.get(1);
@@ -97,6 +102,15 @@ def slow_metric`,
       if (emptyHost.marimoValue !== undefined) {
         renderEmptyTable(emptyHost.marimoValue);
       }
+      const renderLargeTable = (table) => {
+        largeSummary.textContent = \`${"${table.numRows}"} rows\`;
+      };
+      largeHost.addEventListener("marimo-value-updated", (event) => {
+        renderLargeTable(event.detail.value);
+      });
+      if (largeHost.marimoValue !== undefined) {
+        renderLargeTable(largeHost.marimoValue);
+      }
     </script>
   </body>`,
       ),
@@ -124,6 +138,14 @@ const expectEmptyDataframe = async (preview: ReturnType<typeof presentationFrame
   await expect(summary).toHaveText("0 rows × 2 columns");
 };
 
+// Each row encodes eight bytes, so every scale step is above the JSON limit.
+const expectLargeDataframe = async (
+  preview: ReturnType<typeof presentationFrame>,
+  scale: number,
+) => {
+  await expect(preview.locator("#large-table-summary")).toHaveText(`${scale * 250_000} rows`);
+};
+
 test("delivers and refreshes dataframe values in Server and WebAssembly runtimes", async ({
   page,
 }) => {
@@ -132,14 +154,18 @@ test("delivers and refreshes dataframe values in Server and WebAssembly runtimes
   const server = await waitForPreview(page);
   await expectProjectedDataframe(server, 42);
   await expectEmptyDataframe(server);
+  await expectLargeDataframe(server, 2);
   await labeledSlider(server.locator('marimo-cell[name="controls"]'), /^Scale/).press("End");
   await expectProjectedDataframe(server, 63);
+  await expectLargeDataframe(server, 3);
 
   await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await expectProjectedDataframe(wasm, 63);
   await expectEmptyDataframe(wasm);
+  await expectLargeDataframe(wasm, 3);
   await labeledSlider(wasm.locator('marimo-cell[name="controls"]'), /^Scale/).press("Home");
   await expectProjectedDataframe(wasm, 21);
+  await expectLargeDataframe(wasm, 1);
 });

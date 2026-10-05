@@ -76,12 +76,40 @@ target.
 
 ## Runtime payloads
 
-| Boundary                              |           Limit | Failure                      |
-| ------------------------------------- | --------------: | ---------------------------- |
-| Encoded browser runtime configuration |          16 MiB | `runtime-config-too-large`   |
-| One projected JSON or Arrow value     | 1,000,000 bytes | Value read or decode error   |
-| One rendered output request set       |   100 selectors | Capability or protocol error |
-| Browser client response               | 5,000,000 bytes | Live request failure         |
+| Boundary                                          |           Limit | Failure                                    |
+| ------------------------------------------------- | --------------: | ------------------------------------------ |
+| Encoded browser runtime configuration             |          16 MiB | `runtime-config-too-large`                 |
+| One projected JSON value                          | 1,000,000 bytes | `value-too-large`                          |
+| JSON values in one value read                     | 1,000,000 bytes | `response-too-large`                       |
+| One projected Arrow value                         |          64 MiB | `value-too-large`                          |
+| Arrow values in one value read                    |         128 MiB | `response-too-large`                       |
+| Arrow values in one Browser runtime value read    |          64 MiB | `response-too-large`                       |
+| One rendered output, and the outputs of a request | 1,000,000 bytes | `output-too-large` or `response-too-large` |
+| One rendered output request set                   |   100 selectors | Capability or protocol error               |
+| Browser client response                           | 5,000,000 bytes | Live request failure                       |
+
+The Python and Browser runtimes enforce the value rows. A value read carries
+the values that a view projects from one producer cell, and `marimo-studio
+check` reads them the same way. Eager pandas, Polars, and PyArrow tables travel
+as
+[Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc),
+a columnar binary format. Every other value travels as JSON, so return a table
+to project more than 1,000,000 bytes.
+
+The Python runtime publishes Arrow values through marimo's shared memory. A
+container's default 64 MiB `/dev/shm` holds about one large value, so start
+containers with a larger `--shm-size`. A value that does not fit travels
+inline, which takes longer to load.
+
+The Browser runtime passes Arrow values from its worker as base64 text, so a
+value read there carries at most 64 MiB of Arrow. A 60 MB value took about 8
+seconds to appear in Chromium on a Linux workstation. `marimo-studio check`
+applies the Python runtime budgets.
+
+The Prepared runtime stores each value as a
+[marimo-export](https://github.com/marimo-team/marimo-export) asset. One asset
+holds at most 64 MiB, and one export holds at most 512 MiB of unique assets
+across its prepared states.
 
 Browser runtime configuration contains saved notebook source, projection
 declarations, runtime bindings, and presentation settings. Prepared runtime

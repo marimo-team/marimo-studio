@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import base64
 import io
-import json
 import math
 import sys
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 
+from marimo_studio._compat.kernel_values import representations
 from marimo_studio._compat.kernel_values.representations import (
     ValueEncoder,
     inspection_value,
@@ -18,6 +19,7 @@ from marimo_studio._compat.kernel_values.selectors import (
     normalize_selector_spec,
 )
 from marimo_studio._projections.records import ValuePathStep
+from marimo_studio._projections.runtime_records import ValueLimits
 from marimo_studio._projections.values import (
     parse_value_reference,
     resolve_value_reference,
@@ -48,7 +50,6 @@ def test_kernel_value_reads_use_json_string_escape_semantics() -> None:
     result = _read_values(
         {"context": {"a/b": "slash", "😀": "emoji"}},
         {selector: _selector_spec(selector) for selector in selectors},
-        max_value_bytes=1_000,
     )
 
     assert result.values == {
@@ -129,7 +130,6 @@ def test_kernel_projection_returns_exact_json_leaves_and_local_errors() -> None:
     result = _read_values(
         namespace,
         specifications,
-        max_value_bytes=1_000,
     )
 
     assert result.values == {
@@ -159,20 +159,20 @@ def test_kernel_projection_bounds_each_selected_leaf() -> None:
             )
             for selector, reference in references.items()
         },
-        max_value_bytes=32,
+        limits=ValueLimits(json_value_bytes=32),
     )
 
     assert result.values == {"context.small": _encoded_json({"count": 3})}
     assert result.errors["context.large"].code == "value-too-large"
 
 
-def test_kernel_projection_bounds_the_aggregate_response() -> None:
+def test_kernel_projection_bounds_json_values_per_read() -> None:
     references = {
         selector: parse_value_reference(selector)
         for selector in ("context.first", "context.second")
     }
     result = _read_values(
-        {"context": {"first": "x" * 400, "second": "y" * 700}},
+        {"context": {"first": "x" * 600_000, "second": "y" * 600_000}},
         {
             selector: (
                 reference.variable,
@@ -180,11 +180,9 @@ def test_kernel_projection_bounds_the_aggregate_response() -> None:
             )
             for selector, reference in references.items()
         },
-        max_value_bytes=800,
-        max_response_bytes=1_000,
     )
 
-    assert result.values == {"context.first": _encoded_json("x" * 400)}
+    assert result.values == {"context.first": _encoded_json("x" * 600_000)}
     assert result.errors["context.second"].code == "response-too-large"
 
 
@@ -201,7 +199,6 @@ def test_kernel_projection_encodes_mixed_values_independently() -> None:
             "opaque": object(),
         },
         {selector: _selector_spec(selector) for selector in selectors},
-        max_value_bytes=10_000,
     )
 
     frame = cast(dict[str, object], result.values["bundle.frame"])
@@ -226,7 +223,6 @@ def test_kernel_projection_encodes_pyarrow_tables_and_batches() -> None:
     result = _read_values(
         values,
         {name: _selector_spec(name) for name in values},
-        max_value_bytes=10_000,
     )
 
     for name in values:
@@ -255,7 +251,6 @@ def test_kernel_projection_encodes_pandas_dataframe_types() -> None:
     result = _read_values(
         {"frame": frame},
         {"frame": _selector_spec("frame")},
-        max_value_bytes=10_000,
     )
 
     payload = cast(dict[str, object], result.values["frame"])
@@ -294,7 +289,6 @@ def test_kernel_projection_reports_dataframe_conversion_errors(
     result = _read_values(
         {"frame": frame},
         {"frame": _selector_spec("frame")},
-        max_value_bytes=10_000,
     )
 
     assert result.values == {}
@@ -309,7 +303,6 @@ def test_kernel_projection_encodes_empty_eager_dataframes() -> None:
     result = _read_values(
         {"frame": frame},
         {"frame": _selector_spec("frame")},
-        max_value_bytes=10_000,
     )
 
     payload = cast(dict[str, object], result.values["frame"])
@@ -319,13 +312,85 @@ def test_kernel_projection_encodes_empty_eager_dataframes() -> None:
     assert decoded.num_rows == 0
 
 
+def test_kernel_projection_sends_dataframes_beyond_the_json_limit() -> None:
+    import polars as pl
+
+    frame = pl.DataFrame({"value": range(250_000)})
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+    with context.install():
+        result = _read_values(
+            {"frame": frame, "rows": frame.to_dicts()},
+            {name: _selector_spec(name) for name in ("frame", "rows")},
+            encoder=encoder,
+        )
+        encoder.close()
+    context.virtual_file_registry.shutdown()
+
+    descriptor = cast(dict[str, object], result.values["frame"])
+    assert descriptor["codec"] == "arrow-ipc-v1"
+    assert cast(int, descriptor["byteLength"]) > 2_000_000
+    assert result.errors["rows"].code == "value-too-large"
+
+
+def test_kernel_projection_inlines_arrow_values_that_exceed_free_shared_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import polars as pl
+    from marimo._runtime.virtual_file.storage import SharedMemoryStorage
+
+    monkeypatch.setattr(
+        representations.os,
+        "statvfs",
+        lambda _path: SimpleNamespace(f_bavail=1, f_frsize=4_096),
+        raising=False,
+    )
+    context = _native_output_context()
+    context.virtual_file_registry.storage = SharedMemoryStorage()
+    encoder = ValueEncoder(context)
+    with context.install():
+        result = _read_values(
+            {"frame": pl.DataFrame({"value": range(1_000)})},
+            {"frame": _selector_spec("frame")},
+            encoder=encoder,
+        )
+
+        descriptor = cast(dict[str, object], result.values["frame"])
+        assert cast(str, descriptor["dataUrl"]).startswith("data:")
+        assert tuple(context.virtual_file_registry.filenames()) == ()
+        encoder.close()
+    context.virtual_file_registry.shutdown()
+
+
+def test_kernel_projection_budgets_arrow_values_apart_from_json() -> None:
+    import polars as pl
+
+    frame = pl.DataFrame({"value": range(1_000)})
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+    with context.install():
+        result = _read_values(
+            {"first": frame, "second": frame, "label": "x" * 900_000},
+            {name: _selector_spec(name) for name in ("first", "second", "label")},
+            limits=ValueLimits(arrow_read_bytes=12_000),
+            encoder=encoder,
+        )
+
+        assert set(result.values) == {"first", "label"}
+        assert result.errors["second"].code == "response-too-large"
+        assert "Arrow values read from one cell" in result.errors["second"].message
+        assert len(tuple(context.virtual_file_registry.filenames())) == 1
+        encoder.close()
+    context.virtual_file_registry.shutdown()
+
+
 def test_kernel_projection_bounds_arrow_ipc_values() -> None:
     import polars as pl
 
     result = _read_values(
         {"frame": pl.DataFrame({"value": ["x" * 1_000]})},
         {"frame": _selector_spec("frame")},
-        max_value_bytes=100,
+        limits=ValueLimits(arrow_value_bytes=100),
     )
 
     assert result.values == {}
@@ -358,7 +423,6 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
         first = _read_values(
             {"frame": pl.DataFrame({"value": [1]})},
             {"frame": _selector_spec("frame")},
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -370,7 +434,6 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
         same = _read_values(
             {"frame": pl.DataFrame({"value": [1]})},
             {"frame": _selector_spec("frame")},
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -381,7 +444,6 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
         second = _read_values(
             {"frame": pl.DataFrame({"value": [2]})},
             {"frame": _selector_spec("frame")},
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -393,7 +455,6 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
         _read_values(
             {"frame": {"value": 2}},
             {"frame": _selector_spec("frame")},
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -414,7 +475,6 @@ def test_kernel_projection_isolates_arrow_resources_by_consumer_and_revision() -
         result = _read_values(
             {"frame": pl.DataFrame({"value": [value]})},
             {"frame": _selector_spec("frame")},
-            max_value_bytes=10_000,
             consumer_id=consumer_id,
             revision=revision,
             encoder=encoder,
@@ -454,7 +514,6 @@ def test_kernel_projection_discards_uncommitted_resources_after_commit_failure(
             {"first": pl.DataFrame({"value": [1]})},
             {"first": specifications["first"]},
             specifications,
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -481,7 +540,6 @@ def test_kernel_projection_discards_uncommitted_resources_after_commit_failure(
                 },
                 specifications,
                 specifications,
-                max_value_bytes=10_000,
                 consumer_id="preview",
                 revision="revision-1",
                 encoder=encoder,
@@ -496,30 +554,14 @@ def test_kernel_projection_discards_uncommitted_resources_after_commit_failure(
 def test_kernel_projection_discards_resources_when_envelope_too_large() -> None:
     import polars as pl
 
-    frame = pl.DataFrame({"value": [1]})
-    probe = _read_values(
-        {"frame": frame},
-        {"frame": _selector_spec("frame")},
-        max_value_bytes=10_000,
-    )
-    arrow_bytes = cast(dict[str, object], probe.values["frame"])["byteLength"]
-    assert isinstance(arrow_bytes, int)
-    labels = {"first": 0, "second": 1}
-    specifications = {
-        selector: _selector_spec(selector) for selector in ("frame", *labels)
-    }
-    raw_json_bytes = sum(
-        len(json.dumps(value).encode("utf-8")) for value in labels.values()
-    )
-
+    missing = tuple(f"missing_{index}" for index in range(10))
     context = _native_output_context()
     encoder = ValueEncoder(context)
     with context.install():
         result = _read_values(
-            {"frame": frame, **labels},
-            specifications,
-            max_value_bytes=10_000,
-            max_response_bytes=arrow_bytes + raw_json_bytes,
+            {"frame": pl.DataFrame({"value": [1]}), "label": 1},
+            {name: _selector_spec(name) for name in ("frame", "label", *missing)},
+            limits=ValueLimits(json_read_bytes=10, arrow_read_bytes=400),
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -546,7 +588,6 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
             {"first": pl.DataFrame({"value": [1]})},
             {"first": _selector_spec("first")},
             active,
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -558,7 +599,6 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
             {"second": pl.DataFrame({"value": [2]})},
             {"second": _selector_spec("second")},
             active,
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -570,7 +610,6 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
             {"second": pl.DataFrame({"value": [2]})},
             {"second": _selector_spec("second")},
             {"second": _selector_spec("second")},
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -581,7 +620,6 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
             {"second": pl.DataFrame({"value": [2]}).lazy()},
             {"second": _selector_spec("second")},
             {"second": _selector_spec("second")},
-            max_value_bytes=10_000,
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,

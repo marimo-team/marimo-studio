@@ -146,7 +146,15 @@ def runtime_value_hint(code: str) -> str:
             "cell output."
         )
     if code == "value-too-large":
-        return "Project a smaller JSON value or render the defining cell."
+        return (
+            "Filter or aggregate the value in Marimo, project tables as "
+            "dataframes, or render the defining cell."
+        )
+    if code == "response-too-large":
+        return (
+            "Project fewer or smaller values from the defining cell, or split "
+            "large tables across cells."
+        )
     return (
         "Fix the mo-value selector in the view source or its defining "
         "notebook cell, then rerun the check."

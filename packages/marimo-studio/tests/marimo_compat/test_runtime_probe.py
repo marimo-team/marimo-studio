@@ -59,7 +59,7 @@ if __name__ == "__main__":
         probe_runtime_in_worker(
             notebook,
             cell_ids=(cell.runtime_id,),
-            variables=("context.count",),
+            value_selector_groups=(("context.count",),),
             timeout=10,
         )
     )
@@ -68,6 +68,49 @@ if __name__ == "__main__":
     assert result.cells[cell.runtime_id].outputs
     assert result.values.values == {"context.count": 3}
     assert sys.modules["__main__"] is main_module
+
+
+def test_runtime_probe_caps_json_values_and_reports_larger_dataframes(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "runtime.py"
+    notebook.write_text(
+        """import marimo
+
+__generated_with = "__MARIMO_VERSION__"
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import polars as pl
+
+    frame = pl.DataFrame({"value": range(10_000)})
+    text = "x" * 2_000
+    return frame, text
+
+
+if __name__ == "__main__":
+    app.run()
+""".replace("__MARIMO_VERSION__", marimo.__version__),
+        encoding="utf-8",
+    )
+    cell = load_static_notebook(notebook).cells[0]
+
+    result = asyncio.run(
+        probe_runtime_in_worker(
+            notebook,
+            cell_ids=(cell.runtime_id,),
+            value_selector_groups=(("frame", "text"),),
+            timeout=30,
+            max_json_bytes=1_024,
+        )
+    )
+
+    frame = cast(dict[str, Any], result.values.values["frame"])
+    assert frame["codec"] == "arrow-ipc-v1"
+    assert frame["byteLength"] > 80_000
+    assert result.values.errors["text"].code == "value-too-large"
 
 
 def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
@@ -127,7 +170,6 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                                 **probe_value_arguments(
                                     _selector_specs(owned), f"probe-{owned}"
                                 ),
-                                "max_value_bytes": 1_000,
                             }
                         ),
                     )
@@ -138,7 +180,6 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                                 **probe_value_arguments(
                                     _selector_specs(foreign), f"probe-{owned}"
                                 ),
-                                "max_value_bytes": 1_000,
                             }
                         ),
                     )
@@ -279,7 +320,7 @@ if __name__ == "__main__":
         probe_runtime_in_worker(
             notebook,
             cell_ids=(),
-            variables=(),
+            value_selector_groups=(),
             output_selector_groups=(("df",),),
             timeout=10,
         )
@@ -317,7 +358,7 @@ if __name__ == "__main__":
         probe_runtime_in_worker(
             notebook,
             cell_ids=(),
-            variables=(),
+            value_selector_groups=(),
             output_selector_groups=(("first", "second"),),
             timeout=10,
         )

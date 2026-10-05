@@ -104,10 +104,16 @@ checking projected output.
 ## Data in views
 
 **A value host fails with `value-too-large`.**
-Each projected value must encode within 1,000,000 bytes. Split the data into
-per-item values and select one at runtime, as in
-[projections](projections.md#select-targets). Runtime selection needs the
-Python or Browser runtime.
+A projected JSON value must encode within 1,000,000 bytes and a projected
+dataframe within 64 MiB of Arrow IPC. Project tables as dataframes, filter or
+aggregate them in the notebook, or split the data into per-item values and
+select one at runtime, as in [projections](projections.md#select-targets).
+Runtime selection needs the Python or Browser runtime.
+
+**A value host fails with `response-too-large`.**
+The values a view projects from one cell share 1,000,000 bytes of JSON and
+128 MiB of Arrow, or 64 MiB of Arrow in the Browser runtime. Project fewer
+values from that cell, or move large tables into separate cells.
 
 **A click in custom view code needs to change a notebook computation.**
 Route the change through a native marimo control, as in

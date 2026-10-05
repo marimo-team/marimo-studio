@@ -32,7 +32,6 @@ from marimo_studio._compat.kernel_values.lens import (
     lens_overlay,
 )
 from marimo_studio._compat.kernel_values.models import (
-    DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
     NAMESPACE,
     OUTPUT_FUNCTION_NAME,
@@ -52,6 +51,8 @@ from marimo_studio._compat.kernel_values.selectors import (
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS, QUERY_OPERATION_QUERY_PARAM
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._projections.runtime_records import (
+    MAX_OUTPUT_BYTES,
+    VALUE_LIMITS,
     OutputRenderResult,
     ValueReadError,
     ValueReadResult,
@@ -472,7 +473,6 @@ class _KernelBridgeLifespan:
                         )
                     },
                 ).to_dict()
-            limit = max(1, min(args.max_value_bytes, DEFAULT_MAX_VALUE_BYTES))
             value_encoder = self._value_encoder
             assert value_encoder is not None
             if not specifications and not active_specifications:
@@ -484,7 +484,7 @@ class _KernelBridgeLifespan:
                     kernel.globals,
                     specifications,
                     active_specifications,
-                    max_value_bytes=limit,
+                    limits=VALUE_LIMITS.capped(args.max_json_bytes),
                     consumer_id=args.consumer_id,
                     revision=args.revision,
                     encoder=value_encoder,
@@ -565,7 +565,7 @@ class _KernelBridgeLifespan:
                         )
                     },
                 ).to_dict()
-            limit = max(1, min(args.max_output_bytes, DEFAULT_MAX_VALUE_BYTES))
+            limit = max(1, min(args.max_output_bytes, MAX_OUTPUT_BYTES))
             kernel = context._kernel
             output_renderer = self._output_renderer
             assert output_renderer is not None

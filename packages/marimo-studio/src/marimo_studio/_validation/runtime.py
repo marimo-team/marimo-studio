@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+from typing import cast
 
 from marimo_studio._notebook.ports import LiveNotebookRunner, NotebookInspector
-from marimo_studio._notebook.records import CellSpec
+from marimo_studio._notebook.records import CellRef, CellSpec
 from marimo_studio._projections.resolution import ResolvedProjection
 from marimo_studio._projections.resolved import ResolvedStudio
 from marimo_studio._projections.runtime_records import (
@@ -91,6 +92,7 @@ async def run_runtime_checks(
     values: dict[str, list[tuple[str, ResolvedProjection]]] = {}
     outputs: dict[str, list[tuple[str, ResolvedProjection]]] = {}
     output_groups: list[tuple[str, ...]] = []
+    value_groups: dict[CellRef, set[str]] = {}
     for name in selected:
         view_outputs: list[str] = []
         for projection in resolved.views[name].projections:
@@ -99,6 +101,7 @@ async def run_runtime_checks(
                 cells.setdefault(target, projection)
             elif projection.kind == "value":
                 values.setdefault(target, []).append((name, projection))
+                value_groups.setdefault(projection.producer, set()).add(target)
             else:
                 outputs.setdefault(target, []).append((name, projection))
                 view_outputs.append(target)
@@ -114,7 +117,9 @@ async def run_runtime_checks(
                     notebook_cells[item.producer].runtime_id for item in cells.values()
                 )
             ),
-            variables=tuple(sorted(values)),
+            value_selector_groups=tuple(
+                tuple(sorted(group)) for group in value_groups.values()
+            ),
             output_selector_groups=tuple(output_groups),
             show_tracebacks=True,
             timeout=timeout,
@@ -316,11 +321,12 @@ def _value_results(
                 )
             )
         else:
+            codec = cast(Mapping[str, object], values[target])["codec"]
             results.append(
                 CheckResult(
                     f"runtime-value:{target}",
                     "pass",
-                    "Kernel value resolved to JSON data",
+                    f"Kernel value resolved as {codec}",
                 )
             )
     return results

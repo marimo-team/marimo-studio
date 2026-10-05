@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from marimo_studio._projections.runtime_records import MAX_RUNTIME_VALUE_BYTES
+from marimo_studio._projections.runtime_records import MAX_OUTPUT_BYTES
 
 NAMESPACE = "_marimo_studio"
 FUNCTION_NAME = "read_values"
 OUTPUT_FUNCTION_NAME = "render_values"
 QUERY_FUNCTION_NAME = "sync_query"
 OUTPUT_OWNER_PREFIX = "__marimo_studio_output_"
-DEFAULT_MAX_VALUE_BYTES = MAX_RUNTIME_VALUE_BYTES
 
 
 @dataclass
@@ -21,7 +20,7 @@ class ReadValuesArgs:
     active_projections: list[object]
     consumer_id: str
     authorization: str
-    max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES
+    max_json_bytes: int | None = None
 
 
 @dataclass
@@ -31,7 +30,7 @@ class RenderValuesArgs:
     active_projections: list[object]
     consumer_id: str
     authorization: str
-    max_output_bytes: int = DEFAULT_MAX_VALUE_BYTES
+    max_output_bytes: int = MAX_OUTPUT_BYTES
 
 
 @dataclass

@@ -15,7 +15,6 @@ import marimo
 
 from marimo_studio._compat.browser_notebook import selector_specs
 from marimo_studio._compat.kernel_values import (
-    DEFAULT_MAX_VALUE_BYTES,
     probe_selector_lease,
     read_probe_values,
     render_probe_outputs,
@@ -89,11 +88,11 @@ async def probe_runtime_in_worker(
     path: Path,
     *,
     cell_ids: tuple[str, ...],
-    variables: tuple[str, ...],
+    value_selector_groups: tuple[tuple[str, ...], ...] = (),
     output_selector_groups: tuple[tuple[str, ...], ...] = (),
     timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     show_tracebacks: bool = False,
-    value_max_bytes: int | None = None,
+    max_json_bytes: int | None = None,
     source_generation: NotebookSourceGeneration | None = None,
 ) -> RuntimeProbe:
     """Run a notebook session owned by the current isolated worker."""
@@ -132,6 +131,9 @@ async def probe_runtime_in_worker(
             return
 
     groups = output_selector_groups
+    allowed_values = tuple(
+        dict.fromkeys(selector for group in value_selector_groups for selector in group)
+    )
     allowed_outputs = tuple(
         dict.fromkeys(selector for group in groups for selector in group)
     )
@@ -145,7 +147,9 @@ async def probe_runtime_in_worker(
     consumer = ProbeConsumer()
     session: Any | None = None
     try:
-        with probe_selector_lease(path, variables, allowed_outputs) as query_params:
+        with probe_selector_lease(
+            path, allowed_values, allowed_outputs
+        ) as query_params:
             try:
                 session = await asyncio.wait_for(
                     manager.create_session(
@@ -198,24 +202,32 @@ async def probe_runtime_in_worker(
                 )
                 for cell_id in cell_ids
             }
-            values = (
-                await _read_values_within_deadline(
+            # Each group is one value read, so per-read budgets match views.
+            read_values: dict[str, object] = {}
+            read_errors: dict[str, ValueReadError] = {}
+            for value_group in value_selector_groups:
+                read = await _read_values_within_deadline(
                     session,
                     selector_specs(
                         {
                             selector: parse_value_reference(selector)
-                            for selector in variables
+                            for selector in value_group
                         }
                     ),
                     consumer_id=str(consumer.consumer_id),
-                    max_value_bytes=value_max_bytes or DEFAULT_MAX_VALUE_BYTES,
+                    max_json_bytes=max_json_bytes,
                     loop=loop,
                     deadline=deadline,
                     timeout=timeout,
                 )
-                if variables
-                else ValueReadResult(values={}, errors={})
-            )
+                read_values.update(read.values)
+                response_error = read.errors.get("*")
+                read_errors.update(
+                    {selector: response_error for selector in value_group}
+                    if response_error is not None
+                    else read.errors
+                )
+            values = ValueReadResult(values=read_values, errors=read_errors)
             outputs: dict[str, RenderedOutput] = {}
             output_errors: dict[str, ValueReadError] = {}
             for group in groups:
@@ -289,7 +301,7 @@ async def _read_values_within_deadline(
     specifications: dict[str, tuple[str, tuple[tuple[str, str | int], ...]]],
     *,
     consumer_id: str,
-    max_value_bytes: int,
+    max_json_bytes: int | None,
     loop: asyncio.AbstractEventLoop,
     deadline: float,
     timeout: float,
@@ -300,7 +312,7 @@ async def _read_values_within_deadline(
             specifications,
             consumer_id=consumer_id,
             timeout=_remaining_runtime_time(loop, deadline, timeout),
-            max_value_bytes=max_value_bytes,
+            max_json_bytes=max_json_bytes,
         )
     except ProjectionUnavailable as error:
         if error.code == "read-timeout":

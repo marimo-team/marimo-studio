@@ -66,11 +66,11 @@ def test_isolated_probe_uses_the_runtime_process_budget(
         runtime_process.probe_runtime_isolated(
             tmp_path / "analysis.py",
             cell_ids=("cell",),
-            variables=("value",),
+            value_selector_groups=(("value",),),
             output_selector_groups=(("output",),),
             show_tracebacks=True,
             timeout=42,
-            value_max_bytes=1024,
+            max_json_bytes=1024,
         )
     )
 
@@ -80,11 +80,11 @@ def test_isolated_probe_uses_the_runtime_process_budget(
         "schema": 1,
         "notebook": str(tmp_path / "analysis.py"),
         "cellIds": ["cell"],
-        "variables": ["value"],
+        "valueSelectorGroups": [["value"]],
         "outputSelectorGroups": [["output"]],
         "showTracebacks": True,
         "timeout": 42,
-        "valueMaxBytes": 1024,
+        "maxJsonBytes": 1024,
         "sourceGeneration": None,
     }
 
@@ -102,7 +102,7 @@ def test_isolated_probe_rejects_an_invalid_timeout(
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
                 timeout=timeout,
@@ -110,20 +110,20 @@ def test_isolated_probe_rejects_an_invalid_timeout(
         )
 
 
-@pytest.mark.parametrize("value_max_bytes", (0, 1_000_001))
-def test_isolated_probe_rejects_an_invalid_value_budget(
+@pytest.mark.parametrize("max_json_bytes", (0, True))
+def test_isolated_probe_rejects_an_invalid_json_budget(
     tmp_path: Path,
-    value_max_bytes: int,
+    max_json_bytes: int,
 ) -> None:
-    with pytest.raises(ValueError, match="integer between 1 and 1000000"):
+    with pytest.raises(ValueError, match="positive integer or None"):
         asyncio.run(
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
-                value_max_bytes=value_max_bytes,
+                max_json_bytes=max_json_bytes,
             )
         )
 
@@ -134,7 +134,7 @@ def test_isolated_probe_rejects_an_oversized_request(tmp_path: Path) -> None:
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=("x" * 262_144,),
+                value_selector_groups=(("x" * 262_144,),),
                 output_selector_groups=(),
                 show_tracebacks=False,
             )
@@ -159,7 +159,7 @@ def test_isolated_probe_enforces_the_process_request_budget(
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
             )
@@ -217,7 +217,7 @@ def test_isolated_probe_runs_request_files_outside_the_event_loop(
             await runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
             )
@@ -263,7 +263,7 @@ def test_isolated_probe_maps_the_process_deadline_to_the_runtime_budget(
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
                 timeout=3,
@@ -310,7 +310,7 @@ def test_isolated_probe_rejects_invalid_process_responses(
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
             )
@@ -344,7 +344,7 @@ def test_isolated_probe_does_not_expose_worker_stderr(
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
             )
@@ -368,7 +368,7 @@ def test_isolated_probe_rejects_a_changed_source_generation(
                 runtime_process.probe_runtime_isolated(
                     notebook_path,
                     cell_ids=(),
-                    variables=(),
+                    value_selector_groups=(),
                     output_selector_groups=(),
                     show_tracebacks=False,
                     source_generation=generation,
@@ -401,7 +401,7 @@ def test_cancelled_probe_surfaces_process_tree_cleanup_failure(
             runtime_process.probe_runtime_isolated(
                 tmp_path / "analysis.py",
                 cell_ids=(),
-                variables=(),
+                value_selector_groups=(),
                 output_selector_groups=(),
                 show_tracebacks=False,
             )

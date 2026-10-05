@@ -12,7 +12,6 @@ from marimo_studio._processes.limits import (
     validate_runtime_timeout,
 )
 from marimo_studio._projections.runtime_records import (
-    MAX_RUNTIME_VALUE_BYTES,
     RuntimeProbe,
     runtime_probe_from_dict,
 )
@@ -25,11 +24,11 @@ _REQUEST_FIELDS = {
     "schema",
     "notebook",
     "cellIds",
-    "variables",
+    "valueSelectorGroups",
     "outputSelectorGroups",
     "showTracebacks",
     "timeout",
-    "valueMaxBytes",
+    "maxJsonBytes",
     "sourceGeneration",
 }
 
@@ -38,31 +37,33 @@ def encode_runtime_request(
     path: Path,
     *,
     cell_ids: tuple[str, ...],
-    variables: tuple[str, ...],
+    value_selector_groups: tuple[tuple[str, ...], ...],
     output_selector_groups: tuple[tuple[str, ...], ...],
     show_tracebacks: bool,
     timeout: float,
-    value_max_bytes: int | None,
+    max_json_bytes: int | None,
     source_generation: NotebookSourceGeneration | None,
 ) -> bytes:
     """Encode one complete worker request after validating its budgets."""
     _validate_timeout(timeout)
-    limit = MAX_RUNTIME_VALUE_BYTES if value_max_bytes is None else value_max_bytes
-    _validate_value_limit(limit)
+    _validate_json_limit(max_json_bytes)
     if type(show_tracebacks) is not bool:
         raise ValueError("show_tracebacks must be a boolean")
     payload = {
         "schema": RUNTIME_PROTOCOL_SCHEMA,
         "notebook": str(path),
         "cellIds": list(_strings(cell_ids, "cell_ids")),
-        "variables": list(_strings(variables, "variables")),
+        "valueSelectorGroups": [
+            list(_strings(group, "value_selector_groups"))
+            for group in value_selector_groups
+        ],
         "outputSelectorGroups": [
             list(_strings(group, "output_selector_groups"))
             for group in output_selector_groups
         ],
         "showTracebacks": show_tracebacks,
         "timeout": timeout,
-        "valueMaxBytes": limit,
+        "maxJsonBytes": max_json_bytes,
         "sourceGeneration": (
             source_generation.to_dict() if source_generation is not None else None
         ),
@@ -110,14 +111,13 @@ def load_runtime_request(path: Path) -> dict[str, Any]:
         raise ProtocolError("Runtime inspection request is invalid")
     try:
         _validate_timeout(request["timeout"])
-        _validate_value_limit(request["valueMaxBytes"])
+        _validate_json_limit(request["maxJsonBytes"])
         cell_ids = _strings(request["cellIds"], "cellIds")
-        variables = _strings(request["variables"], "variables")
-        groups = request["outputSelectorGroups"]
-        if not isinstance(groups, list):
-            raise ValueError
-        output_groups = tuple(
-            _strings(group, "outputSelectorGroups") for group in groups
+        value_groups = _string_groups(
+            request["valueSelectorGroups"], "valueSelectorGroups"
+        )
+        output_groups = _string_groups(
+            request["outputSelectorGroups"], "outputSelectorGroups"
         )
         source_generation = (
             None
@@ -129,11 +129,11 @@ def load_runtime_request(path: Path) -> dict[str, Any]:
     return {
         "notebook": notebook,
         "cell_ids": cell_ids,
-        "variables": variables,
+        "value_selector_groups": value_groups,
         "output_selector_groups": output_groups,
         "show_tracebacks": show_tracebacks,
         "timeout": request["timeout"],
-        "value_max_bytes": request["valueMaxBytes"],
+        "max_json_bytes": request["maxJsonBytes"],
         "source_generation": source_generation,
     }
 
@@ -217,12 +217,15 @@ def _parse_json_float(value: str) -> float:
     return parsed
 
 
-def _validate_value_limit(value: object) -> None:
-    if type(value) is not int or not 1 <= value <= MAX_RUNTIME_VALUE_BYTES:
-        raise ValueError(
-            "value_max_bytes must be an integer between 1 and "
-            f"{MAX_RUNTIME_VALUE_BYTES}"
-        )
+def _validate_json_limit(value: object) -> None:
+    if value is not None and (type(value) is not int or value < 1):
+        raise ValueError("max_json_bytes must be a positive integer or None")
+
+
+def _string_groups(value: object, field: str) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field} must be an array")
+    return tuple(_strings(group, field) for group in value)
 
 
 def _strings(value: object, field: str) -> tuple[str, ...]:
