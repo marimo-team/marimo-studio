@@ -220,14 +220,16 @@ async def probe_runtime_in_worker(
                     deadline=deadline,
                     timeout=timeout,
                 )
-                read_values.update(read.values)
                 response_error = read.errors.get("*")
-                read_errors.update(
-                    {selector: response_error for selector in value_group}
-                    if response_error is not None
-                    else read.errors
-                )
-            values = ValueReadResult(values=read_values, errors=read_errors)
+                for selector in value_group:
+                    error = read.errors.get(selector) or response_error
+                    if error is not None:
+                        read_values.pop(selector, None)
+                        read_errors[selector] = error
+                    elif selector in read.values:
+                        read_errors.pop(selector, None)
+                        # Drop inline Arrow bytes before the next read.
+                        read_values[selector] = inspection_value(read.values[selector])
             outputs: dict[str, RenderedOutput] = {}
             output_errors: dict[str, ValueReadError] = {}
             for group in groups:
@@ -259,16 +261,9 @@ async def probe_runtime_in_worker(
                 outputs=outputs,
                 errors=output_errors,
             )
-            inspection_values = ValueReadResult(
-                values={
-                    selector: inspection_value(value)
-                    for selector, value in values.values.items()
-                },
-                errors=values.errors,
-            )
             return RuntimeProbe(
                 cells=cells,
-                values=inspection_values,
+                values=ValueReadResult(values=read_values, errors=read_errors),
                 outputs=output_result,
             )
     finally:

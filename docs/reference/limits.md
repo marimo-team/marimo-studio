@@ -93,8 +93,9 @@ the values that a view projects from one producer cell, and `marimo-studio
 check` reads them the same way. Eager pandas, Polars, and PyArrow tables travel
 as
 [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc),
-a columnar binary format. Every other value travels as JSON, so return a table
-to project more than 1,000,000 bytes.
+a columnar binary format. Collect lazy dataframes in the notebook before
+projecting them. Other values travel as JSON, so return a table to project more
+than 1,000,000 bytes.
 
 The Python runtime publishes Arrow values through marimo's shared memory. A
 container's default 64 MiB `/dev/shm` holds about one large value, so start

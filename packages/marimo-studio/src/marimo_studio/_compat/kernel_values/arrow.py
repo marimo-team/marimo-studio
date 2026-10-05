@@ -14,8 +14,8 @@ class _ArrowValueTooLarge(ValueError):
 def _dataframe_ipc(value: object, max_bytes: int) -> bytes | None:
     """Return an uncompressed Arrow stream or None for a non-tabular value.
 
-    Raises ``_ArrowValueTooLarge`` once the stream passes ``max_bytes``, so an
-    oversized table never reaches memory in full. The browser notebook embeds
+    Raises ``_ArrowValueTooLarge`` once the stream passes ``max_bytes`` and
+    keeps at most ``max_bytes`` of encoded output. The browser notebook embeds
     this function and its errors directly. Keep runtime dependencies inside
     the function.
     """
@@ -84,9 +84,7 @@ def _dataframe_ipc(value: object, max_bytes: int) -> bytes | None:
         try:
             table = pyarrow.Table.from_pandas(value)
         except Exception:
-            source = pyarrow.ipc.open_file(
-                io.BytesIO(manager.to_arrow_ipc())
-            ).read_all()
+            source = pyarrow.ipc.open_file(manager.to_arrow_ipc()).read_all()
             return write_stream(source, pyarrow)
         return write_stream(table, pyarrow)
 

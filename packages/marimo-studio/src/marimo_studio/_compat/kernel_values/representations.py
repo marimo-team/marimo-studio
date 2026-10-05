@@ -44,6 +44,7 @@ def _fits_shared_memory(context: Any, size: int) -> bool:
     try:
         stats = os.statvfs("/dev/shm")
     except (AttributeError, OSError):
+        # macOS and Windows back shared memory without a tmpfs to fill.
         return True
     return size <= stats.f_bavail * stats.f_frsize
 

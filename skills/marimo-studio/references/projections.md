@@ -32,11 +32,10 @@ Materialize lazy or remote dataframe queries in the notebook before projecting
 them. Pandas may require PyArrow. WebAssembly notebooks need browser-compatible
 dataframe and Arrow writer packages. A projected dataframe must encode within
 64 MiB of Arrow IPC in every runtime. The values a view projects from one cell
-share 1,000,000 bytes of JSON and 128 MiB of Arrow in the Python runtime or
-64 MiB in the Browser runtime. Any other value travels as JSON within
-1,000,000 bytes. Filter,
-aggregate, or split larger tables into separate notebook values, then select
-one at runtime as described in [Select targets](#select-targets).
+share 1,000,000 bytes of JSON and 128 MiB of Arrow, or 64 MiB of Arrow in the
+Browser runtime. Any other value travels as JSON within 1,000,000 bytes.
+Filter, aggregate, or split larger tables into separate notebook values, then
+select one at runtime as described in [Select targets](#select-targets).
 
 ## Select targets
 
