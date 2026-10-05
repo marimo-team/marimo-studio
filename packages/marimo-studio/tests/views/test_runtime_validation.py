@@ -482,3 +482,17 @@ def test_selected_view_check_isolated_from_other_templates(
 
     assert all(result.status == "pass" for result in selected.checks)
     assert any(result.status == "fail" for result in all_views.checks)
+
+
+@pytest.mark.native_process
+def test_runtime_check_passes_json_values_from_the_worker(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    _shell(studio, "dashboard", '<span mo-value="doubled"></span>')
+
+    results = asyncio.run(
+        check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
+    )
+
+    value = next(result for result in results if result.name == "runtime-value:doubled")
+    assert value.status == "pass"

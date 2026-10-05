@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-from typing import cast
 
 from marimo_studio._notebook.ports import LiveNotebookRunner, NotebookInspector
 from marimo_studio._notebook.records import CellRef, CellSpec
@@ -321,12 +320,11 @@ def _value_results(
                 )
             )
         else:
-            codec = cast(Mapping[str, object], values[target])["codec"]
             results.append(
                 CheckResult(
                     f"runtime-value:{target}",
                     "pass",
-                    f"Kernel value resolved as {codec}",
+                    "Kernel value resolved",
                 )
             )
     return results
