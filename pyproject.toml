@@ -20,7 +20,7 @@ dev = [
   "agent-plugins>=0.2.4",
   "basedpyright>=1.39.10",
   "deno==2.9.5",
-  "marimo[recommended]==0.25.0",
+  "marimo[recommended]==0.25.1",
   "marimo-lens>=0.2.3",
   "pyrefly>=1.1",
   "ruff>=0.16",

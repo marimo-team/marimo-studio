@@ -75,7 +75,7 @@ at the next sandbox start, and the first start after adding Studio spends extra
 time installing it. For a Git-synced notebook, add the header in the repository
 and sync again.
 
-Studio 0.2 runs on marimo 0.25.0, so the sandbox image must provide that marimo
+Studio 0.2 runs on marimo 0.25.1, so the sandbox image must provide that marimo
 version. See
 [Supported environment](../reference/compatibility.md#supported-environment).
 

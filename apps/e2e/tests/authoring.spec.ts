@@ -61,9 +61,16 @@ test("reuses a warm view artifact with current notebook changes", async ({
     2,
   );
   await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+  // A superseded warm build can write a cancelled receipt before the published one.
   await expect
-    .poll(() => readWorkspaceFile(receiptPath).catch(() => null), { timeout: 30_000 })
-    .not.toBeNull();
+    .poll(
+      async () => {
+        const receipt = await readWorkspaceFile(receiptPath).catch(() => null);
+        return receipt === null ? null : JSON.parse(receipt).build.phase;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe("published");
   const warmedReceipt = await readWorkspaceFile(receiptPath);
 
   const metricRefresh = await captureProjectionRefresh(page, browserDiagnostics);

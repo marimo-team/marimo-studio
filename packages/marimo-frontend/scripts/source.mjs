@@ -163,6 +163,8 @@ export const assertCleanCheckout = async (path) => {
 const patchedFiles = [
   "frontend/src/components/ui/native-select.tsx",
   "frontend/src/components/ui/slider.tsx",
+  "frontend/src/core/kernel/__tests__/session.test.ts",
+  "frontend/src/core/kernel/session.ts",
   "frontend/src/core/websocket/__tests__/useWebSocket.test.ts",
   "frontend/src/core/websocket/useWebSocket.tsx",
   "frontend/src/plugins/core/__test__/registerReactComponent.test.ts",
