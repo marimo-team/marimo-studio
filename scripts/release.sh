@@ -9,8 +9,8 @@ usage() {
 Usage: ./scripts/release.sh [--dry-run]
 
 Releases the package version committed to main. The command requires a clean,
-synchronized main branch plus successful CI, Browser acceptance, and
-documentation workflows for its current commit. It creates and pushes the
+synchronized main branch plus successful CI, Browser acceptance, Platform
+acceptance, and documentation workflows for its current commit. It creates and pushes the
 annotated vX.Y.Z tag that starts trusted publishing.
 
 Add the version change to the release pull request with:

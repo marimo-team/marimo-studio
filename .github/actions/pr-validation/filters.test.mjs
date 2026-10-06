@@ -106,3 +106,62 @@ test("Notebook Kit spec changes select their owning provider suite", () => {
 test("provider preview spec changes select their owning provider suite", () => {
   assert.deepEqual(selected("apps/e2e/tests/provider-preview.spec.ts"), ["provider_browser"]);
 });
+
+const matches = (name, path) => {
+  const patterns = filters[name].flat(Infinity);
+  return picomatch(
+    patterns.filter((pattern) => !pattern.startsWith("!")),
+    {
+      dot: true,
+      ignore: patterns
+        .filter((pattern) => pattern.startsWith("!"))
+        .map((pattern) => pattern.slice(1)),
+    },
+  )(path);
+};
+
+test("process, filesystem, and dependency changes run platform contracts on the pull request", () => {
+  for (const path of [
+    "packages/marimo-studio/src/marimo_studio/_filesystem/_windows.py",
+    "packages/marimo-studio/src/marimo_studio/_processes/provider_runner.py",
+    "packages/marimo-studio/src/marimo_studio/view_providers/_host/registry.py",
+    "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/runtime.py",
+    "uv.lock",
+    "pnpm-lock.yaml",
+    ".github/workflows/platforms.yml",
+    "apps/e2e/scripts/process-group.ts",
+  ]) {
+    assert.equal(matches("platform_sensitive", path), true, path);
+  }
+});
+
+test("portable product changes defer platform contracts until after merge", () => {
+  for (const path of [
+    "packages/marimo-studio/src/marimo_studio/_projections/resolution.py",
+    "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/build.py",
+    "packages/presentation/src/runtime/wasm.ts",
+    "docs/guide/views.md",
+  ]) {
+    assert.equal(matches("platform_sensitive", path), false, path);
+  }
+});
+
+test("documentation and example changes build the complete site on the pull request", () => {
+  for (const path of [
+    "docs/guide/views.md",
+    "apps/docs/examples.ts",
+    "examples/athletes.py",
+    "examples/__marimo__/studio/athletes/overview/index.html",
+    ".github/workflows/pages.yml",
+  ]) {
+    assert.equal(matches("docs_site", path), true, path);
+  }
+  assert.equal(
+    matches("docs_site", "packages/marimo-studio/src/marimo_studio/_projections/resolution.py"),
+    false,
+  );
+  assert.equal(
+    matches("pages", "packages/marimo-studio/src/marimo_studio/_projections/resolution.py"),
+    true,
+  );
+});

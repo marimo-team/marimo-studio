@@ -1,0 +1,541 @@
+name: Platform acceptance
+
+# Runs the macOS and Windows contracts after merge. A pull request runs them
+# when it changes a platform-sensitive path, or when the last platform run on
+# its base failed, so a fix is validated on every platform before it lands.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      installed_platforms: ${{ steps.selection.outputs.installed_platforms }}
+      python_platforms: ${{ steps.selection.outputs.python_platforms }}
+      windows_installed: ${{ steps.selection.outputs.windows_installed }}
+      windows_lifecycle: ${{ steps.selection.outputs.windows_lifecycle }}
+      windows_provider: ${{ steps.selection.outputs.windows_provider }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select validation from the comparison base
+        id: pr-validation
+        uses: ./.github/actions/pr-validation
+        with:
+          workflow: platforms.yml
+          reuse: "false"
+          pending: changed
+
+      - name: Classify changed files
+        id: filter
+        if: steps.pr-validation.outputs.mode == 'changed'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/filters.yml
+          predicate-quantifier: some-with-excludes
+      - name: Select required contracts
+        id: selection
+        env:
+          VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
+          VALIDATION_EVENT: ${{ github.event_name }}
+          DEFERRED_FILTERS: >-
+            {"installed_platforms":{"filter":"installed_distribution","escalate":"platform_sensitive"},
+            "python_platforms":{"filter":"python_contracts","escalate":"platform_sensitive"},
+            "windows_installed":{"filter":"installed_browser","escalate":"platform_sensitive"},
+            "windows_lifecycle":{"filter":"windows_lifecycle","escalate":"platform_sensitive"},
+            "windows_provider":{"filter":"provider_browser","escalate":"platform_sensitive"}}
+          PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
+        run: node .github/actions/pr-validation/select.mjs
+
+  python:
+    name: Platform contracts (${{ matrix.profile }}, ${{ matrix.os }})
+    needs: changes
+    if: >-
+      needs.changes.outputs.python_platforms == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: native
+            os: macos-latest
+          - profile: native
+            os: windows-latest
+          - profile: deno
+            os: macos-latest
+          - profile: deno
+            os: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test ${{ matrix.profile }} contracts
+        uses: ./.github/actions/test-python
+        with:
+          profile: ${{ matrix.profile }}
+          python-version: "3.12"
+
+  package:
+    name: Package candidate
+    needs: changes
+    if: >-
+      needs.changes.outputs.installed_platforms == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+        with:
+          prepare-marimo-frontend: "true"
+
+      - name: Build and validate package archives
+        run: make _package-build
+
+      - name: Upload package candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-candidate
+          path: |
+            dist/marimo_studio-*.whl
+            dist/agent-plugin-digests.json
+          retention-days: 1
+          if-no-files-found: error
+
+  installed-package:
+    name: Installed package and provider (${{ matrix.os }})
+    needs: [changes, package]
+    if: >-
+      needs.changes.outputs.installed_platforms == 'true' && needs.package.result == 'success'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download package candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: package-candidate
+          path: dist
+
+      - name: Verify installed package and providers
+        shell: bash
+        run: ./scripts/verify-installed-wheel.sh 2>&1 | tee "$RUNNER_TEMP/installed-verification.log"
+      - name: Upload installed verification timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: installed-verification-${{ runner.os }}
+          path: ${{ runner.temp }}/installed-verification.log
+          retention-days: 7
+          if-no-files-found: warn
+
+  browser-assets:
+    name: Browser and package artifacts
+    needs: changes
+    if: >-
+      needs.changes.outputs.windows_lifecycle == 'true' ||
+      needs.changes.outputs.windows_provider == 'true' ||
+      needs.changes.outputs.windows_installed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      wheel: ${{ steps.package.outputs.wheel }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.12"
+      - name: Install Python dependencies
+        run: uv sync --locked --group e2e
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+        with:
+          prepare-marimo-frontend: "true"
+      - name: Prepare browser Python test payload
+        run: make _prepare-browser-tests
+      - name: Build and validate browser and package artifacts
+        id: package
+        run: |-
+          make _package-build
+          printf 'wheel=%s\n' "$(basename dist/marimo_studio-*.whl)" >> "$GITHUB_OUTPUT"
+      - name: Upload browser assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: browser-assets
+          path: packages/marimo-studio/src/marimo_studio/_static/browser
+          retention-days: 1
+          if-no-files-found: error
+      - name: Upload browser package candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: browser-package
+          path: dist/marimo_studio-*.whl
+          retention-days: 1
+          if-no-files-found: error
+      - name: Upload browser Python test payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: browser-pyodide
+          path: apps/e2e/.cache/pyodide
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
+
+  windows-e2e:
+    name: Windows browser lifecycle contracts
+    needs:
+      - changes
+      - browser-assets
+    if: >-
+      needs.changes.outputs.windows_lifecycle == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group e2e
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+      - name: Download browser assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: browser-assets
+          path: packages/marimo-studio/src/marimo_studio/_static/browser
+      - name: Download browser Python test payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: browser-pyodide
+          path: apps/e2e/.cache/pyodide
+
+      - name: Install Chromium
+        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
+
+      - name: Test Windows view and shutdown lifecycles
+        run: pnpm --filter @marimo-studio/e2e e2e:windows
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: main-windows.zip
+
+      - name: Upload Windows browser report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-playwright-report
+          path: |
+            apps/e2e/playwright-report/
+            apps/e2e/playwright-report-installed/
+            apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload browser result records
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: browser-results-windows-e2e
+          path: apps/e2e/test-results/blob-*/**/*.zip
+          retention-days: 7
+          if-no-files-found: warn
+
+  windows-provider-e2e:
+    name: Windows provider browser contracts
+    needs:
+      - changes
+      - browser-assets
+    if: >-
+      needs.changes.outputs.windows_provider == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group e2e
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+      - name: Download browser assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: browser-assets
+          path: packages/marimo-studio/src/marimo_studio/_static/browser
+      - name: Download browser Python test payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: browser-pyodide
+          path: apps/e2e/.cache/pyodide
+
+      - name: Install Chromium
+        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
+
+      - name: Test Windows provider runtimes
+        run: pnpm --filter @marimo-studio/e2e e2e:windows:providers
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: provider-windows.zip
+
+      - name: Upload Windows provider browser report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-provider-playwright-report
+          path: |
+            apps/e2e/playwright-report/
+            apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload browser result records
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: browser-results-windows-provider-e2e
+          path: apps/e2e/test-results/blob-*/**/*.zip
+          retention-days: 7
+          if-no-files-found: warn
+
+  windows-installed-e2e:
+    name: Windows installed-wheel browser contract
+    needs:
+      - changes
+      - browser-assets
+    if: >-
+      needs.changes.outputs.windows_installed == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group e2e
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+      - name: Download browser assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: browser-assets
+          path: packages/marimo-studio/src/marimo_studio/_static/browser
+      - name: Download browser Python test payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: browser-pyodide
+          path: apps/e2e/.cache/pyodide
+
+      - name: Install Chromium
+        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
+      - name: Download installed browser candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: browser-package
+          path: dist
+
+      - name: Test the installed wheel in Chromium
+        run: pnpm --filter @marimo-studio/e2e e2e:installed
+        env:
+          MARIMO_STUDIO_E2E_WHEEL: ${{ github.workspace }}/dist/${{ needs.browser-assets.outputs.wheel }}
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: installed-windows.zip
+
+      - name: Upload Windows installed-wheel browser report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-installed-playwright-report
+          path: |
+            apps/e2e/playwright-report-installed/
+            apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload browser result records
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: browser-results-windows-installed-e2e
+          path: apps/e2e/test-results/blob-*/**/*.zip
+          retention-days: 7
+          if-no-files-found: warn
+  reports:
+    name: Windows browser reports
+    needs:
+      - windows-e2e
+      - windows-provider-e2e
+      - windows-installed-e2e
+    if:
+      "!cancelled() && (needs.windows-e2e.result == 'success' || needs.windows-e2e.result == 'failure' ||
+      needs.windows-provider-e2e.result == 'success' || needs.windows-provider-e2e.result ==
+      'failure' || needs.windows-installed-e2e.result == 'success' ||
+      needs.windows-installed-e2e.result == 'failure')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+      - name: Download browser result records
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: browser-results-*
+          path: browser-results
+          merge-multiple: true
+      - name: Merge browser reports
+        run: >-
+          mkdir merged-blobs
+
+          find browser-results -name '*.zip' -exec cp {} merged-blobs/ \;
+
+          pnpm --filter @marimo-studio/e2e exec playwright merge-reports --config
+          playwright.merge.config.ts "${{ github.workspace }}/merged-blobs"
+      - name: Upload merged browser report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: windows-browser-report
+          path: apps/e2e/playwright-report
+          retention-days: 7
+          if-no-files-found: error
+
+  gate:
+    name: Platform gate
+    if: always()
+    needs:
+      - changes
+      - python
+      - package
+      - installed-package
+      - browser-assets
+      - windows-e2e
+      - windows-provider-e2e
+      - windows-installed-e2e
+      - reports
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Confirm platform results
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          PYTHON_REQUIRED: ${{ needs.changes.outputs.python_platforms == 'true' }}
+          PYTHON: ${{ needs.python.result }}
+          PACKAGE_REQUIRED: ${{ needs.changes.outputs.installed_platforms == 'true' }}
+          PACKAGE: ${{ needs.package.result }}
+          INSTALLED_PACKAGE_REQUIRED: ${{ needs.changes.outputs.installed_platforms == 'true' }}
+          INSTALLED_PACKAGE: ${{ needs.installed-package.result }}
+          BROWSER_ASSETS_REQUIRED: ${{ needs.changes.outputs.windows_lifecycle == 'true' ||
+            needs.changes.outputs.windows_provider == 'true' ||
+            needs.changes.outputs.windows_installed == 'true' }}
+          BROWSER_ASSETS: ${{ needs.browser-assets.result }}
+          WINDOWS_E2E_REQUIRED: ${{ needs.changes.outputs.windows_lifecycle == 'true' }}
+          WINDOWS_E2E: ${{ needs.windows-e2e.result }}
+          WINDOWS_PROVIDER_E2E_REQUIRED: ${{ needs.changes.outputs.windows_provider == 'true' }}
+          WINDOWS_PROVIDER_E2E: ${{ needs.windows-provider-e2e.result }}
+          WINDOWS_INSTALLED_E2E_REQUIRED: ${{ needs.changes.outputs.windows_installed == 'true' }}
+          WINDOWS_INSTALLED_E2E: ${{ needs.windows-installed-e2e.result }}
+          REPORTS_REQUIRED: ${{ needs.windows-e2e.result == 'success' || needs.windows-e2e.result ==
+            'failure' || needs.windows-provider-e2e.result == 'success' ||
+            needs.windows-provider-e2e.result == 'failure' || needs.windows-installed-e2e.result ==
+            'success' || needs.windows-installed-e2e.result == 'failure' }}
+          REPORTS: ${{ needs.reports.result }}
+        run: |
+          scripts/check-workflow-results.sh \
+            Changes true "$CHANGES" \
+            Platform-python "$PYTHON_REQUIRED" "$PYTHON" \
+            Package "$PACKAGE_REQUIRED" "$PACKAGE" \
+            Installed-package "$INSTALLED_PACKAGE_REQUIRED" "$INSTALLED_PACKAGE" \
+            Browser-assets "$BROWSER_ASSETS_REQUIRED" "$BROWSER_ASSETS" \
+            Windows-lifecycle "$WINDOWS_E2E_REQUIRED" "$WINDOWS_E2E" \
+            Windows-provider "$WINDOWS_PROVIDER_E2E_REQUIRED" "$WINDOWS_PROVIDER_E2E" \
+            Windows-installed "$WINDOWS_INSTALLED_E2E_REQUIRED" "$WINDOWS_INSTALLED_E2E" \
+            Reports "$REPORTS_REQUIRED" "$REPORTS"

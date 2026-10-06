@@ -24,7 +24,6 @@ jobs:
       installed_browser: ${{ steps.selection.outputs.installed_browser }}
       main_browser: ${{ steps.selection.outputs.main_browser }}
       provider_browser: ${{ steps.selection.outputs.provider_browser }}
-      windows_lifecycle: ${{ steps.selection.outputs.windows_lifecycle }}
       windows_unit: ${{ steps.selection.outputs.windows_unit }}
     steps:
       - name: Check out repository
@@ -50,7 +49,7 @@ jobs:
         id: selection
         env:
           VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
-          VALIDATION_FILTERS: '["installed_browser","main_browser","provider_browser","windows_lifecycle","windows_unit"]'
+          VALIDATION_FILTERS: '["installed_browser","main_browser","provider_browser","windows_unit"]'
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
         run: node .github/actions/pr-validation/select.mjs
   browser-assets:
@@ -58,8 +57,7 @@ jobs:
     needs: changes
     if:
       needs.changes.outputs.main_browser == 'true' || needs.changes.outputs.provider_browser == 'true'
-      || needs.changes.outputs.installed_browser == 'true' ||
-      needs.changes.outputs.windows_lifecycle == 'true'
+      || needs.changes.outputs.installed_browser == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -309,224 +307,13 @@ jobs:
       - name: Test Windows process and request ownership
         run: pnpm --filter @marimo-studio/e2e test
 
-  windows-e2e:
-    name: Windows browser lifecycle contracts
-    needs:
-      - changes
-      - browser-assets
-    if: >-
-      needs.changes.outputs.windows_lifecycle == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 45
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-          prune-cache: false
-          python-version: "3.12"
-
-      - name: Install Python dependencies
-        run: uv sync --locked --group e2e
-
-      - name: Set up JavaScript workspace
-        uses: ./.github/actions/setup-js
-      - name: Download browser assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: browser-assets
-          path: packages/marimo-studio/src/marimo_studio/_static/browser
-      - name: Download browser Python test payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: browser-pyodide
-          path: apps/e2e/.cache/pyodide
-
-      - name: Install Chromium
-        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
-
-      - name: Test Windows view and shutdown lifecycles
-        run: pnpm --filter @marimo-studio/e2e e2e:windows
-        env:
-          PLAYWRIGHT_BLOB_OUTPUT_NAME: main-windows.zip
-
-      - name: Upload Windows browser report
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: windows-playwright-report
-          path: |
-            apps/e2e/playwright-report/
-            apps/e2e/playwright-report-installed/
-            apps/e2e/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Upload browser result records
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: browser-results-windows-e2e
-          path: apps/e2e/test-results/blob-*/**/*.zip
-          retention-days: 7
-          if-no-files-found: warn
-
-  windows-provider-e2e:
-    name: Windows provider browser contracts
-    needs:
-      - changes
-      - browser-assets
-    if: >-
-      needs.changes.outputs.provider_browser == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-          prune-cache: false
-          python-version: "3.12"
-
-      - name: Install Python dependencies
-        run: uv sync --locked --group e2e
-
-      - name: Set up JavaScript workspace
-        uses: ./.github/actions/setup-js
-      - name: Download browser assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: browser-assets
-          path: packages/marimo-studio/src/marimo_studio/_static/browser
-      - name: Download browser Python test payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: browser-pyodide
-          path: apps/e2e/.cache/pyodide
-
-      - name: Install Chromium
-        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
-
-      - name: Test Windows provider runtimes
-        run: pnpm --filter @marimo-studio/e2e e2e:windows:providers
-        env:
-          PLAYWRIGHT_BLOB_OUTPUT_NAME: provider-windows.zip
-
-      - name: Upload Windows provider browser report
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: windows-provider-playwright-report
-          path: |
-            apps/e2e/playwright-report/
-            apps/e2e/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Upload browser result records
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: browser-results-windows-provider-e2e
-          path: apps/e2e/test-results/blob-*/**/*.zip
-          retention-days: 7
-          if-no-files-found: warn
-
-  windows-installed-e2e:
-    name: Windows installed-wheel browser contract
-    needs:
-      - changes
-      - browser-assets
-    if: >-
-      needs.changes.outputs.installed_browser == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-          prune-cache: false
-          python-version: "3.12"
-
-      - name: Install Python dependencies
-        run: uv sync --locked --group e2e
-
-      - name: Set up JavaScript workspace
-        uses: ./.github/actions/setup-js
-      - name: Download browser assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: browser-assets
-          path: packages/marimo-studio/src/marimo_studio/_static/browser
-      - name: Download browser Python test payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: browser-pyodide
-          path: apps/e2e/.cache/pyodide
-
-      - name: Install Chromium
-        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
-      - name: Download installed browser candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: browser-package
-          path: dist
-
-      - name: Test the installed wheel in Chromium
-        run: pnpm --filter @marimo-studio/e2e e2e:installed
-        env:
-          MARIMO_STUDIO_E2E_WHEEL: ${{ github.workspace }}/dist/${{ needs.browser-assets.outputs.wheel }}
-          PLAYWRIGHT_BLOB_OUTPUT_NAME: installed-windows.zip
-
-      - name: Upload Windows installed-wheel browser report
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: windows-installed-playwright-report
-          path: |
-            apps/e2e/playwright-report-installed/
-            apps/e2e/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Upload browser result records
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: browser-results-windows-installed-e2e
-          path: apps/e2e/test-results/blob-*/**/*.zip
-          retention-days: 7
-          if-no-files-found: warn
   reports:
     name: Browser reports
     needs:
       - e2e
       - package-e2e
-      - windows-e2e
-      - windows-provider-e2e
-      - windows-installed-e2e
     if: "!cancelled() && (needs.e2e.result == 'success' || needs.e2e.result == 'failure' ||
-      needs.package-e2e.result == 'success' || needs.package-e2e.result == 'failure' ||
-      needs.windows-e2e.result == 'success' || needs.windows-e2e.result == 'failure' ||
-      needs.windows-provider-e2e.result == 'success' || needs.windows-provider-e2e.result ==
-      'failure' || needs.windows-installed-e2e.result == 'success' ||
-      needs.windows-installed-e2e.result == 'failure')"
+      needs.package-e2e.result == 'success' || needs.package-e2e.result == 'failure')"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -566,9 +353,6 @@ jobs:
       - e2e
       - package-e2e
       - windows-unit
-      - windows-e2e
-      - windows-provider-e2e
-      - windows-installed-e2e
       - browser-assets
       - reports
     runs-on: ubuntu-latest
@@ -587,25 +371,14 @@ jobs:
           PACKAGE_E2E_REQUIRED: ${{ (needs.changes.outputs.provider_browser == 'true' ||
             needs.changes.outputs.installed_browser == 'true') }}
           PACKAGE_E2E: ${{ needs.package-e2e.result }}
-          WINDOWS_E2E_REQUIRED: ${{ needs.changes.outputs.windows_lifecycle == 'true' }}
-          WINDOWS_E2E: ${{ needs.windows-e2e.result }}
-          WINDOWS_INSTALLED_E2E_REQUIRED: ${{ needs.changes.outputs.installed_browser == 'true' }}
-          WINDOWS_INSTALLED_E2E: ${{ needs.windows-installed-e2e.result }}
-          WINDOWS_PROVIDER_E2E_REQUIRED: ${{ needs.changes.outputs.provider_browser == 'true' }}
-          WINDOWS_PROVIDER_E2E: ${{ needs.windows-provider-e2e.result }}
           WINDOWS_UNIT_REQUIRED: ${{ needs.changes.outputs.windows_unit == 'true' }}
           WINDOWS_UNIT: ${{ needs.windows-unit.result }}
           BROWSER_ASSETS_REQUIRED: ${{ needs.changes.outputs.main_browser == 'true' ||
             needs.changes.outputs.provider_browser == 'true' ||
-            needs.changes.outputs.installed_browser == 'true' ||
-            needs.changes.outputs.windows_lifecycle == 'true' }}
+            needs.changes.outputs.installed_browser == 'true' }}
           BROWSER_ASSETS: ${{ needs.browser-assets.result }}
           REPORTS_REQUIRED: ${{ needs.e2e.result == 'success' || needs.e2e.result == 'failure' ||
-            needs.package-e2e.result == 'success' || needs.package-e2e.result == 'failure' ||
-            needs.windows-e2e.result == 'success' || needs.windows-e2e.result == 'failure' ||
-            needs.windows-provider-e2e.result == 'success' || needs.windows-provider-e2e.result ==
-            'failure' || needs.windows-installed-e2e.result == 'success' ||
-            needs.windows-installed-e2e.result == 'failure' }}
+            needs.package-e2e.result == 'success' || needs.package-e2e.result == 'failure' }}
           REPORTS: ${{ needs.reports.result }}
         run: |
           scripts/check-workflow-results.sh \
@@ -614,7 +387,4 @@ jobs:
             Reports "$REPORTS_REQUIRED" "$REPORTS" \
             Browser "$E2E_REQUIRED" "$E2E" \
             Package-browser "$PACKAGE_E2E_REQUIRED" "$PACKAGE_E2E" \
-            Windows-lifecycle "$WINDOWS_E2E_REQUIRED" "$WINDOWS_E2E" \
-            Windows-installed "$WINDOWS_INSTALLED_E2E_REQUIRED" "$WINDOWS_INSTALLED_E2E" \
-            Windows-provider "$WINDOWS_PROVIDER_E2E_REQUIRED" "$WINDOWS_PROVIDER_E2E" \
             Windows-unit "$WINDOWS_UNIT_REQUIRED" "$WINDOWS_UNIT"

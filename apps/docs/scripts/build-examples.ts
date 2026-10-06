@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { documentationExampleFamilies } from "../examples.ts";
 import { publishExamples, validatePreparedExample } from "./example-publication.ts";
-import { selectDocumentationExamples } from "./example-selection.ts";
+import { selectDocumentationExamples, type SelectedExampleFamily } from "./example-selection.ts";
 
 interface ExportResult {
   entrypoint: string;
@@ -36,12 +36,19 @@ const commandTimings: {
   durationMs: number;
   exitCode: number | null;
 }[] = [];
-const usage = `Usage: pnpm --filter @marimo-studio/docs examples:build [selectors]
+const usage = `Usage: pnpm --filter @marimo-studio/docs examples:build [selectors] [--partial | --check]
 
 Selectors may be repeated and combined:
   --family SLUG       Rebuild one notebook and all of its views
   --notebook SLUG     Rebuild one notebook export
-  --view FAMILY/VIEW  Rebuild one named view export`;
+  --view FAMILY/VIEW  Rebuild one named view export
+
+Without --partial, selectors rebuild part of an existing complete publication.
+
+  --partial           Publish only the selected exports, so separate jobs can
+                      export families in parallel and assemble the site later
+  --check             Validate the complete publication without exporting`;
+const modeFlags = new Set(["--partial", "--check"]);
 
 const isFile = async (path: string): Promise<boolean> => {
   try {
@@ -191,13 +198,19 @@ const exportNotebook = async (
   }
 };
 
-const validateExamplePublication = async (root: string): Promise<void> => {
-  for (const family of documentationExampleFamilies) {
+const validateExamplePublication = async (
+  root: string,
+  selected: readonly SelectedExampleFamily[] = selectDocumentationExamples(
+    documentationExampleFamilies,
+    [],
+  ).families,
+): Promise<void> => {
+  for (const { family, notebook: notebookSelected, views } of selected) {
     const notebook = join(root, family.slug, "notebook", "index.html");
-    if (!(await isFile(notebook))) {
+    if (notebookSelected && !(await isFile(notebook))) {
       throw new Error(`The ${family.slug}/notebook export is unavailable.`);
     }
-    for (const view of family.views) {
+    for (const view of views) {
       const entrypoint = join(root, family.slug, view.key, "index.html");
       if (!(await isFile(entrypoint))) {
         throw new Error(`The ${family.slug}/${view.key} export is unavailable.`);
@@ -222,11 +235,29 @@ const main = async (): Promise<void> => {
     console.log(usage);
     return;
   }
-  const selection = selectDocumentationExamples(documentationExampleFamilies, arguments_);
+  const partial = arguments_.includes("--partial");
+  const check = arguments_.includes("--check");
+  const selection = selectDocumentationExamples(
+    documentationExampleFamilies,
+    arguments_.filter((argument) => !modeFlags.has(argument)),
+  );
+  if (check) {
+    if (partial || !selection.complete) {
+      throw new Error("--check validates the complete publication and takes no other options.");
+    }
+    await validateExamplePublication(destinationRoot);
+    console.log(
+      `Validated ${selection.notebooks} static notebooks and ${selection.views} live documentation views.`,
+    );
+    return;
+  }
+  if (partial && selection.complete) {
+    throw new Error("--partial requires a selector.");
+  }
   await mkdir(cacheRoot, { recursive: true });
   const stagingRoot = await mkdtemp(join(cacheRoot, "docs-examples-"));
   try {
-    if (!selection.complete) {
+    if (!selection.complete && !partial) {
       if (!(await isDirectory(destinationRoot))) {
         throw new Error(
           "Selective example rebuilding requires an existing complete publication. Run the full examples build first.",
@@ -249,14 +280,14 @@ const main = async (): Promise<void> => {
       }
     }
 
-    await validateExamplePublication(stagingRoot);
+    await validateExamplePublication(stagingRoot, partial ? selection.families : undefined);
 
     await publishExamples({
       destination: destinationRoot,
       previous: join(cacheRoot, `docs-examples-previous-${process.pid}`),
       staging: stagingRoot,
     });
-    const action = selection.complete ? "Exported" : "Rebuilt";
+    const action = selection.complete || partial ? "Exported" : "Rebuilt";
     console.log(
       `${action} ${selection.notebooks} static notebooks and ${selection.views} live documentation views.`,
     );

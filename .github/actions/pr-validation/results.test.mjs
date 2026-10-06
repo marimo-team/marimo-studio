@@ -38,43 +38,53 @@ test("frontend test failure survives timing-log capture", async () => {
 });
 
 test("browser result uploads include run and worker report directories", async () => {
-  const browser = await workflow("e2e");
-  const uploads = Object.values(browser.jobs)
-    .flatMap((job) => job.steps ?? [])
-    .filter((step) => step.with?.name?.startsWith("browser-results-"));
-  assert.ok(uploads.length > 0);
-  for (const upload of uploads) {
-    const matches = picomatch(upload.with.path);
-    for (const path of [
-      "apps/e2e/test-results/blob-main/run-a/controller/main-linux-1.zip",
-      "apps/e2e/test-results/blob-provider/run-b/controller/provider-linux.zip",
-      "apps/e2e/test-results/blob-installed/run-c/controller/installed-windows.zip",
-    ]) {
-      assert.ok(matches(path), `${upload.with.name} must include ${path}`);
+  for (const name of ["e2e", "platforms"]) {
+    const browser = await workflow(name);
+    const uploads = Object.values(browser.jobs)
+      .flatMap((job) => job.steps ?? [])
+      .filter((step) => step.with?.name?.startsWith("browser-results-"));
+    assert.ok(uploads.length > 0, name);
+    for (const upload of uploads) {
+      const matches = picomatch(upload.with.path);
+      for (const path of [
+        "apps/e2e/test-results/blob-main/run-a/controller/main-linux-1.zip",
+        "apps/e2e/test-results/blob-provider/run-b/controller/provider-linux.zip",
+        "apps/e2e/test-results/blob-installed/run-c/controller/installed-windows.zip",
+      ]) {
+        assert.ok(matches(path), `${upload.with.name} must include ${path}`);
+      }
     }
   }
 });
 
 test("browser consumers receive the producer's prepared Python payload", async () => {
-  const browser = await workflow("e2e");
-  const producer = browser.jobs["browser-assets"].steps.find(
-    (step) =>
-      step.uses?.startsWith("actions/upload-artifact@") && step.with?.name === "browser-pyodide",
-  );
-  assert.equal(producer.with.path, "apps/e2e/.cache/pyodide");
-  for (const name of [
-    "e2e",
-    "package-e2e",
-    "windows-e2e",
-    "windows-provider-e2e",
-    "windows-installed-e2e",
+  for (const [name, consumers] of [
+    ["e2e", ["e2e", "package-e2e"]],
+    ["platforms", ["windows-e2e", "windows-provider-e2e", "windows-installed-e2e"]],
   ]) {
-    const consumer = browser.jobs[name].steps.find(
+    const browser = await workflow(name);
+    const producer = browser.jobs["browser-assets"].steps.find(
       (step) =>
-        step.uses?.startsWith("actions/download-artifact@") &&
-        step.with?.name === producer.with.name,
+        step.uses?.startsWith("actions/upload-artifact@") && step.with?.name === "browser-pyodide",
     );
-    assert.ok(consumer, `${name} requires the prepared Python payload`);
-    assert.equal(consumer.with.path, "apps/e2e/.cache/pyodide", name);
+    assert.equal(producer.with.path, "apps/e2e/.cache/pyodide");
+    for (const job of consumers) {
+      const consumer = browser.jobs[job].steps.find(
+        (step) =>
+          step.uses?.startsWith("actions/download-artifact@") &&
+          step.with?.name === producer.with.name,
+      );
+      assert.ok(consumer, `${job} requires the prepared Python payload`);
+      assert.equal(consumer.with.path, "apps/e2e/.cache/pyodide", job);
+    }
   }
+});
+
+test("the site exports every documentation example family", async () => {
+  const pages = await workflow("pages");
+  const { documentationExampleFamilies } = await import("../../../apps/docs/examples.ts");
+  assert.deepEqual(
+    [...pages.jobs.examples.strategy.matrix.family].sort(),
+    documentationExampleFamilies.map((family) => family.slug).sort(),
+  );
 });

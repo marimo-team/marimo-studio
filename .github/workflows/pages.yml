@@ -24,6 +24,7 @@ jobs:
     outputs:
       documentation: ${{ steps.selection.outputs.documentation }}
       pages: ${{ steps.selection.outputs.pages }}
+      site: ${{ steps.selection.outputs.site }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,6 +37,7 @@ jobs:
         with:
           workflow: pages.yml
           reuse: "false"
+          pending: changed
 
       - name: Classify changed files
         id: filter
@@ -48,7 +50,11 @@ jobs:
         id: selection
         env:
           VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
+          VALIDATION_EVENT: ${{ github.event_name }}
           VALIDATION_FILTERS: '["documentation","pages"]'
+          # Main builds the complete site whenever it changes. A pull request
+          # builds it only when it changes the site or its examples.
+          DEFERRED_FILTERS: '{"site":{"filter":"pages","escalate":"docs_site"}}'
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
         run: node .github/actions/pr-validation/select.mjs
 
@@ -99,35 +105,67 @@ jobs:
           ./scripts/python-test.sh --profile standard --python 3.12 --
           packages/marimo-studio/tests/cli/test_documentation_examples.py
 
-  build:
+  smoke:
+    name: Example export smoke
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
+    if: >-
+      github.event_name == 'pull_request' && needs.changes.outputs.pages == 'true' &&
+      needs.changes.outputs.site != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    outputs:
-      publish: ${{ steps.latest.outputs.publish }}
-    env:
-      MARIMO_EXPORT_REPOSITORY: ${{ github.workspace }}/.cache/marimo-export-repository
-    permissions:
-      contents: read
-      pages: read
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          cache-suffix: documentation-examples
+          python-version: "3.12"
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+        with:
+          prepare-marimo-frontend: "true"
+
+      - name: Build browser assets
+        run: make build
+
+      - name: Export the smoke examples
+        run: pnpm --filter @marimo-studio/docs examples:smoke
+
+  examples:
+    name: Examples (${{ matrix.family }})
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [quadratic-programs, athletes, earthquakes, occupancy]
+    env:
+      MARIMO_EXPORT_REPOSITORY: ${{ github.workspace }}/.cache/marimo-export-repository
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
           persist-credentials: false
 
       - name: Restore prepared notebook states
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.MARIMO_EXPORT_REPOSITORY }}
-          key: marimo-export-v1-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ github.sha }}
+          key: marimo-export-v1-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ matrix.family }}-${{ github.sha }}
           restore-keys: |
-            marimo-export-v1-${{ runner.os }}-${{ hashFiles('uv.lock') }}-
+            marimo-export-v1-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ matrix.family }}-
 
       # Prepared notebook states are keyed by the resolved path of each
-      # notebook's uv environment. This job keeps its own uv cache so later
+      # notebook's uv environment. These jobs keep their own uv cache so later
       # runs restore the same environments and reuse those states.
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -142,6 +180,59 @@ jobs:
         with:
           prepare-marimo-frontend: "true"
 
+      - name: Build browser assets
+        run: make build
+
+      - name: Export the example family
+        run: >-
+          pnpm --filter @marimo-studio/docs examples:build --family ${{ matrix.family }} --partial
+
+      - name: Upload the exported family
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-examples-${{ matrix.family }}
+          path: apps/docs/public/examples
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload example timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: documentation-example-timings-${{ matrix.family }}
+          path: apps/docs/.vitepress/cache/example-timings.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  build:
+    name: Site
+    needs: [changes, examples]
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      publish: ${{ steps.latest.outputs.publish }}
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+
+      - name: Download the exported families
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: docs-examples-*
+          path: apps/docs/public/examples
+          merge-multiple: true
+
       - name: Configure GitHub Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         id: pages
@@ -150,7 +241,7 @@ jobs:
       - name: Build documentation
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: make docs-build
+        run: pnpm --filter @marimo-studio/docs site:build
 
       - name: Confirm this commit is still the tip of main
         id: latest
@@ -178,15 +269,6 @@ jobs:
         with:
           include-hidden-files: true
           path: apps/docs/.vitepress/dist
-      - name: Upload example timings
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: documentation-example-timings
-          path: apps/docs/.vitepress/cache/example-timings.json
-          retention-days: 7
-          if-no-files-found: warn
-
   deploy:
     if: needs.build.outputs.publish == 'true' && needs.documentation.result == 'success'
     needs:
@@ -238,7 +320,7 @@ jobs:
   gate:
     name: Documentation gate
     if: always()
-    needs: [changes, documentation, build, deploy]
+    needs: [changes, documentation, smoke, examples, build, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
@@ -249,18 +331,24 @@ jobs:
 
       - name: Confirm documentation results
         env:
-          BUILD_REQUIRED: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true' }}
-          BUILD: ${{ needs.build.result }}
           CHANGES: ${{ needs.changes.result }}
-          DEPLOY_REQUIRED: ${{ needs.build.outputs.publish == 'true' && needs.documentation.result == 'success' }}
-          DEPLOY: ${{ needs.deploy.result }}
           DOCUMENTATION_REQUIRED: ${{ github.event_name == 'workflow_dispatch' ||
             needs.changes.outputs.documentation == 'true' || needs.changes.outputs.pages == 'true'
             }}
           DOCUMENTATION: ${{ needs.documentation.result }}
+          SMOKE_REQUIRED: ${{ github.event_name == 'pull_request' &&
+            needs.changes.outputs.pages == 'true' && needs.changes.outputs.site != 'true' }}
+          SMOKE: ${{ needs.smoke.result }}
+          SITE_REQUIRED: ${{ needs.changes.outputs.site == 'true' }}
+          EXAMPLES: ${{ needs.examples.result }}
+          BUILD: ${{ needs.build.result }}
+          DEPLOY_REQUIRED: ${{ needs.build.outputs.publish == 'true' && needs.documentation.result == 'success' }}
+          DEPLOY: ${{ needs.deploy.result }}
         run: |
           scripts/check-workflow-results.sh \
             Changes true "$CHANGES" \
             Documentation "$DOCUMENTATION_REQUIRED" "$DOCUMENTATION" \
-            Build "$BUILD_REQUIRED" "$BUILD" \
+            Smoke "$SMOKE_REQUIRED" "$SMOKE" \
+            Examples "$SITE_REQUIRED" "$EXAMPLES" \
+            Build "$SITE_REQUIRED" "$BUILD" \
             Deploy "$DEPLOY_REQUIRED" "$DEPLOY"
