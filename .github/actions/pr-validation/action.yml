@@ -9,6 +9,12 @@ inputs:
     description: Reuse successful exact-tree PR evidence after merge.
     required: false
     default: "true"
+  pending:
+    description: >-
+      Validation mode while the comparison base is still running: full, or
+      changed for workflows whose main runs outlast pull request updates.
+    required: false
+    default: "full"
 
 outputs:
   mode:
@@ -51,4 +57,5 @@ runs:
         VALIDATION_WORKFLOW: ${{ inputs.workflow }}
         VALIDATION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         VALIDATION_REUSE: ${{ inputs.reuse }}
+        VALIDATION_PENDING: ${{ inputs.pending }}
       run: "$GITHUB_ACTION_PATH/resolve.sh"

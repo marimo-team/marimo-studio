@@ -256,12 +256,16 @@ project URL, which `agent-plugins read marimo-studio` includes in the briefing.
 
 ## Deployment
 
-`.github/workflows/pages.yml` runs `make docs-build` for pull requests and
-`main`. A `main` build receives the base path from GitHub Pages, uploads
+`.github/workflows/pages.yml` exports each example family in its own job with
+`examples:build --family SLUG --partial`. A final job downloads the families,
+runs `examples:check` to validate the assembled publication, and builds the
+site. A `main` build receives the base path from GitHub Pages, uploads
 `apps/docs/.vitepress/dist`, then deploys that exact artifact.
 
-Pull requests prove the documentation source and root-based site build. A
-`main` build verifies the Pages base path before deployment.
+Pull requests that change the site or its examples build the complete
+root-based site. Pull requests that change product code run `examples:smoke`,
+which exports two Earthquake watch views, a plain HTML view and a React view,
+through the same export path. `make docs-build` builds the complete site locally.
 
 ## Version parity
 

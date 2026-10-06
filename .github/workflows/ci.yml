@@ -23,7 +23,6 @@ jobs:
     outputs:
       distribution: ${{ steps.selection.outputs.distribution }}
       frontend_contracts: ${{ steps.selection.outputs.frontend_contracts }}
-      installed_distribution: ${{ steps.selection.outputs.installed_distribution }}
       python_contracts: ${{ steps.selection.outputs.python_contracts }}
       quality: ${{ steps.selection.outputs.quality }}
     steps:
@@ -50,7 +49,7 @@ jobs:
         id: selection
         env:
           VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
-          VALIDATION_FILTERS: '["distribution","frontend_contracts","installed_distribution","python_contracts","quality"]'
+          VALIDATION_FILTERS: '["distribution","frontend_contracts","python_contracts","quality"]'
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
         run: node .github/actions/pr-validation/select.mjs
 
@@ -214,17 +213,15 @@ jobs:
           profile: supported-python
           python-version: ${{ matrix.python-version }}
 
+  # macOS and Windows variants of the native, Deno, and installed-package
+  # contracts run in platforms.yml after merge.
   native-process:
-    name: Native process ownership (${{ matrix.os }})
+    name: Native process ownership (Linux)
     needs: changes
     if: >-
       needs.changes.outputs.python_contracts == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -238,16 +235,12 @@ jobs:
           python-version: "3.12"
 
   deno:
-    name: Deno providers (${{ matrix.os }})
+    name: Deno providers (Linux)
     needs: changes
     if: >-
       needs.changes.outputs.python_contracts == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -261,18 +254,12 @@ jobs:
           python-version: "3.12"
 
   installed-package:
-    name: Installed package and provider (${{ matrix.os }})
+    name: Installed package and provider (Linux)
     needs: [changes, package]
     if: >-
       needs.changes.outputs.distribution == 'true' && needs.package.result == 'success'
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          ${{ fromJSON(needs.changes.outputs.installed_distribution == 'true' && '["ubuntu-latest",
-          "macos-latest", "windows-latest"]' || '["ubuntu-latest"]') }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -298,7 +285,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: installed-verification-${{ matrix.os }}
+          name: installed-verification-${{ runner.os }}
           path: ${{ runner.temp }}/installed-verification.log
           retention-days: 7
           if-no-files-found: warn

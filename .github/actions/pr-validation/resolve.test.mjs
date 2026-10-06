@@ -244,3 +244,36 @@ test("GitHub API failures fall back to main validation", async () => {
   assert.equal(result.validation, "mode=changed\n");
   assert.match(result.explanation, /workflow evidence could not be read/);
 });
+
+test("a running base keeps changed-file validation when the workflow allows it", async () => {
+  const running = JSON.stringify({
+    workflow_runs: [workflowRun({ head_branch: "main", status: "in_progress", conclusion: null })],
+  });
+  const pending = await runResolver({
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_BASE_REF: "main",
+    BASE_RUNS_JSON: running,
+    VALIDATION_PENDING: "changed",
+  });
+  assert.equal(pending.validation, "mode=changed\n");
+  assert.match(pending.explanation, /still running e2e\.yml/);
+
+  const strict = await runResolver({
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_BASE_REF: "main",
+    BASE_RUNS_JSON: running,
+  });
+  assert.equal(strict.validation, "mode=full\n");
+});
+
+test("a failed base still requires complete validation when pending bases are allowed", async () => {
+  const result = await runResolver({
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_BASE_REF: "main",
+    VALIDATION_PENDING: "changed",
+    BASE_RUNS_JSON: JSON.stringify({
+      workflow_runs: [workflowRun({ head_branch: "main", conclusion: "failure" })],
+    }),
+  });
+  assert.equal(result.validation, "mode=full\n");
+});

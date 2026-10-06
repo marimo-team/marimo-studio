@@ -19,6 +19,7 @@ commit="$1"
 checks=(
 	"CI|ci.yml"
 	"Browser acceptance|e2e.yml"
+	"Platform acceptance|platforms.yml"
 	"Documentation|pages.yml"
 )
 

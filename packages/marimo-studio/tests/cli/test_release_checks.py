@@ -94,6 +94,7 @@ def test_release_checks_require_successful_runs_for_the_release_commit(
         assert calls.read_text(encoding="utf-8").splitlines() == [
             f"ci.yml|main|{_COMMIT}|push",
             f"e2e.yml|main|{_COMMIT}|push",
+            f"platforms.yml|main|{_COMMIT}|push",
             f"pages.yml|main|{_COMMIT}|push",
         ]
 

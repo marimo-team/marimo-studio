@@ -104,6 +104,50 @@ notebook_services: &notebook_services
   - apps/e2e/scripts/_compat/**
   - apps/e2e/scripts/static-server.py
 
+# Pull requests that change these paths also run the macOS and Windows
+# contracts that otherwise run after merge.
+platform_sensitive:
+  - ".github/**"
+  - "Makefile"
+  - ".python-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "pyproject.toml"
+  - "uv.lock"
+  - "pixi.toml"
+  - "pixi.lock"
+  - "packages/marimo-studio/pyproject.toml"
+  - "packages/marimo-studio/src/marimo_studio/_filesystem/**"
+  - "packages/marimo-studio/src/marimo_studio/_processes/**"
+  - "packages/marimo-studio/src/marimo_studio/_server/development/**"
+  - "packages/marimo-studio/src/marimo_studio/view_providers/_host/**"
+  - "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/**"
+  - "packages/marimo-studio/tests/filesystem/**"
+  - "packages/marimo-studio/tests/processes/**"
+  - "scripts/python-test.sh"
+  - "scripts/verify-installed-wheel.sh"
+  - "scripts/verify-installed-package.py"
+  - "apps/e2e/package.json"
+  - "apps/e2e/playwright*.ts"
+  - "apps/e2e/scripts/**"
+  - "apps/e2e/unit/**"
+
+# The platform workflow selects every platform contract when it changes.
+platform_control:
+  - ".github/workflows/platforms.yml"
+
+# Pull requests that change the documentation site or its examples build the
+# complete site. Other pull requests that reach the site export a smoke subset.
+docs_site:
+  - *pages_control
+  - "README.md"
+  - "docs/**"
+  - "apps/docs/**"
+  - "packages/marimo-studio/README.md"
+  - "skills/marimo-studio/**"
+  - "examples/**"
+
 documentation:
   - "README.md"
   - "AGENTS.md"

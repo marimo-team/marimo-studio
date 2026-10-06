@@ -89,12 +89,13 @@ The gates provide different evidence:
 | `make docs-build` | Public navigation, examples, and reference pages build                                                                                |
 | `make package`    | Browser assets, distributions, provider entry points, starters, optional extras, and installed commands verify                        |
 
-Merge after CI, Browser acceptance, and documentation workflows pass on the
-release commit.
+Merge after CI, Browser acceptance, Platform acceptance, and documentation
+workflows pass on the release commit.
 
-`main` branch protection must require `CI gate`, `Browser acceptance gate`, and
-`Documentation gate`, with the pull request updated against the current base.
-Routine merge actors must follow the same required checks.
+The `main` ruleset requires `CI gate`, `Browser acceptance gate`,
+`Platform gate`, and `Documentation gate` for pull requests. A pull request can
+merge while behind `main`, and `main` then validates the merged tree. Routine
+merge actors follow the same required checks.
 
 ## Validate packaged providers
 
@@ -103,10 +104,10 @@ before checking metadata on all three. `scripts/verify-dist.sh` requires the
 two wheels to be byte-identical and checks packaged resources against source.
 The command then runs installed-package acceptance on the current platform.
 
-CI builds an archive-validated `package-candidate` once. Linux, macOS, and
-Windows consumers validate that candidate independently when platform coverage
-is selected. Distribution changes always run the Linux consumer. `CI gate`
-requires the producer and every selected consumer to pass.
+CI builds an archive-validated `package-candidate` once, and its Linux consumer
+validates every distribution change. Platform acceptance builds its own
+candidate for the macOS and Windows consumers after merge. Each gate requires
+its producer and every selected consumer to pass.
 
 The base installation verifies:
 
@@ -199,13 +200,15 @@ The preflight validates:
 3. Local `main` matches `origin/main` after fetching branches and tags.
 4. The package version has final `X.Y.Z` form.
 5. The corresponding `vX.Y.Z` tag is available.
-6. Push-triggered CI, Browser acceptance, and documentation passed for the
-   exact commit.
+6. Push-triggered CI, Browser acceptance, Platform acceptance, and
+   documentation passed for the exact commit.
 
 Validation first checks the comparison base: the PR base commit or the main
 commit before a push. A base with missing, pending, or failed workflow evidence
 requires the complete workflow. A successful base permits changed-file
-selection. Missing path-filter results fail the Changes job.
+selection. Platform acceptance and GitHub Pages also select changed files while
+their base run is still in progress, because their `main` runs outlast pull
+request updates. Missing path-filter results fail the Changes job.
 
 Each pull request CI and Browser acceptance run records its tested Git tree.
 After merge, those workflows can reuse a successful same-repository PR run

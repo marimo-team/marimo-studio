@@ -227,18 +227,48 @@ Basedpyright analyzes the distributed package against Python 3.10 and analyzes
 tests and contributor scripts against Python 3.11. Error diagnostics fail the
 type-check gate.
 
+### Validation stages
+
+Pull requests run the Linux contracts that cover most regressions. The macOS and
+Windows contracts and the complete documentation site run after merge, on
+`main`:
+
+| Stage        | Workflow            | Contracts                                                                                                           |
+| ------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Pull request | CI                  | Quality, Python on Linux, supported Python on Linux and Windows, Linux native and Deno contracts, frontend, package |
+| Pull request | Browser acceptance  | Linux browser shards, provider and installed-package browser contracts, Windows process unit contracts              |
+| Pull request | GitHub Pages        | Documentation contracts, and an export of two example views when product code changes                               |
+| After merge  | Platform acceptance | macOS and Windows native and Deno contracts, installed package, and Windows browser suites                          |
+| After merge  | GitHub Pages        | Every example family in parallel, then the assembled site and its deployment                                        |
+
+A pull request runs the after-merge stage itself in three cases:
+
+- It changes a path in the `platform_sensitive` filter, such as process,
+  filesystem, provider-host, or Deno runtime code, a lockfile, or a workflow.
+  Platform acceptance then runs the contracts that its changes select. A change
+  to Platform acceptance itself selects every platform contract.
+- Platform acceptance last failed on the pull request's base. The pull request
+  then runs every platform contract, so a fix proves itself on every platform.
+- It changes the documentation site or its examples. GitHub Pages then builds
+  the complete site.
+
+`.github/filters.yml` owns the path selection. Required checks for merging are
+`CI gate`, `Browser acceptance gate`, `Platform gate`, and `Documentation gate`.
+A red after-merge run on `main` is fixed forward with a pull request.
+
 ### Inspect CI evidence
 
-The CI, Browser acceptance, and GitHub Pages workflows retain results for
-seven days:
+The CI, Browser acceptance, Platform acceptance, and GitHub Pages workflows
+retain results for seven days:
 
-| Artifact                          | Evidence                                                                      |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `python-<profile>-<version>-<os>` | JUnit test results, with the longest cases also printed in the job log        |
-| `frontend-test-timings`           | Package test output, including Vitest phase timings                           |
-| `installed-verification-<os>`     | Elapsed time and exit status for each installed-package phase                 |
-| `browser-report`                  | Merged Playwright results across selected suites and platforms                |
-| `documentation-example-timings`   | Export command arguments, duration, and exit status for each selected example |
+| Artifact                          | Evidence                                                                   |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `python-<profile>-<version>-<os>` | JUnit test results, with the longest cases also printed in the job log     |
+| `frontend-test-timings`           | Package test output, including Vitest phase timings                        |
+| `installed-verification-<os>`     | Elapsed time and exit status for each installed-package phase              |
+| `browser-report`                  | Merged Playwright results across the selected Linux suites                 |
+| `windows-browser-report`          | Merged Playwright results across the selected Windows suites               |
+| `documentation-example-timings-*` | Export command arguments, duration, and exit status for one example family |
 
 Browser acceptance builds one browser artifact and package candidate, then
 passes them and the pinned Pyodide test payload to the selected source and
