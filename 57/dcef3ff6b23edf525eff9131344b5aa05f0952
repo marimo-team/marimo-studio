@@ -1,0 +1,27 @@
+packages/marimo-studio/src/marimo_studio/_filesystem/_windows.py
+  s_781885fc26099a::t_2094222a629623 141-142
+  s_781885fc26099a::t_d337a14e071cc7 131-135,137,140,143,151,154,157-158
+  s_781885fc26099a::t_3e0174795e32bf 61-96,118-120,122,139,144-145,149-150,152-153,155-156
+  s_781885fc26099a::t_ef42fb01c74611 146-148
+packages/marimo-studio/tests/filesystem/test_windows.py
+  s_781885fc26099a::t_3e0174795e32bf 24,27-28,42-43,47-48,58-60,90-107,109-126
+  s_781885fc26099a::t_eb134e63612257 44-46
+  s_781885fc26099a::t_2094222a629623 49
+  s_781885fc26099a::t_ff3e08eef99a29 108,127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "57dcef3ff6b23edf525eff9131344b5aa05f0952",
+  "prompts": {},
+  "sessions": {
+    "s_781885fc26099a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a10faa-7f65-78a1-90ab-d17c0dcf5ced",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
