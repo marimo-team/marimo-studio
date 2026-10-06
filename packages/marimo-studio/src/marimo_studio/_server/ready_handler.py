@@ -207,11 +207,14 @@ class ReadyWorkspaceHandler:
                 security_policy=security_policy,
                 view_name=route.request_view,
             )
-        waiting_server = (
-            response.status_code == 202
-            and security_policy.trusted_server_runtime
+        same_origin_server = (
+            security_policy.trusted_server_runtime
             and (route.request.query_params.get("runtime") or workspace.default_runtime)
             == "server"
+        )
+        waiting_server = response.status_code == 202 and same_origin_server
+        sandbox = not same_origin_server or (
+            response.status_code != 200 and not waiting_server
         )
         if (
             route.selected_document is not None
@@ -220,15 +223,14 @@ class ReadyWorkspaceHandler:
         ):
             grant_capability_headers(
                 response,
-                sandbox=response.status_code != 200 and not waiting_server,
+                sandbox=sandbox,
             )
         if artifact_response is not None:
             grant_capability_headers(artifact_response)
         if route.capability is not None:
             grant_capability_headers(
                 response,
-                sandbox=route.selected_document is None
-                or (response.status_code != 200 and not waiting_server),
+                sandbox=route.selected_document is None or sandbox,
             )
         if artifact_response is not None:
             await _send_artifact_response(

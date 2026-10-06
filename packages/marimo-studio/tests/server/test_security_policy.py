@@ -52,6 +52,7 @@ def test_empty_configuration_preserves_same_origin_framing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(ALLOWED_EMBED_ORIGINS_ENV, raising=False)
+    monkeypatch.delenv(TRUSTED_SERVER_RUNTIME_ENV, raising=False)
 
     policy = create_security_policy()
 
@@ -80,6 +81,7 @@ def test_trusted_server_runtime_rejects_ambiguous_configuration() -> None:
 def test_create_security_policy_rejects_invalid_trusted_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv(ALLOWED_EMBED_ORIGINS_ENV, raising=False)
     monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "maybe")
 
     with pytest.raises(ConfigurationError, match=TRUSTED_SERVER_RUNTIME_ENV):

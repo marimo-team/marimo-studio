@@ -25,8 +25,12 @@ def test_capability_headers_sandbox_error_documents_without_overwriting_csp() ->
 
     document = HTMLResponse("document")
     document.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+    document.headers["Access-Control-Allow-Origin"] = "null"
+    document.headers["Vary"] = "Origin"
     grant_capability_headers(document, sandbox=False)
     assert document.headers["content-security-policy"] == "frame-ancestors 'self'"
+    assert "access-control-allow-origin" not in document.headers
+    assert "vary" not in document.headers
 
 
 def test_presentation_client_disconnect_finishes_native_delegation() -> None:

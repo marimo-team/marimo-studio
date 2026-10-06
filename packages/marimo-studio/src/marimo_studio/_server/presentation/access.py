@@ -15,6 +15,7 @@ an unrelated document or replaced session cannot attach to the live notebook.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode
 
@@ -409,6 +410,10 @@ def grant_capability_headers(
     sandbox: bool = True,
 ) -> Response:
     """Grant presentation transport headers while preserving document CSP."""
+    if not sandbox:
+        for name in ("Access-Control-Allow-Origin", "Vary"):
+            with suppress(KeyError):
+                del response.headers[name]
     response.headers.update(presentation_response_headers(sandbox=sandbox))
     return response
 

@@ -19,16 +19,16 @@ PRESENTATION_PATH = f"{SUPPORT_PATH}/presentation"
 def presentation_response_headers(*, sandbox: bool = True) -> dict[str, str]:
     """Return transport headers for an authored presentation response."""
     headers = {
-        "Access-Control-Allow-Origin": "null",
         "Access-Control-Expose-Headers": (
             "ETag, Marimo-Studio-Error, Marimo-Studio-Hint, "
             "Marimo-Studio-Revision, Marimo-Studio-Support-Url, Retry-After"
         ),
         "Cross-Origin-Resource-Policy": "cross-origin",
         "Referrer-Policy": "no-referrer",
-        "Vary": "Origin",
     }
     if sandbox:
+        headers["Access-Control-Allow-Origin"] = "null"
+        headers["Vary"] = "Origin"
         headers["Content-Security-Policy"] = f"sandbox {PRESENTATION_SANDBOX}"
     return headers
 

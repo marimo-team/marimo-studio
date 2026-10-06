@@ -88,11 +88,19 @@ def test_explicit_host_enters_a_ready_workspace_through_studio(
     assert _studio_bootstrap(workspace)["selectedView"] == studio.default_view
 
 
+@pytest.mark.parametrize(
+    ("runtime_env", "trusted"),
+    [(None, False), ("1", True)],
+)
 def test_trusted_server_runtime_marks_the_workspace_preview(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    runtime_env: str | None,
+    trusted: bool,
 ) -> None:
-    monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "1")
+    monkeypatch.delenv(TRUSTED_SERVER_RUNTIME_ENV, raising=False)
+    if runtime_env is not None:
+        monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, runtime_env)
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook, programmatic=True, route_policy=_EXPLICIT_HOST)
     _edit_mode(app)
@@ -101,7 +109,7 @@ def test_trusted_server_runtime_marks_the_workspace_preview(
         workspace = client.get("/studio/dashboard/?session_id=s_ready1")
 
     assert workspace.status_code == 200
-    assert _studio_bootstrap(workspace)["trustedServerRuntime"] is True
+    assert _studio_bootstrap(workspace)["trustedServerRuntime"] is trusted
 
 
 def test_explicit_host_handoff_uses_the_embedding_security_policy(
