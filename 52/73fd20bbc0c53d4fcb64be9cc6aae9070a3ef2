@@ -1,0 +1,87 @@
+docs/guide/marimohub.md
+  s_69fc584a65858c::t_a77d2825dbaab3 78
+apps/e2e/scripts/installed-workspace.ts
+  s_69fc584a65858c::t_7f4a09b8b5be07 111
+scripts/verify-installed-package.py
+  s_69fc584a65858c::t_7f4a09b8b5be07 362,364
+packages/marimo-frontend/patches/marimo-frontend.json
+  s_69fc584a65858c::t_a77d2825dbaab3 2
+  s_69fc584a65858c::t_60dce4aa32b423 4
+packages/marimo-studio/tests/marimo_compat/test_editor_runtime_transactions.py
+  s_69fc584a65858c::t_37b342af6ccf0c 125-126,130,133,135
+  s_69fc584a65858c::t_2de5ce291a3f56 24
+packages/marimo-frontend/tests/session-bootstrap.test.ts
+  s_69fc584a65858c::t_ed20378a818e8d 36
+  s_69fc584a65858c::t_6ac65c6b308e0d 41-45
+apps/e2e/unit/marimo-edit.test.ts
+  s_69fc584a65858c::t_a77d2825dbaab3 32
+docs/reference/compatibility.md
+  s_69fc584a65858c::t_a77d2825dbaab3 76
+packages/marimo-frontend/patches/marimo-frontend.patch
+  s_69fc584a65858c::t_1ce927f9ee23d0 340,347,351,355,718,733,739,742,756,760-761,772,782,800-801,832,858,900,904,908,917
+  s_69fc584a65858c::t_60dce4aa32b423 160-243
+pnpm-workspace.yaml
+  s_69fc584a65858c::t_7f4a09b8b5be07 14
+packages/marimo-frontend/src/session-bootstrap-core.ts
+  s_69fc584a65858c::t_ed20378a818e8d 11,17
+  s_69fc584a65858c::t_3c14bf8c1a542b 1-3,9-10,12
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_69fc584a65858c::t_7f4a09b8b5be07 16
+packages/marimo-studio/src/marimo_studio/_compat/release.json
+  s_69fc584a65858c::t_60dce4aa32b423 4
+  s_69fc584a65858c::t_a77d2825dbaab3 2-3
+packages/marimo-frontend/src/session-bootstrap.ts
+  s_69fc584a65858c::t_3c14bf8c1a542b 10,12-14
+packages/marimo-studio/src/marimo_studio/_compat/kernel_values/lens.py
+  s_69fc584a65858c::t_be6a8ab251d578 3
+packages/marimo-studio/src/marimo_studio/_compat/layout.py
+  s_69fc584a65858c::t_01c11c9ab96168 140,334
+packages/marimo-studio/tests/server/test_editor_runtime_assets.py
+  s_69fc584a65858c::t_37b342af6ccf0c 299,528,640,696,850,903,909
+  s_69fc584a65858c::t_7f8144625ca894 389,902
+scripts/verify-dist.sh
+  s_69fc584a65858c::t_7f4a09b8b5be07 92
+packages/marimo-frontend/src/upstream/session.ts
+  s_69fc584a65858c::t_60dce4aa32b423 2
+packages/presentation/tests/session-preservation.test.ts
+  s_69fc584a65858c::t_674cf19ced1f9a 459-461,463-484
+  s_69fc584a65858c::t_3b89dc97c2903d 462
+packages/marimo-frontend/scripts/source.mjs
+  s_69fc584a65858c::t_60dce4aa32b423 166-167
+packages/presentation/tests/session-startup.test.ts
+  s_69fc584a65858c::t_5c0dc2f23b2637 69,78,116,151,180,203
+apps/e2e/scripts/_compat/server.py
+  s_69fc584a65858c::t_a77d2825dbaab3 20
+packages/marimo-studio/src/marimo_studio/_compat/kernel_values/kernel.py
+  s_69fc584a65858c::t_be6a8ab251d578 30
+packages/presentation/src/document/session-startup.ts
+  s_69fc584a65858c::t_74b4dc229b25ea 6,50,63,68
+pyproject.toml
+  s_69fc584a65858c::t_a77d2825dbaab3 23
+packages/marimo-studio/pyproject.toml
+  s_69fc584a65858c::t_a77d2825dbaab3 14
+  s_69fc584a65858c::t_7f4a09b8b5be07 15
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_69fc584a65858c::t_09311306078628 565-569
+packages/marimo-studio/src/marimo_studio/_compat/server/editor_runtime.py
+  s_69fc584a65858c::t_37b342af6ccf0c 32,34,36-37,83,85,91,96,130,151,157,185
+packages/presentation/src/document/session-preservation.ts
+  s_69fc584a65858c::t_e7bff2c2672925 1,188-196,209-217,219-222,245,273,284,291,297,310,320,441-442,444-450
+  s_69fc584a65858c::t_74b4dc229b25ea 218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5273fd20bbc0c53d4fcb64be9cc6aae9070a3ef2",
+  "prompts": {},
+  "sessions": {
+    "s_69fc584a65858c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "033d136f-85b2-4ba1-a82e-64fa7b9e52d0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
