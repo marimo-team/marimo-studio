@@ -1,0 +1,20 @@
+apps/e2e/tests/provider-notebook.spec.ts
+  s_69fc584a65858c::t_0948dd765389a5 99-100
+  s_69fc584a65858c::t_8c77c0e0c3aa26 5,101,103,105,107-108,121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7fb4db488cadac48cbe71757aea823a8a0153580",
+  "prompts": {},
+  "sessions": {
+    "s_69fc584a65858c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "033d136f-85b2-4ba1-a82e-64fa7b9e52d0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
