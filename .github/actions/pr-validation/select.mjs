@@ -20,16 +20,24 @@ if (
 ) {
   throw new Error("Validation filters must be a list of distinct output names");
 }
-// A deferred contract runs after merge whenever its paths changed. A pull
-// request runs it only when an escalation filter also matched.
-const deferred = Object.entries(JSON.parse(DEFERRED_FILTERS ?? "{}"));
+// A deferred contract runs after merge whenever one of its filters matched. A
+// pull request runs it only when its escalation filter also matched.
+const deferred = Object.entries(JSON.parse(DEFERRED_FILTERS ?? "{}")).map(([name, rule]) => [
+  name,
+  {
+    filters: typeof rule?.filter === "string" ? [rule.filter] : rule?.filter,
+    escalate: rule?.escalate,
+  },
+]);
 if (
   deferred.some(
     ([name, rule]) =>
       !outputName.test(name) ||
       names.includes(name) ||
-      typeof rule?.filter !== "string" ||
-      typeof rule?.escalate !== "string",
+      !Array.isArray(rule.filters) ||
+      rule.filters.length === 0 ||
+      rule.filters.some((filter) => typeof filter !== "string") ||
+      typeof rule.escalate !== "string",
   )
 ) {
   throw new Error("Deferred filters must map new output names to filter and escalate names");
@@ -57,10 +65,10 @@ const lines = names.map((name) => {
   const selected = VALIDATION_MODE === "changed" ? matched(name) : VALIDATION_MODE === "full";
   return `${name}=${selected}\n`;
 });
-for (const [name, { filter, escalate }] of deferred) {
+for (const [name, { filters: owned, escalate }] of deferred) {
   const selected =
     VALIDATION_MODE === "full" ||
-    (matched(filter) && (VALIDATION_EVENT === "push" || matched(escalate)));
+    (owned.map(matched).some(Boolean) && (VALIDATION_EVENT === "push" || matched(escalate)));
   lines.push(`${name}=${selected}\n`);
 }
 if (!GITHUB_OUTPUT) throw new Error("GITHUB_OUTPUT is required");

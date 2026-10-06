@@ -1,8 +1,9 @@
 name: Platform acceptance
 
-# Runs the macOS and Windows contracts after merge. A pull request runs them
-# when it changes a platform-sensitive path, or when the last platform run on
-# its base failed, so a fix is validated on every platform before it lands.
+# Runs the macOS and Windows contracts after merge. A pull request runs the
+# contracts its changes select when it also changes a platform-sensitive path,
+# and every contract when the last platform run on its base failed, so a fix is
+# validated on every platform before it lands.
 on:
   pull_request:
   push:
@@ -58,11 +59,11 @@ jobs:
           VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
           VALIDATION_EVENT: ${{ github.event_name }}
           DEFERRED_FILTERS: >-
-            {"installed_platforms":{"filter":"installed_distribution","escalate":"platform_sensitive"},
-            "python_platforms":{"filter":"python_contracts","escalate":"platform_sensitive"},
-            "windows_installed":{"filter":"installed_browser","escalate":"platform_sensitive"},
-            "windows_lifecycle":{"filter":"windows_lifecycle","escalate":"platform_sensitive"},
-            "windows_provider":{"filter":"provider_browser","escalate":"platform_sensitive"}}
+            {"installed_platforms":{"filter":["installed_distribution","platform_control"],"escalate":"platform_sensitive"},
+            "python_platforms":{"filter":["python_contracts","platform_control"],"escalate":"platform_sensitive"},
+            "windows_installed":{"filter":["installed_browser","platform_control"],"escalate":"platform_sensitive"},
+            "windows_lifecycle":{"filter":["windows_lifecycle","platform_control"],"escalate":"platform_sensitive"},
+            "windows_provider":{"filter":["provider_browser","platform_control"],"escalate":"platform_sensitive"}}
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
         run: node .github/actions/pr-validation/select.mjs
 
@@ -97,52 +98,11 @@ jobs:
           profile: ${{ matrix.profile }}
           python-version: "3.12"
 
-  package:
-    name: Package candidate
-    needs: changes
-    if: >-
-      needs.changes.outputs.installed_platforms == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-          python-version: "3.12"
-
-      - name: Install Python dependencies
-        run: uv sync --locked
-
-      - name: Set up JavaScript workspace
-        uses: ./.github/actions/setup-js
-        with:
-          prepare-marimo-frontend: "true"
-
-      - name: Build and validate package archives
-        run: make _package-build
-
-      - name: Upload package candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: package-candidate
-          path: |
-            dist/marimo_studio-*.whl
-            dist/agent-plugin-digests.json
-          retention-days: 1
-          if-no-files-found: error
-
   installed-package:
     name: Installed package and provider (${{ matrix.os }})
-    needs: [changes, package]
+    needs: [changes, artifacts]
     if: >-
-      needs.changes.outputs.installed_platforms == 'true' && needs.package.result == 'success'
+      needs.changes.outputs.installed_platforms == 'true' && needs.artifacts.result == 'success'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -179,24 +139,29 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-  browser-assets:
-    name: Browser and package artifacts
+  artifacts:
+    name: Package and browser artifacts
     needs: changes
     if: >-
+      needs.changes.outputs.installed_platforms == 'true' ||
       needs.changes.outputs.windows_lifecycle == 'true' ||
       needs.changes.outputs.windows_provider == 'true' ||
       needs.changes.outputs.windows_installed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      WINDOWS_BROWSER: ${{ needs.changes.outputs.windows_lifecycle == 'true' ||
+        needs.changes.outputs.windows_provider == 'true' ||
+        needs.changes.outputs.windows_installed == 'true' }}
     outputs:
       wheel: ${{ steps.package.outputs.wheel }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up uv and Python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -208,28 +173,34 @@ jobs:
         with:
           prepare-marimo-frontend: "true"
       - name: Prepare browser Python test payload
+        if: env.WINDOWS_BROWSER == 'true'
         run: make _prepare-browser-tests
-      - name: Build and validate browser and package artifacts
+      # One wheel serves the installed-package and Windows browser consumers.
+      - name: Build and validate package archives
         id: package
         run: |-
           make _package-build
           printf 'wheel=%s\n' "$(basename dist/marimo_studio-*.whl)" >> "$GITHUB_OUTPUT"
+      - name: Upload package candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-candidate
+          path: |
+            dist/marimo_studio-*.whl
+            dist/agent-plugin-digests.json
+          retention-days: 1
+          if-no-files-found: error
       - name: Upload browser assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: env.WINDOWS_BROWSER == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-assets
           path: packages/marimo-studio/src/marimo_studio/_static/browser
           retention-days: 1
           if-no-files-found: error
-      - name: Upload browser package candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: browser-package
-          path: dist/marimo_studio-*.whl
-          retention-days: 1
-          if-no-files-found: error
       - name: Upload browser Python test payload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: env.WINDOWS_BROWSER == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-pyodide
           path: apps/e2e/.cache/pyodide
@@ -241,7 +212,7 @@ jobs:
     name: Windows browser lifecycle contracts
     needs:
       - changes
-      - browser-assets
+      - artifacts
     if: >-
       needs.changes.outputs.windows_lifecycle == 'true'
     runs-on: windows-latest
@@ -308,7 +279,7 @@ jobs:
     name: Windows provider browser contracts
     needs:
       - changes
-      - browser-assets
+      - artifacts
     if: >-
       needs.changes.outputs.windows_provider == 'true'
     runs-on: windows-latest
@@ -374,7 +345,7 @@ jobs:
     name: Windows installed-wheel browser contract
     needs:
       - changes
-      - browser-assets
+      - artifacts
     if: >-
       needs.changes.outputs.windows_installed == 'true'
     runs-on: windows-latest
@@ -414,13 +385,13 @@ jobs:
       - name: Download installed browser candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: browser-package
+          name: package-candidate
           path: dist
 
       - name: Test the installed wheel in Chromium
         run: pnpm --filter @marimo-studio/e2e e2e:installed
         env:
-          MARIMO_STUDIO_E2E_WHEEL: ${{ github.workspace }}/dist/${{ needs.browser-assets.outputs.wheel }}
+          MARIMO_STUDIO_E2E_WHEEL: ${{ github.workspace }}/dist/${{ needs.artifacts.outputs.wheel }}
           PLAYWRIGHT_BLOB_OUTPUT_NAME: installed-windows.zip
 
       - name: Upload Windows installed-wheel browser report
@@ -489,9 +460,8 @@ jobs:
     needs:
       - changes
       - python
-      - package
+      - artifacts
       - installed-package
-      - browser-assets
       - windows-e2e
       - windows-provider-e2e
       - windows-installed-e2e
@@ -509,14 +479,13 @@ jobs:
           CHANGES: ${{ needs.changes.result }}
           PYTHON_REQUIRED: ${{ needs.changes.outputs.python_platforms == 'true' }}
           PYTHON: ${{ needs.python.result }}
-          PACKAGE_REQUIRED: ${{ needs.changes.outputs.installed_platforms == 'true' }}
-          PACKAGE: ${{ needs.package.result }}
           INSTALLED_PACKAGE_REQUIRED: ${{ needs.changes.outputs.installed_platforms == 'true' }}
           INSTALLED_PACKAGE: ${{ needs.installed-package.result }}
-          BROWSER_ASSETS_REQUIRED: ${{ needs.changes.outputs.windows_lifecycle == 'true' ||
+          ARTIFACTS_REQUIRED: ${{ needs.changes.outputs.installed_platforms == 'true' ||
+            needs.changes.outputs.windows_lifecycle == 'true' ||
             needs.changes.outputs.windows_provider == 'true' ||
             needs.changes.outputs.windows_installed == 'true' }}
-          BROWSER_ASSETS: ${{ needs.browser-assets.result }}
+          ARTIFACTS: ${{ needs.artifacts.result }}
           WINDOWS_E2E_REQUIRED: ${{ needs.changes.outputs.windows_lifecycle == 'true' }}
           WINDOWS_E2E: ${{ needs.windows-e2e.result }}
           WINDOWS_PROVIDER_E2E_REQUIRED: ${{ needs.changes.outputs.windows_provider == 'true' }}
@@ -532,9 +501,8 @@ jobs:
           scripts/check-workflow-results.sh \
             Changes true "$CHANGES" \
             Platform-python "$PYTHON_REQUIRED" "$PYTHON" \
-            Package "$PACKAGE_REQUIRED" "$PACKAGE" \
+            Artifacts "$ARTIFACTS_REQUIRED" "$ARTIFACTS" \
             Installed-package "$INSTALLED_PACKAGE_REQUIRED" "$INSTALLED_PACKAGE" \
-            Browser-assets "$BROWSER_ASSETS_REQUIRED" "$BROWSER_ASSETS" \
             Windows-lifecycle "$WINDOWS_E2E_REQUIRED" "$WINDOWS_E2E" \
             Windows-provider "$WINDOWS_PROVIDER_E2E_REQUIRED" "$WINDOWS_PROVIDER_E2E" \
             Windows-installed "$WINDOWS_INSTALLED_E2E_REQUIRED" "$WINDOWS_INSTALLED_E2E" \

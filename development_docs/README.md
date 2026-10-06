@@ -245,7 +245,8 @@ A pull request runs the after-merge stage itself in three cases:
 
 - It changes a path in the `platform_sensitive` filter, such as process,
   filesystem, provider-host, or Deno runtime code, a lockfile, or a workflow.
-  Platform acceptance then runs the contracts that those paths select.
+  Platform acceptance then runs the contracts that its changes select. A change
+  to Platform acceptance itself selects every platform contract.
 - Platform acceptance last failed on the pull request's base. The pull request
   then runs every platform contract, so a fix proves itself on every platform.
 - It changes the documentation site or its examples. GitHub Pages then builds

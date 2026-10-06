@@ -58,12 +58,12 @@ test("browser result uploads include run and worker report directories", async (
 });
 
 test("browser consumers receive the producer's prepared Python payload", async () => {
-  for (const [name, consumers] of [
-    ["e2e", ["e2e", "package-e2e"]],
-    ["platforms", ["windows-e2e", "windows-provider-e2e", "windows-installed-e2e"]],
+  for (const [name, producerJob, consumers] of [
+    ["e2e", "browser-assets", ["e2e", "package-e2e"]],
+    ["platforms", "artifacts", ["windows-e2e", "windows-provider-e2e", "windows-installed-e2e"]],
   ]) {
     const browser = await workflow(name);
-    const producer = browser.jobs["browser-assets"].steps.find(
+    const producer = browser.jobs[producerJob].steps.find(
       (step) =>
         step.uses?.startsWith("actions/upload-artifact@") && step.with?.name === "browser-pyodide",
     );
@@ -77,6 +77,26 @@ test("browser consumers receive the producer's prepared Python payload", async (
       assert.ok(consumer, `${job} requires the prepared Python payload`);
       assert.equal(consumer.with.path, "apps/e2e/.cache/pyodide", job);
     }
+  }
+});
+
+test("platform consumers install the one package candidate the workflow builds", async () => {
+  const platforms = await workflow("platforms");
+  const builds = Object.entries(platforms.jobs).filter(([, job]) =>
+    (job.steps ?? []).some((step) => step.run?.includes("make _package-build")),
+  );
+  assert.deepEqual(
+    builds.map(([name]) => name),
+    ["artifacts"],
+  );
+  for (const job of ["installed-package", "windows-installed-e2e"]) {
+    const download = platforms.jobs[job].steps.find(
+      (step) =>
+        step.uses?.startsWith("actions/download-artifact@") &&
+        step.with?.name === "package-candidate",
+    );
+    assert.ok(download, `${job} installs the package candidate`);
+    assert.ok(platforms.jobs[job].needs.includes("artifacts"), job);
   }
 });
 

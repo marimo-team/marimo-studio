@@ -237,12 +237,10 @@ const main = async (): Promise<void> => {
   }
   const partial = arguments_.includes("--partial");
   const check = arguments_.includes("--check");
-  const selection = selectDocumentationExamples(
-    documentationExampleFamilies,
-    arguments_.filter((argument) => !modeFlags.has(argument)),
-  );
+  const selectors = arguments_.filter((argument) => !modeFlags.has(argument));
+  const selection = selectDocumentationExamples(documentationExampleFamilies, selectors);
   if (check) {
-    if (partial || !selection.complete) {
+    if (partial || selectors.length > 0) {
       throw new Error("--check validates the complete publication and takes no other options.");
     }
     await validateExamplePublication(destinationRoot);
@@ -251,7 +249,7 @@ const main = async (): Promise<void> => {
     );
     return;
   }
-  if (partial && selection.complete) {
+  if (partial && selectors.length === 0) {
     throw new Error("--partial requires a selector.");
   }
   await mkdir(cacheRoot, { recursive: true });

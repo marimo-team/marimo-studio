@@ -139,3 +139,43 @@ test("deferred contracts cannot reuse a pull request output name", async () => {
   assert.notEqual(result.status, 0);
   assert.equal(result.selected, "");
 });
+
+test("a deferred contract selects when any of its filters matched", async () => {
+  const deferred = {
+    platforms: {
+      filter: ["python_contracts", "platform_control"],
+      escalate: "platform_sensitive",
+    },
+  };
+  const filters = {
+    python_contracts: "false",
+    platform_control: "true",
+    platform_sensitive: "true",
+  };
+  assert.equal(
+    (await select("changed", filters, { names: [], deferred })).selected,
+    "platforms=true\n",
+  );
+  assert.equal(
+    (await select("changed", filters, { event: "push", names: [], deferred })).selected,
+    "platforms=true\n",
+  );
+});
+
+test("a deferred contract fails closed when one of its filters is missing", async () => {
+  const result = await select(
+    "changed",
+    { python_contracts: "true", platform_sensitive: "true" },
+    {
+      names: [],
+      deferred: {
+        platforms: {
+          filter: ["python_contracts", "platform_control"],
+          escalate: "platform_sensitive",
+        },
+      },
+    },
+  );
+  assert.notEqual(result.status, 0);
+  assert.equal(result.selected, "");
+});

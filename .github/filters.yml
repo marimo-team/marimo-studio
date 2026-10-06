@@ -128,9 +128,14 @@ platform_sensitive:
   - "scripts/python-test.sh"
   - "scripts/verify-installed-wheel.sh"
   - "scripts/verify-installed-package.py"
+  - "apps/e2e/package.json"
   - "apps/e2e/playwright*.ts"
   - "apps/e2e/scripts/**"
   - "apps/e2e/unit/**"
+
+# The platform workflow selects every platform contract when it changes.
+platform_control:
+  - ".github/workflows/platforms.yml"
 
 # Pull requests that change the documentation site or its examples build the
 # complete site. Other pull requests that reach the site export a smoke subset.

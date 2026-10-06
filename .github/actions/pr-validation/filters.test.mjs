@@ -16,19 +16,19 @@ const names = [
 ];
 
 // paths-filter applies picomatch with dotfiles and the some-with-excludes predicate.
-const selected = (path) =>
-  names.filter((name) => {
-    const patterns = filters[name].flat(Infinity);
-    return picomatch(
-      patterns.filter((pattern) => !pattern.startsWith("!")),
-      {
-        dot: true,
-        ignore: patterns
-          .filter((pattern) => pattern.startsWith("!"))
-          .map((pattern) => pattern.slice(1)),
-      },
-    )(path);
-  });
+const matches = (name, path) => {
+  const patterns = filters[name].flat(Infinity);
+  return picomatch(
+    patterns.filter((pattern) => !pattern.startsWith("!")),
+    {
+      dot: true,
+      ignore: patterns
+        .filter((pattern) => pattern.startsWith("!"))
+        .map((pattern) => pattern.slice(1)),
+    },
+  )(path);
+};
+const selected = (path) => names.filter((name) => matches(name, path));
 
 test("main workspace changes select live browser and Windows lifecycle acceptance", () => {
   assert.deepEqual(selected("apps/e2e/scripts/main-workspace.ts"), [
@@ -107,19 +107,6 @@ test("provider preview spec changes select their owning provider suite", () => {
   assert.deepEqual(selected("apps/e2e/tests/provider-preview.spec.ts"), ["provider_browser"]);
 });
 
-const matches = (name, path) => {
-  const patterns = filters[name].flat(Infinity);
-  return picomatch(
-    patterns.filter((pattern) => !pattern.startsWith("!")),
-    {
-      dot: true,
-      ignore: patterns
-        .filter((pattern) => pattern.startsWith("!"))
-        .map((pattern) => pattern.slice(1)),
-    },
-  )(path);
-};
-
 test("process, filesystem, and dependency changes run platform contracts on the pull request", () => {
   for (const path of [
     "packages/marimo-studio/src/marimo_studio/_filesystem/_windows.py",
@@ -129,10 +116,16 @@ test("process, filesystem, and dependency changes run platform contracts on the 
     "uv.lock",
     "pnpm-lock.yaml",
     ".github/workflows/platforms.yml",
+    "apps/e2e/package.json",
     "apps/e2e/scripts/process-group.ts",
   ]) {
     assert.equal(matches("platform_sensitive", path), true, path);
   }
+});
+
+test("platform workflow changes own every platform contract", () => {
+  assert.equal(matches("platform_control", ".github/workflows/platforms.yml"), true);
+  assert.equal(matches("platform_control", ".github/workflows/pages.yml"), false);
 });
 
 test("portable product changes defer platform contracts until after merge", () => {
