@@ -289,26 +289,39 @@ def test_studio_preview_keeps_its_waiting_document_until_startup_completes(
         _session_manager(app).get_session_by_file_key = Mock(return_value=object())
         waiting = client.get(
             "/executive/",
-            params={"marimo_studio_client": "browser-client-1234"},
+            params={
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
         )
         waiting_head = client.head(
             "/executive/",
-            params={"marimo_studio_client": "browser-client-1234"},
+            params={
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
         )
         ready = True
         document = client.get(
             "/executive/",
-            params={"marimo_studio_client": "browser-client-1234"},
+            params={
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
         )
         document_head = client.head(
             "/executive/",
-            params={"marimo_studio_client": "browser-client-1234"},
+            params={
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
         )
 
     assert waiting.status_code == 202
     assert waiting_head.status_code == 202
     assert waiting_head.content == b""
     assert waiting_head.headers["content-length"] == "0"
+    assert waiting.headers["content-security-policy"].startswith("sandbox ")
     assert document.status_code == 200
     assert document.headers["Marimo-Studio-Revision"]
     assert document_head.status_code == 200

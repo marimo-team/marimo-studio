@@ -153,6 +153,23 @@ provider operations, and background tasks during shutdown. Start with one ASGI
 worker for one notebook application because live session and presentation
 authority is process-local.
 
+Cookie-authenticated reverse proxies can require same-origin Server runtime
+documents. Set the trusted runtime policy in the process that serves Studio:
+
+```console
+MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1 \
+  MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
+  uvicorn marimo_studio.asgi:app --host 127.0.0.1 --port 8000 --lifespan on
+```
+
+The policy covers the view document, the workspace preview iframe, and the
+ASGI application path. It is process-wide and is read when composition starts,
+so restart the process after changing it. Use it when the notebook and
+authored view code are trusted with the authenticated host. Server-authored
+code can access host cookies, local storage, the parent document, and
+same-origin requests. Browser and Prepared runtimes retain opaque-origin
+isolation.
+
 `create_asgi_app()` has no token configuration argument. Put this form behind
 an access-controlled reverse proxy or compose it into an application that owns
 authentication before exposing it beyond a trusted network.

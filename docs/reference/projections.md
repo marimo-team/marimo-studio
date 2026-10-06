@@ -375,7 +375,7 @@ the view to place the Lens dock there:
 <marimo-output value="studio_lens"></marimo-output>
 ```
 
-Studio skips marimo's automatic Lens in a notebook that imports Lens, so
+marimo skips its automatic Lens in a notebook that constructs its own Lens, so
 `studio_lens` is the notebook's only Lens.
 
 The [Lens agent guide](https://marimo-team.github.io/marimo-lens/agents) defines

@@ -15,6 +15,7 @@ an unrelated document or replaced session cannot attach to the live notebook.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode
 
@@ -39,6 +40,7 @@ from marimo_studio._server.presentation.capability import (
     capability_matches_snapshot,
     capability_target_matches,
     parse_presentation_capability_route,
+    presentation_response_headers,
     presentation_target_allowed,
     presentation_target_session_header,
 )
@@ -402,8 +404,17 @@ class PresentationCapabilityHandler:
         await _send_response(_capability_forbidden(), scope, receive, send)
 
 
-def grant_capability_headers(response: Response) -> Response:
-    response.headers.update(PRESENTATION_RESPONSE_HEADERS)
+def grant_capability_headers(
+    response: Response,
+    *,
+    sandbox: bool = True,
+) -> Response:
+    """Grant presentation transport headers while preserving document CSP."""
+    if not sandbox:
+        for name in ("Access-Control-Allow-Origin", "Vary"):
+            with suppress(KeyError):
+                del response.headers[name]
+    response.headers.update(presentation_response_headers(sandbox=sandbox))
     return response
 
 

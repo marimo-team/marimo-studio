@@ -11,6 +11,7 @@ export const studioBootstrap: StudioBootstrap = {
     { id: "wasm", label: "Browser" },
   ],
   defaultRuntime: "server",
+  trustedServerRuntime: false,
   clientId: "browser-client-1234",
   serverInstance: "server-instance",
   urls: {

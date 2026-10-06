@@ -177,6 +177,18 @@ served at edit `/`. Declared origins add to
 `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS`. Studio ignores a value that is not an
 exact origin, or one that would exceed the 32-entry or 4,096-byte limit.
 
+`MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` enables same-origin delivery for
+Server runtime view documents. The setting applies to the top-level view,
+workspace previews, and applications created with `create_asgi_app`. Server
+runtime code can then use the host origin's cookies, local storage, parent
+document, and same-origin requests. Set it when the notebook and its authored
+view code share the trust boundary of the authenticated host.
+
+The setting is disabled when unset and is read when the Studio process starts.
+Restart the process after changing it. Browser and Prepared runtimes keep their
+opaque-origin sandbox, so a workspace that offers multiple runtimes can enable
+the Server runtime path without changing browser execution isolation.
+
 ## Provider environments
 
 Python `dependencies` are the executable environment contract. For

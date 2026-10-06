@@ -6,12 +6,31 @@ from typing import Any, cast
 
 import pytest
 from starlette.requests import Request
+from starlette.responses import HTMLResponse
 
-from marimo_studio._server.presentation.access import send_capability_app
+from marimo_studio._server.presentation.access import (
+    grant_capability_headers,
+    send_capability_app,
+)
 from marimo_studio._server.presentation.isolation import isolated_presentation_document
 from marimo_studio._server.presentation.ownership import studio_owned_request
 
 from .app_test_support import _presentation_wrapper_config
+
+
+def test_capability_headers_sandbox_error_documents_without_overwriting_csp() -> None:
+    error = HTMLResponse("error", status_code=500)
+    grant_capability_headers(error, sandbox=True)
+    assert error.headers["content-security-policy"].startswith("sandbox")
+
+    document = HTMLResponse("document")
+    document.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+    document.headers["Access-Control-Allow-Origin"] = "null"
+    document.headers["Vary"] = "Origin"
+    grant_capability_headers(document, sandbox=False)
+    assert document.headers["content-security-policy"] == "frame-ancestors 'self'"
+    assert "access-control-allow-origin" not in document.headers
+    assert "vary" not in document.headers
 
 
 def test_presentation_client_disconnect_finishes_native_delegation() -> None:

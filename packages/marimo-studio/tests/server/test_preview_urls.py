@@ -17,6 +17,7 @@ from starlette.testclient import TestClient
 from marimo_studio._artifacts.lock import build_lock
 from marimo_studio._artifacts.publication import record_build_started
 from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.revisions import capture_source_snapshot
@@ -89,6 +90,100 @@ def test_wasm_preview_opens_without_an_editor_or_browser_client(
     assert "allow-same-origin" not in policy
     assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
+
+
+def test_trusted_server_preview_keeps_the_host_origin(
+    notebook_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from marimo_studio._compat.server.session_state import PrivateSessionState
+
+    configured(notebook_path)
+    app = marimo_app(
+        notebook_path,
+        programmatic=True,
+        security_policy=SecurityPolicy(trusted_server_runtime=True),
+    )
+    edit_mode(app)
+    ready = False
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        _client_id: str,
+    ) -> str:
+        return "s_123456"
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        PrivateSessionState,
+        "has_notebook_session",
+        lambda *_args: ready,
+    )
+    monkeypatch.setattr(
+        PrivateSessionState,
+        "exists",
+        lambda *_args: ready,
+    )
+    monkeypatch.setattr(
+        PrivateSessionState,
+        "ensure_started",
+        lambda *_args: ready,
+    )
+
+    with TestClient(app) as client:
+        params = {
+            "runtime": "server",
+            "marimo_studio_client": "browser-client-1234",
+            "marimo_studio_lifecycle": "1",
+        }
+        waiting = client.get("/dashboard/", params=params)
+        ready = True
+        document = client.get("/dashboard/", params=params)
+
+    assert waiting.status_code == 202
+    assert waiting.headers.get("content-security-policy") is None
+    assert document.status_code == 200
+    assert "sandbox" not in document.headers.get("content-security-policy", "")
+
+
+@pytest.mark.parametrize("trusted", [False, True])
+def test_owned_preview_head_preserves_runtime_isolation(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    trusted: bool,
+) -> None:
+    from marimo_studio._compat.server.session_state import PrivateSessionState
+
+    configured(notebook_path)
+    app = marimo_app(
+        notebook_path,
+        programmatic=True,
+        security_policy=SecurityPolicy(trusted_server_runtime=trusted),
+    )
+    edit_mode(app)
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        _client_id: str,
+    ) -> str:
+        return "s_123456"
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(PrivateSessionState, "has_notebook_session", lambda *_: True)
+    monkeypatch.setattr(PrivateSessionState, "exists", lambda *_: True)
+    monkeypatch.setattr(PrivateSessionState, "ensure_started", lambda *_: True)
+
+    with TestClient(app) as client:
+        document = client.head(
+            "/dashboard/",
+            params={
+                "runtime": "server",
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
+        )
+    assert document.status_code == 200
+    has_sandbox = "sandbox" in document.headers.get("content-security-policy", "")
+    assert has_sandbox is not trusted
 
 
 def test_preview_preserves_mounted_directory_notebook_routing(

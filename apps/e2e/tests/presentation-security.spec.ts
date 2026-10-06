@@ -18,12 +18,90 @@ import {
   studioOrigin,
   test,
   waitForPreview,
+  workspaceNotebookPath,
   writeDashboardSource,
   writeWorkspaceFile,
 } from "./fixture.ts";
 import { startNotebookServer } from "./notebook-server.ts";
 
 test.use({ services: ["studio", "static"] });
+
+test("trusted Server views carry the SSO cookie into authored requests", async ({ browser }) => {
+  const server = startNotebookServer({
+    command: "run",
+    target: workspaceNotebookPath,
+    endpoint: e2eNetwork.main.recovery,
+    authentication: ["--no-token"],
+    environment: { MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME: "1" },
+  });
+  const context = await browser.newContext();
+  const missingCookie: string[] = [];
+
+  try {
+    await server.waitUntilReady(`${server.serverUrl}/dashboard/`);
+    await context.addCookies([{ name: "sso", value: "ok", url: `${server.serverUrl}/` }]);
+    await context.route("**/*", async (route) => {
+      const request = route.request();
+      const headers = await request.allHeaders();
+      if (request.url().startsWith(server.serverUrl) && !headers.cookie) {
+        missingCookie.push(request.url());
+        await route.fulfill({ status: 403, body: "SSO cookie required" });
+        return;
+      }
+      await route.continue();
+    });
+
+    const page = await context.newPage();
+    await page.goto(`${server.serverUrl}/dashboard/`);
+    await expect(page.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+    await expect(page.locator('[mo-value="metric"]')).toHaveText("42");
+    expect(missingCookie).toEqual([]);
+  } finally {
+    await context.close();
+    await server.close();
+  }
+});
+
+test("trusted Server workspace previews carry the SSO cookie", async ({ browser }) => {
+  const server = startNotebookServer({
+    command: "edit",
+    target: workspaceDirectory,
+    endpoint: e2eNetwork.main.recovery,
+    authentication: ["--no-token"],
+    environment: { MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME: "1" },
+  });
+  const context = await browser.newContext();
+  const missingCookie: string[] = [];
+
+  try {
+    await server.waitUntilReady(`${server.serverUrl}/health`);
+    await context.addCookies([{ name: "sso", value: "ok", url: `${server.serverUrl}/` }]);
+    await context.route("**/*", async (route) => {
+      const request = route.request();
+      const headers = await request.allHeaders();
+      if (request.url().startsWith(server.serverUrl) && !headers.cookie) {
+        missingCookie.push(request.url());
+        await route.fulfill({ status: 403, body: "SSO cookie required" });
+        return;
+      }
+      await route.continue();
+    });
+
+    const page = await context.newPage();
+    await page.goto(`${server.serverUrl}/?file=notebook.py`);
+    const preview = await waitForPreview(page);
+    await expect(page.locator('iframe[data-preview-runtime-frame="server"]')).not.toHaveAttribute(
+      "sandbox",
+    );
+    const previewCookie = await preview.locator("html").evaluate(() => document.cookie);
+    expect(previewCookie).toBe("sso=ok");
+    await expect(preview.locator('[mo-value="metric"]')).toHaveText("42");
+    expect(missingCookie).toEqual([]);
+  } finally {
+    await context.close();
+    await server.close();
+  }
+});
 
 test("allows a configured parent origin and blocks an unlisted parent", async ({
   browserDiagnostics,

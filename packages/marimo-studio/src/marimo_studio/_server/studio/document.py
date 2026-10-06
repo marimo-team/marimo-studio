@@ -61,6 +61,7 @@ def studio_bootstrap_payload(
     native_session_id: str,
     *,
     request_path: str,
+    trusted_server_runtime: bool = False,
 ) -> dict[str, object]:
     """Build the ready-workspace contract served from app path `request_path`."""
     server_instance = server_instance_id(context.server_token)
@@ -96,6 +97,7 @@ def studio_bootstrap_payload(
             if config.default_runtime in {runtime_id for runtime_id, _label in runtimes}
             else runtimes[0][0]
         ),
+        "trustedServerRuntime": trusted_server_runtime,
         "urls": {
             "editor": relative_url(
                 request_path,
@@ -147,6 +149,7 @@ def studio_document(
     selected: str | None = None,
     default_view: str | None = None,
     generation: str | None = None,
+    trusted_server_runtime: bool = False,
 ) -> str:
     """Return the stable editor host served from app path `request_path`."""
     notebook = context.notebook
@@ -241,6 +244,7 @@ def studio_document(
             client_id,
             native_session_id,
             request_path=request_path,
+            trusted_server_runtime=trusted_server_runtime,
         )
 
     fallback = (
