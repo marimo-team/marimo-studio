@@ -1,0 +1,19 @@
+apps/e2e/tests/authoring.spec.ts
+  s_69fc584a65858c::t_4ad905d65f3995 64,66-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bf2d4fcfaa4468b6698929f0420a38f63e7f8ae6",
+  "prompts": {},
+  "sessions": {
+    "s_69fc584a65858c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "033d136f-85b2-4ba1-a82e-64fa7b9e52d0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
