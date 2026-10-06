@@ -27,10 +27,7 @@ from marimo_studio._compat.kernel_values.authorization import (
 from marimo_studio._compat.kernel_values.dependencies import (
     current_dependency_closure,
 )
-from marimo_studio._compat.kernel_values.lens import (
-    LensMountPolicy,
-    lens_overlay,
-)
+from marimo_studio._compat.kernel_values.lens import lens_overlay
 from marimo_studio._compat.kernel_values.models import (
     FUNCTION_NAME,
     NAMESPACE,
@@ -277,7 +274,6 @@ class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
-        self._lens_mount: LensMountPolicy | None = None
         self._value_encoder: ValueEncoder | None = None
         self._query_generations: dict[str, tuple[int, int]] = {}
         self._query_operations: dict[tuple[str, str], tuple[str, tuple[int, int]]] = {}
@@ -403,13 +399,6 @@ class _KernelBridgeLifespan:
         from marimo._messaging.notification_utils import broadcast_notification
 
         filename = filename or _kernel_filename(context)
-        if self._lens_mount is None and not is_owned_session():
-            lens_mount = LensMountPolicy(
-                context,
-                lambda: _is_studio_notebook(_kernel_filename(context)),
-            )
-            lens_mount.open()
-            self._lens_mount = lens_mount
         inspection = (
             _claim_probe_selector_lease(context, filename)
             if filename is not None
@@ -712,13 +701,6 @@ class _KernelBridgeLifespan:
 
     def _close(self) -> None:
         failure: BaseException | None = None
-        if self._lens_mount is not None:
-            try:
-                self._lens_mount.close()
-            except BaseException as error:
-                failure = error
-            else:
-                self._lens_mount = None
         if self._value_encoder is not None:
             try:
                 self._value_encoder.close()

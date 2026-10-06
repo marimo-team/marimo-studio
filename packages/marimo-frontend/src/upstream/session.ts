@@ -1,4 +1,5 @@
 export {
+  authorizeSessionId,
   getSessionId,
   isSessionId,
   type SessionId,

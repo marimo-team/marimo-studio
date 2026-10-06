@@ -296,7 +296,7 @@ const studioReportDocumentSave = (captured, succeeded) =>
 const studioFlushBeforeDocumentSave = studioFlushDocumentChanges;
 const br = async () => {{}};
 const n = () => ({{}});
-const Qk = (value) => value;
+const PA = (value) => value;
 const e = () => ({{
   POST(url, options) {{
     requests.push([url, options.body, generation]);
@@ -386,7 +386,7 @@ var marimoStudioAwaitDocumentMutation, marimoStudioDocumentMutationGeneration;
 var marimoStudioReportDocumentSave, marimoStudioFlushDocumentChanges;
 var marimoStudioFlushBeforeDocumentSave;
 const Cj = (changes) => changes;
-const I = (callback) => Object.assign(callback, {{ cancel() {{}} }});
+const te = (callback) => Object.assign(callback, {{ cancel() {{}} }});
 class li {{
   constructor() {{
     this.promise = new Promise((resolve) => {{ this.resolve = resolve; }});
@@ -525,7 +525,7 @@ const initial = """
 const apply = (operation, data) => {
   window.location.href = initial;
   historyEntries.length = 0;
-  Xf[operation](data);
+  Yf[operation](data);
   return { href: window.location.href, writes: historyEntries.length };
 };
 const results = {
@@ -637,7 +637,7 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
     tmp_path: Path,
 ) -> None:
     asset = tmp_path / "RunButton-test.js"
-    asset.write_bytes(b"const extensions = [im.of(Jt())];")
+    asset.write_bytes(b"const extensions = [im.of(Yt())];")
     observed_scope: dict[str, object] = {}
     messages: list[Message] = []
 
@@ -693,7 +693,7 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
         for message in messages
         if message["type"] == "http.response.body"
     )
-    assert body == b"const extensions = [e.copilot===`github`?im.of(Jt()):[]];"
+    assert body == b"const extensions = [e.copilot===`github`?im.of(Yt()):[]];"
 
 
 def test_editor_root_rewrite_requires_a_complete_identity_response() -> None:
@@ -847,7 +847,7 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
     panels = next(
         path
         for path in assets.glob("panels-*.js")
-        if b"var Xf={append:" in path.read_bytes()
+        if b"var Yf={append:" in path.read_bytes()
     )
     session = next(
         path
@@ -899,14 +899,14 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
     )
     assert native[4].content == panels.read_bytes()
     assert native[5].content == session.read_bytes()
-    assert b'e.has("marimo_studio_editor")' in before[5].content
-    assert native[0].content.count(b"e.copilot===`github`?im.of(Jt()):[]") == 1
+    assert b't.has("marimo_studio_editor")' in before[5].content
+    assert native[0].content.count(b"e.copilot===`github`?im.of(Yt()):[]") == 1
     for response in (*before, *after, *native):
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
         for header in ("accept-ranges", "content-range", "etag", "last-modified"):
             assert header not in response.headers
-    assert before[0].content.count(b"e.copilot===`github`?im.of(Jt()):[]") == 1
+    assert before[0].content.count(b"e.copilot===`github`?im.of(Yt()):[]") == 1
     assert before[1].content.count(b'"/_marimo-studio/editor/lsp/","/lsp/"') == 1
     assert _DOCUMENT_RUNTIME in before[2].content
     assert b"this.options.onConnectionFailure" in before[2].content

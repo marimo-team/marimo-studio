@@ -1,16 +1,20 @@
-export const createSessionBootstrap = <SessionId>(loadSession: () => Promise<SessionId>) => {
+export const createSessionBootstrap = <SessionId>(
+  loadSession: (authorized: SessionId | undefined) => Promise<SessionId>,
+) => {
   let state: { status: "pending" } | { status: "ready"; sessionId: SessionId } = {
     status: "pending",
   };
   let sessionBootstrap: Promise<SessionId> | undefined;
 
-  const bootstrap = (preflight: () => void | Promise<void>): Promise<SessionId> => {
+  // Preflight returns the URL session it validated, if any.
+  const bootstrap = (
+    preflight: () => SessionId | undefined | void | Promise<SessionId | undefined | void>,
+  ): Promise<SessionId> => {
     if (sessionBootstrap) {
       return sessionBootstrap;
     }
     const pending = (async () => {
-      await preflight();
-      const sessionId = await loadSession();
+      const sessionId = await loadSession((await preflight()) ?? undefined);
       state = { status: "ready", sessionId };
       return sessionId;
     })();

@@ -157,6 +157,90 @@ index c721bfeb5..2a2ed6ed0 100644
  Slider.displayName = SliderPrimitive.Root.displayName;
  
  export { Slider };
+diff --git a/frontend/src/core/kernel/__tests__/session.test.ts b/frontend/src/core/kernel/__tests__/session.test.ts
+index 2f3050266..11acd541b 100644
+--- a/frontend/src/core/kernel/__tests__/session.test.ts
++++ b/frontend/src/core/kernel/__tests__/session.test.ts
+@@ -1,7 +1,11 @@
+ /* Copyright 2026 Marimo. All rights reserved. */
+ import { afterEach, describe, expect, it, vi } from "vitest";
+ import type { AppMode } from "@/core/mode";
+-import { generateSessionId, isSessionId } from "../session";
++import {
++  generateSessionId,
++  isSessionId,
++  type SessionId,
++} from "../session";
+ 
+ const URL_SESSION_ID = "s_abc123";
+ 
+@@ -112,6 +116,28 @@ describe("Session", () => {
+     expect(currentSearchParams().has("session_id")).toBe(false);
+   });
+ 
++  it("resumes a host-authorized URL session id outside the editor", async () => {
++    const { authorizeSessionId, getSessionId } = await loadSession({
++      mode: undefined,
++      url: `/?kiosk=true&session_id=${URL_SESSION_ID}`,
++    });
++    authorizeSessionId(URL_SESSION_ID as SessionId);
++    expect(getSessionId()).toBe(URL_SESSION_ID);
++    expect(currentSearchParams().has("session_id")).toBe(false);
++    expect(currentSearchParams().has("kiosk")).toBe(false);
++  });
++
++  it("ignores a URL session id that differs from the authorized one", async () => {
++    const { authorizeSessionId, getSessionId } = await loadSession({
++      mode: "read",
++      url: `/?session_id=${URL_SESSION_ID}`,
++    });
++    authorizeSessionId("s_xyz789" as SessionId);
++    const id = getSessionId();
++    expect(id).not.toBe(URL_SESSION_ID);
++    expect(id).not.toBe("s_xyz789");
++  });
++
+   it("returns the same id on every call", async () => {
+     const { getSessionId } = await loadSession({ mode: "read", url: "/" });
+     expect(getSessionId()).toBe(getSessionId());
+diff --git a/frontend/src/core/kernel/session.ts b/frontend/src/core/kernel/session.ts
+index af894e1dc..ffb16c380 100644
+--- a/frontend/src/core/kernel/session.ts
++++ b/frontend/src/core/kernel/session.ts
+@@ -23,6 +23,15 @@ export function isSessionId(value: string | null): value is SessionId {
+ }
+ 
+ let sessionId: SessionId | null = null;
++let authorizedSessionId: SessionId | null = null;
++
++/**
++ * Let an embedding host resume a session it has validated, outside the
++ * editor. Call before the first `getSessionId()`.
++ */
++export function authorizeSessionId(id: SessionId): void {
++  authorizedSessionId = id;
++}
+ 
+ function resolveSessionId(): SessionId {
+   // Only the editor lets the URL steer the connection: kiosk mode and
+@@ -38,6 +47,8 @@ function resolveSessionId(): SessionId {
+     KnownQueryParams.sessionId,
+   ) as SessionId | null;
+   const urlSessionId = isSessionId(id) ? id : null;
++  const hostResumesSession =
++    urlSessionId !== null && urlSessionId === authorizedSessionId;
+ 
+   updateQueryParams((params) => {
+     if (!urlMaySteerConnection) {
+@@ -57,7 +68,7 @@ function resolveSessionId(): SessionId {
+     Logger.debug("Starting a new session", { sessionId: id });
+     return generateSessionId();
+   }
+-  if (!urlMaySteerConnection) {
++  if (!urlMaySteerConnection && !hostResumesSession) {
+     Logger.debug("Ignoring session_id from URL outside the editor", {
+       sessionId: urlSessionId,
+     });
 diff --git a/frontend/src/core/websocket/__tests__/useWebSocket.test.ts b/frontend/src/core/websocket/__tests__/useWebSocket.test.ts
 index 2065cec5a..39ad56d78 100644
 --- a/frontend/src/core/websocket/__tests__/useWebSocket.test.ts
@@ -253,22 +337,22 @@ index a285a7229..a870bb3db 100644
      const tag = uniqueTag("in-div");
      registerReactComponent(makePlugin(tag));
 diff --git a/frontend/src/plugins/core/registerReactComponent.tsx b/frontend/src/plugins/core/registerReactComponent.tsx
-index c65c8a9b0..c469610a4 100644
+index 3503b6f01..6a3a45643 100644
 --- a/frontend/src/plugins/core/registerReactComponent.tsx
 +++ b/frontend/src/plugins/core/registerReactComponent.tsx
 @@ -383,6 +383,10 @@ export function registerReactComponent<T>(plugin: IPlugin<T, unknown>): void {
        });
      }
  
-+    connectedMoveCallback() {
++    public connectedMoveCallback() {
 +      // moveBefore preserves the mounted React root and plugin-local state.
 +    }
 +
-     disconnectedCallback() {
+     public disconnectedCallback() {
        this.observer.disconnect();
        this.root?.unmount();
 diff --git a/frontend/src/plugins/impl/SliderPlugin.tsx b/frontend/src/plugins/impl/SliderPlugin.tsx
-index c337ebb47..b041e2a87 100644
+index b2c834d8c..d6d33a728 100644
 --- a/frontend/src/plugins/impl/SliderPlugin.tsx
 +++ b/frontend/src/plugins/impl/SliderPlugin.tsx
 @@ -3,6 +3,7 @@ import { type JSX, useEffect, useId, useMemo, useState } from "react";
@@ -631,7 +715,7 @@ index f9047d7ea..2fce1d863 100644
      }
    });
 diff --git a/frontend/src/plugins/impl/anywidget/model.ts b/frontend/src/plugins/impl/anywidget/model.ts
-index 9941ed4f8..c2c486354 100644
+index b53a06cce..64758b2ef 100644
 --- a/frontend/src/plugins/impl/anywidget/model.ts
 +++ b/frontend/src/plugins/impl/anywidget/model.ts
 @@ -28,6 +28,8 @@ export interface MarimoComm<T> {
@@ -646,16 +730,16 @@ index 9941ed4f8..c2c486354 100644
 @@ -85,6 +87,7 @@ export class Model<T extends ModelState> implements AnyModel<T> {
     * Access via getMarimoInternal().
     */
-   [marimoSymbol]: MarimoInternalApi<T> = {
+   public [marimoSymbol]: MarimoInternalApi<T> = {
 +    snapshotState: () => structuredClone(this.#data),
      updateAndEmitDiffs: (value: T) => this.#updateAndEmitDiffs(value),
      emitCustomMessage: (
        message: CustomMessage,
 diff --git a/frontend/src/plugins/impl/anywidget/registry.ts b/frontend/src/plugins/impl/anywidget/registry.ts
-index 041ae03ea..9c5f79b06 100644
+index 9a7dfa1aa..4714654d2 100644
 --- a/frontend/src/plugins/impl/anywidget/registry.ts
 +++ b/frontend/src/plugins/impl/anywidget/registry.ts
-@@ -55,7 +55,12 @@ export class WidgetRegistry implements WidgetResolver {
+@@ -58,7 +58,12 @@ export class WidgetRegistry implements WidgetResolver {
          createHost: (signal) => createHost(this, signal),
          onModelTimeout: () => {
            if (this.#runtimes.get(key) === nextRuntime) {
@@ -669,12 +753,12 @@ index 041ae03ea..9c5f79b06 100644
              this.#runtimes.delete(key);
            }
          },
-@@ -125,13 +130,13 @@ export class WidgetRegistry implements WidgetResolver {
+@@ -128,13 +133,13 @@ export class WidgetRegistry implements WidgetResolver {
     * Tear down everything known about `key`: the model's lifecycle
     * signal and the current generation.
     */
--  delete(key: WidgetModelId): void {
-+  async delete(key: WidgetModelId): Promise<void> {
+-  public delete(key: WidgetModelId): void {
++  public async delete(key: WidgetModelId): Promise<void> {
      const runtime = this.#runtimes.get(key);
      if (!runtime) {
        return;
@@ -685,7 +769,7 @@ index 041ae03ea..9c5f79b06 100644
    }
  }
  
-@@ -241,7 +246,7 @@ export async function handleWidgetMessage(
+@@ -244,7 +249,7 @@ export async function handleWidgetMessage(
      }
  
      case "close":
@@ -695,7 +779,7 @@ index 041ae03ea..9c5f79b06 100644
  
      case "update": {
 diff --git a/frontend/src/plugins/impl/anywidget/runtime.ts b/frontend/src/plugins/impl/anywidget/runtime.ts
-index 9e5121dcb..38fa93142 100644
+index 636201c55..ab15428b8 100644
 --- a/frontend/src/plugins/impl/anywidget/runtime.ts
 +++ b/frontend/src/plugins/impl/anywidget/runtime.ts
 @@ -14,6 +14,7 @@ interface Generation {
@@ -713,8 +797,8 @@ index 9e5121dcb..38fa93142 100644
 +  #disposal: Promise<void> | undefined;
    #css = "";
  
-   constructor(key: WidgetModelId, options: WidgetRuntimeOptions) {
-@@ -202,18 +204,27 @@ export class WidgetRuntime {
+   public constructor(key: WidgetModelId, options: WidgetRuntimeOptions) {
+@@ -204,18 +206,27 @@ export class WidgetRuntime {
      spec: EsmSpec;
      model: Model<ModelState>;
      controller: AbortController;
@@ -745,7 +829,7 @@ index 9e5121dcb..38fa93142 100644
      return WidgetBinding.create({
        widgetDef: widget,
        model,
-@@ -224,11 +235,23 @@ export class WidgetRuntime {
+@@ -226,11 +237,23 @@ export class WidgetRuntime {
  
    #startGeneration(spec: EsmSpec, model: Model<ModelState>): Generation {
      const controller = new AbortController();
@@ -771,7 +855,7 @@ index 9e5121dcb..38fa93142 100644
      generation.promise.catch(() => {
        if (this.#generation === generation) {
          this.#generation = undefined;
-@@ -263,22 +286,30 @@ export class WidgetRuntime {
+@@ -265,22 +288,30 @@ export class WidgetRuntime {
    }
  
    #queueGenerationCleanup(generation: Generation): Promise<void> {
@@ -813,15 +897,15 @@ index 9e5121dcb..38fa93142 100644
    async #renderView(
      view: RuntimeView,
      requestedGeneration?: Generation,
-@@ -341,10 +372,12 @@ export class WidgetRuntime {
+@@ -343,10 +374,12 @@ export class WidgetRuntime {
      view.signal.addEventListener("abort", release, { once: true });
    }
  
--  dispose(): void {
+-  public dispose(): void {
 -    if (this.#controller.signal.aborted) {
 -      return;
 -    }
-+  dispose(): Promise<void> {
++  public dispose(): Promise<void> {
 +    this.#disposal ??= this.#dispose();
 +    return this.#disposal;
 +  }
@@ -830,7 +914,7 @@ index 9e5121dcb..38fa93142 100644
      Logger.debug(`[WidgetRuntime] Disposing model=${this.#key}`);
      if (this.#modelTimeout) {
        clearTimeout(this.#modelTimeout);
-@@ -363,6 +396,7 @@ export class WidgetRuntime {
+@@ -365,6 +398,7 @@ export class WidgetRuntime {
        mount.dispose();
      }
      this.#styleMounts.clear();

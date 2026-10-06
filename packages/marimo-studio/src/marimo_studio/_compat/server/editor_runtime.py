@@ -29,12 +29,12 @@ _INDEX_ASSET = re.compile(r"^/assets/index-[A-Za-z0-9_-]+\.js$")
 _PANELS_ASSET = re.compile(r"^/assets/panels-[A-Za-z0-9_-]+\.js$")
 # The pinned hash width distinguishes session from the session-panel bundle.
 _SESSION_ASSET = re.compile(r"^/assets/session-[A-Za-z0-9_-]{8}\.js$")
-_REMOVE_SESSION_QUERY = b"e.has(n.kiosk)||e.delete(n.sessionId)"
+_REMOVE_SESSION_QUERY = b"t.has(s.kiosk)||t.delete(s.sessionId)"
 _RETAIN_EDITOR_SESSION_QUERY = (
-    b'e.has(n.kiosk)||e.has("marimo_studio_editor")||e.delete(n.sessionId)'
+    b't.has(s.kiosk)||t.has("marimo_studio_editor")||t.delete(s.sessionId)'
 )
-_COPILOT_EXTENSION = b"im.of(Jt())"
-_GATED_COPILOT_EXTENSION = b"e.copilot===`github`?im.of(Jt()):[]"
+_COPILOT_EXTENSION = b"im.of(Yt())"
+_GATED_COPILOT_EXTENSION = b"e.copilot===`github`?im.of(Yt()):[]"
 _COPILOT_LSP_URL = b"this.formatWsURL(`/lsp/${e}`)"
 _STUDIO_COPILOT_LSP_URL = (
     b"new URL(this.formatWsURL(`/lsp/${e}`).toString().replace("
@@ -80,20 +80,20 @@ _ORDERED_CELLS_EXPORT = (
     b"marimoStudioFlushBeforeDocumentSave as studioFlushBeforeDocumentSave,"
     b"marimoStudioReportDocumentSave as studioReportDocumentSave};"
 )
-_INDEX_CELLS_IMPORT = b'zt as tn}from"./cells-'
+_INDEX_CELLS_IMPORT = b'zt as en}from"./cells-'
 _ORDERED_INDEX_CELLS_IMPORT = (
-    b"zt as tn,studioCreateDocumentRequests,studioAwaitDocumentMutation,"
+    b"zt as en,studioCreateDocumentRequests,studioAwaitDocumentMutation,"
     b"studioFlushDocumentChanges,studioFlushBeforeDocumentSave,"
     b'studioDocumentMutationGeneration,studioReportDocumentSave}from"./cells-'
 )
 _NETWORK_SEND_SAVE = (
     b"sendSave:t=>e().POST(`/api/kernel/save`,{body:t,parseAs:`text`,params:n()})"
-    b".then(Qk)"
+    b".then(PA)"
 )
 _NETWORK_SEND_DOCUMENT_TRANSACTION = (
     b"sendDocumentTransaction:async t=>(await br(),e().POST("
     b"`/api/document/transaction`,"
-    b"{body:t,params:n()}).then(Qk))"
+    b"{body:t,params:n()}).then(PA))"
 )
 _NETWORK_REQUEST_FACTORY = b"n=()=>({header:t()});return{sendComponentValues:"
 _HOST_HANDOFF_QUERY_JSON = json.dumps(HOST_SESSION_HANDOFF_QUERY_PARAM).encode()
@@ -127,7 +127,7 @@ const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   post:(...args)=>e().POST(...args),
   waitForConnection:()=>br(),
   params:()=>n(),
-  handleResponse:result=>Qk(result),
+  handleResponse:result=>PA(result),
   handoffAccepted:async()=>{
     if(marimoStudioHasNewHostHandoff())return true;
     await Promise.race([
@@ -148,13 +148,13 @@ _ORDERED_NETWORK_SEND_SAVE = (
 )
 _NETWORK_SEND_RUN = (
     b"sendRun:async t=>(await br(),e().POST(`/api/kernel/run`,{body:t,params:n()})"
-    b".then(Qk))"
+    b".then(PA))"
 )
 _ORDERED_NETWORK_SEND_RUN = (
     b"sendRun:request=>marimoStudioDocumentRequests.sendRun(request)"
 )
 _QUERY_PARAM_HANDLERS = (
-    b"var Xf={append:e=>{let t=new URL(window.location.href);t.searchParams."
+    b"var Yf={append:e=>{let t=new URL(window.location.href);t.searchParams."
     b"append(e.key,e.value),window.history.pushState({},``,`${t.pathname}${t"
     b".search}`)},set:e=>{let t=new URL(window.location.href);Array.isArray("
     b"e.value)?(t.searchParams.delete(e.key),e.value.forEach(n=>t.searchPara"
@@ -182,7 +182,7 @@ _PROTECTED_QUERY_PARAM_HANDLERS = (
     + b"),marimoStudioRetainedQueryKeys=new Set("
     + _RETAINED_QUERY_KEYS_JSON
     + b'),marimoStudioPushQuery=t=>window.history.pushState({},"",'
-    b"`${t.pathname}${t.search}${t.hash}`),Xf={append:t=>{if("
+    b"`${t.pathname}${t.search}${t.hash}`),Yf={append:t=>{if("
     b"marimoStudioImmutableQueryKeys.has(t.key))return;let A=new URL("
     b"window.location.href);"
     b"A.searchParams.append(t.key,t.value),marimoStudioPushQuery(A)},set:t=>{if("

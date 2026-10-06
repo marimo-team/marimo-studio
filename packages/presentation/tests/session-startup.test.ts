@@ -66,7 +66,7 @@ test("a preserved session preflights and reloads configuration before runtime co
   const startup = await bootstrapPresentationSession({
     bootstrap: async (preflight) => {
       order.push("bootstrap");
-      await preflight();
+      assert.equal(await preflight(), sessionId);
       order.push("marimo-session-module");
       return sessionId;
     },
@@ -75,6 +75,7 @@ test("a preserved session preflights and reloads configuration before runtime co
       return runtimeConfig(currentSessionId ? "connected" : "preflight");
     },
     replay: {
+      authorizedSession: () => sessionId,
       pending: () => true,
       preflight: () => {
         order.push("session-preflight");
@@ -112,6 +113,7 @@ test("a fresh presentation session authorizes config before the native session r
       return runtimeConfig(nativeSessionId ?? "preflight");
     },
     replay: {
+      authorizedSession: () => undefined,
       pending: () => false,
       preflight: () => {
         order.push("session-preflight");
@@ -146,6 +148,7 @@ test("WebAssembly startup keeps its preflight config", async () => {
       return wasmRuntimeConfig("presentation-revision");
     },
     replay: {
+      authorizedSession: () => undefined,
       pending: () => false,
       preflight: () => false,
     },
@@ -174,6 +177,7 @@ test("document retirement between session bootstrap and config reload cancels st
       return runtimeConfig("presentation-revision");
     },
     replay: {
+      authorizedSession: () => undefined,
       pending: () => false,
       preflight: () => false,
     },
@@ -196,6 +200,7 @@ test("an active document reports config network failures", async () => {
     },
     loadConfig: () => Promise.reject(failure),
     replay: {
+      authorizedSession: () => undefined,
       pending: () => false,
       preflight: () => false,
     },

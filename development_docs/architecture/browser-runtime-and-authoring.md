@@ -562,6 +562,11 @@ routing keys. Reload and direct document navigation offer the session when the
 target has that query. The replay marker and session parameter leave the
 visible URL after the runtime opens.
 
+Marimo resumes the document URL's `session_id` outside its editor only when
+replay preflight authorizes that exact session. Preflight authorizes a
+remembered session whose query matches and the server-assigned renewal
+session. Any other `session_id` starts a fresh native session.
+
 `PrivateSessionReplay` owns the reversible Marimo server patch and the
 application's registered notebook sessions. The application lifespan installs
 and closes that owner. Server replay admission independently compares the
