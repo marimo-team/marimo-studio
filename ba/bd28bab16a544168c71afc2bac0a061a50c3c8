@@ -1,0 +1,61 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react/starters/default/__init__.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-61
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_svelte/build.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-202
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_svelte/starters/default/__init__.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-68
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_obsnotebook/analyzer.ts
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-211
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react/__init__.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-108
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/vanilla/_sources.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-585
+examples/__marimo__/studio/occupancy/pdf-report/public/fonts/OFL.txt
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-92
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/vanilla/__init__.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-174
+packages/marimo-studio/src/marimo_studio/_processes/operation.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-101
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/analyzers/projection-diagnostics.ts
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-71
+packages/marimo-studio/tests/providers/test_builtin_starters.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-291
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react/build.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-604
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/analysis.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-187
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_svelte/__init__.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-119
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react/analyzer.ts
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-427
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/runtime.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-233
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/vite.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-226
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/project.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-337
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/vite_project.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-147
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_svelte/analyzer.ts
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-690
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/__init__.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-27
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_obsnotebook/__init__.py
+  s_80bb094c6b36f0::t_ee9af973fb1676 1-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "babd28bab16a544168c71afc2bac0a061a50c3c8",
+  "prompts": {},
+  "sessions": {
+    "s_80bb094c6b36f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d6eee0f-6b75-4b28-bbdf-635416cd0a12",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
