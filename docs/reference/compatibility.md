@@ -154,6 +154,11 @@ scripts, forms, downloads, modals, pointer lock, and popups. It withholds
 same-origin access and top-level navigation. Studio validates navigation,
 query, replay, and readiness messages at the parent boundary.
 
+Set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` for a trusted single-tenant
+deployment that needs Server runtime documents to share the authenticated host
+origin. The policy covers view documents, workspace previews, and the ASGI
+embedding path. Browser and Prepared runtimes keep opaque-origin isolation.
+
 ## Third-party view providers
 
 Studio 0.2 requires provider API version `1`. Set

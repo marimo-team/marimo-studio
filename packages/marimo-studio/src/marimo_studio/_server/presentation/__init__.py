@@ -6,9 +6,9 @@ combination while it loads assets, reads values, renders native output,
 or synchronizes query state. A failed later build leaves the last working
 presentation available when one exists.
 
-Provider-authored HTML runs inside a sandboxed presentation frame. Signed URLs
-grant that frame the narrow access needed for its view, presentation revision,
-artifact revision, runtime, and session. Requests from an older presentation,
-another view, or a replaced session are rejected before they reach the live
-notebook.
+Provider-authored HTML runs inside a sandboxed presentation frame by default.
+Signed URLs grant that frame the narrow access needed for its view,
+presentation revision, artifact revision, runtime, and session. Requests from
+an older presentation, another view, or a replaced session are rejected before
+they reach the live notebook.
 """

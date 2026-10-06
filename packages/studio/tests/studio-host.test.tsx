@@ -46,6 +46,7 @@ const ready: StudioBootstrap = {
   views: ["dashboard"],
   runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
+  trustedServerRuntime: false,
   clientId: host.clientId,
   serverInstance: host.serverInstance,
   serverToken: host.serverToken,

@@ -331,9 +331,10 @@ objects retain their native output resources; completed notebook runs refresh
 the selection through the existing output reader.
 
 In edit mode, the private Lens adapter shows `marimo_lens.notebook_lens()`, the
-notebook's open Lens. That includes anonymous outputs such as the Lens that
-Marimo mounts automatically. The preview keeps the Lens's configured selector
-and notebook ownership. A notebook with no open Lens gets no preview overlay.
+notebook's open Lens. Marimo mounts that Lens automatically unless the notebook
+creates its own, and Lens owns that decision through `automatic_lens()`. The
+preview keeps the Lens's configured selector and notebook ownership. A notebook
+with no open Lens gets no preview overlay.
 
 Lens gives each document its own interaction owner, so the notebook dock and the
 preview dock drive one Lens model. Lens bounds its notebook UI to Marimo's

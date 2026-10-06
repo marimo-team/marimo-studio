@@ -164,6 +164,7 @@ class LifecycleRouteHandler:
             presentation_view=(
                 route.capability.view if route.capability is not None else None
             ),
+            security_policy=self._resolve_security_policy(route.scope),
         )
 
     async def _error_response(

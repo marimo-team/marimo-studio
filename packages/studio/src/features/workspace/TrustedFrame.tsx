@@ -18,7 +18,7 @@ export const TrustedFrame = ({
   ...attributes
 }: TrustedFrameProps) => (
   <>
-    {/* Editor frames share Marimo's origin. PreviewFrame supplies its sandbox. */}
+    {/* Editor frames share Marimo's origin. PreviewFrame sandboxes previews by default. */}
     {/* react-doctor-disable-next-line react-doctor/iframe-missing-sandbox */}
     <iframe
       ref={frameRef}
@@ -35,9 +35,15 @@ export const TrustedFrame = ({
 export const PreviewFrame = ({
   primary = true,
   runtime,
+  sameOrigin = false,
   view,
   ...props
-}: TrustedFrameProps & { primary?: boolean; runtime: string; view?: string }) => (
+}: TrustedFrameProps & {
+  primary?: boolean;
+  runtime: string;
+  sameOrigin?: boolean;
+  view?: string;
+}) => (
   <TrustedFrame
     {...props}
     allow="clipboard-write; fullscreen *"
@@ -45,7 +51,11 @@ export const PreviewFrame = ({
     data-preview-cache-runtime={runtime}
     data-preview-runtime-frame={primary ? runtime : undefined}
     data-preview-view-frame={view}
-    sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-scripts"
+    sandbox={
+      sameOrigin
+        ? undefined
+        : "allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-scripts"
+    }
   />
 );
 

@@ -14,17 +14,26 @@ from marimo_studio._server.presentation.isolation import PRESENTATION_SANDBOX
 from marimo_studio._server.records import ServerContext
 
 PRESENTATION_PATH = f"{SUPPORT_PATH}/presentation"
-PRESENTATION_RESPONSE_HEADERS = {
-    "Access-Control-Allow-Origin": "null",
-    "Access-Control-Expose-Headers": (
-        "ETag, Marimo-Studio-Error, Marimo-Studio-Hint, "
-        "Marimo-Studio-Revision, Marimo-Studio-Support-Url, Retry-After"
-    ),
-    "Content-Security-Policy": f"sandbox {PRESENTATION_SANDBOX}",
-    "Cross-Origin-Resource-Policy": "cross-origin",
-    "Referrer-Policy": "no-referrer",
-    "Vary": "Origin",
-}
+
+
+def presentation_response_headers(*, sandbox: bool = True) -> dict[str, str]:
+    """Return transport headers for an authored presentation response."""
+    headers = {
+        "Access-Control-Allow-Origin": "null",
+        "Access-Control-Expose-Headers": (
+            "ETag, Marimo-Studio-Error, Marimo-Studio-Hint, "
+            "Marimo-Studio-Revision, Marimo-Studio-Support-Url, Retry-After"
+        ),
+        "Cross-Origin-Resource-Policy": "cross-origin",
+        "Referrer-Policy": "no-referrer",
+        "Vary": "Origin",
+    }
+    if sandbox:
+        headers["Content-Security-Policy"] = f"sandbox {PRESENTATION_SANDBOX}"
+    return headers
+
+
+PRESENTATION_RESPONSE_HEADERS = presentation_response_headers()
 
 CapabilityKind = Literal["renewal", "revision"]
 

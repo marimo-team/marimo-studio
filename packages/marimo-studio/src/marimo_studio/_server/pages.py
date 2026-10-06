@@ -42,13 +42,12 @@ from marimo_studio._server.headers import DOCUMENT_HEADERS, edit_document_header
 from marimo_studio._server.ports import SessionReplay, SessionState
 from marimo_studio._server.presentation.capability import (
     PRESENTATION_PATH,
-    PRESENTATION_RESPONSE_HEADERS,
     presentation_renewal_path,
+    presentation_response_headers,
     presentation_revision_path,
     presentation_storage_scope,
 )
 from marimo_studio._server.presentation.isolation import (
-    PRESENTATION_SANDBOX,
     isolated_presentation_document,
     isolation_content_security_policy,
 )
@@ -156,6 +155,7 @@ async def document_response(
     runtimes: RuntimeRegistry,
     marimo_version: str,
     presentation_session: PresentationSession,
+    security_policy: SecurityPolicy,
     trusted_shell: bool = True,
 ) -> Response:
     """Render one custom view document against the active Marimo server."""
@@ -187,6 +187,9 @@ async def document_response(
         request.query_params.get("runtime"),
     )
     runtime_explicit = request.query_params.get("runtime") is not None
+    same_origin_server = (
+        security_policy.trusted_server_runtime and runtime.id == "server"
+    )
     if expected_revisions and snapshot.revision != expected_revisions[0]:
         raise AgentRequestError(
             "presentation-revision-mismatch",
@@ -278,6 +281,7 @@ async def document_response(
         trusted_shell
         and not unframed
         and not (context.mode == "edit" and studio_owned_request(request))
+        and not same_origin_server
     )
     if isolated:
         nonce = secrets.token_urlsafe(18)
@@ -331,9 +335,10 @@ async def document_response(
             headers=shell_headers,
         )
     runtime_headers = dict(headers)
-    if context.mode == "edit" or unframed:
-        runtime_headers.update(PRESENTATION_RESPONSE_HEADERS)
-        runtime_headers["Content-Security-Policy"] = f"sandbox {PRESENTATION_SANDBOX}"
+    if context.mode == "edit" or unframed or not trusted_shell:
+        runtime_headers.update(
+            presentation_response_headers(sandbox=not same_origin_server)
+        )
     return HTMLResponse(
         render_presentation_document(
             snapshot,
@@ -394,6 +399,7 @@ def studio_response(
             state="ready",
             config=studio,
             selected=selected,
+            trusted_server_runtime=security_policy.trusted_server_runtime,
         ),
         headers=edit_document_headers(security_policy),
     )
@@ -428,6 +434,7 @@ def initialization_response(
             state="needs-view",
             default_view=default_view,
             generation=generation,
+            trusted_server_runtime=security_policy.trusted_server_runtime,
         ),
         headers=edit_document_headers(security_policy),
     )
@@ -478,6 +485,7 @@ def unconfigured_response(
             native_session_id,
             request_path=request_path(request),
             state="unconfigured",
+            trusted_server_runtime=security_policy.trusted_server_runtime,
         ),
         headers=edit_document_headers(security_policy),
     )

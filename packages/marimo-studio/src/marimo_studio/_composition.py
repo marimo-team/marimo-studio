@@ -45,8 +45,10 @@ from marimo_studio._server.ports import (
 from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.security import (
     ALLOWED_EMBED_ORIGINS_ENV,
+    TRUSTED_SERVER_RUNTIME_ENV,
     SecurityPolicy,
     parse_allowed_embed_origins,
+    parse_trusted_server_runtime,
 )
 
 
@@ -170,7 +172,11 @@ def create_server_adapters() -> ServerAdapters:
 
 def create_security_policy() -> SecurityPolicy:
     """Load the process security policy for one server composition."""
-    return parse_allowed_embed_origins(os.environ.get(ALLOWED_EMBED_ORIGINS_ENV, ""))
+    policy = parse_allowed_embed_origins(os.environ.get(ALLOWED_EMBED_ORIGINS_ENV, ""))
+    return SecurityPolicy(
+        policy.allowed_embed_origins,
+        parse_trusted_server_runtime(os.environ.get(TRUSTED_SERVER_RUNTIME_ENV, "")),
+    )
 
 
 def install_presentation_authorization() -> CloseHandle:
@@ -248,7 +254,12 @@ def programmatic_middleware(
     *,
     route_policy: StudioRoutePolicy | None = None,
 ) -> ASGIMiddlewareFactory:
-    """Construct the Marimo middleware for one programmatic notebook."""
+    """Construct Marimo middleware, using an explicit policy when supplied.
+
+    The environment policy is read only when ``security_policy`` is omitted.
+    Host applications that compose Studio programmatically therefore own the
+    complete policy they pass to this boundary.
+    """
     validate_marimo_release()
     from marimo_studio._compat.server.programmatic import programmatic_middleware
 

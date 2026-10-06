@@ -206,10 +206,21 @@ and diagnostic messages. The wrapper accepts child messages from
 the iframe window with origin `null` and parent messages from the same-origin
 Studio window.
 
-Presentation responses enforce a sandbox content security policy, a null-origin
-CORS audience, no referrer, and explicit exposed headers. Studio documents use
-no-store, `nosniff`, and same-origin referrer policy. The native editor bridge
-and outer edit documents use one `SecurityPolicy` for `frame-ancestors`.
+Trusted server deployments may set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1`.
+For a Server runtime, the view document renders directly on the host origin,
+the workspace preview omits the iframe sandbox, and presentation transport
+responses keep the host origin. The setting is process-wide and belongs to the
+deployment trust boundary. Browser and Prepared runtimes continue through the
+opaque-origin path.
+
+Presentation responses enforce a sandbox content security policy by default, a
+null-origin CORS audience, no referrer, and explicit exposed headers. Trusted
+Server runtime documents are the deliberate same-origin exception. They give
+authored code access to the host's cookies, local storage, parent document, and
+same-origin requests, so enable the policy only when that code shares the
+authenticated host's trust boundary. Studio documents use no-store,
+`nosniff`, and same-origin referrer policy. The native editor bridge and outer
+edit documents use one `SecurityPolicy` for `frame-ancestors`.
 Every document owner resolves it for its request through
 `PresentationMiddleware`. The policy always includes `'self'` and may include
 canonical origins loaded from `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` during

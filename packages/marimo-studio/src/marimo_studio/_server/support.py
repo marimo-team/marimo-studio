@@ -62,6 +62,7 @@ from marimo_studio._server.runtime.routes import (
     runtime_availability_response,
     runtime_config_response,
 )
+from marimo_studio._server.security import DEFAULT_SECURITY_POLICY, SecurityPolicy
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.streaming import OwnedStreamingResponse
 from marimo_studio._server.studio.document import studio_bootstrap_payload
@@ -112,6 +113,7 @@ async def support_response(
     runtimes: RuntimeRegistry,
     presentation_capability: PresentationCapability | None = None,
     presentation_view: str | None = None,
+    security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
 ) -> Response:
     """Dispatch one namespaced Studio support request."""
     if support_path.startswith("/assets/"):
@@ -171,6 +173,7 @@ async def support_response(
             notebook_scope,
             runtimes,
             session_state,
+            security_policy,
         )
     if (
         context.mode == "edit"
@@ -323,6 +326,7 @@ async def _bootstrap_response(
     notebook_scope: NotebookScope,
     runtimes: RuntimeRegistry,
     session_state: SessionState,
+    security_policy: SecurityPolicy,
 ) -> Response:
     client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
     if client_id is None or re.fullmatch(r"[A-Za-z0-9_-]{16,128}", client_id) is None:
@@ -379,6 +383,7 @@ async def _bootstrap_response(
             client_id,
             native_session_id,
             request_path=request_path(request),
+            trusted_server_runtime=security_policy.trusted_server_runtime,
         ),
         headers=NO_STORE,
     )

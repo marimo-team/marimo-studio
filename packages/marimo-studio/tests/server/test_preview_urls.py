@@ -17,6 +17,7 @@ from starlette.testclient import TestClient
 from marimo_studio._artifacts.lock import build_lock
 from marimo_studio._artifacts.publication import record_build_started
 from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.revisions import capture_source_snapshot
@@ -89,6 +90,31 @@ def test_wasm_preview_opens_without_an_editor_or_browser_client(
     assert "allow-same-origin" not in policy
     assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
+
+
+def test_trusted_server_waiting_preview_keeps_the_host_origin(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(
+        notebook_path,
+        programmatic=True,
+        security_policy=SecurityPolicy(trusted_server_runtime=True),
+    )
+    edit_mode(app)
+
+    with TestClient(app) as client:
+        waiting = client.get(
+            "/dashboard/",
+            params={
+                "runtime": "server",
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
+        )
+
+    assert waiting.status_code == 202
+    assert waiting.headers.get("content-security-policy") is None
 
 
 def test_preview_preserves_mounted_directory_notebook_routing(

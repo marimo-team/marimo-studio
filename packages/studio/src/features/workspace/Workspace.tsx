@@ -15,6 +15,7 @@ interface WorkspaceProps {
   editorWorkspace?: EditorWorkspace;
   frameRef: (frameId: string) => RefCallback<HTMLIFrameElement>;
   source: SourceController;
+  trustedServerRuntime: boolean;
   workspace: WorkspaceModel;
 }
 
@@ -23,6 +24,7 @@ export const Workspace = ({
   editorWorkspace,
   frameRef,
   source,
+  trustedServerRuntime,
   workspace,
 }: WorkspaceProps) => {
   const { actions, currentView, geometry, preview, ref, resizing } = workspace;
@@ -101,6 +103,7 @@ export const Workspace = ({
                   runtime={frame.runtime}
                   view={frame.view}
                   primary={frame.primary}
+                  sameOrigin={trustedServerRuntime && frame.runtime === "server"}
                   frameRef={frameRef(frame.id)}
                   src="about:blank"
                   title={`${frame.view ?? currentView} custom view using ${frame.runtime}`}

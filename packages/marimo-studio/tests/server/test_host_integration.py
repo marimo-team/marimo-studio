@@ -17,7 +17,11 @@ from marimo_studio._entrypoints import EDIT_ROOT_ENV, route_policy_from_environm
 from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.route_policy import StudioRoutePolicy
-from marimo_studio._server.security import Origin, SecurityPolicy
+from marimo_studio._server.security import (
+    TRUSTED_SERVER_RUNTIME_ENV,
+    Origin,
+    SecurityPolicy,
+)
 from marimo_studio._server.studio.session_handoff import (
     HostSessionTicket,
     host_session_handoff_capability_matches,
@@ -82,6 +86,22 @@ def test_explicit_host_enters_a_ready_workspace_through_studio(
 
     assert workspace.status_code == 200
     assert _studio_bootstrap(workspace)["selectedView"] == studio.default_view
+
+
+def test_trusted_server_runtime_marks_the_workspace_preview(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "1")
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook, programmatic=True, route_policy=_EXPLICIT_HOST)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        workspace = client.get("/studio/dashboard/?session_id=s_ready1")
+
+    assert workspace.status_code == 200
+    assert _studio_bootstrap(workspace)["trustedServerRuntime"] is True
 
 
 def test_explicit_host_handoff_uses_the_embedding_security_policy(

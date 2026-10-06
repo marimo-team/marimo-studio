@@ -93,6 +93,7 @@ class ReadyWorkspaceHandler:
     ) -> None:
         presentation = route.notebook_scope.presentation
         workspace = route.lifecycle.workspace
+        security_policy = self._resolve_security_policy(route.scope)
         artifact_response: Response | None = None
         try:
             redirect = (
@@ -142,6 +143,7 @@ class ReadyWorkspaceHandler:
                         runtimes=self._runtimes,
                         marimo_version=self._adapters.browser.version,
                         presentation_session=route.presentation_session,
+                        security_policy=security_policy,
                         trusted_shell=route.capability is None,
                     )
                 elif route.selected_studio is not None:
@@ -155,7 +157,7 @@ class ReadyWorkspaceHandler:
                         self._runtimes.options_for(workspace, route.context),
                         self._adapters.session_state,
                         route.notebook_scope.session_ids,
-                        self._resolve_security_policy(route.scope),
+                        security_policy,
                     )
                 elif route.selected_asset is not None:
                     response, artifact_response = await self._artifact_response(route)
@@ -181,6 +183,7 @@ class ReadyWorkspaceHandler:
                             if route.capability is not None
                             else None
                         ),
+                        security_policy=security_policy,
                     )
         except MarimoStudioError as error:
             response = error_response(
@@ -201,19 +204,32 @@ class ReadyWorkspaceHandler:
                 ),
                 lifecycle_id=request_lifecycle_id(route.request),
                 runtime=route.request.query_params.get("runtime", "server"),
-                security_policy=self._resolve_security_policy(route.scope),
+                security_policy=security_policy,
                 view_name=route.request_view,
             )
+        waiting_server = (
+            response.status_code == 202
+            and security_policy.trusted_server_runtime
+            and (route.request.query_params.get("runtime") or workspace.default_runtime)
+            == "server"
+        )
         if (
             route.selected_document is not None
             and route.context.mode == "edit"
             and studio_owned_request(route.request)
         ):
-            grant_capability_headers(response)
+            grant_capability_headers(
+                response,
+                sandbox=response.status_code != 200 and not waiting_server,
+            )
         if artifact_response is not None:
             grant_capability_headers(artifact_response)
         if route.capability is not None:
-            grant_capability_headers(response)
+            grant_capability_headers(
+                response,
+                sandbox=route.selected_document is None
+                or (response.status_code != 200 and not waiting_server),
+            )
         if artifact_response is not None:
             await _send_artifact_response(
                 artifact_response,

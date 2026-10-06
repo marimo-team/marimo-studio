@@ -10,6 +10,7 @@ const payload = {
   views: ["dashboard"],
   runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
+  trustedServerRuntime: false,
   clientId: "browser-client-1234",
   serverInstance: "server-instance",
   urls: {
@@ -44,6 +45,11 @@ describe("Studio bootstrap", () => {
         views: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views",
       },
     });
+  });
+
+  it("defaults the trusted runtime flag for older backends", () => {
+    const { trustedServerRuntime: _trustedServerRuntime, ...legacyPayload } = payload;
+    expect(parseStudioBootstrap(legacyPayload, documentUrl).trustedServerRuntime).toBe(false);
   });
 
   it("rejects selected views and runtimes outside their declared lists", () => {
