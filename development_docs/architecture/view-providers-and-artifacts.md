@@ -247,9 +247,10 @@ to that descriptor. A swapped ancestor either fails the walk or leaves the
 operation in the directory it resolved. A tree binds to the root directory its
 first verb opens, so a multi-step operation refuses to continue once the root
 path names another directory. Windows offers no descriptor-relative file API, so
-each verb checks the path for symlinks and junctions before it acts. A junction
-that replaces a checked ancestor between that check and the operation is not
-refused.
+each verb checks the path for symlinks and junctions before it acts. Data reparse
+points such as cloud files are reopened through the filesystem filter, while a
+junction that replaces a checked ancestor between that check and the operation
+is not refused.
 
 | Verb                    | Primitive                                                                                                               |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |

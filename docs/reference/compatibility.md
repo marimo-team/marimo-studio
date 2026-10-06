@@ -102,8 +102,12 @@ provides both:
 | Platform        | Supported workspace storage                                                                                     |
 | --------------- | --------------------------------------------------------------------------------------------------------------- |
 | Linux and macOS | Local ext4, XFS, Btrfs, or APFS disks, NFSv3 and NFSv4 shares, and [gVisor](https://gvisor.dev/) sandbox mounts |
-| Windows         | NTFS, ReFS, and SMB shares                                                                                      |
+| Windows         | NTFS, ReFS, SMB shares, and OneDrive or SharePoint-synced folders                                               |
 | WSL 2           | The Linux disk and NTFS drives mounted under `/mnt`                                                             |
+
+Windows cloud-sync folders use data reparse points for online files. Studio
+opens those entries through the cloud filter, while symlinks and junctions
+remain outside the workspace contract.
 
 Object-storage mounts such as [s3fs](https://github.com/s3fs-fuse/s3fs-fuse)
 and [rclone](https://rclone.org/commands/rclone_mount/) rewrite file timestamps
