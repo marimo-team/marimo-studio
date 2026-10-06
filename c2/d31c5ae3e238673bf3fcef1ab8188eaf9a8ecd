@@ -1,0 +1,40 @@
+skills/marimo-studio/references/lens.md
+  s_a009d87aa7587b::t_0513216cb0f0ae 31-32
+development_docs/architecture/marimo-integration.md
+  s_a009d87aa7587b::t_0513216cb0f0ae 334-336
+packages/marimo-studio/tests/server/test_host_integration.py
+  s_a009d87aa7587b::t_d84c4f8a31f797 91-94,98-99,101-103,112
+packages/marimo-studio/tests/server/test_security_policy.py
+  s_a009d87aa7587b::t_7ad6f550a15e08 55
+  s_a009d87aa7587b::t_d84c4f8a31f797 84
+packages/marimo-studio/src/marimo_studio/_server/presentation/access.py
+  s_a009d87aa7587b::t_6dad2ebb9dafd4 413
+  s_a009d87aa7587b::t_dbc5fb98701625 18,415
+  s_a009d87aa7587b::t_c07faf850e2554 414,416
+packages/marimo-studio/src/marimo_studio/_server/ready_handler.py
+  s_a009d87aa7587b::t_5dd8009960cdba 233
+  s_a009d87aa7587b::t_6dad2ebb9dafd4 210-211,215-218,226
+packages/marimo-studio/tests/server/test_presentation_transport.py
+  s_a009d87aa7587b::t_a645ffe54e18ae 28-29,32-33
+packages/marimo-studio/src/marimo_studio/_server/presentation/capability.py
+  s_a009d87aa7587b::t_6dad2ebb9dafd4 30-31
+packages/marimo-studio/tests/server/test_preview_urls.py
+  s_a009d87aa7587b::t_a645ffe54e18ae 95-96,98-99,107-142,144-173,176,184-186
+  s_a009d87aa7587b::t_35ab92034439fa 143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c2d31c5ae3e238673bf3fcef1ab8188eaf9a8ecd",
+  "prompts": {},
+  "sessions": {
+    "s_a009d87aa7587b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a10faa-fe1c-7e03-833e-31f03eabfc0a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
