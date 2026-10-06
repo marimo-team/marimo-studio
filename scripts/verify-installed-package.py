@@ -359,9 +359,9 @@ def main() -> None:
     installed_version = version(_DISTRIBUTION)
     marimo_export = distribution("marimo-export")
     marimo_export_version = marimo_export.version
-    if marimo_export_version not in SpecifierSet(">=0.1.2"):
+    if marimo_export_version not in SpecifierSet(">=0.1.3"):
         raise AssertionError(
-            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.2"
+            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.3"
         )
     if marimo_export.read_text("direct_url.json") is not None:
         raise AssertionError("Installed marimo-export came from a direct source")
