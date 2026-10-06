@@ -15,7 +15,7 @@ from tomlkit import TOMLDocument
 
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._notebook.records import CellRef
-from marimo_studio._workspace.python_project import owning_project
+from marimo_studio._workspace.python_project import project_environment
 from marimo_studio._workspace.python_requirement import (
     intersect_python_requirements,
 )
@@ -544,7 +544,7 @@ def configured_notebook_source(
     else:
         config.setdefault("default", default_view)
         config.setdefault("cells", tomlkit.table())
-    if "dependencies" in document or owning_project(path) is None:
+    if "dependencies" in document or project_environment(path) is None:
         _set_provider_dependency_ownership(
             document,
             config,

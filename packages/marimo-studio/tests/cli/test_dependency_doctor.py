@@ -327,3 +327,41 @@ def test_dependency_doctor_rejects_undeclared_packages_in_project_venv(
     assert report["imports"][0]["available"]
     assert not report["imports"][0]["local"]
     assert {issue["code"] for issue in report["issues"]} == {"undeclared-import"}
+
+
+def test_dependency_doctor_accepts_conda_packages_a_pixi_workspace_declares(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    site_packages = (
+        tmp_path / ".pixi" / "envs" / "default" / "lib" / "python3.12" / "site-packages"
+    )
+    site_packages.mkdir(parents=True)
+    (site_packages / "conda_package.py").write_text(
+        'raise RuntimeError("do not import")\n'
+    )
+    metadata = site_packages / "conda_package-1.0.dist-info"
+    metadata.mkdir()
+    (metadata / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: conda-package\nVersion: 1.0\n"
+    )
+    (metadata / "top_level.txt").write_text("conda_package\n")
+    monkeypatch.syspath_prepend(str(site_packages))
+    (tmp_path / "pixi.toml").write_text(
+        '[workspace]\nname = "analysis"\nchannels = ["conda-forge"]\n'
+        'platforms = ["linux-64"]\n\n'
+        '[dependencies]\npython = "3.12.*"\nconda-package = "*"\n\n'
+        '[pypi-dependencies]\nmarimo = "*"\n'
+    )
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        "# /// script\n# dependencies = []\n# ///\n"
+        "import marimo\nimport conda_package\n"
+    )
+    result = CliRunner().invoke(
+        cli, ["doctor", "--dependencies", "--target", str(notebook), "--json"]
+    )
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.stdout)
+    assert report["project"] == str(tmp_path / "pixi.toml")
+    assert report["declarations"]["project"] == ["marimo"]

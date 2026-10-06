@@ -1,8 +1,15 @@
-"""Resolve and enter the uv environment selected by a CLI target."""
+"""Resolve the environment that owns a CLI target and re-enter it.
+
+uv projects and standalone notebooks re-enter through `uv run`. A pixi
+workspace runs Studio in place: pixi activates the workspace environment,
+which provides Studio, its providers, and their system tools, so Studio
+requires that it already runs there instead of starting another process.
+"""
 
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -44,10 +51,12 @@ from marimo_studio._workspace.installation import invoking_studio
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.models import NotebookEnvironment, StudioWorkspace
 from marimo_studio._workspace.python_project import (
-    declares_project_environment as _declares_project_environment,
+    ProjectEnvironment,
+    has_project_environment,
+    project_environment,
 )
 from marimo_studio._workspace.python_project import (
-    has_project_environment,
+    declares_project_environment as _declares_project_environment,
 )
 from marimo_studio._workspace.python_project import (
     project_metadata as _project_metadata,
@@ -58,6 +67,16 @@ from marimo_studio.view_providers._host.package_policy import (
 )
 
 SANDBOX_ENV = "MARIMO_STUDIO_SANDBOX_BOOTSTRAPPED"
+# Activation state from an enclosing virtual, conda, or pixi environment. A uv
+# child started from it would otherwise adopt that environment's interpreter.
+_ACTIVATION_ENV = (
+    "CONDA_DEFAULT_ENV",
+    "CONDA_PREFIX",
+    "PIXI_ENVIRONMENT_NAME",
+    "PIXI_PROJECT_MANIFEST",
+    "PIXI_PROJECT_ROOT",
+    "VIRTUAL_ENV",
+)
 _RESULT_CHANNEL_ENV = "MARIMO_STUDIO_RESULT_CHANNEL"
 _DIAGNOSTIC_CHANNEL_ENV = "MARIMO_STUDIO_DIAGNOSTIC_CHANNEL"
 _STUDIO_DISTRIBUTION = canonicalize_name("marimo-studio")
@@ -105,6 +124,48 @@ def include_provider_ids(
         root=target.root,
         notebook=target.notebook,
         provider_ids=tuple(sorted({*existing, *provider_ids})),
+    )
+
+
+def shell_command(arguments: list[str]) -> str:
+    """Quote a command for the current platform's shell."""
+    if os.name == "nt":
+        return subprocess.list2cmdline(arguments)
+    return shlex.join(arguments)
+
+
+def pixi_run_command(project: ProjectEnvironment, arguments: list[str]) -> list[str]:
+    """Return the command that runs an executable in a pixi workspace."""
+    return ["pixi", "run", "--manifest-path", str(project.manifest), "-x", *arguments]
+
+
+def _runs_in(project: ProjectEnvironment) -> bool:
+    manifest = os.environ.get("PIXI_PROJECT_MANIFEST")
+    prefix = os.environ.get("CONDA_PREFIX")
+    return (
+        manifest is not None
+        and prefix is not None
+        and Path(manifest).resolve() == project.manifest.resolve()
+        and Path(prefix).resolve() == Path(sys.prefix).resolve()
+    )
+
+
+def _runs_in_pixi_workspace(target: EnvironmentTarget) -> bool:
+    """Return whether a pixi workspace owns the target, which Studio runs in.
+
+    Raises ``DependencyError`` with the command to use when a pixi workspace
+    owns the target and Studio runs outside its activated environment.
+    """
+    project = project_environment(target.notebook)
+    if project is None or project.manager != "pixi":
+        return False
+    if _runs_in(project):
+        return True
+    command = shell_command(pixi_run_command(project, ["marimo-studio", *sys.argv[1:]]))
+    raise DependencyError(
+        f"{target.notebook.name} uses the pixi workspace at {project.root}, and "
+        f"Studio is running outside it. Run `{command}`. The workspace must "
+        'declare Studio, for example with `pixi add --pypi "marimo-studio"`.'
     )
 
 
@@ -374,7 +435,7 @@ def _installed_requirement_satisfies(value: str) -> bool:
 
 def provider_bootstrap_required(target: EnvironmentTarget) -> bool:
     """Return whether configured providers require environment re-entry."""
-    if os.environ.get(SANDBOX_ENV) == "1":
+    if os.environ.get(SANDBOX_ENV) == "1" or _runs_in_pixi_workspace(target):
         return False
     root = environment_root(target)
     project_metadata = _project_metadata(root)
@@ -392,7 +453,7 @@ def provider_bootstrap_required(target: EnvironmentTarget) -> bool:
 
 
 def should_reenter(target: EnvironmentTarget, requested: bool | None) -> bool:
-    if os.environ.get(SANDBOX_ENV) == "1":
+    if os.environ.get(SANDBOX_ENV) == "1" or _runs_in_pixi_workspace(target):
         return False
     if requested is not None:
         return requested
@@ -636,7 +697,8 @@ def run_in_notebook_environment(
     """Re-enter the CLI through the notebook's Python environment."""
     child_env = os.environ.copy()
     child_env[SANDBOX_ENV] = "1"
-    child_env.pop("VIRTUAL_ENV", None)
+    for name in _ACTIVATION_ENV:
+        child_env.pop(name, None)
     child_env.pop(_RESULT_CHANNEL_ENV, None)
     child_env.pop(_DIAGNOSTIC_CHANNEL_ENV, None)
     command = environment_command(

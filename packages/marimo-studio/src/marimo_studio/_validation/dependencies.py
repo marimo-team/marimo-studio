@@ -20,7 +20,11 @@ from marimo_studio._workspace.config import (
     discover_views,
 )
 from marimo_studio._workspace.metadata import read_notebook_metadata
-from marimo_studio._workspace.python_project import owning_project, project_metadata
+from marimo_studio._workspace.python_project import (
+    pixi_declarations,
+    project_environment,
+    project_metadata,
+)
 from marimo_studio.errors import (
     ConfigurationError,
     MarimoStudioError,
@@ -227,18 +231,25 @@ def _import_resolutions(
 def diagnose_dependencies(notebook: Path) -> DependencyReport:
     """Inspect project and notebook dependencies without executing notebook cells."""
     inline = read_notebook_metadata(notebook) or {}
-    root = owning_project(notebook)
+    owner = project_environment(notebook)
+    root = owner.root if owner is not None else None
     metadata = project_metadata(root) if root is not None else None
     project = metadata.get("project", {}) if metadata else {}
-    project_values = (
-        project.get("dependencies", ()) if isinstance(project, Mapping) else ()
-    )
+    conda_packages: frozenset[str] = frozenset()
+    if owner is not None and owner.manager == "pixi":
+        project_values, conda_packages = pixi_declarations(owner)
+    else:
+        project_values = (
+            project.get("dependencies", ()) if isinstance(project, Mapping) else ()
+        )
     declarations = {
         "notebook": _requirements(inline.get("dependencies", ())),
         "project": _requirements(project_values),
     }
     issues: list[DependencyIssue] = []
-    if root is not None and "dependencies" in inline:
+    # pixi workspaces also install conda packages, which PyPI requirements in
+    # the notebook cannot be compared with.
+    if owner is not None and owner.manager == "uv" and "dependencies" in inline:
         sandbox, owning = (
             _by_name(declarations[key]) for key in ("notebook", "project")
         )
@@ -288,13 +299,17 @@ def diagnose_dependencies(notebook: Path) -> DependencyReport:
                 )
             )
     environment = _installed_requirements(declarations["providers"], issues, installed)
-    declared = set(authored) | set(environment)
+    declared = (
+        set(authored)
+        | set(environment)
+        | {canonicalize_name(name) for name in conda_packages}
+    )
     if isinstance(project, Mapping) and isinstance(project.get("name"), str):
         declared.add(canonicalize_name(project["name"]))
     imports = _import_resolutions(notebook, root, declared, issues)
     return DependencyReport(
         notebook=notebook,
-        project=root / "pyproject.toml" if root else None,
+        project=owner.manifest if owner is not None else None,
         python=sys.executable,
         declarations={
             source: tuple(map(str, values)) for source, values in declarations.items()

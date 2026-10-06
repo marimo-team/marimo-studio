@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
-import shlex
-import subprocess
 from typing import Any
 
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._cli.diagnostics import diagnostics
-from marimo_studio._cli.environment import environment_command
+from marimo_studio._cli.environment import (
+    environment_command,
+    pixi_run_command,
+    shell_command,
+)
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
 from marimo_studio._delivery.export import StaticExportResult
 from marimo_studio._delivery.preflight import StaticPreflightReport
@@ -24,13 +25,7 @@ from marimo_studio._views.records import (
     ViewSetupResult,
 )
 from marimo_studio._workspace.models import BindingResult
-from marimo_studio._workspace.python_project import owning_project
-
-
-def _shell_command(arguments: list[str]) -> str:
-    if os.name == "nt":
-        return subprocess.list2cmdline(arguments)
-    return shlex.join(arguments)
+from marimo_studio._workspace.python_project import project_environment
 
 
 def _uvx_command(
@@ -47,7 +42,7 @@ def _uvx_command(
             continue
         command.extend(["--with", requirement])
     command.extend(arguments)
-    return _shell_command(command)
+    return shell_command(command)
 
 
 def echo_error(message: str) -> None:
@@ -86,14 +81,21 @@ def render_view_next_command(result: ViewSetupResult) -> None:
     """Show the next command after a completed view creation."""
     if result.dry_run:
         return
-    project = owning_project(result.notebook)
+    project = project_environment(result.notebook)
     if project is None:
         command = _uvx_command(
             result.launch_requirements,
             ["marimo", "edit", str(result.notebook), "--sandbox", "--watch"],
         )
+    elif project.manager == "pixi":
+        command = shell_command(
+            pixi_run_command(
+                project,
+                ["marimo", "edit", str(result.notebook), "--no-sandbox", "--watch"],
+            )
+        )
     else:
-        command = _shell_command(
+        command = shell_command(
             environment_command(
                 result,
                 ["marimo", "edit", str(result.notebook), "--no-sandbox", "--watch"],
@@ -253,7 +255,7 @@ def render_static_export(result: StaticExportResult) -> None:
     for warning in result.warnings:
         echo(f"  {yellow('warning')} {warning.code}: {warning.message}")
     echo(f"  {light_blue('open')} {result.entrypoint}")
-    command = _shell_command(
+    command = shell_command(
         [
             "python",
             "-m",
