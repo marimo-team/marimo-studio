@@ -148,7 +148,7 @@ esac
     )
 
     completed = subprocess.run(
-        [script],
+        [script, "0.1.0"],
         capture_output=True,
         text=True,
         check=False,
@@ -157,7 +157,6 @@ esac
             **os.environ,
             "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
             "PROBE_COUNT": str(probe_count),
-            "RELEASE_VERSION": "0.1.0",
             "UV_CALLS": str(calls),
         },
     )

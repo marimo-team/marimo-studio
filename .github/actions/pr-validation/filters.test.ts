@@ -134,6 +134,20 @@ test("platform workflow changes own every platform contract", () => {
   assert.equal(matches("platform_control", ".github/workflows/pages.yml"), false);
 });
 
+test("publication script changes run their shell-boundary tests", () => {
+  for (const path of [
+    "scripts/check-release.sh",
+    "scripts/preview-version.sh",
+    "scripts/publish-preview.sh",
+    "scripts/release.sh",
+    "scripts/require-release-checks.sh",
+    "scripts/verify-pypi.sh",
+    "scripts/write-dist-checksums.py",
+  ]) {
+    assert.equal(matches("python_contracts", path), true, path);
+  }
+});
+
 test("portable product changes defer platform contracts until after merge", () => {
   for (const path of [
     "packages/marimo-studio/src/marimo_studio/_projections/resolution.py",

@@ -1,22 +1,46 @@
 name: Publish package
 
+# A vX.Y.Z tag publishes that release to PyPI. A main commit publishes a preview
+# wheel to the `preview` GitHub release once CI, Browser acceptance, Platform
+# acceptance, and GitHub Pages pass for it. Both channels build and attest the
+# package the same way.
 on:
   push:
     tags:
       - "v[0-9]*.[0-9]*.[0-9]*"
+  workflow_run:
+    workflows: [CI, Browser acceptance, Platform acceptance, GitHub Pages]
+    types: [completed]
+    branches: [main]
 
 permissions:
   actions: read
   contents: read
 
+# Releases publish one at a time. Each main commit queues its four workflow
+# completions so a pending check never replaces the one that publishes.
 concurrency:
-  group: publish
+  group: >-
+    ${{ github.event_name == 'push' && 'publish-release' ||
+    format('publish-preview-{0}', github.event.workflow_run.head_sha) }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
-  build:
+  resolve:
+    name: Resolve publication
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      channel: ${{ steps.release.outputs.channel || steps.preview.outputs.channel }}
+      commit: ${{ steps.release.outputs.commit || steps.preview.outputs.commit }}
+      version: ${{ steps.release.outputs.version || steps.preview.outputs.version }}
+      publish: ${{ steps.release.outputs.publish || steps.preview.outputs.publish }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,10 +49,64 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv
+        if: github.event_name == 'push'
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      - name: Verify release commit
+        id: release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/check-release.sh
+          printf 'channel=release\ncommit=%s\nversion=%s\npublish=true\n' \
+            "$GITHUB_SHA" "${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check preview readiness
+        id: preview
+        if: github.event_name == 'workflow_run'
+        env:
+          COMMIT: ${{ github.event.workflow_run.head_sha }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(./scripts/preview-version.sh "$COMMIT")"
+          printf 'channel=preview\ncommit=%s\nversion=%s\n' "$COMMIT" "$version" >> "$GITHUB_OUTPUT"
+          if ! ./scripts/require-release-checks.sh "$COMMIT"; then
+            echo "::notice::The $version preview waits until every main workflow passes for $COMMIT."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif assets="$(gh release view preview --json assets --jq '.assets[].name' 2>/dev/null)" &&
+            grep -qxF "marimo_studio-$version-py3-none-any.whl" <<<"$assets"; then
+            echo "::notice::marimo-studio $version is already published as a preview."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build package
+    needs: resolve
+    if: needs.resolve.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          persist-credentials: false
+
+      - name: Set up uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+
+      - name: Set the preview version
+        if: needs.resolve.outputs.channel == 'preview'
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: uv version --package marimo-studio --no-sync "$VERSION"
 
       - name: Install Python dependencies
         run: uv sync --locked
@@ -38,15 +116,10 @@ jobs:
         with:
           prepare-marimo-frontend: "true"
 
-      - name: Verify release commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ./scripts/check-release.sh
-
-      - name: Build release
+      - name: Build and verify distributions
         run: make package
 
-      - name: Upload package artifact
+      - name: Upload distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
@@ -69,7 +142,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Download package artifact
+      - name: Download distributions
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
@@ -82,8 +155,10 @@ jobs:
             dist/marimo_studio-*.whl
             dist/marimo_studio-*.tar.gz
 
-  publish:
-    needs: attest
+  pypi:
+    name: Publish to PyPI
+    needs: [resolve, attest]
+    if: needs.resolve.outputs.channel == 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -100,7 +175,7 @@ jobs:
           enable-cache: false
           version: "0.12.7"
 
-      - name: Download package artifact
+      - name: Download distributions
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
@@ -114,7 +189,8 @@ jobs:
           dist/marimo_studio-*.tar.gz
 
   verify-pypi:
-    needs: publish
+    name: Verify PyPI release
+    needs: [resolve, pypi]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -127,11 +203,13 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       - name: Verify the public PyPI release
-        run: ./scripts/verify-pypi.sh
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: ./scripts/verify-pypi.sh "$VERSION"
 
   release-notes:
     name: Release notes
-    needs: [publish, verify-pypi]
+    needs: [pypi, verify-pypi]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -143,7 +221,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download package artifact
+      - name: Download distributions
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
@@ -174,3 +252,41 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+
+  preview:
+    name: Publish preview
+    needs: [resolve, attest]
+    if: needs.resolve.outputs.channel == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Every preview edits the same release, so uploads, notes, and pruning run
+    # one commit at a time.
+    concurrency:
+      group: publish-preview-release
+      cancel-in-progress: false
+      queue: max
+    environment:
+      name: preview
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/preview
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish the preview wheel
+        env:
+          COMMIT: ${{ needs.resolve.outputs.commit }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/publish-preview.sh dist/marimo_studio-*.whl "$COMMIT"
