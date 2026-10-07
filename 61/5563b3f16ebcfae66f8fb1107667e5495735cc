@@ -1,0 +1,28 @@
+packages/presentation/tests/runtime-config.test.ts
+  s_f9539e858c2d0e::t_9c93a166aec6f6 427
+  s_f9539e858c2d0e::t_648002f14ebad7 407
+packages/presentation/src/runtime-config/remote.ts
+  s_f9539e858c2d0e::t_78fd95fc6fd261 147-148
+apps/e2e/unit/browser-response-expectations.test.ts
+  s_f9539e858c2d0e::t_d18bc296f77aa1 87,89-96,98-108
+  s_f9539e858c2d0e::t_fadc5d6dc1c87e 88,97
+apps/e2e/tests/browser-response-expectations.ts
+  s_f9539e858c2d0e::t_d18bc296f77aa1 95,100
+  s_f9539e858c2d0e::t_648002f14ebad7 112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "615563b3f16ebcfae66f8fb1107667e5495735cc",
+  "prompts": {},
+  "sessions": {
+    "s_f9539e858c2d0e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a11621-0201-7b51-8514-6b8cd59694bf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
