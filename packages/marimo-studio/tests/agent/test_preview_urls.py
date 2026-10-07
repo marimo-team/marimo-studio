@@ -13,6 +13,8 @@ from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import ProtocolError, ViewGenerationConflictError
 
+from ..helpers import write_marimohub_context
+
 
 def test_saved_view_resolves_a_plain_url_with_connection_routing(
     notebook_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -100,6 +102,91 @@ def test_current_view_infers_its_attached_server(
         agent.current_workspace().view("dashboard").preview_url(runtime="server")
     )
     assert url.startswith("http://localhost:2718/dashboard/")
+
+
+@pytest.mark.parametrize(
+    ("public_url", "server", "expected"),
+    [
+        (
+            "https://hub.example/proxy/token/",
+            "http://127.0.0.1:2718/proxy/token",
+            "https://hub.example/proxy/token/",
+        ),
+        (
+            "https://hub.example/marimohub/proxy/token",
+            "http://localhost:2718/marimohub/proxy/token",
+            "https://hub.example/marimohub/proxy/token/",
+        ),
+        (
+            "https://sbx-1.sandbox.example/",
+            "http://127.0.0.1:2718",
+            "https://sbx-1.sandbox.example/",
+        ),
+        (
+            "https://hub.example/proxy/token/",
+            "http://127.0.0.1:2719/other",
+            "http://127.0.0.1:2719/other/",
+        ),
+        (
+            "https://hub.example/proxy/token/?access_token=secret",
+            "http://127.0.0.1:2718/proxy/token",
+            "http://127.0.0.1:2718/proxy/token/",
+        ),
+    ],
+)
+def test_current_view_preview_uses_the_marimohub_public_address(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    public_url: str,
+    server: str,
+    expected: str,
+) -> None:
+    write_marimohub_context(tmp_path, monkeypatch, public_url=public_url)
+    workspace = authoring.open_workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+    connection = StudioServerConnection(server, session_id="s_123456")
+    monkeypatch.setattr(
+        "marimo_studio._composition.create_code_mode_bridge",
+        lambda: SimpleNamespace(
+            active_notebook=lambda: notebook_path.resolve(),
+            connection=lambda: connection,
+        ),
+    )
+
+    async def request(_connection, _path, *, query):
+        return "../../../dashboard/?runtime=server&marimo_studio_unframed=1"
+
+    monkeypatch.setattr("marimo_studio._authoring.preview.request_text", request)
+    url = asyncio.run(
+        agent.current_workspace().view("dashboard").preview_url(runtime="server")
+    )
+    assert url == f"{expected}dashboard/?runtime=server&marimo_studio_unframed=1"
+
+
+def test_explicit_server_preview_keeps_its_address_in_a_hub_session(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_marimohub_context(
+        tmp_path,
+        monkeypatch,
+        public_url="https://sbx-1.sandbox.example/",
+        exposure_mode="subdomain",
+    )
+    view = asyncio.run(authoring.open_workspace(notebook_path).create_view("dashboard"))
+
+    async def request(_connection, _path, *, query):
+        return "../../../dashboard/?runtime=server&marimo_studio_unframed=1"
+
+    monkeypatch.setattr("marimo_studio._authoring.preview.request_text", request)
+    url = asyncio.run(
+        view.preview_url(runtime="server", server="http://127.0.0.1:2718")
+    )
+    assert url == (
+        "http://127.0.0.1:2718/dashboard/?runtime=server&marimo_studio_unframed=1"
+    )
 
 
 @pytest.mark.parametrize("when", ["before-request", "during-request"])

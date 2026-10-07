@@ -246,7 +246,7 @@ class HostEntryHandler:
         return (
             scope["type"] == "http"
             and scope.get("method") in {"GET", "HEAD"}
-            and is_studio_route(relative, "edit")
+            and is_studio_route(relative)
             and has_read_access(scope)
             and not has_access_token(scope)
         )

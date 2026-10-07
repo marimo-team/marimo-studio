@@ -69,6 +69,19 @@ def filesystem_shape(
     return shape
 
 
+@pytest.fixture(autouse=True)
+def outside_marimohub() -> Iterator[None]:
+    """Run each test outside a marimohub session unless the test publishes one.
+
+    A private MonkeyPatch keeps the test's own ``monkeypatch`` teardown order,
+    which module fixtures that restore process globals depend on.
+    """
+    with pytest.MonkeyPatch.context() as environment:
+        environment.delenv("MARIMOHUB_CONTEXT_FILE", raising=False)
+        environment.delenv("MARIMOHUB_KERNEL_URL", raising=False)
+        yield
+
+
 @pytest.fixture(autouse=True, scope="session")
 def export_repository(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     repository = tmp_path_factory.mktemp("marimo-export-repository")

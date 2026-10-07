@@ -44,7 +44,7 @@ from marimo_studio._server.lifecycle_handler import (
     LifecycleRouteHandler,
 )
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
-from marimo_studio._server.pages import authentication_redirect
+from marimo_studio._server.pages import authentication_redirect, run_view_redirect
 from marimo_studio._server.ports import ServerAdapters
 from marimo_studio._server.presentation.access import (
     PresentationCapabilityHandler,
@@ -75,6 +75,7 @@ from marimo_studio._server.routing import (
     document_view,
     is_studio_landing,
     is_support_route,
+    run_view_target,
     studio_view,
     view_asset,
     view_route_alias,
@@ -392,6 +393,15 @@ class PresentationMiddleware:
             await self.app(scope, receive, send)
             return
 
+        run_target = run_view_target(relative, location.mode)
+        if run_target is not None:
+            if presentation_access or request.method not in {"GET", "HEAD"}:
+                await self.app(scope, receive, send)
+            else:
+                await _send_studio_response(
+                    run_view_redirect(request, run_target), scope, receive, send
+                )
+            return
         landing = is_studio_landing(relative, location.mode)
         if landing and request.method not in {"GET", "HEAD"}:
             await self.app(scope, receive, send)

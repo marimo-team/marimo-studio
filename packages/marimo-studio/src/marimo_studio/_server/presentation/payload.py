@@ -78,6 +78,7 @@ def render_presentation_document(
     client_id: str | None = None,
     lifecycle_id: int | None = None,
     editor_session_id: str | None = None,
+    host_head: str | None = None,
 ) -> str:
     """Render the document served at app path `request_path`.
 
@@ -127,6 +128,7 @@ def render_presentation_document(
         lifecycle_id=lifecycle_id,
         runtime_session_id=runtime_session_id if runtime == "server" else None,
         icon_url=relative_url(root, "/favicon.ico"),
+        host_head=host_head,
     )
 
 

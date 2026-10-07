@@ -155,6 +155,8 @@ def render_status(result: StudioOverview) -> None:
         echo(f"  {light_blue('runtime')} {result.default_runtime}")
     if result.runtimes:
         echo(f"  {light_blue('runtimes')} {', '.join(result.runtimes)}")
+    if result.persistence is not None:
+        echo(f"  {light_blue('persistence')} {result.persistence}")
     if result.bindings:
         echo(f"  {light_blue('aliases')}")
         for alias, ref in sorted(result.bindings.items()):

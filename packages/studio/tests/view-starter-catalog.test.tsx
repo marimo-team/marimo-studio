@@ -172,3 +172,34 @@ it("shows the folder where a new view's files are created", async () => {
   expect(files).toHaveTextContent("__marimo__/studio/analysis/briefing/");
   controller.dispose();
 });
+
+it.each([
+  ["source", "View files are lost when this session ends"],
+  ["none", "View files are lost when this session ends"],
+  ["workspace", null],
+  [null, null],
+] as const)("describes Create with what a %s hub session keeps", async (persistence, notice) => {
+  const remote: ViewRemote = {
+    list: vi.fn(async () => ({ ...viewList(["dashboard"]), persistence })),
+    create: vi.fn(),
+    remove: vi.fn(),
+  };
+  const controller = new ViewController(
+    "dashboard",
+    ["dashboard"],
+    remote,
+    vi.fn(async () => true),
+    vi.fn(async () => true),
+    vi.fn(),
+  );
+  const user = userEvent.setup();
+  render(<ViewMenu controller={controller} />);
+
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
+  await screen.findByRole("radio", { name: /HTML/ });
+
+  const create = screen.getByRole("button", { name: "Create" });
+  expect(create).toHaveAccessibleDescription(notice ? expect.stringContaining(notice) : "");
+  controller.dispose();
+});

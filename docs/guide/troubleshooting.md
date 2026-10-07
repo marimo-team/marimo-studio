@@ -131,6 +131,9 @@ requires a cookie on every request rejects these requests. For trusted
 notebooks and views, set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` in the Studio
 process and restart it, as
 [Run as an ASGI application](deploy.md#run-as-an-asgi-application) describes.
+In marimohub, add the setting to the project's **Environment variables**
+integration, as [Serve Preview behind a
+sign-in](marimohub.md#serve-preview-behind-a-sign-in) describes.
 
 ## The Browser runtime does not start
 

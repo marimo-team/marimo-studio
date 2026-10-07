@@ -1,5 +1,5 @@
 import type { Starter } from "@marimo-studio/protocol/provider-catalog";
-import type { ViewList } from "@marimo-studio/protocol/views";
+import type { HostPersistence, ViewList } from "@marimo-studio/protocol/views";
 
 import type { ViewRemote } from "./remote.ts";
 
@@ -17,6 +17,7 @@ export interface StarterCatalogSnapshot {
   starters: readonly Starter[];
   defaultStarter: string;
   viewRoot: string;
+  persistence: HostPersistence;
 }
 
 type Listener = () => void;
@@ -40,6 +41,7 @@ export class StarterCatalogController {
       starters: initialStarters,
       defaultStarter: initialDefaultStarter,
       viewRoot: "",
+      persistence: null,
     };
   }
 
@@ -77,7 +79,10 @@ export class StarterCatalogController {
   }
 
   accept(
-    inventory: Pick<ViewList, "default_starter" | "generation" | "starters" | "view_root">,
+    inventory: Pick<
+      ViewList,
+      "default_starter" | "generation" | "persistence" | "starters" | "view_root"
+    >,
   ): void {
     if (this.disposed) {
       return;
@@ -89,6 +94,7 @@ export class StarterCatalogController {
       starters: inventory.starters,
       defaultStarter: inventory.default_starter,
       viewRoot: inventory.view_root,
+      persistence: inventory.persistence,
     });
   }
 
@@ -117,6 +123,7 @@ export class StarterCatalogController {
         starters: inventory.starters,
         defaultStarter: inventory.default_starter,
         viewRoot: inventory.view_root,
+        persistence: inventory.persistence,
       });
       return inventory;
     } catch (cause) {

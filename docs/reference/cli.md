@@ -106,7 +106,11 @@ marimo-studio status [--target PATH] [--json]
 
 Returns the notebook, active configuration source, default view, allowed
 runtimes, cell aliases, named views, and exact `launch_requirements` for Studio
-and configured provider distributions. An unconfigured notebook includes the
+and configured provider distributions. In a
+[marimohub](../guide/marimohub.md) session, `persistence` reports which files
+the hub saves when the session ends. It is `null` outside marimohub and before
+the hub publishes the session. An
+unconfigured notebook includes the
 command that creates its first view. The command inspects every configured view
 through its provider.
 
@@ -324,8 +328,9 @@ returns a JSON string. Open it with your preferred browser tool. The URL keeps
 the origin and path of `--server`, including a proxy path prefix. The CLI sends
 its own request to that server URL. When it reaches the server through a local
 address, open the same path beneath the browser's public root. The server must
-expose the requested runtime. Edit-mode Python previews require an open
-notebook session. Use `MARIMO_STUDIO_SERVER_URL` to supply the server URL and
+expose the requested runtime. Edit-mode
+Python previews require an open notebook session. Use
+`MARIMO_STUDIO_SERVER_URL` to supply the server URL and
 `MARIMO_STUDIO_ACCESS_TOKEN` to authenticate the request when needed. The
 browser requires its own normal server authentication.
 

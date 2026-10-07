@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 import shutil
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
@@ -99,6 +101,48 @@ def test_provider_build_reads_one_immutable_input_snapshot(
         document = lease.read_text(lease.artifact.document)
 
     assert document == source_a
+
+
+def test_build_tags_its_cache_and_staging_directories(tmp_path: Path) -> None:
+    project = make_project(tmp_path)
+    cache = artifact_root(project) / ".cache"
+    cache.mkdir(parents=True)
+    (cache / "CACHEDIR.TAG").write_bytes(b"written by a provider\n")
+
+    with publish_artifact_lease(project, "development"):
+        pass
+
+    for directory in (".cache", ".staging"):
+        tag = artifact_root(project) / directory / "CACHEDIR.TAG"
+        assert tag.read_bytes().startswith(
+            b"Signature: 8a477f597d28d172789f06886806bc55"
+        )
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="directory modes do not restrict writes on Windows or for root",
+)
+def test_build_publishes_when_the_provider_cache_cannot_be_tagged(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    project = make_project(tmp_path)
+    cache = artifact_root(project) / ".cache"
+    cache.mkdir(parents=True)
+    cache.chmod(0o500)
+    try:
+        with (
+            caplog.at_level(logging.WARNING, logger="marimo.studio"),
+            publish_artifact_lease(project, "development") as lease,
+        ):
+            document = lease.read_text(lease.artifact.document)
+    finally:
+        cache.chmod(0o700)
+
+    assert "<main" in document
+    assert not (cache / "CACHEDIR.TAG").exists()
+    assert "Check that the directory is writable" in caplog.text
 
 
 def test_build_request_receives_the_owner_cancellation(

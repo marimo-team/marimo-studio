@@ -183,11 +183,13 @@ def runtime_document(
     runtime_entry: str = "runtime.js",
     runtime_styles: tuple[str, ...] = ("runtime.css",),
     icon_url: str | None = None,
+    host_head: str | None = None,
 ) -> str:
     """Inject one presentation runtime into an authored view document.
 
     `icon_url` declares the server's favicon ahead of authored head content,
-    so an authored icon still takes precedence.
+    so an authored icon still takes precedence. `host_head` carries the trusted
+    head markup that a notebook host adds to marimo's own pages.
     """
     parser = HTMLDocumentParser()
     parser.feed(document)
@@ -227,6 +229,7 @@ def runtime_document(
             )
         )
         + "\n"
+        + (f"{host_head}\n" if host_head else "")
     )
     body_content = (
         "\n" + render(runtime_root()) + "\n" + render(runtime_metadata(filename)) + "\n"

@@ -6,7 +6,11 @@ from pathlib import Path
 
 from marimo_studio._artifacts.repository import read_artifact_state
 from marimo_studio._views.inspection import inspect_view_project_sync
-from marimo_studio._views.records import StudioOverview, ViewOverview
+from marimo_studio._views.records import (
+    HostPersistence,
+    StudioOverview,
+    ViewOverview,
+)
 from marimo_studio._workspace.config import (
     canonical_view_root,
     discover_studio_definition,
@@ -24,8 +28,15 @@ from marimo_studio.view_providers._host.requirements import (
 )
 
 
-def overview(notebook: str | Path) -> StudioOverview:
-    """Return Studio configuration and view state for a saved notebook."""
+def overview(
+    notebook: str | Path,
+    *,
+    persistence: HostPersistence | None,
+) -> StudioOverview:
+    """Return Studio configuration and view state for a saved notebook.
+
+    ``persistence`` is what the notebook's host saves when the session ends.
+    """
     notebook_path = Path(notebook).expanduser().resolve()
     if not notebook_path.is_file():
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
@@ -47,6 +58,7 @@ def overview(notebook: str | Path) -> StudioOverview:
             bindings={},
             views=(),
             launch_requirements=resolve_launch_requirements(()),
+            persistence=persistence,
         )
 
     discovered = discover_views(definition.view_root)
@@ -114,4 +126,5 @@ def overview(notebook: str | Path) -> StudioOverview:
         launch_requirements=resolve_launch_requirements(
             project.provider for project in discovered.values()
         ),
+        persistence=persistence,
     )

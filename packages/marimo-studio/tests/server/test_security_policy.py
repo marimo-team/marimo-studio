@@ -63,8 +63,13 @@ def test_empty_configuration_preserves_same_origin_framing(
     )
 
 
-@pytest.mark.parametrize("value", ["", "0", "false", "no", "off", " FALSE "])
-def test_trusted_server_runtime_is_disabled_by_default(value: str) -> None:
+@pytest.mark.parametrize("value", ["", "  "])
+def test_trusted_server_runtime_is_unset_when_empty(value: str) -> None:
+    assert parse_trusted_server_runtime(value) is None
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", " FALSE "])
+def test_trusted_server_runtime_accepts_explicit_opt_out(value: str) -> None:
     assert parse_trusted_server_runtime(value) is False
 
 

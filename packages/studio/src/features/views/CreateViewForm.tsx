@@ -1,4 +1,5 @@
 import type { Starter } from "@marimo-studio/protocol/provider-catalog";
+import type { HostPersistence } from "@marimo-studio/protocol/views";
 import type { FormEventHandler, RefObject } from "react";
 
 import type { StarterCatalogState } from "./catalog.ts";
@@ -13,6 +14,12 @@ const VIEW_NAME = new RegExp(`^${VIEW_NAME_PATTERN}$`);
 const MESSAGE_ROLES = {
   error: "alert",
   warning: "status",
+} as const;
+
+const PERSISTENCE_NOTICES = {
+  source:
+    "View files are lost when this session ends because marimohub saves only notebook.py and pyproject.toml. A hub administrator can set MARIMOHUB_PERSIST_WORKSPACE=workspace to keep them.",
+  none: "View files are lost when this session ends because marimohub saves no files from it. For a Git-synced notebook, commit notebook.py and the view folder before you stop the session.",
 } as const;
 
 const revealStarterOption = (input: HTMLInputElement): void => {
@@ -68,6 +75,7 @@ export interface CreateViewFormProps {
   starterCatalog: StarterCatalogState;
   starters: readonly Starter[];
   viewRoot: string;
+  persistence: HostPersistence;
   onCancel: () => void;
   onNameChange: (name: string) => void;
   onRetryStarters: () => void;
@@ -85,6 +93,7 @@ export const CreateViewForm = ({
   starterCatalog,
   starters,
   viewRoot,
+  persistence,
   onCancel,
   onNameChange,
   onRetryStarters,
@@ -92,6 +101,8 @@ export const CreateViewForm = ({
   onSubmit,
 }: CreateViewFormProps) => {
   const selected = starters.find((candidate) => candidate.id === starter);
+  const persistenceNotice =
+    persistence === "source" || persistence === "none" ? PERSISTENCE_NOTICES[persistence] : null;
   const starterGroups = groupStartersByDistribution(starters);
   const renderStarter = (candidate: Starter) => (
     <StarterOption
@@ -145,6 +156,11 @@ export const CreateViewForm = ({
             ))
           : starters.map(renderStarter)}
       </fieldset>
+      {persistenceNotice ? (
+        <p id="studio-view-persistence" className="studio-form-message" data-state="warning">
+          {persistenceNotice}
+        </p>
+      ) : null}
       {selected ? (
         <details className="studio-starter-details">
           <summary>Files created</summary>
@@ -168,6 +184,7 @@ export const CreateViewForm = ({
         <button
           type="submit"
           className="studio-control studio-primary-action"
+          aria-describedby={persistenceNotice ? "studio-view-persistence" : undefined}
           disabled={busy || selected?.availability.available !== true}
         >
           {submitLabel}

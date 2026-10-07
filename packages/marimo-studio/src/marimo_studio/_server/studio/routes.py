@@ -12,6 +12,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from marimo_studio._artifacts.inputs import project_input_state
+from marimo_studio._hosts.marimohub import host_persistence
 from marimo_studio._processes.ownership import (
     propagate_cancellation,
     settle_ownership,
@@ -210,13 +211,16 @@ async def _retired_view_response(
             lambda: tuple(item.to_dict() for item in starters())
         )
         result = await retire()
+        inventory = await run_provider_operation(
+            partial(
+                view_inventory_payload,
+                result.workspace,
+                result.workspace,
+                starter_records=starter_records,
+            )
+        )
     except MarimoStudioError as error:
         return error_response(error)
-    inventory = view_inventory_payload(
-        result.workspace,
-        result.workspace,
-        starter_records=starter_records,
-    )
     return JSONResponse(
         {
             **inventory,
@@ -322,6 +326,7 @@ def view_inventory_payload(
         "default_view": definition.default_view,
         "default_starter": DEFAULT_STARTER_ID,
         "view_root": _view_root_label(definition.notebook, definition.view_root),
+        "persistence": host_persistence(),
         "views": (
             [
                 {
@@ -355,6 +360,7 @@ def unconfigured_view_inventory_payload(
         "view_root": PurePosixPath(
             MARIMO_DIRECTORY, STUDIO_DIRECTORY, Path(notebook).stem
         ).as_posix(),
+        "persistence": host_persistence(),
         "views": [],
         "starters": (
             list(starter_records)
