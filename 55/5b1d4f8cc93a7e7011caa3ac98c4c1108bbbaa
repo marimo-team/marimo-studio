@@ -1,0 +1,21 @@
+packages/marimo-studio/tests/providers/test_setup.py
+  s_9045434c54747d::t_8169490f8e08de 160,163,176,181-188,195-210
+packages/marimo-studio/src/marimo_studio/_workspace/metadata.py
+  s_9045434c54747d::t_5181c5316ea1eb 471-474,481
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "555b1d4f8cc93a7e7011caa3ac98c4c1108bbbaa",
+  "prompts": {},
+  "sessions": {
+    "s_9045434c54747d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6b8d0f7d-2732-4b15-9b0d-892f7e5fff78",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
