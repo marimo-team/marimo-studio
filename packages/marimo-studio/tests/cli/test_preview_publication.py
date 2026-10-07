@@ -304,6 +304,22 @@ def test_preview_versions_increase_across_releases(tmp_path: Path) -> None:
     assert Version(versions[1]) < Version("0.2.4") < Version(versions[3])
 
 
+def test_preview_version_counts_from_the_previous_final_release(
+    tmp_path: Path,
+) -> None:
+    _git(tmp_path, "init", "--quiet")
+    released = _commit(tmp_path)
+    _git(tmp_path, "tag", "--annotate", "v0.2.3", "--message", "release", released)
+    candidate = _commit(tmp_path)
+    _git(tmp_path, "tag", "--annotate", "v0.2.4-rc1", "--message", "rc", candidate)
+    commit = _commit(tmp_path)
+
+    completed = _preview_version(tmp_path, commit)
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "0.2.4.dev2"
+
+
 def test_preview_version_requires_a_previous_release(tmp_path: Path) -> None:
     _git(tmp_path, "init", "--quiet")
     _commit(tmp_path)

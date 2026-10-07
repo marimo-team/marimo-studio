@@ -13,15 +13,14 @@ fi
 commit="$1"
 
 # Count from the release before this commit. The commit keeps its preview
-# version after it is tagged as the next release.
-if ! base="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' "$commit^" 2>/dev/null)"; then
+# version after it is tagged as the next release. Tag globs also match
+# suffixed tags such as v0.2.4-rc1, so select final versions by regex.
+tags="$(git tag --merged "$commit^" --list 'v*' --sort=-v:refname)"
+if ! base="$(grep -m 1 -E '^v[0-9]+\.[0-9]+\.[0-9]+$' <<<"$tags")"; then
 	error "No vX.Y.Z release tag precedes $commit. Fetch tags and full history, then retry."
 	exit 1
 fi
-if [[ ! "$base" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-	error "Release tag $base must use final-version form vX.Y.Z"
-	exit 1
-fi
+[[ "$base" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]
 major="${BASH_REMATCH[1]}"
 minor="${BASH_REMATCH[2]}"
 patch="${BASH_REMATCH[3]}"

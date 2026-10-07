@@ -139,7 +139,10 @@ test("publication script changes run their shell-boundary tests", () => {
     "scripts/check-release.sh",
     "scripts/preview-version.sh",
     "scripts/publish-preview.sh",
+    "scripts/release.sh",
+    "scripts/require-release-checks.sh",
     "scripts/verify-pypi.sh",
+    "scripts/write-dist-checksums.py",
   ]) {
     assert.equal(matches("python_contracts", path), true, path);
   }
