@@ -17,6 +17,7 @@ from marimo_studio._server.prepared_progress import PreparedProgress
 from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgressSink
 from marimo_studio._server.runtime.stream import runtime_config_stream
 from marimo_studio.errors import PublicationError
+from marimo_studio.errors._internal import RuntimeSyncRequiredError
 
 from ..app_helpers import configured
 from ..async_test_support import wait_for_event
@@ -127,12 +128,14 @@ def test_runtime_stream_coalesces_progress_for_a_slow_reader() -> None:
     asyncio.run(exercise())
 
 
-@pytest.mark.parametrize("failure", ["public", "unexpected", "superseded"])
+@pytest.mark.parametrize("failure", ["public", "required", "unexpected", "superseded"])
 def test_runtime_stream_terminates_with_an_error(failure: str) -> None:
     async def exercise() -> list[dict[str, Any]]:
         async def configuration(_progress: RuntimeProgressSink) -> Response:
             if failure == "public":
                 raise PublicationError("A configured state could not be captured")
+            if failure == "required":
+                raise RuntimeSyncRequiredError()
             if failure == "superseded":
                 raise asyncio.CancelledError
             raise ValueError("private implementation detail")
@@ -148,6 +151,17 @@ def test_runtime_stream_terminates_with_an_error(failure: str) -> None:
     if failure == "public":
         assert messages[0]["error"] == PublicationError.code
         assert messages[0]["message"] == "A configured state could not be captured"
+    elif failure == "required":
+        assert messages[0] == {
+            "type": "error",
+            "error": "runtime-sync-required",
+            "message": (
+                "Run the changed notebook cells to update the Python runtime preview."
+            ),
+            "hint": (
+                "Run the changed notebook cells in the editor, then retry the preview."
+            ),
+        }
     elif failure == "superseded":
         assert messages[0]["error"] == "runtime-sync-pending"
         assert messages[0]["transient"] is True

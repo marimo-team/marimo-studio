@@ -15,7 +15,13 @@ from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.records import ServerContext
-from marimo_studio.errors._internal import RuntimeSyncError
+from marimo_studio._server.runtime.catalog import (
+    revalidate_runtime_cells,
+    runtime_cell_bindings,
+)
+from marimo_studio.errors._internal import (
+    RuntimeSyncError,
+)
 
 
 async def control_config_response(
@@ -39,6 +45,7 @@ async def control_config_response(
     if snapshot is None:
         return _revision_unavailable()
     session_id = await clients.session_for_client(client_id)
+    binding_generation = await clients.binding_generation_for_client(client_id)
     supplied_session_id = request.headers.get("Marimo-Session-Id")
     if (
         session_id is None
@@ -51,13 +58,19 @@ async def control_config_response(
         cells = await sessions.live_cells(
             context, session_id, include_dependency_closures=False
         )
+        runtime_bindings = runtime_cell_bindings(snapshot, cells)
         bindings = await sessions.control_bindings(context, session_id)
-    except RuntimeSyncError:
-        return _session_pending()
-    if await clients.session_for_client(client_id) != session_id:
+        await revalidate_runtime_cells(sessions, context, session_id, cells)
+    except RuntimeSyncError as error:
+        return _runtime_sync_response(error)
+    current_session_id = await clients.session_for_client(client_id)
+    current_generation = await clients.binding_generation_for_client(client_id)
+    if current_session_id != session_id or (
+        binding_generation is not None and current_generation != binding_generation
+    ):
         return _session_pending()
     controls = {
-        "cells": snapshot.resolved.runtime_cell_refs(cells),
+        "cells": runtime_bindings,
         "bindings": bindings,
     }
     encoded = json.dumps(
@@ -99,7 +112,20 @@ def _session_pending() -> JSONResponse:
             "transient": True,
         },
         status_code=409,
-        headers=NO_STORE,
+        headers={**NO_STORE, "Marimo-Studio-Error": "runtime-sync-pending"},
+    )
+
+
+def _runtime_sync_response(error: RuntimeSyncError) -> JSONResponse:
+    return JSONResponse(
+        {
+            "error": error.code,
+            "message": error.public_message(),
+            "transient": error.transient,
+            **({"hint": error.public_hint} if error.public_hint else {}),
+        },
+        status_code=error.status_code,
+        headers={**NO_STORE, "Marimo-Studio-Error": error.code},
     )
 
 

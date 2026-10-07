@@ -10,6 +10,7 @@ NAMESPACE = "_marimo_studio"
 FUNCTION_NAME = "read_values"
 OUTPUT_FUNCTION_NAME = "render_values"
 QUERY_FUNCTION_NAME = "sync_query"
+BARRIER_FUNCTION_NAME = "execution_barrier"
 OUTPUT_OWNER_PREFIX = "__marimo_studio_output_"
 
 
@@ -21,6 +22,13 @@ class ReadValuesArgs:
     consumer_id: str
     authorization: str
     max_json_bytes: int | None = None
+
+
+@dataclass
+class ExecutionBarrierArgs:
+    """Arguments for the queue barrier used by live runtime snapshots."""
+
+    pass
 
 
 @dataclass

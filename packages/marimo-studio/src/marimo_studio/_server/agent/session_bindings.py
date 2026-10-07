@@ -248,6 +248,19 @@ class SessionBindings(Generic[BindingClientT]):
             return lease.session_id
         return None
 
+    def generation_for_client(self, client_id: str) -> int | None:
+        client = self._clients.get(client_id)
+        lease = client.binding_lease if client is not None else None
+        if (
+            client is None
+            or lease is None
+            or self._resolve(lease, "active") is None
+            or not self._is_connected(client)
+            or lease.native_claim is None
+        ):
+            return None
+        return lease.binding_generation
+
     def retained_generations(self) -> dict[str, int]:
         return {
             client_id: client.binding_generation

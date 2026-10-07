@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._notebook.records import CellRef
+from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio._projections.resolution import (
     MAX_ACTIVE_PROJECTION_INSTANCES,
     MAX_UNIQUE_VALUE_TARGETS,
@@ -35,7 +35,13 @@ from marimo_studio._server.request_body import (
     json_body_error_response,
     read_json_body,
 )
-from marimo_studio.errors._internal import RuntimeSyncError
+from marimo_studio._server.runtime.catalog import (
+    revalidate_runtime_cells,
+    runtime_cell_bindings,
+)
+from marimo_studio.errors._internal import (
+    RuntimeSyncError,
+)
 from marimo_studio.view_providers import ProjectionKind
 
 _PROJECTION_JSON_MAX_BYTES = 2 * 1024 * 1024
@@ -121,14 +127,14 @@ async def values_response(
     if sessions.ownership(context, session_id) == "foreign":
         return _session_unavailable(session_id)
     try:
-        runtime_cell_refs = await _runtime_cell_refs(
+        runtime_cell_refs, live_cells = await _runtime_cell_refs(
             snapshot,
             context,
             session_id,
             sessions,
         )
     except RuntimeSyncError as error:
-        return _runtime_sync_pending(error)
+        return _runtime_sync_response(error)
     try:
         result = await projections.read_values(
             context,
@@ -139,6 +145,9 @@ async def values_response(
             consumer_id=session_id,
             runtime_cell_refs=runtime_cell_refs,
         )
+        await revalidate_runtime_cells(sessions, context, session_id, live_cells)
+    except RuntimeSyncError as error:
+        return _runtime_sync_response(error)
     except ProjectionUnavailable as error:
         return _value_error(error)
     if stale := _stale_binding_error(result.errors):
@@ -214,14 +223,14 @@ async def outputs_response(
     if sessions.ownership(context, session_id) == "foreign":
         return _session_unavailable(session_id)
     try:
-        runtime_cell_refs = await _runtime_cell_refs(
+        runtime_cell_refs, live_cells = await _runtime_cell_refs(
             snapshot,
             context,
             session_id,
             sessions,
         )
     except RuntimeSyncError as error:
-        return _runtime_sync_pending(error)
+        return _runtime_sync_response(error)
     try:
         result = await projections.render_outputs(
             context,
@@ -232,6 +241,9 @@ async def outputs_response(
             consumer_id=session_id,
             runtime_cell_refs=runtime_cell_refs,
         )
+        await revalidate_runtime_cells(sessions, context, session_id, live_cells)
+    except RuntimeSyncError as error:
+        return _runtime_sync_response(error)
     except ProjectionUnavailable as error:
         return _value_error(error)
     if stale := _stale_binding_error(result.errors):
@@ -307,18 +319,17 @@ async def _runtime_cell_refs(
     context: ServerContext,
     session_id: str,
     sessions: SessionState,
-) -> dict[CellRef, str]:
+) -> tuple[dict[CellRef, str], LiveCellSnapshot | None]:
     live_cells = await sessions.live_cells(
         context,
         session_id,
         include_dependency_closures=False,
     )
+    bindings = runtime_cell_bindings(snapshot, live_cells)
     return {
         CellRef.parse(reference): runtime_id
-        for reference, runtime_id in snapshot.resolved.runtime_cell_refs(
-            live_cells
-        ).items()
-    }
+        for reference, runtime_id in bindings.items()
+    }, live_cells
 
 
 def _resolution_error(error: ProjectionResolutionError) -> JSONResponse:
@@ -374,15 +385,16 @@ def _session_unavailable(session_id: str | None) -> JSONResponse:
     )
 
 
-def _runtime_sync_pending(error: RuntimeSyncError) -> JSONResponse:
+def _runtime_sync_response(error: RuntimeSyncError) -> JSONResponse:
     return JSONResponse(
         {
             "error": error.code,
-            "message": str(error),
-            "transient": True,
+            "message": error.public_message(),
+            "transient": error.transient,
+            **({"hint": error.public_hint} if error.public_hint else {}),
         },
         status_code=error.status_code,
-        headers=NO_STORE,
+        headers={**NO_STORE, "Marimo-Studio-Error": error.code},
     )
 
 

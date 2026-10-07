@@ -118,6 +118,7 @@ class PresentationMiddleware:
         self.app = app
         self._security_policy = security_policy
         self._adapters = adapter_factory()
+        self._install_execution_tracking()
         self._route_policy = route_policy
         self._notebooks = NotebookScopeRegistry()
         self._viewless_notebooks: set[Path] = set()
@@ -152,6 +153,25 @@ class PresentationMiddleware:
             self._resolve_security_policy,
         )
 
+    def _install_execution_tracking(self) -> None:
+        pending = [self.app]
+        seen: set[int] = set()
+        while pending:
+            current = pending.pop()
+            identity = id(current)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            manager = getattr(getattr(current, "state", None), "session_manager", None)
+            if manager is not None:
+                self._adapters.session_state.prepare_manager(manager)
+                return
+            pending.extend(
+                child
+                for route in getattr(current, "routes", ())
+                if (child := getattr(route, "app", None)) is not None
+            )
+
     def _resolve_security_policy(self, scope: Scope) -> SecurityPolicy:
         """Return the framing policy shared by every edit document in a request."""
         return extend_security_policy_from_host_head(
@@ -162,6 +182,7 @@ class PresentationMiddleware:
     @asynccontextmanager
     async def lifespan(self) -> AsyncIterator[Callable[[], Awaitable[None]]]:
         """Own Studio resources for one server application lifespan."""
+        self._install_execution_tracking()
         adapters = self._adapters.lifecycle.open()
         closed = False
 

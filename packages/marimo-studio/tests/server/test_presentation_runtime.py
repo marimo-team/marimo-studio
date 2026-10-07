@@ -371,9 +371,54 @@ def test_runtime_config_waits_for_semantic_change_then_accepts_exact_execution(
         ready = client.get("/_marimo-studio/views/dashboard/config")
 
     assert pending.status_code == 409
-    assert pending.json()["error"] == "runtime-sync-pending"
-    assert pending.json()["transient"] is True
+    assert pending.json()["error"] == "runtime-sync-required"
+    assert pending.json()["message"] == (
+        "Run the changed notebook cells to update the Python runtime preview."
+    )
+    assert pending.json()["hint"] == (
+        "Run the changed notebook cells in the editor, then retry the preview."
+    )
+    assert pending.json()["transient"] is False
     assert ready.status_code == 200
+
+
+def test_runtime_config_waits_while_changed_cells_are_running(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
+    rows = tuple(
+        SimpleNamespace(code=cell.code, id=cell.runtime_id, name=cell.name)
+        for cell in static.cells
+    )
+    session = _live_test_session(rows)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    _session_manager(app).get_session_by_file_key = Mock(return_value=session)
+    source = studio.notebook.read_text(encoding="utf-8")
+    studio.notebook.write_text(source.replace("x = 2", "x = 3"), encoding="utf-8")
+    updated = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
+    session.document.cells = tuple(
+        SimpleNamespace(code=cell.code, id=cell.runtime_id, name=cell.name)
+        for cell in updated.cells
+    )
+    session.session_view.cell_notifications = {
+        updated.cells[0].runtime_id: SimpleNamespace(status="running")
+    }
+
+    with TestClient(app) as client:
+        pending = client.get("/_marimo-studio/views/dashboard/config")
+
+    assert pending.status_code == 409
+    assert pending.json() == {
+        "error": "runtime-sync-pending",
+        "message": "Waiting for changed notebook cells to finish running.",
+        "transient": True,
+    }
 
 
 def test_unrelated_named_cell_does_not_block_the_selected_view(

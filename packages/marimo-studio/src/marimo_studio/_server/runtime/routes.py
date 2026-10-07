@@ -116,6 +116,9 @@ async def runtime_config_response(
             or not sessions.is_session_id(preview_session_id)
         ):
             return _invalid_studio_session()
+        binding_generation = await clients.binding_generation_for_client(client_id)
+    else:
+        binding_generation = None
     if presentation_capability is not None:
         runtime_session_id = presentation_capability.runtime_session_id
         if runtime_session_id is None:
@@ -208,7 +211,26 @@ async def runtime_config_response(
             )
 
     async def configuration(progress: RuntimeProgressSink | None = None) -> Response:
+        revalidation: tuple[str, dict[str, str]] | None = None
         try:
+            expected_live_cells = None
+            requested_runtime = request.query_params.get("runtime")
+            if (
+                lookup_session_id is not None
+                and (requested_runtime or snapshot.resolved.workspace.default_runtime)
+                == "server"
+            ):
+                try:
+                    expected_live_cells = await sessions.live_cells(
+                        context,
+                        lookup_session_id,
+                        include_dependency_closures=False,
+                    )
+                except RuntimeSyncError:
+                    # The provider performs the authoritative live-cell read
+                    # when it builds the server projection. Keep compatibility
+                    # providers that do not expose that optional read here.
+                    expected_live_cells = None
             payload = await build_runtime_config(
                 snapshot,
                 context,
@@ -223,16 +245,59 @@ async def runtime_config_response(
                 progress=progress,
             )
             encoded = await asyncio.to_thread(encode_runtime_config, payload)
+            runtime = payload.get("runtime")
+            runtime_bindings = payload.get("runtimeBindings")
+            if isinstance(runtime, dict) and isinstance(runtime_bindings, dict):
+                runtime_id = runtime.get("id")
+                expected_refs = runtime_bindings.get("cellRefs")
+                if isinstance(runtime_id, str) and isinstance(expected_refs, dict):
+                    revalidation = (
+                        runtime_id,
+                        {
+                            reference: binding_id
+                            for reference, binding_id in expected_refs.items()
+                            if isinstance(reference, str)
+                            and isinstance(binding_id, str)
+                        },
+                    )
         except RuntimeSyncError as error:
-            return _session_pending(str(error))
+            return _runtime_sync_response(error)
         except RuntimeConfigTooLargeError as error:
             return error_response(error)
+        if revalidation is not None:
+            runtime_id, expected_refs = revalidation
+            try:
+                await runtimes.revalidate_server_bindings(
+                    snapshot,
+                    context,
+                    runtime_id,
+                    lookup_session_id,
+                    expected_refs,
+                    expected_snapshot=expected_live_cells,
+                )
+            except RuntimeSyncError as error:
+                return _runtime_sync_response(error)
         if client_id is not None:
             current_session_id = await clients.session_for_client(client_id)
+            current_generation = await clients.binding_generation_for_client(client_id)
             if current_session_id is None:
                 return _editor_disconnected()
             if current_session_id != lookup_session_id or not sessions.exists(
                 context, current_session_id
+            ):
+                return JSONResponse(
+                    {
+                        "error": "preview-session-changed",
+                        "message": (
+                            "The notebook session changed. Open a new preview URL."
+                        ),
+                    },
+                    status_code=409,
+                    headers=NO_STORE,
+                )
+            if (
+                binding_generation is not None
+                and current_generation != binding_generation
             ):
                 return JSONResponse(
                     {
@@ -277,7 +342,7 @@ def _invalid_studio_session() -> JSONResponse:
             "message": "The Studio preview session context is invalid.",
         },
         status_code=400,
-        headers=NO_STORE,
+        headers={**NO_STORE, "Marimo-Studio-Error": "invalid-studio-session"},
     )
 
 
@@ -293,7 +358,20 @@ def _session_pending(
             "transient": True,
         },
         status_code=409,
-        headers=NO_STORE,
+        headers={**NO_STORE, "Marimo-Studio-Error": code},
+    )
+
+
+def _runtime_sync_response(error: RuntimeSyncError) -> JSONResponse:
+    return JSONResponse(
+        {
+            "error": error.code,
+            "message": error.public_message(),
+            "transient": error.transient,
+            **({"hint": error.public_hint} if error.public_hint else {}),
+        },
+        status_code=error.status_code,
+        headers={**NO_STORE, "Marimo-Studio-Error": error.code},
     )
 
 

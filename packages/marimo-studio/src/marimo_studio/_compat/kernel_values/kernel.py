@@ -4,18 +4,23 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from types import TracebackType
-from typing import Any
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 from marimo_export.integration import is_owned_session, keep_cached_cells_compatible
 from marimo_export.observations import ObservationLedger, install_observation_ledger
 
+from marimo_studio._compat.execution_markers import (
+    is_execution_command,
+    is_observation_command,
+    make_marker,
+)
 from marimo_studio._compat.kernel_values.authorization import (
     STALE_PROJECTION_BINDING_MESSAGE,
     AuthorizedProjections,
@@ -29,10 +34,12 @@ from marimo_studio._compat.kernel_values.dependencies import (
 )
 from marimo_studio._compat.kernel_values.lens import lens_overlay
 from marimo_studio._compat.kernel_values.models import (
+    BARRIER_FUNCTION_NAME,
     FUNCTION_NAME,
     NAMESPACE,
     OUTPUT_FUNCTION_NAME,
     QUERY_FUNCTION_NAME,
+    ExecutionBarrierArgs,
     ReadValuesArgs,
     RenderValuesArgs,
     SyncQueryArgs,
@@ -61,10 +68,64 @@ from marimo_studio._server.presentation.query_state import (
     valid_query_operation_id,
 )
 from marimo_studio._workspace.config import discover_studio_definition
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
 
 _PROBE_LEASE_QUERY_PARAM = "_marimo_studio_probe_lease"
 _MAX_QUERY_OPERATIONS = 256
+
+
+def _install_execution_markers(context: Any) -> None:
+    """Expose command admission and completion through the kernel stream.
+
+    Session events observe only host-originated requests. Kernel callbacks can
+    enqueue execution directly, so the marker is emitted when the kernel
+    begins handling the command. That boundary sees both host and kernel
+    requests after Marimo's queue has applied its batching rules. The marker
+    uses ``CompletedRunNotification`` because it is already carried by the
+    kernel stream. The Studio session consumes these private packets before
+    Marimo broadcasts them to consumers.
+    """
+    if is_owned_session():
+        return
+    kernel = context._kernel
+    if getattr(kernel, "_studio_execution_markers_installed", False):
+        return
+    original_handle = getattr(kernel, "handle_message", None)
+    if not callable(original_handle):
+        return
+    handle_message = cast(Callable[[Any], Awaitable[None]], original_handle)
+    from marimo._messaging.notification import CompletedRunNotification
+    from marimo._messaging.notification_utils import broadcast_notification
+
+    def emit(
+        phase: Literal["start", "done", "failed"],
+        name: str,
+        token: str,
+    ) -> None:
+        broadcast_notification(
+            CompletedRunNotification(run_id=make_marker(phase, name, token)),
+            context.stream,
+        )
+
+    async def handle(request: Any) -> None:
+        name = type(request).__name__
+        if not is_execution_command(name):
+            await handle_message(request)
+            return
+        token = uuid4().hex
+        if is_observation_command(request):
+            token = f"observation:{token}"
+        emit("start", name, token)
+        try:
+            await handle_message(request)
+        except BaseException:
+            emit("failed", name, token)
+            raise
+        else:
+            emit("done", name, token)
+
+    kernel.handle_message = handle
+    kernel._studio_execution_markers_installed = True
 
 
 def _current_projection_specs(
@@ -266,7 +327,12 @@ def _is_studio_notebook(filename: Path | None) -> bool:
         return False
     try:
         return discover_studio_definition(filename) is not None
-    except (OSError, UnicodeError, ConfigurationError):
+    except (
+        OSError,
+        UnicodeError,
+        ConfigurationError,
+        WorkspaceGenerationConflictError,
+    ):
         return False
 
 
@@ -296,6 +362,7 @@ class _KernelBridgeLifespan:
         configured = _is_studio_notebook(filename)
         if inspection is None and not configured:
             return False
+        _install_execution_markers(context)
         from marimo._session.model import SessionMode
 
         edit_preview = (
@@ -366,6 +433,14 @@ class _KernelBridgeLifespan:
         context = get_context()
         if not isinstance(context, KernelRuntimeContext):
             return
+        query_params = getattr(context, "query_params", None)
+        get_query_param = getattr(query_params, "get", None)
+        is_probe = (
+            callable(get_query_param)
+            and get_query_param(_PROBE_LEASE_QUERY_PARAM) is not None
+        )
+        if _is_studio_notebook(_kernel_filename(context)) or is_probe:
+            _install_execution_markers(context)
         self._entered_lifespan = _guard_entered_lifespan(context, self._resume)
         try:
             self._enter(
@@ -487,6 +562,20 @@ class _KernelBridgeLifespan:
         function.cell_id = cell_id_type("__marimo_studio_values__")
         context.function_registry.register(NAMESPACE, function)
         self._registry = context.function_registry
+
+        def execution_barrier(_args: ExecutionBarrierArgs) -> dict[str, str]:
+            # Reaching this function means the native control queue has
+            # crossed the request boundary. Keep it separate from value reads
+            # so a snapshot never releases the browser's Arrow resources.
+            return {"status": "settled"}
+
+        barrier_function = function_type(
+            BARRIER_FUNCTION_NAME,
+            ExecutionBarrierArgs,
+            execution_barrier,
+        )
+        barrier_function.cell_id = cell_id_type("__marimo_studio_barrier__")
+        context.function_registry.register(NAMESPACE, barrier_function)
 
         def render_outputs(args: RenderValuesArgs) -> dict[str, object]:
             try:

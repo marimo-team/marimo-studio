@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 import pytest
 from starlette.testclient import TestClient
 
+from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.prepared_views import (
     PreparedViewRegistry,
@@ -316,3 +317,77 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
             "/_marimo-studio/views/dashboard/controls", params=params, headers=headers
         )
         assert rebound.status_code == 409
+
+
+def test_editor_controls_report_required_execution(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = configured(notebook_path)
+    app = marimo_app(studio.notebook)
+    edit_mode(app)
+    bound = "s_abcdef"
+    stale_cells: LiveCellSnapshot | None = None
+
+    async def session_for_client(
+        _clients: StudioClientRegistry, client_id: str
+    ) -> str | None:
+        return bound if client_id == "browser-client-1234" else None
+
+    async def live_cells(*_args: object, **_kwargs: object) -> LiveCellSnapshot:
+        assert stale_cells is not None
+        return stale_cells
+
+    async def read_bindings(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("Control bindings must not be read before execution")
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    with TestClient(app) as client:
+        runtime = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        revision = runtime["revision"]
+        references = tuple(
+            CellRef.parse(reference)
+            for reference in runtime["runtimeBindings"]["cellRefs"]
+        )
+        stale_cells = LiveCellSnapshot(
+            owner="session:test",
+            generation="0" * 64,
+            ids={
+                reference: f"live-{index}" for index, reference in enumerate(references)
+            },
+            names={},
+            dependency_closures={},
+            current_refs={},
+        )
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
+            live_cells,
+        )
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.control_bindings",
+            read_bindings,
+        )
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+            lambda _sessions, _context, session_id: session_id == bound,
+        )
+        response = client.get(
+            "/_marimo-studio/views/dashboard/controls",
+            params={
+                "marimo_studio_client": "browser-client-1234",
+                "revision": revision,
+            },
+            headers={"Marimo-Session-Id": bound},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "runtime-sync-required",
+        "message": (
+            "Run the changed notebook cells to update the Python runtime preview."
+        ),
+        "transient": False,
+        "hint": (
+            "Run the changed notebook cells in the editor, then retry the preview."
+        ),
+    }
