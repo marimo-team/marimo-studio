@@ -4,6 +4,7 @@ import type { fetchRuntimeControls } from "../src/features/preview/control-remot
 import type { FrameControlEndpoint } from "../src/features/preview/frame-bridge.ts";
 
 import { PreviewControlController } from "../src/features/preview/control-controller.ts";
+import { ControlRequestError } from "../src/features/preview/control-remote.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -98,6 +99,41 @@ it("retries a bounded control setup against the active editor session", async ()
   expect(fetchControls).toHaveBeenCalledTimes(2);
   expect(fetchControls.mock.calls.every(([, , sessionId]) => sessionId === "s_editor1")).toBe(true);
   expect(status).toHaveBeenLastCalledWith({ phase: "ready" }, "revision-1", undefined);
+  controller.stop();
+});
+
+it("surfaces terminal control synchronization failures without retrying", async () => {
+  vi.useFakeTimers();
+  const failure = new ControlRequestError(
+    "Run the changed notebook cells to update the Python runtime preview.",
+    "runtime-sync-required",
+    false,
+    "Run the changed notebook cells in the editor, then retry the preview.",
+  );
+  const fetchControls = vi.fn<typeof fetchRuntimeControls>().mockRejectedValue(failure);
+  const status = vi.fn();
+  const controller = new PreviewControlController({
+    runtime: "wasm",
+    editor: document.createElement("iframe"),
+    preview: document.createElement("iframe"),
+    supportUrl: () => "http://localhost:3000/_marimo-studio/views/dashboard",
+    clientId: () => "browser-client-1234",
+    connect: () => endpoint(),
+    connectPreview: () => endpoint(),
+    fetchControls,
+    status,
+  });
+
+  controller.begin("revision-1", undefined, "s_editor1");
+  await vi.waitFor(() => expect(status).toHaveBeenCalled());
+  await vi.runAllTimersAsync();
+
+  expect(fetchControls).toHaveBeenCalledOnce();
+  expect(status).toHaveBeenLastCalledWith(
+    { phase: "degraded", error: failure },
+    "revision-1",
+    undefined,
+  );
   controller.stop();
 });
 

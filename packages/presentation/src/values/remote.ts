@@ -21,6 +21,7 @@ export class ValueRequestError extends Error {
     message: string,
     readonly code: string,
     readonly transient: boolean,
+    readonly hint?: string,
   ) {
     super(message);
     this.name = "ValueRequestError";
@@ -93,7 +94,7 @@ export const readServerValues = async (
       const message = detail.message ?? `Value request failed with ${response.status}`;
       const code = detail.error ?? "value-request-failed";
       const transient = detail.transient ?? false;
-      const error = new ValueRequestError(message, code, transient);
+      const error = new ValueRequestError(message, code, transient, detail.hint);
       notifyProjectionBindingStale(error, config.projectionRevision);
       throw error;
     }
@@ -132,5 +133,9 @@ export const readServerValuesWithRetry = async (
     },
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof ValueRequestError && error.transient,
+    retryAfterExhaustion: (error) =>
+      error instanceof ValueRequestError && error.code === "runtime-sync-pending"
+        ? 5_000
+        : undefined,
     signal,
   });

@@ -30,3 +30,29 @@ it("targets control configuration at the active editor session", async () => {
     }),
   );
 });
+
+it("preserves terminal runtime synchronization diagnostics", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      Response.json(
+        {
+          error: "runtime-sync-required",
+          message: "Run the changed notebook cells to update the Python runtime preview.",
+          transient: false,
+          hint: "Run the changed notebook cells in the editor, then retry the preview.",
+        },
+        { status: 409 },
+      ),
+    ),
+  );
+
+  await expect(
+    fetchRuntimeControls("http://localhost:3000/views/dashboard", "client", "s_123456", "revision"),
+  ).rejects.toMatchObject({
+    name: "ControlRequestError",
+    code: "runtime-sync-required",
+    transient: false,
+    hint: "Run the changed notebook cells in the editor, then retry the preview.",
+  });
+});

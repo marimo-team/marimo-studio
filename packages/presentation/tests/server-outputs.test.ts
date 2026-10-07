@@ -165,6 +165,30 @@ test("discards canceled queued output work before dispatch", async () => {
   expect(requests[1]?.url).toContain("/_marimo-studio/views/executive/outputs");
 });
 
+test("preserves output repair hints from the runtime", async () => {
+  commitRuntimeConfig(config);
+  globalThis.fetch = vi.fn(async () =>
+    Response.json(
+      {
+        error: "runtime-sync-required",
+        message: "Run the changed notebook cells to update the Python runtime preview.",
+        transient: false,
+        hint: "Run the changed notebook cells in the editor, then retry the preview.",
+      },
+      { status: 409 },
+    ),
+  );
+  const reader = createServerOutputReader((response) => response);
+  await expect(
+    reader({ revision: config.revision, projections: [], activeProjections: [] }),
+  ).rejects.toMatchObject({
+    name: "OutputRequestError",
+    code: "runtime-sync-required",
+    transient: false,
+    hint: "Run the changed notebook cells in the editor, then retry the preview.",
+  });
+});
+
 test.each(["dispatch", "body"])(
   "keeps an interrupted server output %s retryable",
   async (phase) => {

@@ -261,6 +261,7 @@ test("terminal value failures do not retry", async () => {
         {
           error: "unknown-selector",
           message: "Unknown selector",
+          hint: "Run the changed notebook cells, then retry.",
           transient: false,
         },
         { status: 400 },
@@ -278,6 +279,7 @@ test("terminal value failures do not retry", async () => {
       (cause: unknown) => {
         assert.ok(cause instanceof ValueRequestError);
         assert.match(cause.message, /Unknown selector/);
+        assert.equal(cause.hint, "Run the changed notebook cells, then retry.");
         return true;
       },
     );

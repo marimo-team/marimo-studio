@@ -2,6 +2,7 @@ import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
 import type { fetchRuntimeControls } from "./control-remote.ts";
 
+import { ControlRequestError } from "./control-remote.ts";
 import {
   type ControlFrameConnector,
   type ControlEndpoint,
@@ -202,8 +203,8 @@ export class PreviewControlController {
       this.options.status?.({ phase: "ready" }, revision, previewSessionId);
     } catch (cause) {
       if (!controller.signal.aborted && this.request === request) {
-        retry = true;
         failure = controlSetupError(cause);
+        retry = !(failure instanceof ControlRequestError && !failure.transient);
       }
     } finally {
       stopPreviewInputs();
@@ -213,6 +214,9 @@ export class PreviewControlController {
       const ownsRequest = this.request === request;
       if (ownsRequest) {
         this.request = undefined;
+      }
+      if (!retry && failure !== undefined && ownsRequest && !controller.signal.aborted) {
+        this.options.status?.({ phase: "degraded", error: failure }, revision, previewSessionId);
       }
       if (retry && ownsRequest && !controller.signal.aborted) {
         this.schedule(revision, previewSessionId, editorSessionId, failure);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "vite-plus/test";
+import { test, vi } from "vite-plus/test";
 
 import {
   commitRuntimeConfig,
@@ -366,6 +366,131 @@ test("runtime config retries a transient session mismatch", async () => {
   }
 
   assert.deepEqual(attempts, 2);
+});
+
+test("runtime config does not retry a terminal execution diagnostic", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = () => {
+    attempts += 1;
+    return Promise.resolve(
+      Response.json(
+        {
+          error: "runtime-sync-required",
+          message: "Run the changed notebook cells to update the Python runtime preview.",
+          hint: "Run the changed notebook cells in the editor, then retry the preview.",
+          transient: false,
+        },
+        { status: 409 },
+      ),
+    );
+  };
+
+  try {
+    await assert.rejects(
+      fetchRuntimeConfigWithRetry("http://localhost:3000/_marimo-studio/views/dashboard"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(attempts, 1);
+});
+
+test("runtime config keeps retrying while notebook execution settles", async () => {
+  const originalFetch = globalThis.fetch;
+  vi.useFakeTimers();
+  let attempts = 0;
+  globalThis.fetch = () => {
+    attempts += 1;
+    return Promise.resolve(
+      attempts <= 5
+        ? Response.json(
+            {
+              error: "runtime-sync-pending",
+              message: "Waiting for changed notebook cells to finish running.",
+              transient: true,
+            },
+            { status: 409 },
+          )
+        : Response.json(baseRuntimeConfig),
+    );
+  };
+
+  try {
+    const request = fetchRuntimeConfigWithRetry(
+      "http://localhost:3000/_marimo-studio/views/dashboard",
+    );
+    await vi.runAllTimersAsync();
+    const result = await request;
+    assert.equal(result.runtime.id, "server");
+    assert.equal(attempts, 6);
+  } finally {
+    globalThis.fetch = originalFetch;
+    vi.useRealTimers();
+  }
+});
+
+test("runtime config preserves the terminal execution diagnostic", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => {
+    return Promise.resolve(
+      Response.json(
+        {
+          error: "runtime-sync-required",
+          message: "Run the changed notebook cells to update the Python runtime preview.",
+          hint: "Run the changed notebook cells in the editor, then retry the preview.",
+          transient: false,
+        },
+        { status: 409 },
+      ),
+    );
+  };
+
+  try {
+    const error = await fetchRuntimeConfig(
+      "http://localhost:3000/_marimo-studio/views/dashboard",
+    ).catch((cause: unknown) => cause);
+    assert.ok(error instanceof RuntimeConfigRequestError);
+    assert.equal(error.code, "runtime-sync-required");
+    assert.equal(error.transient, false);
+    assert.equal(
+      error.hint,
+      "Run the changed notebook cells in the editor, then retry the preview.",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("runtime config retry preserves the terminal execution diagnostic", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = () => {
+    attempts += 1;
+    return Promise.resolve(
+      Response.json(
+        {
+          error: "runtime-sync-required",
+          message: "Run the changed notebook cells to update the Python runtime preview.",
+          hint: "Run the changed notebook cells in the editor, then retry the preview.",
+          transient: false,
+        },
+        { status: 409 },
+      ),
+    );
+  };
+
+  try {
+    const error = await fetchRuntimeConfigWithRetry(
+      "http://localhost:3000/_marimo-studio/views/dashboard",
+    ).catch((cause: unknown) => cause);
+    assert.ok(error instanceof RuntimeConfigRequestError);
+    assert.equal(error.code, "runtime-sync-required");
+    assert.equal(attempts, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("fixed revision rejects an unavailable snapshot without retrying it", async () => {

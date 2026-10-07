@@ -26,7 +26,7 @@ import { assertNever } from "../../shared/assertNever.ts";
 import { errorMessage } from "../../shared/errors.ts";
 import { PreviewAdmission } from "./admission.ts";
 import { PreviewControlController } from "./control-controller.ts";
-import { fetchRuntimeControls } from "./control-remote.ts";
+import { ControlRequestError, fetchRuntimeControls } from "./control-remote.ts";
 import { releaseFrameBridge, resizeFrame } from "./frame-bridge.ts";
 import { PreviewMutationBarriers } from "./mutation-barriers.ts";
 import { PreviewQueryController, type QuerySyncStatus } from "./query-controller.ts";
@@ -826,7 +826,9 @@ export class PreviewController {
             "control-sync-failed",
             "warning",
             "Control state could not be synchronized.",
-            status.error?.message ?? "Wait for both notebook runtimes, then retry the view.",
+            status.error instanceof ControlRequestError && status.error.hint
+              ? status.error.hint
+              : (status.error?.message ?? "Wait for both notebook runtimes, then retry the view."),
           )
         : undefined;
     this.showReadyStatus();

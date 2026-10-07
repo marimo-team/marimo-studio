@@ -24,6 +24,7 @@ export class OutputRequestError extends Error {
     message: string,
     readonly code: string,
     readonly transient: boolean,
+    readonly hint?: string,
   ) {
     super(message);
     this.name = "OutputRequestError";
@@ -93,6 +94,7 @@ const readServerOutputsAtTarget = async (
       detail.message ?? `Output request failed with ${response.status}`,
       detail.error ?? "output-request-failed",
       detail.transient ?? false,
+      detail.hint,
     );
     notifyProjectionBindingStale(error, target.projectionRevision);
     throw error;
@@ -111,6 +113,10 @@ const readServerOutputsAtTargetWithRetry = (
     operation: () => readServerOutputsAtTarget(target, request, signal),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof OutputRequestError && error.transient,
+    retryAfterExhaustion: (error) =>
+      error instanceof OutputRequestError && error.code === "runtime-sync-pending"
+        ? 5_000
+        : undefined,
     signal,
   });
 
