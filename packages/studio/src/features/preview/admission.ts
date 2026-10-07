@@ -382,7 +382,8 @@ export class PreviewAdmission {
         previousIdentity?.sessionId !== this.readyIdentity?.sessionId);
     this.invalidateGatedMutationCandidate();
     this.failure = localized ? "localized" : "fatal";
-    this.failedRevision = this.baseline.phase === "known" ? this.baseline.revision : null;
+    this.failedRevision =
+      revision ?? (this.baseline.phase === "known" ? this.baseline.revision : null);
     this.localizedCommitPending = localized && (!wasInteractive || identityChanged);
     if (!localized) {
       this.admittedRevision = null;

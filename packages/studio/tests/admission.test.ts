@@ -564,3 +564,20 @@ it("keeps a failed document refresh failed when its revision is built again", ()
   ]);
   expect(admission.snapshot.view).toBe("failed");
 });
+
+it("keeps a failure attached to the revision its document reported", () => {
+  const owner = admitted();
+  owner.admission.buildStarted("active");
+  owner.admission.buildCompleted("revision-2", "active");
+  owner.admission.receiverUnready();
+  owner.admission.viewError(notebookError, "revision-3", "active");
+  owner.effects.postMessage.mockClear();
+
+  owner.admission.buildStarted("active");
+  owner.admission.buildCompleted("revision-3", "active");
+
+  expect(owner.effects.postMessage).not.toHaveBeenCalledWith({
+    type: "marimo-studio:presentation-change",
+  });
+  expect(owner.admission.snapshot.view).toBe("failed");
+});

@@ -37,3 +37,23 @@ test("a released refresh cannot publish late readiness", () => {
   expect(callbacks.ready).not.toHaveBeenCalled();
   expect(callbacks.viewReady).not.toHaveBeenCalled();
 });
+
+test("a failed refresh withholds readiness until a retry begins a new handshake", () => {
+  const events: string[] = [];
+  const handshake = new ReceiverRefreshHandshake({
+    unready: () => events.push("unready"),
+    ready: () => events.push("receiver-ready"),
+    viewReady: () => events.push("view-ready"),
+  });
+
+  handshake.begin();
+  handshake.fail();
+  expect(handshake.active).toBe(true);
+  handshake.complete();
+  expect(events).toEqual(["unready"]);
+
+  handshake.begin();
+  handshake.complete();
+  expect(handshake.active).toBe(false);
+  expect(events).toEqual(["unready", "unready", "receiver-ready", "view-ready"]);
+});
