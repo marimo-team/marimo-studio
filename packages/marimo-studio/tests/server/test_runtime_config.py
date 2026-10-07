@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Awaitable, Callable, MutableMapping
 from pathlib import Path
 from unittest.mock import Mock
 from urllib.parse import parse_qs, urlsplit
@@ -28,6 +28,14 @@ from .app_test_support import (
     _studio_bootstrap,
     _view_support_url,
 )
+
+
+async def _session_binding(
+    registry: StudioClientRegistry,
+    client_id: str,
+    session_for_client: Callable[[StudioClientRegistry, str], Awaitable[str | None]],
+) -> tuple[str | None, int | None]:
+    return await session_for_client(registry, client_id), None
 
 
 def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -> None:
@@ -136,6 +144,13 @@ def test_studio_runtime_config_binds_without_exposing_its_editor_session(
         session_for_client,
     )
     monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
+    monkeypatch.setattr(
         "marimo_studio._server.runtime.routes.build_runtime_config",
         runtime_config,
     )
@@ -236,6 +251,13 @@ def test_studio_runtime_config_waits_for_automatic_startup(
         session_for_client,
     )
     monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
+    monkeypatch.setattr(
         "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
         lambda _sessions, _context, session_id: session_id == "s_123456",
     )
@@ -275,6 +297,13 @@ def test_studio_preview_keeps_its_waiting_document_until_startup_completes(
         StudioClientRegistry,
         "session_for_client",
         session_for_client,
+    )
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
     )
     monkeypatch.setattr(
         "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
@@ -351,6 +380,13 @@ def test_studio_runtime_config_reports_terminal_startup_failure(
         StudioClientRegistry,
         "session_for_client",
         session_for_client,
+    )
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
     )
     monkeypatch.setattr(
         "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
@@ -435,6 +471,13 @@ def test_studio_runtime_config_resolves_session_after_snapshot(
         StudioClientRegistry,
         "session_for_client",
         session_for_client,
+    )
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
     )
     monkeypatch.setattr(
         "marimo_studio._server.runtime.routes.build_runtime_config",

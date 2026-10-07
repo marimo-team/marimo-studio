@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -26,6 +27,14 @@ from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgr
 from ..app_helpers import configured, edit_mode, marimo_app
 from ..helpers import update_notebook_config
 from .app_test_support import _runtime_config
+
+
+async def _session_binding(
+    registry: StudioClientRegistry,
+    client_id: str,
+    session_for_client: Callable[[StudioClientRegistry, str], Awaitable[str | None]],
+) -> tuple[str | None, int | None]:
+    return await session_for_client(registry, client_id), None
 
 
 def test_zero_python_runtime_uses_notebook_scoped_publication_owner(
@@ -192,6 +201,13 @@ def test_prepared_manifest_follows_the_browser_editor_binding(
         return SimpleNamespace(path=path, close=lambda: None) if path else None
 
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
     monkeypatch.setattr(PreparedViewRegistry, "prepare", prepare)
     monkeypatch.setattr(PreparedViewRegistry, "current", current)
     monkeypatch.setattr(PreparedViewRegistry, "poll_current", current)
@@ -277,6 +293,13 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
         raise AssertionError("Control metadata must not prepare notebook states")
 
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
     monkeypatch.setattr(PreparedViewRegistry, "prepare", prepare)
     monkeypatch.setattr(
         "marimo_studio._server.runtime.catalog.RuntimeRegistry.project", prepare
@@ -342,6 +365,13 @@ def test_editor_controls_report_required_execution(
         raise AssertionError("Control bindings must not be read before execution")
 
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
     with TestClient(app) as client:
         runtime = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
         revision = runtime["revision"]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from collections.abc import MutableMapping
+from collections.abc import Awaitable, Callable, MutableMapping
 from html import unescape
 from pathlib import Path
 from unittest.mock import Mock
@@ -37,6 +37,15 @@ from .app_test_support import (
 
 ENDPOINT = "/_marimo-studio/views/dashboard/preview"
 REVISION = "marimo_studio_revision"
+
+
+async def _session_binding(
+    registry: StudioClientRegistry,
+    client_id: str,
+    session_for_client: Callable[[StudioClientRegistry, str], Awaitable[str | None]],
+) -> tuple[str | None, int | None]:
+    session = await session_for_client(registry, client_id)
+    return session, None
 
 
 def _enable_wasm(notebook: Path) -> None:
@@ -698,6 +707,13 @@ def test_session_bound_preview_retains_and_revalidates_its_editor(
 
     monkeypatch.setattr(StudioClientRegistry, "session_target", target)
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, selected: _session_binding(
+            registry, selected, session_for_client
+        ),
+    )
 
     async def live_cells(*_args, **_kwargs):
         return None
@@ -860,6 +876,13 @@ def test_runtime_config_revalidates_editor_after_preparation(
         return {"runtime": {"id": "server"}}
 
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, selected: _session_binding(
+            registry, selected, session_for_client
+        ),
+    )
     monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: session_exists)
     monkeypatch.setattr(PrivateSessionState, "ensure_started", lambda *_args: True)
     monkeypatch.setattr(
