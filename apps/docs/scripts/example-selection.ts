@@ -7,7 +7,6 @@ export interface SelectedExampleFamily {
 }
 
 export interface ExampleBuildSelection {
-  complete: boolean;
   families: readonly SelectedExampleFamily[];
   notebooks: number;
   views: number;
@@ -67,7 +66,6 @@ export const selectDocumentationExamples = (
   const selectors = parseSelectors(arguments_);
   if (selectors.length === 0) {
     return {
-      complete: true,
       families: families.map((family) => ({
         family,
         notebook: true,
@@ -117,9 +115,7 @@ export const selectDocumentationExamples = (
   });
   const notebookCount = selected.filter((item) => item.notebook).length;
   const viewCount = selected.reduce((count, item) => count + item.views.length, 0);
-  const totalViews = families.reduce((count, family) => count + family.views.length, 0);
   return {
-    complete: notebookCount === families.length && viewCount === totalViews,
     families: selected,
     notebooks: notebookCount,
     views: viewCount,

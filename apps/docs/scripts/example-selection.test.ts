@@ -7,7 +7,6 @@ describe("documentation example selection", () => {
   it("selects every notebook and view by default", () => {
     const selection = selectDocumentationExamples(documentationExampleFamilies, []);
 
-    expect(selection.complete).toBe(true);
     expect(selection.notebooks).toBe(4);
     expect(selection.views).toBe(12);
   });
@@ -23,7 +22,6 @@ describe("documentation example selection", () => {
       "--view=occupancy/monitor",
     ]);
 
-    expect(selection.complete).toBe(false);
     expect(selection.notebooks).toBe(2);
     expect(selection.views).toBe(4);
     expect(
