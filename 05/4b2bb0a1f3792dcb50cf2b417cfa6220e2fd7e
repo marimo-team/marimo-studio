@@ -1,0 +1,51 @@
+packages/studio/tests/control-controller.test.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 105-136
+packages/presentation/src/runtime-config/remote.ts
+  s_f9539e858c2d0e::t_cfd99321cb8fb9 144-145
+packages/studio/src/features/preview/controller.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 29,829-831
+packages/presentation/tests/server-values.test.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 264,282
+packages/studio/tests/control-remote.test.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 33-51,53-57
+  s_f9539e858c2d0e::t_d0fb716c41bba5 52
+packages/studio/src/features/preview/control-remote.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 1,4,14-25,42-50
+packages/presentation/src/values/remote.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 24,97
+  s_f9539e858c2d0e::t_c9d75ec3ae58eb 136-139
+packages/presentation/src/runtime/values/use-runtime-value.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 21-30
+packages/presentation/tests/runtime-config.test.ts
+  s_f9539e858c2d0e::t_013ae8a40878d8 2,400-431
+  s_f9539e858c2d0e::t_955d6092bc54f8 434-465
+  s_f9539e858c2d0e::t_5b68da1b390860 466-495
+  s_f9539e858c2d0e::t_4184509256e78b 371-390,392-399
+  s_f9539e858c2d0e::t_4bb48c364d0ff8 391
+packages/presentation/tests/server-outputs.test.ts
+  s_f9539e858c2d0e::t_d58800330a2e7a 184
+  s_f9539e858c2d0e::t_955d6092bc54f8 168-183,185-189
+packages/studio/src/features/preview/control-controller.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 5,207,218-219
+packages/presentation/src/runtime/outputs/use-output-projection.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 45-54
+packages/presentation/src/outputs/remote.ts
+  s_f9539e858c2d0e::t_955d6092bc54f8 27,97
+  s_f9539e858c2d0e::t_c9d75ec3ae58eb 116-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "054b2bb0a1f3792dcb50cf2b417cfa6220e2fd7e",
+  "prompts": {},
+  "sessions": {
+    "s_f9539e858c2d0e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a11621-0201-7b51-8514-6b8cd59694bf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
