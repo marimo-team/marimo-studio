@@ -765,6 +765,23 @@ def test_execution_tracker_ignores_a_late_create_terminal_after_retry_reset() ->
     assert not tracker.pending(session)
 
 
+def test_startup_retry_preserves_other_active_kernel_commands() -> None:
+    session: Any = SimpleNamespace(session_view=SimpleNamespace(cell_notifications={}))
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_notification_sent(
+        session, _marker("CreateNotebookCommand", "start", "create")
+    )
+    tracker.on_notification_sent(
+        session, _marker("ExecuteCellsCommand", "start", "execute")
+    )
+    tracker.reset_startup()
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session, _marker("ExecuteCellsCommand", "done", "execute")
+    )
+    assert not tracker.pending(session)
+
+
 def test_execution_tracker_ignores_a_late_unmarked_create_completion_after_retry() -> (
     None
 ):

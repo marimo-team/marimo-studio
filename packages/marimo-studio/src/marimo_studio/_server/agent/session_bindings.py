@@ -255,7 +255,6 @@ class SessionBindings(Generic[BindingClientT]):
             client is None
             or lease is None
             or self._resolve(lease, "active") is None
-            or not self._is_connected(client)
             or lease.native_claim is None
         ):
             return None

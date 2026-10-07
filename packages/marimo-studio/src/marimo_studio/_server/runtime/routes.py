@@ -116,9 +116,7 @@ async def runtime_config_response(
             or not sessions.is_session_id(preview_session_id)
         ):
             return _invalid_studio_session()
-        binding_generation = await clients.binding_generation_for_client(client_id)
-    else:
-        binding_generation = None
+    binding_generation = None
     if presentation_capability is not None:
         runtime_session_id = presentation_capability.runtime_session_id
         if runtime_session_id is None:
@@ -180,7 +178,10 @@ async def runtime_config_response(
             return _revision_unavailable()
         snapshot = current
     if client_id is not None:
-        lookup_session_id = await clients.session_for_client(client_id)
+        (
+            lookup_session_id,
+            binding_generation,
+        ) = await clients.session_binding_for_client(client_id)
         expected_sessions = request.query_params.getlist(EDITOR_SESSION_QUERY_PARAM)
         # A disconnected editor tab reports no session and stays pending.
         if (
@@ -211,6 +212,32 @@ async def runtime_config_response(
             )
 
     async def configuration(progress: RuntimeProgressSink | None = None) -> Response:
+        async def binding_error() -> Response | None:
+            if client_id is None:
+                return None
+            (
+                current_session_id,
+                current_generation,
+            ) = await clients.session_binding_for_client(client_id)
+            if current_session_id is None:
+                return _editor_disconnected()
+            if (
+                current_session_id != lookup_session_id
+                or current_generation != binding_generation
+                or not sessions.exists(context, current_session_id)
+            ):
+                return JSONResponse(
+                    {
+                        "error": "preview-session-changed",
+                        "message": (
+                            "The notebook session changed. Open a new preview URL."
+                        ),
+                    },
+                    status_code=409,
+                    headers=NO_STORE,
+                )
+            return None
+
         revalidation: tuple[str, dict[str, str]] | None = None
         try:
             expected_live_cells = None
@@ -261,6 +288,8 @@ async def runtime_config_response(
                         },
                     )
         except RuntimeSyncError as error:
+            if changed := await binding_error():
+                return changed
             return _runtime_sync_response(error)
         except RuntimeConfigTooLargeError as error:
             return error_response(error)
@@ -276,39 +305,12 @@ async def runtime_config_response(
                     expected_snapshot=expected_live_cells,
                 )
             except RuntimeSyncError as error:
+                if changed := await binding_error():
+                    return changed
                 return _runtime_sync_response(error)
         if client_id is not None:
-            current_session_id = await clients.session_for_client(client_id)
-            current_generation = await clients.binding_generation_for_client(client_id)
-            if current_session_id is None:
-                return _editor_disconnected()
-            if current_session_id != lookup_session_id or not sessions.exists(
-                context, current_session_id
-            ):
-                return JSONResponse(
-                    {
-                        "error": "preview-session-changed",
-                        "message": (
-                            "The notebook session changed. Open a new preview URL."
-                        ),
-                    },
-                    status_code=409,
-                    headers=NO_STORE,
-                )
-            if (
-                binding_generation is not None
-                and current_generation != binding_generation
-            ):
-                return JSONResponse(
-                    {
-                        "error": "preview-session-changed",
-                        "message": (
-                            "The notebook session changed. Open a new preview URL."
-                        ),
-                    },
-                    status_code=409,
-                    headers=NO_STORE,
-                )
+            if changed := await binding_error():
+                return changed
             assert preview_session_id is not None
             runtime = payload.get("runtime")
             if (

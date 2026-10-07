@@ -483,20 +483,28 @@ def test_output_timeout_is_terminal_after_one_kernel_dispatch() -> None:
     assert raised.value.transient is False
 
 
-def test_timed_out_session_barriers_release_projection_work() -> None:
+def test_timed_out_session_barriers_retain_capacity_until_kernel_completion() -> None:
+    from marimo._messaging.notification import (
+        FunctionCallResultNotification,
+        HumanReadableStatus,
+    )
+    from marimo._messaging.serde import serialize_kernel_message
+
     consumer = object()
 
     class Session:
         def __init__(self) -> None:
             self.room = _EditorRoom(consumer, "editor")
+            self.calls: list[tuple[Any, Any]] = []
+            self.waiter: Any = None
 
-        @staticmethod
         @contextmanager
-        def scoped(_: object):
+        def scoped(self, waiter: object):
+            self.waiter = waiter
             yield
 
-        def put_control_request(self, *_: object, **__: object) -> None:
-            return
+        def put_control_request(self, request: object, **__: object) -> None:
+            self.calls.append((request, self.waiter))
 
     session = Session()
 
@@ -509,6 +517,23 @@ def test_timed_out_session_barriers_release_projection_work() -> None:
                     timeout=0,
                 )
             assert raised.value.code == "read-timeout"
+        state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)
+        assert state is not None
+        assert state.active == 3
+        for request, waiter in session.calls:
+            waiter.on_notification_sent(
+                session,
+                serialize_kernel_message(
+                    FunctionCallResultNotification(
+                        function_call_id=request.function_call_id,
+                        return_value={"status": "settled"},
+                        status=HumanReadableStatus(code="ok"),
+                        found=True,
+                    )
+                ),
+            )
+        await asyncio.sleep(0)
+        assert state.active == 0
 
     asyncio.run(exercise())
     state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)

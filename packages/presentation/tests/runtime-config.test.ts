@@ -404,7 +404,7 @@ test("runtime config keeps retrying while notebook execution settles", async () 
   globalThis.fetch = () => {
     attempts += 1;
     return Promise.resolve(
-      attempts <= 5
+      attempts <= 4
         ? Response.json(
             {
               error: "runtime-sync-pending",
@@ -424,7 +424,7 @@ test("runtime config keeps retrying while notebook execution settles", async () 
     await vi.runAllTimersAsync();
     const result = await request;
     assert.equal(result.runtime.id, "server");
-    assert.equal(attempts, 6);
+    assert.equal(attempts, 5);
   } finally {
     globalThis.fetch = originalFetch;
     vi.useRealTimers();

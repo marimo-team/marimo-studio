@@ -17,7 +17,7 @@ it("targets control configuration at the active editor session", async () => {
       "s_123456",
       "revision-1",
     ),
-  ).rejects.toThrow("503");
+  ).rejects.toMatchObject({ code: "control-request-failed", transient: true });
 
   const url = new URL(String(fetch.mock.calls[0]?.[0]));
   expect(url.pathname).toBe("/_marimo-studio/views/dashboard/controls");
@@ -29,6 +29,24 @@ it("targets control configuration at the active editor session", async () => {
       headers: { "Marimo-Session-Id": "s_123456" },
     }),
   );
+});
+
+it("preserves an abort while reading a control error response", async () => {
+  const controller = new AbortController();
+  const response = new Response(null, { status: 503 });
+  response.json = vi.fn().mockRejectedValue(new DOMException("aborted", "AbortError"));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+  controller.abort();
+
+  await expect(
+    fetchRuntimeControls(
+      "http://localhost:3000/views/dashboard",
+      "client",
+      "s_123456",
+      "revision",
+      controller.signal,
+    ),
+  ).rejects.toMatchObject({ name: "AbortError" });
 });
 
 it("preserves terminal runtime synchronization diagnostics", async () => {

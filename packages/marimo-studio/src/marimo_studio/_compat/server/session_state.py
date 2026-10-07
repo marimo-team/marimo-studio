@@ -318,13 +318,14 @@ class _ExecutionTracker(SessionEventListener):
                 name == "CreateNotebookCommand" for name, _token in self._fallback_runs
             )
             self._ignored_create_markers.update(self._create_marker_runs)
+            for token in self._create_marker_runs:
+                self._marker_runs.discard(token)
             self._create_marker_runs.clear()
             self._fallback_runs = deque(
                 (name, token)
                 for name, token in self._fallback_runs
                 if name != "CreateNotebookCommand"
             )
-            self._marker_runs.clear()
             self._fallback_batch_key = None
             self.create_accepted = False
             self.create_failed = False
@@ -367,6 +368,8 @@ async def _wait_for_execution_settle(
 def _marker_message(operation: object) -> bytes | None:
     if isinstance(operation, bytes):
         encoded = operation
+        if b"marimo-studio-execution:" not in encoded:
+            return None
     elif isinstance(operation, CompletedRunNotification):
         encoded = serialize_kernel_message(operation)
     else:

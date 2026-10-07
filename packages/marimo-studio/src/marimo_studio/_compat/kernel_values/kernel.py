@@ -362,7 +362,8 @@ class _KernelBridgeLifespan:
         configured = _is_studio_notebook(filename)
         if inspection is None and not configured:
             return False
-        _install_execution_markers(context)
+        if inspection is None:
+            _install_execution_markers(context)
         from marimo._session.model import SessionMode
 
         edit_preview = (
@@ -439,7 +440,7 @@ class _KernelBridgeLifespan:
             callable(get_query_param)
             and get_query_param(_PROBE_LEASE_QUERY_PARAM) is not None
         )
-        if _is_studio_notebook(_kernel_filename(context)) or is_probe:
+        if _is_studio_notebook(_kernel_filename(context)) and not is_probe:
             _install_execution_markers(context)
         self._entered_lifespan = _guard_entered_lifespan(context, self._resume)
         try:

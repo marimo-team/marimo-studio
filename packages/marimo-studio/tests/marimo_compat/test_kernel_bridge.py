@@ -71,7 +71,7 @@ def test_execution_markers_follow_kernel_dispatch_and_report_failures(
     assert markers[0][2] == markers[1][2]
 
 
-def test_execution_markers_report_kernel_enqueues_before_dispatch(
+def test_execution_markers_follow_the_enqueued_kernel_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo._messaging import notification_utils
@@ -79,13 +79,14 @@ def test_execution_markers_report_kernel_enqueues_before_dispatch(
 
     notifications: list[object] = []
     enqueued: list[object] = []
+    handled: list[object] = []
 
     class Kernel:
         def enqueue_control_request(self, request: object) -> None:
             enqueued.append(request)
 
-        async def handle_message(self, _request: object) -> None:
-            return
+        async def handle_message(self, request: object) -> None:
+            handled.append(request)
 
     context = SimpleNamespace(_kernel=Kernel(), stream=object())
     monkeypatch.setattr(kernel_values_module, "is_owned_session", lambda: False)
@@ -96,14 +97,16 @@ def test_execution_markers_report_kernel_enqueues_before_dispatch(
     )
     _install_execution_markers(context)
 
-    context._kernel.enqueue_control_request(ExecuteStaleCellsCommand())
-    asyncio.run(context._kernel.handle_message(ExecuteStaleCellsCommand()))
+    request = ExecuteStaleCellsCommand()
+    context._kernel.enqueue_control_request(request)
+    assert notifications == []
+    asyncio.run(context._kernel.handle_message(enqueued.pop(0)))
 
     markers = [
         parse_marker(getattr(notification, "run_id", None))
         for notification in notifications
     ]
-    assert len(enqueued) == 1
+    assert handled == [request]
     assert [marker[0:2] for marker in markers if marker is not None] == [
         ("start", "ExecuteStaleCellsCommand"),
         ("done", "ExecuteStaleCellsCommand"),

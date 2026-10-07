@@ -141,8 +141,7 @@ export const fetchRuntimeConfigWithRetry = async (
       error.transient &&
       error.code !== "presentation-revision-unavailable",
     retryAfterExhaustion: (error) =>
-      error instanceof RuntimeConfigRequestError &&
-      (error.code === "runtime-startup-pending" || error.code === "runtime-sync-pending")
+      error instanceof RuntimeConfigRequestError && error.code === "runtime-startup-pending"
         ? 5_000
         : undefined,
     signal,

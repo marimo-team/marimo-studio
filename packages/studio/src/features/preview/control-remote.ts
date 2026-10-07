@@ -39,13 +39,20 @@ export const fetchRuntimeControls = async (
     signal,
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
+    }
     const parsed = jsonValueSchema.safeParse(body);
     const detail = parseErrorResponse(parsed.success ? parsed.data : null);
     throw new ControlRequestError(
       detail.message ?? `Control configuration failed with ${response.status}`,
       detail.error ?? "control-request-failed",
-      detail.transient ?? false,
+      detail.transient ?? true,
       detail.hint,
     );
   }

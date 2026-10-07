@@ -44,8 +44,7 @@ async def control_config_response(
     snapshot = presentation.snapshot_for_revision(view_name, revision)
     if snapshot is None:
         return _revision_unavailable()
-    session_id = await clients.session_for_client(client_id)
-    binding_generation = await clients.binding_generation_for_client(client_id)
+    session_id, binding_generation = await clients.session_binding_for_client(client_id)
     supplied_session_id = request.headers.get("Marimo-Session-Id")
     if (
         session_id is None
@@ -62,11 +61,15 @@ async def control_config_response(
         bindings = await sessions.control_bindings(context, session_id)
         await revalidate_runtime_cells(sessions, context, session_id, cells)
     except RuntimeSyncError as error:
+        if await clients.session_binding_for_client(client_id) != (
+            session_id,
+            binding_generation,
+        ):
+            return _session_pending()
         return _runtime_sync_response(error)
-    current_session_id = await clients.session_for_client(client_id)
-    current_generation = await clients.binding_generation_for_client(client_id)
-    if current_session_id != session_id or (
-        binding_generation is not None and current_generation != binding_generation
+    if await clients.session_binding_for_client(client_id) != (
+        session_id,
+        binding_generation,
     ):
         return _session_pending()
     controls = {

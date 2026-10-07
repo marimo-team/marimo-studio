@@ -635,10 +635,6 @@ async def _invoke_session_function(
         )
         return await asyncio.wait_for(result, timeout=timeout)
     except asyncio.TimeoutError as error:
-        if operation == "barrier":
-            # Barriers are bounded synchronization points. There is no
-            # deferred result for a timed-out barrier to finish the lease.
-            waiter.finish_work()
         output_read = operation == "output"
         query_sync = operation == "query"
         raise ProjectionUnavailable(
@@ -653,10 +649,6 @@ async def _invoke_session_function(
             transient=not output_read,
             terminal=waiter.terminal if query_sync else None,
         ) from error
-    except asyncio.CancelledError:
-        if operation == "barrier":
-            waiter.finish_work()
-        raise
     finally:
         if pending is not None:
 

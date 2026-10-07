@@ -82,10 +82,10 @@ test("keeps the startup document while runtime configuration is pending", async 
     await expect(
       page.getByRole("progressbar", { name: "Connecting to the Python runtime" }),
     ).toHaveCount(0);
-    pendingProjectionReads.recovered();
   } finally {
     release();
   }
+  pendingProjectionReads.recovered();
 });
 
 test("shows a startup failure and retries configuration on request", async ({
@@ -386,9 +386,9 @@ test("keeps rendered content visible while replacement preparation reports progr
     await waitForPreview(page);
     await expect(panel).toHaveCount(0);
     await expect(preview.getByText("Updated view", { exact: true })).toBeVisible();
-    pendingProjectionReads.recovered();
   } finally {
     await writeDashboardSource(page, original);
     await waitForPreview(page);
   }
+  pendingProjectionReads.recovered();
 });

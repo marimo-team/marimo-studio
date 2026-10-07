@@ -379,6 +379,15 @@ class StudioClientRegistry:
         async with self._condition:
             return self._bindings.generation_for_client(client_id)
 
+    async def session_binding_for_client(
+        self, client_id: str
+    ) -> tuple[str | None, int | None]:
+        async with self._condition:
+            return (
+                self._bindings.session_for_client(client_id),
+                self._bindings.generation_for_client(client_id),
+            )
+
     async def target_for_client(self, client_id: str) -> PeerTarget | None:
         async with self._condition:
             return self._presence.target(client_id)

@@ -133,9 +133,5 @@ export const readServerValuesWithRetry = async (
     },
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof ValueRequestError && error.transient,
-    retryAfterExhaustion: (error) =>
-      error instanceof ValueRequestError && error.code === "runtime-sync-pending"
-        ? 5_000
-        : undefined,
     signal,
   });

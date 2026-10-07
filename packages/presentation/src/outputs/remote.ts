@@ -113,10 +113,6 @@ const readServerOutputsAtTargetWithRetry = (
     operation: () => readServerOutputsAtTarget(target, request, signal),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof OutputRequestError && error.transient,
-    retryAfterExhaustion: (error) =>
-      error instanceof OutputRequestError && error.code === "runtime-sync-pending"
-        ? 5_000
-        : undefined,
     signal,
   });
 
