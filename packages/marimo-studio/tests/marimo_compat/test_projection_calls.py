@@ -22,6 +22,7 @@ from marimo_studio._compat.kernel_values.query_authorization import (
 from marimo_studio._compat.kernel_values.session import (
     _FunctionResultWaiter,
     _parse_result,
+    wait_for_session_barrier,
 )
 from marimo_studio._projections.runtime_records import VALUE_LIMITS, ValueLimits
 from marimo_studio._server.presentation.ports import (
@@ -480,6 +481,64 @@ def test_output_timeout_is_terminal_after_one_kernel_dispatch() -> None:
     assert session.dispatched == 1
     assert raised.value.code == "output-read-timeout"
     assert raised.value.transient is False
+
+
+def test_timed_out_session_barriers_retain_capacity_until_kernel_completion() -> None:
+    from marimo._messaging.notification import (
+        FunctionCallResultNotification,
+        HumanReadableStatus,
+    )
+    from marimo._messaging.serde import serialize_kernel_message
+
+    consumer = object()
+
+    class Session:
+        def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, "editor")
+            self.calls: list[tuple[Any, Any]] = []
+            self.waiter: Any = None
+
+        @contextmanager
+        def scoped(self, waiter: object):
+            self.waiter = waiter
+            yield
+
+        def put_control_request(self, request: object, **__: object) -> None:
+            self.calls.append((request, self.waiter))
+
+    session = Session()
+
+    async def exercise() -> None:
+        for _index in range(3):
+            with pytest.raises(ProjectionUnavailable) as raised:
+                await wait_for_session_barrier(
+                    session,
+                    consumer_id="editor",
+                    timeout=0,
+                )
+            assert raised.value.code == "read-timeout"
+        state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)
+        assert state is not None
+        assert state.active == 3
+        for request, waiter in session.calls:
+            waiter.on_notification_sent(
+                session,
+                serialize_kernel_message(
+                    FunctionCallResultNotification(
+                        function_call_id=request.function_call_id,
+                        return_value={"status": "settled"},
+                        status=HumanReadableStatus(code="ok"),
+                        found=True,
+                    )
+                ),
+            )
+        await asyncio.sleep(0)
+        assert state.active == 0
+
+    asyncio.run(exercise())
+    state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)
+    assert state is not None
+    assert state.active == 0
 
 
 def test_timed_out_projection_calls_cannot_grow_the_session_backlog(

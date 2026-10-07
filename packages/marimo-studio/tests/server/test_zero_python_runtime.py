@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -9,6 +10,7 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 import pytest
 from starlette.testclient import TestClient
 
+from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.prepared_views import (
     PreparedViewRegistry,
@@ -25,6 +27,14 @@ from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgr
 from ..app_helpers import configured, edit_mode, marimo_app
 from ..helpers import update_notebook_config
 from .app_test_support import _runtime_config
+
+
+async def _session_binding(
+    registry: StudioClientRegistry,
+    client_id: str,
+    session_for_client: Callable[[StudioClientRegistry, str], Awaitable[str | None]],
+) -> tuple[str | None, int | None]:
+    return await session_for_client(registry, client_id), None
 
 
 def test_zero_python_runtime_uses_notebook_scoped_publication_owner(
@@ -191,6 +201,13 @@ def test_prepared_manifest_follows_the_browser_editor_binding(
         return SimpleNamespace(path=path, close=lambda: None) if path else None
 
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
     monkeypatch.setattr(PreparedViewRegistry, "prepare", prepare)
     monkeypatch.setattr(PreparedViewRegistry, "current", current)
     monkeypatch.setattr(PreparedViewRegistry, "poll_current", current)
@@ -256,6 +273,7 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
     edit_mode(app)
     bound = "s_abcdef"
     rebinding = False
+    live_cell_calls = 0
     bindings: dict[str, object] = {"PKri-0": {"input": "sport", "path": []}}
 
     async def session_for_client(
@@ -270,12 +288,21 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
         return bindings
 
     async def live_cells(*_args: object, **_kwargs: object) -> None:
+        nonlocal live_cell_calls
+        live_cell_calls += 1
         return None
 
     async def prepare(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("Control metadata must not prepare notebook states")
 
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
     monkeypatch.setattr(PreparedViewRegistry, "prepare", prepare)
     monkeypatch.setattr(
         "marimo_studio._server.runtime.catalog.RuntimeRegistry.project", prepare
@@ -302,6 +329,7 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
             "/_marimo-studio/views/dashboard/controls", params=params, headers=headers
         )
         assert response.status_code == 200, response.text
+        assert live_cell_calls == 1
         assert response.json()["controls"]["bindings"] == bindings
         assert response.json()["revision"] == revision
         unchanged = client.get(
@@ -316,3 +344,84 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
             "/_marimo-studio/views/dashboard/controls", params=params, headers=headers
         )
         assert rebound.status_code == 409
+
+
+def test_editor_controls_report_required_execution(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = configured(notebook_path)
+    app = marimo_app(studio.notebook)
+    edit_mode(app)
+    bound = "s_abcdef"
+    stale_cells: LiveCellSnapshot | None = None
+
+    async def session_for_client(
+        _clients: StudioClientRegistry, client_id: str
+    ) -> str | None:
+        return bound if client_id == "browser-client-1234" else None
+
+    async def live_cells(*_args: object, **_kwargs: object) -> LiveCellSnapshot:
+        assert stale_cells is not None
+        return stale_cells
+
+    async def read_bindings(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("Control bindings must not be read before execution")
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, client_id: _session_binding(
+            registry, client_id, session_for_client
+        ),
+    )
+    with TestClient(app) as client:
+        runtime = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        revision = runtime["revision"]
+        references = tuple(
+            CellRef.parse(reference)
+            for reference in runtime["runtimeBindings"]["cellRefs"]
+        )
+        stale_cells = LiveCellSnapshot(
+            owner="session:test",
+            generation="0" * 64,
+            ids={
+                reference: f"live-{index}" for index, reference in enumerate(references)
+            },
+            names={},
+            dependency_closures={},
+            current_refs={},
+        )
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
+            live_cells,
+        )
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.control_bindings",
+            read_bindings,
+        )
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+            lambda _sessions, _context, session_id: session_id == bound,
+        )
+        response = client.get(
+            "/_marimo-studio/views/dashboard/controls",
+            params={
+                "marimo_studio_client": "browser-client-1234",
+                "revision": revision,
+            },
+            headers={"Marimo-Session-Id": bound},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "runtime-sync-required",
+        "message": (
+            "Run the changed notebook cells to update the Python runtime preview."
+        ),
+        "transient": False,
+        "hint": (
+            "Run the changed notebook cells in the editor, then retry the preview."
+        ),
+    }

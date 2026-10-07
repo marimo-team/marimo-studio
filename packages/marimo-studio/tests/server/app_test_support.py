@@ -284,7 +284,8 @@ def _live_test_session(
     session = _LiveTestSession()
     session.document = document
     session.session_view = SimpleNamespace(
-        last_executed_code={row.id: row.code for row in rows}
+        last_executed_code={row.id: row.code for row in rows},
+        cell_notifications={},
     )
     session.app_file_manager = SimpleNamespace(
         app=_LiveTestApp(document),

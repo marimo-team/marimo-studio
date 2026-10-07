@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -14,7 +15,9 @@ from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio._views.build import build_view_project_sync
-from marimo_studio.errors._internal import RuntimeSyncError
+from marimo_studio.errors._internal import (
+    RuntimeSyncError,
+)
 
 from ..app_helpers import published_dashboard
 from ..app_helpers import set_shell as _set_shell
@@ -464,6 +467,138 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
         ("outputs", "output", "render_outputs"),
     ],
 )
+def test_projection_waits_while_notebook_execution_is_pending(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    kind: str,
+    reader_name: str,
+) -> None:
+    studio = published_dashboard(notebook_path)
+    calls: list[object] = []
+
+    async def read_projection(*args: object, **_options: object) -> SimpleNamespace:
+        calls.append(args)
+        return SimpleNamespace(errors={}, to_dict=lambda: {"errors": {}})
+
+    monkeypatch.setattr(
+        f"marimo_studio._compat.kernel_values.host.PrivateKernelProjectionHost.{reader_name}",
+        read_projection,
+    )
+
+    async def pending_session(
+        *_args: object,
+        **_kwargs: object,
+    ) -> LiveCellSnapshot:
+        return LiveCellSnapshot(
+            owner="session:test",
+            generation="0" * 64,
+            ids={},
+            names={},
+            dependency_closures={},
+            current_refs={},
+            execution_pending=True,
+        )
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
+            pending_session,
+        )
+        projection = _projection_request(config, kind, "doubled")
+        body: dict[str, object] = {
+            "projections": [projection],
+            "activeProjections": [projection],
+        }
+        response = client.post(
+            _view_support_url(config, endpoint),
+            headers={"Marimo-Session-Id": config["presentationSessionId"]},
+            json={"revision": config["revision"], **body},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "runtime-sync-pending",
+        "message": "Waiting for changed notebook cells to finish running.",
+        "transient": True,
+    }
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "kind", "reader_name"),
+    [
+        ("values", "value", "read_values"),
+        ("outputs", "output", "render_outputs"),
+    ],
+)
+def test_projection_revalidates_live_generation_after_read(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    kind: str,
+    reader_name: str,
+) -> None:
+    studio = published_dashboard(notebook_path)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
+    references = cell_refs(cell.code for cell in static.cells)
+    live_cells = LiveCellSnapshot(
+        owner="session:test",
+        generation="0" * 64,
+        ids={reference: f"live-{index}" for index, reference in enumerate(references)},
+        names={},
+        dependency_closures={},
+        current_refs={
+            f"live-{index}": reference for index, reference in enumerate(references)
+        },
+    )
+    changed_cells = replace(live_cells, execution_generation=1)
+    captures = iter((live_cells, changed_cells))
+    calls: list[object] = []
+
+    async def current_live_cells(*_args: object, **_kwargs: object):
+        return next(captures)
+
+    async def read_projection(*args: object, **_options: object) -> SimpleNamespace:
+        calls.append(args)
+        return SimpleNamespace(errors={}, to_dict=lambda: {"errors": {}})
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
+            current_live_cells,
+        )
+        monkeypatch.setattr(
+            f"marimo_studio._compat.kernel_values.host.PrivateKernelProjectionHost.{reader_name}",
+            read_projection,
+        )
+        projection = _projection_request(config, kind, "doubled")
+        response = client.post(
+            _view_support_url(config, endpoint),
+            headers={"Marimo-Session-Id": config["presentationSessionId"]},
+            json={
+                "revision": config["revision"],
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "runtime-sync-pending"
+    assert calls
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "kind", "reader_name"),
+    [
+        ("values", "value", "read_values"),
+        ("outputs", "output", "render_outputs"),
+    ],
+)
 def test_projection_waits_for_the_live_session_binding(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -509,6 +644,84 @@ def test_projection_waits_for_the_live_session_binding(
     assert response.status_code == 409
     assert response.json()["error"] == "runtime-sync-pending"
     assert response.json()["transient"] is True
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "kind", "reader_name"),
+    [
+        ("values", "value", "read_values"),
+        ("outputs", "output", "render_outputs"),
+    ],
+)
+def test_projection_reports_required_execution(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    kind: str,
+    reader_name: str,
+) -> None:
+    studio = published_dashboard(notebook_path)
+    calls: list[object] = []
+
+    async def read_projection(*args: object, **_options: object) -> SimpleNamespace:
+        calls.append(args)
+        return SimpleNamespace(errors={}, to_dict=lambda: {"errors": {}})
+
+    monkeypatch.setattr(
+        f"marimo_studio._compat.kernel_values.host.PrivateKernelProjectionHost.{reader_name}",
+        read_projection,
+    )
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        static = load_static_notebook(
+            studio.notebook, studio.notebook.read_text(encoding="utf-8")
+        )
+        references = cell_refs(cell.code for cell in static.cells)
+        stale_cells = LiveCellSnapshot(
+            owner="session:test",
+            generation="0" * 64,
+            ids={
+                reference: f"live-{index}" for index, reference in enumerate(references)
+            },
+            names={},
+            dependency_closures={},
+            current_refs={},
+        )
+
+        async def stale_session(
+            *_args: object,
+            **_kwargs: object,
+        ) -> LiveCellSnapshot:
+            return stale_cells
+
+        monkeypatch.setattr(
+            "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
+            stale_session,
+        )
+        projection = _projection_request(config, kind, "doubled")
+        body: dict[str, object] = {
+            "projections": [projection],
+            "activeProjections": [projection],
+        }
+        response = client.post(
+            _view_support_url(config, endpoint),
+            headers={"Marimo-Session-Id": config["presentationSessionId"]},
+            json={"revision": config["revision"], **body},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "runtime-sync-required",
+        "message": (
+            "Run the changed notebook cells to update the Python runtime preview."
+        ),
+        "transient": False,
+        "hint": (
+            "Run the changed notebook cells in the editor, then retry the preview."
+        ),
+    }
     assert calls == []
 
 

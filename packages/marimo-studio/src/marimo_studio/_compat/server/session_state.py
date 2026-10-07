@@ -6,25 +6,44 @@ import asyncio
 import hashlib
 import os
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections import deque
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from threading import RLock
 from time import monotonic
-from typing import Literal
+from typing import Any, Literal, cast
 from weakref import ReferenceType, WeakKeyDictionary, WeakSet
 from weakref import ref as weakref_ref
 
 from marimo._messaging.notification import (
+    CellNotification,
+    CompletedRunNotification,
     QueryParamsSetNotification,
     ReloadNotification,
 )
-from marimo._messaging.serde import serialize_kernel_message
+from marimo._messaging.serde import (
+    deserialize_kernel_message,
+    serialize_kernel_message,
+)
+from marimo._messaging.types import KernelMessage
+from marimo._session.events import SessionEventListener
 from marimo._session.session import Session
 from marimo._session.types import KernelState
 
-from marimo_studio._compat.kernel_values.session import read_session_values
+from marimo_studio._compat.execution_markers import (
+    has_compatibility_completion,
+    is_execution_command,
+    is_observation_command,
+    is_observation_token,
+    parse_marker,
+)
+from marimo_studio._compat.kernel_values.session import (
+    read_session_values,
+    wait_for_session_barrier,
+)
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
 from marimo_studio._compat.server.gateway import context_handle
 from marimo_studio._delivery.urls import (
@@ -35,7 +54,7 @@ from marimo_studio._delivery.urls import (
     STUDIO_CLIENT_QUERY_PARAM,
 )
 from marimo_studio._notebook.cell_refs import cell_refs
-from marimo_studio._notebook.records import LiveCellIdentity, LiveCellSnapshot
+from marimo_studio._notebook.records import CellRef, LiveCellIdentity, LiveCellSnapshot
 from marimo_studio._processes.latest_work import LatestWork
 from marimo_studio._processes.ownership import (
     propagate_cancellation,
@@ -48,10 +67,16 @@ from marimo_studio._server.query import (
     canonical_public_query,
 )
 from marimo_studio._server.records import ServerContext
-from marimo_studio.errors._internal import RuntimeStartupError, RuntimeSyncError
+from marimo_studio.errors._internal import (
+    RuntimeExecutionPendingError,
+    RuntimeKernelExitError,
+    RuntimeStartupError,
+    RuntimeSyncError,
+)
 
 _SESSION_PATTERN = re.compile(r"s_[a-z0-9]{6}")
 _NATIVE_INSTANTIATION_TIMEOUT_SECONDS = 30.0
+_LIVE_CAPTURE_BARRIER_TIMEOUT_SECONDS = 0.5
 
 
 @dataclass(frozen=True)
@@ -61,6 +86,425 @@ class _LiveCellCapture:
     cells: tuple[tuple[str, str, str], ...]
     executed_cells: tuple[tuple[str, str], ...]
     graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None
+    execution_pending: bool = False
+    execution_generation: int = 0
+
+
+class _ExecutionTracker(SessionEventListener):
+    """Track the execution lifecycle exposed by a Marimo session.
+
+    The kernel emits a correlated start and terminal marker for every command
+    that can mutate execution. Session events remain a compatibility barrier
+    until the marker arrives, while cell notifications expose work that was
+    already active when Studio attached.
+    """
+
+    def __init__(self, session: Session, *, attached: bool) -> None:
+        self._lock = RLock()
+        self._generation = 0
+        self._active_cells: set[str] = set()
+        self._marker_runs: set[str] = set()
+        self._create_marker_runs: set[str] = set()
+        self._ignored_create_markers: set[str] = set()
+        self._ignored_create_starts = 0
+        self._ignored_fallback_completions = 0
+        self._fallback_runs: deque[tuple[str, str]] = deque()
+        self._fallback_token = 0
+        self._fallback_batch_key: tuple[str, str] | None = None
+        self._marker_supported = False
+        self.create_accepted = False
+        self.create_failed = False
+        self.attached = attached
+        notifications = getattr(
+            getattr(session, "session_view", None), "cell_notifications", None
+        )
+        if isinstance(notifications, Mapping):
+            self._active_cells.update(
+                str(cell_id)
+                for cell_id, notification in notifications.items()
+                if getattr(notification, "status", None) in {"queued", "running"}
+            )
+
+    @property
+    def generation(self) -> int:
+        with self._lock:
+            return self._generation
+
+    @property
+    def marker_supported(self) -> bool:
+        with self._lock:
+            return self._marker_supported
+
+    def _retire_fallback(self, name: str) -> None:
+        fallback = next((item for item in self._fallback_runs if item[0] == name), None)
+        if fallback is not None:
+            self._fallback_runs.remove(fallback)
+
+    def _admit_unmarked_create(self) -> None:
+        """Close the first CreateNotebook barrier when marker support appears.
+
+        The bridge is installed while Marimo handles the first native create
+        request, so that request can complete before its wrapper exists. The
+        first later marker proves that the kernel progressed past that create.
+        """
+        had_create = any(
+            name == "CreateNotebookCommand" for name, _token in self._fallback_runs
+        )
+        if not had_create:
+            return
+        self._fallback_runs = deque(
+            (name, token)
+            for name, token in self._fallback_runs
+            if name != "CreateNotebookCommand"
+        )
+        self.create_accepted = True
+        self.create_failed = False
+
+    def on_received_command(
+        self,
+        session: Session,
+        request: object,
+        from_consumer_id: object | None,
+    ) -> None:
+        del session, from_consumer_id
+        name = type(request).__name__
+        with self._lock:
+            if (
+                not is_execution_command(name)
+                or (self._marker_supported and name != "CreateNotebookCommand")
+                or not has_compatibility_completion(name)
+            ):
+                return
+            # The first native create enters the bridge lifespan before its
+            # dispatch wrapper is installed. Retain native completions until
+            # the kernel starts emitting correlated dispatch markers.
+            batch_key = ("ui", "") if name == "UpdateUIElementCommand" else None
+            if batch_key is not None and self._fallback_batch_key == batch_key:
+                return
+            self._fallback_token += 1
+            token = f"fallback:{self._fallback_token}"
+            if is_observation_command(request):
+                token = f"fallback:observation:{self._fallback_token}"
+            self._fallback_runs.append((name, token))
+            if batch_key is not None:
+                self._fallback_batch_key = batch_key
+            if name == "CreateNotebookCommand":
+                self.create_accepted = True
+                self.create_failed = False
+            if not is_observation_command(request):
+                self._generation += 1
+
+    def on_notification_sent(self, session: Session, notification: object) -> None:
+        if not isinstance(notification, bytes):
+            return
+        try:
+            message = deserialize_kernel_message(KernelMessage(notification))
+        except Exception:
+            return
+        if isinstance(message, CompletedRunNotification):
+            marker = parse_marker(getattr(message, "run_id", None))
+            if marker is not None:
+                phase, name, token = marker
+                with self._lock:
+                    if not self._marker_supported:
+                        self._fallback_runs = deque(
+                            item
+                            for item in self._fallback_runs
+                            if item[0] == "CreateNotebookCommand"
+                        )
+                    self._marker_supported = True
+                    if (
+                        name != "CreateNotebookCommand"
+                        and phase == "start"
+                        and not self._create_marker_runs
+                    ):
+                        self._admit_unmarked_create()
+                    if phase == "start":
+                        self._fallback_batch_key = None
+                        if (
+                            name == "CreateNotebookCommand"
+                            and self._ignored_create_starts
+                        ):
+                            self._ignored_create_starts -= 1
+                            self._ignored_create_markers.add(token)
+                            if not is_observation_token(token):
+                                self._generation += 1
+                            return
+                        self._marker_runs.add(token)
+                        if name == "CreateNotebookCommand":
+                            self._create_marker_runs.add(token)
+                            self.create_accepted = True
+                            self.create_failed = False
+                    elif phase == "done":
+                        if token in self._ignored_create_markers:
+                            self._ignored_create_markers.discard(token)
+                            self._generation += 1
+                            return
+                        matched = token in self._marker_runs
+                        self._marker_runs.discard(token)
+                        self._create_marker_runs.discard(token)
+                        if matched:
+                            self._retire_fallback(name)
+                        if name == "CreateNotebookCommand" and matched:
+                            self.create_accepted = True
+                    else:
+                        if token in self._ignored_create_markers:
+                            self._ignored_create_markers.discard(token)
+                            self._generation += 1
+                            return
+                        matched = token in self._marker_runs
+                        self._marker_runs.discard(token)
+                        self._create_marker_runs.discard(token)
+                        if matched:
+                            self._retire_fallback(name)
+                        if name == "CreateNotebookCommand" and matched:
+                            self.create_accepted = False
+                            self.create_failed = True
+                    if not is_observation_token(token):
+                        self._generation += 1
+                return
+            with self._lock:
+                if self._ignored_fallback_completions:
+                    self._ignored_fallback_completions -= 1
+                    self._fallback_batch_key = None
+                    return
+                # Native handlers emit an ordinary completion before the
+                # wrapper's private terminal marker. The marker owns that
+                # dispatch, so consuming a fallback here could retire a
+                # different same-type request that is still queued.
+                if self._marker_runs:
+                    return
+                if self._fallback_runs:
+                    name, token = self._fallback_runs[0]
+                    self._fallback_runs.popleft()
+                    self._fallback_batch_key = None
+                    if name == "CreateNotebookCommand":
+                        self.create_accepted = True
+                    if not token.startswith("fallback:observation:"):
+                        self._generation += 1
+            return
+        if not isinstance(message, CellNotification) or message.status is None:
+            return
+        cell_id = str(message.cell_id)
+        if message.status in {"queued", "running"}:
+            with self._lock:
+                self._active_cells.add(cell_id)
+                self._generation += 1
+            return
+        if message.status not in {"idle", "stale", "disabled-transitively"}:
+            return
+        with self._lock:
+            self._active_cells.discard(cell_id)
+            self._generation += 1
+
+    def pending(self, session: Session) -> bool:
+        del session
+        with self._lock:
+            return bool(self._active_cells or self._fallback_runs or self._marker_runs)
+
+    def reset_startup(self) -> None:
+        """Release a CreateNotebook barrier after its bounded retry window."""
+        with self._lock:
+            has_create_fallback = any(
+                name == "CreateNotebookCommand" for name, _token in self._fallback_runs
+            )
+            if (
+                has_create_fallback
+                and self._marker_supported
+                and not self._create_marker_runs
+            ):
+                self._ignored_create_starts += 1
+            self._ignored_fallback_completions += sum(
+                name == "CreateNotebookCommand" for name, _token in self._fallback_runs
+            )
+            self._ignored_create_markers.update(self._create_marker_runs)
+            for token in self._create_marker_runs:
+                self._marker_runs.discard(token)
+            self._create_marker_runs.clear()
+            self._fallback_runs = deque(
+                (name, token)
+                for name, token in self._fallback_runs
+                if name != "CreateNotebookCommand"
+            )
+            self._fallback_batch_key = None
+            self.create_accepted = False
+            self.create_failed = False
+            self._generation += 1
+
+    async def on_session_closed(self, session: Session) -> None:
+        del session
+        with self._lock:
+            self._active_cells.clear()
+            self._marker_runs.clear()
+            self._create_marker_runs.clear()
+            self._ignored_create_markers.clear()
+            self._ignored_create_starts = 0
+            self._ignored_fallback_completions = 0
+            self._fallback_runs.clear()
+            self._fallback_batch_key = None
+            self.create_accepted = False
+            self.create_failed = False
+
+
+async def _wait_for_execution_settle(
+    session: Session,
+    tracker: _ExecutionTracker,
+) -> None:
+    """Wait until the kernel barrier's marker reaches the session observer."""
+    deadline = monotonic() + _LIVE_CAPTURE_BARRIER_TIMEOUT_SECONDS
+    while tracker.pending(session):
+        kernel_exit_info = getattr(session, "kernel_exit_info", None)
+        if callable(kernel_exit_info):
+            exit_info = kernel_exit_info()
+            if exit_info is not None:
+                raise RuntimeKernelExitError(
+                    str(getattr(exit_info, "message", exit_info))
+                )
+        if monotonic() >= deadline:
+            raise RuntimeExecutionPendingError()
+        await asyncio.sleep(0.01)
+
+
+def _marker_message(operation: object) -> bytes | None:
+    if isinstance(operation, bytes):
+        encoded = operation
+        if b"marimo-studio-execution:" not in encoded:
+            return None
+    elif isinstance(operation, CompletedRunNotification):
+        encoded = serialize_kernel_message(operation)
+    else:
+        return None
+    try:
+        message = deserialize_kernel_message(KernelMessage(encoded))
+    except Exception:
+        return None
+    if isinstance(message, CompletedRunNotification) and parse_marker(
+        getattr(message, "run_id", None)
+    ):
+        return encoded
+    return None
+
+
+def _filter_kernel_markers(
+    session: Session,
+    tracker: _ExecutionTracker,
+) -> None:
+    """Keep private kernel markers out of Marimo's replay and browser streams."""
+    if getattr(session, "_studio_execution_notify_wrapped", False):
+        return
+    notify = getattr(session, "notify", None)
+    if not callable(notify):
+        return
+
+    def notify_without_marker(
+        operation: object,
+        from_consumer_id: object | None,
+    ) -> None:
+        marker = _marker_message(operation)
+        if marker is not None:
+            tracker.on_notification_sent(session, marker)
+            return
+        notify(operation, from_consumer_id)
+
+    try:
+        session_object = cast(Any, session)
+        session_object.notify = notify_without_marker
+        session_object._studio_execution_notify_wrapped = True
+    except (AttributeError, TypeError):
+        return
+
+
+_EXECUTION_TRACKERS: WeakKeyDictionary[Session, _ExecutionTracker] = WeakKeyDictionary()
+_EXECUTION_TRACKERS_LOCK = RLock()
+
+
+def _ensure_execution_tracker(session: Session) -> _ExecutionTracker:
+    with _EXECUTION_TRACKERS_LOCK:
+        try:
+            tracker = _EXECUTION_TRACKERS.get(session)
+        except TypeError:
+            return _ExecutionTracker(session, attached=False)
+        if tracker is not None:
+            return tracker
+        event_bus = getattr(session, "_event_bus", None)
+        subscribe = getattr(event_bus, "subscribe", None)
+        tracker = _ExecutionTracker(session, attached=callable(subscribe))
+        _filter_kernel_markers(session, tracker)
+        if callable(subscribe):
+            listeners = getattr(event_bus, "_listeners", None)
+            if isinstance(listeners, list):
+                listeners.insert(0, tracker)
+            else:
+                subscribe(tracker)
+        try:
+            _EXECUTION_TRACKERS[session] = tracker
+        except TypeError:
+            tracker.attached = False
+        return tracker
+
+
+class _ManagerExecutionTracker(SessionEventListener):
+    async def on_session_created(self, session: Session) -> None:
+        _ensure_execution_tracker(session)
+
+
+_MANAGER_EXECUTION_TRACKERS: WeakKeyDictionary[object, _ManagerExecutionTracker] = (
+    WeakKeyDictionary()
+)
+_MANAGER_SESSION_CREATE_WRAPPED: WeakSet[object] = WeakSet()
+
+
+def _ensure_manager_execution_tracker(manager: object) -> None:
+    event_bus = getattr(manager, "_event_bus", None)
+    subscribe = getattr(event_bus, "subscribe", None)
+    if not callable(subscribe):
+        return
+    with _EXECUTION_TRACKERS_LOCK:
+        try:
+            tracked = manager in _MANAGER_EXECUTION_TRACKERS
+        except TypeError:
+            return
+        if tracked:
+            return
+        listener = _ManagerExecutionTracker()
+        subscribe(listener)
+        try:
+            _MANAGER_EXECUTION_TRACKERS[manager] = listener
+        except TypeError:
+            return
+        create_session = getattr(manager, "create_session", None)
+        if callable(create_session):
+            create_session_fn = cast(Callable[..., Awaitable[Session]], create_session)
+            try:
+                wrapped = manager in _MANAGER_SESSION_CREATE_WRAPPED
+            except TypeError:
+                wrapped = True
+            if not wrapped:
+
+                async def create_with_execution_tracker(
+                    *args: object, **kwargs: object
+                ) -> Session:
+                    session = await create_session_fn(*args, **kwargs)
+                    _ensure_execution_tracker(session)
+                    return session
+
+                try:
+                    manager_dict = getattr(manager, "__dict__", None)
+                    if not isinstance(manager_dict, dict):
+                        raise TypeError(
+                            "Session manager does not expose instance attributes"
+                        )
+                    manager_dict["create_session"] = create_with_execution_tracker
+                    _MANAGER_SESSION_CREATE_WRAPPED.add(manager)
+                except (AttributeError, TypeError):
+                    pass
+        for session in getattr(manager, "sessions", {}).values():
+            _ensure_execution_tracker(session)
+
+
+def install_execution_tracker(manager: object) -> None:
+    """Attach execution tracking before an existing manager accepts commands."""
+    _ensure_manager_execution_tracker(manager)
 
 
 def _is_session_id(value: object) -> bool:
@@ -113,7 +557,11 @@ def current_session(context: ServerContext, session_id: str) -> Session | None:
     """Return an adapter-owned session for internal capability composition."""
     from marimo._types.ids import SessionId
 
-    session = context_handle(context).session_manager.get_session(SessionId(session_id))
+    manager = context_handle(context).session_manager
+    _ensure_manager_execution_tracker(manager)
+    session = manager.get_session(SessionId(session_id))
+    if session is not None:
+        _ensure_execution_tracker(session)
     return (
         session
         if session_matches_notebook(
@@ -122,6 +570,20 @@ def current_session(context: ServerContext, session_id: str) -> Session | None:
             notebook=context.notebook,
         )
         else None
+    )
+
+
+def _canonical_session_id(manager: object, session: Session) -> str | None:
+    sessions = getattr(manager, "sessions", None)
+    if not isinstance(sessions, Mapping):
+        return None
+    return next(
+        (
+            str(session_id)
+            for session_id, current in sessions.items()
+            if current is session
+        ),
+        None,
     )
 
 
@@ -155,9 +617,11 @@ def _capture_live_cells(
     if session_id is not None:
         session = current_session(context, session_id)
     elif context.mode == "edit":
-        session = context_handle(context).session_manager.get_session_by_file_key(
-            context.file_key
-        )
+        manager = context_handle(context).session_manager
+        _ensure_manager_execution_tracker(manager)
+        session = manager.get_session_by_file_key(context.file_key)
+        if session is not None:
+            _ensure_execution_tracker(session)
     else:
         return None
     if session is None:
@@ -178,6 +642,8 @@ def _capture_live_cells(
         for runtime_id in ordered_ids
         if runtime_id in executed_code
     )
+    tracker = _ensure_execution_tracker(session)
+    execution_pending = tracker.pending(session)
     graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None = None
     if include_dependency_closures:
         graph = session.app_file_manager.app.graph
@@ -203,6 +669,8 @@ def _capture_live_cells(
         cells=rows,
         executed_cells=ordered_executed_cells,
         graph_parents=graph_parents,
+        execution_pending=execution_pending,
+        execution_generation=tracker.generation,
     )
 
 
@@ -236,7 +704,15 @@ def _dependency_closures(
 def _materialize_live_cells(capture: _LiveCellCapture) -> LiveCellSnapshot:
     ordered_ids = tuple(runtime_id for runtime_id, _code, _name in capture.cells)
     refs = cell_refs(code for _runtime_id, code, _name in capture.cells)
-    executed_refs = cell_refs(code for _runtime_id, code in capture.executed_cells)
+    refs_by_runtime_id = dict(zip(ordered_ids, refs, strict=True))
+    executed_refs: dict[str, CellRef] = {}
+    for runtime_id, code in capture.executed_cells:
+        executed_ref = cell_refs((code,))[0]
+        executed_refs[runtime_id] = CellRef(
+            executed_ref.fingerprint,
+            executed_ref.layout_fingerprint,
+            refs_by_runtime_id[runtime_id].occurrence,
+        )
     names: dict[str, list[LiveCellIdentity]] = {}
     for ref, (runtime_id, _code, name) in zip(
         refs,
@@ -265,13 +741,11 @@ def _materialize_live_cells(capture: _LiveCellCapture) -> LiveCellSnapshot:
             capture.graph_parents,
         ),
         current_refs={
-            runtime_id: ref
-            for ref, (runtime_id, _cell) in zip(
-                executed_refs,
-                capture.executed_cells,
-                strict=True,
-            )
+            runtime_id: executed_refs[runtime_id]
+            for runtime_id, _cell in capture.executed_cells
         },
+        execution_pending=capture.execution_pending,
+        execution_generation=capture.execution_generation,
     )
 
 
@@ -300,6 +774,10 @@ class PrivateSessionState:
 
     def is_session_id(self, value: object) -> bool:
         return _is_session_id(value)
+
+    def prepare_manager(self, manager: object) -> None:
+        """Install execution observation before a manager serves requests."""
+        install_execution_tracker(manager)
 
     async def close(self) -> None:
         """Cancel and gather every adapter-owned startup barrier."""
@@ -397,9 +875,11 @@ class PrivateSessionState:
         from marimo._types.ids import SessionId
 
         manager = context_handle(context).session_manager
+        _ensure_manager_execution_tracker(manager)
         session = manager.get_session(SessionId(session_id))
         if session is None:
             return SessionOwner("unclaimed", None)
+        _ensure_execution_tracker(session)
         state: Literal["current", "foreign"] = (
             "current"
             if session_matches_notebook(
@@ -449,6 +929,7 @@ class PrivateSessionState:
             or session not in self._start_failures
         ):
             return False
+        _ensure_execution_tracker(session).reset_startup()
         self._start_failures.pop(session, None)
         self._waiting_since.pop(session, None)
         self._instantiation_requested.discard(session)
@@ -479,9 +960,28 @@ class PrivateSessionState:
             self._waiting_since.pop(session, None)
             self._started.add(session)
             return True
-        last_executed_code = session.session_view.last_executed_code
-        queued = {str(cell_id) for cell_id in last_executed_code}
-        if not queued:
+        tracker = _ensure_execution_tracker(session)
+        exit_info = session.kernel_exit_info()
+        if exit_info is not None:
+            raise RuntimeStartupError(exit_info.message)
+        if tracker.create_failed:
+            failure = (
+                "Marimo could not initialize the notebook. Reload the editor to retry."
+            )
+            self._start_failures[session] = failure
+            raise RuntimeStartupError(failure)
+        if tracker.pending(session):
+            waiting_since = self._waiting_since.setdefault(session, monotonic())
+            if monotonic() - waiting_since >= _NATIVE_INSTANTIATION_TIMEOUT_SECONDS:
+                failure = (
+                    "Marimo did not finish notebook startup within "
+                    f"{_NATIVE_INSTANTIATION_TIMEOUT_SECONDS:g} seconds. "
+                    "Reload the editor to retry."
+                )
+                self._start_failures[session] = failure
+                raise RuntimeStartupError(failure)
+            return False
+        if tracker.attached and not tracker.create_accepted:
             waiting_since = self._waiting_since.setdefault(session, monotonic())
             if (
                 session.kernel_state() is KernelState.RUNNING
@@ -501,9 +1001,30 @@ class PrivateSessionState:
                 self._start_failures[session] = failure
                 raise RuntimeStartupError(failure)
             return False
-        # Any recorded code proves Marimo queued its native CreateNotebook command.
-        # The browser can legitimately omit hidden or locally removed cells, so exact
-        # parity with the saved document is not a valid initialization barrier.
+        last_executed_code = session.session_view.last_executed_code
+        queued = {str(cell_id) for cell_id in last_executed_code}
+        if not queued and not tracker.create_accepted:
+            waiting_since = self._waiting_since.setdefault(session, monotonic())
+            if (
+                session.kernel_state() is KernelState.RUNNING
+                and session not in self._instantiation_requested
+            ):
+                session.instantiate(
+                    instantiate_notebook_request(auto_run=False),
+                    http_request=None,
+                )
+                self._instantiation_requested.add(session)
+            if monotonic() - waiting_since >= _NATIVE_INSTANTIATION_TIMEOUT_SECONDS:
+                failure = (
+                    "Marimo did not initialize the notebook within "
+                    f"{_NATIVE_INSTANTIATION_TIMEOUT_SECONDS:g} seconds. "
+                    "Reload the editor to retry."
+                )
+                self._start_failures[session] = failure
+                raise RuntimeStartupError(failure)
+            return False
+        # Sessions without the event-bus adapter retain the old compatibility
+        # barrier. Native sessions use the explicit CreateNotebook event above.
         self._waiting_since.pop(session, None)
         self._instantiation_requested.discard(session)
         task = asyncio.create_task(self._start(session, session_id))
@@ -582,11 +1103,63 @@ class PrivateSessionState:
         *,
         include_dependency_closures: bool,
     ) -> LiveCellSnapshot | None:
+        from marimo._types.ids import ConsumerId
+
         if self._closed:
             raise RuntimeSyncError("Marimo session state is shutting down.")
+        capture_session_id = session_id
+        try:
+            if session_id:
+                session = current_session(context, session_id)
+            elif context.mode == "edit":
+                manager = context_handle(context).session_manager
+                session = manager.get_session_by_file_key(context.file_key)
+                if session is not None:
+                    _ensure_execution_tracker(session)
+                    capture_session_id = _canonical_session_id(manager, session)
+            else:
+                session = None
+        except (AttributeError, TypeError):
+            session = None
+        if session is not None:
+            tracker = _ensure_execution_tracker(session)
+            kernel_exit_info = getattr(session, "kernel_exit_info", None)
+            if callable(kernel_exit_info):
+                exit_info = kernel_exit_info()
+                if exit_info is not None:
+                    raise RuntimeKernelExitError(
+                        str(getattr(exit_info, "message", exit_info))
+                    )
+            if (
+                tracker.attached
+                and callable(getattr(session, "put_control_request", None))
+                and getattr(session, "room", None) is not None
+                and capture_session_id is not None
+                and callable(getattr(session.room, "get_consumer", None))
+                and session.room.get_consumer(ConsumerId(capture_session_id))
+                is not None
+            ):
+                try:
+                    await wait_for_session_barrier(
+                        session,
+                        consumer_id=capture_session_id,
+                        timeout=_LIVE_CAPTURE_BARRIER_TIMEOUT_SECONDS,
+                    )
+                except ProjectionUnavailable as error:
+                    if error.transient:
+                        exit_info = session.kernel_exit_info()
+                        if exit_info is not None:
+                            raise RuntimeKernelExitError(
+                                str(getattr(exit_info, "message", exit_info))
+                            ) from error
+                        raise RuntimeExecutionPendingError() from error
+                    raise RuntimeSyncError(str(error)) from error
+                await _wait_for_execution_settle(session, tracker)
+            elif tracker.pending(session):
+                raise RuntimeExecutionPendingError()
         capture = _capture_live_cells(
             context,
-            session_id,
+            capture_session_id,
             include_dependency_closures=include_dependency_closures,
             session_owner=self._runtime_owner,
         )
@@ -601,7 +1174,7 @@ class PrivateSessionState:
             raise RuntimeSyncError("Marimo session state is shutting down.")
         current = _capture_live_cells(
             context,
-            session_id,
+            capture_session_id,
             include_dependency_closures=include_dependency_closures,
             session_owner=self._runtime_owner,
         )
@@ -609,6 +1182,15 @@ class PrivateSessionState:
             raise RuntimeSyncError(
                 "The Marimo session changed while Studio captured runtime bindings."
             )
+        kernel_exit_info = getattr(session, "kernel_exit_info", None)
+        if callable(kernel_exit_info):
+            exit_info = kernel_exit_info()
+            if exit_info is not None:
+                raise RuntimeKernelExitError(
+                    str(getattr(exit_info, "message", exit_info))
+                )
+        if snapshot.execution_pending:
+            raise RuntimeExecutionPendingError()
         return snapshot
 
     async def control_bindings(

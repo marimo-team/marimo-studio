@@ -78,6 +78,8 @@ class LiveCellSnapshot:
     names: Mapping[str, tuple[LiveCellIdentity, ...]]
     dependency_closures: Mapping[str, tuple[str, ...]]
     current_refs: Mapping[str, CellRef]
+    execution_pending: bool = False
+    execution_generation: int = 0
 
 
 @dataclass(frozen=True)

@@ -302,6 +302,27 @@ def test_new_native_incarnation_rotates_the_binding_generation() -> None:
     asyncio.run(exercise())
 
 
+def test_disconnected_binding_retains_its_generation_during_grace() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry(disconnect_grace=60)
+        lease = await clients.bind_session(_SESSION_ID, _CLIENT_ID)
+        assert lease is not None
+        native = object()
+        assert clients.accept_session_binding(lease, native) is not None
+        stream = await clients.connect_stream(_CLIENT_ID, 1, "dashboard")
+        assert stream is not None
+        generation = await clients.binding_generation_for_client(_CLIENT_ID)
+        assert generation is not None
+
+        await clients.release_stream(stream)
+
+        assert await clients.session_for_client(_CLIENT_ID) is None
+        assert await clients.binding_generation_for_client(_CLIENT_ID) == generation
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
 def test_current_native_identity_restores_a_pruned_client_binding() -> None:
     async def exercise() -> None:
         cleanup_started = asyncio.Event()

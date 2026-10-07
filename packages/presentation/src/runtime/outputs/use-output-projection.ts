@@ -42,10 +42,16 @@ export interface OutputProjectionState {
   projectionCurrent: boolean;
 }
 
-const requestFailure = (cause: unknown): ValueReadError => ({
-  code: cause instanceof OutputRequestError ? cause.code : "output-request-failed",
-  message: errorMessage(cause),
-});
+const requestFailure = (cause: unknown): ValueReadError => {
+  const failure: ValueReadError = {
+    code: cause instanceof OutputRequestError ? cause.code : "output-request-failed",
+    message: errorMessage(cause),
+  };
+  if (cause instanceof OutputRequestError && cause.hint) {
+    failure.hint = cause.hint;
+  }
+  return failure;
+};
 
 export const useOutputProjection = ({
   activeProjections,

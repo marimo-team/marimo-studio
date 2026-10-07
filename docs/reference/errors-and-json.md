@@ -203,6 +203,11 @@ the code in a response header, and expected error responses use
 `Cache-Control: no-store`. An available hint appears as `hint`. A retryable
 failure includes `transient: true`.
 
+Studio's Python runtime routes use two synchronization codes. `runtime-sync-pending`
+is transient while the editor session is applying changed cells, so the browser
+can retry the request. `runtime-sync-required` is terminal for the current
+notebook state. Run the changed cells in the editor, then retry the preview.
+
 Authentication failures use route-owned codes such as
 `authentication-required`, `edit-access-required`, `missing-server-token`, and
 `invalid-server-token`.

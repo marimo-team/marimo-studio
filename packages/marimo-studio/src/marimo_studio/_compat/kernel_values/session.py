@@ -23,6 +23,7 @@ from marimo_studio._compat.kernel_values.authorization import (
     probe_value_arguments,
 )
 from marimo_studio._compat.kernel_values.models import (
+    BARRIER_FUNCTION_NAME,
     FUNCTION_NAME,
     NAMESPACE,
     OUTPUT_FUNCTION_NAME,
@@ -610,7 +611,7 @@ async def _invoke_session_function(
         operation,
     )
     pending: WeakSet[_FunctionResultWaiter] | None = None
-    if operation in {"output", "value"} and hasattr(consumer, "on_detach"):
+    if operation in {"output", "value", "barrier"} and hasattr(consumer, "on_detach"):
         _attach_session_work_cleanup(consumer)
         pending = _PENDING_SESSION_WORK.setdefault(consumer, WeakSet())
         pending.add(waiter)
@@ -699,6 +700,24 @@ async def read_session_values(
     )
     assert isinstance(result, ValueReadResult)
     return result
+
+
+async def wait_for_session_barrier(
+    session: Any,
+    *,
+    consumer_id: str,
+    timeout: float | None = 5.0,
+) -> None:
+    """Wait for the native control queue without changing projection state."""
+    await _invoke_session_function(
+        session,
+        function_name=BARRIER_FUNCTION_NAME,
+        args={},
+        consumer_id=consumer_id,
+        timeout=timeout,
+        parser=lambda _value: None,
+        operation="barrier",
+    )
 
 
 async def render_session_outputs(

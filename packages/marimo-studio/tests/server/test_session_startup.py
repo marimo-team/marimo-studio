@@ -4,7 +4,7 @@ import asyncio
 from importlib.metadata import entry_points
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
 import pytest
@@ -27,6 +27,55 @@ from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
+
+
+def test_cached_cell_notifications_do_not_skip_native_instantiation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._session.types import KernelState
+
+    class Session:
+        def __init__(self) -> None:
+            self.document = SimpleNamespace(
+                cells=[SimpleNamespace(id="cell-1", code="value = 1")]
+            )
+            self.session_view = SimpleNamespace(
+                last_executed_code={},
+                cell_notifications={"cell-1": SimpleNamespace(status="idle")},
+            )
+            self.instantiations: list[object] = []
+            self.requests: list[object] = []
+
+        @staticmethod
+        def kernel_exit_info() -> None:
+            return None
+
+        @staticmethod
+        def kernel_state() -> KernelState:
+            return KernelState.RUNNING
+
+        def instantiate(self, request: object, *, http_request: object | None) -> None:
+            assert http_request is None
+            self.instantiations.append(request)
+
+        def put_control_request(
+            self,
+            request: object,
+            *,
+            from_consumer_id: object | None,
+        ) -> None:
+            assert from_consumer_id is None
+            self.requests.append(request)
+
+    session: Any = Session()
+    monkeypatch.setattr(session_state_module, "current_session", lambda *_args: session)
+
+    assert (
+        PrivateSessionState().ensure_started(cast(Any, SimpleNamespace()), "s_123456")
+        is False
+    )
+    assert len(session.instantiations) == 1
+    assert session.requests == []
 
 
 def test_studio_session_runs_after_native_instantiation(
