@@ -51,7 +51,7 @@ jobs:
           VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
           VALIDATION_FILTERS: '["installed_browser","main_browser","provider_browser","windows_unit"]'
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
-        run: node .github/actions/pr-validation/select.mjs
+        run: node .github/actions/pr-validation/select.ts
   browser-assets:
     name: Browser and package artifacts
     needs: changes

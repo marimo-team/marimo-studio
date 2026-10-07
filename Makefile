@@ -8,8 +8,8 @@ VP := $(PNPM) exec vp
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
 PYTHON_PATHS := $(PY_PACKAGE) scripts
-FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tools/example-showcase tsconfig.json vite.config.ts
-TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
+FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tools/example-showcase tsconfig.json tsconfig.node.json vite.config.ts
+TYPECHECK_PATHS := .github/actions/pr-validation apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
 DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_obsnotebook $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
 # Portless binds its default proxy port 443 through sudo. Without a terminal,
@@ -53,13 +53,13 @@ _architecture-check:
 
 _workflow-check:
 	./scripts/check-workflow-results.test.sh
-	node --test .github/actions/pr-validation/*.test.mjs
+	$(VP) test run .github/actions/pr-validation
 
 lint: _frontend-ready _anti-slop-check _architecture-check _provider-sources-check _workflow-check ## Check formatting, source, workflows, and shell scripts.
 	$(UV) run ruff format --check $(PYTHON_PATHS)
 	$(UV) run ruff check $(PYTHON_PATHS)
 	$(VP) fmt --check $(FORMAT_PATHS)
-	$(VP) lint apps packages vite.config.ts
+	$(VP) lint .github/actions/pr-validation apps packages vite.config.ts
 	uvx --from actionlint-py==1.7.12.24 actionlint \
 		-ignore 'unexpected key "queue" for "concurrency" section' \
 		.github/workflows/*.yml

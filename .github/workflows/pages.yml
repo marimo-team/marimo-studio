@@ -56,7 +56,7 @@ jobs:
           # builds it only when it changes the site or its examples.
           DEFERRED_FILTERS: '{"site":{"filter":"pages","escalate":"docs_site"}}'
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
-        run: node .github/actions/pr-validation/select.mjs
+        run: node .github/actions/pr-validation/select.ts
 
   documentation:
     name: Documentation contracts

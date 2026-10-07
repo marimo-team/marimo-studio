@@ -1,12 +1,12 @@
 import { readFile, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { z } from "zod";
 
-const packageRoot = dirname(fileURLToPath(import.meta.url));
+import type { BrowserEntryClosure, BrowserEntryClosures } from "../entry-closures.ts";
+
 const outputRoot = resolve(
-  packageRoot,
-  "../../packages/marimo-studio/src/marimo_studio/_static/browser",
+  import.meta.dirname,
+  "../../../packages/marimo-studio/src/marimo_studio/_static/browser",
 );
 const runtimePath = join(outputRoot, "entry-closures.runtime.json");
 const zeroPythonPath = join(outputRoot, "entry-closures.zero-python.json");
@@ -26,28 +26,22 @@ const partialClosureSchema = z
   })
   .strict();
 
-const readClosure = async (path, entry) => {
+const readClosure = async (path: string, entry: string): Promise<BrowserEntryClosure> => {
   const parsed = partialClosureSchema.parse(JSON.parse(await readFile(path, "utf8")));
-  if (Object.keys(parsed.entries).length !== 1 || parsed.entries[entry] === undefined) {
+  const closure = parsed.entries[entry];
+  if (Object.keys(parsed.entries).length !== 1 || closure === undefined) {
     throw new Error(`Browser entry closure ${JSON.stringify(entry)} is invalid.`);
   }
-  return parsed.entries[entry];
+  return closure;
 };
 
 const [runtime, zeroPython] = await Promise.all([
   readClosure(runtimePath, "runtime"),
   readClosure(zeroPythonPath, "zero-python"),
 ]);
-await writeFile(
-  outputPath,
-  `${JSON.stringify(
-    {
-      schema: 1,
-      entries: { runtime, "zero-python": zeroPython },
-    },
-    null,
-    2,
-  )}\n`,
-  "utf8",
-);
+const closures: BrowserEntryClosures = {
+  schema: 1,
+  entries: { runtime, "zero-python": zeroPython },
+};
+await writeFile(outputPath, `${JSON.stringify(closures, null, 2)}\n`, "utf8");
 await Promise.all([unlink(runtimePath), unlink(zeroPythonPath)]);

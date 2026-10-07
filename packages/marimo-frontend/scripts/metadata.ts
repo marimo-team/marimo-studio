@@ -1,19 +1,19 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { z } from "zod";
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const metadataPath = join(packageRoot, ".cache", "source.json");
+const metadataPath = join(import.meta.dirname, "..", ".cache", "source.json");
 
-export const marimoSourceSchema = z.object({
+const marimoSourceSchema = z.object({
   commit: z.string().min(1),
   patchSha256: z.string().regex(/^[\da-f]{64}$/u),
   path: z.string().min(1),
   repository: z.string().min(1),
   version: z.string().min(1),
 });
+
+export type MarimoSource = z.infer<typeof marimoSourceSchema>;
 
 const marimoSourceCodec = z.codec(z.string(), marimoSourceSchema, {
   decode: (source, context) => {
@@ -32,7 +32,9 @@ const marimoSourceCodec = z.codec(z.string(), marimoSourceSchema, {
   encode: (metadata) => JSON.stringify(metadata),
 });
 
-export const decodeMarimoSource = (source) => marimoSourceCodec.decode(source);
-export const readMarimoSource = async () =>
+export const decodeMarimoSource = (source: string): MarimoSource =>
+  marimoSourceCodec.decode(source);
+export const readMarimoSource = async (): Promise<MarimoSource> =>
   decodeMarimoSource(await readFile(metadataPath, "utf8"));
-export const readMarimoSourceSync = () => decodeMarimoSource(readFileSync(metadataPath, "utf8"));
+export const readMarimoSourceSync = (): MarimoSource =>
+  decodeMarimoSource(readFileSync(metadataPath, "utf8"));

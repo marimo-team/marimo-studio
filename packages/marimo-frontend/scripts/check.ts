@@ -1,5 +1,7 @@
 try {
-  const { assertPreparedMarimoSource } = await import("./source.mjs");
+  // Importing source.ts validates the pinned patch identity, so its failures
+  // also report the setup instructions below.
+  const { assertPreparedMarimoSource } = await import("./source.ts");
   await assertPreparedMarimoSource();
 } catch (error) {
   const detail = error instanceof Error ? error.message : String(error);

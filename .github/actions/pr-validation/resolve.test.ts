@@ -2,18 +2,40 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { onTestFinished, test } from "vite-plus/test";
 
-const actionDirectory = dirname(fileURLToPath(import.meta.url));
-const resolver = resolve(actionDirectory, "resolve.sh");
-const selector = resolve(actionDirectory, "select.mjs");
-const gate = resolve(actionDirectory, "../../../scripts/check-workflow-results.sh");
+interface PullRequest {
+  readonly number: number;
+  readonly merged_at: string;
+  readonly merge_commit_sha: string;
+  readonly base: { readonly ref: string };
+  readonly head: {
+    readonly label: string;
+    readonly ref: string;
+    readonly sha: string;
+    readonly repo: { readonly full_name: string };
+  };
+}
+
+interface WorkflowRun {
+  readonly id: number;
+  readonly status: string;
+  readonly conclusion: string | null;
+  readonly created_at: string;
+  readonly run_attempt: number;
+  readonly head_branch: string;
+  readonly head_repository: { readonly full_name: string };
+  readonly html_url: string;
+}
+
+const resolver = join(import.meta.dirname, "resolve.sh");
+const selector = join(import.meta.dirname, "select.ts");
+const gate = join(import.meta.dirname, "../../../scripts/check-workflow-results.sh");
 const mergedTree = "a".repeat(40);
 const headSha = "b".repeat(40);
 
-const pull = (overrides = {}) => ({
+const pull = (overrides: Partial<PullRequest> = {}): PullRequest => ({
   number: 7,
   merged_at: "2026-09-05T00:00:00Z",
   merge_commit_sha: "c".repeat(40),
@@ -27,7 +49,7 @@ const pull = (overrides = {}) => ({
   ...overrides,
 });
 
-const workflowRun = (overrides = {}) => ({
+const workflowRun = (overrides: Partial<WorkflowRun> = {}): WorkflowRun => ({
   id: 91,
   status: "completed",
   conclusion: "success",
@@ -39,14 +61,15 @@ const workflowRun = (overrides = {}) => ({
   ...overrides,
 });
 
-const fakeCommand = async (directory, name, source) => {
+const fakeCommand = async (directory: string, name: string, source: string) => {
   const path = join(directory, name);
   await writeFile(path, source, "utf8");
   await chmod(path, 0o755);
 };
 
-const runResolver = async (overrides = {}) => {
+const runResolver = async (overrides: NodeJS.ProcessEnv = {}) => {
   const directory = await mkdtemp(join(tmpdir(), "pr-validation-test-"));
+  onTestFinished(() => rm(directory, { force: true, recursive: true }));
   const output = join(directory, "output");
   const summary = join(directory, "summary");
   await fakeCommand(
@@ -126,9 +149,12 @@ process.stdout.write(process.env.TESTED_TREE + "\\n");
     (await readFile(selectedOutput, "utf8"))
       .trim()
       .split("\n")
-      .map((line) => line.split("=")),
+      .map((line): [string, string] => {
+        const [name, required] = line.split("=");
+        return [name, required];
+      }),
   );
-  const check = (results) =>
+  const check = (results: Readonly<Record<string, string>>) =>
     spawnSync(
       "bash",
       [
@@ -144,7 +170,6 @@ process.stdout.write(process.env.TESTED_TREE + "\\n");
       ],
       { encoding: "utf8" },
     ).status;
-  await rm(directory, { force: true, recursive: true });
   assert.equal(result.status, 0, result.stderr);
   return { check, explanation, requirements, validation };
 };

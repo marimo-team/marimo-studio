@@ -224,6 +224,22 @@ export default defineConfig({
         },
       },
       {
+        files: [".github/actions/pr-validation/select.ts"],
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                {
+                  group: ["*", "!node:*", "!node:*/*"],
+                  message: "The selector runs before the workspace installs dependencies.",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         files: ["**/*.test.ts", "**/*.test.tsx", "**/tests/**"],
         rules: {
           "typescript/unbound-method": "off",
