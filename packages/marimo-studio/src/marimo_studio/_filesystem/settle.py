@@ -29,20 +29,24 @@ def while_unchanged(path: Path, operation: Callable[[], _Result]) -> _Result:
     Marimo saves a notebook by truncating it and writing it again, so a
     concurrent read can see partial content and still succeed or fail. An
     attempt that overlapped a change repeats after a pause that lets the writer
-    finish, including an attempt that raised ``MarimoStudioError``. A file that
-    keeps changing raises ``ConcurrentChangeError``, which callers may retry.
+    finish, including an attempt that raised ``MarimoStudioError``. A failure
+    or an empty file counts only once the file stays unchanged across a pause.
+    A file that keeps changing raises ``ConcurrentChangeError``, which callers
+    may retry.
     """
-    empty: tuple[int, int, int, int] | None = None
+    confirmed: tuple[int, int, int, int] | None = None
 
-    def settled(before: tuple[int, int, int, int] | None) -> bool:
-        nonlocal empty
+    def settled(before: tuple[int, int, int, int] | None, *, failed: bool) -> bool:
+        nonlocal confirmed
         after = _stamp(path)
         if after != before:
             return False
-        # A save can pause between truncating and writing, so an empty file
-        # is settled only once it stays empty across a pause.
-        if after is not None and after[1] == 0 and after != empty:
-            empty = after
+        # A save can pause after truncating the file or partway through writing
+        # it. Partial content can fail or read as empty, so those results wait
+        # for the file to stay unchanged across a pause.
+        suspect = after is not None and (failed or after[1] == 0)
+        if suspect and after != confirmed:
+            confirmed = after
             return False
         return True
 
@@ -53,9 +57,9 @@ def while_unchanged(path: Path, operation: Callable[[], _Result]) -> _Result:
         try:
             result = operation()
         except MarimoStudioError:
-            if settled(before):
+            if settled(before, failed=True):
                 raise
             continue
-        if settled(before):
+        if settled(before, failed=False):
             return result
     raise ConcurrentChangeError(f"File kept changing while it was read: {path}")

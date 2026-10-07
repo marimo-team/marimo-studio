@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 from textwrap import indent
 from time import monotonic
+from types import SimpleNamespace
 from typing import Any
 
 import marimo
@@ -14,6 +15,7 @@ import pytest
 
 import marimo_studio._notebook.inspection as inspection_module
 from marimo_studio import inspect_notebook
+from marimo_studio._filesystem import settle
 from marimo_studio._notebook.cell_refs import (
     _cell_fingerprint,
     _layout_fingerprint,
@@ -140,6 +142,23 @@ def test_inspection_names_the_notebook_source_problem(
 
     assert raised.value.public_message() == summary
     assert raised.value.public_hint == hint
+
+
+def test_inspection_waits_for_a_save_paused_partway_through_writing(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    saved = notebook_path.read_bytes()
+    notebook_path.write_bytes(saved[: saved.index(b"doubled = x * 2")])
+
+    def finish_save(_seconds: float) -> None:
+        notebook_path.write_bytes(saved)
+
+    monkeypatch.setattr(settle, "time", SimpleNamespace(sleep=finish_save))
+
+    notebook = inspect_notebook(notebook_path)
+
+    assert notebook.cells[1].definitions == ("doubled",)
 
 
 def test_inspection_reports_a_notebook_that_is_not_utf8(tmp_path: Path) -> None:

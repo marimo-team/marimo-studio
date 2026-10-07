@@ -216,11 +216,17 @@ A static export compiles the source it captured and asks for another run when
 the notebook changed during the export. A notebook that keeps changing raises a
 transient error, which clients retry.
 
-`NotebookSourceError` names the problem Marimo found. The cases are an
-unparsable cell, a line Marimo cannot parse, duplicate definitions, a
-dependency cycle, a file that is not a Marimo notebook, and a notebook without
-cells. The browser message uses the notebook file name and line, and the hint
-names the repair.
+`NotebookSourceError` names the problem Marimo found, and its hint names the
+repair. Browser messages contain no filesystem paths.
+
+| Problem                         | Location in the browser message |
+| ------------------------------- | ------------------------------- |
+| Line Marimo cannot parse        | File name and line              |
+| Unparsable cell                 | Line where the cell starts      |
+| File that is not a notebook     | File name                       |
+| Notebook without cells          | File name                       |
+| Duplicate definition or a cycle | None                            |
+| Any other Marimo failure        | File name                       |
 
 Native cell names enter the cell target namespace. Configured aliases are
 resolved against semantic `CellRef` values and join the same namespace.

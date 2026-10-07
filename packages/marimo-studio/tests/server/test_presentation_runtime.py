@@ -150,15 +150,21 @@ def test_deleted_named_cell_keeps_the_view_live_until_repaired(
     assert repaired["runtimeBindings"]["cellRefs"][producer]
 
 
+@pytest.mark.parametrize("name", ["análisis.py", "分析.py"])
 def test_notebook_syntax_error_names_the_line_and_repair_for_any_file_name(
     tmp_path: Path,
     notebook_path: Path,
+    name: str,
 ) -> None:
-    notebook = tmp_path / "análisis.py"
+    notebook = tmp_path / name
     notebook.write_text(notebook_path.read_text(encoding="utf-8"), encoding="utf-8")
     studio = _configured(notebook)
     source = notebook.read_text(encoding="utf-8")
     decorator_line = source.splitlines().index("def _(x):")
+    hint = (
+        f"Run `marimo check {name}` to see the problem, fix it, then save the "
+        "notebook again."
+    )
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         notebook.write_text(
@@ -170,14 +176,11 @@ def test_notebook_syntax_error_names_the_line_and_repair_for_any_file_name(
 
     assert config.status_code == 500
     assert config.json()["message"] == (
-        f"Marimo cannot parse análisis.py near line {decorator_line}."
+        f"Marimo cannot parse {name} near line {decorator_line}."
     )
-    assert config.json()["hint"] == (
-        "Run `marimo check análisis.py` to see the problem, fix it, then save "
-        "the notebook again."
-    )
+    assert config.json()["hint"] == hint
     assert page.status_code == 500
-    assert "marimo check análisis.py" in page.text
+    assert f"marimo check {name}" in page.text
 
 
 def test_notebook_syntax_error_has_a_browser_safe_repair_diagnostic(
