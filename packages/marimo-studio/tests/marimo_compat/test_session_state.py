@@ -40,7 +40,11 @@ from marimo_studio._compat.server.session_state import (
     session_matches_notebook,
 )
 from marimo_studio._server.ports import EditorSessionIdentity
-from marimo_studio.errors._internal import RuntimeKernelExitError, RuntimeSyncError
+from marimo_studio.errors._internal import (
+    RuntimeExecutionPendingError,
+    RuntimeKernelExitError,
+    RuntimeSyncError,
+)
 
 
 def _live_capture() -> session_state_module._LiveCellCapture:
@@ -512,17 +516,28 @@ def test_execution_tracker_coalesces_unmarked_batchable_ui_commands() -> None:
     assert not tracker.pending(session)
 
 
-def test_live_cell_capture_waits_for_the_native_kernel_barrier(
+@pytest.mark.parametrize("connected", (True, False))
+@pytest.mark.parametrize("executing", (True, False))
+def test_live_cell_capture_uses_the_native_barrier_for_connected_consumers(
     monkeypatch: pytest.MonkeyPatch,
+    connected: bool,
+    executing: bool,
 ) -> None:
     class Session:
-        room = object()
+        room = SimpleNamespace(
+            get_consumer=lambda _consumer_id: object() if connected else None
+        )
 
         def put_control_request(self, *_args: object, **_kwargs: object) -> None:
             return
 
     session: Any = Session()
     tracker = session_state_module._ExecutionTracker(session, attached=True)
+    if executing:
+        tracker.on_notification_sent(
+            session,
+            _marker("ExecuteCellsCommand", "start", "running"),
+        )
     order: list[str] = []
     capture = _live_capture()
     monkeypatch.setattr(session_state_module, "current_session", lambda *_args: session)
@@ -544,6 +559,18 @@ def test_live_cell_capture_waits_for_the_native_kernel_barrier(
         lambda *_args, **_kwargs: order.append("capture") or capture,
     )
 
+    if executing and not connected:
+        with pytest.raises(RuntimeExecutionPendingError):
+            asyncio.run(
+                PrivateSessionState().live_cells(
+                    cast(Any, object()),
+                    "s_123456",
+                    include_dependency_closures=False,
+                )
+            )
+        assert order == []
+        return
+
     result = asyncio.run(
         PrivateSessionState().live_cells(
             cast(Any, object()),
@@ -553,14 +580,14 @@ def test_live_cell_capture_waits_for_the_native_kernel_barrier(
     )
 
     assert isinstance(result, session_state_module.LiveCellSnapshot)
-    assert order == ["barrier", "capture", "capture"]
+    assert order == (["barrier"] if connected else []) + ["capture", "capture"]
 
 
 def test_live_cell_capture_resolves_a_file_session_before_the_kernel_barrier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class Session:
-        room = object()
+        room = SimpleNamespace(get_consumer=lambda _consumer_id: object())
 
         def put_control_request(self, *_args: object, **_kwargs: object) -> None:
             return

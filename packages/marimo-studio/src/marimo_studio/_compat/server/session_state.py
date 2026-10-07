@@ -1103,6 +1103,8 @@ class PrivateSessionState:
         *,
         include_dependency_closures: bool,
     ) -> LiveCellSnapshot | None:
+        from marimo._types.ids import ConsumerId
+
         if self._closed:
             raise RuntimeSyncError("Marimo session state is shutting down.")
         capture_session_id = session_id
@@ -1133,6 +1135,9 @@ class PrivateSessionState:
                 and callable(getattr(session, "put_control_request", None))
                 and getattr(session, "room", None) is not None
                 and capture_session_id is not None
+                and callable(getattr(session.room, "get_consumer", None))
+                and session.room.get_consumer(ConsumerId(capture_session_id))
+                is not None
             ):
                 try:
                     await wait_for_session_barrier(
