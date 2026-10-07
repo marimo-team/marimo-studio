@@ -468,16 +468,17 @@ def _package_requirement() -> str:
 def _studio_requirement(document: Mapping[str, Any]) -> str:
     """Return the Studio requirement that view configuration records.
 
-    A declared direct reference already names one build, which can differ from
-    the release of the same version, so it stays. A version range is pinned to
-    the installed release.
+    An unconditional direct reference already names one build, which can differ
+    from the release of the same version, so it stays. A version range or a
+    reference limited by an environment marker is pinned to the installed
+    release.
     """
     dependencies = document.get("dependencies")
     for dependency in dependencies if isinstance(dependencies, list) else ():
         if _dependency_name(dependency) != _PACKAGE_NAME:
             continue
         requirement = Requirement(str(dependency))
-        if requirement.url is not None:
+        if requirement.url is not None and requirement.marker is None:
             return str(requirement)
     return _package_requirement()
 
