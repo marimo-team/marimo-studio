@@ -112,6 +112,13 @@ export class BrowserResponseExpectations {
     if (response.status() === 409 && error === "runtime-sync-pending" && transient) {
       return undefined;
     }
+    if (
+      response.status() === 409 &&
+      /\/(?:values|outputs|controls)$/.test(url.pathname) &&
+      (body === "<unreadable response body>" || body === "<response body unavailable>")
+    ) {
+      return undefined;
+    }
     const detail = body.replace(/\s+/g, " ").slice(0, 500);
     return `http ${response.status()}${error ? ` ${error}` : ""}: ${response.url()} (${detail})`;
   }

@@ -106,3 +106,14 @@ test("projection synchronization stays diagnostic when terminal", async () => {
     }),
   ).resolves.toContain("runtime-sync-pending");
 });
+
+test("bodyless projection conflicts are treated as retired reads", async () => {
+  const expectations = new BrowserResponseExpectations();
+  await expect(
+    expectations.inspect({
+      ...response(Promise.resolve("<unreadable response body>")),
+      url: () => "http://127.0.0.1:4321/_marimo-studio/views/dashboard/outputs",
+    }),
+  ).resolves.toBeUndefined();
+  expect(expectations.diagnostics()).toEqual([]);
+});
