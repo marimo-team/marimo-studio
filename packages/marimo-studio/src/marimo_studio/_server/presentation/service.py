@@ -258,6 +258,7 @@ class NotebookPresentation:
             try:
                 resolved = resolve_studio(
                     studio,
+                    notebook_source=before.notebook_source,
                     view_name=selected,
                     published_mounts={selected: artifact.mounts},
                 )

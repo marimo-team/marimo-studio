@@ -42,13 +42,21 @@ class ConfigurationError(MarimoStudioError):
 
 
 class NotebookSourceError(ConfigurationError):
-    """Marimo cannot compile the current notebook source."""
+    """Marimo cannot compile the current notebook source.
+
+    ``summary`` names the cause for browsers without filesystem paths, and
+    ``hint`` names the repair.
+    """
 
     code = "notebook-source-error"
-    public_hint = "Fix the highlighted cell in Marimo, then save it again."
+
+    def __init__(self, message: str, *, summary: str, hint: str) -> None:
+        super().__init__(message)
+        self.summary = summary
+        self.public_hint = hint
 
     def public_message(self) -> str:
-        return "Marimo cannot inspect the notebook while a cell contains invalid code."
+        return self.summary
 
 
 class ViewProjectError(ConfigurationError):

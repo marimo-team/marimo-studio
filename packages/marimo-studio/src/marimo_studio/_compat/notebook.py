@@ -6,15 +6,16 @@ import ast
 from contextlib import AbstractContextManager
 from hashlib import sha256
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from marimo_studio._notebook.output_prediction import may_display_output
 from marimo_studio._notebook.ports import StaticCell, StaticNotebook
 from marimo_studio._notebook.records import CellKind, SourceSpan
-from marimo_studio.errors import (
-    ConfigurationError,
-    NotebookSourceError,
-    ProtocolError,
-)
+from marimo_studio.errors import NotebookSourceError, ProtocolError
+
+if TYPE_CHECKING:
+    from marimo._ast.app import App
+    from marimo._schemas.serialization import NotebookSerializationV1
 
 
 def notebook_write_lock(path: Path) -> AbstractContextManager[None]:
@@ -89,55 +90,157 @@ def _is_canonical_empty_notebook(source: str) -> bool:
     return marimo_import and generated_version and app_constructor and run_guard
 
 
-def load_static_notebook(path: Path) -> StaticNotebook:
-    """Compile notebook metadata without running cell bodies."""
-    try:
-        from marimo._ast.compiler import ends_with_semicolon
-        from marimo._ast.load import (
-            all_violations_soft,
-            get_notebook_serializer,
-            is_non_marimo_markdown,
-            is_non_marimo_python_script,
-            load_notebook_ir,
-        )
-        from marimo._ast.scanner import scan_notebook
-        from marimo._convert.common import get_markdown_from_cell
-        from marimo._schemas.serialization import (
-            ClassCell,
-            FunctionCell,
-            SetupCell,
-            UnparsableCell,
-        )
+def _check_hint(path: Path) -> str:
+    return (
+        f"Run `marimo check {path.name}` to see the problem, fix it, then save "
+        "the notebook again."
+    )
 
-        payload = path.read_bytes()
-        source = payload.decode("utf-8")
-        source_revision = sha256(payload).hexdigest()
-        canonical_empty = _is_canonical_empty_notebook(source)
+
+def _compile(
+    path: Path,
+    source: str,
+    *,
+    canonical_empty: bool,
+    leading_lines: int,
+) -> tuple[NotebookSerializationV1, App]:
+    from marimo._ast.errors import (
+        CycleError,
+        MultipleDefinitionError,
+        UnparsableError,
+    )
+    from marimo._ast.load import (
+        all_violations_soft,
+        get_notebook_serializer,
+        is_non_marimo_markdown,
+        is_non_marimo_python_script,
+        load_notebook_ir,
+    )
+    from marimo._schemas.serialization import UnparsableCell
+
+    try:
         serialized = get_notebook_serializer(path).deserialize(
             source,
             filepath=str(path),
         )
-        if (
-            serialized is None
-            or not serialized.valid
-            or is_non_marimo_python_script(serialized)
-            or is_non_marimo_markdown(serialized)
-            or (
-                serialized.violations
-                and not all_violations_soft(serialized.violations)
-                and not canonical_empty
+    except Exception as error:
+        raise NotebookSourceError(
+            f"marimo could not parse notebook {path}: {error}",
+            summary=f"Marimo cannot parse {path.name}.",
+            hint=_check_hint(path),
+        ) from error
+    if (
+        serialized is None
+        or is_non_marimo_python_script(serialized)
+        or is_non_marimo_markdown(serialized)
+    ):
+        raise NotebookSourceError(
+            f"{path} is not a marimo notebook",
+            summary=f"{path.name} is not a Marimo notebook.",
+            hint=(
+                f"Convert it with `marimo convert {path.name} -o "
+                f"{path.stem}_marimo.py`, then open the converted notebook."
+            ),
+        )
+    if not serialized.cells and not canonical_empty:
+        raise NotebookSourceError(
+            f"{path} has no marimo cells",
+            summary=f"{path.name} has no Marimo cells.",
+            hint="Add a cell in Marimo, then save the notebook again.",
+        )
+    hard = [
+        violation
+        for violation in serialized.violations
+        if not all_violations_soft([violation])
+    ]
+    if not serialized.valid or (hard and not canonical_empty):
+        if not hard:
+            raise NotebookSourceError(
+                f"marimo could not parse notebook {path}",
+                summary=f"Marimo cannot parse {path.name}.",
+                hint=_check_hint(path),
             )
-        ):
-            raise NotebookSourceError(f"marimo could not parse notebook: {path}")
+        line = hard[0].lineno + leading_lines
+        raise NotebookSourceError(
+            f"marimo could not parse notebook {path} at line {line}: "
+            f"{hard[0].description}",
+            summary=f"Marimo cannot parse {path.name} near line {line}.",
+            hint=_check_hint(path),
+        )
+    try:
         app = load_notebook_ir(serialized, filepath=str(path))
         app._cell_manager.ensure_one_cell()
         app._maybe_initialize()
-    except ConfigurationError:
-        raise
+    except UnparsableError as error:
+        line = next(
+            (
+                cell.lineno + leading_lines
+                for cell in serialized.cells
+                if isinstance(cell, UnparsableCell)
+            ),
+            None,
+        )
+        raise NotebookSourceError(
+            f"Could not inspect notebook {path}: {error}",
+            summary=(
+                f"The notebook cell at line {line} contains invalid code."
+                if line is not None
+                else "A notebook cell contains invalid code."
+            ),
+            hint="Fix the cell in Marimo, then save the notebook again.",
+        ) from error
+    except MultipleDefinitionError as error:
+        raise NotebookSourceError(
+            f"Could not inspect notebook {path}: {error}",
+            summary="More than one notebook cell defines the same name.",
+            hint=(
+                "Rename or remove the duplicate definition in Marimo, then save "
+                "the notebook again."
+            ),
+        ) from error
+    except CycleError as error:
+        raise NotebookSourceError(
+            f"Could not inspect notebook {path}: {error}",
+            summary="Notebook cells depend on each other in a cycle.",
+            hint=(
+                "Remove one reference from the cycle in Marimo, then save the "
+                "notebook again."
+            ),
+        ) from error
     except Exception as error:
         raise NotebookSourceError(
-            f"Could not inspect notebook {path}: {error}"
+            f"Could not inspect notebook {path}: {error}",
+            summary=f"Marimo cannot inspect {path.name}.",
+            hint=_check_hint(path),
         ) from error
+    return serialized, app
+
+
+def load_static_notebook(path: Path, source: str) -> StaticNotebook:
+    """Compile notebook metadata from ``source`` without running cell bodies.
+
+    ``path`` selects Marimo's notebook format and names the app.
+    """
+    from marimo._ast.compiler import ends_with_semicolon
+    from marimo._ast.scanner import scan_notebook
+    from marimo._convert.common import get_markdown_from_cell
+    from marimo._schemas.serialization import (
+        ClassCell,
+        FunctionCell,
+        SetupCell,
+        UnparsableCell,
+    )
+
+    source_revision = sha256(source.encode("utf-8")).hexdigest()
+    canonical_empty = _is_canonical_empty_notebook(source)
+    leading_whitespace = len(source) - len(source.lstrip())
+    leading_lines = source[:leading_whitespace].count("\n")
+    serialized, app = _compile(
+        path,
+        source,
+        canonical_empty=canonical_empty,
+        leading_lines=leading_lines,
+    )
 
     serialized_cells = serialized.cells
     rows = list(app._cell_manager.cell_data())
@@ -155,8 +258,6 @@ def load_static_notebook(path: Path) -> StaticNotebook:
             app_config=app._config.asdict(),
             source_revision=source_revision,
         )
-    leading_whitespace = len(source) - len(source.lstrip())
-    leading_lines = source[:leading_whitespace].count("\n")
     source_lines = [cell.lineno + leading_lines for cell in serialized_cells]
     scanned_cells = scan_notebook(source).cells
     if len(rows) != len(source_lines) or len(rows) != len(scanned_cells):
@@ -177,13 +278,16 @@ def load_static_notebook(path: Path) -> StaticNotebook:
         return "cell"
 
     for index, row in enumerate(rows):
-        if row.cell is None:
-            raise ProtocolError(f"marimo did not compile cell {row.cell_id}")
         scanned = scanned_cells[index]
         source_line = source_lines[index]
+        if row.cell is None:
+            raise ProtocolError(
+                f"marimo did not compile the cell at line {source_line}"
+            )
         if not scanned.start_line <= source_line <= scanned.end_line:
             raise ProtocolError(
-                f"marimo returned inconsistent source location for cell {row.cell_id}"
+                "marimo returned an inconsistent source location for the cell at "
+                f"line {source_line}"
             )
         end_column = len(lines[scanned.end_line - 1])
         compiled = row.cell._cell

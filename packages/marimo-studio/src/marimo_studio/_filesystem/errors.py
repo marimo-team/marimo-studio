@@ -14,6 +14,8 @@ class UnsafePathError(ConfigurationError, OSError):
 class ConcurrentChangeError(ConfigurationError, OSError):
     """Report a file that changed while Studio read or verified it."""
 
+    transient = True
+
 
 class FileAccessError(ConfigurationError, OSError):
     """Report a file that the operating system refused to read or write."""

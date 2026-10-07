@@ -101,20 +101,19 @@ def test_bind_cell_inspects_the_captured_notebook_source(
     prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     original = notebook_path.read_text(encoding="utf-8")
-    inspected_paths: list[Path] = []
 
     def inspect_with_live_aba(
         path: str | Path,
         *,
         include_code: bool = False,
+        source: str | None = None,
     ) -> NotebookSpec:
-        inspected_paths.append(Path(path))
         notebook_path.write_text(
             original.replace("doubled = x * 2", "doubled = x * 3"),
             encoding="utf-8",
         )
         try:
-            return inspect_notebook(path, include_code=include_code)
+            return inspect_notebook(path, include_code=include_code, source=source)
         finally:
             notebook_path.write_text(original, encoding="utf-8")
 
@@ -126,7 +125,6 @@ def test_bind_cell_inspects_the_captured_notebook_source(
         lock_notebook=create_notebook_write_lock(),
     )
 
-    assert inspected_paths[0] != notebook_path
     assert result.cell.ref == inspect_notebook(notebook_path).cells[1].ref
     assert load_studio(notebook_path).cells["captured-result"] == result.cell.ref
 

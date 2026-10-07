@@ -213,7 +213,7 @@ async def delegate_editor_request(
         workspace = None
         if scope["type"] == "http" and location is not None:
             with suppress(MarimoStudioError):
-                workspace = discover_studio(location.notebook)
+                workspace = await asyncio.to_thread(discover_studio, location.notebook)
             if workspace is not None and workspace.cells:
                 persistence.enable(location)
             if editor_target.rstrip("/") in _CODE_MODE_ROUTES:

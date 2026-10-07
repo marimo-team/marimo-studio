@@ -11,6 +11,8 @@ from marimo_studio._composition import (
     create_runtime_probe,
     create_static_notebook_loader,
 )
+from marimo_studio._filesystem.files import FileTree
+from marimo_studio._filesystem.settle import while_unchanged
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.ports import StaticNotebook
 from marimo_studio._notebook.records import (
@@ -62,12 +64,13 @@ def inspect_notebook(
     path: str | Path,
     *,
     include_code: bool = False,
+    source: str | None = None,
 ) -> NotebookSpec:
     """Return the static cell inventory for a marimo notebook.
 
     Cell bodies are compiled for graph analysis and are never executed.
     """
-    notebook, static = _notebook_snapshot(path)
+    notebook, static = _notebook_snapshot(path, source)
     if not include_code:
         return notebook
     return replace(
@@ -76,11 +79,31 @@ def inspect_notebook(
     )
 
 
-def _notebook_snapshot(path: str | Path) -> tuple[NotebookSpec, StaticNotebook]:
+def _saved_source(path: Path) -> str:
+    try:
+        content = FileTree(path.parent).read(path).content
+    except FileNotFoundError as error:
+        raise ConfigurationError(f"Notebook does not exist: {path}") from error
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ConfigurationError(f"Notebook is not UTF-8 text: {path}") from error
+
+
+def _notebook_snapshot(
+    path: str | Path,
+    source: str | None = None,
+) -> tuple[NotebookSpec, StaticNotebook]:
     notebook_path = Path(path).expanduser().resolve()
-    if not notebook_path.is_file():
-        raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
-    static = create_static_notebook_loader()(notebook_path)
+    load = create_static_notebook_loader()
+    static = (
+        while_unchanged(
+            notebook_path,
+            lambda: load(notebook_path, _saved_source(notebook_path)),
+        )
+        if source is None
+        else load(notebook_path, source)
+    )
     source_digests = [
         hashlib.sha256(cell.code.encode("utf-8")).hexdigest() for cell in static.cells
     ]

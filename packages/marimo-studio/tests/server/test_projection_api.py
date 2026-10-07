@@ -394,7 +394,9 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
     reader_name: str,
 ) -> None:
     studio = published_dashboard(notebook_path)
-    static = load_static_notebook(studio.notebook)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
     references = cell_refs(cell.code for cell in static.cells)
     live_ids = {
         reference: f"live-{index}" for index, reference in enumerate(references)
@@ -677,7 +679,9 @@ def test_retained_value_revision_rejects_an_upstream_only_edit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = published_dashboard(notebook_path)
-    static = load_static_notebook(studio.notebook)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
     rows = [
         SimpleNamespace(
             id=f"runtime-{index}",
@@ -724,7 +728,9 @@ def test_retained_value_revision_rejects_a_newly_resolved_reference(
         encoding="utf-8",
     )
     studio = published_dashboard(notebook_path)
-    static = load_static_notebook(studio.notebook)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
     rows = [
         SimpleNamespace(
             id=f"runtime-{index}",

@@ -565,7 +565,9 @@ def error_response(
         edit_document_headers(security_policy) if edit_mode else DOCUMENT_HEADERS
     )
     headers = {**document_headers, "Marimo-Studio-Error": code}
-    if hint:
+    # Header values are Latin-1, and hints can name non-ASCII files. The body
+    # always carries the hint.
+    if hint and hint.isascii():
         headers["Marimo-Studio-Hint"] = hint
     if transient:
         headers.update(

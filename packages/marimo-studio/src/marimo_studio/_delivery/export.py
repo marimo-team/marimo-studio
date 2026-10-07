@@ -678,11 +678,15 @@ def _write_bundle(
         raise_process_cleanup(error)
         stable = False
     if not stable:
-        raise StaticExportError(
-            "The static export sources changed while the bundle was written. "
-            "Run the export again."
-        )
+        raise _sources_changed()
     return len(assets) + 2 + int(config is not None) + int(manifest is not None)
+
+
+def _sources_changed() -> StaticExportError:
+    return StaticExportError(
+        "The static export sources changed while the bundle was written. "
+        "Run the export again."
+    )
 
 
 def _publication_inputs_current(publication: StaticPublication) -> bool:
@@ -843,12 +847,18 @@ def _export_to_delivery(
             document = lease.read_text(artifact.document)
         except MarimoStudioError as error:
             raise StaticExportError(str(error)) from error
-        notebook_source = studio.notebook.read_text(encoding="utf-8")
-        resolved = resolve_studio(
-            studio,
-            view_name=selected,
-            published_mounts={selected: artifact.mounts},
-        )
+        try:
+            notebook_source = studio.notebook.read_text(encoding="utf-8")
+            resolved = resolve_studio(
+                studio,
+                notebook_source=notebook_source,
+                view_name=selected,
+                published_mounts={selected: artifact.mounts},
+            )
+        except (MarimoStudioError, UnicodeDecodeError) as error:
+            if _file_stamp(studio.notebook) != notebook_stamp:
+                raise _sources_changed() from error
+            raise
         _projection_error(resolved, selected)
         portability = projection_portability(artifact.mounts, runtime)
         incompatible = next(

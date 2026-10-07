@@ -164,7 +164,9 @@ def test_browser_execution_catalog_preserves_saved_notebook_cells(
         notebook_path,
         notebook_path.read_text(encoding="utf-8"),
     )
-    static = load_static_notebook(notebook_path)
+    static = load_static_notebook(
+        notebook_path, notebook_path.read_text(encoding="utf-8")
+    )
     catalog = {cell.runtime_id: cell.code for cell in projection.execution_cells}
 
     assert {

@@ -20,7 +20,6 @@ from pathlib import Path
 from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._notebook.ports import NotebookInspector
-from marimo_studio._notebook.source_snapshot import inspect_notebook_source
 from marimo_studio._views.creation_plan import (
     PreparedExistingView,
     PreparedStarter,
@@ -124,12 +123,7 @@ def _saved_notebook(
     inspect_notebook: NotebookInspector,
 ) -> SavedNotebook:
     source, identity = _text_snapshot(path)
-    notebook = inspect_notebook_source(
-        path,
-        source,
-        inspect_notebook,
-        include_code=True,
-    )
+    notebook = inspect_notebook(path, include_code=True, source=source)
     return SavedNotebook(notebook, source, identity)
 
 

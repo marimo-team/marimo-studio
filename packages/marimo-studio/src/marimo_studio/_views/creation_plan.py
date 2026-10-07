@@ -15,7 +15,6 @@ from marimo_studio._artifacts.inputs import (
 from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._notebook.ports import NotebookInspector
 from marimo_studio._notebook.records import CellRef, NotebookSpec
-from marimo_studio._notebook.source_snapshot import inspect_notebook_source
 from marimo_studio._views.catalog import resolve_starter
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.records import Starter
@@ -239,11 +238,10 @@ def prepare_starter(
             initial,
         )
 
-    planned_notebook = inspect_notebook_source(
+    planned_notebook = inspect_notebook(
         notebook_path,
-        configured,
-        inspect_notebook,
         include_code=True,
+        source=configured,
     )
     planned = _provider_plans(
         provider,
@@ -397,11 +395,10 @@ def _configuration_transition(
             prospective = (
                 saved.notebook
                 if configured == saved.source
-                else inspect_notebook_source(
+                else inspect_notebook(
                     notebook_path,
-                    configured,
-                    inspect_notebook,
                     include_code=True,
+                    source=configured,
                 )
             )
             if prospective.revision != prepared.planned_notebook.revision:

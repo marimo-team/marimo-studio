@@ -39,13 +39,18 @@ class NotebookWriteLock(Protocol):
 
 
 class NotebookInspector(Protocol):
-    """Read the static graph for one saved Marimo notebook."""
+    """Read the static graph for one Marimo notebook.
+
+    When ``source`` is given, the inspector compiles it as the content of
+    ``path``. Otherwise it reads the saved notebook once.
+    """
 
     def __call__(
         self,
         path: str | Path,
         *,
         include_code: bool = False,
+        source: str | None = None,
     ) -> NotebookSpec: ...
 
 
@@ -76,7 +81,7 @@ class StaticNotebook:
 
 
 class StaticNotebookLoader(Protocol):
-    def __call__(self, path: Path) -> StaticNotebook: ...
+    def __call__(self, path: Path, source: str) -> StaticNotebook: ...
 
 
 class EnvironmentFlagBuilder(Protocol):
