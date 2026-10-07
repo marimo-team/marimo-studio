@@ -15,6 +15,7 @@ the last working page remains available.
 
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from collections.abc import Callable, Iterator
@@ -65,7 +66,12 @@ from marimo_studio._artifacts.retention import (
     prune_artifacts_locked,
     quarantine_artifact_revision_locked,
 )
-from marimo_studio._filesystem.files import ABSENT, FileTree, TreeVersion
+from marimo_studio._filesystem.files import (
+    ABSENT,
+    ConditionalWriteError,
+    FileTree,
+    TreeVersion,
+)
 from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
@@ -76,6 +82,8 @@ from marimo_studio.view_providers import (
     ViewProject,
 )
 from marimo_studio.view_providers._host.records import ProviderProvenance
+
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 @dataclass(frozen=True)
@@ -218,6 +226,32 @@ def prepare_artifact_build(
         return ArtifactBuildPreparation(current, recovery, current_snapshot)
 
 
+# https://bford.info/cachedir/ marks a directory that tools can rebuild.
+# Workspace hosts and backup tools skip it, which keeps a provider's dependency
+# cache and unfinished build candidates out of saved workspaces while view
+# sources and revisions stay.
+_CACHE_DIRECTORY_TAG = (
+    b"Signature: 8a477f597d28d172789f06886806bc55\n"
+    b"# marimo Studio recreates this directory on demand.\n"
+)
+
+
+def _tag_cache_directory(tree: FileTree, directory: Path) -> None:
+    tag = directory / "CACHEDIR.TAG"
+    try:
+        if not tree.is_file(tag):
+            tree.write(tag, _CACHE_DIRECTORY_TAG, expect=ABSENT)
+    except ConditionalWriteError:
+        return
+    except OSError as error:
+        _LOGGER.warning(
+            "Could not tag %s as a cache directory, so saved workspaces and "
+            "backups include it. Check that the directory is writable: %s",
+            directory,
+            error,
+        )
+
+
 @contextmanager
 def capture_artifact_candidate(
     project: ViewProject,
@@ -229,6 +263,7 @@ def capture_artifact_candidate(
     )
     tree = FileTree(project.root)
     tree.create_directory(generation_root)
+    _tag_cache_directory(tree, generation_root.parent)
     try:
         captured = snapshot_project(project, inspection, generation_root / "project")
         files_root = artifact_root(captured.project) / "build" / "files"
@@ -241,6 +276,7 @@ def capture_artifact_candidate(
             "Artifact provider cache",
             final_kind="directory",
         )
+        _tag_cache_directory(tree, cache_root)
         yield ArtifactCandidate(generation_root, captured, files_root, cache_root)
     finally:
         with suppress(OSError):

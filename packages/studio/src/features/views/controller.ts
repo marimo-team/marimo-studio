@@ -1,7 +1,7 @@
 import type { ViewNavigationIntent } from "@marimo-studio/protocol/preview-messages";
 import type { Starter } from "@marimo-studio/protocol/provider-catalog";
 
-import { type ViewList, viewNameError } from "@marimo-studio/protocol/views";
+import { type HostPersistence, type ViewList, viewNameError } from "@marimo-studio/protocol/views";
 
 import type { StarterCatalogState } from "./catalog.ts";
 import type { ViewRemote } from "./remote.ts";
@@ -25,6 +25,7 @@ export interface ViewSnapshot {
   defaultStarter: string;
   starterCatalog: StarterCatalogState;
   viewRoot: string;
+  persistence: HostPersistence;
   creating: boolean;
   deleting: boolean;
   removing?: string;
@@ -86,6 +87,7 @@ export class ViewController {
       defaultStarter: initialDefaultStarter,
       starterCatalog: initialStarters.length > 0 ? { phase: "ready" } : { phase: "idle" },
       viewRoot: "",
+      persistence: null,
       creating: false,
       deleting: false,
     };
@@ -601,6 +603,7 @@ export class ViewController {
       defaultStarter: inventory.default_starter,
       starterCatalog: { phase: "ready" },
       viewRoot: inventory.view_root,
+      persistence: inventory.persistence,
     });
   }
 

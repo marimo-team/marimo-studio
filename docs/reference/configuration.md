@@ -32,7 +32,8 @@ MARIMO_STUDIO_EDIT_ROOT=marimo marimo edit analysis.py --headless
 | `marimo` | Native marimo editor      | Studio authoring workspace | Default Studio presentation |
 
 Until the view root contains a view, run `/` serves the notebook as a marimo
-app.
+app. Run mode redirects `/studio/` to `/` and `/studio/<view>/` to `/<view>/`,
+so a host that carries the editor's path into the app opens the same view.
 
 The setting is process configuration. Apply it before marimo loads the Studio
 server extension. A direct `/studio/` request can create the first view, then
@@ -161,7 +162,13 @@ workspace](../guide/deploy.md#embed-the-studio-edit-workspace) for the deploymen
 command and clickjacking boundary.
 
 Studio also preserves marimo's trusted, server-level `html_head` content in its
-outer edit document. A host-injected script can declare its exact parent with a
+outer edit document and in the view documents that run mode serves. When run
+mode keeps Server runtime view code in an opaque frame, the outer document's
+Content Security Policy admits only `<script>` and `<style>` elements from that
+content, and Studio gives them its nonce. Stylesheet links, scripts that the
+content inserts later, and requests to other origins stay blocked there. Use
+absolute URLs in that content, because view documents resolve relative URLs
+against the view. A host-injected script can declare its exact parent with a
 `data-parent-origin` attribute:
 
 ```html
@@ -184,10 +191,34 @@ runtime code can then use the host origin's cookies, local storage, parent
 document, and same-origin requests. Set it when the notebook and its authored
 view code share the trust boundary of the authenticated host.
 
-The setting is disabled when unset and is read when the Studio process starts.
-Restart the process after changing it. Browser and Prepared runtimes keep their
-opaque-origin sandbox, so a workspace that offers multiple runtimes can enable
-the Server runtime path without changing browser execution isolation.
+When the variable is unset or empty, the setting is off except in a marimohub
+session with proxy exposure, as the
+[sandbox context](#marimohub-sandbox-context) reports. Set it to `0` to keep it
+off there too. Studio reads it
+when the process starts. Restart the process after changing it. Browser and
+Prepared runtimes keep their opaque-origin sandbox, so a workspace that offers
+multiple runtimes can enable the Server runtime path without changing browser
+execution isolation.
+
+### marimohub sandbox context
+
+marimohub sets `MARIMOHUB_CONTEXT_FILE` to a JSON file that describes how the
+hub publishes the session, as its
+[published URLs](https://marimohub.docs.marimo.io/apps#published-urls-inside-the-sandbox)
+reference describes. Studio reads the file when it exists:
+
+| Context field      | Studio behavior                                                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exposure_mode`    | `proxy` serves the sandbox on the hub origin, so Studio enables the trusted Server runtime unless `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME` is set |
+| `public_url`       | Code-mode preview URLs use this address. A preview URL for an explicit `server` keeps that server's address                                     |
+| `persistence_mode` | **Add view** warns before creating a view whose files the hub does not save, and `workspace.status()` reports the value in `persistence`        |
+
+The file decides process trust, so only marimohub should set
+`MARIMOHUB_CONTEXT_FILE`. marimohub reserves the `MARIMOHUB_` prefix from
+project environment variables. Studio reads `exposure_mode` when the process
+starts. A missing or unreadable file leaves these behaviors off, and Studio
+ignores a field whose value it does not recognize. See
+[Use Studio in marimohub](../guide/marimohub.md).
 
 ## Provider environments
 

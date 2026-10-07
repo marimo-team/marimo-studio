@@ -108,6 +108,21 @@ def page_redirect(request: Request, relative: str, page: bool) -> Response | Non
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
 
+def run_view_redirect(request: Request, target: str) -> Response:
+    """Redirect a workspace path to the view that run mode serves at `target`.
+
+    Marimo's authentication sets its session cookie on this response, so the
+    redirect drops `access_token` from the query.
+    """
+    query = [
+        (key, value)
+        for key, value in request.query_params.multi_items()
+        if key != "access_token"
+    ]
+    reference = request_reference(request, with_query(target, query))
+    return RedirectResponse(reference, status_code=307, headers=DOCUMENT_HEADERS)
+
+
 def studio_landing_redirect(
     request: Request,
     view_name: str,
@@ -283,6 +298,14 @@ async def document_response(
         and not (context.mode == "edit" and studio_owned_request(request))
         and not same_origin_server
     )
+    # A host frames run-mode views as its app pages. Its trusted head, such as
+    # marimohub's notebook bridge, runs in the top-level view document as it
+    # would on marimo's own page. Opaque child and preview documents skip it.
+    host_head = (
+        context.trusted_html_head
+        if context.mode == "run" and trusted_shell and not unframed
+        else None
+    )
     if isolated:
         nonce = secrets.token_urlsafe(18)
         shell_headers = {
@@ -331,6 +354,7 @@ async def document_response(
                 runtime_explicit=runtime_explicit,
                 title_text=f"{snapshot.view_name} view",
                 nonce=nonce,
+                host_head=host_head,
             ),
             headers=shell_headers,
         )
@@ -360,6 +384,7 @@ async def document_response(
             ),
             editor_session_id=request.query_params.get(EDITOR_SESSION_QUERY_PARAM),
             lifecycle_id=frame_identity[1] if frame_identity is not None else None,
+            host_head=host_head,
         ),
         headers=runtime_headers,
     )

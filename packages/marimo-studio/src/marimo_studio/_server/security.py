@@ -58,10 +58,15 @@ def parse_allowed_embed_origins(value: str) -> SecurityPolicy:
     )
 
 
-def parse_trusted_server_runtime(value: str) -> bool:
-    """Parse the opt-in that shares the server runtime's browser origin."""
+def parse_trusted_server_runtime(value: str) -> bool | None:
+    """Parse the setting that shares the server runtime's browser origin.
+
+    An empty value leaves the choice to the default or the notebook host.
+    """
     normalized = value.strip().casefold()
-    if normalized in {"", "0", "false", "no", "off"}:
+    if not normalized:
+        return None
+    if normalized in {"0", "false", "no", "off"}:
         return False
     if normalized in {"1", "true", "yes", "on"}:
         return True

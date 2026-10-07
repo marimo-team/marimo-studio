@@ -36,6 +36,8 @@ from marimo_studio.errors import (
 )
 from marimo_studio.view_providers._host import provider_registry
 
+from ..helpers import write_marimohub_context
+
 
 def _workspace(notebook: Path) -> studio_authoring.Workspace:
     return studio_authoring.open_workspace(notebook)
@@ -178,7 +180,7 @@ def test_workspace_sync_operations_preserve_context_from_an_active_loop(
     caller_thread = threading.get_ident()
     observations: list[tuple[int, str]] = []
 
-    def overview(notebook: Path):
+    def overview(notebook: Path, *, persistence: object):
         observations.append((threading.get_ident(), request_context.get()))
         return SimpleNamespace(notebook=notebook)
 
@@ -356,6 +358,25 @@ def test_workspace_advances_after_sequential_bindings(notebook_path: Path) -> No
     assert first.catalog_generation != second.catalog_generation
     status = asyncio.run(workspace.status())
     assert {"first-result", "second-result"} <= set(status.bindings)
+
+
+@pytest.mark.parametrize("persistence", ["source", "none"])
+def test_workspace_status_reports_what_the_hub_saves(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    persistence: str,
+) -> None:
+    write_marimohub_context(tmp_path, monkeypatch, persistence_mode=persistence)
+    workspace = _workspace(notebook_path)
+
+    before = asyncio.run(workspace.status())
+    asyncio.run(workspace.create_view("dashboard"))
+    after = asyncio.run(workspace.status())
+
+    assert before.persistence == persistence
+    assert after.persistence == persistence
+    assert after.to_dict()["persistence"] == persistence
 
 
 def test_workspace_advances_after_remove_and_requires_view_reacquisition(

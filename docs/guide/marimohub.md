@@ -1,6 +1,6 @@
 ---
 title: Use Studio in marimohub
-description: Add Studio to a marimohub notebook, create a view in the hub editor, and serve it as the notebook's app.
+description: Add Studio to a marimohub notebook, create a view in the hub editor, serve it as the notebook's app, and author views with coding agents.
 ---
 
 # Use Studio in marimohub
@@ -9,32 +9,41 @@ description: Add Studio to a marimohub notebook, create a view in the hub editor
 stores marimo notebooks and runs each session in a sandbox. When a notebook
 declares `marimo-studio`, the hub installs Studio into the sandbox, the
 notebook page opens the Studio authoring workspace, and **Run as app** serves
-the notebook's default view.
+the view the editor shows.
 
 ![A marimohub notebook page with the notebook beside a live dashboard Preview](/screenshots/marimohub/studio-workspace.png)
+
+This guide covers marimohub 0.4.16 and later.
 
 ## Persist view projects
 
 marimohub copies `notebook.py` and `pyproject.toml` into each sandbox and saves
 them when the session ends. Studio writes view projects to the same sandbox
-workspace, and the hub saves those files only when the deployment sets:
+workspace, and the hub saves those files when the deployment sets:
 
 ```console
 MARIMOHUB_PERSIST_WORKSPACE=workspace
 ```
 
-With the default `source` value, every new sandbox starts without the notebook's
-views. The editor offers **Add view** again, and **Run as app** serves the
-notebook as a plain marimo app. See the hub's
+Workspace persistence saves hidden files such as `.env` too, and any project
+member with read access can download them. Keep credentials in the hub's
+[integration secrets](https://marimohub.docs.marimo.io/integration-secrets).
+
+With the default `source` value, view files are lost when the session ends, and
+**Add view** says so before it creates a view. Git-synced notebooks, temporary
+editors, and previews save nothing from the session, and **Add view** warns
+about those sessions too. For a Git-synced notebook, commit `notebook.py` and
+the view folder to the repository before you stop the session, as the hub's
+[marimo-studio steps](https://marimohub.docs.marimo.io/apps#use-marimo-studio)
+describe. See the hub's
 [configuration reference](https://marimohub.docs.marimo.io/configuration) for
 the setting.
 
-marimohub 0.4.14 and later save `__marimo__/` and hidden files with the
-workspace, so views in Studio's default view root survive a restart. When the
-workspace exceeds the hub's file or byte budget, the hub saves visible files
-first, then `__marimo__/`, then other hidden paths. Set `view_root = "studio"`
-to place view sources among the visible files. Each view's regenerable build
-state in `.artifacts/` then falls into the last group.
+Studio marks each view's build cache and unfinished builds with a
+[`CACHEDIR.TAG`](https://bford.info/cachedir/) file, and the hub leaves tagged
+folders out of the saved workspace. A notebook with a React view and an HTML
+view saves about 3 MB: the view sources plus their built revisions. The first
+build in a new session downloads the view's packages again.
 
 Studio edits view projects inside the sandbox workspace, so that workspace must
 use [supported storage](../reference/compatibility.md#workspace-storage). Hub
@@ -42,12 +51,6 @@ backends that copy the workspace into the sandbox meet that requirement. The
 Cloudflare backend mounts the workspace bucket into the sandbox with
 [s3fs](https://github.com/s3fs-fuse/s3fs-fuse) instead, and Studio stops view
 creation and builds there with a concurrent-change error.
-
-The hub page frames the notebook from another origin. marimohub's notebook
-bridge declares the hub origin with a `data-parent-origin` script attribute, and
-Studio adds that origin to the `frame-ancestors` policy of the workspace and its
-native editor. See [Process settings](../reference/configuration.md#process-settings)
-for that contract.
 
 ## Add Studio to the notebook
 
@@ -70,11 +73,15 @@ and click **Save**:
 The header is a [PEP 723](https://peps.python.org/pep-0723/) script block,
 which stores dependencies and tool configuration inside the notebook file:
 
-| Entry          | Effect in marimohub                                                                                                                                |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dependencies` | The hub [installs inline dependencies](https://marimohub.docs.marimo.io/sandbox-image#inline-dependencies) when a sandbox starts                   |
-| `default`      | Names the view that **Add view** proposes and **Run as app** serves                                                                                |
-| `view_root`    | Stores view projects in `studio/` beside the notebook, where the hub saves their sources ahead of build state when it reaches its workspace budget |
+| Entry          | Effect in marimohub                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `dependencies` | The hub [installs inline dependencies](https://marimohub.docs.marimo.io/sandbox-image#inline-dependencies) when a sandbox starts |
+| `default`      | Names the view that **Add view** proposes and that an app link without a view path serves                                        |
+| `view_root`    | Stores view projects in `studio/` beside the notebook, where **Browse files** and a synced Git repository show them              |
+
+The **HTML document** starter needs no extra packages. React, Svelte, Reveal.js
+slides, and Notebook Kit starters need `marimo-studio[deno]>=0.2.3` in
+`dependencies` and network access to the npm registry.
 
 **Browse files** is read-only while an editor session runs, so stop the session
 first. The saved header creates a new notebook version. Dependency changes apply
@@ -88,18 +95,6 @@ version. See
 
 To bring a new notebook into the hub, save the header in a local `notebook.py`
 and choose that file under **Start from a file** in the **New Notebook** dialog.
-
-### Choose a starter for hub storage
-
-The **HTML document** starter keeps each view project to a few small files.
-React, Svelte, Reveal.js slides, and Notebook Kit starters need
-`marimo-studio[deno]>=0.2.3` and network access to the npm registry. Each of
-those views also keeps its Deno build cache in `.artifacts/`, about 55 MB and
-300 files for the React starter.
-
-The hub saves at most 1,000 files and 100 MB per workspace and skips files past
-that budget. Keep one Deno-based view per hub notebook so its source files stay
-within the saved set.
 
 ## Create the first view
 
@@ -147,46 +142,110 @@ The next session restores `studio/` into a fresh sandbox and opens Studio on the
 ## Run the view as an app
 
 Choose **Open**, then **Run as app**. The hub starts the notebook with
-`marimo run`, and Studio serves the default view at the app page.
+`marimo run`, and Studio serves the view the editor shows.
 
 ![The dashboard view served as the notebook's marimohub app](/screenshots/marimohub/run-as-app.png)
+
+The hub mirrors the path of its notebook frame into the `__mh_path` query
+parameter, so a reload, **Copy URL**, **Run as app**, and app links reopen the
+same view. For example, `/app/sales?__mh_path=report%2F` opens the `report`
+view of the app named `sales`. An app link without `__mh_path` serves the
+default view.
+
+An app builds a view's production revision the first time a visitor opens it.
+With `MARIMOHUB_PERSIST_WORKSPACE=workspace`, build that revision for a React,
+Svelte, Reveal.js, or Notebook Kit view before you stop the editor session, and
+the app serves it without a build. Run this code through the hub's MCP
+`execute_code` or `marimo pair`, as
+[Coding agents in marimohub](#coding-agents-in-marimohub) shows:
+
+```python
+import marimo_studio
+
+await marimo_studio.agent.current_workspace().view("dashboard").build(
+    profile="production"
+)
+```
 
 [Run or export a view](run-and-share.md) covers runtimes and static export for
 the same view outside the hub.
 
-## Serve Preview behind a cookie sign-in
+## Serve Preview behind a sign-in
 
-With `MARIMOHUB_SANDBOX_EXPOSURE=proxy`, the hub serves each sandbox at
-`/proxy/<token>/` on the hub origin and checks the hub sign-in on every request.
-A login proxy in front of the hub or the sandbox domain checks its own cookie
-the same way. Preview runs view code in a sandboxed frame with an opaque origin,
-which sends no cookies, so the sign-in rejects those requests. After 10 seconds
-Preview reports **The preview cannot reach the Studio server.**
+Preview runs view code in a sandboxed frame with an opaque origin, so its
+requests carry no cookies. A sign-in that checks a cookie on every request
+rejects them, and after 10 seconds Preview reports
+**The preview cannot reach the Studio server.**
 
-Set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` in the sandbox image to serve
-Server runtime views from the sandbox origin, where requests carry the sign-in
-cookie. The hub's **Environment variables** integration rejects names that start
-with `MARIMO`, so build the setting into the image that
-`MARIMOHUB_COMPUTE_IMAGE` selects:
+`MARIMOHUB_SANDBOX_EXPOSURE` sets where the hub serves each sandbox:
 
-```dockerfile
-FROM ghcr.io/marimo-team/marimo-sandbox:latest
-ENV MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1
+| Exposure              | Sandbox address               | Preview                      |
+| --------------------- | ----------------------------- | ---------------------------- |
+| `subdomain` (default) | Its own domain                | Fails behind a login proxy   |
+| `proxy`               | Hub origin, `/proxy/<token>/` | Works behind the hub sign-in |
+
+With proxy exposure, notebook output already runs on the hub origin, which is
+why the hub requires `MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED=true`. Studio reads
+the exposure from the hub's
+[sandbox context](../reference/configuration.md#marimohub-sandbox-context) and
+serves Server runtime views on that origin too, where requests carry the hub
+sign-in cookie.
+
+Behind a login proxy on the sandbox domain, add
+`MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` to the project's **Environment
+variables** integration, then restart the session. Server runtime code then
+runs on the sandbox origin with its cookies, local storage, and same-origin
+requests. With proxy exposure, set it to `0` to keep Server runtime views in
+their opaque frame. See
+[Process settings](../reference/configuration.md#process-settings).
+
+## Coding agents in marimohub
+
+Coding agents author views through Studio's agent API in the live notebook
+kernel. In a marimohub session, `workspace.status()` reports in `persistence`
+whether the hub saves view files. In code mode, `view.preview_url()` returns
+the view's address on the sandbox's public URL. `MARIMOHUB_SANDBOX_AUTH=on`
+makes marimo in each sandbox require an access token, and the exposure decides
+who can open that URL:
+
+| Exposure and sandbox authentication | Who can open the preview URL                                       |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `proxy`                             | People signed in to the hub who can open the session               |
+| `subdomain` with `on`               | Browsers signed in to the session's marimo server                  |
+| `subdomain` with `off`, the default | Anyone with the URL, who can then run code in the session's kernel |
+
+Open the preview URL in your own browser, and share the notebook page with
+other people.
+
+### Agents in the sandbox
+
+[VS Code and OpenCode surfaces](https://marimohub.docs.marimo.io/surfaces) run
+beside marimo in the edit sandbox. The hub gives their terminals and agents the
+kernel's address in `MARIMOHUB_KERNEL_URL` and its access token file in
+`MARIMOHUB_KERNEL_TOKEN_FILE`, which is empty when sandbox authentication is
+off. Pass both to `marimo pair` on every call:
+
+```console
+kernel_args=(--url "$MARIMOHUB_KERNEL_URL")
+if [[ -n "${MARIMOHUB_KERNEL_TOKEN_FILE:-}" ]]; then
+  kernel_args+=(--token-file "$MARIMOHUB_KERNEL_TOKEN_FILE")
+fi
+uv run --no-sync marimo pair execute "${kernel_args[@]}" --code-file - <<'PY'
+import marimo_studio
+print(await marimo_studio.agent.current_workspace().status())
+PY
 ```
 
-With proxy exposure, the sandbox origin is the hub origin. Notebook output
-already runs there, and the hub requires
-`MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED=true` for it. The trusted Server runtime
-runs authored view code on the same origin. See
-[Process settings](../reference/configuration.md#process-settings) for the
-setting.
+The hub owns the session's marimo server. Attach to it through `marimo pair`,
+and start no other server. Continue with
+[Author with a coding agent](coding-agents.md).
 
-## Author views over MCP
+### Agents over MCP
 
 A coding agent connected to the hub's
-[MCP server](https://marimohub.docs.marimo.io/mcp) edits views through the live
-notebook kernel. `start_session` opens an edit session, and `execute_code` runs
-Studio's agent API in it:
+[MCP server](https://marimohub.docs.marimo.io/mcp) edits views through the same
+kernel. `start_session` opens an edit session, and `execute_code` runs Studio's
+agent API in it:
 
 ```python
 import marimo_studio
@@ -210,11 +269,10 @@ view.
 
 ## Troubleshoot
 
-| Symptom                                                          | Fix                                                                                                                                                        |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The notebook page shows the marimo editor with no Studio toolbar | Check that `dependencies` lists `marimo-studio`, then stop and restart the session                                                                         |
-| A new session offers **Add view** for a view you created         | Set `MARIMOHUB_PERSIST_WORKSPACE=workspace`. With marimohub before 0.4.14, keep `view_root` outside `__marimo__/`                                          |
-| **Run as app** shows the notebook instead of the view            | Same fix. Run mode serves the notebook as a marimo app while the view root contains no view                                                                |
-| A starter asks for `marimo-studio[deno]`                         | Change the dependency to `marimo-studio[deno]>=0.2.3` and restart the session                                                                              |
-| A view loses source files after a restart                        | Check the hub server log for `captureWorkspace` cap warnings and reduce the notebook to one Deno-based view                                                |
-| Preview reports **The preview cannot reach the Studio server.**  | Build `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` into the sandbox image. See [Serve Preview behind a cookie sign-in](#serve-preview-behind-a-cookie-sign-in) |
+| Symptom                                                           | Fix                                                                                                                                         |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| The notebook page shows the marimo editor with no Studio toolbar  | Check that `dependencies` lists `marimo-studio`, then stop and restart the session                                                          |
+| **Add view** warns that view files are lost when the session ends | Set `MARIMOHUB_PERSIST_WORKSPACE=workspace` on the hub. For a Git-synced notebook, commit `notebook.py` and the view folder before you stop |
+| **Run as app** shows the notebook instead of the view             | Run mode serves the notebook as a marimo app while the view root contains no view. See [Persist view projects](#persist-view-projects)      |
+| A starter asks for `marimo-studio[deno]`                          | Change the dependency to `marimo-studio[deno]>=0.2.3` and restart the session                                                               |
+| Preview reports **The preview cannot reach the Studio server.**   | See [Serve Preview behind a sign-in](#serve-preview-behind-a-sign-in)                                                                       |

@@ -296,6 +296,100 @@ def test_studio_redirects_stay_on_the_request_origin(
 
 
 @pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/studio/executive/?id=7", "/proxy/token/executive/?id=7"),
+        ("/studio/?id=7", "/proxy/token/?id=7"),
+    ],
+)
+def test_run_mode_opens_the_view_a_workspace_path_names(
+    notebook_path: Path,
+    path: str,
+    expected: str,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+    # A proxy that strips /proxy/token forwards the rest. The browser
+    # resolves Location against its own URL.
+    browser_url = f"https://hub.example/proxy/token{path}"
+
+    with TestClient(app) as client:
+        redirect = client.get(path, follow_redirects=False)
+        page = client.get(path)
+
+    target = urlsplit(urljoin(browser_url, redirect.headers["location"]))
+    assert redirect.status_code == 307
+    assert f"{target.path}?{target.query}" == expected
+    assert page.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "path", ["/studio/Not%20a%20view/", "/studio/assets/", "/studio/dashboard/x/"]
+)
+def test_run_mode_workspace_paths_need_a_view_name(
+    notebook_path: Path,
+    path: str,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+
+    with TestClient(app) as client:
+        response = client.get(path, follow_redirects=False)
+
+    assert response.status_code == 404
+
+
+def test_run_mode_workspace_redirect_signs_in_without_repeating_the_token(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, token="secret")
+
+    with TestClient(app) as client:
+        redirect = client.get(
+            "/studio/executive/?access_token=secret&id=7", follow_redirects=False
+        )
+        page = client.get(
+            urljoin("http://testserver/studio/executive/", redirect.headers["location"])
+        )
+
+    target = urlsplit(
+        urljoin("http://testserver/studio/executive/", redirect.headers["location"])
+    )
+    assert redirect.status_code == 307
+    assert "set-cookie" in redirect.headers
+    assert (target.path, parse_qs(target.query)) == ("/executive/", {"id": ["7"]})
+    assert page.status_code == 200
+
+
+def test_run_mode_workspace_redirect_does_not_reveal_which_views_exist(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, token="secret")
+
+    with TestClient(app) as client:
+        existing = client.get("/studio/executive/", follow_redirects=False)
+        missing = client.get("/studio/missing/", follow_redirects=False)
+
+    assert (existing.status_code, missing.status_code) == (307, 307)
+    assert existing.headers["location"] == "../../executive/"
+    assert missing.headers["location"] == "../../missing/"
+
+
+def test_run_mode_workspace_paths_redirect_only_page_requests(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+
+    with TestClient(app) as client:
+        response = client.post("/studio/executive/", follow_redirects=False)
+
+    assert response.status_code != 307
+
+
+@pytest.mark.parametrize(
     ("request_path", "expected_path"),
     [
         ("/", "/s/f3a9/p/77c1/studio/dashboard/"),

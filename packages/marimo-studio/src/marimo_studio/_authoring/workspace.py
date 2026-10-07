@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+from marimo_studio._hosts.marimohub import host_persistence
 from marimo_studio._notebook.inspection import (
     inspect_notebook_result,
     inspect_runtime,
@@ -45,7 +46,9 @@ class ProviderReport:
 
 async def status(notebook: Path) -> StudioOverview:
     """Return configuration and view state for one notebook."""
-    return await run_provider_operation(partial(overview, notebook))
+    return await run_provider_operation(
+        lambda: overview(notebook, persistence=host_persistence())
+    )
 
 
 async def inspect_notebook(

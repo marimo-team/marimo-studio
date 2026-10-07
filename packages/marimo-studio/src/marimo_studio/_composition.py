@@ -13,6 +13,7 @@ setup is closed before the original startup failure returns to its owner.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterable
 from pathlib import Path
@@ -29,6 +30,7 @@ from marimo_studio._compat.layout import (
 from marimo_studio._compat.patch import CompositeCloseHandle
 from marimo_studio._delivery.browser_ports import BrowserRuntimeProjector
 from marimo_studio._delivery.ports import ExportAdapters
+from marimo_studio._hosts.marimohub import sandbox_context
 from marimo_studio._notebook.ports import (
     EnvironmentFlagBuilder,
     LiveNotebookRunner,
@@ -50,6 +52,8 @@ from marimo_studio._server.security import (
     parse_allowed_embed_origins,
     parse_trusted_server_runtime,
 )
+
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 class _PrivateAdapterLifecycle:
@@ -171,12 +175,26 @@ def create_server_adapters() -> ServerAdapters:
 
 
 def create_security_policy() -> SecurityPolicy:
-    """Load the process security policy for one server composition."""
+    """Load the process security policy for one server composition.
+
+    Without an explicit trusted runtime setting, marimohub's proxy exposure
+    enables it: the hub already serves notebook output from its own origin, and
+    opaque preview frames would lack the hub sign-in cookie.
+    """
     policy = parse_allowed_embed_origins(os.environ.get(ALLOWED_EMBED_ORIGINS_ENV, ""))
-    return SecurityPolicy(
-        policy.allowed_embed_origins,
-        parse_trusted_server_runtime(os.environ.get(TRUSTED_SERVER_RUNTIME_ENV, "")),
+    trusted = parse_trusted_server_runtime(
+        os.environ.get(TRUSTED_SERVER_RUNTIME_ENV, "")
     )
+    if trusted is None:
+        context = sandbox_context()
+        trusted = context is not None and context.host_origin
+        if trusted:
+            _LOGGER.info(
+                "marimohub proxy exposure serves this session on the hub origin, "
+                "so Server runtime views share it. Set %s=0 to keep them isolated.",
+                TRUSTED_SERVER_RUNTIME_ENV,
+            )
+    return SecurityPolicy(policy.allowed_embed_origins, trusted)
 
 
 def install_presentation_authorization() -> CloseHandle:

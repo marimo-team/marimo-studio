@@ -61,10 +61,29 @@ to read the notebook's absolute `path`, and pass `--token-file <PATH>` to every
 uvx --with marimo-studio marimo pair notebook list --url <URL> --token-file <PATH>
 ```
 
-When the notebook is not running, start it in the background. For a topic with
-no notebook, choose a new file name and marimo creates the file. marimo opens a
-Studio tab in the user's browser, and the notebook appears in the list once
-that tab connects:
+In a [marimohub](https://marimo-team.github.io/marimo-studio/guide/marimohub)
+sandbox, such as an OpenCode agent or a VS Code terminal, the hub sets
+`MARIMOHUB_KERNEL_URL` and `MARIMOHUB_KERNEL_TOKEN_FILE`. The hub owns the
+session's server. Attach to it through the sandbox's own environment, which
+already includes Studio, and pass both values to every `pair` command. Do not
+start another server or disable authentication:
+
+```console
+kernel_args=(--url "$MARIMOHUB_KERNEL_URL")
+if [[ -n "${MARIMOHUB_KERNEL_TOKEN_FILE:-}" ]]; then
+  kernel_args+=(--token-file "$MARIMOHUB_KERNEL_TOKEN_FILE")
+fi
+uv run --no-sync marimo pair notebook list "${kernel_args[@]}"
+```
+
+In a hub session, check `status().persistence` before you create a view. When
+it is `"source"` or `"none"`, tell the user that the hub discards view files
+when the session ends.
+
+Outside marimohub, when the notebook is not running, start it in the background.
+For a topic with no notebook, choose a new file name and marimo creates the
+file. marimo opens a Studio tab in the user's browser, and the notebook appears
+in the list once that tab connects:
 
 ```console
 uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox --watch --no-token
