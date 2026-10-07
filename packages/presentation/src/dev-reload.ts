@@ -306,6 +306,9 @@ const revisionPolicy: PresentationRevisionPolicy = {
       return;
     }
     resetRetry();
+    // The failed refresh is over, so the next presentation change announces
+    // this receiver as unready again before it retries.
+    receiverRefreshHandshake.release();
     showDiagnostic(failure.diagnostic);
     console.error("marimo-studio presentation refresh error", error);
   },

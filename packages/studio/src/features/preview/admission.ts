@@ -77,6 +77,7 @@ export class PreviewAdmission {
   private refresh: PreviewAdmissionSnapshot["presentation"]["refresh"] = "current";
   private gatedMutationCandidate: PreviewIdentity | undefined;
   private failure: Failure = "none";
+  private failedRevision: string | null = null;
   private localizedCommitPending = false;
   private buildDiagnostic: BrowserDiagnostic | undefined;
 
@@ -120,6 +121,10 @@ export class PreviewAdmission {
       this.admittedRevision === this.readyIdentity.revision &&
       (this.baseline.phase === "unknown" || this.baseline.revision === this.readyIdentity.revision)
     );
+  }
+
+  private get failedWithoutCandidate(): boolean {
+    return this.view === "failed" && this.failure === "fatal" && this.candidate === null;
   }
 
   get snapshot(): PreviewAdmissionSnapshot {
@@ -377,6 +382,7 @@ export class PreviewAdmission {
         previousIdentity?.sessionId !== this.readyIdentity?.sessionId);
     this.invalidateGatedMutationCandidate();
     this.failure = localized ? "localized" : "fatal";
+    this.failedRevision = this.baseline.phase === "known" ? this.baseline.revision : null;
     this.localizedCommitPending = localized && (!wasInteractive || identityChanged);
     if (!localized) {
       this.admittedRevision = null;
@@ -423,7 +429,21 @@ export class PreviewAdmission {
   }
 
   private reconcile(owner: Owner): void {
-    if (this.receiver.phase !== "ready" || this.build === "pending") {
+    if (this.build === "pending") {
+      return;
+    }
+    if (this.receiver.phase !== "ready") {
+      // A document whose refresh failed stays unready and keeps listening, so
+      // a newer revision or a required refresh retries it.
+      if (this.failedWithoutCandidate) {
+        const superseded =
+          this.baseline.phase === "known" && this.baseline.revision !== this.failedRevision;
+        if ((superseded || this.refresh === "required") && isActive(owner)) {
+          this.requestPresentationChange();
+        } else {
+          this.settleGate();
+        }
+      }
       return;
     }
     const refreshNeedsBaseline = this.refresh === "required" && this.baseline.phase === "unknown";
@@ -436,11 +456,8 @@ export class PreviewAdmission {
       return;
     }
     this.settleGate();
-    const fatalWithoutCandidate =
-      this.view === "failed" && this.failure === "fatal" && this.candidate === null;
-    const retryFatal = fatalWithoutCandidate && this.refresh === "required" && isActive(owner);
-    if (fatalWithoutCandidate) {
-      if (retryFatal) {
+    if (this.failedWithoutCandidate) {
+      if (this.refresh === "required" && isActive(owner)) {
         this.requestPresentationChange();
       }
       return;
