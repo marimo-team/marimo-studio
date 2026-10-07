@@ -1,0 +1,25 @@
+packages/marimo-studio/tests/cli/test_preview_publication.py
+  s_07452f3bdbef7c::t_6ba19512c4e6ae 307-322
+.github/actions/pr-validation/filters.test.ts
+  s_07452f3bdbef7c::t_6ba19512c4e6ae 142-143,145
+development_docs/releasing.md
+  s_07452f3bdbef7c::t_6ba19512c4e6ae 298
+scripts/preview-version.sh
+  s_07452f3bdbef7c::t_891bcc33c172c6 16-19,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d03d93686ff923a46fd6abecee5ff1e85426f81d",
+  "prompts": {},
+  "sessions": {
+    "s_07452f3bdbef7c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8160f1c0-1d09-4afb-9549-f0d303c721c7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
