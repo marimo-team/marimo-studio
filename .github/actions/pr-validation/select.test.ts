@@ -193,6 +193,8 @@ test("a deferred contract fails closed when one of its filters is missing", asyn
 test("malformed deferred rules fail closed", async () => {
   for (const deferredJson of [
     "null",
+    "[]",
+    "5",
     '{"platforms":null}',
     '{"platforms":{"filter":[],"escalate":"platform_sensitive"}}',
     '{"platforms":{"filter":["python_contracts",1],"escalate":"platform_sensitive"}}',
@@ -201,8 +203,8 @@ test("malformed deferred rules fail closed", async () => {
   ]) {
     const result = await select(
       "changed",
-      { python_contracts: "true", platform_sensitive: "true" },
-      { names: [], deferredJson },
+      { python_contracts: "true", main_browser: "false", platform_sensitive: "true" },
+      { deferredJson },
     );
     assert.notEqual(result.status, 0, deferredJson);
     assert.equal(result.selected, "", deferredJson);

@@ -39,6 +39,9 @@ if (
 // A deferred contract runs after merge whenever one of its filters matched. A
 // pull request runs it only when its escalation filter also matched.
 const rules: Readonly<Record<string, DeferredRule | null>> = JSON.parse(DEFERRED_FILTERS ?? "{}");
+if (rules === null || Object.getPrototypeOf(rules) !== Object.prototype) {
+  throw new Error("Deferred filters must map new output names to filter and escalate names");
+}
 const deferred = Object.entries(rules).map(([name, rule]): [string, DeferredContract] => {
   const owned: unknown = isString(rule?.filter) ? [rule.filter] : rule?.filter;
   const escalate: unknown = rule?.escalate;

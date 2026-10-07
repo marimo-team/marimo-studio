@@ -22,7 +22,14 @@ export const importTypeScriptModule = async (source: string, loader = "ts") =>
 
 export const temporaryDirectory = async (prefix: string) => {
   const path = await mkdtemp(join(tmpdir(), prefix));
-  onTestFinished(() => rm(path, { force: true, recursive: true }));
+  onTestFinished(() =>
+    rm(path, {
+      force: true,
+      maxRetries: 10,
+      recursive: true,
+      retryDelay: 20,
+    }),
+  );
   return path;
 };
 

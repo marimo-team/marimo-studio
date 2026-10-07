@@ -60,7 +60,8 @@ make lint
 ```
 
 TypeScript helper scripts run directly with Node, for example
-`node scripts/prepare.ts`. Node removes type annotations when it loads a file
+`node packages/marimo-frontend/scripts/check.ts`. Node removes type
+annotations when it loads a file
 ([type stripping](https://nodejs.org/api/typescript.html#type-stripping)), so
 scripts use erasable syntax: `import type` for types, `.ts` extensions in
 relative imports, and no `enum`, `namespace`, or constructor parameter
