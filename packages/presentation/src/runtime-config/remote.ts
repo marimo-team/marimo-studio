@@ -8,7 +8,7 @@ import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import { responseJson } from "../json.ts";
-import { retry } from "../retry.ts";
+import { boundedRetryAfterExhaustion, retry } from "../retry.ts";
 import { readResponseError, RuntimeConfigRequestError } from "./error.ts";
 import { runtimeProgress } from "./progress.ts";
 import { getMountConfig } from "./store.ts";
@@ -123,6 +123,7 @@ export const fetchRuntimeConfig = async (
 };
 
 const RETRY_DELAYS = [100, 250, 500, 1_000] as const;
+const RUNTIME_SYNC_RETRY_DELAYS = [5_000, 5_000, 5_000] as const;
 
 export const fetchRuntimeConfigWithRetry = async (
   supportUrl: string,
@@ -140,10 +141,11 @@ export const fetchRuntimeConfigWithRetry = async (
       error instanceof RuntimeConfigRequestError &&
       error.transient &&
       error.code !== "presentation-revision-unavailable",
-    retryAfterExhaustion: (error) =>
-      error instanceof RuntimeConfigRequestError && error.code === "runtime-startup-pending"
-        ? 5_000
-        : undefined,
+    retryAfterExhaustion: boundedRetryAfterExhaustion(
+      [...RUNTIME_SYNC_RETRY_DELAYS, 5_000],
+      (error) =>
+        error instanceof RuntimeConfigRequestError && error.code === "runtime-startup-pending",
+    ),
     signal,
   });
 
