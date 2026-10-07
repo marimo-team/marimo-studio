@@ -1,0 +1,19 @@
+packages/studio/src/features/preview/control-remote.ts
+  s_f9539e858c2d0e::t_7d0e785f14b1d1 42,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6825a44bf6a8a49f7f43e1fe6ec61657c99030e5",
+  "prompts": {},
+  "sessions": {
+    "s_f9539e858c2d0e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a11621-0201-7b51-8514-6b8cd59694bf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
