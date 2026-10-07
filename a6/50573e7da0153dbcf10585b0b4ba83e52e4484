@@ -1,0 +1,30 @@
+packages/marimo-studio/tests/server/test_runtime_config.py
+  s_f9539e858c2d0e::t_f687b83fcac022 36
+  s_f9539e858c2d0e::t_ace0050a286e62 3,33-35,37-38
+  s_f9539e858c2d0e::t_6f37d4bf0a7ce5 147-152,253-259,301-307,384-390,475-480
+packages/marimo-studio/tests/server/test_preview_urls.py
+  s_f9539e858c2d0e::t_f687b83fcac022 45
+  s_f9539e858c2d0e::t_43b86df387ceee 710-716,879-885
+  s_f9539e858c2d0e::t_8c4a31d3e24ede 5,47
+  s_f9539e858c2d0e::t_b9ddff941e1658 42-44,46,48-50
+packages/marimo-studio/tests/server/test_zero_python_runtime.py
+  s_f9539e858c2d0e::t_476aca67db5f65 204-210,296-302,368-374
+  s_f9539e858c2d0e::t_7b8988257d3fc3 4,32-34,36-37
+  s_f9539e858c2d0e::t_f687b83fcac022 35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a650573e7da0153dbcf10585b0b4ba83e52e4484",
+  "prompts": {},
+  "sessions": {
+    "s_f9539e858c2d0e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a11621-0201-7b51-8514-6b8cd59694bf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
