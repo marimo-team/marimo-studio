@@ -1,5 +1,11 @@
+packages/marimo-studio/src/marimo_studio/_server/studio/waiting.py
+  ai_agent 13-20,42,46,51-68,146-147,154,165-178
 docs/guide/marimohub.md
   ai_agent 32-38,73-77,117-122,157-210,213-220
+docs/guide/troubleshooting.md
+  ai_agent 125-134
+apps/e2e/tests/presentation-security.spec.ts
+  ai_agent 106-141
 ---
 {
   "schema_version": "authorship/3.0.0",
