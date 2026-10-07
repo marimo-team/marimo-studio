@@ -12,7 +12,7 @@ import {
 } from "./control-sync.ts";
 import { connectFrameControlBridge, type FrameControlEndpoint } from "./frame-bridge.ts";
 
-const RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
+const RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 4_000, 6_000] as const;
 const ATTEMPT_TIMEOUT_MS = 3_000;
 
 interface ControlControllerOptions {

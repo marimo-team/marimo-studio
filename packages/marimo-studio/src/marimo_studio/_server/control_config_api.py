@@ -15,10 +15,7 @@ from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.records import ServerContext
-from marimo_studio._server.runtime.catalog import (
-    revalidate_runtime_cells,
-    runtime_cell_bindings,
-)
+from marimo_studio._server.runtime.catalog import runtime_cell_bindings
 from marimo_studio.errors._internal import (
     RuntimeSyncError,
 )
@@ -58,8 +55,10 @@ async def control_config_response(
             context, session_id, include_dependency_closures=False
         )
         runtime_bindings = runtime_cell_bindings(snapshot, cells)
+        # live_cells has already crossed the native queue barrier. Reading a
+        # second barrier here makes concurrent tabs enqueue competing
+        # observations and can invalidate an otherwise stable control snapshot.
         bindings = await sessions.control_bindings(context, session_id)
-        await revalidate_runtime_cells(sessions, context, session_id, cells)
     except RuntimeSyncError as error:
         if await clients.session_binding_for_client(client_id) != (
             session_id,
