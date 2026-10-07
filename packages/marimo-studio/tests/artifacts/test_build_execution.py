@@ -105,6 +105,9 @@ def test_provider_build_reads_one_immutable_input_snapshot(
 
 def test_build_tags_its_cache_and_staging_directories(tmp_path: Path) -> None:
     project = make_project(tmp_path)
+    cache = artifact_root(project) / ".cache"
+    cache.mkdir(parents=True)
+    (cache / "CACHEDIR.TAG").write_bytes(b"written by a provider\n")
 
     with publish_artifact_lease(project, "development"):
         pass

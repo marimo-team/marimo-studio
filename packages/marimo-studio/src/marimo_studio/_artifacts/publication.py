@@ -230,17 +230,29 @@ def prepare_artifact_build(
 # Workspace hosts and backup tools skip it, which keeps a provider's dependency
 # cache and unfinished build candidates out of saved workspaces while view
 # sources and revisions stay.
+_CACHE_DIRECTORY_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
 _CACHE_DIRECTORY_TAG = (
-    b"Signature: 8a477f597d28d172789f06886806bc55\n"
-    b"# marimo Studio recreates this directory on demand.\n"
+    _CACHE_DIRECTORY_SIGNATURE
+    + b"\n# marimo Studio recreates this directory on demand.\n"
 )
 
 
 def _tag_cache_directory(tree: FileTree, directory: Path) -> None:
     tag = directory / "CACHEDIR.TAG"
     try:
-        if not tree.is_file(tag):
-            tree.write(tag, _CACHE_DIRECTORY_TAG, expect=ABSENT)
+        try:
+            current = tree.read(tag)
+        except FileNotFoundError:
+            current = None
+        if current is not None and current.content.startswith(
+            _CACHE_DIRECTORY_SIGNATURE
+        ):
+            return
+        tree.write(
+            tag,
+            _CACHE_DIRECTORY_TAG,
+            expect=ABSENT if current is None else current.version,
+        )
     except ConditionalWriteError:
         return
     except OSError as error:

@@ -87,14 +87,16 @@ def test_view_lists_read_a_context_that_the_hub_writes_after_startup(
     assert after["persistence"] == "source"
 
 
+@pytest.mark.parametrize("exposure", ["tunnel", ["proxy"], {"mode": "proxy"}])
 def test_newer_hub_values_keep_the_fields_studio_reads(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    exposure: object,
 ) -> None:
     monkeypatch.delenv("MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME", raising=False)
     write_marimohub_context(
-        tmp_path, monkeypatch, exposure_mode="tunnel", persistence_mode="source"
+        tmp_path, monkeypatch, exposure_mode=exposure, persistence_mode="source"
     )
     app = _marimo_app(_configured(notebook_path).notebook, programmatic=True)
     _edit_mode(app)

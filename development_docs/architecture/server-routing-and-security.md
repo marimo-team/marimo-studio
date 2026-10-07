@@ -231,8 +231,10 @@ Every document owner resolves it for its request through
 canonical origins loaded from `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` during
 server composition. Trusted host scripts carried in Marimo's server-level
 `html_head` remain in the outer Studio document and in top-level run-mode view
-documents, where the isolation wrapper extends its nonce to their `<script>` and
-`<style>` elements. Opaque child documents and unframed previews omit them.
+documents. When the isolation wrapper serves a view, it extends its nonce to
+their `<script>` and `<style>` elements. Trusted Server runtime documents carry
+no Content Security Policy, so the scripts run as written. Opaque child
+documents and unframed previews omit them.
 Their bounded `data-parent-origin` declarations extend the same policy for
 host-managed embedding without importing host code.
 

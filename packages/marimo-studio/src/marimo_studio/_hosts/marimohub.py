@@ -117,7 +117,7 @@ def _parse(path: str, raw: bytes) -> SandboxContext | None:
         field
         for field, known in (
             ("public_url", context.public_url is not None),
-            ("exposure_mode", record.get("exposure_mode") in {"subdomain", "proxy"}),
+            ("exposure_mode", record.get("exposure_mode") in ("subdomain", "proxy")),
             ("persistence_mode", context.persistence is not None),
         )
         if not known
