@@ -1,0 +1,27 @@
+packages/marimo-studio/src/marimo_studio/_hosts/marimohub.py
+  s_9045434c54747d::t_1c78a00c50d08c 120
+packages/marimo-studio/src/marimo_studio/_artifacts/publication.py
+  s_9045434c54747d::t_1c78a00c50d08c 233,235-236,243-255
+development_docs/architecture/server-routing-and-security.md
+  s_9045434c54747d::t_1c78a00c50d08c 234-237
+packages/marimo-studio/tests/artifacts/test_build_execution.py
+  s_9045434c54747d::t_1c78a00c50d08c 108-110
+packages/marimo-studio/tests/server/test_marimohub_publication.py
+  s_9045434c54747d::t_1c78a00c50d08c 90,95,99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f0aba3e0d435f6575c266d2cc525d6798f69b709",
+  "prompts": {},
+  "sessions": {
+    "s_9045434c54747d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6b8d0f7d-2732-4b15-9b0d-892f7e5fff78",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
