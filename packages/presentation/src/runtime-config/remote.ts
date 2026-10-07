@@ -144,7 +144,8 @@ export const fetchRuntimeConfigWithRetry = async (
     retryAfterExhaustion: boundedRetryAfterExhaustion(
       [...RUNTIME_SYNC_RETRY_DELAYS, 5_000],
       (error) =>
-        error instanceof RuntimeConfigRequestError && error.code === "runtime-startup-pending",
+        error instanceof RuntimeConfigRequestError &&
+        (error.code === "runtime-startup-pending" || error.code === "runtime-sync-pending"),
     ),
     signal,
   });

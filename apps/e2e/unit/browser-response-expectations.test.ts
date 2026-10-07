@@ -84,3 +84,25 @@ test("concurrent responses cannot overclaim one exact error allowance", async ()
   recovered();
   expect(expectations.diagnostics()).toEqual([]);
 });
+
+test("projection reads accept transient execution synchronization", async () => {
+  const expectations = new BrowserResponseExpectations();
+  const pending = {
+    ...response(Promise.resolve('{"error":"runtime-sync-pending","transient":true}')),
+    url: () => "http://127.0.0.1:4321/_marimo-studio/views/dashboard/outputs",
+  };
+  for (let attempt = 0; attempt < 128; attempt += 1) {
+    await expect(expectations.inspect(pending)).resolves.toBeUndefined();
+  }
+  expect(expectations.diagnostics()).toEqual([]);
+});
+
+test("projection synchronization stays diagnostic when terminal", async () => {
+  const expectations = new BrowserResponseExpectations();
+  await expect(
+    expectations.inspect({
+      ...response(Promise.resolve('{"error":"runtime-sync-pending","transient":false}')),
+      url: () => "http://127.0.0.1:4321/_marimo-studio/views/dashboard/values",
+    }),
+  ).resolves.toContain("runtime-sync-pending");
+});
