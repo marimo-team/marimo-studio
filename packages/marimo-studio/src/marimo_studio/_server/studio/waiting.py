@@ -10,6 +10,14 @@ from markupsafe import Markup
 
 from marimo_studio._delivery.html import node_list, render
 
+# Server restarts reject polls briefly. Longer failures leave the preview
+# waiting without a cause, which a cookie-requiring login proxy produces.
+_UNREACHABLE_AFTER_MS = 10_000
+_PROCESS_SETTINGS_URL = (
+    "https://marimo-team.github.io/marimo-studio/reference/configuration"
+    "#process-settings"
+)
+
 
 def waiting_document(
     *,
@@ -31,14 +39,32 @@ def waiting_document(
         else None
     )
 
-    def signal(message_type: str) -> str:
+    def signal(message_type: str, **fields: object) -> str:
         if receiver is None:
             return ""
         payload = json.dumps(
-            {"type": message_type, **receiver},
+            {"type": message_type, **receiver, **fields},
             separators=(",", ":"),
         ).replace("<", "\\u003c")
         return f"parent.postMessage({payload}, '*');"
+
+    unreachable = signal(
+        "marimo-studio:view-error",
+        diagnostic={
+            "code": "preview-unreachable",
+            "severity": "error",
+            "message": "The preview cannot reach the Studio server.",
+            "hint": (
+                "The preview frame sends requests without cookies, and a login "
+                "proxy that requires cookies rejects them. Check that the server "
+                "is running. Behind a login proxy, review "
+                "MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME: "
+                f"{_PROCESS_SETTINGS_URL}"
+            ),
+            "view": view,
+            "scope": "runtime",
+        },
+    )
 
     node = html(
         lang="en",
@@ -117,13 +143,20 @@ def waiting_document(
                             const refreshUrl = """
                             + refresh
                             + """;
+                            let failingSince = null;
+                            let reported = false;
                             const poll = async () => {
+                              let reachable = false;
                               try {
                                 const response = await fetch(refreshUrl, {
                                   method: "HEAD",
                                   cache: "no-store",
                                 });
-                                if (response.status !== 202) {
+                                // Studio never answers this route with 401 or
+                                // 407. Those come from a sign-in in front of it.
+                                reachable =
+                                  response.status !== 401 && response.status !== 407;
+                                if (reachable && response.status !== 202) {
                                   """
                             + signal("marimo-studio:receiver-unready")
                             + """
@@ -134,6 +167,30 @@ def waiting_document(
                                   return;
                                 }
                               } catch {}
+                              if (reachable) {
+                                failingSince = null;
+                                if (reported) {
+                                  // Clear the reported failure while the
+                                  // notebook session keeps starting.
+                                  reported = false;
+                                  """
+                            + signal("marimo-studio:receiver-unready")
+                            + signal("marimo-studio:receiver-waiting")
+                            + """
+                                }
+                              } else {
+                                // Keep polling so the preview recovers after
+                                // the cause is fixed.
+                                failingSince ??= Date.now();
+                                if (!reported && Date.now() - failingSince >= """
+                            + str(_UNREACHABLE_AFTER_MS)
+                            + """) {
+                                  reported = true;
+                                  """
+                            + unreachable
+                            + """
+                                }
+                              }
                               setTimeout(poll, 300);
                             };
                             setTimeout(poll, 300);

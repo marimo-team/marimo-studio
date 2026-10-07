@@ -1,4 +1,4 @@
-import type { BrowserContext } from "@playwright/test";
+import type { BrowserContext, Route } from "@playwright/test";
 
 import { e2eNetwork } from "../scripts/network.ts";
 import { workspaceDirectory } from "../scripts/paths.ts";
@@ -102,6 +102,68 @@ test("trusted Server workspace previews carry the SSO cookie", async ({ browser 
     await server.close();
   }
 });
+
+const cookieWalls: { name: string; reject: (route: Route) => Promise<void> }[] = [
+  {
+    // A login proxy that sends no CORS headers surfaces in the opaque preview
+    // frame as a failed fetch.
+    name: "fails the preview requests",
+    reject: (route) => route.abort("accessdenied"),
+  },
+  {
+    name: "answers with a sign-in challenge",
+    reject: (route) =>
+      route.fulfill({
+        status: 401,
+        headers: { "access-control-allow-origin": "*" },
+        body: "Sign in required",
+      }),
+  },
+];
+
+for (const wall of cookieWalls) {
+  test(`workspace previews report a cookie wall that ${wall.name}`, async ({ browser }) => {
+    const server = startNotebookServer({
+      command: "edit",
+      target: workspaceDirectory,
+      endpoint: e2eNetwork.main.recovery,
+      authentication: ["--no-token"],
+    });
+    const context = await browser.newContext();
+    let walled = true;
+
+    try {
+      await server.waitUntilReady(`${server.serverUrl}/health`);
+      await context.addCookies([{ name: "sso", value: "ok", url: `${server.serverUrl}/` }]);
+      await context.route("**/*", async (route) => {
+        const request = route.request();
+        const headers = await request.allHeaders();
+        if (walled && request.url().startsWith(server.serverUrl) && !headers.cookie) {
+          await wall.reject(route);
+          return;
+        }
+        await route.continue();
+      });
+
+      const page = await context.newPage();
+      await page.goto(`${server.serverUrl}/?file=notebook.py`);
+      const failure = page
+        .getByRole("alert")
+        .filter({ hasText: "The preview cannot reach the Studio server." });
+      await expect(failure).toContainText("MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME", {
+        timeout: PREVIEW_TIMEOUT,
+      });
+      await expect(page.getByRole("status", { name: "View status" })).toContainText("Needs repair");
+
+      walled = false;
+      await waitForPreview(page);
+      await expect(failure).toHaveCount(0);
+    } finally {
+      await context.close();
+      await server.close();
+    }
+  });
+}
 
 test("allows a configured parent origin and blocks an unlisted parent", async ({
   browserDiagnostics,

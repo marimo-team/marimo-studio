@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -33,7 +35,12 @@ from marimo_studio.errors import WorkspaceGenerationConflictError
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
-from .app_test_support import _redirect_target, _studio_bootstrap, _studio_host
+from .app_test_support import (
+    Response,
+    _redirect_target,
+    _studio_bootstrap,
+    _studio_host,
+)
 
 _EXPLICIT_HOST = StudioRoutePolicy(edit_root="marimo")
 
@@ -154,6 +161,41 @@ def test_explicit_host_documents_allow_host_declared_parent_origins(
         assert response.headers["content-security-policy"] == (
             "frame-ancestors 'self' https://host.example"
         )
+
+
+class _NativePageElements(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attrs: dict[str, dict[str, str | None]] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"marimo-user-config", "marimo-server-token"}:
+            self.attrs[tag] = dict(attrs)
+
+
+def _native_page_elements(response: Response) -> tuple[object, str | None]:
+    parser = _NativePageElements()
+    parser.feed(response.text)
+    config = parser.attrs["marimo-user-config"]["data-config"]
+    assert config is not None
+    return json.loads(config), parser.attrs["marimo-server-token"]["data-token"]
+
+
+@pytest.mark.parametrize("configured", (False, True))
+def test_edit_root_keeps_the_native_editor_page_elements(
+    notebook_path: Path,
+    configured: bool,
+) -> None:
+    notebook = _configured(notebook_path).notebook if configured else notebook_path
+    app = _marimo_app(notebook, programmatic=True)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        root = client.get("/")
+        native = client.get(_studio_host(root)["urls"]["editor"])
+
+    assert root.status_code == native.status_code == 200
+    assert _native_page_elements(root) == _native_page_elements(native)
 
 
 def test_studio_route_initializes_an_unconfigured_notebook(

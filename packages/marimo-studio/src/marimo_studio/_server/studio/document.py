@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from typing import Literal, cast
 
 from htpy import (
+    Element,
     Node,
     a,
     body,
@@ -282,6 +283,15 @@ def studio_document(
             ],
             body[
                 node_list(
+                    # Studio replaces marimo's editor page at the edit root.
+                    # Headless clients, such as marimohub's kernel bootstrap,
+                    # read the server token and user configuration from it.
+                    Element("marimo-user-config")(
+                        {"data-config": json.dumps(context.user_config), "hidden": True}
+                    ),
+                    Element("marimo-server-token")(
+                        {"data-token": context.server_token, "hidden": True}
+                    ),
                     div(id="marimo-studio-editor-host")[
                         cast(
                             Node,
