@@ -1,0 +1,33 @@
+uv.lock
+  ai_agent 1214,1230,1232,1290
+scripts/verify-installed-package.py
+  s_811e0125d4b03b::t_462f8282c91aed 362,364
+apps/e2e/scripts/installed-workspace.ts
+  s_811e0125d4b03b::t_462f8282c91aed 111
+scripts/verify-dist.sh
+  s_811e0125d4b03b::t_462f8282c91aed 92
+packages/marimo-studio/pyproject.toml
+  s_811e0125d4b03b::t_462f8282c91aed 15
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_811e0125d4b03b::t_462f8282c91aed 16
+pnpm-workspace.yaml
+  s_811e0125d4b03b::t_462f8282c91aed 14
+pnpm-lock.yaml
+  ai_agent 28-29,167,301,760-761,3222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "899017598c3947796a24bbba6bc0219979c757a0",
+  "prompts": {},
+  "sessions": {
+    "s_811e0125d4b03b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "43dc8bf5-082e-461b-a26f-66bbb2a77c36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
