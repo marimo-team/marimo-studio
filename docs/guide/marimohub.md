@@ -60,7 +60,7 @@ and click **Save**:
 
 ```python
 # /// script
-# dependencies = ["marimo-studio>=0.2.3"]
+# dependencies = ["marimo-studio>=0.3.0"]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
@@ -80,7 +80,7 @@ which stores dependencies and tool configuration inside the notebook file:
 | `view_root`    | Stores view projects in `studio/` beside the notebook, where **Browse files** and a synced Git repository show them              |
 
 The **HTML document** starter needs no extra packages. React, Svelte, Reveal.js
-slides, and Notebook Kit starters need `marimo-studio[deno]>=0.2.3` in
+slides, and Notebook Kit starters need `marimo-studio[deno]>=0.3.0` in
 `dependencies` and network access to the npm registry.
 
 **Browse files** is read-only while an editor session runs, so stop the session
@@ -110,9 +110,9 @@ kernel as the notebook, so moving a slider in the view reruns the dependent
 cells and updates both panes.
 
 View creation also rewrites the notebook header. It pins a Studio version
-range to the installed version, for example `marimo-studio==0.2.3`, and records
+range to the installed version, for example `marimo-studio==0.3.0`, and records
 aliases for the cells the starter placed. A direct reference such as
-`marimo-studio @ https://example.com/marimo_studio-0.2.3-py3-none-any.whl` stays
+`marimo-studio @ https://example.com/marimo_studio-0.3.0-py3-none-any.whl` stays
 as written, so the next sandbox installs the same build. The hub saves those
 changes with `notebook.py`.
 
@@ -274,5 +274,5 @@ view.
 | The notebook page shows the marimo editor with no Studio toolbar  | Check that `dependencies` lists `marimo-studio`, then stop and restart the session                                                          |
 | **Add view** warns that view files are lost when the session ends | Set `MARIMOHUB_PERSIST_WORKSPACE=workspace` on the hub. For a Git-synced notebook, commit `notebook.py` and the view folder before you stop |
 | **Run as app** shows the notebook instead of the view             | Run mode serves the notebook as a marimo app while the view root contains no view. See [Persist view projects](#persist-view-projects)      |
-| A starter asks for `marimo-studio[deno]`                          | Change the dependency to `marimo-studio[deno]>=0.2.3` and restart the session                                                               |
+| A starter asks for `marimo-studio[deno]`                          | Change the dependency to `marimo-studio[deno]>=0.3.0` and restart the session                                                               |
 | Preview reports **The preview cannot reach the Studio server.**   | See [Serve Preview behind a sign-in](#serve-preview-behind-a-sign-in)                                                                       |
