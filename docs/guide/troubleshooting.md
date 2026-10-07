@@ -122,6 +122,16 @@ On macOS, `--watch` misses changes when the notebook path passes through a
 symlinked folder such as `/tmp`. Open the notebook by its resolved path, for
 example `/private/tmp/analysis.py`.
 
+## Preview cannot reach the Studio server
+
+Preview runs view code in a sandboxed frame whose requests carry no cookies.
+When those requests fail for 10 seconds, Preview reports **The preview cannot
+reach the Studio server.** Check that the server is running. A login proxy that
+requires a cookie on every request rejects these requests. For trusted
+notebooks and views, set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` in the Studio
+process and restart it, as
+[Run as an ASGI application](deploy.md#run-as-an-asgi-application) describes.
+
 ## The Browser runtime does not start
 
 The notebook's dependencies must run in Pyodide. The visitor's browser must

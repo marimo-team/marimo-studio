@@ -103,6 +103,47 @@ test("trusted Server workspace previews carry the SSO cookie", async ({ browser 
   }
 });
 
+test("workspace previews behind a cookie wall report the rejected requests", async ({
+  browser,
+}) => {
+  const server = startNotebookServer({
+    command: "edit",
+    target: workspaceDirectory,
+    endpoint: e2eNetwork.main.recovery,
+    authentication: ["--no-token"],
+  });
+  const context = await browser.newContext();
+
+  try {
+    await server.waitUntilReady(`${server.serverUrl}/health`);
+    await context.addCookies([{ name: "sso", value: "ok", url: `${server.serverUrl}/` }]);
+    await context.route("**/*", async (route) => {
+      const request = route.request();
+      const headers = await request.allHeaders();
+      // A login proxy answers without CORS headers, so the opaque preview
+      // frame observes the rejection as a failed fetch.
+      if (request.url().startsWith(server.serverUrl) && !headers.cookie) {
+        await route.abort("accessdenied");
+        return;
+      }
+      await route.continue();
+    });
+
+    const page = await context.newPage();
+    await page.goto(`${server.serverUrl}/?file=notebook.py`);
+    const failure = page
+      .getByRole("alert")
+      .filter({ hasText: "The preview cannot reach the Studio server." });
+    await expect(failure).toContainText("MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME", {
+      timeout: PREVIEW_TIMEOUT,
+    });
+    await expect(page.getByRole("status", { name: "View status" })).toContainText("Needs repair");
+  } finally {
+    await context.close();
+    await server.close();
+  }
+});
+
 test("allows a configured parent origin and blocks an unlisted parent", async ({
   browserDiagnostics,
   context,
