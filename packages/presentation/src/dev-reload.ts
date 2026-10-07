@@ -306,6 +306,7 @@ const revisionPolicy: PresentationRevisionPolicy = {
       return;
     }
     resetRetry();
+    receiverRefreshHandshake.fail();
     showDiagnostic(failure.diagnostic);
     console.error("marimo-studio presentation refresh error", error);
   },
