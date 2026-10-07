@@ -1,4 +1,7 @@
 {
   "extends": "../../../tsconfig.node.json",
+  "compilerOptions": {
+    "lib": ["ES2024"]
+  },
   "include": ["**/*.ts"]
 }

@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     "./arrow-table": "./src/arrow-table.ts",
-    "./build-metadata": "./scripts/metadata.mjs",
+    "./build-metadata": "./scripts/metadata.ts",
     "./cell-presentation": "./src/cell-presentation.tsx",
     "./control-endpoint": "./src/control-endpoint.ts",
     "./embedded-runtime": "./src/embedded-runtime.tsx",
@@ -19,8 +19,8 @@
     "./editor-workspace": "./src/editor-workspace.ts"
   },
   "scripts": {
-    "check:upstream": "node scripts/check.mjs",
-    "prepare:upstream": "node scripts/prepare.mjs",
+    "check:upstream": "node scripts/check.ts",
+    "prepare:upstream": "node scripts/prepare.ts",
     "test": "vp test"
   },
   "dependencies": {

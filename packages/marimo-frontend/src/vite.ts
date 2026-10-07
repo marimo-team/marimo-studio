@@ -3,7 +3,7 @@ import type { Plugin } from "vite";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readMarimoSourceSync } from "../scripts/metadata.mjs";
+import { readMarimoSourceSync } from "../scripts/metadata.ts";
 import { createWasmWorkerViteIntegration } from "./wasm-worker-vite.ts";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");

@@ -1,3 +1,4 @@
+import corepackManifest from "corepack/package.json" with { type: "json" };
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -6,23 +7,32 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { readMarimoSource } from "./metadata.mjs";
+import type { MarimoSource } from "./metadata.ts";
+
+import release from "../../marimo-studio/src/marimo_studio/_compat/release.json" with { type: "json" };
+import patchManifest from "../patches/marimo-frontend.json" with { type: "json" };
+import { readMarimoSource } from "./metadata.ts";
+
+interface OwnedCheckout {
+  readonly path: string;
+  readonly repository: string;
+  readonly commit: string;
+}
 
 const exec = promisify(execFile);
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const packageRoot = resolve(import.meta.dirname, "..");
 const workspaceRoot = resolve(packageRoot, "../..");
-const corepackPackagePath = fileURLToPath(import.meta.resolve("corepack/package.json"));
-const corepackPackage = JSON.parse(readFileSync(corepackPackagePath, "utf8"));
-const corepackExecutable = resolve(dirname(corepackPackagePath), corepackPackage.bin.corepack);
+const corepackExecutable = resolve(
+  dirname(fileURLToPath(import.meta.resolve("corepack/package.json"))),
+  corepackManifest.bin.corepack,
+);
 const cacheRoot = join(packageRoot, ".cache");
 const checkout = join(cacheRoot, "marimo");
 const metadataPath = join(cacheRoot, "source.json");
-const patchManifestPath = resolve(packageRoot, "patches/marimo-frontend.json");
-const patchManifest = JSON.parse(readFileSync(patchManifestPath, "utf8"));
 const patchPath = resolve(packageRoot, "patches", patchManifest.file);
 const patchContents = readFileSync(patchPath);
-const comparablePatch = (value) =>
-  value.toString("utf8").replace(/^index [\da-f]+\.\.[\da-f]+(?: \d+)?\n/gmu, "");
+const comparablePatch = (value: string): string =>
+  value.replace(/^index [\da-f]+\.\.[\da-f]+(?: \d+)?\n/gmu, "");
 const environmentRoot = resolve(
   workspaceRoot,
   process.env.UV_PROJECT_ENVIRONMENT?.trim() || ".venv",
@@ -32,17 +42,10 @@ const pythonExecutable =
     ? join(environmentRoot, "Scripts", "python.exe")
     : join(environmentRoot, "bin", "python");
 
-export const repository = "https://github.com/marimo-team/marimo.git";
-
-const release = JSON.parse(
-  readFileSync(
-    resolve(packageRoot, "../marimo-studio/src/marimo_studio/_compat/release.json"),
-    "utf8",
-  ),
-);
-export const expectedVersion = release.version;
+const repository = "https://github.com/marimo-team/marimo.git";
+const expectedVersion = release.version;
 export const expectedCommit = release.commit;
-export const expectedPatchSha256 = release.frontendPatchSha256;
+const expectedPatchSha256 = release.frontendPatchSha256;
 
 if (patchManifest.baseCommit !== expectedCommit) {
   throw new Error("The Marimo frontend patch targets a different release commit");
@@ -54,18 +57,23 @@ if (createHash("sha256").update(patchContents).digest("hex") !== expectedPatchSh
   throw new Error("The Marimo frontend patch digest is stale");
 }
 
-const capture = async (command, args, cwd, env) => {
+const capture = async (
+  command: string,
+  args: readonly string[],
+  cwd: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<string> => {
   const result = await exec(command, args, { cwd, encoding: "utf8", env });
   return result.stdout.trim();
 };
 
-const captureRaw = async (command, args, cwd) => {
+const captureRaw = async (command: string, args: readonly string[], cwd: string) => {
   const result = await exec(command, args, { cwd, encoding: "utf8" });
   return result.stdout;
 };
 
-const run = (command, args, cwd) =>
-  new Promise((resolveRun, rejectRun) => {
+const run = (command: string, args: readonly string[], cwd: string) =>
+  new Promise<void>((resolveRun, rejectRun) => {
     const child = spawn(command, args, { cwd, stdio: "inherit" });
     child.once("error", rejectRun);
     child.once("close", (code, signal) => {
@@ -83,20 +91,17 @@ const run = (command, args, cwd) =>
     });
   });
 
-export const pnpmInvocation = (
-  args,
-  { nodeExecutable = process.execPath, corepackExecutable: corepackCli = corepackExecutable } = {},
-) => ({
-  command: nodeExecutable,
-  args: [corepackCli, "pnpm", ...args],
+export const pnpmInvocation = (args: readonly string[]) => ({
+  command: process.execPath,
+  args: [corepackExecutable, "pnpm", ...args],
 });
 
-const runPnpm = async (args, cwd) => {
+const runPnpm = async (args: readonly string[], cwd: string) => {
   const invocation = pnpmInvocation(args);
   await run(invocation.command, invocation.args, cwd);
 };
 
-const exists = async (path) => {
+const exists = async (path: string): Promise<boolean> => {
   try {
     await access(path);
     return true;
@@ -127,10 +132,10 @@ const installedVersion = () =>
     workspaceRoot,
   );
 
-const projectVersion = (path) =>
+const projectVersion = (path: string) =>
   capture("uv", ["--color", "never", "--project", path, "version", "--short"], workspaceRoot);
 
-const assertVersion = async (path, expected) => {
+const assertVersion = async (path: string, expected: string) => {
   const actual = await projectVersion(path);
   if (actual !== expected) {
     throw new Error(
@@ -139,7 +144,7 @@ const assertVersion = async (path, expected) => {
   }
 };
 
-export const assertMarimoCommit = async (path) => {
+export const assertMarimoCommit = async (path: string) => {
   const actual = await capture("git", ["rev-parse", "HEAD"], path);
   if (actual !== expectedCommit) {
     throw new Error(
@@ -148,7 +153,7 @@ export const assertMarimoCommit = async (path) => {
   }
 };
 
-export const assertCleanCheckout = async (path) => {
+export const assertCleanCheckout = async (path: string) => {
   const status = await capture("git", ["status", "--porcelain=v1", "--untracked-files=all"], path, {
     ...process.env,
     GIT_OPTIONAL_LOCKS: "0",
@@ -180,7 +185,7 @@ const patchedFiles = [
   "frontend/src/plugins/impl/common/labeled.tsx",
 ];
 
-export const assertMarimoPatch = async (path) => {
+const assertMarimoPatch = async (path: string) => {
   await assertMarimoCommit(path);
   const status = await captureRaw(
     "git",
@@ -202,7 +207,7 @@ export const assertMarimoPatch = async (path) => {
     path,
   );
   const observed = comparablePatch(diff);
-  const expected = comparablePatch(patchContents);
+  const expected = comparablePatch(patchContents.toString("utf8"));
   if (observed !== expected) {
     const digest = createHash("sha256").update(observed).digest("hex");
     throw new Error(`The applied Marimo frontend patch has digest ${digest}`);
@@ -210,7 +215,7 @@ export const assertMarimoPatch = async (path) => {
   await exec("git", ["apply", "--reverse", "--check", patchPath], { cwd: path });
 };
 
-const applyMarimoPatch = async (path) => {
+const applyMarimoPatch = async (path: string) => {
   await assertMarimoCommit(path);
   await assertCleanCheckout(path);
   await exec("git", ["apply", "--check", patchPath], { cwd: path });
@@ -218,28 +223,23 @@ const applyMarimoPatch = async (path) => {
   await assertMarimoPatch(path);
 };
 
-const installWorkspace = async (path) => {
+const installWorkspace = async (path: string) => {
   await runPnpm(["install", "--frozen-lockfile"], path);
   await runPnpm(["--dir", "packages/llm-info", "codegen"], path);
 };
 
-const workspacePaths = (path) => [
+const workspacePaths = (path: string) => [
   join(path, "node_modules", ".pnpm"),
   join(path, "frontend", "node_modules"),
   join(path, "packages", "llm-info", "data", "generated", "models.json"),
 ];
 
-const isWorkspaceInstalled = async (path) =>
+const isWorkspaceInstalled = async (path: string): Promise<boolean> =>
   (await Promise.all(workspacePaths(path).map(exists))).every(Boolean);
 
-const remoteUrl = (path) => capture("git", ["remote", "get-url", "origin"], path);
+const remoteUrl = (path: string) => capture("git", ["remote", "get-url", "origin"], path);
 
-const hasInstalledWorkspace = async (path) =>
-  (await exists(join(path, "node_modules", ".pnpm"))) &&
-  (await exists(join(path, "frontend", "node_modules"))) &&
-  (await exists(join(path, "packages", "llm-info", "data", "generated", "models.json")));
-
-export const prepareOwnedCheckout = async ({ path, repository, commit }) => {
+export const prepareOwnedCheckout = async ({ path, repository, commit }: OwnedCheckout) => {
   if (await exists(repository)) {
     const source = await realpath(repository);
     const owned = (await exists(path)) ? await realpath(path) : resolve(path);
@@ -280,26 +280,7 @@ export const prepareOwnedCheckout = async ({ path, repository, commit }) => {
   }
 };
 
-export const isPreparedOwnedCheckout = async ({ path, repository, commit }) => {
-  try {
-    if (!(await exists(join(path, ".git")))) {
-      return false;
-    }
-    const [origin, head, status] = await Promise.all([
-      remoteUrl(path),
-      capture("git", ["rev-parse", "HEAD"], path),
-      capture("git", ["status", "--porcelain=v1", "--untracked-files=all"], path),
-    ]);
-    if (origin !== repository || head !== commit || status) {
-      return false;
-    }
-    return isWorkspaceInstalled(path);
-  } catch {
-    return false;
-  }
-};
-
-const isPreparedPatchedCheckout = async ({ path, repository, commit }) => {
+const isPreparedPatchedCheckout = async ({ path, repository, commit }: OwnedCheckout) => {
   try {
     if (!(await exists(join(path, ".git"))) || (await remoteUrl(path)) !== repository) {
       return false;
@@ -314,7 +295,7 @@ const isPreparedPatchedCheckout = async ({ path, repository, commit }) => {
   }
 };
 
-const reusableOwnedSource = async (version, origin) => {
+const reusableOwnedSource = async (version: string, origin: string) => {
   try {
     const source = await readMarimoSource();
     const matches =
@@ -332,13 +313,13 @@ const reusableOwnedSource = async (version, origin) => {
   }
 };
 
-const refreshableOwnedCheckout = async (origin = repository) => {
+const refreshableOwnedCheckout = async (origin: string) => {
   try {
     return (
       (await exists(join(checkout, ".git"))) &&
       (await remoteUrl(checkout)) === origin &&
       (await capture("git", ["rev-parse", "HEAD"], checkout)) === expectedCommit &&
-      (await hasInstalledWorkspace(checkout))
+      (await isWorkspaceInstalled(checkout))
     );
   } catch {
     return false;
@@ -350,7 +331,7 @@ const sourceRepository = () => {
   return configured ? resolve(configured) : repository;
 };
 
-export const prepareMarimoSource = async () => {
+export const prepareMarimoSource = async (): Promise<MarimoSource> => {
   const version = await resolvedVersion();
   if (version !== expectedVersion) {
     throw new Error(
@@ -390,7 +371,7 @@ export const prepareMarimoSource = async () => {
   return source;
 };
 
-export const assertPreparedMarimoSource = async () => {
+export const assertPreparedMarimoSource = async (): Promise<MarimoSource> => {
   const version = await installedVersion();
   if (version !== expectedVersion) {
     throw new Error(
@@ -422,5 +403,3 @@ export const assertPreparedMarimoSource = async () => {
   }
   return source;
 };
-
-export { readMarimoSource };

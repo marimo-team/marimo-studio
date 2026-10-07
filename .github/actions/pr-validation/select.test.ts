@@ -1,26 +1,39 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { test } from "vite-plus/test";
 
-const selector = new URL("./select.mjs", import.meta.url);
+interface SelectionOptions {
+  readonly event?: string;
+  readonly names?: readonly string[];
+  readonly deferred?: Readonly<Record<string, DeferredRule>>;
+  readonly deferredJson?: string;
+}
+
+interface DeferredRule {
+  readonly filter: string | readonly string[];
+  readonly escalate: string;
+}
+
+const selector = join(import.meta.dirname, "select.ts");
 
 const select = async (
-  mode,
-  filters,
+  mode: string,
+  filters: Readonly<Record<string, string>>,
   {
     event = "pull_request",
     names = ["python_contracts", "main_browser"],
-    deferred = undefined,
-  } = {},
+    deferred,
+    deferredJson = deferred === undefined ? undefined : JSON.stringify(deferred),
+  }: SelectionOptions = {},
 ) => {
   const directory = await mkdtemp(join(tmpdir(), "validation-selection-"));
   const output = join(directory, "output");
   try {
-    const result = spawnSync(process.execPath, [fileURLToPath(selector)], {
+    const result = spawnSync(process.execPath, [selector], {
       encoding: "utf8",
       env: {
         ...process.env,
@@ -28,14 +41,11 @@ const select = async (
         VALIDATION_MODE: mode,
         VALIDATION_EVENT: event,
         VALIDATION_FILTERS: JSON.stringify(names),
-        ...(deferred === undefined ? {} : { DEFERRED_FILTERS: JSON.stringify(deferred) }),
+        DEFERRED_FILTERS: deferredJson,
         PATH_FILTERS_JSON: JSON.stringify(filters),
       },
     });
-    const selected = await readFile(output, "utf8").catch((error) => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
+    const selected = existsSync(output) ? await readFile(output, "utf8") : "";
     return { selected, status: result.status };
   } finally {
     await rm(directory, { force: true, recursive: true });
@@ -178,4 +188,23 @@ test("a deferred contract fails closed when one of its filters is missing", asyn
   );
   assert.notEqual(result.status, 0);
   assert.equal(result.selected, "");
+});
+
+test("malformed deferred rules fail closed", async () => {
+  for (const deferredJson of [
+    "null",
+    '{"platforms":null}',
+    '{"platforms":{"filter":[],"escalate":"platform_sensitive"}}',
+    '{"platforms":{"filter":["python_contracts",1],"escalate":"platform_sensitive"}}',
+    '{"platforms":{"filter":"python_contracts","escalate":1}}',
+    '{"Platforms":{"filter":"python_contracts","escalate":"platform_sensitive"}}',
+  ]) {
+    const result = await select(
+      "changed",
+      { python_contracts: "true", platform_sensitive: "true" },
+      { names: [], deferredJson },
+    );
+    assert.notEqual(result.status, 0, deferredJson);
+    assert.equal(result.selected, "", deferredJson);
+  }
 });

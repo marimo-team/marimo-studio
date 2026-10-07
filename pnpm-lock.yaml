@@ -45,6 +45,9 @@ catalogs:
     '@types/node':
       specifier: ^22.20.1
       version: 22.20.1
+    '@types/picomatch':
+      specifier: 2.3.3
+      version: 2.3.3
     '@types/react':
       specifier: ^19.2.10
       version: 19.2.18
@@ -72,6 +75,9 @@ catalogs:
     oxlint-tsgolint:
       specifier: 7.0.2001
       version: 7.0.2001
+    picomatch:
+      specifier: 2.3.1
+      version: 2.3.1
     portless:
       specifier: 0.15.5
       version: 0.15.5
@@ -81,9 +87,6 @@ catalogs:
     react-dom:
       specifier: ^19.2.4
       version: 19.2.8
-    tsx:
-      specifier: 4.21.0
-      version: 4.21.0
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
@@ -96,6 +99,9 @@ catalogs:
     vue:
       specifier: ^3.5.39
       version: 3.5.40
+    yaml:
+      specifier: 2.9.0
+      version: 2.9.0
     zod:
       specifier: 4.3.6
       version: 4.3.6
@@ -117,12 +123,18 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
+      '@types/picomatch':
+        specifier: 'catalog:'
+        version: 2.3.3
       oxlint:
         specifier: 'catalog:'
         version: 1.76.0(oxlint-tsgolint@7.0.2001)(vite-plus@0.3.0(@types/node@22.20.1)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@22.20.1)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(typescript@6.0.3)(yaml@2.9.0))(esbuild@0.27.7)(jiti@2.7.0)(jsdom@29.1.1)(tsx@4.21.0)(typescript@6.0.3)(yaml@2.9.0))
       oxlint-tsgolint:
         specifier: 'catalog:'
         version: 7.0.2001
+      picomatch:
+        specifier: 'catalog:'
+        version: 2.3.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -132,6 +144,9 @@ importers:
       vite-plus:
         specifier: 'catalog:'
         version: 0.3.0(@types/node@22.20.1)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@22.20.1)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(typescript@6.0.3)(yaml@2.9.0))(esbuild@0.27.7)(jiti@2.7.0)(jsdom@29.1.1)(tsx@4.21.0)(typescript@6.0.3)(yaml@2.9.0)
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.0
 
   apps/browser:
     dependencies:
@@ -166,9 +181,6 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1
-      tsx:
-        specifier: 'catalog:'
-        version: 4.21.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1401,6 +1413,9 @@ packages:
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
+  '@types/picomatch@2.3.3':
+    resolution: {integrity: sha512-Yll76ZHikRFCyz/pffKGjrCwe/le2CDwOP5F210KQo27kpRE46U2rDnzikNlVn6/ezH3Mhn46bJMTfeVTtcYMg==}
+
   '@types/react-dom@19.2.4':
     resolution: {integrity: sha512-Bsc+QHgp+P/F02XDzNCY9jnZNCUuLki36KT7VKrTXXLdHf+vHMNZnW1rVu5DNW/rCK+fya3DATySbLM4yhtKUw==}
     peerDependencies:
@@ -2436,6 +2451,10 @@ packages:
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
+
+  picomatch@2.3.1:
+    resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
+    engines: {node: '>=8.6'}
 
   picomatch@4.0.5:
     resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
@@ -3596,6 +3615,8 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/picomatch@2.3.3': {}
+
   '@types/react-dom@19.2.4(@types/react@19.2.18)':
     dependencies:
       '@types/react': 19.2.18
@@ -4072,6 +4093,7 @@ snapshots:
       '@esbuild/win32-arm64': 0.27.7
       '@esbuild/win32-ia32': 0.27.7
       '@esbuild/win32-x64': 0.27.7
+    optional: true
 
   escalade@3.2.0: {}
 
@@ -4118,6 +4140,7 @@ snapshots:
   get-tsconfig@4.14.3:
     dependencies:
       resolve-pkg-maps: 1.0.0
+    optional: true
 
   gray-matter@4.0.3:
     dependencies:
@@ -4616,6 +4639,8 @@ snapshots:
 
   picocolors@1.1.1: {}
 
+  picomatch@2.3.1: {}
+
   picomatch@4.0.5: {}
 
   playwright-core@1.61.1: {}
@@ -4711,7 +4736,8 @@ snapshots:
 
   require-from-string@2.0.2: {}
 
-  resolve-pkg-maps@1.0.0: {}
+  resolve-pkg-maps@1.0.0:
+    optional: true
 
   rolldown@1.2.1:
     dependencies:
@@ -4845,6 +4871,7 @@ snapshots:
       get-tsconfig: 4.14.3
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   typescript@6.0.3: {}
 
@@ -5120,8 +5147,7 @@ snapshots:
 
   y18n@5.0.8: {}
 
-  yaml@2.9.0:
-    optional: true
+  yaml@2.9.0: {}
 
   yargs-parser@21.1.1: {}
 

@@ -65,7 +65,7 @@ jobs:
             "windows_lifecycle":{"filter":["windows_lifecycle","platform_control"],"escalate":"platform_sensitive"},
             "windows_provider":{"filter":["provider_browser","platform_control"],"escalate":"platform_sensitive"}}
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
-        run: node .github/actions/pr-validation/select.mjs
+        run: node .github/actions/pr-validation/select.ts
 
   python:
     name: Platform contracts (${{ matrix.profile }}, ${{ matrix.os }})

@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import test from "node:test";
+import picomatch from "picomatch";
+import { test } from "vite-plus/test";
+import { parse } from "yaml";
 
-const require = createRequire(import.meta.resolve("vite-plus/package.json"));
-const { parse } = require("yaml");
-const picomatch = require("picomatch");
-const filters = parse(await readFile(new URL("../../filters.yml", import.meta.url), "utf8"));
+// Filter entries nest lists through YAML aliases.
+type Patterns = string | Patterns[];
+
+const filters: Readonly<Record<string, Patterns>> = parse(
+  await readFile(new URL("../../filters.yml", import.meta.url), "utf8"),
+);
+const flatten = (patterns: Patterns): readonly string[] =>
+  Array.isArray(patterns) ? patterns.flatMap(flatten) : [patterns];
 const names = [
   "main_browser",
   "provider_browser",
@@ -15,9 +20,10 @@ const names = [
   "windows_unit",
 ];
 
-// paths-filter applies picomatch with dotfiles and the some-with-excludes predicate.
-const matches = (name, path) => {
-  const patterns = filters[name].flat(Infinity);
+// paths-filter applies its locked picomatch with dotfiles and the some-with-excludes
+// predicate. The root catalog pins the same picomatch version.
+const matches = (name: string, path: string): boolean => {
+  const patterns = flatten(filters[name]);
   return picomatch(
     patterns.filter((pattern) => !pattern.startsWith("!")),
     {
@@ -28,7 +34,7 @@ const matches = (name, path) => {
     },
   )(path);
 };
-const selected = (path) => names.filter((name) => matches(name, path));
+const selected = (path: string) => names.filter((name) => matches(name, path));
 
 test("main workspace changes select live browser and Windows lifecycle acceptance", () => {
   assert.deepEqual(selected("apps/e2e/scripts/main-workspace.ts"), [

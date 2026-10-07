@@ -51,7 +51,7 @@ jobs:
           VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
           VALIDATION_FILTERS: '["distribution","frontend_contracts","python_contracts","quality"]'
           PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
-        run: node .github/actions/pr-validation/select.mjs
+        run: node .github/actions/pr-validation/select.ts
 
   quality:
     name: Quality
