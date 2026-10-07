@@ -1,0 +1,21 @@
+apps/e2e/tests/browser-response-expectations.ts
+  s_f9539e858c2d0e::t_454b03ec60557e 115-121
+apps/e2e/unit/browser-response-expectations.test.ts
+  s_f9539e858c2d0e::t_454b03ec60557e 109-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cbbc3b06be897b11312edd0a41928d018af5b3e1",
+  "prompts": {},
+  "sessions": {
+    "s_f9539e858c2d0e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a11621-0201-7b51-8514-6b8cd59694bf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
