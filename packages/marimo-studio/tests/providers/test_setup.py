@@ -157,6 +157,33 @@ def test_repeated_setup_and_vanilla_preserve_the_react_requirement(
     assert dependencies == (f"marimo-studio[deno]=={version('marimo-studio')}",)
 
 
+def test_setup_keeps_a_declared_direct_studio_reference(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    react = ProviderStub("marimo-studio/react", "react")
+    vanilla = ProviderStub("marimo-studio/vanilla", "vanilla")
+    registry = ProviderRegistry(
+        (
+            candidate("react", react, distribution="marimo-studio"),
+            candidate("vanilla", vanilla, distribution="marimo-studio"),
+        ),
+        BUNDLED_PROVIDER_REQUIREMENTS,
+    )
+    install_registry(monkeypatch, registry)
+    wheel = (notebook_path.parent / "marimo_studio-9.9.9-py3-none-any.whl").as_uri()
+    notebook_path.write_text(
+        f'# /// script\n# dependencies = ["marimo-studio @ {wheel}"]\n# ///\n\n'
+        + notebook_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    prepare_view(notebook_path, "dashboard", starter="marimo-studio/react:react")
+    prepare_view(notebook_path, "report", starter="marimo-studio/vanilla:vanilla")
+
+    assert _dependencies(notebook_path) == (f"marimo-studio[deno] @ {wheel}",)
+
+
 def test_setup_keeps_requirements_for_every_installed_third_party_view(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

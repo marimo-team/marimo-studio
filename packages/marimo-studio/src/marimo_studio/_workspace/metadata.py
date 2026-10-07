@@ -212,19 +212,24 @@ def _merge_provider_requirements(requirements: Iterable[str]) -> tuple[str, ...]
             continue
         current_specifier = current.specifier
         candidate_specifier = requirement.specifier
+        # A requirement without a version or URL only adds extras, so a direct
+        # reference such as `marimo-studio @ file:///...` satisfies it.
+        pins = [
+            item
+            for item in (current, requirement)
+            if item.url is not None or str(item.specifier)
+        ]
         if (
-            (
-                str(current_specifier)
-                and str(candidate_specifier)
-                and current_specifier != candidate_specifier
+            len(pins) == 2
+            and (
+                current.url != requirement.url
+                or current_specifier != candidate_specifier
             )
-            or current.url != requirement.url
-            or str(current.marker) != str(requirement.marker)
-        ):
+        ) or str(current.marker) != str(requirement.marker):
             raise ConfigurationError(
                 f"Configured providers require incompatible {name!r} environments"
             )
-        selected = current if str(current_specifier) else requirement
+        selected = pins[0] if pins else requirement
         extras = sorted(current.extras | requirement.extras)
         extra_text = f"[{','.join(extras)}]" if extras else ""
         if selected.url is not None:
@@ -460,6 +465,23 @@ def _package_requirement() -> str:
     return f"marimo-studio=={package_version}"
 
 
+def _studio_requirement(document: Mapping[str, Any]) -> str:
+    """Return the Studio requirement that view configuration records.
+
+    A declared direct reference already names one build, which can differ from
+    the release of the same version, so it stays. A version range is pinned to
+    the installed release.
+    """
+    dependencies = document.get("dependencies")
+    for dependency in dependencies if isinstance(dependencies, list) else ():
+        if _dependency_name(dependency) != _PACKAGE_NAME:
+            continue
+        requirement = Requirement(str(dependency))
+        if requirement.url is not None:
+            return str(requirement)
+    return _package_requirement()
+
+
 def set_cell_bindings(
     config: MutableMapping[str, Any],
     bindings: Mapping[str, CellRef],
@@ -529,7 +551,7 @@ def configured_notebook_source(
         )
         _set_provider_requirements(
             document,
-            (_package_requirement(), *provider_requirements),
+            (_studio_requirement(document), *provider_requirements),
             provider_owned=provider_owned,
         )
     set_cell_bindings(config, cell_bindings or {})
