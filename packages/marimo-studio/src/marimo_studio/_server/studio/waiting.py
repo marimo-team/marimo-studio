@@ -146,13 +146,17 @@ def waiting_document(
                             let failingSince = null;
                             let reported = false;
                             const poll = async () => {
+                              let reachable = false;
                               try {
                                 const response = await fetch(refreshUrl, {
                                   method: "HEAD",
                                   cache: "no-store",
                                 });
-                                failingSince = null;
-                                if (response.status !== 202) {
+                                // Studio never answers this route with 401 or
+                                // 407. Those come from a sign-in in front of it.
+                                reachable =
+                                  response.status !== 401 && response.status !== 407;
+                                if (reachable && response.status !== 202) {
                                   """
                             + signal("marimo-studio:receiver-unready")
                             + """
@@ -162,10 +166,21 @@ def waiting_document(
                                   else location.replace(refreshUrl);
                                   return;
                                 }
-                              } catch {
-                                // A rejected poll never reached a readable
-                                // response. Keep polling so the preview
-                                // recovers after the cause is fixed.
+                              } catch {}
+                              if (reachable) {
+                                failingSince = null;
+                                if (reported) {
+                                  // Clear the reported failure while the
+                                  // notebook session keeps starting.
+                                  reported = false;
+                                  """
+                            + signal("marimo-studio:receiver-unready")
+                            + signal("marimo-studio:receiver-waiting")
+                            + """
+                                }
+                              } else {
+                                // Keep polling so the preview recovers after
+                                // the cause is fixed.
                                 failingSince ??= Date.now();
                                 if (!reported && Date.now() - failingSince >= """
                             + str(_UNREACHABLE_AFTER_MS)
