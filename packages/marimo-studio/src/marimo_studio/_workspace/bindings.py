@@ -8,7 +8,6 @@ from typing import Any, TypeVar
 
 from marimo_studio._notebook.ports import NotebookInspector, NotebookWriteLock
 from marimo_studio._notebook.records import CellRef, CellSelector, resolve_cell
-from marimo_studio._notebook.source_snapshot import inspect_notebook_source
 from marimo_studio._workspace.config import (
     load_studio,
     load_studio_definition,
@@ -92,10 +91,9 @@ def bind_cell(
         )
         current = snapshot.studio
         assert snapshot.notebook_source is not None
-        notebook = inspect_notebook_source(
+        notebook = inspect_notebook(
             current.notebook,
-            snapshot.notebook_source,
-            inspect_notebook,
+            source=snapshot.notebook_source,
         )
         cell = resolve_cell(
             notebook,

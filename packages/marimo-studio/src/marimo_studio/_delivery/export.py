@@ -89,6 +89,7 @@ from marimo_studio._workspace.mutation_lock import (
     workspace_catalog_lock,
 )
 from marimo_studio.errors import (
+    ConfigurationError,
     MarimoStudioError,
     PublicationError,
     StaticExportError,
@@ -192,6 +193,13 @@ def _emit_progress(
 def _file_stamp(path: Path) -> tuple[int, int, int, int]:
     stat = path.stat()
     return stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino
+
+
+def _notebook_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise ConfigurationError(f"Notebook is not UTF-8 text: {path}") from error
 
 
 def _destination_key(path: Path) -> tuple[str, ...]:
@@ -669,7 +677,7 @@ def _write_bundle(
                 provider_registry().get(project.provider).provenance(inspection),
             )
             and document == lease.read_text(artifact.document)
-            and notebook_source == studio.notebook.read_text(encoding="utf-8")
+            and notebook_source == _notebook_text(studio.notebook)
             and notebook_stamp == _file_stamp(studio.notebook)
             and config_stamp == _file_stamp(studio.config_path)
             and (publication is None or _publication_inputs_current(publication))
@@ -678,11 +686,15 @@ def _write_bundle(
         raise_process_cleanup(error)
         stable = False
     if not stable:
-        raise StaticExportError(
-            "The static export sources changed while the bundle was written. "
-            "Run the export again."
-        )
+        raise _sources_changed()
     return len(assets) + 2 + int(config is not None) + int(manifest is not None)
+
+
+def _sources_changed() -> StaticExportError:
+    return StaticExportError(
+        "The static export sources changed while the bundle was written. "
+        "Run the export again."
+    )
 
 
 def _publication_inputs_current(publication: StaticPublication) -> bool:
@@ -843,12 +855,18 @@ def _export_to_delivery(
             document = lease.read_text(artifact.document)
         except MarimoStudioError as error:
             raise StaticExportError(str(error)) from error
-        notebook_source = studio.notebook.read_text(encoding="utf-8")
-        resolved = resolve_studio(
-            studio,
-            view_name=selected,
-            published_mounts={selected: artifact.mounts},
-        )
+        try:
+            notebook_source = _notebook_text(studio.notebook)
+            resolved = resolve_studio(
+                studio,
+                notebook_source=notebook_source,
+                view_name=selected,
+                published_mounts={selected: artifact.mounts},
+            )
+        except MarimoStudioError as error:
+            if _file_stamp(studio.notebook) != notebook_stamp:
+                raise _sources_changed() from error
+            raise
         _projection_error(resolved, selected)
         portability = projection_portability(artifact.mounts, runtime)
         incompatible = next(

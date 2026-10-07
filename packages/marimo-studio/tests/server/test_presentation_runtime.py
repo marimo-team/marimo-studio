@@ -150,6 +150,39 @@ def test_deleted_named_cell_keeps_the_view_live_until_repaired(
     assert repaired["runtimeBindings"]["cellRefs"][producer]
 
 
+@pytest.mark.parametrize("name", ["análisis.py", "分析.py"])
+def test_notebook_syntax_error_names_the_line_and_repair_for_any_file_name(
+    tmp_path: Path,
+    notebook_path: Path,
+    name: str,
+) -> None:
+    notebook = tmp_path / name
+    notebook.write_text(notebook_path.read_text(encoding="utf-8"), encoding="utf-8")
+    studio = _configured(notebook)
+    source = notebook.read_text(encoding="utf-8")
+    decorator_line = source.splitlines().index("def _(x):")
+    hint = (
+        f"Run `marimo check {name}` to see the problem, fix it, then save the "
+        "notebook again."
+    )
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        notebook.write_text(
+            source.replace("    doubled = x * 2", "    42doubled = x * 2"),
+            encoding="utf-8",
+        )
+        config = client.get("/_marimo-studio/views/dashboard/config")
+        page = client.get("/")
+
+    assert config.status_code == 500
+    assert config.json()["message"] == (
+        f"Marimo cannot parse {name} near line {decorator_line}."
+    )
+    assert config.json()["hint"] == hint
+    assert page.status_code == 500
+    assert f"marimo check {name}" in page.text
+
+
 def test_notebook_syntax_error_has_a_browser_safe_repair_diagnostic(
     notebook_path: Path,
 ) -> None:
@@ -257,7 +290,7 @@ def test_named_cell_binding_waits_for_active_name_and_source_sync(
     prepare_view(notebook)
     studio = load_studio(notebook)
     _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
-    static = load_static_notebook(notebook)
+    static = load_static_notebook(notebook, notebook.read_text(encoding="utf-8"))
     app = _marimo_app(notebook)
     _edit_mode(app)
     session = _live_test_session(
@@ -310,7 +343,9 @@ def test_runtime_config_waits_for_semantic_change_then_accepts_exact_execution(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
-    static = load_static_notebook(studio.notebook)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
     rows = tuple(
         SimpleNamespace(code=cell.code, id=cell.runtime_id, name=cell.name)
         for cell in static.cells
@@ -321,7 +356,9 @@ def test_runtime_config_waits_for_semantic_change_then_accepts_exact_execution(
     _session_manager(app).get_session_by_file_key = Mock(return_value=session)
     source = studio.notebook.read_text(encoding="utf-8")
     studio.notebook.write_text(source.replace("x = 2", "x = 3"), encoding="utf-8")
-    updated = load_static_notebook(studio.notebook)
+    updated = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
     session.document.cells = tuple(
         SimpleNamespace(code=cell.code, id=cell.runtime_id, name=cell.name)
         for cell in updated.cells
@@ -357,7 +394,7 @@ def test_unrelated_named_cell_does_not_block_the_selected_view(
     prepare_view(notebook)
     studio = load_studio(notebook)
     _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
-    static = load_static_notebook(notebook)
+    static = load_static_notebook(notebook, notebook.read_text(encoding="utf-8"))
     rows = (
         SimpleNamespace(
             code=static.cells[0].code,
@@ -393,7 +430,9 @@ def test_anonymous_bindings_wait_for_live_cell_identities(
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
-    static = load_static_notebook(studio.notebook)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
     rows = tuple(
         SimpleNamespace(code=cell.code, id=f"live-{index}", name=cell.name)
         for index, cell in enumerate(static.cells)
@@ -601,7 +640,7 @@ def _(mo):
     bind_cell(studio, "report", 1)
     studio = load_studio(notebook)
     _set_shell(studio, "dashboard", '<marimo-cell name="report"></marimo-cell>')
-    static = load_static_notebook(notebook)
+    static = load_static_notebook(notebook, notebook.read_text(encoding="utf-8"))
     app = _marimo_app(notebook)
     _edit_mode(app)
     rows = (
@@ -626,7 +665,9 @@ def test_run_runtime_config_rejects_caller_session_authority(
 ) -> None:
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
-    static = load_static_notebook(studio.notebook)
+    static = load_static_notebook(
+        studio.notebook, studio.notebook.read_text(encoding="utf-8")
+    )
 
     foreign_session = _live_test_session(
         tuple(

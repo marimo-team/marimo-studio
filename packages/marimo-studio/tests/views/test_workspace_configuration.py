@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
+from marimo_studio._filesystem import settle
 from marimo_studio._views.api import prepare_view
+from marimo_studio._workspace import config as workspace_config
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.config import load_studio_definition
+from marimo_studio._workspace.config import discover_studio, load_studio_definition
 from marimo_studio.errors import ConfigurationError
 
 from ..helpers import update_notebook_config
@@ -27,6 +31,54 @@ def test_notebooks_with_the_same_parent_have_independent_presentations(
     assert first_studio.view_root != second_studio.view_root
     assert set(first_studio.views) == {"dashboard"}
     assert set(second_studio.views) == {"forecast"}
+
+
+def test_discovery_reads_the_configuration_a_notebook_save_completes(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path, "dashboard")
+    saved = notebook_path.read_bytes()
+    notebook_config = workspace_config.notebook_config
+    reads = 0
+
+    def config_during_save(path: Path) -> Mapping[str, Any] | None:
+        nonlocal reads
+        reads += 1
+        if reads > 1:
+            return notebook_config(path)
+        # Marimo saves by truncating the notebook, then writing it again.
+        path.write_bytes(b"")
+        try:
+            return notebook_config(path)
+        finally:
+            path.write_bytes(saved + b"\n")
+
+    monkeypatch.setattr(workspace_config, "notebook_config", config_during_save)
+
+    studio = discover_studio(notebook_path)
+
+    assert studio is not None
+    assert set(studio.views) == {"dashboard"}
+
+
+def test_discovery_waits_for_a_save_paused_after_truncating_the_notebook(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path, "dashboard")
+    saved = notebook_path.read_bytes()
+    notebook_path.write_bytes(b"")
+
+    def finish_save(_seconds: float) -> None:
+        notebook_path.write_bytes(saved)
+
+    monkeypatch.setattr(settle, "time", SimpleNamespace(sleep=finish_save))
+
+    studio = discover_studio(notebook_path)
+
+    assert studio is not None
+    assert set(studio.views) == {"dashboard"}
 
 
 def test_directory_discovery_requires_an_explicit_notebook_on_conflict(

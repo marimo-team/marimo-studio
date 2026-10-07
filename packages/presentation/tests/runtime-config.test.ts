@@ -234,8 +234,8 @@ test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
         JSON.stringify({
           error: "notebook-source-error",
           source: { path: "notebook.py", line: 12, column: 4 },
-          message: "Marimo cannot inspect the notebook while a cell contains invalid code.",
-          hint: "Fix the highlighted cell in Marimo, then save it again.",
+          message: "The notebook cell at line 12 contains invalid code.",
+          hint: "Fix the cell in Marimo, then save the notebook again.",
         }),
         {
           status: 500,
@@ -249,15 +249,12 @@ test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
       "http://localhost:3000/_marimo-studio/views/dashboard",
     ).catch((cause: unknown) => cause);
     assert.ok(error instanceof RuntimeConfigRequestError);
-    assert.match(
-      error.message,
-      /Marimo cannot inspect the notebook while a cell contains invalid code/,
-    );
+    assert.match(error.message, /The notebook cell at line 12 contains invalid code/);
     assert.deepEqual(error.code, "notebook-source-error");
     assert.deepEqual(JSON.parse(JSON.stringify(error.details)), {
       source: { path: "notebook.py", line: 12, column: 4 },
     });
-    assert.deepEqual(error.hint, "Fix the highlighted cell in Marimo, then save it again.");
+    assert.deepEqual(error.hint, "Fix the cell in Marimo, then save the notebook again.");
   } finally {
     globalThis.fetch = originalFetch;
   }

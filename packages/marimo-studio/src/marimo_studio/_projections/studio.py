@@ -244,13 +244,20 @@ def resolve_studio(
     inspect_notebook: NotebookInspector,
     inspect_mounts: ViewMountInspector | None = None,
     include_code: bool = False,
+    notebook_source: str | None = None,
     view_name: str | None = None,
     published_mounts: Mapping[str, tuple[MountDeclaration, ...]] | None = None,
 ) -> ResolvedStudio:
-    """Resolve provider projection sites against the current notebook graph."""
-    if not studio.notebook.is_file():
-        raise ConfigurationError(f"Notebook does not exist: {studio.notebook}")
-    notebook = inspect_notebook(studio.notebook, include_code=include_code)
+    """Resolve provider projection sites against one notebook graph.
+
+    Pass ``notebook_source`` to resolve the source a caller already captured,
+    so the graph matches the revision that caller reports.
+    """
+    notebook = inspect_notebook(
+        studio.notebook,
+        include_code=include_code,
+        source=notebook_source,
+    )
     aliases, alias_failures = _resolve_aliases(
         studio,
         notebook.cells,

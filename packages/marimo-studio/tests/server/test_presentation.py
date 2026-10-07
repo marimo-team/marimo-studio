@@ -9,6 +9,7 @@ from typing import Any, cast
 
 import pytest
 
+from marimo_studio._filesystem import settle
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.development import routes as development_routes
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
@@ -151,6 +152,63 @@ def test_presentation_cache_separates_development_and_production_profiles(
         assert development.revision != production.revision
         assert presentation.snapshot("dashboard") is development
         assert presentation.snapshot("dashboard", profile="production") is production
+    finally:
+        presentation.close()
+
+
+def test_snapshot_resolves_the_notebook_source_it_captured(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = configured(notebook_path)
+    saved = notebook_path.read_bytes()
+    resolve = presentation_service.resolve_studio
+
+    def resolve_during_save(*args: Any, **kwargs: Any) -> Any:
+        # Marimo saves by truncating the notebook, then writing it again.
+        notebook_path.write_bytes(saved[: len(saved) // 2])
+        try:
+            return resolve(*args, **kwargs)
+        finally:
+            notebook_path.write_bytes(saved)
+
+    monkeypatch.setattr(presentation_service, "resolve_studio", resolve_during_save)
+    presentation = NotebookPresentation(studio.notebook)
+    try:
+        snapshot = presentation.snapshot("dashboard")
+
+        assert snapshot.notebook_source == saved.decode("utf-8")
+        assert snapshot.resolved.notebook.cells[1].definitions == ("doubled",)
+    finally:
+        presentation.close()
+
+
+def test_snapshot_waits_for_a_save_paused_after_truncating_the_notebook(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = configured(notebook_path)
+    saved = notebook_path.read_bytes()
+    capture = presentation_service.capture_presentations
+
+    def capture_during_save(*args: Any, **kwargs: Any) -> Any:
+        notebook_path.write_bytes(b"")
+        return capture(*args, **kwargs)
+
+    def finish_save(_seconds: float) -> None:
+        notebook_path.write_bytes(saved)
+
+    monkeypatch.setattr(
+        presentation_service,
+        "capture_presentations",
+        capture_during_save,
+    )
+    monkeypatch.setattr(settle, "time", SimpleNamespace(sleep=finish_save))
+    presentation = NotebookPresentation(studio.notebook)
+    try:
+        snapshot = presentation.snapshot("dashboard")
+
+        assert snapshot.notebook_source == saved.decode("utf-8")
     finally:
         presentation.close()
 

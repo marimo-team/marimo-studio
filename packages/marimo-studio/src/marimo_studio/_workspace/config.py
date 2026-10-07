@@ -26,6 +26,7 @@ from marimo_studio._filesystem.paths import (
     PORTABLE_PATH_COMPONENT_MAX_BYTES,
     validate_portable_path_component,
 )
+from marimo_studio._filesystem.settle import while_unchanged
 from marimo_studio._notebook.records import CellRef
 from marimo_studio._workspace.generation import (
     directory_generation,
@@ -594,15 +595,25 @@ def load_studio(target: str | Path | None = None) -> StudioWorkspace:
 def discover_studio(notebook: str | Path) -> StudioWorkspace | None:
     """Find a presentation configured for ``notebook``."""
     notebook_path = Path(notebook).expanduser().resolve()
-    configured = _configuration_for_notebook(notebook_path)
-    return load_studio(configured[0]) if configured is not None else None
+
+    def discover() -> StudioWorkspace | None:
+        configured = _configuration_for_notebook(notebook_path)
+        return load_studio(configured[0]) if configured is not None else None
+
+    return while_unchanged(notebook_path, discover)
 
 
 def discover_studio_definition(notebook: str | Path) -> StudioDefinition | None:
     """Find the Studio definition for a notebook."""
     notebook_path = Path(notebook).expanduser().resolve()
-    configured = _configuration_for_notebook(notebook_path)
-    return load_studio_definition(configured[0]) if configured is not None else None
+
+    def discover() -> StudioDefinition | None:
+        configured = _configuration_for_notebook(notebook_path)
+        if configured is None:
+            return None
+        return load_studio_definition(configured[0])
+
+    return while_unchanged(notebook_path, discover)
 
 
 def updated_studio_config_source(

@@ -16,6 +16,7 @@ def resolve_studio(
     studio: StudioWorkspace,
     *,
     include_code: bool = False,
+    notebook_source: str | None = None,
     view_name: str | None = None,
     published_mounts: Mapping[str, tuple[MountDeclaration, ...]] | None = None,
 ) -> ResolvedStudio:
@@ -25,6 +26,7 @@ def resolve_studio(
         inspect_notebook=inspect_notebook,
         inspect_mounts=inspect_view_mounts,
         include_code=include_code,
+        notebook_source=notebook_source,
         view_name=view_name,
         published_mounts=published_mounts,
     )

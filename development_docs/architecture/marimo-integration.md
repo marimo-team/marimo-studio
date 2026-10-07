@@ -176,8 +176,8 @@ assets, and adapter tests form one compatibility unit.
 
 ## Static notebook inspection
 
-The private notebook adapter compiles the saved notebook and returns
-`StaticNotebook`:
+The private notebook adapter compiles notebook source that Studio has already
+read and returns `StaticNotebook`:
 
 ```python
 StaticNotebook(
@@ -199,6 +199,34 @@ StaticNotebook(
 
 Studio converts this to `NotebookSpec` and then `NotebookSymbolGraph`. Static
 inspection compiles notebook structure and avoids running cell bodies.
+
+Marimo saves a notebook by truncating the file and writing it again, so a
+concurrent read can observe a partial notebook. `while_unchanged` in
+`_filesystem/settle.py` repeats a read that overlapped a change, after a pause
+that lets the save finish. An empty notebook counts as settled only when it
+stays empty across that pause, because a save can pause between truncating and
+writing. Three reads use it:
+
+- Workspace discovery reads the notebook's Studio configuration.
+- Saved-notebook inspection reads and compiles the notebook.
+- A presentation snapshot captures the notebook source for its revision and
+  compiles that captured source.
+
+A static export compiles the source it captured and asks for another run when
+the notebook changed during the export. A notebook that keeps changing raises a
+transient error, which clients retry.
+
+`NotebookSourceError` names the problem Marimo found, and its hint names the
+repair. Browser messages contain no filesystem paths.
+
+| Problem                         | Location in the browser message |
+| ------------------------------- | ------------------------------- |
+| Line Marimo cannot parse        | File name and line              |
+| Unparsable cell                 | Line where the cell starts      |
+| File that is not a notebook     | File name                       |
+| Notebook without cells          | File name                       |
+| Duplicate definition or a cycle | None                            |
+| Any other Marimo failure        | File name                       |
 
 Native cell names enter the cell target namespace. Configured aliases are
 resolved against semantic `CellRef` values and join the same namespace.

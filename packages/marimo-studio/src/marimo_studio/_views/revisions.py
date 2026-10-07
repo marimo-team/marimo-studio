@@ -23,6 +23,7 @@ from marimo_studio._artifacts.inputs import project_revision_snapshot
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.retention import ArtifactLease, lease_published_artifact
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._filesystem.settle import while_unchanged
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._views.build import publish_view
 from marimo_studio._views.inspection import inspect_view_project_sync
@@ -91,17 +92,21 @@ def _selected_views(
 
 def _presentation_source(studio: StudioWorkspace) -> tuple[str, tuple[object, ...]]:
     paths = tuple(dict.fromkeys((studio.config_path, studio.notebook)))
-    contents = {path: FileTree(path.parent).read(path).content for path in paths}
-    try:
-        notebook_source = contents[studio.notebook].decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise ConfigurationError(
-            f"Could not decode {studio.notebook} as UTF-8: {error}"
-        ) from error
-    source_identity = tuple(
-        (str(path), hashlib.sha256(contents[path]).hexdigest()) for path in paths
-    )
-    return notebook_source, (_configuration_identity(studio), source_identity)
+
+    def read() -> tuple[str, tuple[object, ...]]:
+        contents = {path: FileTree(path.parent).read(path).content for path in paths}
+        try:
+            notebook_source = contents[studio.notebook].decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ConfigurationError(
+                f"Notebook is not UTF-8 text: {studio.notebook}"
+            ) from error
+        source_identity = tuple(
+            (str(path), hashlib.sha256(contents[path]).hexdigest()) for path in paths
+        )
+        return notebook_source, (_configuration_identity(studio), source_identity)
+
+    return while_unchanged(studio.notebook, read)
 
 
 def capture_source_revisions(

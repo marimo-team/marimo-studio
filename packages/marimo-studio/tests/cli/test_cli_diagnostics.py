@@ -188,7 +188,8 @@ def test_failed_validation_reports_exit_status_and_error_diagnostic(
         (
             "notebook",
             "notebook-source-error",
-            "Fix the highlighted cell in Marimo, then save it again.",
+            "Run `marimo check analysis.py` to see the problem, fix it, then save "
+            "the notebook again.",
         ),
         (
             "project",

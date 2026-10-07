@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 from textwrap import indent
 from time import monotonic
+from types import SimpleNamespace
 from typing import Any
 
 import marimo
@@ -14,6 +15,7 @@ import pytest
 
 import marimo_studio._notebook.inspection as inspection_module
 from marimo_studio import inspect_notebook
+from marimo_studio._filesystem import settle
 from marimo_studio._notebook.cell_refs import (
     _cell_fingerprint,
     _layout_fingerprint,
@@ -23,7 +25,11 @@ from marimo_studio._notebook.inspection import (
     inspect_runtime,
     select_cells,
 )
-from marimo_studio.errors import CapabilityInputError, ConfigurationError
+from marimo_studio.errors import (
+    CapabilityInputError,
+    ConfigurationError,
+    NotebookSourceError,
+)
 
 from ..helpers import empty_notebook_source
 
@@ -66,6 +72,103 @@ def test_inspection_accepts_a_canonical_empty_notebook(tmp_path: Path) -> None:
     notebook.write_text(empty_notebook_source(), encoding="utf-8")
 
     assert inspect_notebook(notebook).cells == ()
+
+
+_APP = 'import marimo\n\n__generated_with = "0.0.0"\napp = marimo.App()\n\n'
+_RUN_GUARD = '\n\nif __name__ == "__main__":\n    app.run()\n'
+
+
+def _cell(body: str, *, refs: str = "") -> str:
+    return f"\n@app.cell\ndef _({refs}):\n{indent(body, '    ')}\n"
+
+
+@pytest.mark.parametrize(
+    ("source", "summary", "hint"),
+    [
+        (
+            _APP + 'app._unparsable_cell(r"""\nx = (\n""", name="_")\n' + _RUN_GUARD,
+            "The notebook cell at line 6 contains invalid code.",
+            "Fix the cell in Marimo, then save the notebook again.",
+        ),
+        (
+            _APP + _cell("42x = 1\nreturn") + _RUN_GUARD,
+            "Marimo cannot parse analysis.py near line 7.",
+            "Run `marimo check analysis.py` to see the problem, fix it, then save "
+            "the notebook again.",
+        ),
+        (
+            _APP
+            + _cell("x = 1\nreturn (x,)")
+            + _cell("x = 2\nreturn (x,)")
+            + _RUN_GUARD,
+            "More than one notebook cell defines the same name.",
+            "Rename or remove the duplicate definition in Marimo, then save the "
+            "notebook again.",
+        ),
+        (
+            _APP
+            + _cell("a = b\nreturn (a,)", refs="b")
+            + _cell("b = a\nreturn (b,)", refs="a")
+            + _RUN_GUARD,
+            "Notebook cells depend on each other in a cycle.",
+            "Remove one reference from the cycle in Marimo, then save the notebook "
+            "again.",
+        ),
+        (
+            'print("hello")\n',
+            "analysis.py is not a Marimo notebook.",
+            "Convert it with `marimo convert analysis.py -o analysis_marimo.py`, "
+            "then open the converted notebook.",
+        ),
+        (
+            "",
+            "analysis.py has no Marimo cells.",
+            "Add a cell in Marimo, then save the notebook again.",
+        ),
+    ],
+    ids=["unparsable", "syntax", "duplicate", "cycle", "script", "empty"],
+)
+def test_inspection_names_the_notebook_source_problem(
+    tmp_path: Path,
+    source: str,
+    summary: str,
+    hint: str,
+) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(source, encoding="utf-8")
+
+    with pytest.raises(NotebookSourceError) as raised:
+        inspect_notebook(notebook)
+
+    assert raised.value.public_message() == summary
+    assert raised.value.public_hint == hint
+
+
+def test_inspection_waits_for_a_save_paused_partway_through_writing(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    saved = notebook_path.read_bytes()
+    notebook_path.write_bytes(saved[: saved.index(b"doubled = x * 2")])
+
+    def finish_save(_seconds: float) -> None:
+        notebook_path.write_bytes(saved)
+
+    monkeypatch.setattr(settle, "time", SimpleNamespace(sleep=finish_save))
+
+    notebook = inspect_notebook(notebook_path)
+
+    assert notebook.cells[1].definitions == ("doubled",)
+
+
+def test_inspection_reports_a_notebook_that_is_not_utf8(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_bytes(
+        empty_notebook_source().encode() + "# caf\xe9\n".encode("latin-1")
+    )
+
+    with pytest.raises(ConfigurationError, match="Notebook is not UTF-8 text"):
+        inspect_notebook(notebook)
 
 
 def test_inspection_builds_graph_without_executing_cells(
@@ -990,14 +1093,13 @@ def test_runtime_inspection_rejects_a_change_after_static_selection(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    load = inspection_module.create_static_notebook_loader()
+    capture = inspection_module.capture_notebook_source_generation
 
-    def load_then_change(path: Path):
-        static = load(path)
+    def change_then_capture(path: Path, source_revision: str) -> Any:
         path.write_text(
             path.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8"
         )
-        return static
+        return capture(path, source_revision)
 
     called = False
 
@@ -1008,8 +1110,8 @@ def test_runtime_inspection_rejects_a_change_after_static_selection(
 
     monkeypatch.setattr(
         inspection_module,
-        "create_static_notebook_loader",
-        lambda: load_then_change,
+        "capture_notebook_source_generation",
+        change_then_capture,
     )
     monkeypatch.setattr(inspection_module, "create_runtime_probe", lambda: probe)
 

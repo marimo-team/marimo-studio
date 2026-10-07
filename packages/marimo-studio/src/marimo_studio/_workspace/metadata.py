@@ -74,7 +74,11 @@ def _document(source: str, path: Path) -> TOMLDocument | None:
 
 
 def _read_source(path: Path) -> str:
-    return FileTree(path.parent).read(path).content.decode("utf-8")
+    content = FileTree(path.parent).read(path).content
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ConfigurationError(f"Notebook is not UTF-8 text: {path}") from error
 
 
 def read_notebook_metadata(path: Path) -> TOMLDocument | None:

@@ -148,7 +148,7 @@ Every expected error exposes:
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---: | ---------------------: | ----------------------------------------------------------------------- |
 | `MarimoStudioError`                | `marimo-studio-error`                                                                                                          |  `3` |                  `500` | Base class                                                              |
 | `ConfigurationError`               | `configuration-error`                                                                                                          |  `3` |                  `500` | Fix saved configuration or source                                       |
-| `NotebookSourceError`              | `notebook-source-error`                                                                                                        |  `3` |                  `500` | Fix and save the highlighted marimo cell                                |
+| `NotebookSourceError`              | `notebook-source-error`                                                                                                        |  `3` |                  `500` | Fix the notebook problem the message names                              |
 | `ViewProjectError`                 | `view-project-error`                                                                                                           |  `3` |                  `500` | Fix the source-located provider diagnostic and rebuild                  |
 | `BindingError`                     | `binding-error`                                                                                                                |  `4` |                  `500` | Select a valid cell or alias                                            |
 | `ProtocolError`                    | `protocol-error`                                                                                                               |  `6` |                  `500` | Align installed Studio and marimo versions                              |
@@ -181,8 +181,10 @@ Every expected error exposes:
 | `PublicationHeldError`             | `publication-held`                                                                                                             |  `3` |                  `409` | Release the hold named in `details.owner` or wait for it to expire      |
 
 Generation and incomplete-mutation errors marked `transient` require a fresh
-read before retry. `AgentRequestError` can also carry a server-supplied retry
-classification.
+read before retry. A `configuration-error` marked `transient` reports a file
+that kept changing while Studio read it, such as a notebook during repeated
+saves. Retry the operation. `AgentRequestError` can also carry a
+server-supplied retry classification.
 
 ## HTTP error responses
 

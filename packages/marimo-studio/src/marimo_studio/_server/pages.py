@@ -565,7 +565,10 @@ def error_response(
         edit_document_headers(security_policy) if edit_mode else DOCUMENT_HEADERS
     )
     headers = {**document_headers, "Marimo-Studio-Error": code}
-    if hint:
+    # New HTTP fields carry visible ASCII only (RFC 9110, section 5.5), and
+    # clients decode other header bytes inconsistently. The body always carries
+    # the hint, including one that names a non-ASCII notebook file.
+    if hint and hint.isascii():
         headers["Marimo-Studio-Hint"] = hint
     if transient:
         headers.update(

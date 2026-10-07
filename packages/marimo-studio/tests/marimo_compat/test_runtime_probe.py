@@ -53,7 +53,7 @@ if __name__ == "__main__":
 """.replace("__MARIMO_VERSION__", marimo.__version__),
         encoding="utf-8",
     )
-    cell = load_static_notebook(notebook).cells[0]
+    cell = load_static_notebook(notebook, notebook.read_text(encoding="utf-8")).cells[0]
 
     result = asyncio.run(
         probe_runtime_in_worker(
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 """.replace("__MARIMO_VERSION__", marimo.__version__),
         encoding="utf-8",
     )
-    cell = load_static_notebook(notebook).cells[0]
+    cell = load_static_notebook(notebook, notebook.read_text(encoding="utf-8")).cells[0]
 
     result = asyncio.run(
         probe_runtime_in_worker(
