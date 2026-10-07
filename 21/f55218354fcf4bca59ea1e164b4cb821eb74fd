@@ -1,0 +1,113 @@
+packages/marimo-frontend/tests/transformed-modules.ts
+  s_020a0720a6f377::t_5d3f56b0495895 1-34
+apps/e2e/scripts/prepare-pyodide.ts
+  s_020a0720a6f377::t_ae9201993a98c0 101
+packages/marimo-frontend/scripts/tsconfig.json
+  s_020a0720a6f377::t_24af1b902d955e 2-3
+  s_020a0720a6f377::t_c9dd2ddaaf4e65 1,4
+packages/marimo-frontend/tests/source.test.ts
+  s_020a0720a6f377::t_4b028fdceca2a4 1-201
+.github/workflows/platforms.yml
+  s_020a0720a6f377::t_48b617023bd326 68
+packages/marimo-frontend/vite.config.ts
+  s_020a0720a6f377::t_6f0f516c96b297 14
+.github/workflows/pages.yml
+  s_020a0720a6f377::t_48b617023bd326 59
+apps/e2e/scripts/tsconfig.json
+  s_020a0720a6f377::t_24af1b902d955e 2
+pnpm-workspace.yaml
+  s_020a0720a6f377::t_ed304f78f23fc5 43
+packages/marimo-frontend/scripts/check.ts
+  s_020a0720a6f377::t_8f0910b1a35467 1,4-11
+  s_020a0720a6f377::t_59b048634b5c27 2-3
+.github/actions/pr-validation/select.test.ts
+  s_020a0720a6f377::t_b9f1c72455ee88 7
+  s_020a0720a6f377::t_2d8297b13c7fc2 1-6,8-12,14-19,22-29,31-43,45-190,210
+  s_020a0720a6f377::t_93cfb08b4089d0 20
+  s_020a0720a6f377::t_d8884d48f60ba5 13,21,30,44,191-209
+packages/marimo-frontend/scripts/source.ts
+  s_020a0720a6f377::t_cf7bb6ac41c733 1,11-76,99-374
+  s_020a0720a6f377::t_b9f1c72455ee88 9-10
+  s_020a0720a6f377::t_666dd3086e5d22 94-96
+packages/marimo-frontend/scripts/prepare.ts
+  s_020a0720a6f377::t_44129c2f43a2a6 23
+  s_020a0720a6f377::t_e59aac384d7d70 1-12,25-131
+packages/marimo-frontend/tests/wasm-worker-vite.test.ts
+  s_020a0720a6f377::t_5d3f56b0495895 1-206
+.github/filters.yml
+  s_020a0720a6f377::t_be4b9be098bae0 44,85,184,218,247
+apps/browser/scripts/tsconfig.json
+  s_020a0720a6f377::t_24af1b902d955e 1-4
+apps/browser/scripts/merge-entry-closures.ts
+  s_020a0720a6f377::t_24af1b902d955e 1-47
+.github/actions/pr-validation/results.test.ts
+  s_020a0720a6f377::t_b9f1c72455ee88 7
+  s_020a0720a6f377::t_a555eb0f73f742 31-32,36-37,64,68-70,76,86,88-91,93,95-98,101,109,116-119,122,130
+  s_020a0720a6f377::t_0717a8f6d556a2 1-6,8-30,33-35,38-63,65-67,71-75,77-85,87,92,94,99-100,102-108,110-115,120-121,123-129,131-133
+packages/marimo-frontend/src/vite.ts
+  s_020a0720a6f377::t_ae9201993a98c0 6
+.github/workflows/ci.yml
+  s_020a0720a6f377::t_48b617023bd326 54
+vite.config.ts
+  s_020a0720a6f377::t_9c9a337ad60fff 229-233,235-239
+  s_020a0720a6f377::t_8d7aa81f90536c 234
+  s_020a0720a6f377::t_81ba04f878d3d4 227-228,240-241
+.github/actions/pr-validation/select.ts
+  s_020a0720a6f377::t_a9d0afd14bf63c 6-10,41
+  s_020a0720a6f377::t_d5072c2cb29b70 11-24,29-30,63-64,70
+  s_020a0720a6f377::t_b9f1c72455ee88 42,44-47,51-54,56
+  s_020a0720a6f377::t_d30515902cebad 1-3,28,31-36,43,48-50,55,69
+.github/actions/pr-validation/tsconfig.json
+  s_020a0720a6f377::t_1f7e91dfeb6dbf 1,3,5,7
+tsconfig.node.json
+  s_020a0720a6f377::t_24af1b902d955e 1-4,6-7,11
+  s_020a0720a6f377::t_8d7aa81f90536c 5,8
+  s_020a0720a6f377::t_491e5a338c4c31 9-10
+.github/workflows/e2e.yml
+  s_020a0720a6f377::t_48b617023bd326 54
+packages/marimo-frontend/tests/vite.test.ts
+  s_020a0720a6f377::t_34d01616f80ffe 2-10,13-15,17-176
+  s_020a0720a6f377::t_2e5c27dd621e18 16
+  s_020a0720a6f377::t_5d3f56b0495895 1,11-12
+.github/actions/pr-validation/filters.test.ts
+  s_020a0720a6f377::t_87aebeb8335800 1-3,5-6,9,11-12,15-22,25,27-166
+  s_020a0720a6f377::t_a9d0afd14bf63c 7,10,13,26
+  s_020a0720a6f377::t_ba93920e5aea46 8
+  s_020a0720a6f377::t_d2155bb1a2285a 14
+  s_020a0720a6f377::t_b9f1c72455ee88 4
+development_docs/frontend.md
+  s_020a0720a6f377::t_453c294a825c76 71
+  s_020a0720a6f377::t_2eeb58d7df01af 62,67,69-70
+  s_020a0720a6f377::t_f9e078ed19f313 63-66,94-97
+package.json
+  s_020a0720a6f377::t_ed304f78f23fc5 8,11,14-15
+apps/browser/package.json
+  s_020a0720a6f377::t_24af1b902d955e 7
+.github/actions/pr-validation/resolve.test.ts
+  s_020a0720a6f377::t_d8884d48f60ba5 6,72
+  s_020a0720a6f377::t_799014c79b0f18 1-5,7-71,73-304
+Makefile
+  s_020a0720a6f377::t_be4b9be098bae0 11
+  s_020a0720a6f377::t_98095dd5cf00ac 56
+packages/marimo-frontend/scripts/metadata.ts
+  s_020a0720a6f377::t_8582abfba25742 3-6,16-40
+  s_020a0720a6f377::t_ae9201993a98c0 8
+packages/marimo-frontend/package.json
+  s_020a0720a6f377::t_f43128e0192185 8,22-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "21f55218354fcf4bca59ea1e164b4cb821eb74fd",
+  "prompts": {},
+  "sessions": {
+    "s_020a0720a6f377": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b01efc4-fb6c-4714-a5dc-8cd6bd504794",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
