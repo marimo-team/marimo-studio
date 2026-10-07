@@ -25,8 +25,20 @@ pages_control: &pages_control
   - "scripts/check-workflow-results.test.sh"
   - .github/actions/pr-validation/**
 
+# Publication scripts are tested through their shell boundary in the Python
+# suite.
+publication_scripts: &publication_scripts
+  - "scripts/check-release.sh"
+  - "scripts/preview-version.sh"
+  - "scripts/publish-preview.sh"
+  - "scripts/release.sh"
+  - "scripts/require-release-checks.sh"
+  - "scripts/verify-pypi.sh"
+  - "scripts/write-dist-checksums.py"
+
 python_inputs: &python_inputs
   - *ci_control
+  - *publication_scripts
   - ".python-version"
   - "pyproject.toml"
   - "uv.lock"
@@ -225,16 +237,12 @@ distribution:
   - *browser_assets
   - "skills/marimo-studio/**"
   - "apps/e2e/fixtures-provider/provider/**"
-  - "scripts/check-release.sh"
-  - "scripts/release.sh"
-  - "scripts/require-release-checks.sh"
+  - *publication_scripts
   - "scripts/verify-dist.sh"
   - "scripts/verify-installed-wheel.sh"
   - "scripts/verify-installed-package.py"
   - "scripts/verify-external-provider.py"
-  - "scripts/verify-pypi.sh"
   - "scripts/verify-provider-bootstrap.py"
-  - "scripts/write-dist-checksums.py"
 
 installed_distribution:
   - *ci_control

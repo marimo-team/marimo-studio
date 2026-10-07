@@ -131,3 +131,15 @@ test("the site exports every documentation example family", async () => {
     documentationExampleFamilies.map((family) => family.slug).sort(),
   );
 });
+
+test("preview publication waits for every workflow the release checks require", async () => {
+  const read = (path: string) => readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
+  const publish = parse(await read(".github/workflows/publish.yml"));
+  const triggers: readonly string[] = publish.on.workflow_run.workflows;
+  const checks = await read("scripts/require-release-checks.sh");
+  const files = [...checks.matchAll(/^\s*"[^"|]+\|([\w.-]+\.yml)"$/gm)].map((match) => match[1]);
+  const names: readonly string[] = await Promise.all(
+    files.map(async (file) => parse(await read(`.github/workflows/${file}`)).name),
+  );
+  assert.deepEqual(triggers.toSorted(), names.toSorted());
+});

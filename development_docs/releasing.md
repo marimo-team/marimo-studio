@@ -2,7 +2,8 @@
 
 An annotated `vX.Y.Z` tag on `main` starts the trusted PyPI publication
 workflow. The tag version must match
-`packages/marimo-studio/pyproject.toml`.
+`packages/marimo-studio/pyproject.toml`. Between releases, every validated
+`main` commit publishes a [preview build](#preview-builds).
 
 ## Release unit
 
@@ -175,10 +176,22 @@ and generated browser assets must identify the same release.
 
 ## Publishing configuration
 
-Configure the PyPI Trusted Publisher for owner `marimo-team`, repository
-`marimo-studio`, workflow `publish.yml`, and GitHub environment `pypi`.
-GitHub Pages uses GitHub Actions to deploy the documentation at
-`https://marimo-team.github.io/marimo-studio/`.
+Configure the [PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/)
+for owner `marimo-team`, repository `marimo-studio`, workflow `publish.yml`,
+and GitHub environment `pypi`. GitHub Pages uses GitHub Actions to deploy the
+documentation at `https://marimo-team.github.io/marimo-studio/`.
+
+Each publication job deploys to a repository environment whose deployment
+policy limits the refs it accepts:
+
+| Environment    | Job                     | Accepted refs |
+| -------------- | ----------------------- | ------------- |
+| `pypi`         | `publish.yml` `pypi`    | `v*` tags     |
+| `preview`      | `publish.yml` `preview` | `main`        |
+| `github-pages` | `pages.yml` `deploy`    | `main`        |
+
+PyPI matches the workflow file and environment name. The `pypi` tag policy
+keeps a branch that edits `publish.yml` from obtaining a PyPI token.
 
 Repository visibility and security settings are managed independently of package
 publication. The release preflight checks the version, tag, and successful
@@ -224,7 +237,7 @@ tip of `main`. Deploy jobs use one ordered queue and confirm the tip again
 immediately before publication. `Documentation gate` includes the selected
 checks, build, and deployment outcomes.
 
-The command prints the release tag, commit, and all three workflow URLs. The
+The command prints the release tag, commit, and the four workflow URLs. The
 publish workflow repeats the exact-commit check before building artifacts.
 
 ## Start publication
@@ -239,23 +252,22 @@ The tag starts `.github/workflows/publish.yml`.
 
 ```mermaid
 flowchart LR
-    Tag[Annotated version tag] --> Build[Build and inspect distributions]
+    Tag[Annotated version tag] --> Resolve[Verify tag, version, and checks]
+    Resolve --> Build[Build and inspect distributions]
     Build --> Attest[Attest wheel and source distribution]
     Attest --> Publish[Trusted publish to PyPI]
     Publish --> Verify[Fresh base and Deno-extra installs]
     Verify --> Notes[GitHub release notes]
 ```
 
-| Job             | Responsibility                                                     | Evidence                                                 |
-| --------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
-| `build`         | Validate tag, package version, ancestry, and distribution contents | Wheel and source distribution artifact                   |
-| `attest`        | Bind distribution digests to the release workflow and commit       | GitHub build provenance                                  |
-| `publish`       | Publish both artifacts through PyPI Trusted Publishing             | Immutable public package version                         |
-| `verify-pypi`   | Install the exact base package and Deno extra                      | Imports, providers, starters, builds, and assets succeed |
-| `release-notes` | Publish the authored summary and checksum assets                   | Release page tied to the published tag                   |
-
-The repository `pypi` environment must be configured as a
-[PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/).
+| Job             | Responsibility                                                | Evidence                                                 |
+| --------------- | ------------------------------------------------------------- | -------------------------------------------------------- |
+| `resolve`       | Validate tag, package version, ancestry, and workflow results | Release channel, commit, and version                     |
+| `build`         | Build the tagged commit and verify its distribution contents  | Wheel and source distribution artifact                   |
+| `attest`        | Bind distribution digests to the release workflow and commit  | GitHub build provenance                                  |
+| `pypi`          | Publish both artifacts through PyPI Trusted Publishing        | Immutable public package version                         |
+| `verify-pypi`   | Install the exact base package and Deno extra                 | Imports, providers, starters, builds, and assets succeed |
+| `release-notes` | Publish the authored summary and checksum assets              | Release page tied to the published tag                   |
 
 ## Verify the public package
 
@@ -281,15 +293,60 @@ artifacts, inspect the provider catalog, and confirm packaged runtime assets.
 
 Inspect the first failed job and preserve evidence from that boundary.
 
-| First failed job                           | Response                                                                                                                           |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `build`                                    | Correct source or packaging inputs, bump the version when needed, and publish from a new validated commit                          |
-| `publish` before PyPI accepted the version | Resolve the trusted-publishing or service problem, then rerun the workflow                                                         |
-| `verify-pypi`                              | Inspect the installed provider, starter, extra, or asset failure and prepare a patch release when the public artifact is defective |
-| `release-notes`                            | Rerun after public package verification succeeds                                                                                   |
+| First failed job                        | Response                                                                                                                           |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `build`                                 | Correct source or packaging inputs, bump the version when needed, and publish from a new validated commit                          |
+| `pypi` before PyPI accepted the version | Resolve the trusted-publishing or service problem, then rerun the workflow                                                         |
+| `verify-pypi`                           | Inspect the installed provider, starter, extra, or asset failure and prepare a patch release when the public artifact is defective |
+| `release-notes`                         | Rerun after public package verification succeeds                                                                                   |
 
 PyPI versions are immutable. After publication, preserve that artifact and
 prepare a new patch version for a code or package-content correction.
 
 If the tag push fails, `scripts/release.sh` deletes the local tag. Fix the
 remote problem and run the command again from the same validated commit.
+
+## Preview builds
+
+Every `main` commit whose CI, Browser acceptance, Platform acceptance, and
+GitHub Pages workflows pass publishes a wheel to the
+[`preview` release](https://github.com/marimo-team/marimo-studio/releases/tag/preview).
+Its notes show the install command for the newest wheel. Each wheel installs
+by its URL:
+
+```console
+uv tool install "marimo-studio @ https://github.com/marimo-team/marimo-studio/releases/download/preview/marimo_studio-0.2.4.dev14-py3-none-any.whl"
+```
+
+Studio records that URL as its installation source, so sandboxed kernels and
+notebook environments install the same wheel.
+
+`publish.yml` starts each time one of the four workflows completes for a
+`main` push. The completion that finds all four successful for the commit
+builds the wheel. Earlier completions report which workflow is still pending
+and stop.
+
+| Job       | Responsibility                                                                                                                            |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `resolve` | Derive the version with `scripts/preview-version.sh` and confirm the workflow results                                                     |
+| `build`   | Stamp the version, then run `make package` with the release gates                                                                         |
+| `attest`  | Attest the wheel with the same build provenance as a release                                                                              |
+| `preview` | Run `scripts/publish-preview.sh` in the `preview` environment to upload the wheel, refresh the notes, announce it, and prune older wheels |
+
+A preview version bumps the patch of the previous `vX.Y.Z` tag and appends
+`.devN`, where `N` counts commits since that tag. Commits after `v0.2.3`,
+including the commit later tagged `v0.2.4`, publish `0.2.4.devN`, which sorts
+below `0.2.4`.
+
+`scripts/publish-preview.sh` rewrites the release notes when its wheel is the
+newest, so a commit whose checks finish late leaves the notes on the newest
+build. It comments the install command on the merged pull request and keeps
+the newest 30 wheels.
+
+The `preview` tag stays on the commit that created the release because the
+tag ruleset blocks tag updates. Download URLs depend on the tag name, and each
+wheel's attestation records its source commit:
+
+```console
+gh attestation verify marimo_studio-0.2.4.dev14-py3-none-any.whl -R marimo-team/marimo-studio
+```
