@@ -38,6 +38,7 @@ testpaths = ["packages/marimo-studio/tests"]
 markers = [
   "deno: executes or validates the pinned Deno provider runtime",
   "native_process: spawns native processes or validates operating-system process ownership",
+  "quarto: executes the Quarto CLI that the repository's pixi environment provides",
   "requires_node: executes JavaScript through the pinned Node.js runtime",
   "supported_python: validates a contract across the supported Python and platform matrix",
 ]

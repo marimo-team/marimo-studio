@@ -7,7 +7,8 @@ description: Bring your own frontend framework or build tool to the New view pic
 
 A view provider is a small Python package that adds starters to Studio's **New
 view** picker. Install one in the notebook's environment, and its starters
-appear beside the built-in HTML, React, Svelte, and Notebook Kit starters:
+appear beside the built-in HTML, React, Svelte, Notebook Kit, and Quarto
+starters:
 
 ![The New view picker lists Acme report and Acme dashboard under From acme-views, above the built-in starters from marimo-studio](/screenshots/provider-new-view.png){width=448}
 
@@ -28,16 +29,16 @@ Every provider imports one module, `marimo_studio.view_providers`. Pick the
 pattern closest to your tool, then follow its section and read the example
 that uses it:
 
-| Pattern                                   | The build                                  | SDK pieces                                                  | Example                                                                                                                                            |
-| ----------------------------------------- | ------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [HTML page](#write-the-provider)          | copies or templates HTML                   | `html_sites`, `copy_inputs`                                 | this guide's `ReportProvider`                                                                                                                      |
-| [Framework build](#add-a-framework-build) | bundles JavaScript with a pinned toolchain | `request.runner`, `request.work_root`, `request.cache_root` | [`deno_react`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react) |
+| Pattern                                                                | The build                                  | SDK pieces                                                  | Example                                                                                                                                            |
+| ---------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [HTML page](#write-the-provider)                                       | copies or templates HTML                   | `html_sites`, `copy_inputs`                                 | this guide's `ReportProvider`                                                                                                                      |
+| [Framework build](#add-a-framework-build)                              | bundles JavaScript with a pinned toolchain | `request.runner`, `request.work_root`, `request.cache_root` | [`deno_react`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react) |
+| [Command-line tool](../reference/provider-api.md#check-external-tools) | runs an installed tool that writes HTML    | `probe_tool`, `copy_inputs`, `ProviderError`                | [`quarto`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/quarto)         |
 
-The React, Svelte, and Notebook Kit providers share a Deno library inside
-Studio. When no pattern fits, start from the HTML page provider and replace
-`build()` with your tool's steps.
-[Check external tools](../reference/provider-api.md#check-external-tools)
-covers a provider that runs an installed command.
+The Quarto provider imports only the public module, so its source shows the
+command-line pattern at full size. The React, Svelte, and Notebook Kit
+providers also share a Deno library inside Studio. When no pattern fits, start
+from the HTML page provider and replace `build()` with your tool's steps.
 
 ## Ask a coding agent
 

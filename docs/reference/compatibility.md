@@ -76,6 +76,8 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 | marimo                           | 0.25.1                                                                               |
 | [Deno](https://docs.deno.com/)   | 2.9.5 from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring |
 | [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment    |
+| [pixi](https://pixi.prefix.dev/) | Optional. Runs Studio in a pixi workspace and installs Quarto from conda-forge       |
+| [Quarto](https://quarto.org/)    | 1.9.38 or newer for the Quarto provider                                              |
 | Browser acceptance               | Current Chromium on Linux and Windows                                                |
 
 Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),

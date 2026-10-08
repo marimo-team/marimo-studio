@@ -238,9 +238,13 @@ jobs:
       - name: Install Chromium
         run: make _browser-install
 
+      - name: Set up pixi
+        if: needs.changes.outputs.provider_browser == 'true'
+        uses: ./.github/actions/setup-pixi
+
       - name: Test provider browser contracts
         if: needs.changes.outputs.provider_browser == 'true'
-        run: pnpm --filter @marimo-studio/e2e e2e:providers
+        run: pixi run --locked pnpm --filter @marimo-studio/e2e e2e:providers
         env:
           PLAYWRIGHT_BLOB_OUTPUT_NAME: provider-linux.zip
       - name: Download installed browser candidate

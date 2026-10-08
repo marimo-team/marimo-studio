@@ -82,7 +82,8 @@ marimo-studio doctor --dependencies --target notebook.py --json
 Read its interpreter path, declaration drift, provider requirements, and import
 availability. This inspects dependencies without executing notebook cells.
 Preserve project-managed execution with `uv run --project <root>` and
-`--no-sandbox`. Use `--sandbox` when the notebook's PEP 723 dependencies own
+`--no-sandbox`, or with `pixi run` and `--no-sandbox` in a pixi workspace. Use
+`--sandbox` when the notebook's PEP 723 dependencies own
 execution. Pass the exact `status.launch_requirements` through the environment
 tool when launching a notebook.
 

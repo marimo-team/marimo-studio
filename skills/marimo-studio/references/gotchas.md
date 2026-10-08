@@ -16,6 +16,18 @@ The server environment lacks the `deno` extra. Restart the server with
 `marimo-studio[deno]`. Starting every session with the `deno` extra avoids
 this restart.
 
+**`starters()` reports Quarto as unavailable.**
+Quarto needs Quarto 1.9.38 or newer on `PATH` before the server starts.
+Install it from https://quarto.org/docs/get-started/ or with
+`pixi global install quarto`, then restart the server. When the reason says the
+environment is not activated, Quarto comes from a pixi or conda environment
+that the server started without activating. Activate that environment, for
+example with `pixi shell`, then restart the server.
+
+**A Studio command reports that the notebook uses a pixi workspace.**
+Studio runs inside the workspace environment and never re-enters it. Run the
+command the error prints, which starts `marimo-studio` through `pixi run`.
+
 **The editor reports that `index.html` is missing after hours of work.**
 A `uvx` server runs from uv's cache. Cleaning or pruning that cache deletes the
 running server's static files. Restart the server.

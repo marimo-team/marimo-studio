@@ -9,10 +9,13 @@ Start with plain HTML, CSS, and JavaScript. Choose
 [React](https://react.dev/) or [Svelte](https://svelte.dev/) when component
 structure, imported assets, or a larger module graph makes the view project
 easier to maintain. Choose [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
-for reactive JavaScript, Markdown, and HTML cells.
+for reactive JavaScript, Markdown, and HTML cells. Choose
+[Quarto](https://quarto.org/) for a Markdown document with publishing
+typography.
 
-Every built-in view provider supports `marimo-cell`, `marimo-output`, and
-`mo-value`. To use another framework, see
+Each starter places notebook results by name, as
+[Place notebook results in a view](notebook-results.md) describes. To use
+another framework, see
 [Bring your own frontend](#bring-your-own-frontend).
 
 | Starter                              | Choose it for                                             |
@@ -22,6 +25,7 @@ Every built-in view provider supports `marimo-cell`, `marimo-output`, and
 | `marimo-studio/react:reveal`         | Ordered [Reveal.js](https://revealjs.com/) presentations  |
 | `marimo-studio/svelte:default`       | Svelte applications with concise reactive browser state   |
 | `marimo-studio/notebook-kit:default` | Observable notebook HTML with reactive presentation cells |
+| `marimo-studio/quarto:default`       | Quarto Markdown documents with live notebook results      |
 
 For React, Svelte, and Notebook Kit, install the Deno toolchain in the
 notebook's Python project before running dependency commands:
@@ -153,6 +157,33 @@ The starter builds through Vite and Deno with frozen dependencies. Edit the
 page template in `src/page.tmpl` and styles in `src/style.css`. See the
 [Notebook Kit provider reference](../reference/built-in-providers.md#marimo-studio-notebook-kit)
 for value subscriptions, interpolated targets, and project options.
+
+## Quarto document
+
+[Quarto](https://quarto.org/) renders Markdown with front matter into a styled
+document through Pandoc. Install Quarto 1.9.38 or newer, for example with
+[pixi](https://pixi.prefix.dev/) as `pixi global install quarto`, then create a
+view:
+
+```console
+marimo-studio view create report --target analysis.py \
+  --starter marimo-studio/quarto:default
+```
+
+Write `index.qmd` as Quarto Markdown and place notebook results with the
+`marimo` shortcode. Put each `cell` or `output` shortcode on its own line with a
+blank line before and after it, and a `value` shortcode inside a sentence:
+
+```markdown
+Rooms in use today: {{< marimo value="summary.rooms" >}}.
+
+{{< marimo cell="occupancy_chart" >}}
+```
+
+Studio renders the document with `--no-execute`, so computation stays in the
+notebook. See the
+[Quarto provider reference](../reference/built-in-providers.md#marimo-studio-quarto)
+for raw HTML hosts, `.md` entry documents, includes, and build inputs.
 
 ## Inspect installed starters
 

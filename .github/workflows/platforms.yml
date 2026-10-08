@@ -86,16 +86,37 @@ jobs:
             os: macos-latest
           - profile: deno
             os: windows-latest
+          - profile: quarto
+            os: windows-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Set up pixi
+        if: matrix.profile == 'quarto'
+        uses: ./.github/actions/setup-pixi
+
       - name: Test ${{ matrix.profile }} contracts
+        if: matrix.profile != 'quarto'
         uses: ./.github/actions/test-python
         with:
           profile: ${{ matrix.profile }}
+          python-version: "3.12"
+
+      # Quarto keeps a render cache in a SQLite file that Windows opens only
+      # below 260 characters, so the Quarto contracts use short temporary paths.
+      - name: Test quarto contracts
+        if: matrix.profile == 'quarto'
+        uses: ./.github/actions/test-python
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          # pytest splits this like a shell, so quote the Windows path.
+          PYTEST_ADDOPTS: --basetemp='${{ runner.temp }}\p'
+        with:
+          profile: quarto
           python-version: "3.12"
 
   installed-package:

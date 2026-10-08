@@ -23,6 +23,7 @@ from marimo_studio.view_providers.testing import check_provider
 # Selects the test profile that installs each provider's external tool.
 _PROFILES = {
     "notebook-kit": pytest.mark.deno,
+    "quarto": pytest.mark.quarto,
     "react": pytest.mark.deno,
     "svelte": pytest.mark.deno,
 }

@@ -4,6 +4,7 @@ SHELL := /bin/bash
 
 UV ?= uv
 PNPM ?= pnpm
+PIXI ?= pixi
 VP := $(PNPM) exec vp
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
@@ -27,7 +28,8 @@ PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: ## Prepare dependencies, browser assets, and Chromium.
+setup: ## Prepare dependencies, system tools, browser assets, and Chromium.
+	$(PIXI) install --locked
 	$(UV) sync --locked --reinstall-package marimo-studio
 	$(PNPM) install --frozen-lockfile
 	$(MAKE) _prepare-frontend
@@ -94,15 +96,17 @@ _prepare-browser-tests: _frontend-ready
 
 e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
 	$(PNPM) --filter @marimo-studio/e2e e2e
-	$(PNPM) --filter @marimo-studio/e2e e2e:providers
+	$(PIXI) run --locked $(PNPM) --filter @marimo-studio/e2e e2e:providers
 	$(PNPM) --filter @marimo-studio/e2e e2e:installed
 
 e2e-ui: _browser-ready build _prepare-browser-tests ## Open the browser test runner.
 	$(PNPM) --filter @marimo-studio/e2e e2e:ui
 
-# EXAMPLES takes examples:build selectors, for example EXAMPLES='--family athletes'.
+# Example exports run in the pixi environment, which provides the Quarto CLI
+# that the Quarto example views render with. EXAMPLES takes examples:build
+# selectors, for example EXAMPLES='--family athletes'.
 docs-examples: _frontend-ready build ## Export examples for the documentation site.
-	$(VP) run --filter @marimo-studio/docs examples:build $(EXAMPLES)
+	$(PIXI) run --locked $(VP) run --filter @marimo-studio/docs examples:build $(EXAMPLES)
 
 docs-thumbnails: _browser-ready ## Capture example thumbnails and landing posters from exported views.
 	@test -d apps/docs/public/examples || $(MAKE) docs-examples
@@ -114,7 +118,7 @@ docs-showcase: _browser-ready ## Render example showcase images from exported ex
 	node tools/example-showcase/render.ts
 
 docs-build: _frontend-ready build ## Build the VitePress documentation.
-	$(VP) run --filter @marimo-studio/docs build
+	$(PIXI) run --locked $(VP) run --filter @marimo-studio/docs build
 
 docs-serve: _frontend-ready ## Serve documentation through Portless.
 	$(PORTLESS_ENV) BASE_PATH= $(VP) run --filter @marimo-studio/docs dev

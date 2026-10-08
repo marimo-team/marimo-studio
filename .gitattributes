@@ -1,2 +1,3 @@
 apps/browser/license-texts/*.txt text eol=lf whitespace=-blank-at-eof
 packages/marimo-frontend/patches/*.patch text eol=lf
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true

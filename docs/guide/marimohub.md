@@ -81,7 +81,9 @@ which stores dependencies and tool configuration inside the notebook file:
 
 The **HTML document** starter needs no extra packages. React, Svelte, Reveal.js
 slides, and Notebook Kit starters need `marimo-studio[deno]>=0.3.0` in
-`dependencies` and network access to the npm registry.
+`dependencies` and network access to the npm registry. The **Quarto document**
+starter runs the `quarto` command, so the sandbox image must provide Quarto
+1.9.38 or newer on `PATH`.
 
 **Browse files** is read-only while an editor session runs, so stop the session
 first. The saved header creates a new notebook version. Dependency changes apply

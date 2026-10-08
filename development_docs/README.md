@@ -50,6 +50,7 @@ These upstream systems define contracts that Studio integrates:
 | [Marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)                                                                                    | Coding-agent execution inside the live notebook kernel                                       |
 | [Agent Skills](https://agentskills.io/) and [Agent Plugins](https://github.com/peter-gy/agent-plugins)                                                                | Portable agent instructions and their packaged resources                                     |
 | [uv](https://docs.astral.sh/uv/) and [PEP 723](https://peps.python.org/pep-0723/)                                                                                     | Python environment selection and dependencies stored in a script                             |
+| [pixi](https://pixi.prefix.dev/) and [conda-forge](https://conda-forge.org/)                                                                                          | System tools such as Quarto, and pixi workspaces that own a notebook's environment           |
 | [Deno](https://docs.deno.com/)                                                                                                                                        | Pinned JavaScript and TypeScript toolchain for built-in framework providers                  |
 | [ASGI](https://asgi.readthedocs.io/en/latest/)                                                                                                                        | Interface between Studio's asynchronous Python application and a server                      |
 | [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/)                                                                                           | Browser-side notebook execution                                                              |
@@ -61,20 +62,34 @@ for each integration.
 
 ## Install the workspace
 
-Install the locked Python and JavaScript environments:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/),
+[Node.js](https://nodejs.org/) 24.11 or newer, and
+[pixi](https://pixi.prefix.dev/latest/installation/), then the locked
+environments:
 
 ```console
+corepack enable pnpm
 make setup
 ```
 
-`make setup` installs the Python and [pnpm](https://pnpm.io/) JavaScript
-workspaces, prepares the pinned Marimo
+`corepack enable pnpm` lets Node.js provide the pnpm version that
+`package.json` pins.
+
+`make setup` installs the pixi environment of system tools, the Python and
+[pnpm](https://pnpm.io/) JavaScript workspaces, prepares the pinned Marimo
 frontend source, builds Studio's browser assets, and installs Chromium for
 browser acceptance tests. It also prepares the pinned Pyodide test payload in
 `apps/e2e/.cache/pyodide`. Python tooling runs through `uv`. Browser and
 documentation tooling runs through the pnpm workspace, where
 [Vite Plus](https://viteplus.dev/guide) owns formatting, linting, TypeScript
 checks, tests, builds, and task execution.
+
+pixi installs the system tools from conda-forge that neither uv nor pnpm
+provide, locked in `pixi.lock`. It provides Quarto for the Quarto provider.
+Commands that need it run through `pixi run`, which activates the environment.
+`make e2e` does this for the provider browser suite, and
+`./scripts/python-test.sh` does it for the `all` and `quarto` profiles. Run
+`pixi shell` to use the tools in an interactive shell.
 
 Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
@@ -232,13 +247,13 @@ Pull requests run the Linux contracts that cover most regressions. The macOS and
 Windows contracts and the complete documentation site run after merge, on
 `main`:
 
-| Stage        | Workflow            | Contracts                                                                                                           |
-| ------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Pull request | CI                  | Quality, Python on Linux, supported Python on Linux and Windows, Linux native and Deno contracts, frontend, package |
-| Pull request | Browser acceptance  | Linux browser shards, provider and installed-package browser contracts, Windows process unit contracts              |
-| Pull request | GitHub Pages        | Documentation contracts, and an export of two example views when product code changes                               |
-| After merge  | Platform acceptance | macOS and Windows native and Deno contracts, installed package, and Windows browser suites                          |
-| After merge  | GitHub Pages        | Every example family in parallel, then the assembled site and its deployment                                        |
+| Stage        | Workflow            | Contracts                                                                                                                    |
+| ------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Pull request | CI                  | Quality, Python on Linux, supported Python on Linux and Windows, Linux native, Deno, and Quarto contracts, frontend, package |
+| Pull request | Browser acceptance  | Linux browser shards, provider and installed-package browser contracts, Windows process unit contracts                       |
+| Pull request | GitHub Pages        | Documentation contracts, and an export of two example views when product code changes                                        |
+| After merge  | Platform acceptance | macOS and Windows native and Deno contracts, Windows Quarto contracts, installed package, and Windows browser suites         |
+| After merge  | GitHub Pages        | Every example family in parallel, then the assembled site and its deployment                                                 |
 
 A pull request runs the after-merge stage itself in three cases:
 

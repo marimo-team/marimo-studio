@@ -14,6 +14,7 @@ export default defineConfig({
     "provider-notebook.spec.ts",
     "provider-preview.spec.ts",
     "external-provider.spec.ts",
+    "provider-quarto.spec.ts",
   ],
   timeout: 180_000,
   fullyParallel: false,
