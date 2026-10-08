@@ -60,14 +60,23 @@ that `pixi.toml`, then the pixi pyproject, then a uv project. A `pixi.toml`
 that installs only system tools leaves the directory to uv.
 
 Studio runs in place in a pixi workspace and never re-enters it. pixi
-activation exports `PIXI_PROJECT_MANIFEST` and `CONDA_PREFIX`. When the
-manifest matches and `CONDA_PREFIX` is the running interpreter's prefix, the
-command continues. Otherwise it raises `dependency-error` with the
+activation exports `PIXI_PROJECT_MANIFEST` and `CONDA_PREFIX`. A command that
+would bootstrap providers or re-enter the notebook environment checks both.
+When the manifest matches and `CONDA_PREFIX` is the running interpreter's
+prefix, the command continues in place. Otherwise it raises
+`dependency-error` with the
 `pixi run --manifest-path <manifest> -x marimo-studio ...` command to use.
 Both checks matter because a child such as `uvx` inherits the variables
 without running in the workspace interpreter. The workspace declares Studio,
 its extras, and external providers itself, since `pixi run` cannot add launch
 requirements the way `uv run --with` does.
+
+`doctor --dependencies` reads the declarations of the activated pixi
+environment, or `default` outside the workspace: the default feature unless
+the environment excludes it, the environment's features, and the target tables
+for the running platform. A PyPI dependency with a `git`, `url`, or `path`
+source becomes a direct reference, which the doctor reports as
+`unverified-source`.
 
 View creation treats the workspace like a uv project and writes no sandbox
 dependency list. Its next command is
@@ -166,7 +175,8 @@ current user's filesystem, process, environment, and network authority.
 ## Failure behavior
 
 - Missing `uv` raises `dependency-error` before process creation.
-- A pixi workspace notebook outside its activated environment raises
+- A command that would bootstrap providers or re-enter the environment of a
+  pixi workspace notebook, run outside the activated workspace, raises
   `dependency-error` with the `pixi run` command.
 - Invalid metadata or requirement conflicts raise `configuration-error` before
   provider import.

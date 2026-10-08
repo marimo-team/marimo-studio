@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -365,3 +366,72 @@ def test_dependency_doctor_accepts_conda_packages_a_pixi_workspace_declares(
     report = json.loads(result.stdout)
     assert report["project"] == str(tmp_path / "pixi.toml")
     assert report["declarations"]["project"] == ["marimo"]
+
+
+@pytest.mark.parametrize(
+    ("environment", "declared"),
+    (
+        (None, ["marimo", "click"]),
+        ("docs", ["marimo", "click", "docs-tool"]),
+        ("lean", ["docs-tool"]),
+    ),
+)
+def test_dependency_doctor_reads_the_activated_pixi_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    environment: str | None,
+    declared: list[str],
+) -> None:
+    running, other = ("win", "unix") if sys.platform == "win32" else ("unix", "win")
+    manifest = tmp_path / "pixi.toml"
+    manifest.write_text(
+        '[workspace]\nname = "analysis"\nchannels = ["conda-forge"]\n'
+        'platforms = ["linux-64", "osx-arm64", "win-64"]\n\n'
+        '[dependencies]\npython = "3.12.*"\n\n'
+        '[pypi-dependencies]\nmarimo = "*"\n\n'
+        f'[target.{running}.pypi-dependencies]\nclick = "*"\n\n'
+        f'[target.{other}.pypi-dependencies]\nother-platform-tool = "*"\n\n'
+        '[feature.docs.pypi-dependencies]\ndocs-tool = "*"\n\n'
+        '[environments]\ndocs = ["docs"]\n'
+        'lean = { features = ["docs"], no-default-feature = true }\n'
+    )
+    monkeypatch.delenv("PIXI_PROJECT_MANIFEST", raising=False)
+    if environment is not None:
+        monkeypatch.setenv("PIXI_PROJECT_MANIFEST", str(manifest))
+        monkeypatch.setenv("PIXI_ENVIRONMENT_NAME", environment)
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text("import marimo\n")
+
+    result = CliRunner().invoke(
+        cli, ["doctor", "--dependencies", "--target", str(notebook), "--json"]
+    )
+
+    report = json.loads(result.stdout)
+    assert report["declarations"]["project"] == declared
+
+
+def test_dependency_doctor_flags_pixi_git_sources_for_verification(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pixi.toml").write_text(
+        '[workspace]\nname = "analysis"\nchannels = ["conda-forge"]\n'
+        'platforms = ["linux-64"]\n\n'
+        '[dependencies]\npython = "3.12.*"\n\n'
+        "[pypi-dependencies]\n"
+        'click = { git = "https://github.com/pallets/click.git", tag = "8.1.7" }\n'
+    )
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text("import click\n")
+
+    result = CliRunner().invoke(
+        cli, ["doctor", "--dependencies", "--target", str(notebook), "--json"]
+    )
+
+    report = json.loads(result.stdout)
+    assert report["declarations"]["project"] == [
+        "click @ git+https://github.com/pallets/click.git@8.1.7"
+    ]
+    assert {
+        "code": "unverified-source",
+        "message": "Verify the installed source for click",
+    } in report["issues"]

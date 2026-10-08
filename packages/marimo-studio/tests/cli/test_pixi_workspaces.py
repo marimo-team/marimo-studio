@@ -9,7 +9,7 @@ from click.testing import CliRunner
 
 import marimo_studio._cli.environment as environment_module
 from marimo_studio._cli import cli
-from marimo_studio._cli.environment import EnvironmentRunResult
+from marimo_studio._cli.environment import EnvironmentRunResult, shell_command
 from marimo_studio._cli.targets import NotebookTarget
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.python_project import project_environment
@@ -122,9 +122,19 @@ def test_studio_runs_in_the_activated_pixi_workspace(
 
     assert result.exit_code == 0, result.output
     assert "dependencies" not in (read_notebook_metadata(notebook_path) or {})
-    command = (
-        f"pixi run --manifest-path {manifest} -x marimo edit "
-        f"{notebook_path.resolve()} --no-sandbox --watch"
+    command = shell_command(
+        [
+            "pixi",
+            "run",
+            "--manifest-path",
+            str(manifest),
+            "-x",
+            "marimo",
+            "edit",
+            str(notebook_path.resolve()),
+            "--no-sandbox",
+            "--watch",
+        ]
     )
     assert command in result.stderr
 
@@ -143,10 +153,20 @@ def test_studio_outside_the_pixi_workspace_names_the_command_to_run(
     )
 
     assert isinstance(result.exception, DependencyError)
-    assert (
-        f"pixi run --manifest-path {manifest} -x marimo-studio view build dashboard"
-        in str(result.exception)
+    command = shell_command(
+        [
+            "pixi",
+            "run",
+            "--manifest-path",
+            str(manifest),
+            "-x",
+            "marimo-studio",
+            "view",
+            "build",
+            "dashboard",
+        ]
     )
+    assert command in str(result.exception)
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is unavailable")
@@ -154,9 +174,16 @@ def test_uv_reentry_leaves_an_enclosing_pixi_environment_behind(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("CONDA_PREFIX", "/opt/pixi/envs/default")
-    monkeypatch.setenv("PIXI_PROJECT_MANIFEST", "/opt/pixi/pixi.toml")
-    monkeypatch.setenv("PIXI_ENVIRONMENT_NAME", "default")
+    activation = {
+        "CONDA_DEFAULT_ENV": "default",
+        "CONDA_PREFIX": "/opt/pixi/envs/default",
+        "PIXI_ENVIRONMENT_NAME": "default",
+        "PIXI_PROJECT_MANIFEST": "/opt/pixi/pixi.toml",
+        "PIXI_PROJECT_ROOT": "/opt/pixi",
+        "VIRTUAL_ENV": "/opt/pixi/envs/default",
+    }
+    for name, value in activation.items():
+        monkeypatch.setenv(name, value)
     captured: dict[str, str] = {}
 
     def capture(_command, child_env, *_streams) -> EnvironmentRunResult:
@@ -170,8 +197,4 @@ def test_uv_reentry_leaves_an_enclosing_pixi_environment_behind(
         ["status"],
     )
 
-    assert {
-        "CONDA_PREFIX",
-        "PIXI_PROJECT_MANIFEST",
-        "PIXI_ENVIRONMENT_NAME",
-    }.isdisjoint(captured)
+    assert activation.keys().isdisjoint(captured)

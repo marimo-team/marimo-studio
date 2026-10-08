@@ -9,6 +9,8 @@ system tools leaves the directory to uv.
 
 from __future__ import annotations
 
+import os
+import platform
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,32 +76,67 @@ def _pyproject_pixi(data: dict[str, object] | None) -> dict[str, object] | None:
     return pixi if isinstance(workspace, dict) else None
 
 
-def _dependency_tables(manifest: dict[str, object]) -> tuple[dict[str, object], ...]:
-    """Return the manifest's top-level, feature, and platform target tables."""
-    features = manifest.get("feature")
-    owners = (
-        manifest,
-        *(
-            table
-            for table in (features.values() if isinstance(features, dict) else ())
-            if isinstance(table, dict)
-        ),
-    )
+def _dependency_tables(
+    owners: tuple[dict[str, object], ...], platforms: frozenset[str] | None = None
+) -> tuple[dict[str, object], ...]:
+    """Return the owner tables and their target tables for ``platforms``.
+
+    ``None`` selects every target table.
+    """
     tables: list[dict[str, object]] = []
     for owner in owners:
         tables.append(owner)
         targets = owner.get("target")
         if isinstance(targets, dict):
             tables.extend(
-                table for table in targets.values() if isinstance(table, dict)
+                table
+                for selector, table in targets.items()
+                if isinstance(table, dict)
+                and (platforms is None or selector in platforms)
             )
     return tuple(tables)
+
+
+def _features(manifest: dict[str, object]) -> dict[str, object]:
+    features = manifest.get("feature")
+    return features if isinstance(features, dict) else {}
+
+
+def _environment_features(
+    manifest: dict[str, object], environment: str
+) -> tuple[bool, tuple[str, ...]]:
+    """Return whether an environment installs the default feature, and its features."""
+    environments = manifest.get("environments")
+    entry = environments.get(environment) if isinstance(environments, dict) else None
+    if isinstance(entry, dict):
+        names = entry.get("features")
+        default = entry.get("no-default-feature") is not True
+    else:
+        names, default = entry, True
+    if not isinstance(names, list):
+        return default, ()
+    return default, tuple(name for name in names if isinstance(name, str))
+
+
+def _platform_targets() -> frozenset[str]:
+    """Return the pixi target selectors that match the running platform."""
+    machine = platform.machine().lower()
+    arm = machine in {"arm64", "aarch64"}
+    if sys.platform == "darwin":
+        return frozenset({"unix", "osx", "osx-arm64" if arm else "osx-64"})
+    if sys.platform == "win32":
+        return frozenset({"win", "win-arm64" if arm else "win-64"})
+    architecture = "64" if machine in {"x86_64", "amd64"} else machine
+    return frozenset({"unix", "linux", f"linux-{architecture}"})
 
 
 def _declares_python_packages(manifest: dict[str, object] | None) -> bool:
     if manifest is None:
         return False
-    for table in _dependency_tables(manifest):
+    features = tuple(
+        table for table in _features(manifest).values() if isinstance(table, dict)
+    )
+    for table in _dependency_tables((manifest, *features)):
         dependencies = table.get("dependencies")
         if isinstance(dependencies, dict) and "python" in dependencies:
             return True
@@ -108,36 +145,85 @@ def _declares_python_packages(manifest: dict[str, object] | None) -> bool:
     return False
 
 
-def _pypi_requirement(name: str, specification: object) -> str:
-    if isinstance(specification, dict):
-        extras = specification.get("extras")
-        if isinstance(extras, list) and extras:
-            name = f"{name}[{','.join(str(extra) for extra in extras)}]"
-        specification = specification.get("version")
-    if not isinstance(specification, str) or specification.strip() in {"", "*"}:
+def _pypi_requirement(root: Path, name: str, specification: object) -> str:
+    """Return the PEP 508 requirement for one pixi PyPI dependency.
+
+    git, url, and path sources become direct references.
+    """
+    if not isinstance(specification, dict):
+        specification = {"version": specification}
+    extras = specification.get("extras")
+    if isinstance(extras, list) and extras:
+        name = f"{name}[{','.join(str(extra) for extra in extras)}]"
+    git, url, path = (specification.get(key) for key in ("git", "url", "path"))
+    if isinstance(git, str):
+        reference = next(
+            (
+                value
+                for key in ("rev", "tag", "branch")
+                if isinstance(value := specification.get(key), str)
+            ),
+            None,
+        )
+        return f"{name} @ git+{git}" + (f"@{reference}" if reference else "")
+    if isinstance(url, str):
+        return f"{name} @ {url}"
+    if isinstance(path, str):
+        return f"{name} @ {(root / path).resolve().as_uri()}"
+    version = specification.get("version")
+    if not isinstance(version, str) or version.strip() in {"", "*"}:
         return name
-    version = specification.strip()
+    version = version.strip()
     return f"{name}=={version}" if version[0].isdigit() else f"{name}{version}"
 
 
 def pixi_declarations(
     project: ProjectEnvironment,
 ) -> tuple[tuple[str, ...], frozenset[str]]:
-    """Return the PyPI requirements and conda package names a workspace declares."""
+    """Return the PyPI requirements and conda package names of a pixi environment.
+
+    The environment is the activated one when Studio runs in ``project``, else
+    ``default``. Its features and the target tables for the running platform
+    contribute declarations. In a pyproject workspace, ``[project]``
+    dependencies belong to the default feature, and a feature also selects the
+    optional-dependency or dependency group of the same name.
+    """
+    activated = os.environ.get("PIXI_PROJECT_MANIFEST")
+    environment = (
+        os.environ.get("PIXI_ENVIRONMENT_NAME", "default")
+        if activated and Path(activated).resolve() == project.manifest.resolve()
+        else "default"
+    )
     data = _read_manifest(project.manifest) or {}
-    manifest = data if project.manifest.name == "pixi.toml" else _pyproject_pixi(data)
-    requirements: list[str] = []
-    if project.manifest.name == "pyproject.toml":
-        declared = data.get("project")
-        values = declared.get("dependencies") if isinstance(declared, dict) else None
-        if isinstance(values, list):
-            requirements.extend(value for value in values if isinstance(value, str))
+    pyproject = project.manifest.name == "pyproject.toml"
+    manifest = (_pyproject_pixi(data) if pyproject else data) or {}
+    declared = data.get("project") if pyproject else None
+    declared = declared if isinstance(declared, dict) else {}
+    groups: dict[str, object] = {}
+    if pyproject:
+        for table in (
+            data.get("dependency-groups"),
+            declared.get("optional-dependencies"),
+        ):
+            if isinstance(table, dict):
+                groups.update(table)
+    default, names = _environment_features(manifest, environment)
+    owners: list[dict[str, object]] = [manifest] if default else []
+    values: list[object] = list(declared.get("dependencies") or ()) if default else []
+    for name in names:
+        feature = _features(manifest).get(name)
+        if isinstance(feature, dict):
+            owners.append(feature)
+        group = groups.get(name)
+        if isinstance(group, list):
+            values.extend(group)
+    requirements = [value for value in values if isinstance(value, str)]
     conda: set[str] = set()
-    for table in _dependency_tables(manifest or {}):
+    for table in _dependency_tables(tuple(owners), _platform_targets()):
         pypi = table.get("pypi-dependencies")
         if isinstance(pypi, dict):
             requirements.extend(
-                _pypi_requirement(str(name), specification)
+                _pypi_requirement(project.root, str(name), specification)
                 for name, specification in pypi.items()
             )
         dependencies = table.get("dependencies")
