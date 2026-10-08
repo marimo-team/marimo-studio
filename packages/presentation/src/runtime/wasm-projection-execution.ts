@@ -14,10 +14,10 @@ const resolveRequests = (
   requests: readonly ProjectionRequest[],
 ): readonly ResolvedProjection[] =>
   requests.map((request) => {
-    const mount = config.mounts.find((candidate) => candidate.id === request.siteId);
+    const site = config.sites.find((candidate) => candidate.id === request.siteId);
     const resolution = resolveProjection(config, {
       ...request,
-      kind: mount?.kind ?? "value",
+      kind: site?.kind ?? "value",
     });
     if (!resolution.ok) {
       throw new Error(resolution.error.message);

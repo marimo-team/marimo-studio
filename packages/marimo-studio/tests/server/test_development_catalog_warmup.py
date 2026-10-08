@@ -70,7 +70,7 @@ def test_project_catalog_reconciles_a_recreated_view_after_queued_deletion(
             reconciled = await coordinator.project_catalog(current, "qa-view")
 
             assert reconciled.project.name == "qa-view"
-            assert reconciled.inspection.editor_documents
+            assert reconciled.inspection.documents
         finally:
             await coordinator.close()
 

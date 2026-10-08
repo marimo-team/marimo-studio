@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { mountDeclarationSchema } from "./projections.ts";
+import { artifactSiteSchema } from "./projections.ts";
 import { providerKeySchema } from "./provider-catalog.ts";
 import { ownRecordSchema } from "./records.ts";
 import { jsonValueSchema, type JsonValue } from "./runtime-config.ts";
@@ -62,7 +62,7 @@ export const viewProjectSchema = z
     provider: providerKeySchema,
     provider_options: ownRecordSchema(z.string(), jsonValueSchema),
     documents: z.array(sourceDocumentSchema),
-    mounts: z.array(mountDeclarationSchema),
+    sites: z.array(artifactSiteSchema),
     diagnostics: z.array(projectDiagnosticSchema),
     build: viewBuildStateSchema,
     artifact: publishedArtifactSchema.nullable(),
@@ -79,25 +79,25 @@ export const viewProjectSchema = z
     }
     const documents = new Set(paths);
     const diagnosticSources = new Set([...paths, "view.toml"]);
-    const siteIds = project.mounts.map((site) => site.id);
+    const siteIds = project.sites.map((site) => site.id);
     if (new Set(siteIds).size !== siteIds.length) {
       context.addIssue({
         code: "custom",
-        path: ["mounts"],
-        message: "View project mounts must have unique IDs",
+        path: ["sites"],
+        message: "View project sites must have unique IDs",
       });
     }
-    project.mounts.forEach((site, index) => {
+    project.sites.forEach((site, index) => {
       if (!sourceDocumentPathSchema.safeParse(site.source.path).success) {
         context.addIssue({
           code: "custom",
-          path: ["mounts", index, "source", "path"],
+          path: ["sites", index, "source", "path"],
           message: "Projection source paths must be normalized relative POSIX paths",
         });
       } else if (!documents.has(site.source.path)) {
         context.addIssue({
           code: "custom",
-          path: ["mounts", index, "source", "path"],
+          path: ["sites", index, "source", "path"],
           message: "Projection source paths must identify project documents",
         });
       }

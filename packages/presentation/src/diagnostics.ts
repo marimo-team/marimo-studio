@@ -31,7 +31,7 @@ export interface RuntimeDiagnostic {
   details?: Record<string, JsonValue>;
 }
 
-export interface MountDeclarationDiagnostic {
+export interface ProjectionSiteDiagnostic {
   code: string;
   severity: "error";
   message: string;
@@ -44,7 +44,7 @@ export interface MountDeclarationDiagnostic {
 
 export type StudioDiagnostic =
   | ProjectionDiagnostic
-  | MountDeclarationDiagnostic
+  | ProjectionSiteDiagnostic
   | PresentationDiagnostic
   | HostDiagnostic
   | RuntimeDiagnostic;

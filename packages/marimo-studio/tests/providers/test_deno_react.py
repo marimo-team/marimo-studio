@@ -9,11 +9,12 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from marimo_studio.view_providers._bundled import _deno
-from marimo_studio.view_providers._bundled._deno import cache as _deno_cache
-from marimo_studio.view_providers._bundled._deno import runtime as _deno_runtime
-from marimo_studio.view_providers._bundled.deno_react import build as _react_build
-from marimo_studio.view_providers._bundled.deno_react import provider as react_provider
+from marimo_studio.view_providers._artifact_sites import artifact_sites
+from marimo_studio.view_providers._builtin import _deno
+from marimo_studio.view_providers._builtin._deno import cache as _deno_cache
+from marimo_studio.view_providers._builtin._deno import runtime as _deno_runtime
+from marimo_studio.view_providers._builtin.deno_react import build as _react_build
+from marimo_studio.view_providers._builtin.deno_react import provider as react_provider
 from marimo_studio.view_providers._host import provider_registry
 
 from ..deno_provider_test_support import build_provider as _build
@@ -26,6 +27,41 @@ pytestmark = [
     pytest.mark.deno,
     pytest.mark.usefixtures("shared_deno_test_cache"),
 ]
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_react_output_hosts_report_their_literal_accept_list(tmp_path: Path) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    source = root / "src" / "App.tsx"
+    source.write_text(
+        """const formats = "image/png";
+export const App = () => (
+  <main>
+    <marimo-output value="chart" accept="image/svg+xml, image/png" />
+    <marimo-output value="table" accept={formats} />
+    <marimo-output value="report" accept="" />
+    <marimo-cell name="summary" accept="image/png" />
+  </main>
+);
+""",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    (site,) = inspection.sites
+    assert (site.targets, site.accept) == (("chart",), ("image/svg+xml", "image/png"))
+    assert [
+        (diagnostic.code, diagnostic.source and diagnostic.source.line)
+        for diagnostic in inspection.diagnostics
+    ] == [
+        ("projection-accept-dynamic", 5),
+        ("projection-accept-invalid", 6),
+        ("projection-accept-invalid", 7),
+    ]
 
 
 @pytest.mark.skipif(
@@ -50,11 +86,11 @@ def test_react_inspection_tracks_literal_site_identity_and_kind(
 
     inspection = _inspect(react_provider, project)
 
-    assert [site.allowed_targets for site in inspection.mounts] == [
+    assert [site.targets for site in inspection.sites] == [
         ("controls",),
         ("controls",),
     ]
-    assert len({site.id for site in inspection.mounts}) == 2
+    assert len({site.id for site in artifact_sites(inspection.sites)}) == 2
 
     source.write_text(
         """export const App = () => (
@@ -67,7 +103,7 @@ def test_react_inspection_tracks_literal_site_identity_and_kind(
 """,
         encoding="utf-8",
     )
-    padded_sites = _inspect(react_provider, project).mounts
+    padded_sites = _inspect(react_provider, project).sites
     source.write_text(
         """export const App = () => (
   <main>
@@ -79,15 +115,15 @@ def test_react_inspection_tracks_literal_site_identity_and_kind(
 """,
         encoding="utf-8",
     )
-    canonical_sites = _inspect(react_provider, project).mounts
+    canonical_sites = _inspect(react_provider, project).sites
 
-    assert {site.kind: site.allowed_targets for site in padded_sites} == {
+    assert {site.kind: site.targets for site in padded_sites} == {
         "cell": ("controls",),
         "output": ("summary",),
         "value": ("report.total",),
     }
-    assert {site.kind: site.id for site in padded_sites} == {
-        site.kind: site.id for site in canonical_sites
+    assert {site.kind: site.id for site in artifact_sites(padded_sites)} == {
+        site.kind: site.id for site in artifact_sites(canonical_sites)
     }
 
     source.write_text(
@@ -100,7 +136,7 @@ def test_react_inspection_tracks_literal_site_identity_and_kind(
     conflict = _inspect(react_provider, project)
 
     assert [item.code for item in conflict.diagnostics] == ["projection-kind-conflict"]
-    assert conflict.mounts == ()
+    assert conflict.sites == ()
 
 
 @pytest.mark.skipif(
@@ -114,7 +150,7 @@ def test_react_default_starter_declares_notebook_cell_targets(
 
     inspection = _inspect(react_provider, project)
 
-    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+    assert [(site.kind, site.targets) for site in inspection.sites] == [
         ("cell", ("cell-2",)),
     ]
 
@@ -147,7 +183,7 @@ export const App = () => (
     assert [item.code for item in inspection.diagnostics] == [
         "projection-site-reserved"
     ]
-    assert inspection.mounts == ()
+    assert inspection.sites == ()
 
 
 @pytest.mark.parametrize("starter_key", ("default", "reveal"))
@@ -179,7 +215,7 @@ def test_react_starters_build_without_possible_output_cells(
     )
 
     assert inspection.diagnostics == ()
-    assert inspection.mounts == ()
+    assert inspection.sites == ()
     assert report.document is not None
 
 
@@ -223,7 +259,20 @@ def test_react_projection_diagnostics_locate_authored_sources(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_react_starter_types_projections_and_exposes_guidance(
+def test_react_source_opens_on_the_app_component(tmp_path: Path) -> None:
+    _root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+
+    documents = _inspect(react_provider, project).documents
+
+    assert documents[0].path == PurePosixPath("src/App.tsx")
+    assert documents[-1].path == PurePosixPath("deno.lock")
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_react_starter_types_projections(
     tmp_path: Path,
 ) -> None:
     root, project = _project(tmp_path, react_provider, "marimo-studio/react")
@@ -255,7 +304,6 @@ export const App = () => {
 """,
         encoding="utf-8",
     )
-    (root / "DESIGN.md").write_text("# Page design\n", encoding="utf-8")
     inspection = _inspect(react_provider, project)
     files = root / ".artifacts" / ".staging" / "typed-starter" / "files"
     files.mkdir(parents=True)
@@ -265,15 +313,6 @@ export const App = () => {
         provider_build_request(project, inspection, files),
     )
 
-    guidance = {
-        item.path.as_posix(): item
-        for item in inspection.editor_documents
-        if item.path.as_posix() in {"AGENTS.md", "DESIGN.md"}
-    }
-    assert {path: (item.language, item.access) for path, item in guidance.items()} == {
-        "AGENTS.md": ("markdown", "edit"),
-        "DESIGN.md": ("markdown", "edit"),
-    }
     assert report.document is not None
 
 
@@ -355,7 +394,7 @@ def test_reveal_starter_builds_a_deck_from_notebook_cells(
         provider_build_request(project, inspection, files),
     )
 
-    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+    assert [(site.kind, site.targets) for site in inspection.sites] == [
         ("cell", ("cell-2",)),
     ]
     assert report.document is not None
@@ -400,17 +439,17 @@ export const App = () => (
 
     inspection = _inspect(react_provider, project)
 
-    assert [site.kind for site in inspection.mounts] == [
+    assert [site.kind for site in inspection.sites] == [
         "cell",
         "cell",
         "cell",
         "value",
         "output",
     ]
-    assert [site.allowed_targets for site in inspection.mounts] == [
+    assert [site.targets for site in inspection.sites] == [
         ("overview", "detail"),
         ("imported", "detail"),
-        None,
+        "*",
         ("report.total", "report.change"),
         ("summary", "detail_table"),
     ]
@@ -446,15 +485,13 @@ def test_react_inspection_rejects_undeclared_entrypoint_option(
         if item.code == "provider-options-invalid"
     )
     assert (
-        diagnostic.message
-        == "marimo-studio/react received undeclared option 'entrypoint'"
+        diagnostic.message == "view.toml sets 'entrypoint', which React does not read."
     )
     assert diagnostic.source is not None
     assert diagnostic.source.path == PurePosixPath("view.toml")
     assert "view.toml" in diagnostic.hint
     assert all(
-        document.path.as_posix() != "view.toml"
-        for document in inspection.editor_documents
+        document.path.as_posix() != "view.toml" for document in inspection.documents
     )
 
 
@@ -467,7 +504,7 @@ def test_react_inspection_requires_fixed_entry_document(tmp_path: Path) -> None:
     assert [
         item.message
         for item in inspection.diagnostics
-        if item.code == "project-input-missing"
+        if item.code == "build-input-missing"
     ] == ["marimo-studio/react requires src/index.html."]
 
 

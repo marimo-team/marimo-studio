@@ -6,37 +6,29 @@ import sys
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
-    PROVIDER_API_VERSION,
+    BuildInput,
     BuildRequest,
     BuildResult,
     InspectionRequest,
-    MountDeclaration,
-    ProjectInput,
     ProjectInspection,
     ProviderAvailability,
+    ProviderError,
     ProviderInfo,
     ProviderStarter,
     SourceDocument,
-    SourceLocation,
     StarterContext,
     StarterPlan,
-    ViewProject,
-    mount_attribute,
+    html_sites,
 )
 
 _ENTRY = PurePosixPath("index.html")
 _BUILDER = PurePosixPath("build.py")
-_TITLE_MOUNT = "external-title"
 _BUILDER_SOURCE = b"""from pathlib import Path
 import sys
 
 source = Path(sys.argv[1]).read_text(encoding="utf-8")
 output = Path(sys.argv[2])
 output.parent.mkdir(parents=True, exist_ok=True)
-source = source.replace(
-    " data-external-mount",
-    f' {sys.argv[3]}="{sys.argv[4]}" data-external-value',
-)
 output.write_text(
     source.replace("</body>", '<p data-external-build="ready">Built</p></body>'),
     encoding="utf-8",
@@ -48,7 +40,6 @@ class ReportProvider:
     info = ProviderInfo(
         title="External report",
         summary="Copies one HTML report into a browser artifact.",
-        api_version=PROVIDER_API_VERSION,
     )
     _starter = ProviderStarter(
         key="default",
@@ -57,8 +48,7 @@ class ReportProvider:
         documents=(_ENTRY, _BUILDER),
     )
 
-    def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
-        del project
+    def availability(self) -> ProviderAvailability:
         return ProviderAvailability(True, version="1.0.0")
 
     def starters(self) -> tuple[ProviderStarter, ...]:
@@ -77,7 +67,7 @@ class ReportProvider:
   <body>
     <main id="app-shell">
       <h1 data-external-provider>{context.view_name.replace("-", " ").title()}</h1>
-      <p>Notebook value: <strong data-external-mount mo-value="title"></strong></p>
+      <p>Notebook value: <strong data-external-value mo-value="title"></strong></p>
     </main>
   </body>
 </html>
@@ -99,46 +89,34 @@ class ReportProvider:
             timeout=request.command_timeout,
         )
         if completed.returncode != 0:
-            raise RuntimeError(completed.stderr or "External inspection failed")
-        manifest = PurePosixPath("view.toml")
+            raise ProviderError(completed.stderr or "External inspection failed")
+        sites, diagnostics = html_sites(_ENTRY, (project.root / _ENTRY).read_bytes())
         return ProjectInspection(
-            editor_documents=(
+            documents=(
                 SourceDocument(_ENTRY, "html", "edit"),
                 SourceDocument(_BUILDER, "python", "edit"),
             ),
-            input_scope=(
-                ProjectInput(_ENTRY, "file"),
-                ProjectInput(_BUILDER, "file"),
-                ProjectInput(manifest, "file"),
+            inputs=(
+                BuildInput(_ENTRY, "file"),
+                BuildInput(_BUILDER, "file"),
             ),
-            mounts=(
-                MountDeclaration(
-                    id=_TITLE_MOUNT,
-                    kind="value",
-                    source=SourceLocation(_ENTRY, 7, 34),
-                    allowed_targets=("title",),
-                ),
-            ),
-            diagnostics=(),
-            build_fingerprint="external-report-v1",
+            sites=sites,
+            diagnostics=diagnostics,
         )
 
     def build(self, request: BuildRequest) -> BuildResult:
-        attribute, site_id = mount_attribute(_TITLE_MOUNT)
         completed = request.runner.run(
             [
                 sys.executable,
                 _BUILDER.as_posix(),
                 str(request.project.root / _ENTRY),
                 str(request.staging_root / _ENTRY),
-                attribute,
-                site_id,
             ],
             cwd=request.project.root,
         )
         if completed.returncode != 0:
-            raise RuntimeError(completed.stderr or "External report build failed")
-        return BuildResult(_ENTRY, ())
+            raise ProviderError(completed.stderr or "External report build failed")
+        return BuildResult(_ENTRY)
 
 
 provider = ReportProvider()

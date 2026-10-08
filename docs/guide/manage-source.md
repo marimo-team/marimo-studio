@@ -16,7 +16,7 @@ keeping generated artifacts outside Source.
 
 ## Distinguish documents from build inputs
 
-A **source document** is a file Studio can show in Source. A **build input** is
+A **Source document** is a file Studio can show in Source. A **build input** is
 a file or directory whose content can affect the artifact. The sets overlap,
 but they answer different questions.
 
@@ -51,12 +51,12 @@ contract that owns the project after creation.
 
 ## Add `AGENTS.md` and `DESIGN.md`
 
-Bundled starters create `AGENTS.md`, a project-local instruction file for
+Built-in starters create `AGENTS.md`, a project-local instruction file for
 coding agents, with provider-specific guidance. Keep the project intent section
 current when an agent will maintain the view.
 
 Add `DESIGN.md` to record durable decisions such as audience, analytical job,
-visual direction, interaction priorities, and approved libraries. Bundled view
+visual direction, interaction priorities, and approved libraries. Built-in view
 providers include that file in Source when it exists.
 
 ## Resolve a concurrent save

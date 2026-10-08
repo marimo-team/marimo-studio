@@ -1,6 +1,6 @@
 # Symbolic projections
 
-Frontend mounts name notebook results. Studio resolves those names to semantic
+Projection hosts name notebook results. Studio resolves those names to semantic
 producers and validates the live dependency closure before runtime dispatch.
 
 See the [canonical ownership map](../architecture.md#ownership) for package
@@ -16,9 +16,31 @@ Three host forms share one lifecycle:
 <strong mo-value="metrics.total"></strong>
 ```
 
-Provider inspection records the source path, line, column, kind, and allowed
-targets for each declaration. Build instrumentation adds the trusted mount ID
-to the disposable snapshot, not authored source.
+Provider inspection reports a `ProjectionSite` for each declaration with its
+source path, line, column, kind, targets, and the byte offset inside its start
+tag. Core derives the trusted site ID and inserts it at that offset
+in the disposable build snapshot, not authored source.
+
+Accept lists belong to output targets. Inspection gives every literal host of
+a target the same list and rejects one on a `"*"` site, so resolution, kernel
+authorization records, the Pyodide bridge, and the Prepared compiler look up a
+target's list from its literal sites. Page sites accept images marimo's
+renderer shows.
+
+An output with an accept list renders through marimo-export's
+`values.represent()` in every runtime: the kernel output renderer, the Pyodide
+bridge, and Prepared exports through the `media` exporter. The bridge loads
+the source of that standard-library module and of Studio's
+`_projections/media_output.py` into its hidden cell, because Pyodide has
+neither package installed. `media_output()` carries a representation as marimo
+output data: a base64 data URL, wrapped in a marimo mimebundle with the display
+size of a PNG rendered at `MEDIA_SCALE`, as marimo sends its own high-density
+figures. The zero-python loader builds the same data from the `media`
+exporter's `BlobAsset` metadata, and `output_representation()` decodes it
+back into a representation. Matplotlib PDF and SVG bytes are deterministic within one matplotlib
+version. Value targets, output targets, and kernel authorization records parse
+through marimo-export's `ValueSelector`, which owns the selector grammar and
+its limits.
 
 Every provider can declare literal targets. A provider analyzer may also
 authorize a finite target set or explicit wildcard access. An analyzer that
@@ -42,20 +64,20 @@ Analyzer uncertainty never silently grants wildcard access.
 - upstream and downstream relationships
 
 Resolution produces a target, semantic producer, optional selector, and
-dependency closure. Cell mounts select a named cell. Output and value mounts
+dependency closure. Cell sites select a named cell. Output and value sites
 select a variable root plus optional attribute or item steps.
 
 ## Presentation authorization
 
-The published artifact supplies trusted source declarations. The browser
+The published artifact supplies trusted artifact sites. The browser
 supplies mounted instance ID and target. The server joins them with the current
 presentation and notebook symbols.
 
 Authorization checks:
 
 1. The artifact and presentation are current.
-2. The declaration exists and owns the projection kind.
-3. The target is allowed by the declaration.
+2. The site exists and owns the projection kind.
+3. The site's targets include the target.
 4. The target resolves to one notebook producer.
 5. The live kernel capability covers the current dependency closure.
 
@@ -63,10 +85,10 @@ Kernel capabilities use an [HMAC](https://www.rfc-editor.org/rfc/rfc2104), a
 keyed message digest, to bind notebook, session, target, producer, selector,
 and closure. Browser requests cannot widen them.
 
-## Runtime mounts
+## Runtime projections
 
 `ProjectionInventory` resolves an ordered batch of authored hosts against one
-projection revision. Each host retains declaration ID, instance ID, target,
+projection revision. Each host retains site ID, instance ID, target,
 phase, and runtime cell ID. Type-specific adapters own complete cells, rendered
 outputs, and browser values. Value descriptors carry JSON-compatible values directly or
 [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)

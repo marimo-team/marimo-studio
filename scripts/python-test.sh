@@ -119,7 +119,7 @@ fi
 
 if [[ "$profile" == "deno" ]]; then
     uv "${uv_args[@]}" python -c \
-        "from marimo_studio.view_providers._bundled import _deno; assert _deno.deno_availability().available"
+        "from marimo_studio.view_providers._builtin import _deno; assert _deno.deno_availability().available"
 fi
 
 exec uv "${uv_args[@]}" "${pytest_args[@]}" "$@"

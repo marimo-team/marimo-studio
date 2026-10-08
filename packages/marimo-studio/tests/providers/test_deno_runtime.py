@@ -2,39 +2,32 @@
 
 from __future__ import annotations
 
-import os
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import pytest
 
-from marimo_studio._artifacts.limits import FileBudget
 from marimo_studio._artifacts.paths import artifact_root
-from marimo_studio._processes.provider_runner import ProviderCommandError
 from marimo_studio._processes.supervisor import ProcessResult
 from marimo_studio._views.inspection import (
     inspect_view_project_sync,
     inspection_request,
 )
 from marimo_studio.view_providers import (
-    ProviderAvailability,
     ProviderCancellation,
     ProviderCommandResult,
     ViewProject,
 )
-from marimo_studio.view_providers._bundled import _deno
-from marimo_studio.view_providers._bundled._deno import analysis as _deno_analysis
-from marimo_studio.view_providers._bundled._deno import files as _deno_files
-from marimo_studio.view_providers._bundled._deno import project as _deno_project
-from marimo_studio.view_providers._bundled._deno import runtime as _deno_runtime
-from marimo_studio.view_providers._bundled._deno.analysis import (
-    InstrumentationEdit,
-    apply_instrumentation,
+from marimo_studio.view_providers._builtin import _deno
+from marimo_studio.view_providers._builtin._deno import analysis as _deno_analysis
+from marimo_studio.view_providers._builtin._deno import runtime as _deno_runtime
+from marimo_studio.view_providers._builtin._deno.project import (
+    copy_public_assets,
+    failure,
 )
-from marimo_studio.view_providers._bundled._deno.project import copy_public_assets
-from marimo_studio.view_providers._bundled.deno_react import provider as react_provider
-from marimo_studio.view_providers._bundled.deno_svelte import (
+from marimo_studio.view_providers._builtin.deno_react import provider as react_provider
+from marimo_studio.view_providers._builtin.deno_svelte import (
     provider as svelte_provider,
 )
 
@@ -56,144 +49,6 @@ def test_deno_analyzer_normalizes_native_windows_paths() -> None:
     assert _deno_analysis.tool_source_path(r"src\App.svelte") == PurePosixPath(
         "src/App.svelte"
     )
-
-
-def test_deno_instrumentation_preserves_ordered_offsets(
-    tmp_path: Path,
-) -> None:
-    relative = PurePosixPath("src/App.tsx")
-    source = b"alpha beta gamma"
-    edits = (
-        InstrumentationEdit(relative, 0, "<start>"),
-        InstrumentationEdit(relative, 5, "|"),
-        InstrumentationEdit(relative, 10, "<tail>"),
-    )
-    path = tmp_path.joinpath(*relative.parts)
-    path.parent.mkdir(parents=True)
-    path.write_bytes(source)
-
-    apply_instrumentation(tmp_path, edits)
-
-    assert path.read_bytes() == b"<start>alpha| beta<tail> gamma"
-
-
-def test_deno_availability_is_cached_by_binary_identity(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    binary = tmp_path / "deno"
-    binary.write_bytes(b"deno")
-    calls: list[tuple[list[str], float]] = []
-
-    class Supervisor:
-        def run(
-            self,
-            command: list[str],
-            timeout: float,
-            **_kwargs: Any,
-        ) -> ProcessResult:
-            calls.append((command, timeout))
-            return ProcessResult(0, b"deno 2.9.5\n", b"")
-
-    monkeypatch.setattr(_deno_runtime, "deno_binary", lambda: str(binary))
-    monkeypatch.setattr(_deno_runtime, "ProcessSupervisor", Supervisor)
-    _deno_runtime._cached_availability.cache_clear()
-
-    assert _deno.deno_availability().available
-    assert _deno.deno_availability().available
-    binary.write_bytes(b"deno-updated")
-    assert _deno.deno_availability().available
-    assert calls == [
-        ([str(binary.resolve()), "--version"], 15.0),
-        ([str(binary.resolve()), "--version"], 15.0),
-    ]
-    _deno_runtime._cached_availability.cache_clear()
-
-
-def test_deno_availability_reports_a_cold_start_timeout(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    binary = tmp_path / "deno"
-    binary.write_bytes(b"deno")
-
-    class Supervisor:
-        def run(self, *_args: object, **_kwargs: object) -> ProcessResult:
-            return ProcessResult(-15, b"", b"", timed_out=True)
-
-    monkeypatch.setattr(_deno_runtime, "deno_binary", lambda: str(binary))
-    monkeypatch.setattr(_deno_runtime, "ProcessSupervisor", Supervisor)
-    _deno_runtime._cached_availability.cache_clear()
-
-    availability = _deno.deno_availability()
-
-    assert not availability.available
-    assert availability.reason == "Deno version check exceeded its 15 second limit"
-    _deno_runtime._cached_availability.cache_clear()
-
-
-@pytest.mark.parametrize(
-    ("reported_version", "available"),
-    [
-        ("2.9.4", False),
-        ("2.9.5", True),
-        ("2.10.0", True),
-        ("3.0.0", True),
-        ("invalid", False),
-    ],
-)
-def test_deno_availability_accepts_versions_from_2_9_5(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    reported_version: str,
-    available: bool,
-) -> None:
-    binary = tmp_path / "deno"
-    binary.write_bytes(b"deno")
-
-    class Supervisor:
-        def run(self, *_args: object, **_kwargs: object) -> ProcessResult:
-            return ProcessResult(0, f"deno {reported_version}\n".encode(), b"")
-
-    monkeypatch.setattr(_deno_runtime, "deno_binary", lambda: str(binary))
-    monkeypatch.setattr(_deno_runtime, "ProcessSupervisor", Supervisor)
-
-    availability = _deno.deno_availability()
-
-    assert availability.available is available
-    assert availability.version == reported_version
-    if not available:
-        assert (
-            availability.reason == f"requires Deno >= 2.9.5, found {reported_version}"
-        )
-
-
-@pytest.mark.parametrize(
-    ("provider", "provider_id"),
-    [
-        (react_provider, "marimo-studio/react"),
-        (svelte_provider, "marimo-studio/svelte"),
-    ],
-)
-def test_provider_fingerprint_tracks_deno_version(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    provider: Any,
-    provider_id: str,
-) -> None:
-    _, project = provider_project(tmp_path, provider, provider_id)
-    fingerprints = []
-    for reported_version in ("2.9.5", "2.10.0"):
-        monkeypatch.setattr(
-            _deno,
-            "deno_availability",
-            lambda v=reported_version: ProviderAvailability(True, version=v),
-        )
-        inspection = inspect_view_project_sync(project)
-        assert not [item for item in inspection.diagnostics if item.severity == "error"]
-        fingerprints.append(inspection.build_fingerprint)
-
-    assert fingerprints[0] != fingerprints[1]
 
 
 def test_provider_inspection_selects_cache_without_mutating_the_project(
@@ -260,7 +115,7 @@ def test_deno_execution_forwards_command_environment_and_cache(
     )
     calls: list[tuple[object, float, Path, dict[str, str]]] = []
     cache_root = tmp_path / "live" / ".artifacts" / ".cache"
-    cache_root.parent.parent.mkdir()
+    cache_root.mkdir(parents=True)
 
     class Runner:
         def run(
@@ -370,126 +225,8 @@ def test_public_assets_reject_case_equivalent_generated_paths(tmp_path: Path) ->
         copy_public_assets(work, output)
 
 
-def test_deno_inventory_stops_at_the_project_entry_limit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = tmp_path / "view"
-    source = root / "src"
-    source.mkdir(parents=True)
-    for index in range(3):
-        (source / f"{index}.ts").write_text(str(index), encoding="utf-8")
-    project = ViewProject("view", root, root / "view.toml", "provider", {})
-    monkeypatch.setattr(
-        _deno_files,
-        "PROJECT_INPUT_BUDGET",
-        FileBudget(max_files=2, max_file_bytes=1024, max_total_bytes=4096),
-    )
-
-    with pytest.raises(ValueError, match="more than 2 entries"):
-        _deno.project_inventory(project, ("src",), {".ts": "typescript"})
-
-
-def test_deno_inventory_applies_one_entry_limit_across_roots(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = tmp_path / "view"
-    for name in ("first", "second"):
-        (root / name / "one").mkdir(parents=True)
-        (root / name / "two").mkdir()
-    project = ViewProject("view", root, root / "view.toml", "provider", {})
-    monkeypatch.setattr(
-        _deno_files,
-        "PROJECT_INPUT_BUDGET",
-        FileBudget(max_files=4, max_file_bytes=1024, max_total_bytes=4096),
-    )
-
-    with pytest.raises(ValueError, match="more than 4 entries"):
-        _deno.project_inventory(project, ("first", "second"), {})
-
-
-def test_deno_source_copy_stops_before_a_cancelled_build(tmp_path: Path) -> None:
-    root = tmp_path / "view"
-    root.mkdir()
-    source = root / "src.ts"
-    source.write_text("export {};", encoding="utf-8")
-    project = ViewProject("view", root, root / "view.toml", "provider", {})
-    cancellation = ProviderCancellation()
-    cancellation.cancel()
-    destination = tmp_path / "work"
-
-    with pytest.raises(ProviderCommandError, match="cancelled"):
-        _deno.copy_project_inputs(
-            project,
-            (PurePosixPath("src.ts"),),
-            destination,
-            cancellation,
-        )
-
-    assert not destination.exists()
-
-
-def test_public_asset_merge_stops_at_the_combined_output_limit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    work = tmp_path / "work"
-    output = tmp_path / "output"
-    (work / "public").mkdir(parents=True)
-    output.mkdir()
-    (output / "index.html").write_text("generated", encoding="utf-8")
-    for index in range(2):
-        (work / "public" / f"asset-{index}.txt").write_text(
-            str(index),
-            encoding="utf-8",
-        )
-    monkeypatch.setattr(
-        _deno_project,
-        "ARTIFACT_OUTPUT_BUDGET",
-        FileBudget(max_files=2, max_file_bytes=1024, max_total_bytes=4096),
-    )
-    visited = 0
-    scan = os.scandir
-
-    class CountingEntries:
-        def __init__(self, entries: Any) -> None:
-            self._entries = entries
-
-        def __enter__(self) -> CountingEntries:
-            self._entries.__enter__()
-            return self
-
-        def __exit__(self, *args: object) -> object:
-            return self._entries.__exit__(*args)
-
-        def __iter__(self) -> CountingEntries:
-            return self
-
-        def __next__(self) -> Any:
-            nonlocal visited
-            entry = next(self._entries)
-            visited += 1
-            return entry
-
-    def count_entries(path: Any) -> Any:
-        entries = scan(path)
-        return (
-            CountingEntries(entries)
-            if Path(path).absolute() == (work / "public").absolute()
-            else entries
-        )
-
-    monkeypatch.setattr(os, "scandir", count_entries)
-
-    with pytest.raises(ValueError, match="more than 2 entries"):
-        copy_public_assets(work, output)
-
-    assert visited == 2
-
-
 def test_bundle_download_failure_points_to_the_network() -> None:
-    diagnostic = _deno_project.failure(
+    diagnostic = failure(
         "React provider",
         "react-build-failed",
         "bundle source",

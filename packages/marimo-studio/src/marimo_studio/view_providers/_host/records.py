@@ -12,7 +12,6 @@ class ProviderProvenance:
     key: str
     distribution: str
     version: str
-    api_version: int
     build_fingerprint: str
 
     def to_dict(self) -> dict[str, object]:
@@ -20,6 +19,5 @@ class ProviderProvenance:
             "key": self.key,
             "distribution": self.distribution,
             "version": self.version,
-            "api_version": self.api_version,
             "build_fingerprint": self.build_fingerprint,
         }

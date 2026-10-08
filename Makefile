@@ -10,7 +10,7 @@ PY_PACKAGE := packages/marimo-studio
 PYTHON_PATHS := $(PY_PACKAGE) scripts
 FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tools/example-showcase tsconfig.json tsconfig.node.json vite.config.ts
 TYPECHECK_PATHS := .github/actions/pr-validation apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
-DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_obsnotebook $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
+DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/deno_obsnotebook $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/deno_svelte
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
 # Portless binds its default proxy port 443 through sudo. Without a terminal,
 # reuse a proxy already answering there, or start the unprivileged proxy.

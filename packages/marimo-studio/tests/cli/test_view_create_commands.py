@@ -17,7 +17,7 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import ViewExistsError
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_REQUIREMENTS,
+    BUILTIN_PROVIDER_REQUIREMENTS,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
@@ -265,7 +265,7 @@ def test_view_create_reports_exact_requirements_for_every_provider_distribution(
                 candidate("svelte", svelte, distribution="marimo-studio"),
                 candidate("report", external, distribution="example-suite"),
             ),
-            BUNDLED_PROVIDER_REQUIREMENTS,
+            BUILTIN_PROVIDER_REQUIREMENTS,
         ),
     )
     runner = CliRunner()

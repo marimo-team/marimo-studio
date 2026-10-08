@@ -8,13 +8,14 @@ from dataclasses import dataclass
 from marimo_studio._notebook.cell_refs import cell_ref_candidates, safe_cell_ref_matches
 from marimo_studio._notebook.ports import NotebookInspector
 from marimo_studio._notebook.records import CellSpec
-from marimo_studio._projections.ports import ViewMountInspector
+from marimo_studio._projections.ports import ViewSiteInspector
 from marimo_studio._projections.resolution import (
+    MAX_UNIQUE_OUTPUT_TARGETS,
     ProjectionRequest,
     ProjectionResolutionError,
     ResolvedProjection,
     resolve_projection,
-    validate_mount_declaration,
+    validate_artifact_site,
 )
 from marimo_studio._projections.resolved import (
     ProjectionDiagnostic,
@@ -25,14 +26,13 @@ from marimo_studio._projections.symbol_graph import (
     NotebookSymbolGraph,
     build_notebook_symbol_graph,
 )
-from marimo_studio._projections.values import MAX_OUTPUT_SELECTORS
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ConfigurationError, ViewNotFoundError, ViewProjectError
 from marimo_studio.view_providers import (
-    MountDeclaration,
     ProjectionKind,
     ViewProject,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class _AliasFailure:
 
 def _diagnostic(
     view: ViewProject,
-    site: MountDeclaration,
+    site: ArtifactSite,
     *,
     code: str,
     message: str,
@@ -88,7 +88,7 @@ def _resolve_view(
     view: ViewProject,
     graph: NotebookSymbolGraph,
     alias_failures: dict[str, _AliasFailure],
-    sites: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
 ) -> ResolvedView:
     site_ids = [site.id for site in sites]
     if len(site_ids) != len(set(site_ids)):
@@ -99,16 +99,14 @@ def _resolve_view(
     bounded_output_targets = {
         target
         for site in sites
-        if site.kind == "output" and site.allowed_targets is not None
-        for target in site.allowed_targets
+        if site.kind == "output" and site.targets is not None
+        for target in site.targets
     }
-    if len(bounded_output_targets) > MAX_OUTPUT_SELECTORS:
-        site = next(
-            site for site in sites if site.kind == "output" and site.allowed_targets
-        )
+    if len(bounded_output_targets) > MAX_UNIQUE_OUTPUT_TARGETS:
+        site = next(site for site in sites if site.kind == "output" and site.targets)
         raise ViewProjectError(
             f"{site.source.path}: a view may contain at most "
-            f"{MAX_OUTPUT_SELECTORS} output selectors",
+            f"{MAX_UNIQUE_OUTPUT_TARGETS} output selectors",
             source=view.root / site.source.path,
             line=site.source.line,
             column=site.source.column,
@@ -126,7 +124,7 @@ def _resolve_view(
     )
     for site in ordered_sites:
         try:
-            validate_mount_declaration(site)
+            validate_artifact_site(site)
         except ProjectionResolutionError as error:
             diagnostics.append(
                 _diagnostic(
@@ -140,9 +138,9 @@ def _resolve_view(
                 )
             )
             continue
-        if site.allowed_targets is None:
+        if site.targets is None:
             continue
-        for index, target in enumerate(site.allowed_targets):
+        for index, target in enumerate(site.targets):
             try:
                 projections.append(
                     resolve_projection(
@@ -176,7 +174,7 @@ def _resolve_view(
                 )
     return ResolvedView(
         view=view,
-        mounts=sites,
+        sites=sites,
         projections=tuple(projections),
         diagnostics=tuple(diagnostics),
     )
@@ -242,11 +240,11 @@ def resolve_studio(
     studio: StudioWorkspace,
     *,
     inspect_notebook: NotebookInspector,
-    inspect_mounts: ViewMountInspector | None = None,
+    inspect_sites: ViewSiteInspector | None = None,
     include_code: bool = False,
     notebook_source: str | None = None,
     view_name: str | None = None,
-    published_mounts: Mapping[str, tuple[MountDeclaration, ...]] | None = None,
+    published_sites: Mapping[str, tuple[ArtifactSite, ...]] | None = None,
 ) -> ResolvedStudio:
     """Resolve provider projection sites against one notebook graph.
 
@@ -270,19 +268,19 @@ def resolve_studio(
     selected_views = (
         {view_name: studio.views[view_name]} if view_name is not None else studio.views
     )
-    if published_mounts is None:
-        if inspect_mounts is None:
-            raise RuntimeError("View mount inspection is required")
-        site_catalogs: Mapping[str, tuple[MountDeclaration, ...]] = {
-            name: inspect_mounts(view) for name, view in selected_views.items()
+    if published_sites is None:
+        if inspect_sites is None:
+            raise RuntimeError("View site inspection is required")
+        site_catalogs: Mapping[str, tuple[ArtifactSite, ...]] = {
+            name: inspect_sites(view) for name, view in selected_views.items()
         }
     else:
-        missing = set(selected_views).difference(published_mounts)
+        missing = set(selected_views).difference(published_sites)
         if missing:
             raise ConfigurationError(
                 f"Projection sites are missing for view {sorted(missing)[0]!r}"
             )
-        site_catalogs = published_mounts
+        site_catalogs = published_sites
     resolved_views = {
         name: _resolve_view(
             view,

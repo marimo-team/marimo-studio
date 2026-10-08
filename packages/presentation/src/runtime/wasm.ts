@@ -45,7 +45,7 @@ const configureProjections = async (
           args: {
             revision: config.revision,
             generation,
-            mounts: config.mounts,
+            sites: config.sites,
             variables,
           },
         }),

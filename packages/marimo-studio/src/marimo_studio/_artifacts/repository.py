@@ -10,6 +10,7 @@ from contextlib import suppress
 from pathlib import Path, PurePosixPath
 
 from marimo_studio._artifacts.codec import (
+    ArtifactFormatError,
     decode_artifact_manifest,
     decode_profile_state,
     encode_json,
@@ -105,6 +106,18 @@ def read_profile_state(
     )
 
 
+def _current_profile_state(
+    project: ViewProject,
+    profile: BuildProfile,
+) -> ArtifactProfileState | None:
+    # Readers treat state from another Studio format as unbuilt. The next
+    # build discards it and publishes in the current format.
+    try:
+        return read_profile_state(project, profile)
+    except ArtifactFormatError:
+        return None
+
+
 def write_profile_state(project: ViewProject, state: ArtifactProfileState) -> None:
     ensure_secure_directory(
         project.root, artifact_root(project), "Artifact control root"
@@ -183,7 +196,7 @@ def ingest_publication_files(
     files_root: Path,
     destination: Path,
 ) -> tuple[ArtifactFile, ...]:
-    """Copy provider output into a new revision files directory.
+    """Copy provider output into a new Studio-owned revision directory.
 
     The provider can still reach ``files_root``, so publication reads, hashes,
     and serves only the Studio-owned copy at ``destination``.
@@ -216,7 +229,7 @@ def artifact_from_publication(
         profile=profile,
         document=manifest.document,
         files=manifest.files,
-        mounts=manifest.mounts,
+        sites=manifest.sites,
         project_revision=publication.project_revision,
         artifact_revision=manifest.artifact_revision,
         provider=publication.provider,
@@ -313,10 +326,13 @@ def read_published_artifact(
     profile: BuildProfile,
 ) -> ViewArtifact | None:
     """Read a profile publication from its captured provider descriptor."""
-    state = read_profile_state(project, profile)
+    state = _current_profile_state(project, profile)
     if state is None or state.published is None:
         return None
-    revision = read_artifact_revision(project, state.published.artifact_revision)
+    try:
+        revision = read_artifact_revision(project, state.published.artifact_revision)
+    except ArtifactFormatError:
+        return None
     if revision is None:
         raise ConfigurationError(
             f"Published artifact is missing for view {project.name!r}: "
@@ -437,7 +453,7 @@ def _read_build_state(
     with artifact_lock(project, create=False) as acquired:
         if not acquired or _project_incarnation(project) != incarnation:
             return unbuilt
-        state = read_profile_state(project, profile)
+        state = _current_profile_state(project, profile)
         if state is None:
             return unbuilt
         if state.build.phase != "building":
@@ -452,7 +468,7 @@ def _read_build_state(
         with artifact_lock(project, create=False) as published:
             if not published or _project_incarnation(project) != incarnation:
                 return unbuilt
-            latest = read_profile_state(project, profile)
+            latest = _current_profile_state(project, profile)
             if latest is None:
                 return unbuilt
             return (
@@ -485,7 +501,7 @@ def read_artifact_state(
     with artifact_lock(project, create=False) as acquired:
         if not acquired or _project_incarnation(project) != incarnation:
             return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
-        state = read_profile_state(project, profile)
+        state = _current_profile_state(project, profile)
         if state is None:
             return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
         artifact = None
@@ -495,6 +511,8 @@ def read_artifact_state(
                     project,
                     state.published.artifact_revision,
                 )
+            except ArtifactFormatError:
+                return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
             except (ConfigurationError, FileNotFoundError):
                 if _project_incarnation(project) != incarnation:
                     return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))

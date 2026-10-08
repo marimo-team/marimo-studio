@@ -22,7 +22,6 @@ from marimo_studio._compat.runtime_probe import probe_runtime_in_worker
 from .values_test_support import (
     _encoded_json,
     _native_output_context,
-    _selector_specs,
 )
 
 
@@ -167,9 +166,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         dict[str, Any],
                         functions["read_values"](
                             {
-                                **probe_value_arguments(
-                                    _selector_specs(owned), f"probe-{owned}"
-                                ),
+                                **probe_value_arguments((owned,), f"probe-{owned}"),
                             }
                         ),
                     )
@@ -177,9 +174,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         dict[str, Any],
                         functions["read_values"](
                             {
-                                **probe_value_arguments(
-                                    _selector_specs(foreign), f"probe-{owned}"
-                                ),
+                                **probe_value_arguments((foreign,), f"probe-{owned}"),
                             }
                         ),
                     )
@@ -188,9 +183,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         functions["render_values"](
                             {
                                 **probe_output_arguments(
-                                    _selector_specs(owned),
-                                    _selector_specs(owned),
-                                    f"probe-{owned}",
+                                    {owned: ()}, {owned: ()}, f"probe-{owned}"
                                 ),
                                 "max_output_bytes": 10_000,
                             }
@@ -201,9 +194,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         functions["render_values"](
                             {
                                 **probe_output_arguments(
-                                    _selector_specs(foreign),
-                                    _selector_specs(foreign),
-                                    f"probe-{owned}",
+                                    {foreign: ()}, {foreign: ()}, f"probe-{owned}"
                                 ),
                                 "max_output_bytes": 10_000,
                             }
@@ -321,7 +312,7 @@ if __name__ == "__main__":
             notebook,
             cell_ids=(),
             value_selector_groups=(),
-            output_selector_groups=(("df",),),
+            output_groups=({"df": ()},),
             timeout=10,
         )
     )
@@ -359,7 +350,7 @@ if __name__ == "__main__":
             notebook,
             cell_ids=(),
             value_selector_groups=(),
-            output_selector_groups=(("first", "second"),),
+            output_groups=({"first": (), "second": ()},),
             timeout=10,
         )
     )

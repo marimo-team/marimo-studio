@@ -9,7 +9,8 @@ from marimo_studio._delivery.portability import (
     verify_projection_portability,
 )
 from marimo_studio._delivery.preflight import preflight_static_bundle
-from marimo_studio.view_providers import MountDeclaration, SourceLocation
+from marimo_studio.view_providers import SourceLocation
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 
 def _preflight(
@@ -169,13 +170,13 @@ def test_static_preflight_rejects_nonrelocatable_module_paths(
 
 
 def test_projection_portability_keeps_runtime_choice_explicit() -> None:
-    finite = MountDeclaration(
+    finite = ArtifactSite(
         "finite",
         "value",
         SourceLocation(PurePosixPath("src/App.tsx"), 4, 5),
         ("metrics",),
     )
-    dynamic = MountDeclaration(
+    dynamic = ArtifactSite(
         "dynamic",
         "cell",
         SourceLocation(PurePosixPath("src/App.tsx"), 8, 5),

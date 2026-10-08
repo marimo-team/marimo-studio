@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path, PurePosixPath
 
-from marimo_studio.view_providers._bundled.deno_react.build import _check_diagnostic
+from marimo_studio.view_providers._builtin.deno_react.build import _check_diagnostic
 
 
 def test_react_type_error_identifies_authored_source(tmp_path: Path) -> None:

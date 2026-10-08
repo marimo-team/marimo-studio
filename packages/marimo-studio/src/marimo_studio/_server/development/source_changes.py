@@ -1,4 +1,4 @@
-"""Track authored source changes through one provider input scope."""
+"""Track authored source changes through a provider's build inputs."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from marimo_studio._artifacts.inputs import project_revision
-from marimo_studio._artifacts.limits import PROJECT_INPUT_BUDGET
+from marimo_studio._artifacts.limits import BUILD_INPUT_BUDGET
 from marimo_studio._artifacts.paths import artifact_root, digest_secure_file
 from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.tree import bounded_tree_entries
@@ -281,7 +281,7 @@ class SourceChangeProducer:
             self._project = project
             provider = registry.get(project.provider)
             inspection = provider.inspect(inspection_request(project))
-            input_files, roots = _validated_input_scope(project, inspection)
+            input_files, roots = _validated_inputs(project, inspection)
             document_files = _validated_document_files(project, inspection)
             scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
             excluded_roots = (artifact_root(project),)
@@ -298,7 +298,7 @@ class SourceChangeProducer:
             input_id = project_revision(
                 project,
                 inspection,
-                provider.provenance(inspection),
+                provider.provenance(),
                 input_paths=inputs,
             )
         except Exception as error:
@@ -372,7 +372,7 @@ def _path_stamp(
     if (
         not should_hash
         or not stat.S_ISREG(state.st_mode)
-        or state.st_size > PROJECT_INPUT_BUDGET.max_file_bytes
+        or state.st_size > BUILD_INPUT_BUDGET.max_file_bytes
     ):
         return metadata
     try:
@@ -380,7 +380,7 @@ def _path_stamp(
             path.parent,
             path,
             "Watched source file",
-            max_bytes=PROJECT_INPUT_BUDGET.max_file_bytes,
+            max_bytes=BUILD_INPUT_BUDGET.max_file_bytes,
         )
     except ConfigurationError:
         return metadata
@@ -480,18 +480,18 @@ def _selected_manifest_transition(
     return before != after
 
 
-def _validated_input_scope(
+def _validated_inputs(
     project: ViewProject,
     inspection: ProjectInspection,
 ) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
     root = project.root.resolve()
     files: list[Path] = []
     roots: list[Path] = []
-    for item in inspection.input_scope:
+    for item in inspection.inputs:
         normalized = _scope_path(item.path, item.kind)
         if normalized.parts and normalized.parts[0].casefold() == ".artifacts":
-            raise ConfigurationError("Provider input scope cannot include .artifacts")
-        candidate = _validated_project_path(root, normalized, "Provider input scope")
+            raise ConfigurationError("Provider build inputs cannot include .artifacts")
+        candidate = _validated_project_path(root, normalized, "Provider build input")
         selected = roots if item.kind == "directory" else files
         if candidate not in selected:
             selected.append(candidate)
@@ -508,9 +508,9 @@ def _validated_document_files(
             _validated_project_path(
                 root,
                 _scope_path(document.path, "file"),
-                "Provider editor document",
+                "Provider Source document",
             )
-            for document in inspection.editor_documents
+            for document in inspection.documents
         )
     )
 
@@ -554,7 +554,7 @@ def _input_paths_from_tree(
         None,
     )
     if symlink is not None:
-        raise ConfigurationError(f"View project inputs contain a symlink: {symlink}")
+        raise ConfigurationError(f"Build inputs contain a symlink: {symlink}")
     project_root = project.root.absolute()
     selected_files = {path.absolute() for path in files}
     selected_roots = tuple(path.absolute() for path in roots)
@@ -584,7 +584,7 @@ def _scope_path(path: PurePosixPath, kind: str) -> PurePosixPath:
         or any(part in {"", ".", ".."} for part in path.parts)
     ):
         raise ConfigurationError(
-            f"Provider input scope must use normalized project-relative paths: {raw}"
+            f"Provider build inputs must use normalized project-relative paths: {raw}"
         )
     return path
 
@@ -608,10 +608,10 @@ def _tree_stamps(
         if absolute_root in excluded or absolute_root in seen:
             continue
         seen.add(absolute_root)
-        if len(seen) > PROJECT_INPUT_BUDGET.max_files:
+        if len(seen) > BUILD_INPUT_BUDGET.max_files:
             raise ConfigurationError(
                 "Watched source contains more than "
-                f"{PROJECT_INPUT_BUDGET.max_files} entries. "
+                f"{BUILD_INPUT_BUDGET.max_files} entries. "
                 "Remove files or split the project."
             )
         if root.is_symlink():
@@ -626,7 +626,7 @@ def _tree_stamps(
         result[("root", root)] = "directory"
         entries = bounded_tree_entries(
             root,
-            max_entries=PROJECT_INPUT_BUDGET.max_files,
+            max_entries=BUILD_INPUT_BUDGET.max_files,
             label="Watched source",
             excluded_paths=excluded_roots,
             seen=seen,
@@ -655,7 +655,7 @@ def _changed_files(
     changed: set[_WatchKey],
 ) -> list[dict[str, object]]:
     files: list[dict[str, object]] = []
-    documents = {document.path for document in inspection.editor_documents}
+    documents = {document.path for document in inspection.documents}
     for kind, path in sorted(changed, key=lambda item: str(item[1])):
         if kind != "view":
             continue
@@ -681,7 +681,7 @@ def _changed_files(
                 project.root,
                 path,
                 "Changed source document",
-                max_bytes=PROJECT_INPUT_BUDGET.max_file_bytes,
+                max_bytes=BUILD_INPUT_BUDGET.max_file_bytes,
             )
         except (ConfigurationError, OSError):
             return []

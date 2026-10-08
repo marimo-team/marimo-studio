@@ -13,7 +13,7 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import BuildResult, ProjectDiagnostic
 from marimo_studio.view_providers._host.identity import starter_id
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_REQUIREMENTS,
+    BUILTIN_PROVIDER_REQUIREMENTS,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
@@ -145,7 +145,7 @@ def test_repeated_setup_and_vanilla_preserve_the_react_requirement(
             candidate("react", react, distribution="marimo-studio"),
             candidate("vanilla", vanilla, distribution="marimo-studio"),
         ),
-        BUNDLED_PROVIDER_REQUIREMENTS,
+        BUILTIN_PROVIDER_REQUIREMENTS,
     )
     install_registry(monkeypatch, registry)
 
@@ -169,7 +169,7 @@ def _declare_studio(
             candidate("react", react, distribution="marimo-studio"),
             candidate("vanilla", vanilla, distribution="marimo-studio"),
         ),
-        BUNDLED_PROVIDER_REQUIREMENTS,
+        BUILTIN_PROVIDER_REQUIREMENTS,
     )
     install_registry(monkeypatch, registry)
     notebook_path.write_text(

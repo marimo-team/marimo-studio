@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from marimo_studio._artifacts.inputs import project_input_state, project_source_snapshot
+from marimo_studio._artifacts.inputs import build_input_state, project_source_snapshot
 from marimo_studio._artifacts.repository import read_artifact_state
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._projections.resolved import ProjectionDiagnostic
@@ -30,10 +30,11 @@ from marimo_studio.errors import (
     WorkspaceGenerationConflictError,
 )
 from marimo_studio.view_providers import (
+    BuildInput,
     ProjectDiagnostic,
-    ProjectInput,
     ProjectInspection,
 )
+from marimo_studio.view_providers._artifact_sites import inspection_sites
 
 
 def inspect_view_manifest(
@@ -122,16 +123,25 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
             project_source_snapshot,
             project,
             inspection,
-            provider_registry().get(project.provider).provenance(inspection)
+            provider_registry().get(project.provider).provenance()
             if not any(item.severity == "error" for item in inspection.diagnostics)
             else None,
         )
-        # Reinspect within the captured input state so source-derived mounts and
+        # Reinspect within the captured input state so source-derived sites and
         # document discovery describe the same files as the returned revisions.
         confirmed = await inspect_view_project(project)
         if inspection != confirmed:
-            raise ConfigurationError(
-                "View source changed during inspection. Inspect again."
+            if not any(
+                item.severity == "error" for item in confirmed.diagnostics
+            ) or any(item.severity == "error" for item in inspection.diagnostics):
+                raise ConfigurationError(
+                    "View source changed during inspection. Inspect again."
+                )
+            # Only the confirming pass failed, for example when a provider
+            # command exceeded its budget. Report that failure itself.
+            inspection = confirmed
+            source = await asyncio.to_thread(
+                project_source_snapshot, project, inspection, None
             )
         files_complete = not any(
             item.severity == "error" for item in inspection.diagnostics
@@ -139,9 +149,9 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
     except (MarimoStudioError, OSError, UnicodeError, ValueError) as error:
         raise_process_cleanup(error)
         inspection = ProjectInspection(
-            editor_documents=(),
-            input_scope=(ProjectInput(VIEW_MANIFEST_DOCUMENT.path, "file"),),
-            mounts=(),
+            documents=(),
+            inputs=(BuildInput(VIEW_MANIFEST_DOCUMENT.path, "file"),),
+            sites=(),
             diagnostics=(
                 ProjectDiagnostic(
                     code="source-inspection-failed",
@@ -150,7 +160,6 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
                     hint="Repair the view source or view.toml, then inspect again.",
                 ),
             ),
-            build_fingerprint="",
         )
         source = await asyncio.to_thread(
             project_source_snapshot, project, inspection, None
@@ -162,7 +171,7 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
             resolve_studio,
             studio,
             view_name=name,
-            published_mounts={name: inspection.mounts},
+            published_sites={name: inspection_sites(inspection)},
         )
         projection_diagnostics = resolved.view(name).diagnostics
     diagnostics = tuple(_inspection_diagnostic(item) for item in inspection.diagnostics)
@@ -173,7 +182,7 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
     if generation != current_generation:
         raise ViewGenerationConflictError(name, current_generation)
     if source.state != await asyncio.to_thread(
-        project_input_state, project, source.inspection, allow_missing_manifest=True
+        build_input_state, project, source.inspection, allow_missing_manifest=True
     ):
         raise ConfigurationError(
             "View source changed during inspection. Inspect again."
@@ -203,7 +212,7 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
     return ViewInspection(
         view=project.name,
         provider=project.provider,
-        documents=(VIEW_MANIFEST_DOCUMENT, *inspection.editor_documents),
+        documents=(VIEW_MANIFEST_DOCUMENT, *inspection.documents),
         diagnostics=diagnostics,
         freshness=freshness,
         build=(

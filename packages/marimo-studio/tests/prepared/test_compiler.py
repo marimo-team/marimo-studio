@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 from marimo_export import StateSpace
@@ -26,7 +27,7 @@ def test_compiler_uses_native_values_and_deduplicates_targets(
     compiled = compile_export_view(
         snapshot.resolved,
         snapshot.view_name,
-        (*snapshot.mounts, replace(snapshot.mounts[1], id="site-repeat")),
+        (*snapshot.sites, replace(snapshot.sites[1], id="site-repeat")),
     )
 
     assert compiled.bindings.values == {"doubled": "value:doubled"}
@@ -37,6 +38,29 @@ def test_compiler_uses_native_values_and_deduplicates_targets(
         "cell:cell-2": {"source": {"kind": "cell", "by": "id", "value": cell_id}},
         "output:doubled": {"source": {"kind": "output", "selector": "doubled"}},
         "value:doubled": {"source": {"kind": "native", "selector": "doubled"}},
+    }
+
+
+def test_compiler_exports_accepting_outputs_as_media(notebook_path: Path) -> None:
+    snapshot = _snapshot(notebook_path)
+    sites = tuple(
+        replace(site, accept=("image/svg+xml", "image/png"))
+        if site.kind == "output"
+        else site
+        for site in snapshot.sites
+    )
+
+    compiled = compile_export_view(snapshot.resolved, snapshot.view_name, sites)
+
+    outputs = cast(dict[str, object], compiled.spec.to_value()["outputs"])
+    assert compiled.bindings.outputs == {"doubled": "output:doubled"}
+    assert outputs["output:doubled"] == {
+        "source": {"kind": "export", "selector": "doubled"},
+        "exporter": {
+            "name": "media",
+            "options": {"accept": ["image/svg+xml", "image/png"], "scale": 2.0},
+            "dependencies": [],
+        },
     }
 
 
@@ -52,7 +76,7 @@ def test_compiler_combines_a_public_state_space_with_inferred_outputs(
     compiled = compile_export_view(
         snapshot.resolved,
         snapshot.view_name,
-        snapshot.mounts,
+        snapshot.sites,
         state_space=state_space,
     )
 
@@ -65,7 +89,7 @@ def test_compiler_combines_a_public_state_space_with_inferred_outputs(
 
 def test_compiler_rejects_a_dynamic_mount(notebook_path: Path) -> None:
     snapshot = _snapshot(notebook_path)
-    dynamic = replace(snapshot.mounts[0], allowed_targets=None)
+    dynamic = replace(snapshot.sites[0], targets=None)
 
     with pytest.raises(
         PublicationError,
@@ -74,5 +98,5 @@ def test_compiler_rejects_a_dynamic_mount(notebook_path: Path) -> None:
         compile_export_view(
             snapshot.resolved,
             snapshot.view_name,
-            (dynamic, *snapshot.mounts[1:]),
+            (dynamic, *snapshot.sites[1:]),
         )

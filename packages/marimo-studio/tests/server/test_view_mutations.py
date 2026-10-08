@@ -234,8 +234,7 @@ def test_run_mode_serves_the_notebook_when_its_views_are_missing(
     warnings = [
         record.levelname
         for record in caplog.records
-        if record.name.startswith("marimo_studio")
-        and str(notebook_path) in record.getMessage()
+        if record.name == "marimo.studio" and str(notebook_path) in record.getMessage()
     ]
     assert warnings == ["WARNING"]
 
@@ -665,7 +664,7 @@ def test_source_put_rejects_a_same_content_recreated_view(
     ) == replacement_source.text
 
 
-def test_project_endpoint_preserves_manifest_diagnostics_outside_editor_documents(
+def test_project_endpoint_preserves_manifest_diagnostics_outside_source_documents(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -4,6 +4,7 @@ members = ["apps/e2e/fixtures-provider/provider", "packages/marimo-studio"]
 [dependency-groups]
 test = [
   "httpx2>=2.9",
+  "matplotlib>=3.10",
   "pandas>=2.2.2",
   "pandas>=2.2.3; python_version >= '3.13'",
   "pandas>=2.3.3; python_version >= '3.14'",

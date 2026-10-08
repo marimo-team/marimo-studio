@@ -80,7 +80,8 @@ const resolvedOutput = (
       id: request.siteId,
       kind: "output",
       source: { path: "src/App.tsx", line: 1, column: 1 },
-      allowedTargets: [target],
+      targets: [target],
+      accept: [],
     },
     producer,
     variable,
@@ -494,12 +495,13 @@ test("retargets a preserved output portal through an authored shell morph", asyn
     ...runtimeConfig(),
     projectionRevision: "f".repeat(64),
     projectionTargets: { cells: {}, variables: {} },
-    mounts: [
+    sites: [
       {
         id: siteId,
         kind: "output",
         source: { path: "src/index.html", line: 1, column: 1 },
-        allowedTargets: null,
+        targets: null,
+        accept: [],
       },
     ],
     runtimeBindings: { cellRefs: {} },

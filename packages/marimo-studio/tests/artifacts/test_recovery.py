@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -94,11 +95,24 @@ def test_interrupted_build_becomes_stale_and_cleans_staging(tmp_path: Path) -> N
     assert tuple((artifact_root(project) / ".staging").iterdir()) == ()
 
 
-def test_build_repairs_each_replaceable_generated_state(tmp_path: Path) -> None:
+def _studio_records(caplog: pytest.LogCaptureFixture, level: int) -> list[str]:
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "marimo.studio" and record.levelno == level
+    ]
+
+
+def test_build_repairs_each_replaceable_generated_state(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="marimo.studio")
     project = _project(tmp_path)
     publish_artifact_lease(project, "development").close()
 
     for damage in ("receipt", "missing revision", "manifest"):
+        caplog.clear()
         published = read_artifact_state(project, "development").artifact
         assert published is not None
         revision = published.root.parent
@@ -114,13 +128,59 @@ def test_build_repairs_each_replaceable_generated_state(tmp_path: Path) -> None:
         repaired = read_artifact_state(project, "development")
         assert repaired.build.phase == "published", damage
         assert repaired.artifact is not None, damage
-        if damage == "receipt":
-            assert [item.code for item in repaired.build.diagnostics] == [
-                "artifact-state-repaired"
-            ]
+        assert repaired.build.diagnostics == (), damage
+        warnings = _studio_records(caplog, logging.WARNING)
+        assert len(warnings) == 1, damage
+        assert str(artifact_root(project)) in warnings[0], damage
 
 
-def test_provider_api_change_preserves_last_good_until_the_next_build(
+def _project_built_by_studio_0_2(tmp_path: Path) -> ViewProject:
+    project = _project(tmp_path)
+    publish_artifact_lease(project, "development").close()
+    published = read_artifact_state(project, "development").artifact
+    assert published is not None
+    # Studio 0.2 wrote schema 1 records: the receipt carried a provider API
+    # version, and the manifest stored projection sites as "mounts".
+    receipt = _read_json(_profile_path(project))
+    receipt["schema"] = 1
+    receipt["published"]["provider"]["api_version"] = 1
+    _write_json(_profile_path(project), receipt)
+    manifest = published.root.parent / "artifact.json"
+    older = _read_json(manifest)
+    older["schema"] = 1
+    older["mounts"] = older.pop("sites")
+    _write_json(manifest, older)
+    return project
+
+
+def test_readers_treat_state_from_studio_0_2_as_unbuilt(tmp_path: Path) -> None:
+    project = _project_built_by_studio_0_2(tmp_path)
+
+    state = read_artifact_state(project, "development")
+
+    assert state.artifact is None
+    assert state.build.phase == "unbuilt"
+    assert lease_published_artifact(project, "development") is None
+
+
+def test_build_replaces_state_from_studio_0_2(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="marimo.studio")
+    project = _project_built_by_studio_0_2(tmp_path)
+
+    publish_artifact_lease(project, "development").close()
+
+    rebuilt = read_artifact_state(project, "development")
+    assert rebuilt.build.phase == "published"
+    assert rebuilt.artifact is not None
+    assert rebuilt.build.diagnostics == ()
+    assert len(_studio_records(caplog, logging.INFO)) == 1
+    assert _studio_records(caplog, logging.WARNING) == []
+
+
+def test_provider_upgrade_preserves_last_good_until_the_next_build(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -132,7 +192,7 @@ def test_provider_api_change_preserves_last_good_until_the_next_build(
         expected_document = first_lease.read_text(first.document)
     pointer = _profile_path(project)
     state = _read_json(pointer)
-    state["published"]["provider"]["api_version"] = 2
+    state["published"]["provider"]["version"] = "0.0.1"
     previous_project_revision = f"sha256:{'f' * 64}"
     state["published"]["project_revision"] = previous_project_revision
     state["build"]["project_revision"] = previous_project_revision
@@ -141,7 +201,7 @@ def test_provider_api_change_preserves_last_good_until_the_next_build(
     retained = read_artifact_state(project, "development")
     assert retained.artifact is not None
     assert retained.artifact.artifact_revision == first.artifact_revision
-    assert retained.artifact.provider.api_version == 2
+    assert retained.artifact.provider.version == "0.0.1"
     assert retained.build.phase == "published"
     last_good = lease_published_artifact(project, "development")
     assert last_good is not None
@@ -149,15 +209,15 @@ def test_provider_api_change_preserves_last_good_until_the_next_build(
         assert last_good.read_text(last_good.artifact.document) == expected_document
 
     def fail_rebuild(_request: object) -> None:
-        raise RuntimeError("provider API rebuild failed")
+        raise RuntimeError("provider upgrade rebuild failed")
 
     monkeypatch.setattr(provider, "build", fail_rebuild)
-    with pytest.raises(ViewProjectError, match="provider API rebuild failed"):
+    with pytest.raises(ViewProjectError, match="provider upgrade rebuild failed"):
         publish_artifact_lease(project, "development")
 
     failed = read_artifact_state(project, "development")
     assert failed.artifact is not None
-    assert failed.artifact.provider.api_version == 2
+    assert failed.artifact.provider.version == "0.0.1"
     assert failed.build.phase == "failed"
     assert failed.build.artifact_revision == first.artifact_revision
     last_good = lease_published_artifact(project, "development")
@@ -169,7 +229,7 @@ def test_provider_api_change_preserves_last_good_until_the_next_build(
     publish_artifact_lease(project, "development").close()
     rebuilt = read_artifact_state(project, "development")
     assert rebuilt.artifact is not None
-    assert rebuilt.artifact.provider.api_version == 1
+    assert rebuilt.artifact.provider.version != "0.0.1"
     assert rebuilt.build.phase == "published"
     assert rebuilt.build.diagnostics == ()
 
@@ -215,7 +275,7 @@ def test_build_repairs_a_revision_while_its_previous_lease_is_live(
 
     state = read_build_state(project, "development")
     assert state.phase == "published"
-    assert any(item.code == "artifact-state-repaired" for item in state.diagnostics)
+    assert state.diagnostics == ()
 
 
 @pytest.mark.parametrize("reader", ("build", "artifact"))

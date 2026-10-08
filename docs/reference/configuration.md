@@ -349,10 +349,10 @@ Provider inspection returns two separate allowlists:
 | Source documents | Ordered UTF-8 files visible in Source with `edit` or `read` access          |
 | Build inputs     | Exact files and bounded directories copied into an immutable build snapshot |
 
-The browser Source panel lists the provider's `editor_documents`. Python
-`View.inspect()` and CLI `view inspect` prepend editable `view.toml` through
-Studio's provider-independent manifest path. View providers include that file
-in the build input set and keep it out of their `editor_documents` records.
+The browser Source panel lists the Source documents the provider reports.
+Python `View.inspect()` and CLI `view inspect` prepend editable `view.toml`
+through Studio's provider-independent manifest path. Studio adds that file to
+the build inputs, so providers leave it out of their own Source documents.
 
 A Source path uses forward slashes, starts at the view project root, and cannot
 contain `.` or `..` segments. It must name a contained regular file. Source

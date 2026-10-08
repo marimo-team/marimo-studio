@@ -1,9 +1,8 @@
 """Validate provider requests and results before Studio trusts them.
 
-The conformance boundary checks record types, API versions, browser-safe data,
-portable contained paths, and explicit size and count limits. It also keeps
-documents shown in Source distinct from the broader build-input scope, requires
-those documents to be covered by that scope, and rejects path collisions or
+The conformance boundary checks record types, browser-safe data,
+portable contained paths, and explicit size and count limits. It also checks
+Source documents and build inputs separately, and rejects path collisions or
 overlapping declarations before they enter workspace or artifact state.
 
 Studio reserves ``view.toml`` and generated control paths. Installed providers
@@ -14,239 +13,124 @@ workspace mutation, publication, sessions, and browser policy.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import math
-import re
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import replace
-from itertools import pairwise
 from pathlib import Path, PurePosixPath
-from types import MappingProxyType
 from typing import cast
 
-from marimo_studio._filesystem.budgets import PROJECT_INPUT_BUDGET, FileBudgetTracker
-from marimo_studio.errors import ConfigurationError
+from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET
 from marimo_studio.view_providers import (
-    PROVIDER_API_VERSION,
+    BuildInput,
     BuildProfile,
     BuildRequest,
     BuildResult,
-    CellRef,
-    CellSpec,
     InspectionRequest,
     JsonValue,
     ProjectDiagnostic,
-    ProjectInput,
     ProjectInspection,
     ProviderAvailability,
     ProviderCancellation,
+    ProviderError,
     ProviderInfo,
-    ProviderStarter,
     SourceDocument,
-    StarterCellTarget,
-    StarterContext,
-    StarterPlan,
+    SourceLocation,
     ViewProject,
+    ViewProvider,
+)
+from marimo_studio.view_providers._host._shapes import (
+    MANIFEST_PATH,
+    MAX_DOCUMENTS,
+    checked_json,
+    checked_text,
+    checked_tuple,
+    conformance_error,
+    contains,
+    core_path,
+    input_path,
+    is_manifest,
+    overlaps,
+    provider_path,
+    require_casefold_unique,
+    require_disjoint_paths,
+    require_unique,
 )
 from marimo_studio.view_providers._host.records import ProviderProvenance
-from marimo_studio.view_providers._targets import (
-    MAX_CELL_TARGETS,
-    validate_projection_target,
-)
 from marimo_studio.view_providers._validation import (
-    validate_mount_declaration,
+    accept_diagnostics,
     validate_project_diagnostic,
-    validate_relative_path,
+    validate_projection_site,
 )
 
-_STARTER_KEY = re.compile(r"[a-z0-9](?:[a-z0-9._/-]*[a-z0-9])?")
 _PROFILES = frozenset({"development", "production"})
-_RESERVED_ROOTS = frozenset({".artifacts", ".gitignore", ".locks"})
-_BUILD_CONTRACT_VERSION = 1
-_MANIFEST_PATH = PurePosixPath("view.toml")
-_MAX_TEXT_BYTES = 64 * 1024
-_MAX_JSON_BYTES = 64 * 1024
-_MAX_JSON_DEPTH = 32
-_MAX_JSON_NODES = 4_096
+_BUILD_CONTRACT_VERSION = 3
+_GUIDANCE_DOCUMENTS = (PurePosixPath("AGENTS.md"), PurePosixPath("DESIGN.md"))
 _MAX_OPTIONS = 256
-_MAX_STARTERS = 256
-_MAX_STARTER_CELLS = 4_096
-_MAX_STARTER_SOURCE_BYTES = PROJECT_INPUT_BUDGET.max_file_bytes
-_MAX_STARTER_METADATA_RECORDS = 1_000_000
-_MAX_STARTER_CONTEXT_BYTES = 96 * 1024 * 1024
-_MAX_DOCUMENTS = 256
-_MAX_INPUT_SCOPE = PROJECT_INPUT_BUDGET.max_files
-_MAX_MOUNTS = 512
-_MAX_MOUNT_BYTES = 1024 * 1024
+_MAX_BUILD_INPUTS = BUILD_INPUT_BUDGET.max_files
+_MAX_SITES = 512
+_MAX_SITE_BYTES = 1024 * 1024
 _MAX_DIAGNOSTICS = 512
 _MAX_DIAGNOSTIC_BYTES = 1024 * 1024
-_MAX_SAFE_INTEGER = (1 << 53) - 1
 _UNAVAILABLE_REASON = "The provider reported that it is unavailable."
 _UNAVAILABLE_ACTION = "Repair the provider installation or choose another provider."
 
 
-def _is_manifest(path: PurePosixPath) -> bool:
-    return path.as_posix().casefold() == _MANIFEST_PATH.as_posix()
+def provider_methods(provider: object) -> None:
+    """Check that a provider implements its methods synchronously."""
+    for method in ("availability", "starters", "create", "inspect", "build"):
+        operation = getattr(provider, method, None)
+        if not callable(operation):
+            raise ValueError(f"provider requires {method}()")
+        if inspect.iscoroutinefunction(operation):
+            raise ValueError(f"provider {method}() must be synchronous")
 
 
-def _error(provider: str, message: str) -> ConfigurationError:
-    return ConfigurationError(f"View provider {provider!r} {message}")
+# Source opens a raised error's file so the author can repair it there. Editor
+# language IDs that Source highlights, by suffix. Other files open as text.
+_SOURCE_LANGUAGES = {
+    ".css": "css",
+    ".html": "html",
+    ".js": "javascript",
+    ".jsx": "javascriptreact",
+    ".ts": "typescript",
+    ".tsx": "typescriptreact",
+}
 
 
-def _text(value: object, provider: str, field: str) -> str:
-    if not isinstance(value, str) or not value or value != value.strip():
-        raise _error(provider, f"requires {field} to be a non-empty string")
-    if len(value.encode("utf-8")) > _MAX_TEXT_BYTES:
-        raise _error(
-            provider, f"requires {field} to fit within {_MAX_TEXT_BYTES} bytes"
-        )
-    return value
-
-
-def _tuple(
-    value: object,
-    provider: str,
-    field: str,
-    *,
-    maximum: int,
-) -> tuple[object, ...]:
-    if not isinstance(value, tuple):
-        raise _error(provider, f"requires {field} to be a tuple")
-    if len(value) > maximum:
-        raise _error(provider, f"limits {field} to {maximum} records")
-    return value
-
-
-def _unique(values: tuple[object, ...], provider: str, field: str) -> None:
-    if len(values) != len(set(values)):
-        raise _error(provider, f"requires unique {field}")
-
-
-def _json_value(value: object, provider: str, field: str) -> JsonValue:
-    nodes = 0
-
-    def normalize_json(item: object, depth: int) -> JsonValue:
-        nonlocal nodes
-        nodes += 1
-        if nodes > _MAX_JSON_NODES:
-            raise _error(provider, f"limits {field} to {_MAX_JSON_NODES} JSON values")
-        if depth > _MAX_JSON_DEPTH:
-            raise _error(provider, f"limits {field} to {_MAX_JSON_DEPTH} JSON levels")
-        if item is None or type(item) is bool:
-            return cast(JsonValue, item)
-        if type(item) is int:
-            if abs(cast(int, item)) > _MAX_SAFE_INTEGER:
-                raise _error(provider, f"requires browser-safe integers in {field}")
-            return cast(JsonValue, item)
-        if type(item) is str:
-            if len(item.encode("utf-8")) > _MAX_TEXT_BYTES:
-                raise _error(provider, f"requires strings in {field} to be bounded")
-            return cast(JsonValue, item)
-        if type(item) is float:
-            if not math.isfinite(cast(float, item)):
-                raise _error(provider, f"requires finite numbers in {field}")
-            return cast(JsonValue, item)
-        if type(item) is list:
-            return [
-                normalize_json(child, depth + 1) for child in cast(list[object], item)
-            ]
-        if type(item) is dict and all(type(key) is str for key in item):
-            return {
-                key: normalize_json(child, depth + 1)
-                for key, child in cast(dict[str, object], item).items()
-            }
-        raise _error(provider, f"requires JSON-compatible values in {field}")
-
-    normalized = normalize_json(value, 0)
-    encoded = json.dumps(
-        normalized,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    if len(encoded) > _MAX_JSON_BYTES:
-        raise _error(provider, f"limits {field} to {_MAX_JSON_BYTES} encoded bytes")
-    return normalized
-
-
-def _provider_path(value: object, provider: str, field: str) -> PurePosixPath:
-    if type(value) is not PurePosixPath:
-        raise _error(provider, f"requires {field} to be a PurePosixPath")
-    try:
-        path = validate_relative_path(value, field=field)
-    except ValueError as error:
-        raise _error(provider, str(error)) from error
-    if len(path.as_posix().encode("utf-8")) > _MAX_TEXT_BYTES:
-        raise _error(
-            provider, f"requires {field} to fit within {_MAX_TEXT_BYTES} bytes"
-        )
-    if path.parts[0].casefold() in {name.casefold() for name in _RESERVED_ROOTS}:
-        raise _error(provider, f"reserves top-level {path.parts[0]!r} for Studio")
-    return path
-
-
-def _input_path(value: object, provider: str, kind: str) -> PurePosixPath:
-    if (
-        kind == "directory"
-        and type(value) is PurePosixPath
-        and value == PurePosixPath(".")
-    ):
-        return value
-    return _provider_path(value, provider, "input scope path")
-
-
-def _contains(root: PurePosixPath, path: PurePosixPath) -> bool:
-    return root == PurePosixPath(".") or root == path or root in path.parents
-
-
-def _path_shape(path: PurePosixPath) -> tuple[str, ...]:
-    if path == PurePosixPath("."):
-        return ()
-    return tuple(part.casefold() for part in path.parts)
-
-
-def _validate_casefold_unique_paths(
-    paths: tuple[PurePosixPath, ...],
-    provider: str,
-    field: str,
-) -> None:
-    ordered = sorted((_path_shape(path), path.as_posix()) for path in paths)
-    for (current_shape, current), (shape, path) in pairwise(ordered):
-        if shape == current_shape:
-            raise _error(
-                provider,
-                f"returned case-colliding {field} {current!r} and {path!r}",
-            )
-
-
-def _validate_non_overlapping_scope(
-    scope: tuple[ProjectInput, ...],
-    provider: str,
-) -> None:
-    ordered = sorted(
-        (_path_shape(item.path), index, item) for index, item in enumerate(scope)
+def _located(
+    diagnostic: ProjectDiagnostic,
+    documents: Collection[PurePosixPath],
+) -> ProjectDiagnostic:
+    """Move a source outside ``documents`` into the diagnostic's message."""
+    source = diagnostic.source
+    if source is None or source.path in documents:
+        return diagnostic
+    return replace(
+        diagnostic,
+        message=(
+            f"{source.path.as_posix()}:{source.line}:{source.column}: "
+            f"{diagnostic.message}"
+        ),
+        source=None,
     )
-    for (current_shape, _, current), (shape, _, item) in pairwise(ordered):
-        shared = min(len(shape), len(current_shape))
-        if shape[:shared] != current_shape[:shared]:
-            continue
-        relation = (
-            "case-colliding" if len(shape) == len(current_shape) else "overlapping"
-        )
-        raise _error(
-            provider,
-            f"returned {relation} input scope paths "
-            f"{current.path.as_posix()!r} and {item.path.as_posix()!r}",
-        )
 
 
-def _core_path(value: object, provider: str, field: str) -> Path:
-    if not isinstance(value, Path) or not value.is_absolute():
-        raise _error(provider, f"requires {field} to be an absolute path")
-    return value
-
-
-def _overlap(first: Path, second: Path) -> bool:
-    return first == second or first in second.parents or second in first.parents
+def _failed_inspection(root: Path, diagnostic: ProjectDiagnostic) -> ProjectInspection:
+    """Describe a project whose ``inspect()`` raised ``diagnostic``."""
+    source = diagnostic.source
+    if source is None or source.path == MANIFEST_PATH:
+        return ProjectInspection((), (), diagnostics=(diagnostic,))
+    file = root.joinpath(*source.path.parts)
+    if file.is_symlink() or not file.is_file():
+        return ProjectInspection((), (), diagnostics=(_located(diagnostic, ()),))
+    document = SourceDocument(
+        source.path,
+        _SOURCE_LANGUAGES.get(source.path.suffix.lower(), "text"),
+        "edit",
+    )
+    return ProjectInspection((document,), (), diagnostics=(diagnostic,))
 
 
 class ProviderConformance:
@@ -269,18 +153,17 @@ class ProviderConformance:
     def validate_info(value: object, *, provider: str = "unknown") -> ProviderInfo:
         """Return compact provider information after structural validation."""
         if not isinstance(value, ProviderInfo):
-            raise _error(provider, "requires info to be a ProviderInfo record")
-        if (
-            type(value.api_version) is not int
-            or value.api_version != PROVIDER_API_VERSION
-        ):
-            raise _error(
-                provider,
-                f"uses API version {value.api_version!r}. "
-                f"Studio requires {PROVIDER_API_VERSION}",
+            raise conformance_error(
+                provider, "requires info to be a ProviderInfo record"
             )
-        _text(value.title, provider, "title")
-        _text(value.summary, provider, "summary")
+        checked_text(value.title, provider, "title")
+        checked_text(value.summary, provider, "summary")
+        if not isinstance(value.options, frozenset) or not all(
+            isinstance(name, str) and name for name in value.options
+        ):
+            raise conformance_error(
+                provider, "requires options to be a frozenset of names"
+            )
         return value
 
     def validate_availability(self, value: object) -> ProviderAvailability:
@@ -288,14 +171,14 @@ class ProviderConformance:
             not isinstance(value, ProviderAvailability)
             or type(value.available) is not bool
         ):
-            raise _error(self.key, "returned an invalid availability record")
+            raise conformance_error(self.key, "returned an invalid availability record")
         for field, item in (
             ("availability version", value.version),
             ("availability reason", value.reason),
             ("availability action", value.action),
         ):
             if item is not None:
-                _text(item, self.key, field)
+                checked_text(item, self.key, field)
         if not value.available:
             return replace(
                 value,
@@ -304,507 +187,321 @@ class ProviderConformance:
             )
         return value
 
-    def validate_starters(self, value: object) -> tuple[ProviderStarter, ...]:
-        records = _tuple(
-            value,
-            self.key,
-            "starters",
-            maximum=_MAX_STARTERS,
-        )
-        starters: list[ProviderStarter] = []
-        keys: list[str] = []
-        for item in records:
-            if not isinstance(item, ProviderStarter):
-                raise _error(self.key, "requires ProviderStarter records")
-            key = _text(item.key, self.key, "starter key")
-            if _STARTER_KEY.fullmatch(key) is None:
-                raise _error(self.key, f"declares invalid starter key {key!r}")
-            _text(item.title, self.key, "starter title")
-            _text(item.summary, self.key, "starter summary")
-            documents = tuple(
-                _provider_path(path, self.key, "starter document")
-                for path in _tuple(
-                    item.documents,
-                    self.key,
-                    "starter documents",
-                    maximum=_MAX_DOCUMENTS,
-                )
-            )
-            if any(_is_manifest(path) for path in documents):
-                raise _error(self.key, "reserves top-level 'view.toml' for Studio")
-            if not documents:
-                raise _error(self.key, f"starter {key!r} requires a document")
-            _unique(documents, self.key, "starter documents")
-            keys.append(key)
-            starters.append(item)
-        _unique(tuple(keys), self.key, "starter keys")
-        return tuple(starters)
-
     def validate_project(self, value: object) -> ViewProject:
         if not isinstance(value, ViewProject):
-            raise _error(self.key, "requires a ViewProject record")
+            raise conformance_error(self.key, "requires a ViewProject record")
         if value.provider != self.key:
-            raise _error(self.key, f"cannot inspect project for {value.provider!r}")
+            raise conformance_error(
+                self.key, f"cannot inspect project for {value.provider!r}"
+            )
         return replace(value, options=self.validate_options(value.options))
 
     def validate_options(self, value: object) -> Mapping[str, JsonValue]:
         if not isinstance(value, Mapping):
-            raise _error(self.key, "requires options to be a mapping")
+            raise conformance_error(self.key, "requires options to be a mapping")
         if len(value) > _MAX_OPTIONS:
-            raise _error(self.key, f"limits options to {_MAX_OPTIONS} entries")
+            raise conformance_error(
+                self.key, f"limits options to {_MAX_OPTIONS} entries"
+            )
         if any(not isinstance(name, str) for name in value):
-            raise _error(self.key, "requires option names to be strings")
-        normalized = _json_value(
+            raise conformance_error(self.key, "requires option names to be strings")
+        normalized = checked_json(
             dict(cast(Mapping[str, object], value)),
             self.key,
             "options",
         )
         return cast(dict[str, JsonValue], normalized)
 
-    def validate_starter_context(self, value: object) -> StarterContext:
-        if not isinstance(value, StarterContext):
-            raise _error(self.key, "requires a StarterContext record")
-        _text(value.view_name, self.key, "starter view name")
-        _text(value.notebook_name, self.key, "starter notebook name")
-        notebook = value.notebook
-        if not isinstance(notebook.path, Path) or not isinstance(
-            notebook.revision, str
-        ):
-            raise _error(self.key, "requires a saved starter notebook")
-        if len(notebook.revision) != 64 or any(
-            character not in "0123456789abcdef" for character in notebook.revision
-        ):
-            raise _error(self.key, "requires a SHA-256 starter notebook revision")
-        cells = _tuple(
-            notebook.cells,
-            self.key,
-            "starter notebook cells",
-            maximum=_MAX_STARTER_CELLS,
-        )
-        refs: list[CellRef] = []
-        runtime_ids: list[str] = []
-        source_bytes = 0
-        metadata_records = 0
-        context_bytes = sum(
-            len(value.encode("utf-8"))
-            for value in (
-                value.view_name,
-                value.notebook_name,
-                str(notebook.path),
-                notebook.revision,
-            )
-        )
-        for index, item in enumerate(cells):
-            if not isinstance(item, CellSpec) or item.index != index:
-                raise _error(self.key, "requires ordered CellSpec records")
-            if item.kind not in {"cell", "setup", "function", "class", "unparsable"}:
-                raise _error(
-                    self.key,
-                    "requires recognized starter notebook cell kinds",
-                )
-            if item.code is None or not isinstance(item.code, str):
-                raise _error(self.key, "requires starter notebook cell code")
-            if (
-                type(item.has_output_expression) is not bool
-                or type(item.may_display_output) is not bool
-            ):
-                raise _error(
-                    self.key,
-                    "requires has_output_expression and may_display_output "
-                    "to be booleans",
-                )
-            source_bytes += len(item.code.encode("utf-8"))
-            context_bytes += 256 + sum(
-                len(text.encode("utf-8"))
-                for text in (
-                    item.runtime_id,
-                    item.name or "",
-                    item.preview,
-                    item.markdown or "",
-                    item.code,
-                )
-            )
-            context_bytes += sum(
-                len(text.encode("utf-8")) for text in item.definitions
-            ) + sum(len(text.encode("utf-8")) for text in item.references)
-            context_bytes += sum(
-                len(str(ref).encode("utf-8")) for ref in item.upstream
-            ) + sum(len(str(ref).encode("utf-8")) for ref in item.downstream)
-            if source_bytes > _MAX_STARTER_SOURCE_BYTES:
-                raise _error(
-                    self.key,
-                    "requires starter notebook source to fit within the file budget",
-                )
-            digest = hashlib.sha256(item.code.encode("utf-8")).hexdigest()
-            if digest != item.code_sha256:
-                raise _error(self.key, "requires current starter notebook cell digests")
-            if item.name is not None:
-                _text(item.name, self.key, "starter notebook cell name")
-            if item.markdown is not None and not isinstance(item.markdown, str):
-                raise _error(self.key, "requires text starter notebook markdown")
-            refs.append(item.ref)
-            runtime_ids.append(item.runtime_id)
-            metadata_records += (
-                len(item.definitions)
-                + len(item.references)
-                + len(item.upstream)
-                + len(item.downstream)
-            )
-            if metadata_records > _MAX_STARTER_METADATA_RECORDS:
-                raise _error(
-                    self.key,
-                    "limits starter notebook graph and symbol metadata to "
-                    f"{_MAX_STARTER_METADATA_RECORDS} records",
-                )
-        _unique(tuple(refs), self.key, "starter notebook cell refs")
-        _unique(tuple(runtime_ids), self.key, "starter notebook runtime cell IDs")
-        available_refs = set(refs)
-        for item in cast(tuple[CellSpec, ...], cells):
-            if not set(item.upstream).issubset(available_refs) or not set(
-                item.downstream
-            ).issubset(available_refs):
-                raise _error(self.key, "requires contained starter notebook edges")
-        app_config = _json_value(
-            notebook.app_config,
-            self.key,
-            "starter notebook app config",
-        )
-        if not isinstance(app_config, dict):
-            raise _error(self.key, "requires a starter notebook app config object")
-        context_bytes += len(
-            json.dumps(
-                app_config,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        )
-        if not isinstance(value.cell_targets, Mapping):
-            raise _error(self.key, "requires starter cell targets to be a mapping")
-        ordinary_refs = {
-            item.ref
-            for item in cast(tuple[CellSpec, ...], cells)
-            if item.kind == "cell"
-        }
-        if set(value.cell_targets) != ordinary_refs:
-            raise _error(self.key, "requires one target for every notebook cell")
-        targets: dict[CellRef, StarterCellTarget] = {}
-        names: list[str] = []
-        for ref, item in value.cell_targets.items():
-            if (
-                not isinstance(ref, CellRef)
-                or not isinstance(item, StarterCellTarget)
-                or item.cell != ref
-            ):
-                raise _error(self.key, "requires StarterCellTarget records")
-            try:
-                target = validate_projection_target("cell", item.target)
-            except ValueError as error:
-                raise _error(
-                    self.key,
-                    f"declares invalid starter cell target: {error}",
-                ) from error
-            targets[ref] = StarterCellTarget(ref, target)
-            names.append(target)
-            context_bytes += len(str(ref).encode("utf-8")) + len(target.encode("utf-8"))
-        _unique(tuple(names), self.key, "starter cell target names")
-        if context_bytes > _MAX_STARTER_CONTEXT_BYTES:
-            raise _error(
-                self.key,
-                "limits encoded starter notebook context to "
-                f"{_MAX_STARTER_CONTEXT_BYTES} bytes",
-            )
-        normalized_notebook = replace(
-            notebook,
-            cells=cast(tuple[CellSpec, ...], cells),
-            app_config=cast(dict[str, object], app_config),
-        )
-        return StarterContext(
-            view_name=value.view_name,
-            notebook_name=value.notebook_name,
-            notebook=normalized_notebook,
-            cell_targets=MappingProxyType(targets),
-        )
-
-    def validate_starter_plan(
-        self,
-        starter: ProviderStarter,
-        context: StarterContext,
-        value: object,
-    ) -> StarterPlan:
-        self.validate_starters((starter,))
-        if not isinstance(value, StarterPlan):
-            raise _error(self.key, "requires a StarterPlan record")
-        files = self._validate_starter_files(starter, value.files)
-        targets = _tuple(
-            value.cell_targets,
-            self.key,
-            "starter plan cell targets",
-            maximum=MAX_CELL_TARGETS,
-        )
-        selected: list[StarterCellTarget] = []
-        for item in targets:
-            if not isinstance(item, StarterCellTarget):
-                raise _error(self.key, "requires StarterCellTarget records in its plan")
-            if context.cell_targets.get(item.cell) != item:
-                raise _error(
-                    self.key,
-                    f"returned undeclared cell target {item.target!r}",
-                )
-            selected.append(item)
-        _unique(tuple(selected), self.key, "starter plan cell targets")
-        _unique(
-            tuple(item.target for item in selected),
-            self.key,
-            "starter plan cell target names",
-        )
-        return StarterPlan(files=files, cell_targets=tuple(selected))
-
-    def _validate_starter_files(
-        self,
-        starter: ProviderStarter,
-        value: object,
-    ) -> Mapping[PurePosixPath, bytes]:
-        if not isinstance(value, Mapping) or not value:
-            raise _error(self.key, "requires starter files")
-        tracker = FileBudgetTracker(PROJECT_INPUT_BUDGET, "Provider starter")
-        tracker.require_count(len(value))
-        files: dict[PurePosixPath, bytes] = {}
-        shapes: list[tuple[tuple[str, ...], PurePosixPath]] = []
-        for raw_path, payload in value.items():
-            path = _provider_path(raw_path, self.key, "starter file path")
-            if _is_manifest(path):
-                raise _error(self.key, "reserves top-level 'view.toml' for Studio")
-            if type(payload) is not bytes:
-                raise _error(self.key, f"requires {path.as_posix()!r} to contain bytes")
-            tracker.add(path.as_posix(), len(cast(bytes, payload)))
-            shape = _path_shape(path)
-            shapes.append((shape, path))
-            files[path] = cast(bytes, payload)
-        ordered = sorted(shapes)
-        for (current_shape, current), (shape, path) in pairwise(ordered):
-            shared = min(len(shape), len(current_shape))
-            if shape[:shared] != current_shape[:shared]:
-                continue
-            relation = (
-                "case-colliding" if len(shape) == len(current_shape) else "overlapping"
-            )
-            raise _error(
-                self.key,
-                f"returned {relation} starter paths "
-                f"{current.as_posix()!r} and {path.as_posix()!r}",
-            )
-        missing = sorted(set(starter.documents) - files.keys())
-        if missing:
-            raise _error(
-                self.key,
-                f"starter omits document {missing[0].as_posix()!r}",
-            )
-        return MappingProxyType(files)
-
     def validate_inspection(
         self,
         project: object,
         value: object,
     ) -> ProjectInspection:
-        self.validate_project(project)
+        root = self.validate_project(project).root
         if not isinstance(value, ProjectInspection):
-            raise _error(self.key, "requires a ProjectInspection record")
-        documents = _tuple(
-            value.editor_documents,
+            raise conformance_error(self.key, "requires a ProjectInspection record")
+        documents = checked_tuple(
+            value.documents,
             self.key,
-            "editor documents",
-            maximum=_MAX_DOCUMENTS,
+            "Source documents",
+            maximum=MAX_DOCUMENTS,
         )
+        accepted: list[SourceDocument] = []
         document_paths: list[PurePosixPath] = []
         for item in documents:
             if not isinstance(item, SourceDocument):
-                raise _error(self.key, "requires SourceDocument records")
-            path = _provider_path(item.path, self.key, "editor document path")
-            if _is_manifest(path):
-                raise _error(
+                raise conformance_error(self.key, "requires SourceDocument records")
+            accepted.append(item)
+            path = provider_path(item.path, self.key, "Source document path")
+            if is_manifest(path):
+                raise conformance_error(
                     self.key,
                     "cannot expose Studio-owned 'view.toml' in the editor",
                 )
             document_paths.append(path)
-            _text(item.language, self.key, "editor document language")
+            checked_text(item.language, self.key, "Source document language")
             if item.access not in {"edit", "read"}:
-                raise _error(self.key, "returned invalid editor document access")
+                raise conformance_error(
+                    self.key, "returned invalid Source document access"
+                )
             if item.label is not None:
-                _text(item.label, self.key, "editor document label")
-        _unique(tuple(document_paths), self.key, "editor document paths")
-        _validate_casefold_unique_paths(
+                checked_text(item.label, self.key, "Source document label")
+        guidance = tuple(
+            SourceDocument(path, "markdown", "edit")
+            for path in _GUIDANCE_DOCUMENTS
+            if path not in document_paths
+            and not root.joinpath(path).is_symlink()
+            and root.joinpath(path).is_file()
+        )
+        document_paths.extend(item.path for item in guidance)
+        require_unique(tuple(document_paths), self.key, "Source document paths")
+        require_casefold_unique(
             tuple(document_paths),
             self.key,
-            "editor document paths",
+            "Source document paths",
         )
-        scope: list[ProjectInput] = []
-        for item in _tuple(
-            value.input_scope,
+        scope: list[BuildInput] = []
+        for item in checked_tuple(
+            value.inputs,
             self.key,
-            "input scope",
-            maximum=_MAX_INPUT_SCOPE,
+            "build inputs",
+            maximum=_MAX_BUILD_INPUTS,
         ):
-            if not isinstance(item, ProjectInput) or item.kind not in {
+            if not isinstance(item, BuildInput) or item.kind not in {
                 "file",
                 "directory",
             }:
-                raise _error(self.key, "requires ProjectInput records")
+                raise conformance_error(self.key, "requires BuildInput records")
             scope.append(
-                ProjectInput(
-                    _input_path(item.path, self.key, item.kind),
+                BuildInput(
+                    input_path(item.path, self.key, item.kind),
                     item.kind,
                 )
             )
         normalized_scope = tuple(scope)
-        _validate_non_overlapping_scope(normalized_scope, self.key)
+        require_disjoint_paths(
+            (item.path for item in normalized_scope), self.key, "build input"
+        )
 
         def covered(path: PurePosixPath) -> bool:
             return any(
-                item.path == path if item.kind == "file" else _contains(item.path, path)
+                item.path == path if item.kind == "file" else contains(item.path, path)
                 for item in scope
             )
 
-        manifest = _MANIFEST_PATH
+        def require_input(path: PurePosixPath, declaration: str) -> None:
+            if is_manifest(path) or not covered(path):
+                raise conformance_error(
+                    self.key,
+                    f"declares {declaration} in {path.as_posix()!r} "
+                    "outside its build inputs",
+                )
+
+        manifest = MANIFEST_PATH
         if not covered(manifest):
-            raise _error(
-                self.key,
-                "must include Studio-owned 'view.toml' in its input scope",
-            )
+            scope.append(BuildInput(manifest, "file"))
         document_set = set(document_paths)
         diagnostic_sources = {*document_set, manifest}
-        diagnostic_bytes = 0
-        for diagnostic in _tuple(
-            value.diagnostics,
-            self.key,
-            "diagnostics",
-            maximum=_MAX_DIAGNOSTICS,
-        ):
-            try:
-                validated = validate_project_diagnostic(
-                    diagnostic,
-                    documents=diagnostic_sources,
-                )
-            except ValueError as error:
-                raise _error(self.key, str(error)) from error
-            diagnostic_bytes += len(
-                (
-                    validated.code
-                    + validated.message
-                    + validated.hint
-                    + (validated.source.path.as_posix() if validated.source else "")
-                ).encode("utf-8")
-            )
-            if diagnostic_bytes > _MAX_DIAGNOSTIC_BYTES:
-                raise _error(
-                    self.key,
-                    f"limits diagnostics to {_MAX_DIAGNOSTIC_BYTES} encoded bytes",
-                )
+        self._diagnostics(value.diagnostics, "diagnostics", diagnostic_sources)
         sites = []
-        mount_bytes = 0
-        for site in _tuple(
-            value.mounts,
+        site_bytes = 0
+        for site in checked_tuple(
+            value.sites,
             self.key,
             "projection sites",
-            maximum=_MAX_MOUNTS,
+            maximum=_MAX_SITES,
         ):
             try:
-                validated_site = validate_mount_declaration(
+                validated_site = validate_projection_site(
                     site,
                     documents=document_set,
                 )
             except ValueError as error:
-                raise _error(self.key, str(error)) from error
-            mount_bytes += len(
+                raise conformance_error(self.key, str(error)) from error
+            require_input(validated_site.source.path, "a projection site")
+            site_bytes += len(
                 json.dumps(
                     validated_site.to_dict(),
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ).encode("utf-8")
             )
-            if mount_bytes > _MAX_MOUNT_BYTES:
-                raise _error(
+            if site_bytes > _MAX_SITE_BYTES:
+                raise conformance_error(
                     self.key,
-                    f"limits projection sites to {_MAX_MOUNT_BYTES} encoded bytes",
+                    f"limits projection sites to {_MAX_SITE_BYTES} encoded bytes",
                 )
             sites.append(validated_site)
-        _unique(tuple(site.id for site in sites), self.key, "projection site IDs")
-        _text(value.build_fingerprint, self.key, "build fingerprint")
-        return replace(value, input_scope=normalized_scope)
+        require_unique(
+            tuple((site.source.path, site.offset) for site in sites),
+            self.key,
+            "projection site offsets",
+        )
+        return replace(
+            value,
+            documents=(*accepted, *guidance),
+            inputs=tuple(scope),
+            diagnostics=(*value.diagnostics, *accept_diagnostics(sites)),
+        )
+
+    def _operation_owners(
+        self,
+        value: InspectionRequest | BuildRequest,
+        operation: str,
+    ) -> None:
+        if not isinstance(value.cancellation, ProviderCancellation):
+            raise conformance_error(self.key, "requires a ProviderCancellation owner")
+        if not callable(getattr(value.runner, "run", None)):
+            raise conformance_error(self.key, "requires a supervised provider runner")
+        if (
+            not isinstance(value.command_timeout, (int, float))
+            or isinstance(value.command_timeout, bool)
+            or not math.isfinite(value.command_timeout)
+            or value.command_timeout <= 0
+        ):
+            raise conformance_error(
+                self.key,
+                f"requires a positive finite {operation} command budget",
+            )
+
+    def _diagnostics(
+        self,
+        value: object,
+        label: str,
+        documents: set[PurePosixPath] | None,
+    ) -> tuple[ProjectDiagnostic, ...]:
+        diagnostics: list[ProjectDiagnostic] = []
+        encoded = 0
+        for item in checked_tuple(value, self.key, label, maximum=_MAX_DIAGNOSTICS):
+            try:
+                diagnostic = validate_project_diagnostic(item, documents=documents)
+            except ValueError as error:
+                raise conformance_error(self.key, str(error)) from error
+            encoded += len(
+                (
+                    diagnostic.code
+                    + diagnostic.message
+                    + diagnostic.hint
+                    + (diagnostic.source.path.as_posix() if diagnostic.source else "")
+                ).encode("utf-8")
+            )
+            if encoded > _MAX_DIAGNOSTIC_BYTES:
+                raise conformance_error(
+                    self.key,
+                    f"limits {label} to {_MAX_DIAGNOSTIC_BYTES} encoded bytes",
+                )
+            diagnostics.append(diagnostic)
+        return tuple(diagnostics)
+
+    def inspect(
+        self,
+        provider: ViewProvider,
+        request: InspectionRequest,
+    ) -> ProjectInspection:
+        """Inspect with ``provider`` and validate the result.
+
+        Undeclared ``view.toml`` options and a raised ``ProviderError`` become
+        inspection diagnostics.
+        """
+        unknown = sorted(set(request.project.options) - self.info.options)
+        if unknown:
+            supported = ", ".join(sorted(self.info.options)) or "none"
+            inspection = ProjectInspection(
+                (),
+                (),
+                diagnostics=(
+                    ProjectDiagnostic(
+                        "provider-options-invalid",
+                        "error",
+                        f"view.toml sets {unknown[0]!r}, which "
+                        f"{self.info.title} does not read.",
+                        f"Remove it from view.toml. Supported options: {supported}.",
+                        SourceLocation(MANIFEST_PATH, 1, 1),
+                    ),
+                ),
+            )
+        else:
+            try:
+                inspection = provider.inspect(request)
+            except ProviderError as error:
+                inspection = _failed_inspection(request.project.root, error.diagnostic)
+        return self.validate_inspection(request.project, inspection)
+
+    def build(self, provider: ViewProvider, request: BuildRequest) -> BuildResult:
+        """Build with ``provider``. A raised ``ProviderError`` fails the build."""
+        try:
+            result = provider.build(request)
+        except ProviderError as error:
+            documents = {
+                MANIFEST_PATH,
+                *(item.path for item in request.inspection.documents),
+            }
+            result = BuildResult(None, (_located(error.diagnostic, documents),))
+        return self.validate_build_result(request, result)
 
     def validate_inspection_request(self, value: object) -> InspectionRequest:
         if not isinstance(value, InspectionRequest):
-            raise _error(self.key, "requires an InspectionRequest record")
+            raise conformance_error(self.key, "requires an InspectionRequest record")
         project = self.validate_project(value.project)
-        cache = _core_path(value.cache_root, self.key, "inspection cache root")
-        if _overlap(cache, project.root):
-            raise _error(
+        cache = core_path(value.cache_root, self.key, "inspection cache root")
+        if overlaps(cache, project.root):
+            raise conformance_error(
                 self.key,
                 "requires inspection cache outside the view project",
             )
         if cache.exists() and not cache.is_dir():
-            raise _error(self.key, "requires inspection cache root to be a directory")
-        if not isinstance(value.cancellation, ProviderCancellation):
-            raise _error(self.key, "requires a ProviderCancellation owner")
-        if not callable(getattr(value.runner, "run", None)):
-            raise _error(self.key, "requires a supervised provider runner")
-        if (
-            not isinstance(value.command_timeout, (int, float))
-            or isinstance(value.command_timeout, bool)
-            or not math.isfinite(value.command_timeout)
-            or value.command_timeout <= 0
-        ):
-            raise _error(
-                self.key,
-                "requires a positive finite inspection command budget",
+            raise conformance_error(
+                self.key, "requires inspection cache root to be a directory"
             )
+        self._operation_owners(value, "inspection")
         return replace(value, project=project, cache_root=cache)
 
     def validate_build_request(self, value: object) -> BuildRequest:
         if not isinstance(value, BuildRequest):
-            raise _error(self.key, "requires a BuildRequest record")
+            raise conformance_error(self.key, "requires a BuildRequest record")
         project = self.validate_project(value.project)
         inspection = self.validate_inspection(project, value.inspection)
         self.validate_profile(value.profile)
         inputs = tuple(
-            _provider_path(item, self.key, "build input path")
-            for item in _tuple(
+            provider_path(item, self.key, "build input path")
+            for item in checked_tuple(
                 value.inputs,
                 self.key,
                 "build inputs",
-                maximum=_MAX_INPUT_SCOPE,
+                maximum=_MAX_BUILD_INPUTS,
             )
         )
-        _unique(inputs, self.key, "build input paths")
+        require_unique(inputs, self.key, "build input paths")
         if not inputs:
-            raise _error(self.key, "requires enumerated build inputs")
-        snapshot = _core_path(project.root, self.key, "snapshot root")
-        staging = _core_path(value.staging_root, self.key, "staging root")
-        cache = _core_path(value.cache_root, self.key, "cache root")
-        if not staging.is_dir():
-            raise _error(self.key, "requires an existing staging directory")
+            raise conformance_error(self.key, "requires enumerated build inputs")
+        snapshot = core_path(project.root, self.key, "snapshot root")
+        staging = core_path(value.staging_root, self.key, "staging root")
+        cache = core_path(value.cache_root, self.key, "cache root")
+        work = core_path(value.work_root, self.key, "work root")
+        if not staging.is_dir() or not work.is_dir():
+            raise conformance_error(
+                self.key, "requires existing staging and work directories"
+            )
+        if overlaps(work, staging):
+            raise conformance_error(self.key, "requires a work root outside staging")
         if cache.name != ".cache" or cache.parent.name != ".artifacts":
-            raise _error(self.key, "requires cache root to end with .artifacts/.cache")
+            raise conformance_error(
+                self.key, "requires cache root to end with .artifacts/.cache"
+            )
         if cache.exists() and not cache.is_dir():
-            raise _error(self.key, "requires cache root to be a directory")
-        if _overlap(cache, snapshot) or _overlap(cache, staging):
-            raise _error(self.key, "requires cache outside snapshot and staging roots")
-        if not isinstance(value.cancellation, ProviderCancellation):
-            raise _error(self.key, "requires a ProviderCancellation owner")
-        if not callable(getattr(value.runner, "run", None)):
-            raise _error(self.key, "requires a supervised provider runner")
-        if (
-            not isinstance(value.command_timeout, (int, float))
-            or isinstance(value.command_timeout, bool)
-            or not math.isfinite(value.command_timeout)
-            or value.command_timeout <= 0
-        ):
-            raise _error(self.key, "requires a positive finite build command budget")
-        _text(value.project_revision, self.key, "project revision")
+            raise conformance_error(self.key, "requires cache root to be a directory")
+        if overlaps(cache, snapshot) or overlaps(cache, staging):
+            raise conformance_error(
+                self.key, "requires cache outside snapshot and staging roots"
+            )
+        self._operation_owners(value, "build")
+        checked_text(value.project_revision, self.key, "project revision")
         return replace(
             value,
             project=project,
             inspection=inspection,
             inputs=inputs,
+            work_root=work,
         )
 
     def validate_build_result(
@@ -813,46 +510,25 @@ class ProviderConformance:
         value: object,
     ) -> BuildResult:
         if not isinstance(value, BuildResult):
-            raise _error(self.key, "requires a BuildResult record")
+            raise conformance_error(self.key, "requires a BuildResult record")
         documents = {
-            *(item.path for item in request.inspection.editor_documents),
-            _MANIFEST_PATH,
+            *(item.path for item in request.inspection.documents),
+            MANIFEST_PATH,
         }
-        diagnostics: list[ProjectDiagnostic] = []
-        diagnostic_bytes = 0
-        for item in _tuple(
+        normalized_diagnostics = self._diagnostics(
             value.diagnostics,
-            self.key,
             "build diagnostics",
-            maximum=_MAX_DIAGNOSTICS,
-        ):
-            try:
-                diagnostic = validate_project_diagnostic(item, documents=documents)
-            except ValueError as error:
-                raise _error(self.key, str(error)) from error
-            diagnostic_bytes += len(
-                (
-                    diagnostic.code
-                    + diagnostic.message
-                    + diagnostic.hint
-                    + (diagnostic.source.path.as_posix() if diagnostic.source else "")
-                ).encode("utf-8")
-            )
-            if diagnostic_bytes > _MAX_DIAGNOSTIC_BYTES:
-                raise _error(
-                    self.key,
-                    "limits build diagnostics to "
-                    f"{_MAX_DIAGNOSTIC_BYTES} encoded bytes",
-                )
-            diagnostics.append(diagnostic)
-        normalized_diagnostics = tuple(diagnostics)
+            documents,
+        )
         if value.document is None:
             if not any(item.severity == "error" for item in normalized_diagnostics):
-                raise _error(self.key, "returned no document or error diagnostic")
+                raise conformance_error(
+                    self.key, "returned no document or error diagnostic"
+                )
             return replace(value, diagnostics=normalized_diagnostics)
-        document = _provider_path(value.document, self.key, "build document")
+        document = provider_path(value.document, self.key, "build document")
         if not request.staging_root.joinpath(*document.parts).is_file():
-            raise _error(
+            raise conformance_error(
                 self.key,
                 f"returned missing build document {document.as_posix()!r}",
             )
@@ -860,19 +536,20 @@ class ProviderConformance:
 
     def validate_profile(self, value: object) -> BuildProfile:
         if not isinstance(value, str) or value not in _PROFILES:
-            raise _error(self.key, f"does not support build profile {value!r}")
+            raise conformance_error(
+                self.key, f"does not support build profile {value!r}"
+            )
         return cast(BuildProfile, value)
 
-    def provenance(self, inspection: ProjectInspection) -> ProviderProvenance:
-        """Return compact versioned provenance for a normalized inspection."""
+    def provenance(self, tool_version: str | None) -> ProviderProvenance:
+        """Return compact provenance for builds with this provider and tool."""
         payload = json.dumps(
             [
                 self.distribution,
                 self.version,
                 self.key,
-                self.info.api_version,
                 _BUILD_CONTRACT_VERSION,
-                inspection.build_fingerprint,
+                tool_version,
             ],
             separators=(",", ":"),
         ).encode()
@@ -880,6 +557,5 @@ class ProviderConformance:
             key=self.key,
             distribution=self.distribution,
             version=self.version,
-            api_version=self.info.api_version,
             build_fingerprint=f"sha256:{hashlib.sha256(payload).hexdigest()}",
         )

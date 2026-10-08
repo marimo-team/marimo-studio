@@ -1,6 +1,6 @@
 ---
 title: Built-in view providers
-description: Provider keys, starter IDs, source documents, requirements, and view.toml options included with Studio.
+description: Provider keys, starter IDs, Source documents, requirements, and provider options included with Studio.
 ---
 
 # Built-in view providers
@@ -30,8 +30,9 @@ input and is not stored in `view.toml`.
 | `marimo-studio/notebook-kit` | `marimo-studio/notebook-kit:default`                        | `marimo-studio[deno]`    |
 
 Run `marimo-studio starters --json` for the installed catalog and current
-availability. The `documents` field is the starter's initial Source document
-plan. `view create --dry-run` reports every file Studio will create or update.
+availability. The `documents` field lists the Source documents a new view
+starts with. `view create --dry-run` reports every file Studio will create or
+update.
 
 ## `marimo-studio/vanilla`
 
@@ -87,7 +88,7 @@ appears in Source as read-only.
 
 ### React starter
 
-`marimo-studio/react:default` creates this initial Source document plan:
+`marimo-studio/react:default` starts with these Source documents:
 
 ```text
 AGENTS.md
@@ -128,7 +129,7 @@ template sites that request notebook results, and builds an HTML artifact with
 [Vite](https://vite.dev/), a frontend build tool, through the pinned Deno
 toolchain. `deno.lock` and `src/vite-env.d.ts` appear in Source as read-only.
 
-The default starter creates this initial Source document plan:
+The default starter starts with these Source documents:
 
 ```text
 AGENTS.md

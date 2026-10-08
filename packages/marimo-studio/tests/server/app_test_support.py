@@ -215,9 +215,9 @@ def _projection_request(
     expected = site_target or target
     site = next(
         item
-        for item in config["mounts"]
+        for item in config["sites"]
         if item["kind"] == kind
-        and (item["allowedTargets"] is None or expected in item["allowedTargets"])
+        and (item["targets"] is None or expected in item["targets"])
     )
     return {
         "siteId": site["id"],
@@ -229,9 +229,9 @@ def _projection_request(
 def _projection_targets(config: dict[str, Any], kind: str) -> set[str]:
     return {
         target
-        for site in config["mounts"]
+        for site in config["sites"]
         if site["kind"] == kind
-        for target in site["allowedTargets"] or []
+        for target in site["targets"] or []
     }
 
 

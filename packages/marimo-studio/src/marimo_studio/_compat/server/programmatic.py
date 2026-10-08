@@ -42,7 +42,7 @@ _LifespanContext = Callable[[Any], AbstractAsyncContextManager[Any]]
 _AdapterFactory = Callable[[], ServerAdapters]
 _KERNEL_JOIN_TIMEOUT = 5.0
 _MISSING_MAIN = object()
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger("marimo.studio")
 
 
 class _PresentationApplication(Protocol):

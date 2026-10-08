@@ -42,10 +42,10 @@ from marimo_studio.errors import (
     ViewProjectError,
 )
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildRequest,
     BuildResult,
     ProjectDiagnostic,
-    ProjectInput,
     SourceLocation,
     ViewProject,
 )
@@ -300,7 +300,7 @@ def test_prepared_inspection_errors_block_provider_build_and_cached_reuse(
     input_id = project_revision(
         project,
         failed_inspection,
-        provider.provenance(failed_inspection),
+        provider.provenance(),
     )
     if corrupt_receipt:
         _profile_path(project).write_text("{", encoding="utf-8")
@@ -525,7 +525,7 @@ def test_prepared_cache_rechecks_source_before_reporting_success(
     input_id = project_revision(
         project,
         inspection,
-        provider.provenance(inspection),
+        provider.provenance(),
     )
     _change_document(project, "changed before prepared cache reuse")
 
@@ -552,17 +552,15 @@ def test_prepared_build_uses_snapshot_mount_declarations(tmp_path: Path) -> None
     project = _project(tmp_path)
     provider = provider_registry().get(project.provider)
     inspection = provider.inspect(inspection_request(project))
-    input_id = project_revision(project, inspection, provider.provenance(inspection))
+    input_id = project_revision(project, inspection, provider.provenance())
 
     with publish_artifact_lease(
         project,
         "development",
-        inspection=replace(inspection, mounts=()),
+        inspection=replace(inspection, sites=()),
         input_id=input_id,
     ) as lease:
-        assert [
-            (mount.kind, mount.allowed_targets) for mount in lease.artifact.mounts
-        ] == [
+        assert [(site.kind, site.targets) for site in lease.artifact.sites] == [
             ("value", ("summary",)),
         ]
 
@@ -650,11 +648,11 @@ def test_publication_rejects_added_build_inputs(
         inspection = inspect(request)
         return replace(
             inspection,
-            input_scope=(
-                *inspection.input_scope,
-                ProjectInput(PurePosixPath("public"), "directory"),
-                ProjectInput(PurePosixPath("missing"), "directory"),
-                ProjectInput(PurePosixPath("optional.css"), "file"),
+            inputs=(
+                *inspection.inputs,
+                BuildInput(PurePosixPath("public"), "directory"),
+                BuildInput(PurePosixPath("missing"), "directory"),
+                BuildInput(PurePosixPath("optional.css"), "file"),
             ),
         )
 
@@ -808,7 +806,7 @@ def test_prepared_build_identity_requires_inspection_and_input_id(
     input_id = project_revision(
         project,
         inspection,
-        provider.provenance(inspection),
+        provider.provenance(),
     )
 
     with pytest.raises(ConfigurationError, match="require both"):
@@ -877,7 +875,7 @@ def test_failed_build_reports_its_first_location_and_remaining_count(
             for message, line in (("Unknown export.", 3), ("Unknown type.", 9))
         ),
     )
-    input_id = project_revision(project, failed, provider.provenance(failed))
+    input_id = project_revision(project, failed, provider.provenance())
 
     with pytest.raises(ViewProjectError) as captured:
         publish_artifact_lease(
@@ -898,7 +896,7 @@ def test_stale_prepared_build_preserves_newer_publication_receipt(
     project = _project(tmp_path)
     provider = provider_registry().get(project.provider)
     inspection = provider.inspect(inspection_request(project))
-    input_id = project_revision(project, inspection, provider.provenance(inspection))
+    input_id = project_revision(project, inspection, provider.provenance())
     if old_inspection_failed:
         inspection = replace(
             inspection,

@@ -124,7 +124,8 @@ def _bind_projections(
             or tuple(binding.runtime_cell_id for binding in current_closure)
             != tuple(binding.runtime_cell_id for binding in dependency_bindings)
             or (
-                projection.variable is not None and projection.variable not in cell.defs
+                projection.selector is not None
+                and projection.selector.root not in cell.defs
             )
         ):
             raise ProjectionUnavailable(

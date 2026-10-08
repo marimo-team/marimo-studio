@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal, Protocol
 
+from marimo_studio._filesystem.paths import validate_relative_path
 from marimo_studio._notebook.records import CellRef, NotebookSpec
-from marimo_studio.view_providers._operation import (
+from marimo_studio._processes.operation import (
     ProviderCancellation,
     ProviderRunner,
 )
@@ -17,24 +18,27 @@ JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "Jso
 BuildProfile = Literal["development", "production"]
 DocumentAccess = Literal["edit", "read"]
 ProjectionKind = Literal["cell", "output", "value"]
-ProjectInputKind = Literal["file", "directory"]
-PROVIDER_API_VERSION = 1
+BuildInputKind = Literal["file", "directory"]
 
 
 @dataclass(frozen=True)
 class ProviderInfo:
-    """Describe the provider contract shown in discovery and diagnostics."""
+    """Describe a provider in the view picker.
+
+    ``options`` names the ``view.toml`` options the provider reads. Studio
+    rejects any other option before it inspects or builds a view.
+    """
 
     title: str
     summary: str
-    api_version: int
+    options: frozenset[str] = frozenset()
 
     def to_dict(self) -> dict[str, object]:
         return {
             "schema": 1,
             "title": self.title,
             "summary": self.summary,
-            "api_version": self.api_version,
+            "options": sorted(self.options),
         }
 
 
@@ -79,10 +83,38 @@ class ViewProject:
     provider: str
     options: Mapping[str, JsonValue]
 
+    def path_option(
+        self,
+        name: str,
+        *,
+        default: str,
+        suffix: str | None = None,
+    ) -> PurePosixPath:
+        """Return a project-relative path option from ``view.toml``.
+
+        Raises ``ProviderError`` located at ``view.toml`` when the option is not
+        a relative POSIX path inside the project, or lacks ``suffix``.
+        """
+        try:
+            path = validate_relative_path(
+                self.options.get(name, default),
+                field=f"view.toml option {name!r}",
+            )
+            if suffix is not None and path.suffix.lower() != suffix.lower():
+                raise ValueError(f"view.toml option {name!r} must name a {suffix} file")
+        except ValueError as error:
+            raise ProviderError(
+                str(error),
+                hint=f"Set {name} in view.toml to a path such as {default!r}.",
+                source=SourceLocation(PurePosixPath("view.toml"), 1, 1),
+                code="provider-options-invalid",
+            ) from error
+        return path
+
 
 @dataclass(frozen=True)
 class SourceDocument:
-    """Describe one text document exposed through provider inspection."""
+    """One Source document: a UTF-8 text file shown in Studio's Source panel."""
 
     path: PurePosixPath
     language: str
@@ -99,11 +131,11 @@ class SourceDocument:
 
 
 @dataclass(frozen=True)
-class ProjectInput:
-    """Declare one exact file or bounded recursive project directory."""
+class BuildInput:
+    """One build input: an exact file or a bounded recursive directory."""
 
     path: PurePosixPath
-    kind: ProjectInputKind
+    kind: BuildInputKind
 
     def to_dict(self) -> dict[str, str]:
         return {"path": self.path.as_posix(), "kind": self.kind}
@@ -119,21 +151,51 @@ class SourceLocation:
         return {"path": self.path.as_posix(), "line": self.line, "column": self.column}
 
 
+class ProviderError(Exception):
+    """Report a problem with a view project as a diagnostic.
+
+    Raise it from ``inspect()`` or ``build()``. Studio shows
+    ``message`` and ``hint`` beside ``source`` instead of a provider failure.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        hint: str = "",
+        source: SourceLocation | None = None,
+        code: str = "provider-error",
+    ) -> None:
+        super().__init__(message)
+        self.diagnostic = ProjectDiagnostic(
+            code, "error", message.strip(), hint.strip(), source
+        )
+
+
 @dataclass(frozen=True)
-class MountDeclaration:
-    id: str
+class ProjectionSite:
+    """One projection site: the source location of a projection host.
+
+    ``offset`` is the UTF-8 byte offset inside the host's start tag where Studio
+    inserts the runtime site attribute in the build snapshot. An output site
+    with ``accept`` shows the value in the first of those media types it
+    supports, such as ``("image/svg+xml",)`` for a crisp figure. Without
+    ``accept``, the site shows marimo's native output.
+    """
+
     kind: ProjectionKind
+    targets: tuple[str, ...] | Literal["*"]
     source: SourceLocation
-    allowed_targets: tuple[str, ...] | None
+    offset: int
+    accept: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "id": self.id,
             "kind": self.kind,
+            "targets": self.targets if self.targets == "*" else list(self.targets),
             "source": self.source.to_dict(),
-            "allowedTargets": (
-                list(self.allowed_targets) if self.allowed_targets is not None else None
-            ),
+            "offset": self.offset,
+            "accept": list(self.accept),
         }
 
 
@@ -157,20 +219,24 @@ class ProjectDiagnostic:
 
 @dataclass(frozen=True)
 class ProjectInspection:
-    editor_documents: tuple[SourceDocument, ...]
-    input_scope: tuple[ProjectInput, ...]
-    mounts: tuple[MountDeclaration, ...]
-    diagnostics: tuple[ProjectDiagnostic, ...]
-    build_fingerprint: str
+    """Describe a view project's Source documents, build inputs, and sites.
+
+    Studio adds ``view.toml`` to the inputs, and shows ``AGENTS.md`` and
+    ``DESIGN.md`` in Source when they exist.
+    """
+
+    documents: tuple[SourceDocument, ...]
+    inputs: tuple[BuildInput, ...]
+    sites: tuple[ProjectionSite, ...] = ()
+    diagnostics: tuple[ProjectDiagnostic, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schema": 1,
-            "editor_documents": [item.to_dict() for item in self.editor_documents],
-            "input_scope": [item.to_dict() for item in self.input_scope],
-            "mounts": [item.to_dict() for item in self.mounts],
+            "schema": 2,
+            "documents": [item.to_dict() for item in self.documents],
+            "inputs": [item.to_dict() for item in self.inputs],
+            "sites": [item.to_dict() for item in self.sites],
             "diagnostics": [item.to_dict() for item in self.diagnostics],
-            "build_fingerprint": self.build_fingerprint,
         }
 
 
@@ -193,6 +259,46 @@ class StarterContext:
     notebook_name: str
     notebook: NotebookSpec
     cell_targets: Mapping[CellRef, StarterCellTarget]
+
+    @property
+    def app_title(self) -> str | None:
+        """Return the notebook's configured app title, if it has one."""
+        configured = self.notebook.app_config.get("app_title")
+        if isinstance(configured, str) and configured.strip():
+            return configured.strip()
+        return None
+
+    @property
+    def notebook_label(self) -> str:
+        """Return the notebook's app title, or a readable form of its filename."""
+        return (
+            self.app_title
+            or " ".join(
+                self.notebook_name.replace("_", " ").replace("-", " ").split()
+            ).title()
+        )
+
+    @property
+    def output_cells(self) -> tuple[StarterCellTarget, ...]:
+        """Return targets for runnable cells that may display output.
+
+        Cells that are disabled, or downstream of a disabled cell, never run.
+        """
+        cells = self.notebook.by_ref()
+        disabled = {cell.ref for cell in self.notebook.cells if cell.config.disabled}
+        pending = list(disabled)
+        while pending:
+            for child in cells[pending.pop()].downstream:
+                if child not in disabled:
+                    disabled.add(child)
+                    pending.append(child)
+        return tuple(
+            self.cell_targets[cell.ref]
+            for cell in self.notebook.cells
+            if cell.kind == "cell"
+            and cell.ref not in disabled
+            and cell.may_display_output
+        )
 
 
 @dataclass(frozen=True)
@@ -220,6 +326,7 @@ class BuildRequest:
     project_revision: str
     profile: BuildProfile
     staging_root: Path
+    work_root: Path
     cache_root: Path
     cancellation: ProviderCancellation
     runner: ProviderRunner
@@ -229,16 +336,15 @@ class BuildRequest:
 @dataclass(frozen=True)
 class BuildResult:
     document: PurePosixPath | None
-    diagnostics: tuple[ProjectDiagnostic, ...]
+    diagnostics: tuple[ProjectDiagnostic, ...] = ()
 
 
 class ViewProvider(Protocol):
+    """Create, inspect, and build one kind of view project."""
+
     info: ProviderInfo
 
-    def availability(
-        self,
-        project: ViewProject | None = None,
-    ) -> ProviderAvailability: ...
+    def availability(self) -> ProviderAvailability: ...
 
     def starters(self) -> tuple[ProviderStarter, ...]: ...
 

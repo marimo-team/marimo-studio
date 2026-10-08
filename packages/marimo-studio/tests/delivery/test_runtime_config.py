@@ -63,7 +63,7 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
             },
             "variables": {},
         },
-        mounts=(
+        sites=(
             {
                 "id": "site:result",
                 "kind": "cell",
@@ -72,7 +72,8 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
                     "line": 12,
                     "column": 5,
                 },
-                "allowedTargets": ["result"],
+                "targets": ["result"],
+                "accept": [],
             },
         ),
         projection_policy=projection_policy(),
@@ -125,7 +126,7 @@ def test_runtime_config_exposes_only_embedded_runtime_settings() -> None:
         projection_revision="a" * 64,
         show_cell_logs=False,
         projection_targets={"cells": {}, "variables": {}},
-        mounts=(),
+        sites=(),
         projection_policy=projection_policy(),
         runtime_cell_refs={},
         diagnostics=(),
@@ -215,12 +216,12 @@ def test_runtime_config_exposes_only_embedded_runtime_settings() -> None:
 
 
 def test_projection_revision_tracks_its_runtime_contract() -> None:
-    mounts: tuple[dict[str, object], ...] = (
+    sites: tuple[dict[str, object], ...] = (
         {
             "id": "site:result",
             "kind": "cell",
             "source": {"path": "index.html", "line": 1, "column": 1},
-            "allowedTargets": ["result"],
+            "targets": ["result"],
         },
     )
     targets = {
@@ -240,7 +241,7 @@ def test_projection_revision_tracks_its_runtime_contract() -> None:
         source_revision: str = "source-a",
         runtime_id: str = "server",
         runtime_instance: str = "runtime-a",
-        selected_mounts: tuple[dict[str, object], ...] = mounts,
+        selected_sites: tuple[dict[str, object], ...] = sites,
         runtime_cell_refs: dict[str, str] | None = None,
         diagnostics: tuple[dict[str, object], ...] = (),
     ) -> str:
@@ -249,7 +250,7 @@ def test_projection_revision_tracks_its_runtime_contract() -> None:
             view="dashboard",
             runtime_id=runtime_id,
             runtime_instance=runtime_instance,
-            mounts=selected_mounts,
+            sites=selected_sites,
             projection_targets=targets,
             projection_policy=policy,
             runtime_cell_refs=(
@@ -289,9 +290,9 @@ def test_projection_revision_tracks_its_runtime_contract() -> None:
     )
     assert (
         revision(
-            selected_mounts=(
+            selected_sites=(
                 {
-                    **mounts[0],
+                    **sites[0],
                     "source": {"path": "index.html", "line": 8, "column": 5},
                 },
             )
@@ -300,10 +301,10 @@ def test_projection_revision_tracks_its_runtime_contract() -> None:
     )
     assert (
         revision(
-            selected_mounts=(
+            selected_sites=(
                 {
-                    **mounts[0],
-                    "allowedTargets": ["summary"],
+                    **sites[0],
+                    "targets": ["summary"],
                 },
             )
         )

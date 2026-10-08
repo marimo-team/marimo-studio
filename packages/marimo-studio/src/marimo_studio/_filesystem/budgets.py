@@ -45,7 +45,7 @@ class FileBudgetTracker:
             )
 
 
-PROJECT_INPUT_BUDGET = FileBudget(
+BUILD_INPUT_BUDGET = FileBudget(
     max_files=4_096,
     max_file_bytes=64 * 1024 * 1024,
     max_total_bytes=512 * 1024 * 1024,

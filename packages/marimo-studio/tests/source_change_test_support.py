@@ -31,8 +31,8 @@ class CountingProvider:
         self.inspections += 1
         return self._provider.inspect(request)
 
-    def provenance(self, inspection: Any) -> Any:
-        return self._provider.provenance(inspection)
+    def provenance(self) -> Any:
+        return self._provider.provenance()
 
 
 def counting_registry(

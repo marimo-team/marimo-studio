@@ -28,12 +28,13 @@ export const preparedRuntimeConfig = {
       },
     },
   },
-  mounts: [
+  sites: [
     {
       id: "value-report",
       kind: "value",
       source: { path: "index.html", line: 1, column: 1 },
-      allowedTargets: ["report"],
+      targets: ["report"],
+      accept: [],
     },
   ],
   projectionPolicy: {

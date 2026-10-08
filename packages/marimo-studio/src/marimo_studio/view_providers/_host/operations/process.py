@@ -25,7 +25,6 @@ from marimo_studio.view_providers import (
     ProviderStarter,
     StarterContext,
     StarterPlan,
-    ViewProject,
 )
 
 from .codec import (
@@ -113,6 +112,7 @@ def build_in_provider_process(
             "project_revision": request.project_revision,
             "profile": request.profile,
             "staging_root": str(request.staging_root),
+            "work_root": str(request.work_root),
             "cache_root": str(request.cache_root),
             "command_timeout": request.command_timeout,
         },
@@ -147,7 +147,6 @@ def describe_in_provider_process(
 
 def availability_in_provider_process(
     spec: ProviderProcessSpec,
-    project: ViewProject | None,
     cancellation: ProviderCancellation,
     timeout: float = DEFAULT_PROVIDER_EXTENSION_TIMEOUT,
 ) -> ProviderAvailability:
@@ -157,9 +156,7 @@ def availability_in_provider_process(
                 "schema": 1,
                 "operation": "availability",
                 "provider": spec.to_dict(),
-                "request": {
-                    "project": None if project is None else project_payload(project),
-                },
+                "request": {},
             },
             cancellation,
             timeout,

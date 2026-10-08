@@ -1,0 +1,33 @@
+"""Share project and Deno capabilities across framework providers.
+
+React and Svelte use this package to render starters, identify the files shown
+in Source, copy immutable build inputs, find projection sites, merge public
+assets, locate the installed Deno executable, and reuse its dependency cache.
+
+Both providers therefore apply the same file limits, frozen dependency inputs,
+command cancellation, and setup diagnostics. A missing or incompatible Deno
+runtime is reported before a build starts with the installation guidance needed
+to restore the provider.
+"""
+
+from marimo_studio.view_providers._builtin._deno.runtime import (
+    DOWNLOAD_FAILURE_HINT as DOWNLOAD_FAILURE_HINT,
+)
+from marimo_studio.view_providers._builtin._deno.runtime import (
+    DenoExecution as DenoExecution,
+)
+from marimo_studio.view_providers._builtin._deno.runtime import (
+    DenoExecutionError as DenoExecutionError,
+)
+from marimo_studio.view_providers._builtin._deno.runtime import (
+    create_execution as create_execution,
+)
+from marimo_studio.view_providers._builtin._deno.runtime import (
+    deno_availability as deno_availability,
+)
+from marimo_studio.view_providers._builtin._deno.runtime import (
+    deno_binary as deno_binary,
+)
+from marimo_studio.view_providers._builtin._deno.runtime import (
+    download_failed as download_failed,
+)

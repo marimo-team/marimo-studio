@@ -18,12 +18,26 @@ frontend project, so people and coding agents edit it with that framework's own
 files and commands.
 
 ::: warning Advanced feature
-The view provider API is an advanced extension point. A future release may
-change it to reduce the code a provider needs, and Studio plans to ship a
-dedicated agent skill for writing providers. Studio requires an exact
-`PROVIDER_API_VERSION` match, so pin `marimo-studio` to the minor line you
-test, such as `marimo-studio>=0.3.0,<0.4`.
+The view provider API is an advanced extension point. Pin `marimo-studio` to
+the minor line you test, such as `marimo-studio>=0.4,<0.5`.
 :::
+
+## Choose a pattern
+
+Every provider imports one module, `marimo_studio.view_providers`. Pick the
+pattern closest to your tool, then follow its section and read the example
+that uses it:
+
+| Pattern                                   | The build                                  | SDK pieces                                                  | Example                                                                                                                                            |
+| ----------------------------------------- | ------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [HTML page](#write-the-provider)          | copies or templates HTML                   | `html_sites`, `copy_inputs`                                 | this guide's `ReportProvider`                                                                                                                      |
+| [Framework build](#add-a-framework-build) | bundles JavaScript with a pinned toolchain | `request.runner`, `request.work_root`, `request.cache_root` | [`deno_react`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react) |
+
+The React, Svelte, and Notebook Kit providers share a Deno library inside
+Studio. When no pattern fits, start from the HTML page provider and replace
+`build()` with your tool's steps.
+[Check external tools](../reference/provider-api.md#check-external-tools)
+covers a provider that runs an installed command.
 
 ## Ask a coding agent
 
@@ -68,6 +82,10 @@ change rebuilds the page.
 | `index.html` | the provider, at creation   | yes                 | yes         |
 | `AGENTS.md`  | the provider, at creation   | yes                 | no          |
 | `DESIGN.md`  | the user or an agent, later | yes, once it exists | no          |
+| `view.toml`  | Studio                      | yes                 | yes         |
+
+Studio lists `view.toml`, `AGENTS.md`, and `DESIGN.md` in Source and adds
+`view.toml` to the build inputs for every provider.
 
 `AGENTS.md` tells a coding agent how the project fits together: which file
 holds the page, what the `<marimo-cell>` hosts mean, and where decisions
@@ -81,7 +99,7 @@ once the view has a direction, and agents read it before styling.
 Neither Markdown file shapes the built page, so editing them never triggers a
 rebuild.
 
-Studio calls the provider at four moments, and
+Studio calls the provider at these moments, and
 [Write the provider](#write-the-provider) covers each one:
 
 | When                                            | Studio calls                   |
@@ -102,8 +120,8 @@ to other packages. Studio turns that registration into the names people see:
 | ------------ | -------------------------------- | --------------------------------------- |
 | Registration | `report = "acme_views:provider"` | Entry point in the `acme-views` package |
 | Provider key | `acme-views/report`              | Distribution name and registration name |
-| Starter ID   | `acme-views/report:default`      | Provider key and the starter's key      |
-| View record  | `provider = "acme-views/report"` | Written to `view.toml` at creation      |
+| Starter ID   | `acme-views/report:default`      | Provider key and the starter key        |
+| `view.toml`  | `provider = "acme-views/report"` | Written to the view project at creation |
 
 Studio reads the entry points once per process, from the Python environment it
 runs in. Restart `marimo edit` after you install a provider or change its
@@ -119,7 +137,7 @@ resolve notebook environments:
 ```console
 uv init --lib acme-views
 cd acme-views
-uv add "marimo-studio>=0.3.0,<0.4"
+uv add "marimo-studio>=0.4,<0.5"
 ```
 
 When the notebook's directory is a uv project, `uv init` adds `acme-views` to
@@ -136,35 +154,26 @@ Replace `src/acme_views/__init__.py` with:
 
 ```python
 import html
-from html.parser import HTMLParser
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
-    PROVIDER_API_VERSION,
     BuildRequest,
     BuildResult,
-    CellSpec,
     InspectionRequest,
-    MountDeclaration,
-    NotebookSpec,
-    ProjectInput,
+    BuildInput,
     ProjectInspection,
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
     SourceDocument,
-    SourceLocation,
     StarterContext,
     StarterPlan,
-    ViewProject,
-    mount_attribute,
+    copy_inputs,
+    html_sites,
 )
 
 ENTRY = PurePosixPath("index.html")
 AGENTS = PurePosixPath("AGENTS.md")
-DESIGN = PurePosixPath("DESIGN.md")
-MANIFEST = PurePosixPath("view.toml")
-TAG = "<marimo-cell"
 
 AGENTS_SOURCE = """# Acme view
 
@@ -177,53 +186,10 @@ Studio builds this view from `index.html` with the Acme provider.
 """
 
 
-class CellHosts(HTMLParser):
-    """Collect each <marimo-cell name="..."> host with its source position."""
-
-    def __init__(self, source: str) -> None:
-        super().__init__()
-        self.hosts: list[tuple[str, int, int]] = []
-        self.feed(source)
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "marimo-cell" and (name := dict(attrs).get("name")):
-            line, offset = self.getpos()
-            self.hosts.append((name, line, offset + 1))
-
-
-def enabled_cells(notebook: NotebookSpec) -> list[CellSpec]:
-    """Return ordinary cells that run: neither disabled nor below a disabled cell."""
-    cells = notebook.by_ref()
-    disabled = {cell.ref for cell in notebook.cells if cell.config.disabled}
-    pending = list(disabled)
-    while pending:
-        for child in cells[pending.pop()].downstream:
-            if child not in disabled:
-                disabled.add(child)
-                pending.append(child)
-    return [
-        cell
-        for cell in notebook.cells
-        if cell.kind == "cell" and cell.ref not in disabled
-    ]
-
-
-def instrument(source: str, mounts: tuple[MountDeclaration, ...]) -> str:
-    """Add Studio's mount attribute to each declared <marimo-cell> host."""
-    lines = source.splitlines(keepends=True)
-    for site in reversed(mounts):
-        name, value = mount_attribute(site.id)
-        row = site.source.line - 1
-        cut = site.source.column - 1 + len(TAG)
-        lines[row] = f'{lines[row][:cut]} {name}="{value}"{lines[row][cut:]}'
-    return "".join(lines)
-
-
 class ReportProvider:
     info = ProviderInfo(
         title="Acme report",
         summary="One HTML page with the notebook's output cells.",
-        api_version=PROVIDER_API_VERSION,
     )
     starter = ProviderStarter(
         key="default",
@@ -232,18 +198,14 @@ class ReportProvider:
         documents=(ENTRY, AGENTS),
     )
 
-    def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
+    def availability(self) -> ProviderAvailability:
         return ProviderAvailability(True)
 
     def starters(self) -> tuple[ProviderStarter, ...]:
         return (self.starter,)
 
     def create(self, starter: ProviderStarter, context: StarterContext) -> StarterPlan:
-        cells = tuple(
-            context.cell_targets[cell.ref]
-            for cell in enabled_cells(context.notebook)
-            if cell.may_display_output
-        )
+        cells = context.output_cells
         hosts = "\n".join(
             f'      <marimo-cell name="{html.escape(item.target)}"></marimo-cell>'
             for item in cells
@@ -262,49 +224,34 @@ class ReportProvider:
         return StarterPlan(files=files, cell_targets=cells)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
-        root = request.project.root
-        source = (root / ENTRY).read_text(encoding="utf-8")
-        mounts = tuple(
-            MountDeclaration(
-                id=f"cell-{index}",
-                kind="cell",
-                source=SourceLocation(ENTRY, line, column),
-                allowed_targets=(name,),
-            )
-            for index, (name, line, column) in enumerate(CellHosts(source).hosts)
-        )
-        documents = [
-            SourceDocument(ENTRY, "html", "edit"),
-            SourceDocument(AGENTS, "markdown", "edit"),
-        ]
-        if (root / DESIGN).is_file():
-            documents.append(SourceDocument(DESIGN, "markdown", "edit"))
+        source = (request.project.root / ENTRY).read_bytes()
+        sites, diagnostics = html_sites(ENTRY, source)
         return ProjectInspection(
-            editor_documents=tuple(documents),
-            input_scope=(ProjectInput(ENTRY, "file"), ProjectInput(MANIFEST, "file")),
-            mounts=mounts,
-            diagnostics=(),
-            build_fingerprint="acme-report-v1",
+            documents=(SourceDocument(ENTRY, "html", "edit"),),
+            inputs=(BuildInput(ENTRY, "file"),),
+            sites=sites,
+            diagnostics=diagnostics,
         )
 
     def build(self, request: BuildRequest) -> BuildResult:
-        source = (request.project.root / ENTRY).read_text(encoding="utf-8")
-        page = instrument(source, request.inspection.mounts)
-        (request.staging_root / ENTRY).write_text(page, encoding="utf-8")
-        return BuildResult(ENTRY, ())
+        copy_inputs(request, request.staging_root)
+        return BuildResult(ENTRY)
 
 
 provider = ReportProvider()
 ```
 
-`ReportProvider` answers the four moments from
+`ReportProvider` answers the moments from
 [What a provider decides](#what-a-provider-decides), one method at a time.
 
 ### `availability()` and `starters()`: fill the picker
 
 When someone opens **New view**, Studio asks each provider whether it can run
 and which starters it offers. `ReportProvider` needs nothing beyond Python, so
-`availability()` always returns `ProviderAvailability(True)`.
+`availability()` always returns `ProviderAvailability(True)`. A provider that
+runs an installed tool returns `probe_tool(("tool", "--version"), minimum=...,
+install=...)`, which reports a missing or outdated tool with your install
+instructions.
 
 `starters()` returns one `ProviderStarter`. Its `title` and `summary` become
 the card in the picker, and `documents` becomes the **Files created** list.
@@ -315,11 +262,12 @@ Studio keeps the starter list for the life of the process.
 `create()` runs once, when someone clicks **Create**. It receives the saved
 notebook in `context.notebook` and returns every file of the new project in a
 `StarterPlan`. `ReportProvider` writes one `<marimo-cell>` host into
-`index.html` for each cell that may display output, and adds `AGENTS.md`.
+`index.html` for each cell in `context.output_cells`, and adds `AGENTS.md`.
 
-`enabled_cells()` leaves out disabled cells and every cell downstream of one,
-because marimo never runs a cell whose inputs come from a disabled cell. The
-built-in starters apply the same rule.
+`context.output_cells` lists the cells that may display output. It leaves out
+disabled cells and every cell downstream of one, because marimo never runs a
+cell whose inputs come from a disabled cell. The built-in starters use the same
+list.
 
 `context.cell_targets` supplies the name each host uses. A named cell such as
 `summary` keeps its name. For an unnamed cell, Studio proposes an alias such as
@@ -330,25 +278,30 @@ built-in starters apply the same rule.
 
 Studio calls `inspect()` whenever it needs the project's current shape: when
 Source opens, when a watched file changes, and before each build. The
-`ProjectInspection` it returns has three parts.
+`ProjectInspection` it returns lists the project's documents, build inputs, and
+projection sites.
 
-`editor_documents` fills the Source tabs with `index.html`, `AGENTS.md`, and
-`DESIGN.md` once that file exists. `input_scope` names the build inputs,
-`index.html` and `view.toml`. Studio rebuilds when one of them changes, which is
-why edits to the Markdown files leave the page alone.
+`documents` lists the Source documents, here `index.html`, and Studio adds
+`AGENTS.md` and `DESIGN.md` once they exist. `inputs` lists the build
+inputs. Studio rebuilds when `index.html` or `view.toml` changes, which is why
+edits to the Markdown files leave the page alone. For a project with many
+files, `project_files(request.project)` lists every file that can affect a
+build.
 
-`mounts` holds one entry per `<marimo-cell>` host. A mount lets that spot in
-the page show exactly the cell it names. `CellHosts` records each host's line
-and column, so Studio can point an error at the right place in Source.
+`sites` holds one projection site per `<marimo-cell>`, `<marimo-output>`, or
+`mo-value` host. A site lets that spot in the page show exactly the result it
+names. `html_sites()` records each host's line and column, so Studio can point
+an error at the right place in Source, and returns a diagnostic for a malformed
+host.
 
 ### `build()`: publish the page
 
 `build()` runs when Preview, run mode, or export needs a page for the current
-files. `request.project.root` holds a snapshot of the build inputs.
-`ReportProvider` reads `index.html`, adds the attribute from
-`mount_attribute()` to each host so Studio can connect it to the notebook, and
-writes the result to `request.staging_root`. The `index.html` in Source keeps
-its original markup.
+files. `request.project.root` holds a snapshot of the build inputs, and Studio
+has already marked each site's host in the snapshot so it can connect the host
+to the notebook. `ReportProvider` copies its inputs to
+`request.staging_root` with `copy_inputs()`. The `index.html` in Source keeps its
+original markup.
 
 Studio validates the staged files and publishes them as a new revision. A
 failed build leaves the last good revision in Preview.
@@ -475,31 +428,29 @@ Create `src/acme_views/vite.py`:
 
 ```python
 import os
-import shutil
 from dataclasses import replace
 from importlib.resources import files
 from pathlib import Path, PurePosixPath
 
 from deno import find_deno_bin
 from marimo_studio.view_providers import (
-    PROVIDER_API_VERSION,
     BuildRequest,
     BuildResult,
     InspectionRequest,
-    ProjectDiagnostic,
-    ProjectInput,
+    BuildInput,
     ProjectInspection,
     ProviderAvailability,
     ProviderCommandResult,
+    ProviderError,
     ProviderInfo,
     ProviderStarter,
     SourceDocument,
     StarterContext,
     StarterPlan,
-    ViewProject,
+    copy_inputs,
 )
 
-from acme_views import AGENTS, ENTRY, ReportProvider, instrument
+from acme_views import AGENTS, ENTRY, ReportProvider
 
 MAIN = PurePosixPath("main.js")
 CONFIG = PurePosixPath("deno.json")
@@ -511,25 +462,24 @@ def installed(work: Path, pattern: str) -> str:
     """Return the resolved paths of installed npm files that match `pattern`."""
     paths = sorted((work / "node_modules" / ".deno").glob(pattern))
     if not paths:
-        raise FileNotFoundError(f"deno install provided no {pattern}")
+        raise ProviderError(f"deno install provided no {pattern}.")
     return ",".join(str(path.resolve()) for path in paths)
 
 
-def failure(step: str, result: ProviderCommandResult) -> BuildResult:
-    diagnostic = ProjectDiagnostic(
-        code="vite-build-failed",
-        severity="error",
-        message=f"{step} failed with exit code {result.returncode}.",
-        hint=result.stderr.strip()[-2000:],
-    )
-    return BuildResult(None, (diagnostic,))
+def check(step: str, result: ProviderCommandResult) -> None:
+    if result.returncode != 0:
+        raise ProviderError(
+            f"{step} failed with exit code {result.returncode}: "
+            f"{result.stderr.strip()[-2000:]}",
+            hint="Fix the error in the view's source, then build again.",
+            code="vite-build-failed",
+        )
 
 
 class ViteProvider(ReportProvider):
     info = ProviderInfo(
         title="Acme Vite",
         summary="A Vite page with Lit components and the notebook's output cells.",
-        api_version=PROVIDER_API_VERSION,
     )
     starter = ProviderStarter(
         key="default",
@@ -538,13 +488,13 @@ class ViteProvider(ReportProvider):
         documents=(ENTRY, AGENTS, MAIN, CONFIG, LOCK),
     )
 
-    def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
+    def availability(self) -> ProviderAvailability:
         try:
             find_deno_bin()
         except FileNotFoundError:
             return ProviderAvailability(
                 False,
-                reason="deno-missing",
+                reason="The deno package is not installed.",
                 action="Install the deno package where Studio runs.",
             )
         return ProviderAvailability(True)
@@ -568,30 +518,24 @@ class ViteProvider(ReportProvider):
         inspection = super().inspect(request)
         return replace(
             inspection,
-            editor_documents=(
-                *inspection.editor_documents,
+            documents=(
+                *inspection.documents,
                 SourceDocument(MAIN, "javascript", "edit"),
                 SourceDocument(CONFIG, "json", "edit"),
                 SourceDocument(LOCK, "json", "read"),
             ),
-            input_scope=(
-                *inspection.input_scope,
-                ProjectInput(MAIN, "file"),
-                ProjectInput(CONFIG, "file"),
-                ProjectInput(LOCK, "file"),
+            inputs=(
+                *inspection.inputs,
+                BuildInput(MAIN, "file"),
+                BuildInput(CONFIG, "file"),
+                BuildInput(LOCK, "file"),
             ),
-            build_fingerprint="acme-vite-v1",
         )
 
     def build(self, request: BuildRequest) -> BuildResult:
-        work = (request.staging_root.parent / "work").resolve()
+        work = request.work_root.resolve()
         output = request.staging_root.resolve()
-        for path in request.inputs:
-            (work / path).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(request.project.root / path, work / path)
-        source = (work / ENTRY).read_text(encoding="utf-8")
-        page = instrument(source, request.inspection.mounts)
-        (work / ENTRY).write_text(page, encoding="utf-8")
+        copy_inputs(request, work)
 
         deno = find_deno_bin()
         cache = {"DENO_DIR": str(request.cache_root / "deno")}
@@ -600,8 +544,7 @@ class ViteProvider(ReportProvider):
             cwd=work,
             environment={**os.environ, **cache},
         )
-        if result.returncode != 0:
-            return failure("deno install", result)
+        check("deno install", result)
 
         # Stop Vite's package and workspace search at the working directory.
         (work / "package.json").write_text('{ "private": true }\n', encoding="utf-8")
@@ -626,10 +569,8 @@ class ViteProvider(ReportProvider):
             "--outDir",
             str(output),
         ]
-        result = request.runner.run(vite, cwd=work, environment=cache)
-        if result.returncode != 0:
-            return failure("vite build", result)
-        return BuildResult(ENTRY, ())
+        check("vite build", request.runner.run(vite, cwd=work, environment=cache))
+        return BuildResult(ENTRY)
 
 
 provider = ViteProvider()
@@ -643,18 +584,18 @@ provider = ViteProvider()
   and adds an `<acme-header>` element and a `<script>` tag to `index.html`.
 - `inspect()` adds the three files to Source and to the build inputs.
   `deno.lock` opens read-only.
-- `build()` copies the inputs to a working directory beside
-  `request.staging_root` and adds the mount attributes there. `deno install
---frozen` installs exactly the locked packages into `node_modules`, and fails
-  when `deno.json` and `deno.lock` disagree. Vite then bundles `main.js` into
-  `request.staging_root`.
+- `build()` copies the inputs to `request.work_root`, a private directory that
+  Studio empties after the build. `deno install --frozen` installs exactly the
+  locked packages into `node_modules`, and fails when `deno.json` and
+  `deno.lock` disagree. Vite then bundles `main.js` into `request.staging_root` and keeps
+  the site attributes on the hosts in `index.html`.
 
-Studio deletes the working directory after each build. `DENO_DIR` keeps Deno's
-downloads in `request.cache_root`, which persists between builds. The first
+`DENO_DIR` keeps Deno's downloads in `request.cache_root`, which persists between builds. The first
 build downloads Vite and Lit, and later builds reuse them.
 `request.runner.run()` stops a command when Studio cancels the build, and every
-command in one build shares a 120-second budget. A nonzero exit becomes a
-diagnostic that `marimo-studio view build` prints.
+command in one build shares a 120-second budget. `check()` raises
+`ProviderError` for a nonzero exit, and `marimo-studio view build` prints it
+with the end of the command's error output.
 
 ### Sandbox the build
 
@@ -687,7 +628,8 @@ Lit, change the starter in four places:
 - Name the entry module `main.jsx`, point the `<script>` tag at it, and list it
   with the `javascriptreact` language.
 - Add `vite.config.js` to `src/acme_views/dashboard/`, the files `create()`
-  copies, `ProviderStarter.documents`, `editor_documents`, and `input_scope`:
+  copies, `ProviderStarter.documents`, and the inspection's `documents` and
+  `inputs`:
 
   ```js
   export default { esbuild: { jsx: "automatic", jsxImportSource: "preact" } };
@@ -700,33 +642,34 @@ Lit, change the starter in four places:
   Keep the `<marimo-cell>` hosts outside the component tree so the framework
   never replaces them.
 
-`CellHosts` looks for hosts in `index.html`. To place `marimo-cell`,
+`html_sites()` finds hosts in `index.html`. To place `marimo-cell`,
 `marimo-output`, or `mo-value` hosts inside components, extend `inspect()` to
-find them there. The built-in providers in
-[`view_providers/_bundled`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_bundled)
+report them as `ProjectionSite` records from the component source. The
+built-in providers in
+[`view_providers/_builtin`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin)
 find hosts in JSX and Svelte.
 
 ## Provider rules
 
-Studio validates most of these rules and reports the one a result breaks.
+Studio checks each result against these rules and reports the rule it breaks.
 
-- Implement every method as a synchronous function. Set
-  `info.api_version = PROVIDER_API_VERSION`.
-- Leave `view.toml`, `.artifacts/`, `.locks/`, and `.gitignore` out of
-  `StarterPlan.files`. Studio writes those paths.
-- List `view.toml` in `input_scope` and leave it out of `editor_documents`.
-- List every file the build reads in `input_scope`. The build snapshot holds
+- Implement every method as a synchronous function. Raise `ProviderError` for
+  a problem the author can fix, and pass `source=` when it points at a file.
+- Declare every provider option in `info.options`. Studio rejects a view whose
+  `view.toml` sets any other option.
+- List every file the build reads in `inputs`. The build snapshot holds
   those files and nothing else from the view project.
 - Keep `inspect()` read-only. Put reusable data in `request.cache_root`.
-- Give each mount a lowercase ID that is unique within the inspection and stays
-  the same for the same host. Match `kind` to the host: `cell` for
-  `marimo-cell`, `output` for `marimo-output`, `value` for an element with
-  `mo-value`.
-- Add `mount_attribute(site.id)` to each declared host in the built files.
-- Write the build output inside `request.staging_root`. The entry document needs
-  one `head`, one `body`, and one element with `id="app-shell"`.
-- Run commands with `cwd` inside `request.project.root`. The working directory
-  `request.staging_root.parent / "work"` qualifies.
+- Report each host as a `ProjectionSite` whose `offset` points inside its start
+  tag in the stored file. `html_sites()` does this for HTML. Match `kind` to the
+  host: `cell` for `marimo-cell`, `output` for `marimo-output`, `value` for an
+  element with `mo-value`.
+- Build from the snapshot in `request.project.root` and keep the
+  `data-marimo-studio-site` attribute on each host in the built files.
+- Write the build output inside `request.staging_root`. An HTML entry document
+  needs one `head`, one `body`, and one element with `id="app-shell"`.
+- Run `build()` commands with `cwd` inside `request.project.root`, which holds
+  `request.work_root` and `request.staging_root`.
 - Pass `environment={**os.environ, ...}` to add variables. A mapping replaces
   the command's whole environment.
 - Pin npm packages in a lockfile that ships with the starter, and install them
@@ -735,32 +678,50 @@ Studio validates most of these rules and reports the one a result breaks.
   [Sandbox the build](#sandbox-the-build).
 - Use a kebab-case diagnostic `code` and a non-empty `message` without leading
   or trailing whitespace.
-- Change `build_fingerprint` when the provider's build output can change for
-  the same inputs.
+
+Studio rebuilds a view when its inputs change, when the provider package's
+version changes, or when `availability()` reports a new tool version. Release a
+new version when the build output changes for the same inputs.
 
 ## Verify the provider
 
-Run these from the notebook's project after every provider change:
+`check_provider()` runs each starter through the same steps as Studio and
+raises `ProviderCheckError` with the message Studio would show. Add it to the
+provider's tests:
+
+```python
+from marimo_studio.view_providers.testing import check_provider
+
+from acme_views import provider
+
+
+def test_report_provider() -> None:
+    (view,) = check_provider(provider)
+    assert "index.html" in {path.as_posix() for path in view.published}
+```
+
+Pass the provider object while you develop it, and the installed key, such as
+`check_provider("acme-views/report")`, to load it the way Studio does. Pass
+`options={"entrypoint": "page.html"}` to check a provider option.
+[`check_provider()`](../reference/provider-api.md#check-provider) lists every
+check.
+
+Then check the installed provider from the notebook's project:
 
 ```console
 uv run marimo-studio doctor acme-views/vite
-uv run marimo-studio starters
-uv run marimo-studio view create dash --target analysis.py \
-  --starter acme-views/vite:default --dry-run
 uv run marimo-studio view create dash --target analysis.py \
   --starter acme-views/vite:default
 uv run marimo-studio view build dash --target analysis.py
 uv run marimo run analysis.py
 ```
 
-| Command                     | Expected result                                                             |
-| --------------------------- | --------------------------------------------------------------------------- |
-| `doctor acme-views/vite`    | First line `available acme-views/vite`, exit status 0                       |
-| `starters`                  | `available acme-views/vite:default`                                         |
-| `view create ... --dry-run` | `Would create view dash` and every starter file                             |
-| `view create`               | `Created view dash`                                                         |
-| `view build`                | `Built dash for development use`                                            |
-| `marimo run`                | `http://localhost:2718/dash/` shows the Lit header and the notebook's cells |
+| Command                  | Expected result                                                             |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `doctor acme-views/vite` | First line `available acme-views/vite`, exit status 0                       |
+| `view create`            | `Created view dash`                                                         |
+| `view build`             | `Built dash for development use`                                            |
+| `marimo run`             | `http://localhost:2718/dash/` shows the Lit header and the notebook's cells |
 
 `marimo run` builds the `production` profile on the first request. The provider
 works when `/dash/` shows the notebook's controls and outputs with no
@@ -768,16 +729,14 @@ works when `/dash/` shows the notebook's controls and outputs with no
 
 ## Troubleshoot
 
-| Message or symptom                                                                                 | Fix                                                                                                        |
-| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `Unknown view provider 'acme-views/vite'`                                                          | Install the package in the environment that runs Studio, check the entry point, and restart `marimo edit`. |
-| `View provider ... is not installed`, while `doctor` shows `uses API version 2. Studio requires 1` | Set `api_version=PROVIDER_API_VERSION` and pin the tested `marimo-studio` minor line.                      |
-| `cannot expose Studio-owned 'view.toml' in the editor`                                             | Remove `view.toml` from `editor_documents`.                                                                |
-| `must include Studio-owned 'view.toml' in its input scope`                                         | Add `ProjectInput(PurePosixPath("view.toml"), "file")`.                                                    |
-| `Provider working directory is outside the view snapshot`                                          | Run commands in `request.project.root` or a directory beneath it.                                          |
-| `expected one element with id="app-shell"`                                                         | Keep one `#app-shell` element in the entry document.                                                       |
-| The page shows `This section is unavailable.` in place of a cell                                   | Add `mount_attribute(site.id)` to each declared host in `build()`.                                         |
+| Message or symptom                                                                              | Fix                                                                                                        |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `Unknown view provider 'acme-views/vite'`                                                       | Install the package in the environment that runs Studio, check the entry point, and restart `marimo edit`. |
+| `view.toml sets 'port', which Acme Vite does not read.`                                         | Add the option to `info.options`, or remove it from `view.toml`.                                           |
+| `Provider working directory is outside the view snapshot`                                       | Run commands in `request.work_root` or `request.project.root`.                                             |
+| `expected one element with id="app-shell"`                                                      | Keep one `#app-shell` element in the entry document.                                                       |
+| `projection-site-missing`, and the page shows `This section is unavailable.` in place of a cell | Build from `request.project.root` and keep each host's `data-marimo-studio-site` attribute.                |
 
-The [View provider API](../reference/provider-api.md) defines every record,
-including `marimo-output` and `mo-value` mounts, source-located diagnostics,
-and provider options read from `view.toml`.
+The [View provider API](../reference/provider-api.md) defines every record and
+[each term](../reference/provider-api.md#terms) this page uses, including
+projection sites, diagnostics, and provider options.

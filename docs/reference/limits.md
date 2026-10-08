@@ -9,7 +9,7 @@ Studio bounds source inspection, provider processes, build snapshots, browser
 artifacts, projection requests, and validation waits. Limits apply before
 publication or mutation commit unless the table names a browser boundary.
 
-## Names and source documents
+## Names and Source documents
 
 | Boundary                                              |           Limit | Failure or diagnostic                             |
 | ----------------------------------------------------- | --------------: | ------------------------------------------------- |
@@ -37,26 +37,29 @@ missing entry document, and a document without one `head`, one `body`, and one
 `#app-shell`.
 
 Static export combines the artifact with Studio runtime assets and notebook
-public files. Prepared export adds verified output assets. Browser export
-adds notebook source. Each copied tree is checked against the artifact file
-budget before the staged directory can replace the destination.
+public files. Prepared export adds verified output assets, each within
+marimo-export's 64 MiB asset and 512 MiB export limits. Browser export adds
+notebook source. Each copied tree is checked against the artifact file budget
+before the staged directory can replace the destination.
 
 ## Projection declarations
 
-| Boundary                                           |             Limit |
-| -------------------------------------------------- | ----------------: |
-| Mount declarations returned by provider inspection |               512 |
-| Encoded mount declarations                         |             1 MiB |
-| Finite cell targets on one mount                   |               256 |
-| Finite output targets on one mount                 |               100 |
-| Finite value targets on one mount                  |               100 |
-| Projection target                                  | 4,096 UTF-8 bytes |
-| Value selector path                                |          64 steps |
-| Projection site ID                                 |    128 characters |
+| Boundary                                         |             Limit |
+| ------------------------------------------------ | ----------------: |
+| Projection sites returned by provider inspection |               512 |
+| Encoded projection sites                         |             1 MiB |
+| Finite cell targets on one site                  |               256 |
+| Finite output targets on one site                |               100 |
+| Finite value targets on one site                 |               100 |
+| Projection target                                | 4,096 UTF-8 bytes |
+| Value selector path                              |          64 steps |
+| Media types in one output accept list            |                32 |
 
-`allowed_targets=None` represents a dynamic mount and avoids enumerating its
-target set during inspection. Runtime policy still applies to active instances
-and unique targets. Prepared export requires finite targets on every mount.
+Value selectors and accept lists follow marimo-export's
+[`values`](https://marimo-team.github.io/marimo-export/reference/python/values)
+module, which a Prepared export also uses. Targets `"*"` represent a dynamic
+site and avoid enumerating its target set during inspection. Runtime policy
+still applies to active instances and unique targets. Prepared export requires finite targets on every site.
 
 ## Active presentation projections
 
@@ -84,7 +87,7 @@ target.
 | One projected Arrow value                         |          64 MiB | `value-too-large`                          |
 | Arrow values in one value read                    |         128 MiB | `response-too-large`                       |
 | Arrow values in one Browser runtime value read    |          64 MiB | `response-too-large`                       |
-| One rendered output, and the outputs of a request | 1,000,000 bytes | `output-too-large` or `response-too-large` |
+| One rendered output, and the outputs of a request | 5,000,000 bytes | `output-too-large` or `response-too-large` |
 | One rendered output request set                   |   100 selectors | Capability or protocol error               |
 | Browser client response                           | 5,000,000 bytes | Live request failure                       |
 
@@ -123,7 +126,7 @@ reaches 16 MiB.
 | Boundary                                  |                         Limit |
 | ----------------------------------------- | ----------------------------: |
 | Starters per provider                     |                           256 |
-| Advertised documents per starter          |                           256 |
+| Source documents per starter              |                           256 |
 | Options in one view project               |                           256 |
 | Cell targets consumed by one starter plan |                           256 |
 | Provider inspection diagnostics           | 512 records and 1 MiB encoded |

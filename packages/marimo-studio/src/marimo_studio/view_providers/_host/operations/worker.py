@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import inspect
 import json
 import sys
 from importlib.metadata import EntryPoint
 from pathlib import Path, PurePosixPath
 from typing import cast
 
+from marimo_studio._processes.cancellation import provider_cancellation
 from marimo_studio._processes.provider_runner import create_provider_runner
 from marimo_studio.view_providers import (
     BuildProfile,
@@ -19,7 +19,15 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     ViewProvider,
 )
-from marimo_studio.view_providers._host.conformance import ProviderConformance
+from marimo_studio.view_providers._host.conformance import (
+    ProviderConformance,
+    provider_methods,
+)
+from marimo_studio.view_providers._host.starters import (
+    validate_starter_context,
+    validate_starter_plan,
+    validate_starters,
+)
 
 from .codec import (
     availability_payload,
@@ -73,12 +81,7 @@ def _load_provider(
             group="marimo_studio.view_provider",
         ).load(),
     )
-    for method in ("availability", "starters", "create", "inspect", "build"):
-        operation = getattr(implementation, method, None)
-        if not callable(operation):
-            raise ValueError(f"provider requires {method}()")
-        if inspect.iscoroutinefunction(operation):
-            raise ValueError(f"provider {method}() must be synchronous")
+    provider_methods(implementation)
     return implementation, ProviderConformance(
         key,
         getattr(implementation, "info", None),
@@ -87,7 +90,11 @@ def _load_provider(
     )
 
 
-def _invoke(payload: object, transfer_root: Path) -> object:
+def _invoke(
+    payload: object,
+    transfer_root: Path,
+    cancellation: ProviderCancellation,
+) -> object:
     root = _record(payload, {"schema", "operation", "provider", "request"}, "request")
     if root["schema"] != 1:
         raise ValueError("Provider operation schema is unsupported")
@@ -98,19 +105,14 @@ def _invoke(payload: object, transfer_root: Path) -> object:
         _record(request_data, set(), "provider description")
         return provider_info_payload(conformance.info)
     if operation == "availability":
-        data = _record(request_data, {"project"}, "provider availability")
-        project = (
-            None
-            if data["project"] is None
-            else conformance.validate_project(project_from_payload(data["project"]))
-        )
+        _record(request_data, set(), "provider availability")
         return availability_payload(
-            conformance.validate_availability(implementation.availability(project))
+            conformance.validate_availability(implementation.availability())
         )
     if operation == "starters":
         _record(request_data, set(), "provider starters")
         return starters_payload(
-            conformance.validate_starters(implementation.starters())
+            validate_starters(conformance.key, implementation.starters())
         )
     if operation == "create":
         data = _record(
@@ -118,13 +120,16 @@ def _invoke(payload: object, transfer_root: Path) -> object:
             {"starter", "context"},
             "provider starter creation",
         )
-        starter = conformance.validate_starters(
-            (starter_from_payload(data["starter"]),)
+        starter = validate_starters(
+            conformance.key,
+            (starter_from_payload(data["starter"]),),
         )[0]
-        context = conformance.validate_starter_context(
-            starter_context_from_payload(data["context"])
+        context = validate_starter_context(
+            conformance.key,
+            starter_context_from_payload(data["context"]),
         )
-        plan = conformance.validate_starter_plan(
+        plan = validate_starter_plan(
+            conformance.key,
             starter,
             context,
             implementation.create(
@@ -134,9 +139,13 @@ def _invoke(payload: object, transfer_root: Path) -> object:
         )
         return starter_plan_payload(plan, transfer_root)
     if operation == "inspect":
-        return inspection_payload(_inspect(implementation, conformance, request_data))
+        return inspection_payload(
+            _inspect(implementation, conformance, request_data, cancellation)
+        )
     if operation == "build":
-        return build_result_payload(_build(implementation, conformance, request_data))
+        return build_result_payload(
+            _build(implementation, conformance, request_data, cancellation)
+        )
     raise ValueError("Provider operation is unsupported")
 
 
@@ -144,16 +153,16 @@ def _inspect(
     provider: ViewProvider,
     conformance: ProviderConformance,
     value: object,
+    cancellation: ProviderCancellation,
 ) -> ProjectInspection:
     data = _record(value, {"project", "cache_root", "command_timeout"}, "inspection")
     project = project_from_payload(data["project"])
     timeout = _number(data["command_timeout"], "Inspection command timeout")
-    cancellation = ProviderCancellation()
     request = conformance.validate_inspection_request(
         InspectionRequest(
             project,
             create_provider_runner(
-                project,
+                project.root,
                 cancellation,
                 timeout,
                 owns_process_tree=False,
@@ -163,13 +172,14 @@ def _inspect(
             timeout,
         )
     )
-    return conformance.validate_inspection(project, provider.inspect(request))
+    return conformance.inspect(provider, request)
 
 
 def _build(
     provider: ViewProvider,
     conformance: ProviderConformance,
     value: object,
+    cancellation: ProviderCancellation,
 ) -> BuildResult:
     data = _record(
         value,
@@ -180,6 +190,7 @@ def _build(
             "project_revision",
             "profile",
             "staging_root",
+            "work_root",
             "cache_root",
             "command_timeout",
         },
@@ -190,7 +201,6 @@ def _build(
     inputs = data["inputs"]
     if not isinstance(inputs, list):
         raise ValueError("Build inputs must be an array")
-    cancellation = ProviderCancellation()
     request = conformance.validate_build_request(
         BuildRequest(
             project,
@@ -199,10 +209,11 @@ def _build(
             _text(data["project_revision"], "Project revision"),
             cast(BuildProfile, data["profile"]),
             Path(_text(data["staging_root"], "Build staging root")),
+            Path(_text(data["work_root"], "Build work root")),
             Path(_text(data["cache_root"], "Build cache root")),
             cancellation,
             create_provider_runner(
-                project,
+                project.root,
                 cancellation,
                 timeout,
                 owns_process_tree=False,
@@ -210,7 +221,7 @@ def _build(
             timeout,
         )
     )
-    return conformance.validate_build_result(request, provider.build(request))
+    return conformance.build(provider, request)
 
 
 def main() -> int:
@@ -218,11 +229,14 @@ def main() -> int:
         return 2
     request_path = Path(sys.argv[1])
     response_path = Path(sys.argv[2])
+    cancellation = ProviderCancellation()
     try:
-        value = _invoke(
-            json.loads(request_path.read_text(encoding="utf-8")),
-            response_path.parent / "transfer",
-        )
+        with provider_cancellation(cancellation):
+            value = _invoke(
+                json.loads(request_path.read_text(encoding="utf-8")),
+                response_path.parent / "transfer",
+                cancellation,
+            )
         response: dict[str, object] = {"schema": 1, "ok": True, "value": value}
     except BaseException as error:
         response = {

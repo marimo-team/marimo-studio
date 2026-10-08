@@ -175,9 +175,9 @@ Authoring uses these protocol areas:
 | View project          | View, provider, documents, diagnostics, artifact state                   |
 | Source document       | Relative path, language, access, label, and content revision             |
 | Projection targets    | Target names, ready producers, dependency closures, and ambiguity        |
-| Mount declarations    | Mount ID, source location, kind, and allowed targets                     |
+| Artifact sites        | Site ID, source location, kind, and targets                              |
 | Mounted results       | Instance ID, target, phase, runtime cell, and error                      |
-| Runtime configuration | Presentation, runtime, projection targets, mounts, and cell bindings     |
+| Runtime configuration | Presentation, runtime, projection targets, sites, and cell bindings      |
 | Development events    | Project, build, presentation, views, ready, activate, and session events |
 
 Avoid duplicating validation constants across producers and consumers. Let the

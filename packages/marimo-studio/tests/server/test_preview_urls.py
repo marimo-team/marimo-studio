@@ -546,7 +546,7 @@ def test_exact_preview_only_reads_matching_publication_during_an_active_build(
     edit_mode(app)
     with TestClient(app) as client, build_lock(project) as acquired:
         assert acquired
-        record_build_started(project, "development", project_revision, None)
+        record_build_started(project, "development", project_revision)
         resolved = client.get(ENDPOINT, params={"runtime": "wasm", "exact": "1"})
         if source_changed:
             assert resolved.status_code == 409

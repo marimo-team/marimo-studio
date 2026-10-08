@@ -20,7 +20,7 @@ from marimo_studio._processes.supervisor import (
     ProcessResult,
     process_returncode_message,
 )
-from marimo_studio._projections.runtime_records import RuntimeProbe
+from marimo_studio._projections.runtime_records import OutputGroup, RuntimeProbe
 from marimo_studio.errors import ProtocolError, RuntimeTimeoutError
 
 
@@ -29,7 +29,7 @@ async def probe_runtime_isolated(
     *,
     cell_ids: tuple[str, ...],
     value_selector_groups: tuple[tuple[str, ...], ...],
-    output_selector_groups: tuple[tuple[str, ...], ...],
+    output_groups: tuple[OutputGroup, ...],
     show_tracebacks: bool,
     timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     max_json_bytes: int | None = None,
@@ -40,7 +40,7 @@ async def probe_runtime_isolated(
         path,
         cell_ids=cell_ids,
         value_selector_groups=value_selector_groups,
-        output_selector_groups=output_selector_groups,
+        output_groups=output_groups,
         show_tracebacks=show_tracebacks,
         timeout=timeout,
         max_json_bytes=max_json_bytes,

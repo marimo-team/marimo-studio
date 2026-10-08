@@ -10,6 +10,7 @@ from marimo_studio._notebook.records import CellRef, CellSpec
 from marimo_studio._projections.resolution import ResolvedProjection
 from marimo_studio._projections.resolved import ResolvedStudio
 from marimo_studio._projections.runtime_records import (
+    OutputGroup,
     RenderedOutput,
     RuntimeCell,
     ValueReadError,
@@ -29,7 +30,7 @@ from marimo_studio._validation.results import CheckResult
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError, ViewNotFoundError
-from marimo_studio.view_providers import MountDeclaration
+from marimo_studio.view_providers._artifact_sites import ArtifactSite, inspection_sites
 
 
 def _cell_details(
@@ -56,28 +57,28 @@ async def run_runtime_checks(
     view_name: str | None,
     probe_runtime: LiveNotebookRunner,
     timeout: float,
-    published_mounts: Mapping[str, tuple[MountDeclaration, ...]] | None = None,
+    published_sites: Mapping[str, tuple[ArtifactSite, ...]] | None = None,
 ) -> tuple[CheckResult, ...]:
     try:
         if view_name is not None and view_name not in studio.views:
             raise ViewNotFoundError(view_name, available=tuple(studio.views))
         view_names = (view_name,) if view_name is not None else tuple(studio.views)
-        if published_mounts is None:
+        if published_sites is None:
             inspections = await asyncio.gather(
                 *(
                     asyncio.to_thread(inspect_view_project_sync, studio.views[name])
                     for name in view_names
                 )
             )
-            published_mounts = {
-                name: inspection.mounts
+            published_sites = {
+                name: inspection_sites(inspection)
                 for name, inspection in zip(view_names, inspections, strict=True)
             }
         resolved = resolve_studio(
             studio,
             inspect_notebook=inspect_notebook,
             view_name=view_name,
-            published_mounts=published_mounts,
+            published_sites=published_sites,
         )
         selected = selected_views(resolved, view_name)
     except MarimoStudioError as error:
@@ -90,10 +91,10 @@ async def run_runtime_checks(
     cells: dict[str, ResolvedProjection] = {}
     values: dict[str, list[tuple[str, ResolvedProjection]]] = {}
     outputs: dict[str, list[tuple[str, ResolvedProjection]]] = {}
-    output_groups: list[tuple[str, ...]] = []
+    output_groups: list[OutputGroup] = []
     value_groups: dict[CellRef, set[str]] = {}
     for name in selected:
-        view_outputs: list[str] = []
+        view_outputs: dict[str, tuple[str, ...]] = {}
         for projection in resolved.views[name].projections:
             target = projection.request.target
             if projection.kind == "cell":
@@ -103,9 +104,9 @@ async def run_runtime_checks(
                 value_groups.setdefault(projection.producer, set()).add(target)
             else:
                 outputs.setdefault(target, []).append((name, projection))
-                view_outputs.append(target)
+                view_outputs[target] = projection.accept
         if view_outputs:
-            output_groups.append(tuple(dict.fromkeys(sorted(view_outputs))))
+            output_groups.append(dict(sorted(view_outputs.items())))
 
     notebook_cells = resolved.notebook.by_ref()
     try:
@@ -119,7 +120,7 @@ async def run_runtime_checks(
             value_selector_groups=tuple(
                 tuple(sorted(group)) for group in value_groups.values()
             ),
-            output_selector_groups=tuple(output_groups),
+            output_groups=tuple(output_groups),
             show_tracebacks=True,
             timeout=timeout,
         )

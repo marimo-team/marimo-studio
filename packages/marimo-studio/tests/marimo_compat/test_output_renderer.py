@@ -6,13 +6,105 @@ from typing import Any
 import pytest
 
 from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
+from marimo_studio._projections.runtime_records import output_representation
 
 from .values_test_support import (
     _native_output_context,
     _OutputContext,
     _resource_element_class,
+    _selectors,
     assert_native_resources_released,
 )
+
+
+def test_accepting_outputs_render_the_value_as_media(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(2, 1))
+    figure.subplots().plot([1, 3, 2])
+    monkeypatch.setattr(
+        "marimo._messaging.notification_utils.broadcast_notification",
+        lambda _notification: None,
+    )
+    renderer = KernelOutputRenderer(_OutputContext())
+
+    rendered = renderer.render(
+        {"chart": figure, "label": "plain text"},
+        _selectors("chart", "label"),
+        ("chart", "label"),
+        {"chart": ("application/pdf", "image/svg+xml"), "label": ("image/png",)},
+        consumer_id="preview-a",
+        max_output_bytes=1_000_000,
+    )
+
+    chart = rendered.outputs["chart"]
+    media = output_representation(chart.mimetype, chart.data)
+    assert media is not None and media.media_type == "application/pdf"
+    assert media.data.startswith(b"%PDF-")
+    assert rendered.errors["label"].code == "output-media-unavailable"
+    assert "builtins.str has no representation as image/png" in (
+        rendered.errors["label"].message
+    )
+
+
+def test_a_failing_media_value_leaves_the_other_outputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Broken(dict[str, object]):
+        def get(self, key: object, default: object = None) -> object:
+            raise RuntimeError("lazy mapping failed")
+
+    monkeypatch.setattr(
+        "marimo._messaging.notification_utils.broadcast_notification",
+        lambda _notification: None,
+    )
+
+    rendered = KernelOutputRenderer(_OutputContext()).render(
+        {"broken": Broken(), "label": "plain text"},
+        _selectors("broken", "label"),
+        ("broken", "label"),
+        {"broken": ("image/png",)},
+        consumer_id="preview-a",
+        max_output_bytes=1_000_000,
+    )
+
+    assert rendered.errors["broken"].code == "output-format-error"
+    assert "lazy mapping failed" in rendered.errors["broken"].message
+    assert "label" in rendered.outputs
+
+
+def test_a_png_output_keeps_the_figure_display_size_at_double_density(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(3, 2), dpi=100)
+    figure.subplots().plot([1, 3, 2])
+    monkeypatch.setattr(
+        "marimo._messaging.notification_utils.broadcast_notification",
+        lambda _notification: None,
+    )
+
+    chart = (
+        KernelOutputRenderer(_OutputContext())
+        .render(
+            {"chart": figure},
+            _selectors("chart"),
+            ("chart",),
+            {"chart": ("image/png",)},
+            consumer_id="preview-a",
+            max_output_bytes=1_000_000,
+        )
+        .outputs["chart"]
+    )
+
+    # marimo shows a high-density figure through a mimebundle carrying its size.
+    assert chart.mimetype == "application/vnd.marimo+mimebundle"
+    media = output_representation(chart.mimetype, chart.data)
+    assert media is not None and media.width is not None
+    pixels = int.from_bytes(media.data[16:20], "big")
+    assert pixels / 2 == pytest.approx(media.width, abs=1)
+    assert media.width <= 300
 
 
 def test_output_renderer_releases_stable_native_owners(
@@ -36,17 +128,17 @@ def test_output_renderer_releases_stable_native_owners(
 
     rendered = renderer.render(
         {"summary": object()},
+        _selectors("summary"),
         ("summary",),
-        ("summary",),
-        {"summary"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=1_000,
     )
     inactive = renderer.render(
         {"summary": object()},
-        ("summary",),
+        _selectors("summary"),
         (),
-        {"summary"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=1_000,
     )
@@ -93,9 +185,9 @@ def test_output_renderer_deletes_function_bearing_native_resources(
         with context.install():
             first = renderer.render(
                 {"summary": object()},
+                _selectors("summary"),
                 ("summary",),
-                ("summary",),
-                {"summary"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -109,9 +201,9 @@ def test_output_renderer_deletes_function_bearing_native_resources(
             else:
                 renderer.render(
                     {"summary": object()},
+                    {},
                     (),
-                    (),
-                    {"summary"},
+                    {},
                     consumer_id="preview-a",
                     max_output_bytes=10_000,
                 )
@@ -157,9 +249,9 @@ def test_output_renderer_preserves_cached_resources_across_consumers(
         with context.install():
             first = renderer.render(
                 {"summary": value},
+                _selectors("summary"),
                 ("summary",),
-                ("summary",),
-                {"summary"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -169,9 +261,9 @@ def test_output_renderer_preserves_cached_resources_across_consumers(
 
             second = renderer.render(
                 {"summary": value},
+                _selectors("summary"),
                 ("summary",),
-                ("summary",),
-                {"summary"},
+                {},
                 consumer_id="preview-b",
                 max_output_bytes=10_000,
             )
@@ -180,17 +272,17 @@ def test_output_renderer_preserves_cached_resources_across_consumers(
 
             renderer.render(
                 {"summary": value},
+                {},
                 (),
-                (),
-                {"summary"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
             refreshed = renderer.render(
                 {"summary": value},
+                _selectors("summary"),
                 ("summary",),
-                ("summary",),
-                {"summary"},
+                {},
                 consumer_id="preview-b",
                 max_output_bytes=10_000,
             )
@@ -199,17 +291,17 @@ def test_output_renderer_preserves_cached_resources_across_consumers(
 
             renderer.render(
                 {"summary": value},
+                {},
                 (),
-                (),
-                {"summary"},
+                {},
                 consumer_id="preview-b",
                 max_output_bytes=10_000,
             )
             remounted = renderer.render(
                 {"summary": value},
+                _selectors("summary"),
                 ("summary",),
-                ("summary",),
-                {"summary"},
+                {},
                 consumer_id="preview-c",
                 max_output_bytes=10_000,
             )
@@ -218,9 +310,9 @@ def test_output_renderer_preserves_cached_resources_across_consumers(
 
             renderer.render(
                 {"summary": value},
+                {},
                 (),
-                (),
-                {"summary"},
+                {},
                 consumer_id="preview-c",
                 max_output_bytes=10_000,
             )
@@ -228,9 +320,9 @@ def test_output_renderer_preserves_cached_resources_across_consumers(
             gc.collect()
             renderer.render(
                 {},
+                {},
                 (),
-                (),
-                set(),
+                {},
                 consumer_id="preview-d",
                 max_output_bytes=10_000,
             )
@@ -272,9 +364,9 @@ def test_output_renderer_preserves_cached_ui_elements_across_selectors(
         with context.install():
             initial = renderer.render(
                 {"first": value, "second": value},
+                _selectors("first", "second"),
                 ("first", "second"),
-                ("first", "second"),
-                {"first", "second"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -285,9 +377,9 @@ def test_output_renderer_preserves_cached_ui_elements_across_selectors(
 
             refreshed = renderer.render(
                 {"first": value, "second": value},
-                ("first",),
+                _selectors("first"),
                 ("first", "second"),
-                {"first", "second"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -297,9 +389,9 @@ def test_output_renderer_preserves_cached_ui_elements_across_selectors(
 
             surviving = renderer.render(
                 {"first": value, "second": value},
+                _selectors("second"),
                 ("second",),
-                ("second",),
-                {"first", "second"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -312,9 +404,9 @@ def test_output_renderer_preserves_cached_ui_elements_across_selectors(
             gc.collect()
             renderer.render(
                 {},
+                {},
                 (),
-                (),
-                set(),
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -350,17 +442,17 @@ def test_output_renderer_preserves_notebook_ui_owner_until_source_release(
 
             initial = renderer.render(
                 source,
+                _selectors("element"),
                 ("element",),
-                ("element",),
-                {"element"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
             refreshed = renderer.render(
                 source,
+                _selectors("element"),
                 ("element",),
-                ("element",),
-                {"element"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -375,9 +467,9 @@ def test_output_renderer_preserves_notebook_ui_owner_until_source_release(
 
             renderer.render(
                 source,
+                {},
                 (),
-                (),
-                {"element"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -388,9 +480,9 @@ def test_output_renderer_preserves_notebook_ui_owner_until_source_release(
             gc.collect()
             renderer.render(
                 {},
+                {},
                 (),
-                (),
-                set(),
+                {},
                 consumer_id="preview-b",
                 max_output_bytes=10_000,
             )
@@ -431,9 +523,9 @@ def test_output_renderer_defers_creator_notification_for_shared_ui(
         with context.install():
             initial = renderer.render(
                 {"first": value, "second": value},
+                _selectors("first", "second"),
                 ("first", "second"),
-                ("first", "second"),
-                {"first", "second"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -444,9 +536,9 @@ def test_output_renderer_defers_creator_notification_for_shared_ui(
 
             refreshed = renderer.render(
                 {"first": value, "second": value},
+                _selectors("second"),
                 ("second",),
-                ("second",),
-                {"first", "second"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -457,9 +549,9 @@ def test_output_renderer_defers_creator_notification_for_shared_ui(
 
             renderer.render(
                 {"first": value, "second": value},
+                {},
                 (),
-                (),
-                {"first", "second"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -469,9 +561,9 @@ def test_output_renderer_defers_creator_notification_for_shared_ui(
             gc.collect()
             renderer.render(
                 {},
+                {},
                 (),
-                (),
-                set(),
+                {},
                 consumer_id="preview-b",
                 max_output_bytes=10_000,
             )
@@ -482,9 +574,9 @@ def test_output_renderer_defers_creator_notification_for_shared_ui(
         with context.install():
             renderer.render(
                 {},
+                {},
                 (),
-                (),
-                set(),
+                {},
                 consumer_id="preview-b",
                 max_output_bytes=10_000,
             )
@@ -519,18 +611,18 @@ def test_output_renderer_resets_a_fresh_ui_element_reusing_the_owner(
         with context.install():
             first = renderer.render(
                 {"control": object()},
+                _selectors("control"),
                 ("control",),
-                ("control",),
-                {"control"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
             object_id = next(iter(context.ui_element_registry._objects))
             second = renderer.render(
                 {"control": object()},
+                _selectors("control"),
                 ("control",),
-                ("control",),
-                {"control"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -606,9 +698,9 @@ def test_output_renderer_defers_owner_notification_for_mixed_ui(
         with context.install():
             first = renderer.render(
                 {"controls": value},
+                _selectors("controls"),
                 ("controls",),
-                ("controls",),
-                {"controls"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -622,9 +714,9 @@ def test_output_renderer_defers_owner_notification_for_mixed_ui(
             value = MixedOutput(1)
             second = renderer.render(
                 {"controls": value},
+                _selectors("controls"),
                 ("controls",),
-                ("controls",),
-                {"controls"},
+                {},
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
@@ -668,33 +760,33 @@ def test_output_renderer_scopes_native_owners_to_each_consumer(
 
     first = renderer.render(
         {"summary": object(), "detail": object()},
+        _selectors("summary"),
         ("summary",),
-        ("summary",),
-        {"summary", "detail"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=1_000,
     )
     second = renderer.render(
         {"summary": object(), "detail": object()},
+        _selectors("summary"),
         ("summary",),
-        ("summary",),
-        {"summary", "detail"},
+        {},
         consumer_id="preview-b",
         max_output_bytes=1_000,
     )
     renderer.render(
         {"summary": object(), "detail": object()},
+        _selectors("detail"),
         ("detail",),
-        ("detail",),
-        {"summary", "detail"},
+        {},
         consumer_id="preview-b",
         max_output_bytes=1_000,
     )
     refreshed = renderer.render(
         {"summary": object(), "detail": object()},
+        _selectors("summary"),
         ("summary",),
-        ("summary",),
-        {"summary", "detail"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=1_000,
     )
@@ -740,25 +832,25 @@ def test_output_renderer_releases_resources_on_resolution_failure(
 
     ready = renderer.render(
         ready_namespace,
+        _selectors(selector),
         (selector,),
-        (selector,),
-        {selector},
+        {},
         consumer_id="preview-a",
         max_output_bytes=1_000,
     )
     failed = renderer.render(
         failed_namespace,
+        _selectors(selector),
         (selector,),
-        (selector,),
-        {selector},
+        {},
         consumer_id="preview-a",
         max_output_bytes=1_000,
     )
     recovered = renderer.render(
         ready_namespace,
+        _selectors(selector),
         (selector,),
-        (selector,),
-        {selector},
+        {},
         consumer_id="preview-a",
         max_output_bytes=1_000,
     )
@@ -793,9 +885,9 @@ def test_output_renderer_bounds_the_encoded_response_and_releases_owners(
     baseline_renderer = KernelOutputRenderer(_OutputContext())
     baseline = baseline_renderer.render(
         {"summary": object()},
+        _selectors("summary"),
         ("summary",),
-        ("summary",),
-        {"summary"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=10_000,
     )
@@ -823,9 +915,9 @@ def test_output_renderer_bounds_the_encoded_response_and_releases_owners(
 
     rendered = KernelOutputRenderer(context).render(
         {"summary": object()},
+        _selectors("summary"),
         ("summary",),
-        ("summary",),
-        {"summary"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=limit,
     )

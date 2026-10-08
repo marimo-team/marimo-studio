@@ -352,7 +352,7 @@ test("prepared widget projections preserve browser state through restore and tra
 
   const failed = structuredClone(widgetSnapshot("failed"));
   Object.assign(failed.outputs[1]!.output!, {
-    mimetype: "application/vnd.example.unsupported",
+    channel: "unsupported",
   });
   await assert.rejects(handle.replace(failed));
   assert.equal(await button("widget.first"), first);

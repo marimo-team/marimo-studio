@@ -36,7 +36,7 @@ const project = (
   provider,
   provider_options: {},
   documents,
-  mounts: [],
+  sites: [],
   diagnostics: [],
   build: unbuiltView,
   artifact: null,

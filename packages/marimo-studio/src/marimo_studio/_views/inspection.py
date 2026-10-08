@@ -22,12 +22,12 @@ from marimo_studio.errors import MarimoStudioError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildProfile,
     InspectionRequest,
-    MountDeclaration,
     ProjectInspection,
     ProviderCancellation,
     ProviderRunner,
     ViewProject,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite, inspection_sites
 from marimo_studio.view_providers._host import provider_registry
 
 DEFAULT_INSPECTION_COMMAND_TIMEOUT = 120.0
@@ -46,7 +46,7 @@ def inspection_request(
     selected_cache = cache_root or inspection_cache_root(project.provider)
     return InspectionRequest(
         project=project,
-        runner=runner or create_provider_runner(project, control, command_timeout),
+        runner=runner or create_provider_runner(project.root, control, command_timeout),
         cancellation=control,
         cache_root=selected_cache,
         command_timeout=command_timeout,
@@ -77,8 +77,8 @@ def inspect_view_project_sync(
     return provider_registry().get(project.provider).inspect(request)
 
 
-def inspect_view_mounts(project: ViewProject) -> tuple[MountDeclaration, ...]:
-    """Return validated mounts for workspace projection resolution."""
+def inspect_view_sites(project: ViewProject) -> tuple[ArtifactSite, ...]:
+    """Return validated sites for workspace projection resolution."""
     try:
         inspection = inspect_view_project_sync(project)
     except ViewProjectError:
@@ -92,7 +92,7 @@ def inspect_view_mounts(project: ViewProject) -> tuple[MountDeclaration, ...]:
     )
     if failure is not None:
         raise ViewProjectError(failure.message, source=project.manifest)
-    return inspection.mounts
+    return inspection_sites(inspection)
 
 
 def view_project_state(
@@ -115,7 +115,7 @@ def view_project_state(
             revision = project_revision(
                 project,
                 inspection,
-                provider.provenance(inspection),
+                provider.provenance(),
             )
     except (OSError, MarimoStudioError):
         revision = None

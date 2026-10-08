@@ -2,12 +2,12 @@
 
 Server presentations, WebAssembly presentations, and exported sites receive
 the same detached browser record for the selected view, runtime, notebook
-mounts, permitted targets, diagnostics, URLs, and Marimo settings. Browser
+sites, permitted targets, diagnostics, URLs, and Marimo settings. Browser
 packages can consume that record without knowing which Python service produced
 it.
 
 Its projection revision changes whenever the notebook behavior available to
-the page changes. Moving a mount or diagnostic to another source line leaves
+the page changes. Moving a site or diagnostic to another source line leaves
 that execution identity stable.
 """
 
@@ -106,7 +106,7 @@ def runtime_projection_revision(
     view: str,
     runtime_id: str,
     runtime_instance: str,
-    mounts: tuple[Mapping[str, object], ...],
+    sites: tuple[Mapping[str, object], ...],
     projection_targets: Mapping[str, object],
     projection_policy: Mapping[str, int],
     runtime_cell_refs: Mapping[str, str],
@@ -118,13 +118,13 @@ def runtime_projection_revision(
         "sourceRevision": source_revision,
         "view": view,
         "runtime": {"id": runtime_id, "instance": runtime_instance},
-        "mounts": [
+        "sites": [
             {
-                "id": mount["id"],
-                "kind": mount["kind"],
-                "allowedTargets": mount["allowedTargets"],
+                "id": site["id"],
+                "kind": site["kind"],
+                "targets": site["targets"],
             }
-            for mount in mounts
+            for site in sites
         ],
         "projectionTargets": dict(projection_targets),
         "projectionPolicy": dict(projection_policy),
@@ -163,7 +163,7 @@ class RuntimeConfigInputs:
     projection_revision: str
     show_cell_logs: bool
     projection_targets: Mapping[str, object]
-    mounts: tuple[Mapping[str, object], ...]
+    sites: tuple[Mapping[str, object], ...]
     projection_policy: Mapping[str, int]
     runtime_cell_refs: Mapping[str, str]
     diagnostics: tuple[Mapping[str, object], ...]
@@ -197,7 +197,7 @@ class RuntimeConfigInputs:
             "supportUrl": relative_url(base, self.support_path),
             "showCellLogs": self.show_cell_logs,
             "projectionTargets": dict(self.projection_targets),
-            "mounts": [dict(mount) for mount in self.mounts],
+            "sites": [dict(site) for site in self.sites],
             "projectionPolicy": dict(self.projection_policy),
             "runtimeBindings": {"cellRefs": dict(self.runtime_cell_refs)},
             "diagnostics": [dict(diagnostic) for diagnostic in self.diagnostics],

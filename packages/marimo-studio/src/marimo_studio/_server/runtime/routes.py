@@ -60,7 +60,7 @@ async def available_runtime_options(
         profile="development" if context.mode == "edit" else "production",
     )
     available = list(runtimes.options_for(studio, context))
-    if any(site.allowed_targets is None for site in snapshot.mounts):
+    if any(site.targets is None for site in snapshot.sites):
         available = [item for item in available if item[0] != "zero-python"]
     return tuple(available), snapshot.revision
 

@@ -159,6 +159,45 @@ def test_inspection_rejects_source_changes_during_provider_observation(
         asyncio.run(view.inspect())
 
 
+def test_inspection_reports_a_provider_failure_in_its_confirming_pass(
+    notebook_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    from marimo_studio._views import inspect as inspection_module
+    from marimo_studio.view_providers import (
+        ProjectDiagnostic,
+        ProjectInspection,
+        ViewProject,
+    )
+
+    published_dashboard(notebook_path)
+    view = open_workspace(notebook_path).view("dashboard")
+    original = inspection_module.inspect_view_project
+    calls = 0
+    budget = ProjectDiagnostic(
+        code="provider-analysis-failed",
+        severity="error",
+        message="Provider commands exceeded their 120 second aggregate budget",
+    )
+
+    async def inspect_then_time_out(project: ViewProject) -> ProjectInspection:
+        nonlocal calls
+        result = await original(project)
+        calls += 1
+        if calls == 2:
+            return replace(result, diagnostics=(*result.diagnostics, budget))
+        return result
+
+    monkeypatch.setattr(
+        inspection_module, "inspect_view_project", inspect_then_time_out
+    )
+    inspected = asyncio.run(view.inspect())
+
+    assert [item.message for item in inspected.diagnostics] == [budget.message]
+    assert not inspected.files_complete
+
+
 def test_public_inspection_exposes_manifest_repair_and_rejects_stale_owners(
     notebook_path: Path,
 ) -> None:

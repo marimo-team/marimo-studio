@@ -26,17 +26,18 @@ and do not hide healthy registrations.
 class ViewProvider(Protocol):
     info: ProviderInfo
 
-    def availability(self, project=None) -> ProviderAvailability: ...
+    def availability(self) -> ProviderAvailability: ...
     def starters(self) -> tuple[ProviderStarter, ...]: ...
     def create(self, starter, context) -> StarterPlan: ...
     def inspect(self, request) -> ProjectInspection: ...
     def build(self, request) -> BuildResult: ...
 ```
 
-Provider methods are synchronous. Bundled providers run in process. Server
-owners move their synchronous calls off the event loop, and bundled providers
+Provider methods are synchronous. Built-in providers run in process. Server
+owners move their synchronous calls off the event loop, and built-in providers
 can observe `request.cancellation`. They should return promptly when it is
-cancelled.
+cancelled. Both paths run the provider through the same conformance adapters,
+so a `ProviderError` becomes the same diagnostic in process and in the worker.
 
 Installed third-party operations run in owned subprocesses. Host cancellation
 terminates the operation process tree. The isolated worker creates a local
@@ -48,18 +49,22 @@ cancellation or `finally` blocks for cancellation cleanup.
 The owning supervisor covers descendant cleanup, and each command timeout is
 validated and clamped to the budget's remaining time.
 
-`ProviderInfo` contains title, summary, and API version. Explicit `view.toml`
-options reach the provider as a detached JSON-compatible mapping. Provider
-inspection reports unsupported keys and values. Final registry diagnostics
-contain the safe key when available, distribution, version, availability,
-accepted starters, and load or runtime errors.
+`ProviderInfo` contains title, summary, and the provider options the provider
+reads. Conformance rejects any other option with
+`provider-options-invalid` before it calls the provider, and the remaining
+options reach the provider as a detached JSON-compatible mapping. The provider
+validates their values, usually through `ViewProject.path_option()`. A
+`ProviderError` from `inspect()` or `build()` becomes an error
+diagnostic. Any other exception is a provider failure. Final registry
+diagnostics contain the safe key when available, distribution, version,
+availability, accepted starters, and load or runtime errors.
 
 ## Starters
 
-A starter is creation-time data. Its provider-local key, title, summary, and
-document plan are shown to people and agents. Studio qualifies the local key
-as `provider:key` in its public catalogs. Independent providers can use the
-same local key.
+A starter is creation-time data. Its starter key, title, summary, and Source
+documents are shown to people and agents. Public catalogs name a starter by
+its starter ID, `<provider key>:<starter key>`, so independent providers can
+use the same starter key.
 
 `create()` receives a detached `NotebookSpec` with complete saved cell source
 and one `StarterCellTarget` for every ordinary cell. It returns provider-owned
@@ -77,64 +82,120 @@ project configuration.
 
 `ProjectInspection` contains:
 
-- ordered `editor_documents` declared safe for the user-facing Source editor
-- exact files and bounded recursive directories in `input_scope`
-- mount declarations
+- ordered Source documents in `documents`
+- build inputs in `inputs`: exact files and bounded recursive directories
+- projection sites, each with a source location and a UTF-8 byte offset inside
+  the host start tag
 - diagnostics
-- provider build fingerprint
 
-Conformance keeps Studio-owned `view.toml` outside `editor_documents` while it
-remains inside `input_scope`. Core watches both sets and enumerates
-`input_scope` for revisions and snapshots. Editor documents outside that scope
-remain exact provider-authorized source paths without affecting build identity.
-Conformance validates path types, control namespaces, document identity,
-diagnostic shape, artifact-local projection IDs, and fingerprint presence.
+Conformance adds Studio-owned `view.toml` to the build inputs, and adds
+`AGENTS.md` and `DESIGN.md` to the Source documents when they exist. Core
+watches both sets and enumerates the build inputs for revisions and snapshots.
+Source documents outside the build inputs remain exact provider-authorized
+source paths without affecting build identity. Conformance validates path types,
+control namespaces, document identity, diagnostic shape, and site placement
+inside build inputs.
 
-The build fingerprint captures provider-owned semantics. Core combines it with
-distribution, version, provider key, and API version.
+Core derives an `ArtifactSite` from each projection site in
+`_artifact_sites.py`. A site ID
+hashes the path, kind, single target, and occurrence of that key in offset
+order, so unrelated layout edits keep existing IDs. Providers never see site
+IDs.
+
+Provider provenance hashes the distribution, its version, the provider key,
+Studio's build contract version, and the tool version from `availability()`.
+A provider release or tool upgrade therefore changes the artifact revision.
 
 ## Provider layout
 
-The public contract, private host, and bundled implementations live under one
+The public SDK, private host, and built-in implementations live under one
 provider package:
 
 ```text
 view_providers/
-  __init__.py      public provider API
-  _host/           discovery, conformance, and isolated operations
-  _bundled/
-    _starters.py  bundled starter records, selection, and resource assembly
-    vanilla/      provider and vertical starter packages
-    _deno/         shared process, inventory, and analyzer support
-    deno_react/   provider, build, analyzer, and vertical starter packages
-    deno_svelte/  provider, source check, analyzer, and vertical starter packages
+  __init__.py      public SDK: records, protocols, and helpers
+  _records.py      provider records and protocols
+  _toolkit.py      project_files, copy_inputs, project_path, probe_tool
+  _starters.py     PackagedStarter, create_starter, script_json
+  _sites.py        html_sites
+  testing.py       check_provider, the public conformance kit
+  _host/           discovery, conformance, starters, and isolated operations
+  _builtin/
+    vanilla/          provider and vertical starter packages
+    _deno/            shared Deno process, inventory, and analyzer support
+    deno_react/       provider, build, analyzer, and vertical starter packages
+    deno_svelte/      provider, source check, analyzer, and vertical starter packages
     deno_obsnotebook/ provider, notebook HTML analyzer, and vertical starter packages
 ```
 
+The SDK re-exports the operation types from `_processes/operation.py`, so a
+provider imports every name from `marimo_studio.view_providers`. The same
+package also holds core modules that providers never import: `_document.py`,
+`_javascript.py`, and `_css_resources.py` analyze HTML, JavaScript, and CSS for
+vanilla and delivery preflight, `_validation.py` checks provider records, and
+`_artifact_sites.py` and `_targets.py` turn projection sites into artifact
+sites.
+
+### Built-in providers use the public SDK
+
+Each built-in provider is written as if it were already its own distribution:
+
+- It imports Studio only through names in `marimo_studio.view_providers`.
+- It imports other built-in code only from its own subpackage and from a
+  declared shared library. `_deno` is the shared library for the `deno_*`
+  providers.
+- Vanilla is the core built-in. It may also import `_filesystem`, `errors`,
+  and the HTML, JavaScript, and CSS analyzers in `view_providers`.
+
+`scripts/check_python_architecture.py` enforces these rules, and
+`tests/providers/test_builtin_contract.py` runs every built-in provider through
+`check_provider()`. A provider that needs a capability the SDK lacks gets a
+public helper first. Add a helper when two providers need it, or when it hides
+a Studio rule such as path normalization, input limits, or cancellation.
+
+Moving a provider to its own distribution changes its key, because the key
+embeds the distribution name. Its `view.toml` files then need the new key, and
+`BUILTIN_PROVIDER_REQUIREMENTS` stops listing it.
+
+### Add a built-in provider
+
+1. Create `_builtin/<name>/` with `__init__.py` exporting `provider`, and a
+   `starters/` catalog of `PackagedStarter` records.
+2. Register the entry point in `packages/marimo-studio/pyproject.toml` and add
+   its requirement to `BUILTIN_PROVIDER_REQUIREMENTS` in
+   `_host/package_policy.py`.
+3. When it needs an external tool, add the tool's pytest marker to `_PROFILES`
+   in `tests/providers/test_builtin_contract.py`.
+4. Document its starters and options in `docs/reference/built-in-providers.md`
+   and add it to the layout above.
+5. Run `scripts/check_python_architecture.py` and the built-in contract test.
+
 Framework-specific parsing and diagnostics stay inside the matching
-bundled provider. Shared Deno execution, source copying, instrumentation edits,
-and public asset handling stay under `_bundled/_deno`. Svelte and Notebook Kit
-share the contained Vite build pipeline. Svelte supplies its source check before
-instrumentation. Notebook Kit instruments HTML cell source before its Vite
-plugin transforms the notebook, preserving site identity through reactive
-replacement.
+built-in provider. Shared Deno execution, analyzer runs, and public asset
+handling stay under `_builtin/_deno`. Svelte and Notebook Kit share the
+contained Vite build pipeline. Svelte supplies its source check before the
+build. Notebook Kit's Vite plugin transforms the instrumented notebook, so site
+attributes survive reactive replacement of HTML cells.
 
-Each bundled provider composes an immutable catalog in `starters/__init__.py`.
-Every `starters/<key>/` package owns one `ProviderStarter`, its renderer, and a
-colocated `files/` tree. Adding a starter creates that package and adds one
-catalog import. Starter packages never import sibling starters.
-
-Framework declarations and runtime adapters live in each leaf that uses them.
-The generic catalog invokes the selected leaf and assembles its `files/` tree
-while the provider retains ownership of inspection and build behavior.
+Each built-in provider composes an immutable `STARTERS` tuple of
+`PackagedStarter` records in `starters/__init__.py`. Every `starters/<key>/`
+package owns one `ProviderStarter`, its `StarterMarkers` function, and a
+colocated `files/` tree. Adding a starter creates that package and adds one catalog import.
+Starter packages never import sibling starters. `create_starter()` assembles
+the selected `files/` tree while the provider retains ownership of inspection
+and build behavior.
 
 ## Build lifecycle
 
 Studio discovers inputs from the live project, copies them into a private
-snapshot, and treats the snapshot inspection as the build authority. The
-provider writes a candidate beneath its supplied staging root. Studio copies the
-candidate's regular files into a new directory that only Studio writes, then
-validates, hashes, and publishes that copy.
+snapshot, and treats the snapshot inspection as the build authority. Core
+inserts `data-marimo-studio-site` at each site offset in the snapshot through
+`_views/instrumentation.py`, then calls `build()`. The provider writes a
+candidate beneath its supplied staging root. Core shifts diagnostic columns on
+instrumented lines back to authored source. Studio copies the candidate's
+regular files into a new directory that only Studio writes, then validates,
+hashes, and publishes that copy, and warns with `projection-site-missing` when
+a site ID is absent from it.
 
 Core validates:
 
@@ -178,8 +239,10 @@ One profile receipt stores two related records:
 
 A failed or interrupted attempt can retain `published`. Presentation and static
 export read the retained publication while Source reports the latest attempt.
-Damaged generated state resets the affected profile before a new build and
-adds an `artifact-state-repaired` diagnostic.
+A build discards profile state that it cannot read and publishes again.
+Readers treat state written by another Studio version as unbuilt until that
+build runs. The build logs the repair, as described in
+[Automatic recovery and logs](errors-and-diagnostics.md#automatic-recovery-and-logs).
 
 ### Retention and integrity
 
@@ -297,7 +360,8 @@ outside it.
 ## Validation
 
 Keep local tests for conformance and filesystem safety. Prove extensibility with
-one minimal installed provider package and one browser smoke. Prove bundled
-providers through source inspection, build failure retention, and live
-mount behavior. Add retention cases for both profiles, live pins, history,
-quarantine, integrity failure, interrupted builds, pruning, and removal.
+one minimal installed provider package, `scripts/verify-external-provider.py`,
+and one browser smoke. Prove built-in providers through `check_provider()`,
+source inspection, build failure retention, and live projection behavior. Add
+retention cases for both profiles, live pins, history, quarantine, integrity
+failure, interrupted builds, pruning, and removal.

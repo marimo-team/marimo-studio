@@ -9,6 +9,7 @@ from pathlib import PurePosixPath
 from typing import Any, Literal, cast
 
 import pytest
+from marimo_export.values import ValueSelector
 
 from marimo_studio._compat.kernel_values.authorization import (
     BoundProjection,
@@ -22,9 +23,6 @@ from marimo_studio._projections.resolution import (
     ProjectionRequest,
     ResolvedProjection,
 )
-from marimo_studio._projections.values import (
-    parse_value_reference,
-)
 from marimo_studio.view_providers import SourceLocation
 
 
@@ -33,16 +31,8 @@ def _projection_authorization_key() -> None:
     initialize_projection_authorization_key()
 
 
-def _selector_spec(source: str):
-    reference = parse_value_reference(source)
-    return (
-        reference.variable,
-        tuple((step.kind, step.value) for step in reference.path),
-    )
-
-
-def _selector_specs(*sources: str):
-    return {source: _selector_spec(source) for source in sources}
+def _selectors(*sources: str) -> dict[str, ValueSelector]:
+    return {source: ValueSelector(source) for source in sources}
 
 
 def _encoded_json(value: object) -> dict[str, object]:
@@ -63,8 +53,8 @@ def _bound_projection(
     source: str,
     kind: Literal["value", "output"] = "value",
 ) -> BoundProjection:
-    reference = parse_value_reference(source)
-    producer = cell_refs((f"{reference.variable} = None",))[0]
+    selector = ValueSelector(source)
+    producer = cell_refs((f"{selector.root} = None",))[0]
     projection = ResolvedProjection(
         request=ProjectionRequest(
             site_id=f"site:{kind}:{source}",
@@ -74,8 +64,7 @@ def _bound_projection(
         kind=kind,
         source=SourceLocation(PurePosixPath("view.html"), 1, 1),
         producer=producer,
-        variable=reference.variable,
-        selector_path=reference.path,
+        selector=selector,
         dependency_closure=(producer,),
     )
     return BoundProjection(

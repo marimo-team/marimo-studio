@@ -221,7 +221,7 @@ async def inspect_runtime(
         notebook.path,
         cell_ids=tuple(cell.runtime_id for cell in selected),
         value_selector_groups=value_groups,
-        output_selector_groups=(),
+        output_groups=(),
         show_tracebacks=True,
         timeout=runtime_timeout,
         max_json_bytes=_RUNTIME_JSON_BYTES,

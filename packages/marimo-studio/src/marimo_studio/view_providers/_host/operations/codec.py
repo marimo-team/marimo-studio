@@ -9,19 +9,20 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
 
-from marimo_studio._filesystem.budgets import PROJECT_INPUT_BUDGET, FileBudgetTracker
+from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET, FileBudgetTracker
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildResult,
     CellConfigSpec,
     CellKind,
     CellRef,
     CellSpec,
     JsonValue,
-    MountDeclaration,
     NotebookSpec,
     ProjectDiagnostic,
-    ProjectInput,
     ProjectInspection,
+    ProjectionKind,
+    ProjectionSite,
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
@@ -52,15 +53,15 @@ def provider_info_payload(info: ProviderInfo) -> dict[str, object]:
 def provider_info_from_payload(value: object) -> ProviderInfo:
     data = _record(
         value,
-        {"schema", "title", "summary", "api_version"},
+        {"schema", "title", "summary", "options"},
         "provider info",
     )
-    if data["schema"] != 1 or type(data["api_version"]) is not int:
+    if data["schema"] != 1:
         raise ValueError("Provider info schema is unsupported")
     return ProviderInfo(
         _text(data["title"], "provider title"),
         _text(data["summary"], "provider summary"),
-        data["api_version"],
+        frozenset(_text(item, "provider option") for item in _items(data["options"])),
     )
 
 
@@ -210,7 +211,7 @@ def _files_from_payload(
 ) -> Mapping[PurePosixPath, bytes]:
     data = _record(value, {"files"}, "provider starter files")
     items = _items(data["files"])
-    tracker = FileBudgetTracker(PROJECT_INPUT_BUDGET, "Provider starter")
+    tracker = FileBudgetTracker(BUILD_INPUT_BUDGET, "Provider starter")
     tracker.require_count(len(items))
     files: dict[PurePosixPath, bytes] = {}
     for index, item in enumerate(items):
@@ -407,22 +408,20 @@ def inspection_from_payload(value: object) -> ProjectInspection:
         value,
         {
             "schema",
-            "editor_documents",
-            "input_scope",
-            "mounts",
+            "documents",
+            "inputs",
+            "sites",
             "diagnostics",
-            "build_fingerprint",
         },
         "provider inspection",
     )
-    if data["schema"] != 1:
+    if data["schema"] != 2:
         raise ValueError("Provider inspection schema is unsupported")
     return ProjectInspection(
-        tuple(_source_document(item) for item in _items(data["editor_documents"])),
-        tuple(_project_input(item) for item in _items(data["input_scope"])),
-        tuple(_mount(item) for item in _items(data["mounts"])),
+        tuple(_source_document(item) for item in _items(data["documents"])),
+        tuple(_build_input(item) for item in _items(data["inputs"])),
+        tuple(_site(item) for item in _items(data["sites"])),
         tuple(_diagnostic(item) for item in _items(data["diagnostics"])),
-        _text(data["build_fingerprint"], "provider build fingerprint"),
     )
 
 
@@ -454,9 +453,9 @@ def _source_document(value: object) -> SourceDocument:
     )
 
 
-def _project_input(value: object) -> ProjectInput:
+def _build_input(value: object) -> BuildInput:
     data = _record(value, {"path", "kind"}, "project input")
-    return ProjectInput(
+    return BuildInput(
         PurePosixPath(_text(data["path"], "project input path")),
         cast(Literal["file", "directory"], _text(data["kind"], "project input kind")),
     )
@@ -475,19 +474,31 @@ def _source_location(value: object) -> SourceLocation:
     )
 
 
-def _mount(value: object) -> MountDeclaration:
-    data = _record(value, {"id", "kind", "source", "allowedTargets"}, "mount")
-    raw_targets = data["allowedTargets"]
-    targets = (
-        None
-        if raw_targets is None
-        else tuple(_text(item, "mount target") for item in _items(raw_targets))
+def _accept(value: object, label: str) -> tuple[str, ...]:
+    return tuple(_text(item, label) for item in _items(value))
+
+
+def _site(value: object) -> ProjectionSite:
+    data = _record(
+        value, {"kind", "targets", "source", "offset", "accept"}, "projection site"
     )
-    return MountDeclaration(
-        _text(data["id"], "mount id"),
-        cast(Literal["cell", "output", "value"], _text(data["kind"], "mount kind")),
-        _source_location(data["source"]),
+    raw_targets = data["targets"]
+    targets: tuple[str, ...] | Literal["*"] = (
+        "*"
+        if raw_targets == "*"
+        else tuple(
+            _text(item, "projection site target") for item in _items(raw_targets)
+        )
+    )
+    offset = data["offset"]
+    if type(offset) is not int:
+        raise ValueError("Projection site offset must be an integer")
+    return ProjectionSite(
+        cast(ProjectionKind, _text(data["kind"], "projection site kind")),
         targets,
+        _source_location(data["source"]),
+        offset,
+        _accept(data["accept"], "projection site media type"),
     )
 
 

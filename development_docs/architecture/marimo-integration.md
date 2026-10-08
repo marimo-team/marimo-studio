@@ -82,7 +82,7 @@ Route handlers read no process environment.
 
 WebAssembly export uses this bundle to add a browser notebook runtime to a
 production view artifact. Prepared export compiles the provider's immutable
-mount declarations into a marimo-export specification, resolves finite input
+artifact sites into a marimo-export specification, resolves finite input
 states through the cache-backed producer, and publishes its verified result
 index beside the artifact. Static exports open marimo-export's configured
 persistent repository. Exact producer, output-plan, and state-space identities
@@ -100,7 +100,7 @@ directory.
 `states.yaml` uses the public `marimo_export.StateSpace` schema. Studio reads
 the file through its secure filesystem boundary, then marimo-export validates
 and expands the state space. Studio infers `OutputSpec` values from the view's
-projection mounts and combines both parts into one `ExportSpec`.
+projection sites and combines both parts into one `ExportSpec`.
 
 The managed producer gives Marimo the authored notebook path as its logical
 runtime filename. Marimo therefore reads and writes the notebook's shared
@@ -388,7 +388,7 @@ notebook source. The record includes:
 
 The browser worker loads the saved notebook into Marimo with automatic cell
 execution disabled. Python precomputes each available target, producer, and
-dependency closure from the notebook graph and artifact mount declarations.
+dependency closure from the notebook graph and artifact sites.
 The runtime checks mounted requests against those records, schedules required
 cells through Marimo's cell queue, and attaches each host to its worker cell.
 Dynamic retargeting schedules newly required cells while the worker and its
@@ -486,7 +486,7 @@ A Marimo upgrade changes one compatibility unit:
 5. Prepare the exact frontend source.
 6. Rebuild browser assets and verify build metadata.
 7. Run Python, frontend, Server, WebAssembly, export, and package gates.
-8. Exercise bundled Vanilla, React, and Svelte views in a live browser.
+8. Exercise built-in Vanilla, React, and Svelte views in a live browser.
 
 Use a clean local Marimo checkout at the configured commit with:
 

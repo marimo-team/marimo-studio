@@ -36,33 +36,52 @@ export const sourceLocationSchema = z
   })
   .strict();
 
-export const mountDeclarationSchema = z
+// A lowercase type/subtype media type without parameters or wildcards.
+const acceptedMediaTypeSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/);
+
+export const artifactSiteSchema = z
   .object({
     id: projectionSiteIdSchema,
     kind: projectionKindSchema,
     source: sourceLocationSchema,
-    allowedTargets: z.array(projectionTargetNameSchema).nonempty().nullable(),
+    targets: z.array(projectionTargetNameSchema).nonempty().nullable(),
+    // Media types an output or document cell site accepts, in preference
+    // order. An empty output list shows marimo's native output.
+    accept: z.array(acceptedMediaTypeSchema).max(32),
   })
   .strict()
-  .superRefine((mount, context) => {
-    if (
-      mount.allowedTargets !== null &&
-      new Set(mount.allowedTargets).size !== mount.allowedTargets.length
-    ) {
+  .superRefine((site, context) => {
+    if (site.targets !== null && new Set(site.targets).size !== site.targets.length) {
       context.addIssue({
         code: "custom",
-        path: ["allowedTargets"],
-        message: "Mount declarations require unique allowed targets",
+        path: ["targets"],
+        message: "Artifact sites require unique targets",
+      });
+    }
+    if (site.accept.length > 0 && site.kind === "value") {
+      context.addIssue({
+        code: "custom",
+        path: ["accept"],
+        message: "Only output and cell sites accept media types",
+      });
+    }
+    if (new Set(site.accept).size !== site.accept.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["accept"],
+        message: "Artifact sites accept each media type once",
       });
     }
     if (
-      mount.kind === "cell" &&
-      mount.allowedTargets !== null &&
-      mount.allowedTargets.some((target) => !cellTargetIsValid(target))
+      site.kind === "cell" &&
+      site.targets !== null &&
+      site.targets.some((target) => !cellTargetIsValid(target))
     ) {
       context.addIssue({
         code: "custom",
-        path: ["allowedTargets"],
+        path: ["targets"],
         message: "Cell targets must be canonical notebook cell names",
       });
     }
@@ -125,7 +144,7 @@ export const selectorPathStepSchema = z
   })
   .strict();
 
-export type MountDeclaration = z.infer<typeof mountDeclarationSchema>;
+export type ArtifactSite = z.infer<typeof artifactSiteSchema>;
 export type ProjectionKind = z.infer<typeof projectionKindSchema>;
 export type ProjectionPolicy = z.infer<typeof projectionPolicySchema>;
 export type ProjectionRequest = z.infer<typeof projectionRequestSchema>;

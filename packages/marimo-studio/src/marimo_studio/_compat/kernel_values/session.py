@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from hashlib import sha256
 from threading import Lock
@@ -35,13 +35,14 @@ from marimo_studio._compat.kernel_values.representations import (
 from marimo_studio._projections.runtime_records import (
     MAX_OUTPUT_BYTES,
     VALUE_LIMITS,
+    OutputGroup,
     OutputRenderResult,
     RenderedOutput,
     ValueLimits,
     ValueReadError,
     ValueReadResult,
 )
-from marimo_studio._server.presentation.ports import ProjectionUnavailable, SelectorSpec
+from marimo_studio._server.presentation.ports import ProjectionUnavailable
 
 
 class _FunctionResultWaiter(EventAwareExtension):
@@ -759,19 +760,19 @@ async def render_session_outputs(
 
 async def read_probe_values(
     session: Any,
-    specifications: Mapping[str, SelectorSpec],
+    selectors: Iterable[str],
     *,
     consumer_id: str,
     timeout: float = 5.0,
     max_json_bytes: int | None = None,
 ) -> ValueReadResult:
     """Read selectors granted by one internal runtime probe lease."""
-    expected_selectors = frozenset(specifications)
+    expected_selectors = frozenset(selectors)
     result = await _invoke_session_function(
         session,
         function_name=FUNCTION_NAME,
         args={
-            **probe_value_arguments(specifications, consumer_id),
+            **probe_value_arguments(expected_selectors, consumer_id),
             "max_json_bytes": max_json_bytes,
         },
         consumer_id=consumer_id,
@@ -789,8 +790,8 @@ async def read_probe_values(
 
 async def render_probe_outputs(
     session: Any,
-    specifications: Mapping[str, SelectorSpec],
-    active_specifications: Mapping[str, SelectorSpec],
+    outputs: OutputGroup,
+    active_outputs: OutputGroup,
     *,
     consumer_id: str,
     timeout: float = 5.0,
@@ -801,11 +802,7 @@ async def render_probe_outputs(
         session,
         function_name=OUTPUT_FUNCTION_NAME,
         args={
-            **probe_output_arguments(
-                specifications,
-                active_specifications,
-                consumer_id,
-            ),
+            **probe_output_arguments(outputs, active_outputs, consumer_id),
             "max_output_bytes": max_output_bytes,
         },
         consumer_id=consumer_id,

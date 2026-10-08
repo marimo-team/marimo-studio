@@ -8,18 +8,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from time import monotonic
 
-from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessSupervisor
-from marimo_studio.view_providers import (
+from marimo_studio._processes.operation import (
     ProviderCancellation,
+    ProviderCommandError,
     ProviderCommandResult,
     ProviderRunner,
-    ViewProject,
 )
-
-
-class ProviderCommandError(RuntimeError):
-    """A supervised provider command could not complete safely."""
-
+from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessSupervisor
 
 DEFAULT_PROVIDER_COMMAND_TIMEOUT = 120.0
 
@@ -40,13 +35,13 @@ def _positive_finite_timeout(value: object) -> float:
 class _SupervisedProviderRunner:
     def __init__(
         self,
-        project: ViewProject,
+        root: Path,
         cancellation: ProviderCancellation,
         command_timeout: float,
         *,
         owns_process_tree: bool,
     ) -> None:
-        self._root = project.root.resolve()
+        self._root = root.resolve()
         self._cancellation = cancellation
         self._limit = _positive_finite_timeout(command_timeout)
         self._remaining = self._limit
@@ -127,15 +122,15 @@ class _SupervisedProviderRunner:
 
 
 def create_provider_runner(
-    project: ViewProject,
+    root: Path,
     cancellation: ProviderCancellation,
     command_timeout: float = DEFAULT_PROVIDER_COMMAND_TIMEOUT,
     *,
     owns_process_tree: bool = True,
 ) -> ProviderRunner:
-    """Create one supervised command runner for a provider request."""
+    """Create one supervised command runner confined to ``root``."""
     return _SupervisedProviderRunner(
-        project,
+        root,
         cancellation,
         command_timeout,
         owns_process_tree=owns_process_tree,

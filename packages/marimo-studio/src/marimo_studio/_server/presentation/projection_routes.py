@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse, Response
 from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio._projections.resolution import (
     MAX_ACTIVE_PROJECTION_INSTANCES,
+    MAX_UNIQUE_OUTPUT_TARGETS,
     MAX_UNIQUE_VALUE_TARGETS,
     ProjectionRequest,
     ProjectionResolutionError,
@@ -17,7 +18,6 @@ from marimo_studio._projections.resolution import (
     resolve_projection,
 )
 from marimo_studio._projections.runtime_records import ValueReadError
-from marimo_studio._projections.values import MAX_OUTPUT_SELECTORS
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.ports import (
@@ -177,9 +177,9 @@ async def outputs_response(
         or not isinstance(revision, str)
         or not revision
         or not isinstance(projections_value, list)
-        or len(projections_value) > MAX_OUTPUT_SELECTORS
+        or len(projections_value) > MAX_UNIQUE_OUTPUT_TARGETS
         or not isinstance(active_value, list)
-        or len(active_value) > MAX_OUTPUT_SELECTORS
+        or len(active_value) > MAX_UNIQUE_OUTPUT_TARGETS
     ):
         return JSONResponse(
             {
@@ -187,7 +187,7 @@ async def outputs_response(
                 "message": (
                     "revision must be a non-empty string, and projections and "
                     "activeProjections must be arrays of at most "
-                    f"{MAX_OUTPUT_SELECTORS} projection requests."
+                    f"{MAX_UNIQUE_OUTPUT_TARGETS} projection requests."
                 ),
             },
             status_code=400,
@@ -272,7 +272,7 @@ def _resolve_requests(
     resolved = tuple(
         resolve_projection(
             snapshot.symbols,
-            snapshot.mounts,
+            snapshot.sites,
             request,
         )
         for request in requests

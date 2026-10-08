@@ -27,7 +27,7 @@
     },
     "variables": {}
   },
-  "mounts": [
+  "sites": [
     {
       "id": "site:result",
       "kind": "cell",
@@ -36,7 +36,8 @@
         "line": 12,
         "column": 5
       },
-      "allowedTargets": ["result"]
+      "targets": ["result"],
+      "accept": []
     }
   ],
   "projectionPolicy": {

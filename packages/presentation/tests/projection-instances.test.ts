@@ -38,18 +38,20 @@ const dynamicConfig = () =>
         },
       },
     },
-    mounts: [
+    sites: [
       {
         id: "site:dynamic-cell",
         kind: "cell",
         source: { path: "src/App.tsx", line: 10, column: 7 },
-        allowedTargets: null,
+        targets: null,
+        accept: [],
       },
       {
         id: "site:dynamic-value",
         kind: "value",
         source: { path: "src/App.tsx", line: 20, column: 7 },
-        allowedTargets: ["metric"],
+        targets: ["metric"],
+        accept: [],
       },
     ],
     runtimeBindings: {
@@ -202,8 +204,8 @@ test("unresolved hosts do not consume the unique target quota", () => {
   const config = dynamicConfig();
   commitRuntimeConfig({
     ...config,
-    mounts: config.mounts.map((mount) =>
-      mount.id === "site:dynamic-value" ? { ...mount, allowedTargets: null } : mount,
+    sites: config.sites.map((site) =>
+      site.id === "site:dynamic-value" ? { ...site, targets: null } : site,
     ),
     projectionPolicy: { ...config.projectionPolicy, maxUniqueValueTargets: 1 },
   });
@@ -244,7 +246,7 @@ test("mounted projections exclude projection-like native output descendants", ()
   expect(instances[0]?.request.target).toBe("overview");
 });
 
-test("mount declarations authorize targets before notebook resolution", () => {
+test("artifact sites authorize targets before notebook resolution", () => {
   const result = resolveProjection(dynamicConfig(), {
     siteId: "site:dynamic-value",
     instanceId: "projection-other",
@@ -263,8 +265,8 @@ test("value projections reject private attribute selection", () => {
   const result = resolveProjection(
     {
       ...config,
-      mounts: config.mounts.map((mount) =>
-        mount.id === "site:dynamic-value" ? { ...mount, allowedTargets: null } : mount,
+      sites: config.sites.map((site) =>
+        site.id === "site:dynamic-value" ? { ...site, targets: null } : site,
       ),
     },
     {

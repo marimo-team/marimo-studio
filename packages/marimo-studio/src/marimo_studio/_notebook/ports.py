@@ -10,7 +10,7 @@ from typing import Protocol
 
 from marimo_studio._notebook.records import CellKind, NotebookSpec, SourceSpan
 from marimo_studio._notebook.source_generation import NotebookSourceGeneration
-from marimo_studio._projections.runtime_records import RuntimeProbe
+from marimo_studio._projections.runtime_records import OutputGroup, RuntimeProbe
 
 
 class LiveNotebookRunner(Protocol):
@@ -20,7 +20,7 @@ class LiveNotebookRunner(Protocol):
         *,
         cell_ids: tuple[str, ...],
         value_selector_groups: tuple[tuple[str, ...], ...],
-        output_selector_groups: tuple[tuple[str, ...], ...],
+        output_groups: tuple[OutputGroup, ...],
         show_tracebacks: bool,
         timeout: float,
         max_json_bytes: int | None = None,

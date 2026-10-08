@@ -1,7 +1,7 @@
 """Validate selected views against source that stays unchanged during the run.
 
 Validation captures the selected views' source revisions, inspects their
-notebook mounts, runs static checks, and optionally executes the complete
+notebook sites, runs static checks, and optionally executes the complete
 notebook in an isolated runtime.
 
 Source identity is checked again after each later stage. A concurrent edit
@@ -34,6 +34,7 @@ from marimo_studio._views.revisions import (
 )
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError, ViewNotFoundError
+from marimo_studio.view_providers._artifact_sites import inspection_sites
 
 ValidationStage = Literal["static", "runtime"]
 
@@ -133,8 +134,11 @@ def _prepare_validation(
     selected = _views(studio, view_name)
     snapshot, before_error = _try_source_snapshot(studio, selected)
     before = snapshot.revisions if snapshot is not None else None
-    mounts = (
-        {view: project.inspection.mounts for view, project in snapshot.projects.items()}
+    sites = (
+        {
+            view: inspection_sites(project.inspection)
+            for view, project in snapshot.projects.items()
+        }
         if snapshot is not None
         and not any(
             diagnostic.severity == "error"
@@ -146,7 +150,7 @@ def _prepare_validation(
     static = check_studio(
         studio,
         view_name=view_name,
-        _published_mounts=mounts,
+        _published_sites=sites,
     )
     try:
         revisions = _presentation_revisions(

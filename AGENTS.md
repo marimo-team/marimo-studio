@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Marimo Studio turns one reactive notebook into named web views. The notebook
+Marimo Studio turns one reactive notebook into named views. The notebook
 owns data, computation, controls, and domain decisions. Studio owns view
 projects, provider discovery, build publication, projections, delivery, and
 agent workflows.
@@ -43,7 +43,7 @@ Keep private Marimo integration inside `_compat`.
 
 Dependencies point from applications and adapters toward Studio contracts.
 Private Marimo APIs stay in `_compat`, provider and framework knowledge stays
-in `view_providers._bundled`, and serializable browser records stay in
+in `view_providers._builtin`, and serializable browser records stay in
 `packages/protocol`. Product policy must not import those details back.
 
 Trace every cross-boundary change through:

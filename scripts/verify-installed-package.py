@@ -115,6 +115,7 @@ import marimo_studio.authoring
 import marimo_studio.asgi
 import marimo_studio.errors
 import marimo_studio.view_providers
+import marimo_studio.view_providers.testing
 assert callable(marimo_studio.create_asgi_app)
 assert callable(marimo_studio.agent.current_workspace)
 assert callable(marimo_studio.authoring.open_workspace)
@@ -149,15 +150,20 @@ assert set(marimo_studio.authoring.__all__) == {
 }
 assert set(get_args(marimo_studio.authoring.StaticRuntime)) == {"zero-python", "wasm"}
 assert set(marimo_studio.view_providers.__all__) == {
-    "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
+    "BuildInput", "BuildInputKind", "BuildProfile", "BuildRequest", "BuildResult",
     "CellConfigSpec", "CellKind", "CellRef", "CellSpec", "DocumentAccess",
-    "InspectionRequest", "JsonValue", "MountDeclaration", "NotebookSpec", "ProjectDiagnostic",
-    "ProjectInput", "ProjectInputKind", "ProjectInspection", "ProjectionKind",
-    "ProviderAvailability", "ProviderCancellation", "ProviderCommandResult",
+    "InspectionRequest", "JsonValue", "NotebookSpec",
+    "PackagedStarter", "ProjectDiagnostic", "ProjectInspection", "ProjectionKind",
+    "ProjectionSite", "ProviderAvailability", "ProviderCancellation",
+    "ProviderCommandError", "ProviderCommandResult", "ProviderError",
     "ProviderInfo", "ProviderRunner", "ProviderStarter", "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
-    "StarterPlan", "ViewProject", "ViewProvider",
-    "mount_attribute",
+    "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
+    "create_starter", "html_sites", "parse_accept", "probe_tool", "project_files",
+    "project_path", "script_json",
+}
+assert set(marimo_studio.view_providers.testing.__all__) == {
+    "CheckedView", "ProviderCheckError", "check_provider",
 }
 assert set(marimo_studio.errors.__all__) == {
     "AgentRequestError", "BindingError", "CapabilityInputError", "ConfigurationError",
@@ -174,6 +180,24 @@ assert set(marimo_studio.errors.__all__) == {
 providers = marimo_studio.view_providers
 assert tuple(signature(providers.ViewProvider.create).parameters) == (
     "self", "starter", "context",
+)
+assert tuple(signature(providers.html_sites).parameters) == ("path", "source")
+assert tuple(field.name for field in fields(providers.ProjectionSite)) == (
+    "kind", "targets", "source", "offset", "accept",
+)
+assert tuple(field.name for field in fields(providers.ProjectInspection)) == (
+    "documents", "inputs", "sites", "diagnostics",
+)
+assert tuple(field.name for field in fields(providers.ProviderInfo)) == (
+    "title", "summary", "options",
+)
+assert tuple(field.name for field in fields(providers.BuildRequest)) == (
+    "project", "inspection", "inputs", "project_revision", "profile",
+    "staging_root", "work_root", "cache_root", "cancellation", "runner",
+    "command_timeout",
+)
+assert tuple(field.name for field in fields(providers.BuildResult)) == (
+    "document", "diagnostics",
 )
 assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",

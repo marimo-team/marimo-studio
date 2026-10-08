@@ -14,91 +14,27 @@ from marimo_studio._compat.kernel_values.representations import (
     ValueEncoder,
     inspection_value,
 )
-from marimo_studio._compat.kernel_values.selectors import (
-    _read_values,
-    normalize_selector_spec,
-)
-from marimo_studio._projections.records import ValuePathStep
+from marimo_studio._compat.kernel_values.selectors import _read_values
 from marimo_studio._projections.runtime_records import ValueLimits
-from marimo_studio._projections.values import (
-    parse_value_reference,
-    resolve_value_reference,
-)
 
 from .values_test_support import (
     _encoded_json,
     _native_output_context,
-    _selector_spec,
+    _selectors,
 )
-
-
-def test_value_reference_preserves_attribute_and_item_selection() -> None:
-    reference = parse_value_reference('portfolio.rows[0]["market.value"].formatted')
-
-    assert reference.source == 'portfolio.rows[0]["market.value"].formatted'
-    assert reference.variable == "portfolio"
-    assert reference.path == (
-        ValuePathStep("attribute", "rows"),
-        ValuePathStep("item", 0),
-        ValuePathStep("item", "market.value"),
-        ValuePathStep("attribute", "formatted"),
-    )
 
 
 def test_kernel_value_reads_use_json_string_escape_semantics() -> None:
     selectors = (r'context["a\/b"]', r'context["\ud83d\ude00"]')
     result = _read_values(
         {"context": {"a/b": "slash", "😀": "emoji"}},
-        {selector: _selector_spec(selector) for selector in selectors},
+        _selectors(*selectors),
     )
 
     assert result.values == {
         selectors[0]: _encoded_json("slash"),
         selectors[1]: _encoded_json("emoji"),
     }
-
-
-def test_dot_selection_prefers_mapping_keys_then_uses_attributes() -> None:
-    class Report:
-        label = "attribute"
-
-    mapping = {"label": "mapping", "report": Report()}
-
-    assert (
-        resolve_value_reference(
-            {"context": mapping},
-            parse_value_reference("context.label"),
-        )
-        == "mapping"
-    )
-    assert (
-        resolve_value_reference(
-            {"context": mapping},
-            parse_value_reference("context.report.label"),
-        )
-        == "attribute"
-    )
-
-
-def test_value_reference_rejects_python_expressions() -> None:
-    for source in (
-        "",
-        "context.get('date')",
-        "context['date']",
-        "context[1:2]",
-        "context[01]",
-    ):
-        with pytest.raises(ValueError):
-            parse_value_reference(source)
-
-
-def test_kernel_selector_specs_must_match_their_targets() -> None:
-    assert normalize_selector_spec(
-        "report.rows[0]",
-        ("report", (("attribute", "rows"), ("item", 0))),
-    ) == ("report", (("attribute", "rows"), ("item", 0)))
-    with pytest.raises(ValueError, match="does not match"):
-        normalize_selector_spec("report.rows", ("other", ()))
 
 
 def test_kernel_projection_returns_exact_json_leaves_and_local_errors() -> None:
@@ -118,18 +54,9 @@ def test_kernel_projection_returns_exact_json_leaves_and_local_errors() -> None:
         "opaque",
         "absent",
     )
-    specifications = {
-        selector: (
-            reference.variable,
-            tuple((step.kind, step.value) for step in reference.path),
-        )
-        for selector in selectors
-        for reference in (parse_value_reference(selector),)
-    }
-
     result = _read_values(
         namespace,
-        specifications,
+        _selectors(*selectors),
     )
 
     assert result.values == {
@@ -146,19 +73,9 @@ def test_kernel_projection_returns_exact_json_leaves_and_local_errors() -> None:
 
 
 def test_kernel_projection_bounds_each_selected_leaf() -> None:
-    references = {
-        selector: parse_value_reference(selector)
-        for selector in ("context.small", "context.large")
-    }
     result = _read_values(
         {"context": {"small": {"count": 3}, "large": "x" * 100}},
-        {
-            selector: (
-                reference.variable,
-                tuple((step.kind, step.value) for step in reference.path),
-            )
-            for selector, reference in references.items()
-        },
+        _selectors("context.small", "context.large"),
         limits=ValueLimits(json_value_bytes=32),
     )
 
@@ -167,19 +84,9 @@ def test_kernel_projection_bounds_each_selected_leaf() -> None:
 
 
 def test_kernel_projection_bounds_json_values_per_read() -> None:
-    references = {
-        selector: parse_value_reference(selector)
-        for selector in ("context.first", "context.second")
-    }
     result = _read_values(
         {"context": {"first": "x" * 600_000, "second": "y" * 600_000}},
-        {
-            selector: (
-                reference.variable,
-                tuple((step.kind, step.value) for step in reference.path),
-            )
-            for selector, reference in references.items()
-        },
+        _selectors("context.first", "context.second"),
     )
 
     assert result.values == {"context.first": _encoded_json("x" * 600_000)}
@@ -198,7 +105,7 @@ def test_kernel_projection_encodes_mixed_values_independently() -> None:
             },
             "opaque": object(),
         },
-        {selector: _selector_spec(selector) for selector in selectors},
+        _selectors(*selectors),
     )
 
     frame = cast(dict[str, object], result.values["bundle.frame"])
@@ -222,7 +129,7 @@ def test_kernel_projection_encodes_pyarrow_tables_and_batches() -> None:
     values = {"table": table, "record_batch": table.to_batches()[0]}
     result = _read_values(
         values,
-        {name: _selector_spec(name) for name in values},
+        _selectors(*values),
     )
 
     for name in values:
@@ -250,7 +157,7 @@ def test_kernel_projection_encodes_pandas_dataframe_types() -> None:
     )
     result = _read_values(
         {"frame": frame},
-        {"frame": _selector_spec("frame")},
+        _selectors("frame"),
     )
 
     payload = cast(dict[str, object], result.values["frame"])
@@ -288,7 +195,7 @@ def test_kernel_projection_reports_dataframe_conversion_errors(
         monkeypatch.setitem(sys.modules, "pyarrow", None)
     result = _read_values(
         {"frame": frame},
-        {"frame": _selector_spec("frame")},
+        _selectors("frame"),
     )
 
     assert result.values == {}
@@ -302,7 +209,7 @@ def test_kernel_projection_encodes_empty_eager_dataframes() -> None:
     frame = pl.DataFrame(schema={"value": pl.Int64, "label": pl.String})
     result = _read_values(
         {"frame": frame},
-        {"frame": _selector_spec("frame")},
+        _selectors("frame"),
     )
 
     payload = cast(dict[str, object], result.values["frame"])
@@ -321,7 +228,7 @@ def test_kernel_projection_sends_dataframes_beyond_the_json_limit() -> None:
     with context.install():
         result = _read_values(
             {"frame": frame, "rows": frame.to_dicts()},
-            {name: _selector_spec(name) for name in ("frame", "rows")},
+            _selectors("frame", "rows"),
             encoder=encoder,
         )
         encoder.close()
@@ -351,7 +258,7 @@ def test_kernel_projection_inlines_arrow_values_that_exceed_free_shared_memory(
     with context.install():
         result = _read_values(
             {"frame": pl.DataFrame({"value": range(1_000)})},
-            {"frame": _selector_spec("frame")},
+            _selectors("frame"),
             encoder=encoder,
         )
 
@@ -371,7 +278,7 @@ def test_kernel_projection_budgets_arrow_values_apart_from_json() -> None:
     with context.install():
         result = _read_values(
             {"first": frame, "second": frame, "label": "x" * 900_000},
-            {name: _selector_spec(name) for name in ("first", "second", "label")},
+            _selectors("first", "second", "label"),
             limits=ValueLimits(arrow_read_bytes=12_000),
             encoder=encoder,
         )
@@ -389,7 +296,7 @@ def test_kernel_projection_bounds_arrow_ipc_values() -> None:
 
     result = _read_values(
         {"frame": pl.DataFrame({"value": ["x" * 1_000]})},
-        {"frame": _selector_spec("frame")},
+        _selectors("frame"),
         limits=ValueLimits(arrow_value_bytes=100),
     )
 
@@ -422,7 +329,7 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
     with context.install():
         first = _read_values(
             {"frame": pl.DataFrame({"value": [1]})},
-            {"frame": _selector_spec("frame")},
+            _selectors("frame"),
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -433,7 +340,7 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
 
         same = _read_values(
             {"frame": pl.DataFrame({"value": [1]})},
-            {"frame": _selector_spec("frame")},
+            _selectors("frame"),
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -443,7 +350,7 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
 
         second = _read_values(
             {"frame": pl.DataFrame({"value": [2]})},
-            {"frame": _selector_spec("frame")},
+            _selectors("frame"),
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -454,7 +361,7 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
 
         _read_values(
             {"frame": {"value": 2}},
-            {"frame": _selector_spec("frame")},
+            _selectors("frame"),
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -474,7 +381,7 @@ def test_kernel_projection_isolates_arrow_resources_by_consumer_and_revision() -
     def read(consumer_id: str, revision: str, value: int) -> str:
         result = _read_values(
             {"frame": pl.DataFrame({"value": [value]})},
-            {"frame": _selector_spec("frame")},
+            _selectors("frame"),
             consumer_id=consumer_id,
             revision=revision,
             encoder=encoder,
@@ -505,10 +412,7 @@ def test_kernel_projection_discards_uncommitted_resources_after_commit_failure(
 
     context = _native_output_context()
     encoder = ValueEncoder(context)
-    specifications = {
-        "first": _selector_spec("first"),
-        "second": _selector_spec("second"),
-    }
+    specifications = _selectors("first", "second")
     with context.install():
         _read_values(
             {"first": pl.DataFrame({"value": [1]})},
@@ -560,7 +464,7 @@ def test_kernel_projection_discards_resources_when_envelope_too_large() -> None:
     with context.install():
         result = _read_values(
             {"frame": pl.DataFrame({"value": [1]}), "label": 1},
-            {name: _selector_spec(name) for name in ("frame", "label", *missing)},
+            _selectors("frame", "label", *missing),
             limits=ValueLimits(json_read_bytes=10, arrow_read_bytes=400),
             consumer_id="preview",
             revision="revision-1",
@@ -580,13 +484,10 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
     context = _native_output_context()
     encoder = ValueEncoder(context)
     with context.install():
-        active = {
-            "first": _selector_spec("first"),
-            "second": _selector_spec("second"),
-        }
+        active = _selectors("first", "second")
         _read_values(
             {"first": pl.DataFrame({"value": [1]})},
-            {"first": _selector_spec("first")},
+            _selectors("first"),
             active,
             consumer_id="preview",
             revision="revision-1",
@@ -597,7 +498,7 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
 
         _read_values(
             {"second": pl.DataFrame({"value": [2]})},
-            {"second": _selector_spec("second")},
+            _selectors("second"),
             active,
             consumer_id="preview",
             revision="revision-1",
@@ -608,8 +509,8 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
 
         _read_values(
             {"second": pl.DataFrame({"value": [2]})},
-            {"second": _selector_spec("second")},
-            {"second": _selector_spec("second")},
+            _selectors("second"),
+            _selectors("second"),
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,
@@ -618,8 +519,8 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
 
         failed = _read_values(
             {"second": pl.DataFrame({"value": [2]}).lazy()},
-            {"second": _selector_spec("second")},
-            {"second": _selector_spec("second")},
+            _selectors("second"),
+            _selectors("second"),
             consumer_id="preview",
             revision="revision-1",
             encoder=encoder,

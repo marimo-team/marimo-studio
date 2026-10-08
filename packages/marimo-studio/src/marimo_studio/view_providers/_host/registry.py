@@ -6,7 +6,7 @@ Import, metadata, availability, and starter failures remain attached to their
 registration so healthy providers stay available and provider diagnostics can
 explain how to recover.
 
-Bundled providers run in process. Third-party calls use owned worker processes.
+Built-in providers run in process. Third-party calls use owned worker processes.
 Both return through the same conformance checks. Discovery, provider identity,
 installed version, and starters are cached, while availability is checked when
 an operation needs it.
@@ -14,20 +14,22 @@ an operation needs it.
 
 from __future__ import annotations
 
-import inspect
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from contextlib import contextmanager, suppress
 from contextvars import Context, copy_context
 from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
+from pathlib import Path
 from threading import Lock, RLock
 from typing import cast
 
 from packaging.utils import canonicalize_name
 
 from marimo_studio._processes.cancellation import current_provider_cancellation
+from marimo_studio._processes.operation import ProviderCommandError
 from marimo_studio._processes.provider_operation import (
     find_process_cleanup_error,
     raise_process_cleanup,
@@ -53,7 +55,10 @@ from marimo_studio.view_providers import (
     ViewProject,
     ViewProvider,
 )
-from marimo_studio.view_providers._host.conformance import ProviderConformance
+from marimo_studio.view_providers._host.conformance import (
+    ProviderConformance,
+    provider_methods,
+)
 from marimo_studio.view_providers._host.identity import starter_id
 from marimo_studio.view_providers._host.operations.process import (
     DEFAULT_PROVIDER_EXTENSION_TIMEOUT,
@@ -67,23 +72,19 @@ from marimo_studio.view_providers._host.operations.process import (
     starters_in_provider_process,
 )
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_DISTRIBUTION,
+    BUILTIN_PROVIDER_DISTRIBUTION,
 )
 from marimo_studio.view_providers._host.records import ProviderProvenance
+from marimo_studio.view_providers._host.starters import (
+    validate_starter_context,
+    validate_starter_plan,
+    validate_starters,
+)
 
 ENTRY_POINT_GROUP = "marimo_studio.view_provider"
 _ENTRY_POINT_NAME = re.compile(r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?")
 _DISCOVERY_WORKERS = 8
 _STARTER_WORKERS = 8
-
-
-def _validate_provider_methods(provider: ViewProvider) -> None:
-    for method in ("availability", "starters", "create", "inspect", "build"):
-        operation = getattr(provider, method, None)
-        if not callable(operation):
-            raise ValueError(f"provider requires {method}()")
-        if inspect.iscoroutinefunction(operation):
-            raise ValueError(f"provider {method}() must be synchronous")
 
 
 def provider_key(distribution: str, registration: str) -> str:
@@ -167,6 +168,7 @@ class _RegisteredProvider:
         self._extension_timeout = extension_timeout
         self._starter_lock = Lock()
         self._starters: tuple[ProviderStarter, ...] | None = None
+        self._availability: ProviderAvailability | None = None
         self._conformance = ProviderConformance(
             self.key,
             info,
@@ -179,47 +181,65 @@ class _RegisteredProvider:
     def _cancellation() -> ProviderCancellation:
         return current_provider_cancellation() or ProviderCancellation()
 
-    def availability(
-        self,
-        project: ViewProject | None = None,
-    ) -> ProviderAvailability:
-        if project is not None:
-            project = self._conformance.validate_project(project)
+    @contextmanager
+    def _guard(self, action: str, source: Path | None = None) -> Iterator[None]:
+        """Report an unexpected provider failure as a Studio error for ``action``."""
+        try:
+            yield
+        except MarimoStudioError as failure:
+            raise_process_cleanup(failure)
+            raise
+        except Exception as failure:
+            raise_process_cleanup(failure)
+            # A command budget or limit explains itself. Other failures are
+            # provider bugs, so their type helps the provider's author.
+            detail = (
+                str(failure)
+                if isinstance(failure, ProviderCommandError)
+                else f"{type(failure).__name__}: {failure}"
+            )
+            raise ViewProjectError(
+                f"View provider {self.key!r} could not {action}: {detail}",
+                source=source,
+            ) from failure
+
+    def availability(self) -> ProviderAvailability:
         try:
             availability = self._conformance.validate_availability(
                 availability_in_provider_process(
                     self._process,
-                    project,
                     self._cancellation(),
                     self._extension_timeout,
                 )
                 if self._process is not None
-                else self._local_provider().availability(project)
+                else self._local_provider().availability()
             )
             self._registry._clear_error(self.key, "availability")
-            return availability
         except Exception as error:
             raise_process_cleanup(error)
             self._registry._record_error(self.key, "availability", error)
-            return ProviderAvailability(
+            availability = ProviderAvailability(
                 available=False,
                 reason=f"{type(error).__name__}: {error}",
                 action="Repair or remove the provider registration.",
             )
+        self._availability = availability
+        return availability
 
     def starters(self) -> tuple[ProviderStarter, ...]:
         with self._starter_lock:
             if self._starters is not None:
                 return self._starters
             try:
-                starters = self._conformance.validate_starters(
+                starters = validate_starters(
+                    self.key,
                     starters_in_provider_process(
                         self._process,
                         self._cancellation(),
                         self._extension_timeout,
                     )
                     if self._process is not None
-                    else self._local_provider().starters()
+                    else self._local_provider().starters(),
                 )
                 self._registry._clear_error(self.key, "starters")
                 self._starters = starters
@@ -234,9 +254,9 @@ class _RegisteredProvider:
         starter: ProviderStarter,
         context: StarterContext,
     ) -> StarterPlan:
-        self._conformance.validate_starters((starter,))
-        context = self._conformance.validate_starter_context(context)
-        try:
+        validate_starters(self.key, (starter,))
+        context = validate_starter_context(self.key, context)
+        with self._guard(f"create starter {starter.key!r}"):
             plan = (
                 create_in_provider_process(
                     self._process,
@@ -248,59 +268,41 @@ class _RegisteredProvider:
                 if self._process is not None
                 else self._local_provider().create(starter, context)
             )
-        except MarimoStudioError as error:
-            raise_process_cleanup(error)
-            raise
-        except Exception as error:
-            raise_process_cleanup(error)
-            raise ConfigurationError(
-                f"View provider {self.key!r} could not create starter "
-                f"{starter.key!r}: {type(error).__name__}: {error}"
-            ) from error
-        return self._conformance.validate_starter_plan(starter, context, plan)
+        return validate_starter_plan(self.key, starter, context, plan)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         request = self._conformance.validate_inspection_request(request)
-        try:
-            inspection = (
-                self._local_provider().inspect(request)
-                if self._process is None
-                else inspect_in_provider_process(self._process, request)
-            )
-        except MarimoStudioError as error:
-            raise_process_cleanup(error)
-            raise
-        except Exception as error:
-            raise_process_cleanup(error)
-            raise ViewProjectError(
-                f"View provider {self.key!r} could not inspect project "
-                f"{request.project.name!r}: {type(error).__name__}: {error}",
-                source=request.project.manifest,
-            ) from error
-        return self._conformance.validate_inspection(request.project, inspection)
+        with self._guard(
+            f"inspect view {request.project.name!r}",
+            request.project.manifest,
+        ):
+            if self._process is not None:
+                return self._conformance.validate_inspection(
+                    request.project,
+                    inspect_in_provider_process(self._process, request),
+                )
+            return self._conformance.inspect(self._local_provider(), request)
 
     def build(self, request: BuildRequest) -> BuildResult:
         request = self._conformance.validate_build_request(request)
-        try:
-            result = (
-                self._local_provider().build(request)
-                if self._process is None
-                else build_in_provider_process(self._process, request)
-            )
-        except MarimoStudioError as error:
-            raise_process_cleanup(error)
-            raise
-        except Exception as error:
-            raise_process_cleanup(error)
-            raise ViewProjectError(
-                f"View provider {self.key!r} could not build project "
-                f"{request.project.name!r}: {type(error).__name__}: {error}",
-                source=request.project.manifest,
-            ) from error
-        return self._conformance.validate_build_result(request, result)
+        with self._guard(
+            f"build view {request.project.name!r}",
+            request.project.manifest,
+        ):
+            if self._process is not None:
+                result = build_in_provider_process(self._process, request)
+                return self._conformance.validate_build_result(request, result)
+            return self._conformance.build(self._local_provider(), request)
 
-    def provenance(self, inspection: ProjectInspection) -> ProviderProvenance:
-        return self._conformance.provenance(inspection)
+    def provenance(self) -> ProviderProvenance:
+        """Identify the provider and tool versions that build this provider's views.
+
+        The tool version comes from the latest availability check. Builds check
+        availability first, so a tool upgrade reaches the next build.
+        """
+        return self._conformance.provenance(
+            (self._availability or self.availability()).version
+        )
 
     def _local_provider(self) -> ViewProvider:
         if self._provider is None:
@@ -424,7 +426,7 @@ class ProviderRegistry:
                 isolated = (
                     self._isolate_operations
                     and canonicalize_name(candidate.distribution)
-                    != BUNDLED_PROVIDER_DISTRIBUTION
+                    != BUILTIN_PROVIDER_DISTRIBUTION
                 )
                 if isolated:
                     external.append(
@@ -445,7 +447,7 @@ class ProviderRegistry:
                         ViewProvider,
                         candidate.entry_point.load(),
                     )
-                    _validate_provider_methods(implementation)
+                    provider_methods(implementation)
                     descriptions[index] = (
                         implementation,
                         None,
@@ -603,6 +605,14 @@ class ProviderRegistry:
             bucket.pop(operation, None)
             if not bucket:
                 self._runtime_errors.pop(key, None)
+
+    def entry_module(self, key: str) -> str | None:
+        """Return the module that registers ``key``, without loading it."""
+        for candidate in self._candidates:
+            with suppress(ValueError):
+                if candidate.key == key:
+                    return candidate.entry_point.module
+        return None
 
     @property
     def ids(self) -> tuple[str, ...]:

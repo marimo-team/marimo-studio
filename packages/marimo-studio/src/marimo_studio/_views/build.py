@@ -18,13 +18,14 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import Protocol
 
 from marimo_studio._artifacts.inputs import (
-    ProjectInputState,
-    project_input_state,
+    BuildInputState,
+    build_input_state,
     project_revision_snapshot,
     snapshot_revision,
 )
@@ -56,8 +57,13 @@ from marimo_studio._processes.provider_runner import (
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._views.instrumentation import (
+    authored_diagnostics,
+    instrument_sites,
+    missing_site_diagnostics,
+)
 from marimo_studio._views.publication_hold import read_publication_hold
-from marimo_studio._views.records import ViewBuild
+from marimo_studio._views.records import DiagnosticsError, ViewBuild
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.mutation_lock import view_build_lock, view_mutation_lock
 from marimo_studio._workspace.project_manifest import load_view_project
@@ -81,16 +87,13 @@ from marimo_studio.view_providers._host.records import ProviderProvenance
 
 
 class BuildProvider(Protocol):
-    def availability(
-        self,
-        project: ViewProject | None = None,
-    ) -> ProviderAvailability: ...
+    def availability(self) -> ProviderAvailability: ...
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
 
     def build(self, request: BuildRequest) -> BuildResult: ...
 
-    def provenance(self, inspection: ProjectInspection) -> ProviderProvenance: ...
+    def provenance(self) -> ProviderProvenance: ...
 
 
 def _inspection_failures(
@@ -128,7 +131,7 @@ def _inspect_provider(
     provider: BuildProvider,
     started: float,
 ) -> ProjectInspection:
-    availability = provider.availability(project)
+    availability = provider.availability()
     if not availability.available:
         detail = f": {availability.reason}" if availability.reason else ""
         action = f" {availability.action}" if availability.action else ""
@@ -211,10 +214,10 @@ def _inspect_snapshot(
 def _project_stability_failure(
     project: ViewProject,
     inspection: ProjectInspection,
-    expected_state: ProjectInputState,
+    expected_state: BuildInputState,
 ) -> ProjectDiagnostic | None:
     try:
-        actual_state = project_input_state(
+        actual_state = build_input_state(
             project,
             inspection,
             observed=expected_state,
@@ -243,13 +246,13 @@ def _capture_commit_state(
     expected_revision: str,
     started: float,
     provider: BuildProvider,
-) -> ProjectInputState:
+) -> BuildInputState:
     """Hash live inputs outside the mutation lock and retain cheap identities."""
     try:
         captured = project_revision_snapshot(
             project,
             inspection,
-            provider.provenance(inspection),
+            provider.provenance(),
         )
     except Exception as error:
         record_build_failure(
@@ -291,7 +294,7 @@ def _stable_artifact_commit(
     profile: BuildProfile,
     inspection: ProjectInspection,
     expected_revision: str,
-    expected_state: ProjectInputState,
+    expected_state: BuildInputState,
     started: float,
     expected_generation: str | None,
     *,
@@ -416,7 +419,7 @@ def _publish_locked(
         assert input_id is not None
         try:
             current = project_revision_snapshot(
-                project, inspection, provider.provenance(inspection)
+                project, inspection, provider.provenance()
             )
         except (ConfigurationError, OSError) as error:
             raise_process_cleanup(error)
@@ -494,7 +497,7 @@ def _publish_locked(
                 started,
                 candidate.cache_root,
             )
-            provenance = provider.provenance(snapshot_inspection)
+            provenance = provider.provenance()
             revision = snapshot_revision(
                 candidate.snapshot,
                 provenance,
@@ -556,11 +559,23 @@ def _publish_locked(
             held = _publication_hold_diagnostic(project)
             if held is not None:
                 record_build_failure(project, profile, (held,), started, revision)
+            try:
+                sites, insertions = instrument_sites(
+                    snapshot.root,
+                    snapshot_inspection.sites,
+                )
+            except DiagnosticsError as error:
+                record_build_failure(
+                    project,
+                    profile,
+                    error.diagnostics,
+                    started,
+                    revision,
+                )
             record_build_started(
                 project,
                 profile,
                 revision,
-                preparation.recovery_diagnostic,
             )
             command_timeout = DEFAULT_PROVIDER_COMMAND_TIMEOUT
             request = BuildRequest(
@@ -570,10 +585,11 @@ def _publish_locked(
                 project_revision=revision,
                 profile=profile,
                 staging_root=candidate.files_root,
+                work_root=candidate.work_root,
                 cache_root=candidate.cache_root,
                 cancellation=cancellation,
                 runner=create_provider_runner(
-                    snapshot,
+                    snapshot.root,
                     cancellation,
                     command_timeout,
                 ),
@@ -599,6 +615,10 @@ def _publish_locked(
                     started,
                     revision,
                 )
+            report = replace(
+                report,
+                diagnostics=authored_diagnostics(report.diagnostics, insertions),
+            )
             failures = tuple(
                 diagnostic
                 for diagnostic in report.diagnostics
@@ -623,10 +643,20 @@ def _publish_locked(
                 project,
                 profile,
                 candidate,
-                snapshot_inspection,
-                report,
+                sites,
+                report.document,
                 revision,
                 started,
+            )
+            report = replace(
+                report,
+                diagnostics=(
+                    *report.diagnostics,
+                    *missing_site_diagnostics(
+                        prepared.publication_root / "files",
+                        prepared.manifest.sites,
+                    ),
+                ),
             )
             commit_state = _capture_commit_state(
                 project,
@@ -657,7 +687,6 @@ def _publish_locked(
                     report,
                     revision,
                     started,
-                    preparation.recovery_diagnostic,
                     (
                         preparation.current_snapshot
                         if preparation.current is not None

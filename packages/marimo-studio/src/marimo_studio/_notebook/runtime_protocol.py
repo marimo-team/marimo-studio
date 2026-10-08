@@ -12,6 +12,7 @@ from marimo_studio._processes.limits import (
     validate_runtime_timeout,
 )
 from marimo_studio._projections.runtime_records import (
+    OutputGroup,
     RuntimeProbe,
     runtime_probe_from_dict,
 )
@@ -25,7 +26,7 @@ _REQUEST_FIELDS = {
     "notebook",
     "cellIds",
     "valueSelectorGroups",
-    "outputSelectorGroups",
+    "outputGroups",
     "showTracebacks",
     "timeout",
     "maxJsonBytes",
@@ -38,7 +39,7 @@ def encode_runtime_request(
     *,
     cell_ids: tuple[str, ...],
     value_selector_groups: tuple[tuple[str, ...], ...],
-    output_selector_groups: tuple[tuple[str, ...], ...],
+    output_groups: tuple[OutputGroup, ...],
     show_tracebacks: bool,
     timeout: float,
     max_json_bytes: int | None,
@@ -57,9 +58,12 @@ def encode_runtime_request(
             list(_strings(group, "value_selector_groups"))
             for group in value_selector_groups
         ],
-        "outputSelectorGroups": [
-            list(_strings(group, "output_selector_groups"))
-            for group in output_selector_groups
+        "outputGroups": [
+            {
+                target: list(_strings(accept, "output_groups"))
+                for target, accept in group.items()
+            }
+            for group in output_groups
         ],
         "showTracebacks": show_tracebacks,
         "timeout": timeout,
@@ -116,8 +120,17 @@ def load_runtime_request(path: Path) -> dict[str, Any]:
         value_groups = _string_groups(
             request["valueSelectorGroups"], "valueSelectorGroups"
         )
-        output_groups = _string_groups(
-            request["outputSelectorGroups"], "outputSelectorGroups"
+        groups = request["outputGroups"]
+        if not isinstance(groups, list) or not all(
+            isinstance(group, dict) for group in groups
+        ):
+            raise ValueError
+        output_groups = tuple(
+            {
+                target: _strings(accept, "outputGroups")
+                for target, accept in group.items()
+            }
+            for group in groups
         )
         source_generation = (
             None
@@ -130,7 +143,7 @@ def load_runtime_request(path: Path) -> dict[str, Any]:
         "notebook": notebook,
         "cell_ids": cell_ids,
         "value_selector_groups": value_groups,
-        "output_selector_groups": output_groups,
+        "output_groups": output_groups,
         "show_tracebacks": show_tracebacks,
         "timeout": request["timeout"],
         "max_json_bytes": request["maxJsonBytes"],

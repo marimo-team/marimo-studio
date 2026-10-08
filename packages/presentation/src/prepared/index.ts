@@ -1,6 +1,7 @@
 export { mountPreparedProjections } from "./controller.tsx";
 export { PreparedProjectionCapabilityError } from "./errors.ts";
 export { presentationThemeSource } from "./theme.ts";
+export { selectorProducerCell } from "../projections/resolution.ts";
 export type {
   MountPreparedProjectionsOptions,
   PreparedControlBindings,

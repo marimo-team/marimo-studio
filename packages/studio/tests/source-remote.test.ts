@@ -49,7 +49,7 @@ it("parses provider project catalogs from the view support endpoint", async () =
       provider: "marimo-studio/svelte",
       provider_options: {},
       documents: [{ path: "src/App.svelte", language: "svelte", access: "edit", label: null }],
-      mounts: [],
+      sites: [],
       diagnostics: [manifestDiagnostic],
       build: { ...unbuiltView, phase: "failed", diagnostics: [manifestDiagnostic] },
       artifact: null,

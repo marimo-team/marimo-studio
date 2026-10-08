@@ -6,15 +6,17 @@ that permission and recomputes the live dependency path before reading values
 or formatting native output. A tampered request or stale page therefore cannot
 read notebook state from a newer presentation.
 
-Output permissions also follow the browser's current mounted set. Isolated
-runtime probes use a separate short-lived lease for the exact selectors being
-validated.
+Output permissions also follow the browser's current mounted set, and each
+output record carries the media types its site accepts. Isolated runtime probes
+use a separate short-lived lease for the exact selectors being validated.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+
+from marimo_export.values import SelectorError, ValueSelector, normalize_accept
 
 from marimo_studio._compat.kernel_values.authorization_key import (
     sign_kernel_authorization,
@@ -22,7 +24,6 @@ from marimo_studio._compat.kernel_values.authorization_key import (
 )
 from marimo_studio._notebook.records import CellRef
 from marimo_studio._projections.resolution import ResolvedProjection
-from marimo_studio._server.presentation.ports import SelectorSpec
 
 
 class ProjectionAuthorizationError(ValueError):
@@ -84,7 +85,13 @@ class ProjectionBinding:
 
 @dataclass(frozen=True)
 class AuthorizedProjections:
-    specifications: dict[str, SelectorSpec]
+    """Authorized selectors by target, with each output target's accept list.
+
+    An empty accept list reads a value, or formats an output natively.
+    """
+
+    selectors: dict[str, ValueSelector]
+    accept: dict[str, tuple[str, ...]]
     bindings: dict[str, ProjectionBinding]
 
 
@@ -96,7 +103,7 @@ def _projection_record(bound: BoundProjection) -> dict[str, object]:
         "instanceId": projection.request.instance_id,
         "kind": projection.kind,
         "target": projection.request.target,
-        "specification": projection.selector_spec(),
+        "accept": list(projection.accept),
         "producer": str(projection.producer),
         "runtimeCellId": producer.runtime_cell_id,
         "dependencyClosure": [
@@ -111,7 +118,7 @@ def _projection_record(bound: BoundProjection) -> dict[str, object]:
 
 def _probe_records(
     kind: str,
-    specifications: Mapping[str, SelectorSpec],
+    targets: Mapping[str, tuple[str, ...]],
 ) -> list[dict[str, object]]:
     return [
         {
@@ -119,12 +126,12 @@ def _probe_records(
             "instanceId": f"probe-{kind}-{index}",
             "kind": kind,
             "target": target,
-            "specification": specification,
+            "accept": list(accept),
             "producer": None,
             "runtimeCellId": None,
             "dependencyClosure": None,
         }
-        for index, (target, specification) in enumerate(specifications.items())
+        for index, (target, accept) in enumerate(targets.items())
     ]
 
 
@@ -204,33 +211,34 @@ def authorized_output_arguments(
 
 
 def probe_value_arguments(
-    specifications: Mapping[str, SelectorSpec],
+    selectors: Iterable[str],
     consumer_id: str,
-    active_specifications: Mapping[str, SelectorSpec] | None = None,
+    active_selectors: Iterable[str] | None = None,
 ) -> dict[str, object]:
     """Serialize selectors owned by an active internal probe lease."""
+    requested = dict.fromkeys(selectors, ())
+    active = (
+        requested if active_selectors is None else dict.fromkeys(active_selectors, ())
+    )
     return {
         "revision": "probe",
-        "projections": _probe_records("value", specifications),
-        "active_projections": _probe_records(
-            "value",
-            specifications if active_specifications is None else active_specifications,
-        ),
+        "projections": _probe_records("value", requested),
+        "active_projections": _probe_records("value", active),
         "consumer_id": consumer_id,
         "authorization": "",
     }
 
 
 def probe_output_arguments(
-    specifications: Mapping[str, SelectorSpec],
-    active_specifications: Mapping[str, SelectorSpec],
+    outputs: Mapping[str, tuple[str, ...]],
+    active_outputs: Mapping[str, tuple[str, ...]],
     consumer_id: str,
 ) -> dict[str, object]:
-    """Serialize output selectors owned by an active internal probe lease."""
+    """Serialize output selectors and accept lists owned by a probe lease."""
     return {
         "revision": "probe",
-        "projections": _probe_records("output", specifications),
-        "active_projections": _probe_records("output", active_specifications),
+        "projections": _probe_records("output", outputs),
+        "active_projections": _probe_records("output", active_outputs),
         "consumer_id": consumer_id,
         "authorization": "",
     }
@@ -240,12 +248,15 @@ def _decode_records(
     value: object,
     *,
     kind: str,
-) -> tuple[dict[str, SelectorSpec], dict[str, ProjectionBinding | None]]:
-    from marimo_studio._compat.kernel_values.selectors import normalize_selector_spec
-
+) -> tuple[
+    dict[str, ValueSelector],
+    dict[str, tuple[str, ...]],
+    dict[str, ProjectionBinding | None],
+]:
     if not isinstance(value, list):
         raise ProjectionAuthorizationError("Projection records must be an array.")
-    specifications: dict[str, SelectorSpec] = {}
+    selectors: dict[str, ValueSelector] = {}
+    accepts: dict[str, tuple[str, ...]] = {}
     bindings: dict[str, ProjectionBinding | None] = {}
     for record in value:
         if not isinstance(record, dict) or set(record) != {
@@ -253,7 +264,7 @@ def _decode_records(
             "instanceId",
             "kind",
             "target",
-            "specification",
+            "accept",
             "producer",
             "runtimeCellId",
             "dependencyClosure",
@@ -287,12 +298,21 @@ def _decode_records(
         ):
             raise ProjectionAuthorizationError("A projection binding is invalid.")
         try:
-            specification = normalize_selector_spec(target, record["specification"])
+            selector = ValueSelector(target)
+        except SelectorError as error:
+            raise ProjectionAuthorizationError(
+                "A projection target is not a valid selector."
+            ) from error
+        accept_value = record["accept"]
+        if not isinstance(accept_value, list) or (kind != "output" and accept_value):
+            raise ProjectionAuthorizationError("A projection accept list is invalid.")
+        try:
+            accept = normalize_accept(accept_value) if accept_value else ()
         except (TypeError, ValueError) as error:
             raise ProjectionAuthorizationError(
-                "A projection selector does not match its target."
+                "A projection accept list is invalid."
             ) from error
-        previous = specifications.get(target)
+        previous = selectors.get(target)
         binding: ProjectionBinding | None = None
         if not unbound:
             assert isinstance(producer, str)
@@ -336,18 +356,20 @@ def _decode_records(
                 )
             binding = ProjectionBinding(producer_ref, runtime_cell_id, cells)
         if previous is not None and (
-            previous != specification or bindings[target] != binding
+            accepts[target] != accept or bindings[target] != binding
         ):
             raise ProjectionAuthorizationError(
-                "Repeated projection targets require identical selectors."
+                "Repeated projection targets require identical records."
             )
-        specifications[target] = specification
+        selectors[target] = selector
+        accepts[target] = accept
         bindings[target] = binding
-    return specifications, bindings
+    return selectors, accepts, bindings
 
 
 def _authorized_projections(
-    specifications: dict[str, SelectorSpec],
+    selectors: dict[str, ValueSelector],
+    accepts: dict[str, tuple[str, ...]],
     bindings: dict[str, ProjectionBinding | None],
 ) -> AuthorizedProjections:
     if any(binding is None for binding in bindings.values()):
@@ -355,7 +377,8 @@ def _authorized_projections(
             "Projection authorization lacks a live binding."
         )
     return AuthorizedProjections(
-        specifications,
+        selectors,
+        accepts,
         {
             target: binding
             for target, binding in bindings.items()
@@ -395,20 +418,22 @@ def verify_value_ownership_arguments(
     probe_targets: tuple[str, ...] | None = None,
 ) -> tuple[AuthorizedProjections, AuthorizedProjections]:
     """Verify requested and active value capabilities."""
-    specifications, bindings = _decode_records(projections, kind="value")
-    active, active_bindings = _decode_records(active_projections, kind="value")
+    selectors, accepts, bindings = _decode_records(projections, kind="value")
+    active, active_accepts, active_bindings = _decode_records(
+        active_projections, kind="value"
+    )
     assert isinstance(projections, list)
     assert isinstance(active_projections, list)
     if not isinstance(consumer_id, str) or not consumer_id:
         raise ProjectionAuthorizationError("The value consumer is invalid.")
     if revision == "probe" and authorization == "" and probe_targets is not None:
         if (
-            set((*specifications, *active)).issubset(probe_targets)
+            set((*selectors, *active)).issubset(probe_targets)
             and all(binding is None for binding in bindings.values())
             and all(binding is None for binding in active_bindings.values())
         ):
-            return AuthorizedProjections(specifications, {}), AuthorizedProjections(
-                active, {}
+            return AuthorizedProjections(selectors, accepts, {}), AuthorizedProjections(
+                active, active_accepts, {}
             )
         raise ProjectionAuthorizationError("A selector is outside the probe lease.")
     if (
@@ -426,9 +451,9 @@ def verify_value_ownership_arguments(
     )
     if not verify_kernel_authorization(authorization, payload):
         raise ProjectionAuthorizationError("Projection authorization is invalid.")
-    return _authorized_projections(specifications, bindings), _authorized_projections(
-        active, active_bindings
-    )
+    return _authorized_projections(
+        selectors, accepts, bindings
+    ), _authorized_projections(active, active_accepts, active_bindings)
 
 
 def verify_output_arguments(
@@ -441,20 +466,22 @@ def verify_output_arguments(
     probe_targets: tuple[str, ...] | None = None,
 ) -> tuple[AuthorizedProjections, AuthorizedProjections]:
     """Verify one output capability and return its canonical selectors."""
-    specifications, bindings = _decode_records(projections, kind="output")
-    active, active_bindings = _decode_records(active_projections, kind="output")
+    selectors, accepts, bindings = _decode_records(projections, kind="output")
+    active, active_accepts, active_bindings = _decode_records(
+        active_projections, kind="output"
+    )
     assert isinstance(projections, list)
     assert isinstance(active_projections, list)
     if not isinstance(consumer_id, str) or not consumer_id:
         raise ProjectionAuthorizationError("The output consumer is invalid.")
     if revision == "probe" and authorization == "" and probe_targets is not None:
         if (
-            set((*specifications, *active)).issubset(probe_targets)
+            set((*selectors, *active)).issubset(probe_targets)
             and all(binding is None for binding in bindings.values())
             and all(binding is None for binding in active_bindings.values())
         ):
-            return AuthorizedProjections(specifications, {}), AuthorizedProjections(
-                active, {}
+            return AuthorizedProjections(selectors, accepts, {}), AuthorizedProjections(
+                active, active_accepts, {}
             )
         raise ProjectionAuthorizationError("A selector is outside the probe lease.")
     if (
@@ -472,6 +499,6 @@ def verify_output_arguments(
     )
     if not verify_kernel_authorization(authorization, payload):
         raise ProjectionAuthorizationError("Projection authorization is invalid.")
-    return _authorized_projections(specifications, bindings), _authorized_projections(
-        active, active_bindings
-    )
+    return _authorized_projections(
+        selectors, accepts, bindings
+    ), _authorized_projections(active, active_accepts, active_bindings)

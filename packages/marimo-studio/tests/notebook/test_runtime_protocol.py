@@ -106,7 +106,7 @@ def test_runtime_request_maps_excessive_nesting_to_a_protocol_error(
                 "notebook": str(tmp_path / "analysis.py"),
                 "cellIds": [],
                 "valueSelectorGroups": [],
-                "outputSelectorGroups": [],
+                "outputGroups": [],
                 "showTracebacks": False,
                 "timeout": 1,
                 "maxJsonBytes": 1024,

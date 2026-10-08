@@ -31,6 +31,14 @@ dependencies, and ``none`` saves nothing.
 """
 
 
+class DiagnosticsError(Exception):
+    """Diagnostics that stop a build or a document render."""
+
+    def __init__(self, diagnostics: tuple[ProjectDiagnostic, ...]) -> None:
+        super().__init__(diagnostics[0].message)
+        self.diagnostics = diagnostics
+
+
 @dataclass(frozen=True)
 class ViewDocument:
     """One revision-bound authored document."""

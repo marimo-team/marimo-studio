@@ -10,25 +10,26 @@ import pytest
 
 from marimo_studio._artifacts.inputs import project_input_paths
 from marimo_studio._artifacts.limits import FileBudget
+from marimo_studio._filesystem.paths import validate_relative_path
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
-    PROVIDER_API_VERSION,
+    BuildInput,
     BuildResult,
-    MountDeclaration,
     ProjectDiagnostic,
-    ProjectInput,
+    ProjectionSite,
     ProviderAvailability,
     ProviderInfo,
     SourceDocument,
     SourceLocation,
     ViewProject,
 )
+from marimo_studio.view_providers._host import _shapes as shapes_module
 from marimo_studio.view_providers._host import conformance as conformance_module
+from marimo_studio.view_providers._host import starters as starters_module
 from marimo_studio.view_providers._host.registry import (
     ProviderRegistry,
 )
-from marimo_studio.view_providers._validation import validate_relative_path
 
 from ..provider_test_support import (
     ProviderStub,
@@ -72,14 +73,14 @@ def test_provider_info_contains_only_discovery_contracts() -> None:
     info = ProviderInfo(
         title="Reports",
         summary="Builds report frontends.",
-        api_version=1,
+        options=frozenset({"template", "entrypoint"}),
     )
 
     assert info.to_dict() == {
         "schema": 1,
         "title": "Reports",
         "summary": "Builds report frontends.",
-        "api_version": PROVIDER_API_VERSION,
+        "options": ["entrypoint", "template"],
     }
 
 
@@ -109,7 +110,7 @@ def test_unavailable_provider_records_have_actionable_recovery(
     expected_action: str,
 ) -> None:
     provider = ProviderStub("example/html", "html")
-    cast(Any, provider).availability = lambda _project=None: reported
+    cast(Any, provider).availability = lambda: reported
     installed = ProviderRegistry((candidate("html", provider),)).get("test-html/html")
 
     availability = installed.availability()
@@ -118,24 +119,7 @@ def test_unavailable_provider_records_have_actionable_recovery(
     assert availability.action == expected_action
 
 
-def test_project_inspection_separates_editor_documents_from_build_inputs() -> None:
-    payload = inspection().to_dict()
-
-    assert payload["editor_documents"] == [
-        {
-            "path": "index.html",
-            "language": "html",
-            "access": "edit",
-            "label": None,
-        }
-    ]
-    assert payload["input_scope"] == [
-        {"path": "index.html", "kind": "file"},
-        {"path": "view.toml", "kind": "file"},
-    ]
-
-
-def test_input_scope_excludes_undeclared_dependency_directories(
+def test_build_inputs_exclude_undeclared_dependency_directories(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "view"
@@ -150,10 +134,10 @@ def test_input_scope_excludes_undeclared_dependency_directories(
     project = ViewProject("dashboard", root, manifest, "example/report", {})
     selected = replace(
         inspection(),
-        editor_documents=(SourceDocument(PurePosixPath("src/App.tsx"), "tsx", "edit"),),
-        input_scope=(
-            ProjectInput(PurePosixPath("src"), "directory"),
-            ProjectInput(PurePosixPath("view.toml"), "file"),
+        documents=(SourceDocument(PurePosixPath("src/App.tsx"), "tsx", "edit"),),
+        inputs=(
+            BuildInput(PurePosixPath("src"), "directory"),
+            BuildInput(PurePosixPath("view.toml"), "file"),
         ),
     )
 
@@ -214,7 +198,7 @@ def test_starter_context_limits_aggregate_graph_metadata(
     provider = ProviderStub("example/html", "html")
     context = provider_starter_context(tmp_path)
     registry = ProviderRegistry((candidate("html", provider),))
-    monkeypatch.setattr(conformance_module, "_MAX_STARTER_METADATA_RECORDS", 0)
+    monkeypatch.setattr(starters_module, "_MAX_STARTER_METADATA_RECORDS", 0)
 
     with pytest.raises(ConfigurationError, match="graph and symbol metadata"):
         registry.get(registry.ids[0]).create(provider.starter, context)
@@ -227,7 +211,7 @@ def test_starter_context_limits_encoded_size_before_transport(
     provider = ProviderStub("example/html", "html")
     context = provider_starter_context(tmp_path)
     registry = ProviderRegistry((candidate("html", provider),))
-    monkeypatch.setattr(conformance_module, "_MAX_STARTER_CONTEXT_BYTES", 1)
+    monkeypatch.setattr(starters_module, "_MAX_STARTER_CONTEXT_BYTES", 1)
 
     with pytest.raises(ConfigurationError, match="encoded starter notebook context"):
         registry.get(registry.ids[0]).create(provider.starter, context)
@@ -239,7 +223,7 @@ def test_provider_cannot_expose_the_core_manifest_in_the_editor(
     provider = ProviderStub("example/html", "html")
     provider.inspection = replace(
         inspection(),
-        editor_documents=(SourceDocument(PurePosixPath("VIEW.TOML"), "toml", "edit"),),
+        documents=(SourceDocument(PurePosixPath("VIEW.TOML"), "toml", "edit"),),
     )
     registry = ProviderRegistry((candidate("html", provider),))
     installed = registry.get(registry.ids[0])
@@ -282,11 +266,11 @@ def test_provider_inspection_cache_stays_outside_the_view_project(
         )
 
 
-def test_editor_documents_can_stay_outside_build_inputs(tmp_path: Path) -> None:
+def test_source_documents_can_stay_outside_build_inputs(tmp_path: Path) -> None:
     provider = ProviderStub("example/html", "html")
     provider.inspection = replace(
         inspection(),
-        editor_documents=(
+        documents=(
             SourceDocument(PurePosixPath("index.html"), "html", "edit"),
             SourceDocument(PurePosixPath("AGENTS.md"), "markdown", "edit"),
         ),
@@ -310,7 +294,7 @@ def test_editor_documents_can_stay_outside_build_inputs(tmp_path: Path) -> None:
 
     accepted = installed.inspect(inspection_request(project))
 
-    assert [document.path for document in accepted.editor_documents] == [
+    assert [document.path for document in accepted.documents] == [
         PurePosixPath("index.html"),
         PurePosixPath("AGENTS.md"),
     ]
@@ -349,7 +333,7 @@ def test_provider_diagnostics_accept_the_manifest_but_reject_undeclared_sources(
     )
 
     accepted = installed.inspect(inspection_request(project))
-    assert [document.path for document in accepted.editor_documents] == [
+    assert [document.path for document in accepted.documents] == [
         PurePosixPath("index.html"),
     ]
     staging = tmp_path / "staging"
@@ -378,26 +362,27 @@ def test_provider_diagnostics_accept_the_manifest_but_reject_undeclared_sources(
         installed.inspect(inspection_request(project))
 
 
-def test_provider_must_include_the_core_manifest_in_build_inputs(
+def test_studio_adds_view_toml_and_guidance_to_every_inspection(
     tmp_path: Path,
 ) -> None:
     provider = ProviderStub("example/html", "html")
-    provider.inspection = replace(
-        inspection(),
-        input_scope=(ProjectInput(PurePosixPath("index.html"), "file"),),
-    )
     registry = ProviderRegistry((candidate("html", provider),))
     installed = registry.get(registry.ids[0])
+    tmp_path.joinpath("AGENTS.md").write_text("# Agents\n", encoding="utf-8")
     project = ViewProject(
-        "dashboard",
-        tmp_path,
-        tmp_path / "view.toml",
-        installed.key,
-        {},
+        "dashboard", tmp_path, tmp_path / "view.toml", installed.key, {}
     )
 
-    with pytest.raises(ConfigurationError, match=r"include.*view.toml.*input scope"):
-        installed.inspect(inspection_request(project))
+    inspection = installed.inspect(inspection_request(project))
+
+    assert [item.path.as_posix() for item in inspection.documents] == [
+        "index.html",
+        "AGENTS.md",
+    ]
+    assert [item.path.as_posix() for item in inspection.inputs] == [
+        "index.html",
+        "view.toml",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -412,7 +397,7 @@ def test_provider_must_include_the_core_manifest_in_build_inputs(
         ("value", "report" + ".item" * 65),
     ),
 )
-def test_provider_mount_targets_use_the_runtime_selector_grammar(
+def test_provider_site_targets_use_the_runtime_selector_grammar(
     tmp_path: Path,
     kind: str,
     target: str,
@@ -420,12 +405,12 @@ def test_provider_mount_targets_use_the_runtime_selector_grammar(
     provider = ProviderStub("example/html", "html")
     provider.inspection = replace(
         inspection(),
-        mounts=(
-            MountDeclaration(
-                "site:value:test",
+        sites=(
+            ProjectionSite(
                 cast(Any, kind),
-                SourceLocation(PurePosixPath("index.html"), 1, 1),
                 (target,),
+                SourceLocation(PurePosixPath("index.html"), 1, 1),
+                0,
             ),
         ),
     )
@@ -441,22 +426,22 @@ def test_provider_mount_targets_use_the_runtime_selector_grammar(
 
     with pytest.raises(
         ConfigurationError,
-        match=r"target|reference|selection|private|safe integers|surrogate",
+        match=r"target|selector",
     ):
         installed.inspect(inspection_request(project))
 
 
-def test_provider_mount_accepts_nested_value_targets(tmp_path: Path) -> None:
+def test_provider_site_accepts_nested_value_targets(tmp_path: Path) -> None:
     provider = ProviderStub("example/html", "html")
     target = 'report.rows[0]["market.value"].total'
     provider.inspection = replace(
         inspection(),
-        mounts=(
-            MountDeclaration(
-                "site:value:test",
+        sites=(
+            ProjectionSite(
                 "value",
-                SourceLocation(PurePosixPath("index.html"), 1, 1),
                 (target,),
+                SourceLocation(PurePosixPath("index.html"), 1, 1),
+                0,
             ),
         ),
     )
@@ -470,24 +455,22 @@ def test_provider_mount_accepts_nested_value_targets(tmp_path: Path) -> None:
         {},
     )
 
-    assert installed.inspect(inspection_request(project)).mounts[0].allowed_targets == (
-        target,
-    )
+    assert installed.inspect(inspection_request(project)).sites[0].targets == (target,)
 
 
-def test_provider_mount_accepts_native_cell_names_and_configured_aliases(
+def test_provider_site_accepts_native_cell_names_and_configured_aliases(
     tmp_path: Path,
 ) -> None:
     provider = ProviderStub("example/html", "html")
     targets = ("_summary", "résumé", "report-name")
     provider.inspection = replace(
         inspection(),
-        mounts=(
-            MountDeclaration(
-                "site:cell:test",
+        sites=(
+            ProjectionSite(
                 "cell",
-                SourceLocation(PurePosixPath("index.html"), 1, 1),
                 targets,
+                SourceLocation(PurePosixPath("index.html"), 1, 1),
+                0,
             ),
         ),
     )
@@ -501,33 +484,31 @@ def test_provider_mount_accepts_native_cell_names_and_configured_aliases(
         {},
     )
 
-    assert installed.inspect(inspection_request(project)).mounts[0].allowed_targets == (
-        targets
-    )
+    assert installed.inspect(inspection_request(project)).sites[0].targets == (targets)
 
 
 @pytest.mark.parametrize(
-    "input_scope",
+    "inputs",
     (
         (
-            ProjectInput(PurePosixPath("index.html"), "file"),
-            ProjectInput(PurePosixPath("view.toml"), "file"),
-            ProjectInput(PurePosixPath("VIEW.TOML"), "file"),
+            BuildInput(PurePosixPath("index.html"), "file"),
+            BuildInput(PurePosixPath("view.toml"), "file"),
+            BuildInput(PurePosixPath("VIEW.TOML"), "file"),
         ),
         (
-            ProjectInput(PurePosixPath("index.html"), "file"),
-            ProjectInput(PurePosixPath("view.toml"), "file"),
-            ProjectInput(PurePosixPath("SRC"), "directory"),
-            ProjectInput(PurePosixPath("src/App.tsx"), "file"),
+            BuildInput(PurePosixPath("index.html"), "file"),
+            BuildInput(PurePosixPath("view.toml"), "file"),
+            BuildInput(PurePosixPath("SRC"), "directory"),
+            BuildInput(PurePosixPath("src/App.tsx"), "file"),
         ),
     ),
 )
-def test_provider_input_scope_is_cross_platform_unambiguous(
+def test_provider_build_inputs_are_cross_platform_unambiguous(
     tmp_path: Path,
-    input_scope: tuple[ProjectInput, ...],
+    inputs: tuple[BuildInput, ...],
 ) -> None:
     provider = ProviderStub("example/html", "html")
-    provider.inspection = replace(inspection(), input_scope=input_scope)
+    provider.inspection = replace(inspection(), inputs=inputs)
     registry = ProviderRegistry((candidate("html", provider),))
     installed = registry.get(registry.ids[0])
     project = ViewProject(
@@ -551,24 +532,24 @@ def test_provider_inspection_rejects_cross_runtime_records(
     if case == "editor-case-collision":
         provider.inspection = replace(
             inspection(),
-            editor_documents=(
+            documents=(
                 SourceDocument(PurePosixPath("src/App.tsx"), "tsx", "edit"),
                 SourceDocument(PurePosixPath("src/app.tsx"), "tsx", "edit"),
             ),
-            input_scope=(
-                ProjectInput(PurePosixPath("src"), "directory"),
-                ProjectInput(PurePosixPath("view.toml"), "file"),
+            inputs=(
+                BuildInput(PurePosixPath("src"), "directory"),
+                BuildInput(PurePosixPath("view.toml"), "file"),
             ),
         )
     else:
         provider.inspection = replace(
             inspection(),
-            mounts=(
-                MountDeclaration(
-                    "site:cell:test",
+            sites=(
+                ProjectionSite(
                     "cell",
-                    SourceLocation(PurePosixPath("index.html"), 1 << 53, 1),
                     ("overview",),
+                    SourceLocation(PurePosixPath("index.html"), 1 << 53, 1),
+                    0,
                 ),
             ),
         )
@@ -588,7 +569,7 @@ def test_provider_inspection_rejects_cross_runtime_records(
 
 @pytest.mark.parametrize(
     "field",
-    ("editor_documents", "input_scope", "mounts", "diagnostics"),
+    ("documents", "inputs", "sites", "diagnostics"),
 )
 def test_provider_inspection_collections_are_bounded(
     tmp_path: Path,
@@ -598,37 +579,37 @@ def test_provider_inspection_collections_are_bounded(
     provider = ProviderStub("example/html", "html")
     selected = inspection()
     limit = {
-        "editor_documents": "_MAX_DOCUMENTS",
-        "input_scope": "_MAX_INPUT_SCOPE",
-        "mounts": "_MAX_MOUNTS",
+        "documents": "MAX_DOCUMENTS",
+        "inputs": "_MAX_BUILD_INPUTS",
+        "sites": "_MAX_SITES",
         "diagnostics": "_MAX_DIAGNOSTICS",
     }[field]
     monkeypatch.setattr(conformance_module, limit, 1)
-    if field == "editor_documents":
+    if field == "documents":
         selected = replace(
             selected,
-            editor_documents=tuple(
+            documents=tuple(
                 SourceDocument(PurePosixPath(f"source-{index}.html"), "html", "edit")
                 for index in range(2)
             ),
         )
-    elif field == "input_scope":
+    elif field == "inputs":
         selected = replace(
             selected,
-            input_scope=tuple(
-                ProjectInput(PurePosixPath(f"source-{index}.html"), "file")
+            inputs=tuple(
+                BuildInput(PurePosixPath(f"source-{index}.html"), "file")
                 for index in range(2)
             ),
         )
-    elif field == "mounts":
+    elif field == "sites":
         selected = replace(
             selected,
-            mounts=tuple(
-                MountDeclaration(
-                    f"site:value:{index}",
+            sites=tuple(
+                ProjectionSite(
                     "value",
-                    SourceLocation(PurePosixPath("index.html"), 1, 1),
                     ("report",),
+                    SourceLocation(PurePosixPath("index.html"), 1, 1),
+                    index,
                 )
                 for index in range(2)
             ),
@@ -673,11 +654,12 @@ def test_provider_options_are_bounded(
     limit, options = {
         "entries": ("_MAX_OPTIONS", {"first": 1, "second": 2}),
         "depth": ("_MAX_JSON_DEPTH", {"nested": [[0]]}),
-        "text": ("_MAX_TEXT_BYTES", {"text": "xx"}),
+        "text": ("MAX_PROVIDER_TEXT_BYTES", {"text": "xx"}),
         "nodes": ("_MAX_JSON_NODES", {"items": [0]}),
     }[case]
     key = registry.ids[0]
-    monkeypatch.setattr(conformance_module, limit, 1)
+    owner = conformance_module if limit == "_MAX_OPTIONS" else shapes_module
+    monkeypatch.setattr(owner, limit, 1)
 
     with pytest.raises(ConfigurationError, match=r"limits|bounded|entries"):
         registry.validate_project(
@@ -697,7 +679,7 @@ def test_provider_options_share_one_encoded_byte_budget(
     provider = ProviderStub("example/html", "html")
     registry = ProviderRegistry((candidate("html", provider),))
     key = registry.ids[0]
-    monkeypatch.setattr(conformance_module, "_MAX_JSON_BYTES", 20)
+    monkeypatch.setattr(shapes_module, "_MAX_JSON_BYTES", 20)
 
     with pytest.raises(ConfigurationError, match="encoded bytes"):
         registry.validate_project(
@@ -711,26 +693,26 @@ def test_provider_options_share_one_encoded_byte_budget(
         )
 
 
-def test_provider_mounts_share_one_encoded_byte_budget(
+def test_provider_sites_share_one_encoded_byte_budget(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     provider = ProviderStub("example/html", "html")
     provider.inspection = replace(
         inspection(),
-        mounts=tuple(
-            MountDeclaration(
-                f"site:value:{index}",
+        sites=tuple(
+            ProjectionSite(
                 "value",
-                SourceLocation(PurePosixPath("index.html"), 1, 1),
                 ("report",),
+                SourceLocation(PurePosixPath("index.html"), 1, 1),
+                index,
             )
             for index in range(2)
         ),
     )
     registry = ProviderRegistry((candidate("html", provider),))
     installed = registry.get(registry.ids[0])
-    monkeypatch.setattr(conformance_module, "_MAX_MOUNT_BYTES", 150)
+    monkeypatch.setattr(conformance_module, "_MAX_SITE_BYTES", 150)
     project = ViewProject(
         "dashboard",
         tmp_path,
@@ -778,7 +760,7 @@ def test_provider_starter_files_respect_the_project_input_budget(
 ) -> None:
     provider = ProviderStub("example/html", "html")
     provider.plan = files
-    monkeypatch.setattr(conformance_module, "PROJECT_INPUT_BUDGET", budget)
+    monkeypatch.setattr(starters_module, "BUILD_INPUT_BUDGET", budget)
     registry = ProviderRegistry((candidate("html", provider),))
     installed = registry.get(registry.ids[0])
 

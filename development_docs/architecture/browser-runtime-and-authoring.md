@@ -73,7 +73,7 @@ Runtime configuration carries:
   Server transport root and the Prepared manifest
 - Root, public root, document root, and support URLs
 - Precomputed projection targets and dependency closures
-- Artifact mount declarations
+- Artifact sites
 - Projection policy and semantic-to-runtime cell bindings
 - Projection diagnostics
 - Marimo app, user, and override configuration
@@ -92,7 +92,7 @@ fixture is parsed by the Zod protocol tests.
 
 The presentation revision identifies the exact page snapshot used for browser
 requests and evidence. The projection revision identifies the notebook,
-runtime, mounts, targets, bindings, policy, and diagnostics that own projected
+runtime, sites, targets, bindings, policy, and diagnostics that own projected
 state. A stylesheet or non-projection markup edit advances the presentation
 revision while retaining live values, outputs, controls, and cell portals.
 

@@ -148,7 +148,7 @@ def capture_source_snapshot(
         project_snapshot = project_revision_snapshot(
             project,
             inspection,
-            provider.provenance(inspection),
+            provider.provenance(),
         )
         identity = (
             name,
