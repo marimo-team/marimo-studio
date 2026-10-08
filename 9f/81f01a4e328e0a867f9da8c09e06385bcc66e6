@@ -1,0 +1,23 @@
+docs/guide/view-providers.md
+  s_811e0125d4b03b::t_36314ecbd1680d 25,122
+packages/marimo-studio/pyproject.toml
+  s_811e0125d4b03b::t_36314ecbd1680d 3
+.github/release-notes/v0.3.0.md
+  s_811e0125d4b03b::t_36314ecbd1680d 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9f81f01a4e328e0a867f9da8c09e06385bcc66e6",
+  "prompts": {},
+  "sessions": {
+    "s_811e0125d4b03b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "43dc8bf5-082e-461b-a26f-66bbb2a77c36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
