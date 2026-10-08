@@ -38,6 +38,7 @@ _ENTRY_POINTS = {
     ("marimo_studio.view_provider", "quarto"),
     ("marimo_studio.view_provider", "react"),
     ("marimo_studio.view_provider", "svelte"),
+    ("marimo_studio.view_provider", "typst"),
     ("marimo_studio.view_provider", "vanilla"),
 }
 _NOTEBOOK = """import marimo
@@ -153,11 +154,13 @@ assert set(get_args(marimo_studio.authoring.StaticRuntime)) == {"zero-python", "
 assert set(marimo_studio.view_providers.__all__) == {
     "BuildInput", "BuildInputKind", "BuildProfile", "BuildRequest", "BuildResult",
     "CellConfigSpec", "CellKind", "CellRef", "CellSpec", "DocumentAccess",
-    "InspectionRequest", "JsonValue", "NotebookSpec",
+    "DocumentProvider", "InspectionRequest", "JsonValue", "NotebookSpec",
     "PackagedStarter", "ProjectDiagnostic", "ProjectInspection", "ProjectionKind",
     "ProjectionSite", "ProviderAvailability", "ProviderCancellation",
     "ProviderCommandError", "ProviderCommandResult", "ProviderError",
-    "ProviderInfo", "ProviderRunner", "ProviderStarter", "SourceDocument",
+    "ProviderInfo", "ProviderRunner", "ProviderStarter", "RenderCell",
+    "RenderOutput", "RenderRequest", "RenderValue", "Representation",
+    "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
     "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
     "create_starter", "html_sites", "parse_accept", "probe_tool", "project_files",
@@ -182,12 +185,25 @@ providers = marimo_studio.view_providers
 assert tuple(signature(providers.ViewProvider.create).parameters) == (
     "self", "starter", "context",
 )
+assert tuple(signature(providers.DocumentProvider.render).parameters) == (
+    "self", "request",
+)
 assert tuple(signature(providers.html_sites).parameters) == ("path", "source")
 assert tuple(field.name for field in fields(providers.ProjectionSite)) == (
     "kind", "targets", "source", "offset", "accept",
 )
+assert tuple(field.name for field in fields(providers.RenderOutput)) == (
+    "target", "source", "accept",
+)
+assert tuple(field.name for field in fields(providers.RenderValue)) == (
+    "target", "source",
+)
+assert tuple(field.name for field in fields(providers.RenderCell)) == (
+    "target", "source", "accept",
+)
 assert tuple(field.name for field in fields(providers.ProjectInspection)) == (
-    "documents", "inputs", "sites", "diagnostics",
+    "documents", "inputs", "sites", "diagnostics", "render_values",
+    "render_outputs", "render_cells",
 )
 assert tuple(field.name for field in fields(providers.ProviderInfo)) == (
     "title", "summary", "options",
@@ -196,6 +212,10 @@ assert tuple(field.name for field in fields(providers.BuildRequest)) == (
     "project", "inspection", "inputs", "project_revision", "profile",
     "staging_root", "work_root", "cache_root", "cancellation", "runner",
     "command_timeout",
+)
+assert tuple(field.name for field in fields(providers.RenderRequest)) == (
+    "template_root", "document", "values", "outputs", "cells", "output_root",
+    "cancellation", "runner", "command_timeout",
 )
 assert tuple(field.name for field in fields(providers.BuildResult)) == (
     "document", "diagnostics",
@@ -321,6 +341,7 @@ def _verify_views(*, deno: bool) -> None:
                 "marimo-studio/react:default",
                 "marimo-studio/react:reveal",
                 "marimo-studio/svelte:default",
+                "marimo-studio/typst:default",
                 "marimo-studio/vanilla:default",
             }
             if set(catalog) != expected:

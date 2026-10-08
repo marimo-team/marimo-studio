@@ -1,8 +1,10 @@
 """Check a view provider through the same paths Studio uses.
 
 ``check_provider`` creates a view from each of the provider's starters in a
-temporary workspace, then inspects, builds, and publishes it. Any problem
-raises ``ProviderCheckError`` with the message Studio would show.
+temporary workspace, then inspects, builds, and publishes it. A
+``DocumentProvider`` also renders its published template with ``values``,
+``outputs``, and ``cells``. Any problem raises ``ProviderCheckError`` with the
+message Studio would show.
 
 ```python
 from marimo_studio.view_providers.testing import check_provider
@@ -31,13 +33,22 @@ from dataclasses import dataclass
 from importlib.metadata import EntryPoint
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
-from typing import cast
+from typing import TypeVar, cast
 
 import marimo_studio.view_providers._host as host
-from marimo_studio._artifacts.retention import lease_published_artifact
+from marimo_studio._artifacts.retention import ArtifactLease, lease_published_artifact
 from marimo_studio._authoring.view_api import View
 from marimo_studio._authoring.workspace_api import open_workspace
+from marimo_studio._processes.operation import ProviderCancellation
+from marimo_studio._views.documents import (
+    RenderInputError,
+    admit_render_inputs,
+    canonical_values,
+    document_targets,
+    render_document,
+)
 from marimo_studio._views.records import (
+    DiagnosticsError,
     StudioDiagnostic,
     ViewInspection,
 )
@@ -50,6 +61,8 @@ from marimo_studio.errors import MarimoStudioError
 from marimo_studio.view_providers import (
     JsonValue,
     ProjectDiagnostic,
+    ProjectionKind,
+    Representation,
     ViewProvider,
 )
 from marimo_studio.view_providers import __all__ as sdk
@@ -57,6 +70,8 @@ from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
     ProviderRegistry,
 )
+
+_Input = TypeVar("_Input")
 
 SAMPLE_NOTEBOOK = """import marimo
 
@@ -88,6 +103,7 @@ class CheckedView:
     documents: tuple[PurePosixPath, ...]
     published: Mapping[PurePosixPath, bytes]
     warnings: tuple[str, ...]
+    rendered: bytes | None = None
 
 
 def _describe(item: StudioDiagnostic | ProjectDiagnostic) -> str:
@@ -205,6 +221,9 @@ def _tree_digest(root: Path) -> str:
 async def _check(
     key: str,
     notebook: Path,
+    values: Mapping[str, JsonValue],
+    outputs: Mapping[str, Representation],
+    cells: Mapping[str, Representation],
     options: Mapping[str, JsonValue],
 ) -> tuple[CheckedView, ...]:
     workspace = open_workspace(notebook)
@@ -242,6 +261,12 @@ async def _check(
             published = {
                 item.path: lease.read_bytes(item.path) for item in lease.artifact.files
             }
+            template = lease.artifact.template
+            rendered = (
+                _render(key, lease, template.document, values, outputs, cells)
+                if template is not None
+                else None
+            )
         checked.append(
             CheckedView(
                 starter=starter.id,
@@ -252,6 +277,7 @@ async def _check(
                     for item in build.issues
                     if item.severity == "warning"
                 ),
+                rendered=rendered,
             )
         )
     return tuple(checked)
@@ -293,11 +319,52 @@ def _run(
         return pool.submit(run).result()
 
 
+def _render(
+    key: str,
+    lease: ArtifactLease,
+    document: PurePosixPath,
+    values: Mapping[str, JsonValue],
+    outputs: Mapping[str, Representation],
+    cells: Mapping[str, Representation],
+) -> bytes:
+    sites = lease.artifact.sites
+
+    # The check's sample notebook supplies more values than one template reads.
+    def read(supplied: Mapping[str, _Input], kind: ProjectionKind) -> dict[str, _Input]:
+        targets = document_targets(sites, kind)
+        return {target: item for target, item in supplied.items() if target in targets}
+
+    read_values = read(values, "value")
+    read_outputs = read(outputs, "output")
+    read_cells = read(cells, "cell")
+    try:
+        admit_render_inputs(sites, read_values, read_outputs, read_cells)
+        rendition = render_document(
+            host.provider_registry().get(key),
+            lease.copy_template,
+            document,
+            canonical_values(read_values)[0],
+            read_outputs,
+            read_cells,
+            ProviderCancellation(),
+        )
+    except RenderInputError as error:
+        raise ProviderCheckError(str(error)) from error
+    except DiagnosticsError as error:
+        raise ProviderCheckError(
+            "\n".join(_describe(item) for item in error.diagnostics)
+        ) from error
+    return rendition.content
+
+
 def check_provider(
     provider: ViewProvider | str,
     *,
     key: str = "local-provider/provider",
     notebook: str | Path | None = None,
+    values: Mapping[str, JsonValue] | None = None,
+    outputs: Mapping[str, Representation] | None = None,
+    cells: Mapping[str, Representation] | None = None,
     options: Mapping[str, JsonValue] | None = None,
 ) -> tuple[CheckedView, ...]:
     """Create, inspect, build, and publish every starter of ``provider``.
@@ -305,7 +372,10 @@ def check_provider(
     ``provider`` is an installed provider key, or a provider object checked under
     ``key``. ``notebook`` defaults to a small notebook that defines ``metric`` and
     ``report``. ``options`` become the ``[options]`` table of each view's
-    ``view.toml``. Raises ``ProviderCheckError`` for the first problem found.
+    ``view.toml``. ``values``, plus ``outputs`` and ``cells`` as
+    ``Representation`` records in an accepted media type, feed a
+    ``DocumentProvider``'s render. Raises ``ProviderCheckError`` for the first
+    problem found.
     """
     private = _private_imports(_provider_module(provider))
     if private:
@@ -328,6 +398,9 @@ def check_provider(
                     _check(
                         provider if isinstance(provider, str) else key,
                         target,
+                        values or {},
+                        outputs or {},
+                        cells or {},
                         options or {},
                     )
                 )

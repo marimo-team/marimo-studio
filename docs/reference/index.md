@@ -14,7 +14,7 @@ owns task workflows and developed examples.
 | --------------------------------------------------------------- | ------------------------------------------------ |
 | Commands, output, and exit status                               | [CLI](cli.md)                                    |
 | Server entry, notebook settings, view projects, and saved files | [Configuration](configuration.md)                |
-| Cells, rendered outputs, live values, and DOM events            | [Notebook result projections](projections.md)    |
+| Cells, outputs, values, DOM events, and rendered documents      | [Notebook result projections](projections.md)    |
 | Provider keys, starters, and built-in options                   | [Built-in view providers](built-in-providers.md) |
 | Revisions, generations, runtime instances, and state names      | [Identities and state](identities.md)            |
 | File, projection, payload, and timeout boundaries               | [Limits](limits.md)                              |

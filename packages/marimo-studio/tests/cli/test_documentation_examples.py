@@ -44,6 +44,10 @@ def acme_views(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None
         _guide_module("Replace `src/acme_views/__init__.py` with:"),
         encoding="utf-8",
     )
+    (package / "card.py").write_text(
+        _guide_module("`src/acme_views/card.py`:"),
+        encoding="utf-8",
+    )
     monkeypatch.syspath_prepend(str(tmp_path))
     yield
     for name in [
@@ -70,3 +74,13 @@ def test_guide_report_provider_publishes_the_notebook_cells() -> None:
     page = view.published[PurePosixPath("index.html")].decode()
     assert '<marimo-cell name="' in page
     assert "data-marimo-studio-site" in page
+
+
+@pytest.mark.usefixtures("acme_views")
+def test_guide_card_provider_renders_the_report_total() -> None:
+    provider = importlib.import_module("acme_views.card").provider
+
+    (view,) = check_provider(provider, values={"report.total": 1234})
+
+    assert view.rendered is not None
+    assert b"Total: 1234" in view.rendered

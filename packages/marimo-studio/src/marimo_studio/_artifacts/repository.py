@@ -233,6 +233,7 @@ def artifact_from_publication(
         project_revision=publication.project_revision,
         artifact_revision=manifest.artifact_revision,
         provider=publication.provider,
+        template=manifest.template,
     )
 
 
@@ -273,10 +274,6 @@ def read_artifact_revision(
         "Artifact files",
         final_kind="directory",
     )
-    if {path.name for path in root.iterdir()} != {"artifact.json", "files"}:
-        raise ConfigurationError(
-            f"Artifact revision contains untracked entries: {root}"
-        )
     manifest = decode_artifact_manifest(
         read_json(project.root, manifest_path, "artifact manifest")
     )
@@ -284,20 +281,43 @@ def read_artifact_revision(
         raise ConfigurationError(
             f"Artifact manifest revision does not match its directory: {manifest_path}"
         )
+    expected = {"artifact.json", "files"}
+    if manifest.template is not None:
+        expected.add("template")
+    if {path.name for path in root.iterdir()} != expected:
+        raise ConfigurationError(
+            f"Artifact revision contains untracked entries: {root}"
+        )
     physical_files = artifact_files(files_root)
     if physical_files != manifest.files:
         raise ConfigurationError(
             f"Artifact file tree does not match its manifest: {root}"
         )
+    if manifest.template is not None:
+        template_root = root / "template"
+        assert_secure_path(
+            project.root,
+            template_root,
+            "Artifact template",
+            final_kind="directory",
+        )
+        if artifact_files(template_root) != manifest.template.files:
+            raise ConfigurationError(
+                f"Artifact template tree does not match its manifest: {root}"
+            )
     validate_document(files_root, manifest.document)
     return ArtifactRevision(files_root, manifest)
 
 
 def artifact_tree_identity(project: ViewProject, root: Path) -> TreeVersion | None:
-    """Capture bounded artifact metadata without reading file contents."""
+    """Capture bounded artifact metadata without reading file contents.
+
+    A document revision holds its public files and its private template, each
+    within the artifact file budget, beside ``artifact.json``.
+    """
     return FileTree(project.root).tree_version(
         root,
-        max_entries=ARTIFACT_OUTPUT_BUDGET.max_files + 2,
+        max_entries=2 * ARTIFACT_OUTPUT_BUDGET.max_files + 3,
     )
 
 

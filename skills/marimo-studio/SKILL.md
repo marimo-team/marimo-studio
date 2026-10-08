@@ -1,14 +1,14 @@
 ---
 name: marimo-studio
 description: >-
-  Create, inspect, and refine web views of a marimo notebook. Use for Studio
+  Create, inspect, and refine views of a marimo notebook. Use for Studio
   view source, live notebook projections, browser verification, selected
   feedback, and running or exporting a named view.
 ---
 
 # Author Studio views
 
-Studio turns one reactive notebook into named web views. The notebook owns
+Studio turns one reactive notebook into named views. The notebook owns
 computation, data, controls, and domain decisions. A view owns its presentation
 and browser interaction. Studio owns view projects, builds, and delivery.
 
@@ -94,13 +94,14 @@ file. `--no-token` serves the editor on localhost without an access token,
 which lets `pair notebook list` find it. Studio needs `marimo-studio` in the
 marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
-Notebook Kit starters. The Quarto starter needs the `quarto` command from
+Notebook Kit starters, and its `typst` extra enables the Typst starter. The
+Quarto starter needs the `quarto` command from
 https://quarto.org/docs/get-started/ or `pixi global install quarto`. A
 notebook in a pixi workspace runs Studio through
 `pixi run marimo edit notebook.py --no-sandbox --watch`.
-`help(marimo._code_mode)` then lists Studio as the
-`studio` capability, and sandboxed kernels import the same Studio as the
-server. For views across several notebooks, serve their folder as
+`help(marimo._code_mode)` then lists Studio as the `studio` capability, and
+sandboxed kernels import the same Studio as the server. For views across
+several notebooks, serve their folder as
 [setup](references/setup.md#serve-several-notebooks) describes. Create, edit,
 and run cells through `marimo._code_mode`, following the `pair --help`
 workflow. Without a way to run the notebook, continue with

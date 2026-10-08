@@ -14,6 +14,7 @@ BUILTIN_PROVIDER_REQUIREMENTS: Final = MappingProxyType(
         "marimo-studio/quarto": "marimo-studio",
         "marimo-studio/react": "marimo-studio[deno]",
         "marimo-studio/svelte": "marimo-studio[deno]",
+        "marimo-studio/typst": "marimo-studio[typst]",
         VANILLA_PROVIDER_ID: "marimo-studio",
     }
 )

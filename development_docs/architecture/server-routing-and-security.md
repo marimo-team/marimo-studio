@@ -155,10 +155,10 @@ owns browser-client transfer and `NativeSessionAdmission`.
 
 Provider-authored pages receive two signed capability forms:
 
-| Capability | Bound identity                                                                 | Allowed work                                                                            |
-| ---------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Renewal    | Notebook file key, mode, base URL, view, presentation session, runtime session | Fetch the current document, runtime configuration, and the view's development events    |
-| Revision   | Renewal identity plus presentation revision and artifact revision              | Read exact assets, values, outputs, runtime support, and admitted native session routes |
+| Capability | Bound identity                                                                 | Allowed work                                                                                                |
+| ---------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Renewal    | Notebook file key, mode, base URL, view, presentation session, runtime session | Fetch the current document, runtime configuration, and the view's development events                        |
+| Revision   | Renewal identity plus presentation revision and artifact revision              | Read exact assets, values, outputs, rendered documents, runtime support, and admitted native session routes |
 
 The handler validates the signature, target, method, scope type, view,
 presentation session header, runtime mode, and runtime-session assignment.

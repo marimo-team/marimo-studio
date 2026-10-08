@@ -20,6 +20,7 @@ def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
         "quarto": "marimo-studio/quarto",
         "react": "marimo-studio/react",
         "svelte": "marimo-studio/svelte",
+        "typst": "marimo-studio/typst",
         "vanilla": "marimo-studio/vanilla",
     }
     assert {
@@ -31,5 +32,6 @@ def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
         "marimo-studio/quarto": "marimo-studio",
         "marimo-studio/react": "marimo-studio[deno]",
         "marimo-studio/svelte": "marimo-studio[deno]",
+        "marimo-studio/typst": "marimo-studio[typst]",
         "marimo-studio/vanilla": "marimo-studio",
     }

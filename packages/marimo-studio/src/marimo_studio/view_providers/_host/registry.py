@@ -44,12 +44,14 @@ from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
     BuildResult,
+    DocumentProvider,
     InspectionRequest,
     ProjectInspection,
     ProviderAvailability,
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
+    RenderRequest,
     StarterContext,
     StarterPlan,
     ViewProject,
@@ -69,6 +71,7 @@ from marimo_studio.view_providers._host.operations.process import (
     create_in_provider_process,
     describe_in_provider_process,
     inspect_in_provider_process,
+    render_in_provider_process,
     starters_in_provider_process,
 )
 from marimo_studio.view_providers._host.package_policy import (
@@ -156,8 +159,11 @@ class _RegisteredProvider:
         process: ProviderProcessSpec | None,
         info: object,
         extension_timeout: float,
+        *,
+        renders: bool,
     ) -> None:
         self.key = candidate.key
+        self.renders = renders
         self.distribution = canonicalize_name(candidate.distribution)
         self.version = candidate.version
         self.registration = candidate.registration
@@ -294,6 +300,19 @@ class _RegisteredProvider:
                 return self._conformance.validate_build_result(request, result)
             return self._conformance.build(self._local_provider(), request)
 
+    def render(self, request: RenderRequest) -> BuildResult:
+        if not self.renders:
+            raise ConfigurationError(f"View provider {self.key!r} has no render()")
+        request = self._conformance.validate_render_request(request)
+        with self._guard(f"render {request.document.as_posix()!r}"):
+            if self._process is not None:
+                result = render_in_provider_process(self._process, request)
+                return self._conformance.validate_render_result(request, result)
+            return self._conformance.render(
+                cast(DocumentProvider, self._local_provider()),
+                request,
+            )
+
     def provenance(self) -> ProviderProvenance:
         """Identify the provider and tool versions that build this provider's views.
 
@@ -398,7 +417,7 @@ class ProviderRegistry:
             }
             descriptions: dict[
                 int,
-                tuple[ViewProvider | None, ProviderProcessSpec | None, object],
+                tuple[ViewProvider | None, ProviderProcessSpec | None, object, bool],
             ] = {}
             description_errors: dict[int, Exception] = {}
             external: list[tuple[int, ProviderProcessSpec]] = []
@@ -447,11 +466,11 @@ class ProviderRegistry:
                         ViewProvider,
                         candidate.entry_point.load(),
                     )
-                    provider_methods(implementation)
                     descriptions[index] = (
                         implementation,
                         None,
                         getattr(implementation, "info", None),
+                        provider_methods(implementation),
                     )
                 except Exception as error:
                     raise_process_cleanup(error)
@@ -467,7 +486,7 @@ class ProviderRegistry:
                     thread_name_prefix="marimo-studio-provider-discovery",
                 )
                 futures: dict[
-                    Future[ProviderInfo],
+                    Future[tuple[ProviderInfo, bool]],
                     tuple[int, ProviderProcessSpec],
                 ] = {}
                 cleanup_error = None
@@ -479,7 +498,7 @@ class ProviderRegistry:
                         def describe(
                             selected: ProviderProcessSpec = process,
                             selected_context: Context = context,
-                        ) -> ProviderInfo:
+                        ) -> tuple[ProviderInfo, bool]:
                             return selected_context.run(
                                 describe_in_provider_process,
                                 selected,
@@ -491,7 +510,7 @@ class ProviderRegistry:
                     for future in as_completed(futures):
                         index, process = futures[future]
                         try:
-                            info = future.result()
+                            info, renders = future.result()
                         except Exception as error:
                             cleanup = find_process_cleanup_error(error)
                             if cleanup is not None:
@@ -502,7 +521,7 @@ class ProviderRegistry:
                             else:
                                 description_errors[index] = error
                         else:
-                            descriptions[index] = (None, process, info)
+                            descriptions[index] = (None, process, info, renders)
                 finally:
                     executor.shutdown(
                         wait=True,
@@ -536,7 +555,7 @@ class ProviderRegistry:
                         starters=(),
                     )
                     continue
-                implementation, process, info = descriptions[index]
+                implementation, process, info, renders = descriptions[index]
                 try:
                     registered = _RegisteredProvider(
                         implementation,
@@ -550,6 +569,7 @@ class ProviderRegistry:
                         process,
                         info,
                         self._extension_timeout,
+                        renders=renders,
                     )
                 except Exception as error:
                     raise_process_cleanup(error)

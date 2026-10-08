@@ -17,7 +17,11 @@ from marimo_studio._projections.resolution import (
     ResolvedProjection,
     resolve_projection,
 )
-from marimo_studio._projections.runtime_records import ValueReadError
+from marimo_studio._projections.runtime_records import (
+    OutputRenderResult,
+    ValueReadError,
+    ValueReadResult,
+)
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.ports import (
@@ -60,6 +64,32 @@ async def values_response(
         body = await read_json_body(request, max_bytes=_PROJECTION_JSON_MAX_BYTES)
     except JSONBodyError as error:
         return json_body_error_response(error)
+    read = await read_kernel_values(
+        request,
+        body,
+        context,
+        presentation,
+        view_name,
+        projections,
+        sessions,
+        authorized_revision,
+    )
+    if isinstance(read, Response):
+        return read
+    return JSONResponse(read[1].to_dict(), headers=NO_STORE)
+
+
+async def read_kernel_values(
+    request: Request,
+    body: object,
+    context: ServerContext,
+    presentation: NotebookPresentation,
+    view_name: str,
+    projections: KernelProjectionHost,
+    sessions: SessionState,
+    authorized_revision: str | None,
+) -> tuple[PresentationSnapshot, ValueReadResult] | JSONResponse:
+    """Authorize one value request and read its values from the session kernel."""
     revision = body.get("revision") if isinstance(body, dict) else None
     projections_value = body.get("projections") if isinstance(body, dict) else None
     active_value = body.get("activeProjections") if isinstance(body, dict) else None
@@ -85,7 +115,7 @@ async def values_response(
             status_code=400,
             headers=NO_STORE,
         )
-    snapshot = await _projection_snapshot(
+    snapshot = await projection_snapshot(
         presentation,
         context,
         view_name,
@@ -152,7 +182,7 @@ async def values_response(
         return _value_error(error)
     if stale := _stale_binding_error(result.errors):
         return stale
-    return JSONResponse(result.to_dict(), headers=NO_STORE)
+    return snapshot, result
 
 
 async def outputs_response(
@@ -168,6 +198,32 @@ async def outputs_response(
         body = await read_json_body(request, max_bytes=_PROJECTION_JSON_MAX_BYTES)
     except JSONBodyError as error:
         return json_body_error_response(error)
+    read = await read_kernel_outputs(
+        request,
+        body,
+        context,
+        presentation,
+        view_name,
+        projections,
+        sessions,
+        authorized_revision,
+    )
+    if isinstance(read, Response):
+        return read
+    return JSONResponse(read[1].to_dict(), headers=NO_STORE)
+
+
+async def read_kernel_outputs(
+    request: Request,
+    body: object,
+    context: ServerContext,
+    presentation: NotebookPresentation,
+    view_name: str,
+    projections: KernelProjectionHost,
+    sessions: SessionState,
+    authorized_revision: str | None,
+) -> tuple[PresentationSnapshot, OutputRenderResult] | JSONResponse:
+    """Authorize one output request and render its outputs in the session kernel."""
     revision = body.get("revision") if isinstance(body, dict) else None
     projections_value = body.get("projections") if isinstance(body, dict) else None
     active_value = body.get("activeProjections") if isinstance(body, dict) else None
@@ -193,7 +249,7 @@ async def outputs_response(
             status_code=400,
             headers=NO_STORE,
         )
-    snapshot = await _projection_snapshot(
+    snapshot = await projection_snapshot(
         presentation,
         context,
         view_name,
@@ -248,7 +304,57 @@ async def outputs_response(
         return _value_error(error)
     if stale := _stale_binding_error(result.errors):
         return stale
-    return JSONResponse(result.to_dict(), headers=NO_STORE)
+    return snapshot, result
+
+
+async def read_session_cells(
+    request: Request,
+    revision: str,
+    cell_projections: list[object],
+    context: ServerContext,
+    presentation: NotebookPresentation,
+    view_name: str,
+    sessions: SessionState,
+    authorized_revision: str | None,
+) -> dict[str, tuple[str, object]] | JSONResponse:
+    """Authorize cell projections and return each named cell's current output."""
+    snapshot = await projection_snapshot(
+        presentation,
+        context,
+        view_name,
+        revision,
+        authorized_revision,
+    )
+    if isinstance(snapshot, JSONResponse):
+        return snapshot
+    try:
+        requested = _resolve_requests(snapshot, cell_projections, kind="cell")
+    except ProjectionResolutionError as error:
+        return _resolution_error(error)
+    session_id = request.headers.get("Marimo-Session-Id")
+    if not session_id or sessions.ownership(context, session_id) == "foreign":
+        return _session_unavailable(session_id)
+    try:
+        runtime_ids, live_cells = await _runtime_cell_refs(
+            snapshot,
+            context,
+            session_id,
+            sessions,
+        )
+        cells = {
+            item.request.target: runtime_ids[item.producer]
+            for item in requested
+            if item.producer in runtime_ids
+        }
+        outputs = sessions.cell_outputs(context, session_id, cells.values())
+        await revalidate_runtime_cells(sessions, context, session_id, live_cells)
+    except RuntimeSyncError as error:
+        return _runtime_sync_response(error)
+    return {
+        target: outputs[cell_id]
+        for target, cell_id in cells.items()
+        if cell_id in outputs
+    }
 
 
 def _resolve_requests(
@@ -292,7 +398,7 @@ def _resolve_requests(
     return resolved
 
 
-async def _projection_snapshot(
+async def projection_snapshot(
     presentation: NotebookPresentation,
     context: ServerContext,
     view_name: str,

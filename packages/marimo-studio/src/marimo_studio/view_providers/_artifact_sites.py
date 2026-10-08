@@ -1,4 +1,4 @@
-"""Derive artifact sites from provider projection sites."""
+"""Derive artifact sites from provider projection sites and document reads."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ from marimo_studio.view_providers._records import (
     ProjectInspection,
     ProjectionKind,
     ProjectionSite,
+    RenderCell,
+    RenderOutput,
+    RenderValue,
     SourceLocation,
 )
 
@@ -88,16 +91,54 @@ def artifact_sites(
     )
 
 
-def media_accept(sites: Iterable[ArtifactSite]) -> dict[str, tuple[str, ...]]:
-    """Return the media types a view reads each literal output target in.
+def render_sites(
+    values: tuple[RenderValue, ...],
+    outputs: tuple[RenderOutput, ...],
+    cells: tuple[RenderCell, ...],
+) -> tuple[ArtifactSite, ...]:
+    """Return one site per document value, output, and cell, at its first read.
+
+    Read IDs use their own namespace, so they never match a projection site's.
+    """
+    sites: dict[tuple[ProjectionKind, str], ArtifactSite] = {}
+
+    def add(
+        kind: ProjectionKind,
+        target: str,
+        source: SourceLocation,
+        accept: tuple[str, ...] = (),
+    ) -> None:
+        if (kind, target) not in sites:
+            sites[kind, target] = ArtifactSite(
+                id=_site_id("read", kind, target),
+                kind=kind,
+                source=source,
+                targets=(target,),
+                accept=accept,
+            )
+
+    for value in values:
+        add("value", value.target, value.source)
+    for output in outputs:
+        add("output", output.target, output.source, output.accept)
+    for cell in cells:
+        add("cell", cell.target, cell.source, cell.accept)
+    return tuple(sites.values())
+
+
+def media_accept(
+    sites: Iterable[ArtifactSite],
+    kind: ProjectionKind,
+) -> dict[str, tuple[str, ...]]:
+    """Return the media types a view reads each literal output or cell target in.
 
     Inspection gives every literal read of a target the same list, and a host
-    that selects its target at runtime declares none. An empty list reads
-    marimo's native output.
+    that selects its target at runtime declares none. An empty output list
+    reads marimo's native output.
     """
     accept: dict[str, tuple[str, ...]] = {}
     for site in sites:
-        if site.kind == "output":
+        if site.kind == kind:
             for target in site.targets or ():
                 accept.setdefault(target, site.accept)
     return accept
@@ -105,4 +146,11 @@ def media_accept(sites: Iterable[ArtifactSite]) -> dict[str, tuple[str, ...]]:
 
 def inspection_sites(inspection: ProjectInspection) -> tuple[ArtifactSite, ...]:
     """Return the sites a view built from this inspection publishes."""
-    return artifact_sites(inspection.sites)
+    return (
+        *artifact_sites(inspection.sites),
+        *render_sites(
+            inspection.render_values,
+            inspection.render_outputs,
+            inspection.render_cells,
+        ),
+    )

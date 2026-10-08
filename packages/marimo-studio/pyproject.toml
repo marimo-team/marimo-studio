@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 deno = ["deno>=2.9.5"]
 lens = ["marimo-lens>=0.2.3"]
+typst = ["typst>=0.15"]
 recommended = ["marimo-studio[deno,lens]"]
 
 [project.urls]
@@ -51,6 +52,7 @@ notebook-kit = "marimo_studio.view_providers._builtin.deno_obsnotebook:provider"
 quarto = "marimo_studio.view_providers._builtin.quarto:provider"
 react = "marimo_studio.view_providers._builtin.deno_react:provider"
 svelte = "marimo_studio.view_providers._builtin.deno_svelte:provider"
+typst = "marimo_studio.view_providers._builtin.typst:provider"
 vanilla = "marimo_studio.view_providers._builtin.vanilla:provider"
 
 [tool.ruff]

@@ -455,12 +455,6 @@ def test_artifact_manifest_rejects_duplicate_json_fields(tmp_path: Path) -> None
             lambda site: site.update(kind="value", targets=["report..total"]),
             "dot selection",
         ),
-        (
-            lambda site: site.update(
-                kind="output", targets=["report"], accept=["application/pdf"]
-            ),
-            "a page shows",
-        ),
     ),
     ids=(
         "site-id",
@@ -468,7 +462,6 @@ def test_artifact_manifest_rejects_duplicate_json_fields(tmp_path: Path) -> None
         "source-line-browser-safe",
         "targets",
         "value-target-path",
-        "output-accept-page-media",
     ),
 )
 def test_persisted_mounts_use_canonical_validation(

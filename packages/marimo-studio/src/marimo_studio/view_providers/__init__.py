@@ -1,8 +1,9 @@
 """Define the public SDK for frontend view providers.
 
 A provider reports availability, offers starters, and inspects a view project
-for its Source documents, build inputs, and projection sites. It then builds
-the entry document beneath the staging root in its request.
+for its Source documents, build inputs, projection sites, and the values and
+outputs a document renders.
+It then builds the entry document beneath the staging root in its request.
 Built-in and installed third-party providers use the same records, and import
 every Studio name from this module.
 
@@ -10,8 +11,10 @@ Provider methods are synchronous. ``create()`` receives a saved notebook
 snapshot and returns starter files with the cell targets they use.
 ``inspect()`` describes the project without changing it. Studio assigns each
 projection site its ID and adds the site attribute to the build snapshot before
-it calls ``build()``. Raise ``ProviderError`` for a problem the author can fix
-in the project.
+it calls ``build()``. A ``DocumentProvider`` builds a document template, and
+Studio renders it with ``render()`` whenever the notebook values it reads
+change. Raise ``ProviderError`` for a problem the author can fix in the
+project.
 
 The helpers cover work that every provider repeats: ``project_files`` and
 ``copy_inputs`` list and copy build inputs, ``probe_tool`` checks an external
@@ -43,6 +46,7 @@ from marimo_studio.view_providers._records import (
     BuildRequest,
     BuildResult,
     DocumentAccess,
+    DocumentProvider,
     InspectionRequest,
     JsonValue,
     ProjectDiagnostic,
@@ -53,6 +57,11 @@ from marimo_studio.view_providers._records import (
     ProviderError,
     ProviderInfo,
     ProviderStarter,
+    RenderCell,
+    RenderOutput,
+    RenderRequest,
+    RenderValue,
+    Representation,
     SourceDocument,
     SourceLocation,
     StarterCellTarget,
@@ -87,6 +96,7 @@ __all__ = [
     "CellRef",
     "CellSpec",
     "DocumentAccess",
+    "DocumentProvider",
     "InspectionRequest",
     "JsonValue",
     "NotebookSpec",
@@ -103,6 +113,11 @@ __all__ = [
     "ProviderInfo",
     "ProviderRunner",
     "ProviderStarter",
+    "RenderCell",
+    "RenderOutput",
+    "RenderRequest",
+    "RenderValue",
+    "Representation",
     "SourceDocument",
     "SourceLocation",
     "SourceSpan",

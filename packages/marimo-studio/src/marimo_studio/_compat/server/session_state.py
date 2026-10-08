@@ -1193,6 +1193,23 @@ class PrivateSessionState:
             raise RuntimeExecutionPendingError()
         return snapshot
 
+    def cell_outputs(
+        self, context: ServerContext, session_id: str, cell_ids: Iterable[str]
+    ) -> dict[str, tuple[str, object]]:
+        from marimo._types.ids import CellId_t
+
+        session = current_session(context, session_id)
+        if self._closed or session is None:
+            raise RuntimeSyncError("The notebook session is unavailable.")
+        notifications = session.session_view.cell_notifications
+        outputs: dict[str, tuple[str, object]] = {}
+        for cell_id in cell_ids:
+            notification = notifications.get(CellId_t(cell_id))
+            output = notification.output if notification is not None else None
+            if output is not None:
+                outputs[cell_id] = (output.mimetype, output.data)
+        return outputs
+
     async def control_bindings(
         self, context: ServerContext, session_id: str
     ) -> dict[str, object]:

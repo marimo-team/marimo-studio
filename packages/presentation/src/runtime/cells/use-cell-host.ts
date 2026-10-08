@@ -26,6 +26,14 @@ export const useCellHost = (
   cell: RuntimeCell | undefined,
   projection: CellProjection,
 ): void => {
+  const output = cell?.output;
+  useLayoutEffect(() => {
+    host.marimoOutput = output ? { mimetype: output.mimetype, data: output.data } : undefined;
+    return () => {
+      host.marimoOutput = undefined;
+    };
+  }, [host, output]);
+
   useLayoutEffect(() => {
     applyProjectionMetadata(host, binding.resolution, binding.projectionRevision);
     setProjectionRuntimeCell(host, cell?.id);

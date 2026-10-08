@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { isValidElement } from "react";
 import { afterEach, beforeAll, test, vi } from "vite-plus/test";
 
+import type { MarimoOutputElement } from "../src/outputs/host.ts";
 import type { PreparedProjectionDependencies } from "../src/prepared/controller.tsx";
 import type {
   PreparedProjectionHandle,
@@ -305,6 +306,37 @@ test("prepared projections render values, native outputs, and a complete cell", 
   await Promise.all([handle.dispose(), handle.dispose()]);
 });
 
+test("prepared hosts keep media marimo cannot show for the document that reads it", async () => {
+  commitRuntimeConfig(config);
+  document.body.innerHTML = `
+    <div id="runtime"></div>
+    <marimo-output hidden value="report.output"></marimo-output>
+  `;
+  projectionHosts.connect();
+  const handle = mountPreparedProjections({
+    root: document.querySelector<HTMLElement>("#runtime")!,
+    presentation,
+    theme,
+  });
+  handles.push(handle);
+  const pdf = structuredClone(snapshot("pdf"));
+  Object.assign(pdf.outputs[0]!.output!, {
+    mimetype: "application/pdf",
+    data: "data:application/pdf;base64,JVBERi0=",
+  });
+
+  await handle.replace(pdf);
+  await settle();
+
+  const host = document.querySelector<MarimoOutputElement>("marimo-output")!;
+  assert.equal(host.dataset.state, "ready");
+  assert.equal(host.querySelector("img"), null);
+  assert.deepEqual(
+    { mimetype: host.marimoOutput?.mimetype, data: host.marimoOutput?.data },
+    { mimetype: "application/pdf", data: "data:application/pdf;base64,JVBERi0=" },
+  );
+});
+
 test("prepared generations replace hosts and retain the last good result", async () => {
   commitRuntimeConfig(config);
   document.body.innerHTML = `
@@ -331,7 +363,7 @@ test("prepared generations replace hosts and retain the last good result", async
 
   const invalid = structuredClone(snapshot("invalid"));
   Object.assign(invalid.outputs[0]!.output!, {
-    mimetype: "application/vnd.example.unsupported",
+    channel: "unsupported",
   });
   await assert.rejects(handle.replace(invalid));
   assert.match(replacement.textContent ?? "", /output one/u);
@@ -542,7 +574,7 @@ test("prepared UI values mount before controls and clear across a null generatio
 
   const broken = structuredClone(state(5));
   Object.assign(broken.outputs[0]!.output!, {
-    mimetype: "application/vnd.example.unsupported",
+    channel: "unsupported",
   });
   await assert.rejects(handle.replace(broken));
   await sliderValue("3");
@@ -811,16 +843,13 @@ test("prepared replacement attempts restore after model rollback fails", async (
         selector: "invalid.output",
         ownerCellId: "injected-invalid-owner",
         projectionSha256: "1".repeat(64),
-        output: {
-          channel: "output",
-          mimetype: "application/vnd.example.unsupported",
-          data: "invalid",
-        },
+        output: { channel: "output", mimetype: "text/plain", data: "invalid" },
         resources: resources(),
       },
     ],
     cells: [],
   };
+  Object.assign(invalid.outputs[0]!.output!, { channel: "unsupported" });
 
   await assert.rejects(
     handle.replace(invalid),

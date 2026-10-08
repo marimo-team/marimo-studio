@@ -29,25 +29,29 @@ in an environment that contains credentials or private notebook source.
 Each term names one concept, and the third column names the record or field
 that holds it.
 
-| Term             | Meaning                                                                    | In the API               |
-| ---------------- | -------------------------------------------------------------------------- | ------------------------ |
-| View project     | The directory that holds one view's files                                  | `ViewProject`            |
-| View manifest    | `view.toml`, which records the provider key and provider options           | `ViewProject.manifest`   |
-| Provider key     | Distribution and registration name, such as `acme-views/report`            | `ViewProject.provider`   |
-| Provider options | The `[options]` table in `view.toml`                                       | `ViewProject.options`    |
-| Starter          | A template for a new view, shown in the **New view** picker                | `ProviderStarter`        |
-| Starter key      | The starter's name within its provider, such as `default`                  | `ProviderStarter.key`    |
-| Starter ID       | Provider key and starter key, such as `acme-views/report:default`          | `CheckedView.starter`    |
-| Cell target      | The name a `<marimo-cell>` host uses: a marimo cell name or a Studio alias | `StarterCellTarget`      |
-| Source document  | A file shown in Studio's Source panel                                      | `SourceDocument`         |
-| Build input      | A file or directory the build reads. A change rebuilds the view            | `BuildInput`             |
-| Projection host  | `<marimo-cell>`, `<marimo-output>`, or an element with `mo-value`          |                          |
-| Projection site  | The source location, kind, and targets of one projection host              | `ProjectionSite`         |
-| Target           | The cell name or value selector that a host shows                          | `ProjectionSite.targets` |
-| Build snapshot   | A private copy of the build inputs with a site ID on every host            | `BuildRequest.project`   |
-| Entry document   | The HTML page a build returns                                              | `BuildResult.document`   |
-| Accept list      | The image types an output host can show, in preference order               | `ProjectionSite.accept`  |
-| Diagnostic       | A problem with a code, message, hint, and optional source location         | `ProjectDiagnostic`      |
+| Term              | Meaning                                                                    | In the API               |
+| ----------------- | -------------------------------------------------------------------------- | ------------------------ |
+| View project      | The directory that holds one view's files                                  | `ViewProject`            |
+| View manifest     | `view.toml`, which records the provider key and provider options           | `ViewProject.manifest`   |
+| Provider key      | Distribution and registration name, such as `acme-views/report`            | `ViewProject.provider`   |
+| Provider options  | The `[options]` table in `view.toml`                                       | `ViewProject.options`    |
+| Starter           | A template for a new view, shown in the **New view** picker                | `ProviderStarter`        |
+| Starter key       | The starter's name within its provider, such as `default`                  | `ProviderStarter.key`    |
+| Starter ID        | Provider key and starter key, such as `acme-views/report:default`          | `CheckedView.starter`    |
+| Cell target       | The name a `<marimo-cell>` host uses: a marimo cell name or a Studio alias | `StarterCellTarget`      |
+| Source document   | A file shown in Studio's Source panel                                      | `SourceDocument`         |
+| Build input       | A file or directory the build reads. A change rebuilds the view            | `BuildInput`             |
+| Projection host   | `<marimo-cell>`, `<marimo-output>`, or an element with `mo-value`          |                          |
+| Projection site   | The source location, kind, and targets of one projection host              | `ProjectionSite`         |
+| Target            | The cell name or value selector that a host shows                          | `ProjectionSite.targets` |
+| Build snapshot    | A private copy of the build inputs with a site ID on every host            | `BuildRequest.project`   |
+| Entry document    | The file a build returns: an HTML page, or a PDF, SVG, or PNG              | `BuildResult.document`   |
+| Document template | The build output of a `DocumentProvider`, rendered with notebook values    | `RenderRequest`          |
+| Render value      | A notebook value that a document template reads as JSON                    | `RenderValue`            |
+| Render output     | A notebook value, such as a figure, that a template places as media        | `RenderOutput`           |
+| Render cell       | A named notebook cell whose output a template places as media              | `RenderCell`             |
+| Accept list       | The media types a host or template read can show, in preference order      | `RenderOutput.accept`    |
+| Diagnostic        | A problem with a code, message, hint, and optional source location         | `ProjectDiagnostic`      |
 
 ## Register the provider
 
@@ -98,6 +102,16 @@ class ViewProvider(Protocol):
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
 
     def build(self, request: BuildRequest) -> BuildResult: ...
+```
+
+A provider that renders documents with notebook values implements
+`DocumentProvider`, which adds `render()`.
+[Render documents with notebook values](#render-documents-with-notebook-values)
+describes that contract.
+
+```python
+class DocumentProvider(ViewProvider, Protocol):
+    def render(self, request: RenderRequest) -> BuildResult: ...
 ```
 
 Provider methods are synchronous. Studio runs them away from the server event
@@ -236,12 +250,15 @@ produce a JSON string literal that is safe inside a `<script>` element, and
 
 `inspect()` returns a `ProjectInspection`:
 
-| Field         | Holds                                                 |
-| ------------- | ----------------------------------------------------- |
-| `documents`   | The Source documents, in tab order                    |
-| `inputs`      | The build inputs: exact files and bounded directories |
-| `sites`       | One projection site per projection host               |
-| `diagnostics` | Problems found in the project                         |
+| Field            | Holds                                                      |
+| ---------------- | ---------------------------------------------------------- |
+| `documents`      | The Source documents, in tab order                         |
+| `inputs`         | The build inputs: exact files and bounded directories      |
+| `sites`          | One projection site per projection host                    |
+| `diagnostics`    | Problems found in the project                              |
+| `render_values`  | The notebook values a document template reads as JSON      |
+| `render_outputs` | The notebook values a document template places             |
+| `render_cells`   | The notebook cells whose output a document template places |
 
 Studio watches the Source documents and the build inputs. The build inputs
 also decide the project revision and the contents of the build snapshot.
@@ -396,8 +413,14 @@ def build(self, request):
     return BuildResult(ENTRY)
 ```
 
-`request.cache_root` persists between builds. The browser shows notebook
-results in the entry document's projection hosts.
+`request.cache_root` persists between builds. The entry document decides what
+Studio publishes:
+
+| Provider           | Entry document              | Published view                                                                   |
+| ------------------ | --------------------------- | -------------------------------------------------------------------------------- |
+| `ViewProvider`     | An `.html` page             | Live page. The browser shows notebook results in its projection hosts            |
+| `ViewProvider`     | A `.pdf`, `.svg`, or `.png` | Static document shown in a Studio viewer page                                    |
+| `DocumentProvider` | A template file of any type | Rendered document. Studio renders the template with the reader's notebook values |
 
 The `development` profile builds Studio Preview. The `production` profile
 builds run mode and static export. Each profile keeps its own build state and
@@ -407,16 +430,59 @@ An HTML entry document needs one `head`, one `body`, and one `#app-shell`.
 Studio validates paths, symlinks, file limits, reserved routes, projection
 sites, and the complete output before publication.
 
+## Render documents with notebook values
+
+A provider whose object has a `render()` method is a `DocumentProvider`. It
+publishes a document template, and Studio renders the template with notebook
+results. The built-in Typst provider compiles `main.typ` into a PDF each time a
+result it reads changes.
+[Publish a document](../guide/view-providers.md#publish-a-document) builds one
+step by step.
+
+1. `inspect()` reports each value the template reads as JSON as a
+   `RenderValue`, each value it places, such as a figure, as a `RenderOutput`,
+   and each named cell whose output it places as a `RenderCell`. Each carries
+   the target and its source location, and the media reads carry the types the
+   renderer can place.
+2. `build()` writes the template files beneath `request.staging_root` and
+   returns the template's entry file, such as `main.typ`. Studio stores the
+   template with the artifact and keeps it private. Readers receive rendered
+   documents.
+3. Studio calls `render()` once with no values to check the template and
+   publish the first document. A render error fails the build, and the last
+   published view stays available.
+4. While the view runs, Studio calls `render()` with the current results and
+   shows the rendered file in the viewer page. A static export calls it once
+   for each distinct prepared state.
+
+`render()` must depend only on the template and the request's `values`,
+`outputs`, and `cells`. Studio caches each rendition by artifact revision and
+inputs, and shares it among readers. Studio may run two renders of one view at
+once, each with its own template copy and output directory. Treat the request's
+results as untrusted data from the notebook a reader is viewing. A target
+without a current result is absent, so the template applies its own default.
+
+Return the rendered file's path relative to `request.output_root`. It must end
+in `.pdf`, `.svg`, or `.png`. When the template cannot render with the supplied
+results, raise `ProviderError` or return error diagnostics, and Studio shows
+them beside the last rendered document.
+
+Render values hold JSON data. A notebook value that is a table, such as a
+dataframe, fails with `render-value-not-json`. Convert it in the notebook, for
+example with `df.to_dicts()` in Polars or `df.to_dict("records")` in pandas.
+[Rendered documents](projections.md#rendered-documents) describes how each
+runtime supplies results.
+
 ## Report problems
 
-Raise `ProviderError` from `inspect()` or `build()` when the author can fix
-the problem in the project:
+Raise `ProviderError` from `inspect()`, `build()`, or `render()` when the
+author can fix the problem in the project:
 
 ```python
 raise ProviderError(
-    "index.html links missing.css.",
-    hint="Create missing.css or remove the link.",
-    source=SourceLocation(PurePosixPath("index.html"), 3, 5),
+    "main.typ imports missing.typ.",
+    hint="Create missing.typ or remove the import.",
+    source=SourceLocation(PurePosixPath("main.typ"), 3, 1),
 )
 ```
 
@@ -435,9 +501,10 @@ it with the provider key.
 
 ## Run commands
 
-`request.runner.run(command, cwd=...)` starts a supervised child command. Its
-`cwd` must be inside `request.project.root`, which holds `request.work_root`
-and `request.staging_root`.
+`request.runner.run(command, cwd=...)` starts a supervised child command. In
+`inspect()` and `build()`, `cwd` must be inside `request.project.root`, which
+holds `request.work_root` and `request.staging_root`. In `render()`, it must be
+inside `request.template_root`.
 
 - `timeout` is a finite positive number of seconds, 120 by default. Every
   command in one request also shares `request.command_timeout` as a total
@@ -471,9 +538,9 @@ tool's version command and compares the first dotted version it prints:
 ```python
 def availability(self):
     return probe_tool(
-        ["pandoc", "--version"],
-        minimum="3.0",
-        install="Install Pandoc 3.0 or newer from https://pandoc.org/installing.html.",
+        ["typst", "--version"],
+        minimum="0.13",
+        install="Install Typst 0.13 or newer from https://typst.app.",
     )
 ```
 
@@ -586,6 +653,9 @@ ProjectInspection(
     inputs: tuple[BuildInput, ...],
     sites: tuple[ProjectionSite, ...] = (),
     diagnostics: tuple[ProjectDiagnostic, ...] = (),
+    render_values: tuple[RenderValue, ...] = (),
+    render_outputs: tuple[RenderOutput, ...] = (),
+    render_cells: tuple[RenderCell, ...] = (),
 )
 
 SourceDocument(
@@ -605,6 +675,12 @@ ProjectionSite(
     accept: tuple[str, ...] = (),
 )
 
+RenderValue(target: str, source: SourceLocation)
+
+RenderOutput(target: str, source: SourceLocation, accept: tuple[str, ...])
+
+RenderCell(target: str, source: SourceLocation, accept: tuple[str, ...])
+
 SourceLocation(path: PurePosixPath, line: int, column: int)
 ```
 
@@ -612,19 +688,21 @@ SourceLocation(path: PurePosixPath, line: int, column: int)
 is the editor language ID, and `label` is an optional tab name. A directory
 `BuildInput` covers every file beneath it, within Studio's input limits.
 `ProjectionSite.targets` must be non-empty and unique, and `"*"` permits any
-valid target of `kind`.
+valid target of `kind`. A `RenderCell` target is a cell name. Several render
+records of one kind may share a target.
 
 `accept` lists lowercase `type/subtype` media types in order of preference,
-such as `("image/svg+xml", "image/png")`. Only an output site takes one, and it
-lists images a page shows: `image/svg+xml`, `image/png`, `image/jpeg`, or
-`image/gif`. Studio renders the output's value in the first type the value
-supports through marimo-export's
+such as `("application/pdf", "image/svg+xml", "image/png")`. An output site, a
+`RenderOutput`, and a `RenderCell` take one. Studio passes a cell's output as
+marimo shows it, in the first listed type the output carries. Studio renders an
+output's value in the first type the value supports through marimo-export's
 [`represent()`](https://marimo-team.github.io/marimo-export/reference/python/values),
 whatever output settings the notebook uses. An output site without `accept`
-shows marimo's native output. A `"*"` output site declares no `accept` and
-shows each target in the form its literal sites declare. Every site of one
-output target in a view uses the same accept list, and a different list reports
-`output-accept-conflict`.
+shows marimo's native output. An output site lists images a page shows:
+`image/svg+xml`, `image/png`, `image/jpeg`, or `image/gif`. A `"*"` output site
+declares no `accept` and shows each target in the form its literal sites
+declare. Every read of one output or cell target in a view uses the same accept
+list, and a different list reports `output-accept-conflict`.
 `SourceLocation` lines and columns are one-based.
 
 Each artifact revision records the provider distribution's version and the
@@ -681,6 +759,18 @@ BuildRequest(
     command_timeout: float,
 )
 
+RenderRequest(
+    template_root: Path,
+    document: PurePosixPath,
+    values: Mapping[str, JsonValue],
+    outputs: Mapping[str, Representation],
+    cells: Mapping[str, Representation],
+    output_root: Path,
+    cancellation: ProviderCancellation,
+    runner: ProviderRunner,
+    command_timeout: float,
+)
+
 BuildResult(
     document: PurePosixPath | None,
     diagnostics: tuple[ProjectDiagnostic, ...] = (),
@@ -691,6 +781,23 @@ BuildResult(
 `staging_root` receives the output, `work_root` is an empty directory for
 intermediate files, and `cache_root` persists between builds. Return
 `document=None` when diagnostics prevent publication.
+
+`RenderRequest.template_root` is a private, writable copy of the document
+template, and `document` is the template entry that `build()` returned.
+`values` holds JSON for each available `RenderValue` target. `outputs` holds a
+marimo-export
+[`Representation`](https://marimo-team.github.io/marimo-export/reference/python/values#representation)
+for each available `RenderOutput` target, in one of the media types its
+`accept` lists, such as `Representation("application/pdf", b"%PDF-...")`.
+`cells` holds a `Representation` for each available `RenderCell` target in the
+same way. Text media types hold UTF-8 bytes. A PNG figure also carries its
+display `width` and `height` in CSS pixels. A target is absent when it has no
+current result, or when the result has no accepted media type, and the template
+then shows its default. Write files the renderer reads, such as images, into
+`template_root`.
+`output_root` starts empty. `render()` returns a `BuildResult` whose document is
+a `.pdf`, `.svg`, or `.png` path relative to `output_root`, or `document=None`
+with an error diagnostic.
 
 ### Commands and cancellation
 
@@ -801,6 +908,9 @@ check_provider(
     *,
     key: str = "local-provider/provider",
     notebook: str | Path | None = None,
+    values: Mapping[str, JsonValue] | None = None,
+    outputs: Mapping[str, Representation] | None = None,
+    cells: Mapping[str, Representation] | None = None,
     options: Mapping[str, JsonValue] | None = None,
 ) -> tuple[CheckedView, ...]
 
@@ -809,12 +919,13 @@ CheckedView(
     documents: tuple[PurePosixPath, ...],
     published: Mapping[PurePosixPath, bytes],
     warnings: tuple[str, ...],
+    rendered: bytes | None = None,
 )
 ```
 
 `check_provider()` runs each starter through the same steps as Studio. It
-creates a view next to a sample notebook, inspects it twice, and builds and
-publishes it:
+creates a view next to a sample notebook, inspects it twice, builds and
+publishes it, and renders a document template:
 
 ```python
 from marimo_studio.view_providers.testing import check_provider
@@ -830,7 +941,11 @@ def test_report_provider() -> None:
 `provider` is a provider object, checked in process under `key`, or an
 installed provider key, loaded the way Studio loads it. `notebook` defaults to
 a notebook that defines `metric` and `report`. `options` become the provider
-options of each view. `CheckedView.starter` is the starter ID, `documents` lists the view's Source
+options of each view. `values`, `outputs`, and `cells` feed a
+`DocumentProvider`'s render for the targets its template reads, as Studio
+supplies them, and `rendered` holds the result. Each output and cell is a
+`Representation` in one of the media types the template accepts.
+`CheckedView.starter` is the starter ID, `documents` lists the view's Source
 documents, and `warnings` lists the build's warning diagnostics.
 
 It raises `ProviderCheckError`, an `AssertionError`, with the message, hint,

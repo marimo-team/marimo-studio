@@ -19,6 +19,7 @@ import pytest
 
 import marimo_studio.view_providers._host.operations.process as process_module
 from marimo_studio._cli.environment import SANDBOX_ENV
+from marimo_studio._processes.provider_runner import create_provider_runner
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.models import StudioWorkspace
@@ -28,12 +29,18 @@ from marimo_studio.view_providers import (
     BuildResult,
     InspectionRequest,
     JsonValue,
+    ProjectDiagnostic,
     ProjectInspection,
     ProjectionSite,
     ProviderAvailability,
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
+    RenderCell,
+    RenderOutput,
+    RenderRequest,
+    RenderValue,
+    Representation,
     SourceDocument,
     SourceLocation,
     StarterContext,
@@ -280,7 +287,7 @@ create_tree_provider = _CreateProcessTreeProvider(
 delayed_provider = _DelayedProvider("test-process/delayed", "default")
 
 
-class _SitesProvider(ProviderStub):
+class _RenderingProvider(ProviderStub):
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         del request
         card = PurePosixPath("card.txt")
@@ -293,18 +300,51 @@ class _SitesProvider(ProviderStub):
             sites=(
                 ProjectionSite("value", ("total",), SourceLocation(card, 1, 2), 5),
                 ProjectionSite("cell", "*", SourceLocation(card, 2, 1), 9),
-                ProjectionSite(
-                    "output",
-                    ("chart",),
-                    SourceLocation(card, 3, 1),
-                    12,
-                    ("image/svg+xml", "image/png"),
+            ),
+            diagnostics=(),
+            render_values=(RenderValue('rows["north"]', SourceLocation(card, 3, 4)),),
+            render_outputs=(
+                RenderOutput("chart", SourceLocation(card, 3, 20), ("image/svg+xml",)),
+            ),
+            render_cells=(
+                RenderCell("plot", SourceLocation(card, 4, 1), ("image/svg+xml",)),
+            ),
+        )
+
+    def render(self, request: RenderRequest) -> BuildResult:
+        values = json.dumps(dict(request.values), sort_keys=True)
+        reads = (("output", request.outputs), ("cell", request.cells))
+        media = json.dumps(
+            {
+                f"{kind}:{target}": [
+                    item.media_type,
+                    item.data.decode(),
+                    item.width,
+                    item.height,
+                ]
+                for kind, items in reads
+                for target, item in items.items()
+            }
+        )
+        request.output_root.joinpath("card.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            f"<text>{values}</text><text>{media}</text></svg>",
+            encoding="utf-8",
+        )
+        return BuildResult(
+            PurePosixPath("card.svg"),
+            (
+                ProjectDiagnostic(
+                    "card-rendered",
+                    "warning",
+                    "Rendered with defaults",
+                    source=SourceLocation(request.document, 1, 1),
                 ),
             ),
         )
 
 
-sites_provider = _SitesProvider("test-process/sites", "default")
+rendering_provider = _RenderingProvider("test-process/rendering", "default")
 catalog_provider = _CatalogProvider("test-process/catalog", "default")
 context_provider = _ContextProvider("test-process/context", "default")
 environment_provider = _EnvironmentProvider("test-process/environment", "default")
@@ -411,18 +451,60 @@ if __name__ == "__main__":
     assert plan.cell_targets == tuple(context.cell_targets.values())
 
 
-def test_isolated_provider_round_trips_projection_sites(
+def test_isolated_provider_round_trips_sites_render_values_and_renders(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
-    installed = _registry("sites", "sites_provider").get("test-process/sites")
-    project = _project(tmp_path, "test-process/sites")
-    project.root.joinpath("card.txt").write_text("Total\n\n\n", encoding="utf-8")
+    installed = _registry("rendering", "rendering_provider").get(
+        "test-process/rendering"
+    )
+    project = _project(tmp_path, "test-process/rendering")
+    project.root.joinpath("card.txt").write_text("Total\n\n", encoding="utf-8")
+    output = tmp_path / "output"
+    output.mkdir()
+    cancellation = ProviderCancellation()
+    values: dict[str, JsonValue] = {'rows["north"]': [1, 2.5, None]}
 
     inspected = installed.inspect(inspection_request(project))
+    rendered = installed.render(
+        RenderRequest(
+            template_root=project.root,
+            document=PurePosixPath("card.txt"),
+            values=values,
+            outputs={"chart": Representation("image/svg+xml", b"<svg/>", 40, 20)},
+            cells={"plot": Representation("image/svg+xml", b"<svg/>")},
+            output_root=output,
+            cancellation=cancellation,
+            runner=create_provider_runner(project.root, cancellation, 10),
+            command_timeout=10,
+        )
+    )
 
-    assert inspected == sites_provider.inspect(inspection_request(project))
+    assert installed.renders
+    assert inspected == rendering_provider.inspect(inspection_request(project))
+    assert rendered == BuildResult(
+        PurePosixPath("card.svg"),
+        (
+            ProjectDiagnostic(
+                "card-rendered",
+                "warning",
+                "Rendered with defaults",
+                source=SourceLocation(PurePosixPath("card.txt"), 1, 1),
+            ),
+        ),
+    )
+    card = output.joinpath("card.svg").read_text(encoding="utf-8")
+    assert json.dumps(values, sort_keys=True) in card
+    assert (
+        json.dumps(
+            {
+                "output:chart": ["image/svg+xml", "<svg/>", 40, 20],
+                "cell:plot": ["image/svg+xml", "<svg/>", None, None],
+            }
+        )
+        in card
+    )
 
 
 def test_create_process_rejects_oversized_request_before_worker_start(

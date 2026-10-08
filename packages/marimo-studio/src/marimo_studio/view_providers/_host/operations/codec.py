@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
 import stat
@@ -26,6 +27,10 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
+    RenderCell,
+    RenderOutput,
+    RenderValue,
+    Representation,
     SourceDocument,
     SourceLocation,
     SourceSpan,
@@ -46,11 +51,21 @@ def project_payload(project: ViewProject) -> dict[str, object]:
     }
 
 
-def provider_info_payload(info: ProviderInfo) -> dict[str, object]:
-    return info.to_dict()
+def provider_description_payload(
+    info: ProviderInfo,
+    renders: bool,
+) -> dict[str, object]:
+    return {"info": info.to_dict(), "renders": renders}
 
 
-def provider_info_from_payload(value: object) -> ProviderInfo:
+def provider_description_from_payload(value: object) -> tuple[ProviderInfo, bool]:
+    data = _record(value, {"info", "renders"}, "provider description")
+    if type(data["renders"]) is not bool:
+        raise ValueError("Provider render capability must be a boolean")
+    return _provider_info(data["info"]), data["renders"]
+
+
+def _provider_info(value: object) -> ProviderInfo:
     data = _record(
         value,
         {"schema", "title", "summary", "options"},
@@ -412,16 +427,22 @@ def inspection_from_payload(value: object) -> ProjectInspection:
             "inputs",
             "sites",
             "diagnostics",
+            "render_values",
+            "render_outputs",
+            "render_cells",
         },
         "provider inspection",
     )
-    if data["schema"] != 2:
+    if data["schema"] != 3:
         raise ValueError("Provider inspection schema is unsupported")
     return ProjectInspection(
         tuple(_source_document(item) for item in _items(data["documents"])),
         tuple(_build_input(item) for item in _items(data["inputs"])),
         tuple(_site(item) for item in _items(data["sites"])),
         tuple(_diagnostic(item) for item in _items(data["diagnostics"])),
+        tuple(_render_value(item) for item in _items(data["render_values"])),
+        tuple(_render_output(item) for item in _items(data["render_outputs"])),
+        tuple(_render_cell(item) for item in _items(data["render_cells"])),
     )
 
 
@@ -500,6 +521,61 @@ def _site(value: object) -> ProjectionSite:
         offset,
         _accept(data["accept"], "projection site media type"),
     )
+
+
+def _render_value(value: object) -> RenderValue:
+    data = _record(value, {"target", "source"}, "render value")
+    return RenderValue(
+        _text(data["target"], "render value target"),
+        _source_location(data["source"]),
+    )
+
+
+def _render_output(value: object) -> RenderOutput:
+    data = _record(value, {"target", "source", "accept"}, "render output")
+    return RenderOutput(
+        _text(data["target"], "render output target"),
+        _source_location(data["source"]),
+        _accept(data["accept"], "render output media type"),
+    )
+
+
+def _render_cell(value: object) -> RenderCell:
+    data = _record(value, {"target", "source", "accept"}, "render cell")
+    return RenderCell(
+        _text(data["target"], "render cell target"),
+        _source_location(data["source"]),
+        _accept(data["accept"], "render cell media type"),
+    )
+
+
+def media_payload(media: Mapping[str, Representation]) -> dict[str, object]:
+    """Encode render outputs or cells for a provider process."""
+    return {
+        target: {
+            "media_type": item.media_type,
+            "data": base64.b64encode(item.data).decode("ascii"),
+            "width": item.width,
+            "height": item.height,
+        }
+        for target, item in media.items()
+    }
+
+
+def media_from_payload(value: object, label: str) -> dict[str, Representation]:
+    """Decode render outputs or cells written by ``media_payload``."""
+    if not isinstance(value, dict):
+        raise ValueError(f"{label.capitalize()} must map targets to media")
+    media: dict[str, Representation] = {}
+    for target, item in value.items():
+        data = _record(item, {"media_type", "data", "width", "height"}, label)
+        media[_text(target, f"{label} target")] = Representation(
+            _text(data["media_type"], f"{label} media type"),
+            base64.b64decode(_text(data["data"], f"{label} data"), validate=True),
+            cast("int | None", data["width"]),
+            cast("int | None", data["height"]),
+        )
+    return media
 
 
 def _diagnostic(value: object) -> ProjectDiagnostic:

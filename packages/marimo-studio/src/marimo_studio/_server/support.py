@@ -47,6 +47,9 @@ from marimo_studio._server.ports import (
 from marimo_studio._server.presentation.capability import (
     PresentationCapability,
 )
+from marimo_studio._server.presentation.documents import (
+    render_response,
+)
 from marimo_studio._server.presentation.ports import KernelProjectionHost
 from marimo_studio._server.presentation.preview import preview_url_response
 from marimo_studio._server.presentation.projection_routes import (
@@ -523,6 +526,21 @@ async def _view_response(
             view_name,
             projections,
             session_state,
+            authorized_revision=(
+                presentation_capability.revision
+                if presentation_capability is not None
+                else None
+            ),
+        )
+    if route == "render" and request.method == "POST":
+        return await render_response(
+            request,
+            context,
+            presentation,
+            view_name,
+            projections,
+            session_state,
+            notebook_scope.renders,
             authorized_revision=(
                 presentation_capability.revision
                 if presentation_capability is not None

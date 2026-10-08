@@ -272,7 +272,7 @@ def resolve_projection(
         producer=producer,
         selector=selector,
         dependency_closure=graph.dependency_closure(producer),
-        accept=media_accept(sites).get(request.target, ())
+        accept=media_accept(sites, "output").get(request.target, ())
         if site.kind == "output"
         else (),
     )

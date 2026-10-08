@@ -7,7 +7,7 @@ description: Bring your own frontend framework or build tool to the New view pic
 
 A view provider is a small Python package that adds starters to Studio's **New
 view** picker. Install one in the notebook's environment, and its starters
-appear beside the built-in HTML, React, Svelte, Notebook Kit, and Quarto
+appear beside the built-in HTML, React, Svelte, Notebook Kit, Quarto, and Typst
 starters:
 
 ![The New view picker lists Acme report and Acme dashboard under From acme-views, above the built-in starters from marimo-studio](/screenshots/provider-new-view.png){width=448}
@@ -29,16 +29,17 @@ Every provider imports one module, `marimo_studio.view_providers`. Pick the
 pattern closest to your tool, then follow its section and read the example
 that uses it:
 
-| Pattern                                                                | The build                                  | SDK pieces                                                  | Example                                                                                                                                            |
-| ---------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [HTML page](#write-the-provider)                                       | copies or templates HTML                   | `html_sites`, `copy_inputs`                                 | this guide's `ReportProvider`                                                                                                                      |
-| [Framework build](#add-a-framework-build)                              | bundles JavaScript with a pinned toolchain | `request.runner`, `request.work_root`, `request.cache_root` | [`deno_react`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react) |
-| [Command-line tool](../reference/provider-api.md#check-external-tools) | runs an installed tool that writes HTML    | `probe_tool`, `copy_inputs`, `ProviderError`                | [`quarto`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/quarto)         |
+| Pattern                                                                | The build                                       | SDK pieces                                                  | Example                                                                                                                                            |
+| ---------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [HTML page](#write-the-provider)                                       | copies or templates HTML                        | `html_sites`, `copy_inputs`                                 | this guide's `ReportProvider`                                                                                                                      |
+| [Framework build](#add-a-framework-build)                              | bundles JavaScript with a pinned toolchain      | `request.runner`, `request.work_root`, `request.cache_root` | [`deno_react`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react) |
+| [Command-line tool](../reference/provider-api.md#check-external-tools) | runs an installed tool that writes HTML         | `probe_tool`, `copy_inputs`, `ProviderError`                | [`quarto`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/quarto)         |
+| [Rendered document](#publish-a-document)                               | renders a PDF, SVG, or PNG with notebook values | `RenderValue`, `RenderOutput`, `RenderCell`, `render()`     | [`typst`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/typst)           |
 
-The Quarto provider imports only the public module, so its source shows the
-command-line pattern at full size. The React, Svelte, and Notebook Kit
-providers also share a Deno library inside Studio. When no pattern fits, start
-from the HTML page provider and replace `build()` with your tool's steps.
+The Quarto and Typst providers import only the public module, so their source
+shows those patterns at full size. The React, Svelte, and Notebook Kit providers
+also share a Deno library inside Studio. When no pattern fits, start from the
+HTML page provider and replace `build()` with your tool's steps.
 
 ## Ask a coding agent
 
@@ -109,6 +110,7 @@ Studio calls the provider at these moments, and
 | Someone creates a view                          | `create()`                     |
 | Source opens, or a watched file changes         | `inspect()`                    |
 | Preview, run mode, or export needs a fresh page | `build()`                      |
+| A rendered document's notebook results change   | `render()`                     |
 
 ## How Studio finds the provider
 
@@ -242,8 +244,9 @@ class ReportProvider:
 provider = ReportProvider()
 ```
 
-`ReportProvider` answers the moments from
+`ReportProvider` answers the page moments from
 [What a provider decides](#what-a-provider-decides), one method at a time.
+[Publish a document](#publish-a-document) adds `render()`.
 
 ### `availability()` and `starters()`: fill the picker
 
@@ -650,6 +653,98 @@ built-in providers in
 [`view_providers/_builtin`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin)
 find hosts in JSX and Svelte.
 
+## Publish a document
+
+A provider can publish a PDF, SVG, or PNG in place of a page. Its `build()`
+returns a template, and Studio renders the template again whenever a notebook
+value it reads changes. Studio shows each rendered document in a viewer page with a
+download link.
+
+Register `card = "acme_views.card:provider"`, then create
+`src/acme_views/card.py`:
+
+```python
+from pathlib import PurePosixPath
+from xml.sax.saxutils import escape
+
+from marimo_studio.view_providers import (
+    BuildRequest,
+    BuildResult,
+    InspectionRequest,
+    BuildInput,
+    ProjectInspection,
+    ProviderAvailability,
+    ProviderInfo,
+    ProviderStarter,
+    RenderRequest,
+    RenderValue,
+    SourceDocument,
+    SourceLocation,
+    StarterContext,
+    StarterPlan,
+    copy_inputs,
+)
+
+CARD = PurePosixPath("card.svg")
+TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">
+  <text x="16" y="48">Total: {{ total }}</text>
+</svg>
+"""
+
+
+class CardProvider:
+    info = ProviderInfo(
+        title="Acme card",
+        summary="An SVG card with the notebook's report total.",
+    )
+    starter = ProviderStarter(
+        key="default",
+        title="Acme card",
+        summary="Start from an SVG card that shows report.total.",
+        documents=(CARD,),
+    )
+
+    def availability(self) -> ProviderAvailability:
+        return ProviderAvailability(True)
+
+    def starters(self) -> tuple[ProviderStarter, ...]:
+        return (self.starter,)
+
+    def create(self, starter: ProviderStarter, context: StarterContext) -> StarterPlan:
+        return StarterPlan(files={CARD: TEMPLATE.encode()}, cell_targets=())
+
+    def inspect(self, request: InspectionRequest) -> ProjectInspection:
+        return ProjectInspection(
+            documents=(SourceDocument(CARD, "xml", "edit"),),
+            inputs=(BuildInput(CARD, "file"),),
+            render_values=(RenderValue("report.total", SourceLocation(CARD, 2, 30)),),
+        )
+
+    def build(self, request: BuildRequest) -> BuildResult:
+        copy_inputs(request, request.staging_root)
+        return BuildResult(CARD)
+
+    def render(self, request: RenderRequest) -> BuildResult:
+        template = (request.template_root / request.document).read_text("utf-8")
+        total = str(request.values.get("report.total", "pending"))
+        card = template.replace("{{ total }}", escape(total))
+        (request.output_root / CARD).write_text(card, encoding="utf-8")
+        return BuildResult(CARD)
+
+
+provider = CardProvider()
+```
+
+`render_values` names the notebook values the document reads, at the place it
+reads them. A template that places figures reports `render_outputs`, and one
+that places a named cell's output reports `render_cells`. Studio keeps the
+built template private and calls `render()` with a writable copy in
+`request.template_root`, an empty `request.output_root`, and the results the
+reader's notebook currently has. A result without a current value is absent,
+so the template shows its default.
+[Render documents with notebook values](../reference/provider-api.md#render-documents-with-notebook-values)
+defines the contract.
+
 ## Provider rules
 
 Studio checks each result against these rules and reports the rule it breaks.
@@ -670,7 +765,8 @@ Studio checks each result against these rules and reports the rule it breaks.
 - Write the build output inside `request.staging_root`. An HTML entry document
   needs one `head`, one `body`, and one element with `id="app-shell"`.
 - Run `build()` commands with `cwd` inside `request.project.root`, which holds
-  `request.work_root` and `request.staging_root`.
+  `request.work_root` and `request.staging_root`. Run `render()` commands
+  inside `request.template_root`.
 - Pass `environment={**os.environ, ...}` to add variables. A mapping replaces
   the command's whole environment.
 - Pin npm packages in a lockfile that ships with the starter, and install them
@@ -740,4 +836,4 @@ works when `/dash/` shows the notebook's controls and outputs with no
 
 The [View provider API](../reference/provider-api.md) defines every record and
 [each term](../reference/provider-api.md#terms) this page uses, including
-projection sites, diagnostics, and provider options.
+projection sites, rendered documents, diagnostics, and provider options.

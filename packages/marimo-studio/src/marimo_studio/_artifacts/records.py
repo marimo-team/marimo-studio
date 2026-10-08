@@ -50,6 +50,20 @@ class ArtifactFile:
 
 
 @dataclass(frozen=True)
+class ArtifactTemplate:
+    """Describe the private build output a provider renders with values.
+
+    Template files stay beside the public files of a revision. Studio never
+    serves or exports them. ``renderer`` fingerprints the provider build that
+    produced and renders them.
+    """
+
+    document: PurePosixPath
+    files: tuple[ArtifactFile, ...]
+    renderer: str
+
+
+@dataclass(frozen=True)
 class ViewArtifact:
     """One immutable browser artifact published beneath a view project."""
 
@@ -61,6 +75,7 @@ class ViewArtifact:
     project_revision: str
     artifact_revision: str
     provider: ProviderProvenance
+    template: ArtifactTemplate | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -87,6 +102,7 @@ class ArtifactManifest:
     document: PurePosixPath
     files: tuple[ArtifactFile, ...]
     sites: tuple[ArtifactSite, ...]
+    template: ArtifactTemplate | None = None
 
 
 @dataclass(frozen=True)
