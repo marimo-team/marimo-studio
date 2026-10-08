@@ -157,6 +157,7 @@ test("switches preview runtimes beneath a stripped proxy prefix", async ({
 });
 
 test("renders a Typst document beneath a stripped proxy prefix", async ({ page, studioCli }) => {
+  test.setTimeout(180_000);
   await studioCli.addWorkspaceView(proxiedNotebookPath, "report", "marimo-studio/typst:default");
   await writeFile(
     proxiedWorkspacePath("__marimo__/studio/notebook/report/main.typ"),

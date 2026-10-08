@@ -18,10 +18,16 @@ export type DocumentRenderRequest =
       readonly valueProjections: readonly ProjectionRequest[];
       readonly outputProjections: readonly ProjectionRequest[];
       readonly cellProjections: readonly ProjectionRequest[];
+      readonly values?: never;
+      readonly outputs?: never;
+      readonly cells?: never;
     }
   | {
       readonly revision: string;
       readonly values: Record<string, JsonValue>;
       readonly outputs: Record<string, RenderedMedia>;
       readonly cells: Record<string, RenderedMedia>;
+      readonly valueProjections?: never;
+      readonly outputProjections?: never;
+      readonly cellProjections?: never;
     };

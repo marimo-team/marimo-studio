@@ -141,6 +141,36 @@ def test_closing_the_render_owner_stops_active_renders(
             await render
         return pid
 
-    pid = asyncio.run(exercise())
+    try:
+        pid = asyncio.run(exercise())
+    finally:
+        renders.close()
 
     assert not _pid_is_live(pid)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="ps reports POSIX process state")
+def test_closing_the_render_owner_ends_queued_renders_as_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    renders, presentation, snapshot, marker = _render_owner(tmp_path, monkeypatch)
+
+    async def exercise() -> list[Any]:
+        # Two workers take the first renders, and the third waits in the queue.
+        tasks = [
+            asyncio.create_task(
+                renders.render(presentation, snapshot, {"total": total}, {}, {})
+            )
+            for total in (1, 2, 3)
+        ]
+        await _started(marker)
+        await asyncio.to_thread(renders.close)
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    try:
+        results = asyncio.run(exercise())
+    finally:
+        renders.close()
+
+    assert all(isinstance(result, RenderUnavailable) for result in results), results

@@ -83,7 +83,7 @@ __REPORT_BINDING_TYP__
     if type(item) == array and item.len() > 0 and type(item.first()) == dictionary {
       heading(level: 2, field-name(key))
       records(item)
-    } else if type(item) == dictionary {
+    } else if type(item) == dictionary and item.len() > 0 {
       heading(level: 2, field-name(key))
       figures(item.pairs())
     }

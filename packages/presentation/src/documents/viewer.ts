@@ -420,7 +420,8 @@ export class MarimoDocumentElement extends HTMLElement {
 
   /** Return the export's rendition for the prepared state the reader is viewing. */
   private preparedRendition(): string | undefined {
-    const state = globalThis.marimoStudio.state;
+    // The page observer installs the prepared state API after the viewer starts.
+    const state = globalThis.marimoStudio?.state;
     const suffix = this.suffix();
     if (!state || !suffix) {
       return undefined;
@@ -444,7 +445,15 @@ export class MarimoDocumentElement extends HTMLElement {
       return;
     }
     const fetchDocument = (path: string) => fetch(new URL(path, document.baseURI), { signal });
-    let response = rendition === undefined ? undefined : await fetchDocument(rendition);
+    let response: Response | undefined;
+    if (rendition !== undefined) {
+      try {
+        response = await fetchDocument(rendition);
+      } catch (error) {
+        // A failed rendition request falls back to the published document.
+        if (signal.aborted) throw error;
+      }
+    }
     const rendered = response?.ok === true;
     if (!response?.ok) {
       response = await fetchDocument(this.getAttribute("src") ?? "");

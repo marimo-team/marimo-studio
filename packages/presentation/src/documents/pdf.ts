@@ -89,7 +89,9 @@ export const openPdf = async (
 ): Promise<DocumentPages> => {
   const { pdfjs, worker } = await loadEngine();
   signal.throwIfAborted();
-  const task = pdfjs.getDocument({ data, worker });
+  // PDF.js transfers the buffer it receives to its worker. Pass a copy so the
+  // caller can still compare these bytes with the next render.
+  const task = pdfjs.getDocument({ data: data.slice(), worker });
   const abort = () => void task.destroy();
   signal.addEventListener("abort", abort, { once: true });
   try {

@@ -919,7 +919,7 @@ CheckedView(
     documents: tuple[PurePosixPath, ...],
     published: Mapping[PurePosixPath, bytes],
     warnings: tuple[str, ...],
-    rendered: bytes | None,
+    rendered: bytes | None = None,
 )
 ```
 

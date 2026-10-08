@@ -19,6 +19,7 @@ from typing import cast
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from marimo_studio._projections.resolution import MAX_UNIQUE_CELL_TARGETS
 from marimo_studio._projections.runtime_records import (
     ValueReadResult,
     output_representation,
@@ -51,6 +52,7 @@ from marimo_studio._server.request_lifecycle import (
 )
 from marimo_studio._views.documents import (
     RenderInputError,
+    Rendition,
     admit_render_inputs,
     check_render_budget,
     value_not_json,
@@ -140,6 +142,13 @@ async def _kernel_inputs(
         return _error(
             "invalid-render-request",
             "valueProjections, outputProjections, and cellProjections must be arrays.",
+            400,
+        )
+    if len(cell_projections) > MAX_UNIQUE_CELL_TARGETS:
+        return _error(
+            "invalid-render-request",
+            f"cellProjections holds at most {MAX_UNIQUE_CELL_TARGETS} projection "
+            "requests.",
             400,
         )
     arguments = (context, presentation, view_name, projections, sessions)
@@ -269,41 +278,44 @@ async def render_response(
             404,
         )
     cell_accept = media_accept(snapshot.sites, "cell")
-    if posted:
-        values = body["values"]
-        outputs = _posted_media(body["outputs"], {})
-        cells = _posted_media(body["cells"], cell_accept)
-        if not isinstance(values, dict) or outputs is None or cells is None:
-            return _error(
-                "invalid-render-request",
-                "values must be an object, and outputs and cells objects of marimo "
-                "outputs with a mimetype and data.",
-                400,
+
+    # Reading kernel inputs and rendering share one disconnect scope, so a
+    # reader who leaves stops both.
+    async def rendered() -> Rendition | JSONResponse:
+        if posted:
+            values = body["values"]
+            outputs = _posted_media(body["outputs"], {})
+            cells = _posted_media(body["cells"], cell_accept)
+            if not isinstance(values, dict) or outputs is None or cells is None:
+                return _error(
+                    "invalid-render-request",
+                    "values must be an object, and outputs and cells objects of "
+                    "marimo outputs with a mimetype and data.",
+                    400,
+                )
+        else:
+            inputs = await _kernel_inputs(
+                request,
+                body,
+                context,
+                presentation,
+                view_name,
+                projections,
+                sessions,
+                authorized_revision,
+                cell_accept,
             )
-    else:
-        inputs = await _kernel_inputs(
-            request,
-            body,
-            context,
-            presentation,
-            view_name,
-            projections,
-            sessions,
-            authorized_revision,
-            cell_accept,
-        )
-        if isinstance(inputs, JSONResponse):
-            return inputs
-        values, outputs, cells = inputs
+            if isinstance(inputs, JSONResponse):
+                return inputs
+            values, outputs, cells = inputs
+        try:
+            admit_render_inputs(snapshot.sites, values, outputs, cells)
+        except RenderInputError as error:
+            return _error(error.code, str(error), 400)
+        return await renders.render(presentation, snapshot, values, outputs, cells)
+
     try:
-        admit_render_inputs(snapshot.sites, values, outputs, cells)
-    except RenderInputError as error:
-        return _error(error.code, str(error), 400)
-    try:
-        rendition = await run_while_connected(
-            request,
-            renders.render(presentation, snapshot, values, outputs, cells),
-        )
+        rendition = await run_while_connected(request, rendered())
     except RequestDisconnected:
         return Response(status_code=499, headers=NO_STORE)
     except RenderUnavailable as error:
@@ -314,6 +326,8 @@ async def render_response(
         )
     except DiagnosticsError as error:
         return _failure(error.diagnostics)
+    if isinstance(rendition, JSONResponse):
+        return rendition
     return Response(
         rendition.content,
         media_type=rendition.media_type,

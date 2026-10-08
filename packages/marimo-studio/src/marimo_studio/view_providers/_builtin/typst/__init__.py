@@ -176,7 +176,7 @@ class TypstProvider:
         cells: list[RenderCell] = []
         diagnostics: list[ProjectDiagnostic] = []
         for path in files:
-            if path.suffix != ".typ":
+            if path.suffix.lower() != ".typ":
                 continue
             try:
                 source = project.root.joinpath(*path.parts).read_bytes().decode()

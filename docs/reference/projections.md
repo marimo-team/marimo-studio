@@ -84,9 +84,8 @@ A value without an accepted type puts the host in `data-state="error"` with
 code `output-media-unavailable`. Studio reads `accept` when it builds the view,
 so a script that changes the attribute later has no effect.
 
-A view reads each output target in one form. Every literal host of a target,
-one that names it in `value`, and every document read of it list the same
-media types. A different list reports `output-accept-conflict` at its source
+A view reads each output target in one form. Every literal host that names a
+target in `value`, and every document that reads it, lists the same media types. A different list reports `output-accept-conflict` at its source
 location. A host with `data-marimo-allow="*"` shows each target in the form
 its literal hosts declare, and an `accept` on that host reports
 `projection-accept-invalid`.

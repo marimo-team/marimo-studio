@@ -96,10 +96,12 @@ marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
 Notebook Kit starters, and its `typst` extra enables the Typst starter. The
 Quarto starter needs the `quarto` command from
-https://quarto.org/docs/get-started/ or `pixi global install quarto`. A notebook in a pixi workspace runs Studio
-through `pixi run marimo edit notebook.py --no-sandbox --watch`. `help(marimo._code_mode)` then lists Studio as the
-`studio` capability, and sandboxed kernels import the same Studio as the
-server. For views across several notebooks, serve their folder as
+https://quarto.org/docs/get-started/ or `pixi global install quarto`. A
+notebook in a pixi workspace runs Studio through
+`pixi run marimo edit notebook.py --no-sandbox --watch`.
+`help(marimo._code_mode)` then lists Studio as the `studio` capability, and
+sandboxed kernels import the same Studio as the server. For views across
+several notebooks, serve their folder as
 [setup](references/setup.md#serve-several-notebooks) describes. Create, edit,
 and run cells through `marimo._code_mode`, following the `pair --help`
 workflow. Without a way to run the notebook, continue with

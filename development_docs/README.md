@@ -186,10 +186,10 @@ view.toml
 ```
 
 Provider inspection returns Source documents, build inputs, projection sites,
-diagnostics, and the values and outputs a rendered document reads. Core enumerates the
-build inputs for revisions, snapshots, and watching. A document can be visible
-in Source while remaining read-only. A binary asset can affect a build while
-staying outside the text editor.
+diagnostics, and the values and outputs a rendered document reads. Core
+enumerates the build inputs for revisions, snapshots, and watching. A document
+can be visible in Source while remaining read-only. A binary asset can affect a
+build while staying outside the text editor.
 
 ## Trace symbolic projection work
 
@@ -252,7 +252,7 @@ Windows contracts and the complete documentation site run after merge, on
 | ------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Pull request | CI                  | Quality, Python on Linux, supported Python on Linux and Windows, Linux native, Deno, and Quarto contracts, frontend, package |
 | Pull request | Browser acceptance  | Linux browser shards, provider and installed-package browser contracts, Windows process unit contracts                       |
-| Pull request | GitHub Pages        | Documentation contracts, and an export of three example views when product code changes                                      |
+| Pull request | GitHub Pages        | Documentation contracts, and an export of two example views when product code changes                                        |
 | After merge  | Platform acceptance | macOS and Windows native and Deno contracts, Windows Quarto contracts, installed package, and Windows browser suites         |
 | After merge  | GitHub Pages        | Every example family in parallel, then the assembled site and its deployment                                                 |
 

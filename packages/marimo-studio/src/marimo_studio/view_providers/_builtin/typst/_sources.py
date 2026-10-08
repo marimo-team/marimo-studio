@@ -76,11 +76,28 @@ def _masked(source: str) -> str:
             closing = len(source) if closing < 0 else closing + ticks
             _blank(characters, index, closing)
             index = closing
+        elif source[index] == '"':
+            # A string literal can hold comment markers, such as "/*", so skip
+            # a string that closes on its line.
+            index = _string_end(source, index + 1) or index + 1
         elif source[index] == "\\":
             index += 2
         else:
             index += 1
     return "".join(characters)
+
+
+def _string_end(source: str, start: int) -> int | None:
+    """Return the index after the quote that closes a string, if on its line."""
+    index = start
+    while index < len(source):
+        character = source[index]
+        if character == '"':
+            return index + 1
+        if character == "\n":
+            return None
+        index += 2 if character == "\\" else 1
+    return None
 
 
 def _string(source: str, start: int) -> str | None:

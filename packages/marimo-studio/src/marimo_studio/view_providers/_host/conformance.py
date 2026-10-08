@@ -67,6 +67,7 @@ from marimo_studio.view_providers._host._shapes import (
 from marimo_studio.view_providers._host.records import ProviderProvenance
 from marimo_studio.view_providers._records import DOCUMENT_MEDIA_TYPES
 from marimo_studio.view_providers._targets import (
+    MAX_CELL_TARGETS,
     MAX_VALUE_TARGETS,
     validate_projection_target,
 )
@@ -398,10 +399,11 @@ class ProviderConformance:
                     raise conformance_error(self.key, str(error)) from error
                 require_input(item.source.path, f"a render {kind}")
                 validated.append(item)
-            if len({item.target for item in validated}) > MAX_VALUE_TARGETS:
+            limit = MAX_CELL_TARGETS if kind == "cell" else MAX_VALUE_TARGETS
+            if len({item.target for item in validated}) > limit:
                 raise conformance_error(
                     self.key,
-                    f"limits {label} to {MAX_VALUE_TARGETS} unique targets",
+                    f"limits {label} to {limit} unique targets",
                 )
             return tuple(validated)
 

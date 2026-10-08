@@ -184,9 +184,7 @@ Rooms in use today: {{< marimo value="summary.rooms" >}}.
 Studio renders the document with `--no-execute`, so computation stays in the
 notebook. See the
 [Quarto provider reference](../reference/built-in-providers.md#marimo-studio-quarto)
-for raw HTML hosts, `.md` entry documents, includes, and build inputs. The **Bulletin** view of
-[Earthquake watch](../examples/earthquakes.md) is a complete Quarto article
-with citations, callouts, and notebook-driven figures.
+for raw HTML hosts, `.md` entry documents, includes, and build inputs.
 
 ## Typst PDF
 
@@ -224,13 +222,7 @@ it, typically a PNG for a matplotlib figure.
 Return tables to the document as lists of dictionaries, for example with
 `df.to_dicts()`. See the
 [Typst provider reference](../reference/built-in-providers.md#marimo-studio-typst)
-for figures, fonts, and export behavior. The **Report** view of
-[Quadratic programs](../examples/quadratic-programs.md) is a complete Typst
-document that embeds the notebook's matplotlib figures.
-
-A page can also draw a PDF in the browser from `mo-value` data with a
-JavaScript PDF library, which works in every runtime. The **Field report** view of
-[Building occupancy](../examples/occupancy.md) uses pdfcn.
+for figures, fonts, and export behavior.
 
 ## Inspect installed starters
 

@@ -9,8 +9,10 @@ A view is the stable name and URL for one interface backed by a notebook. Add a
 view when the same analysis needs a different layout, explanation, interaction,
 or audience.
 
+<StudioViewStack family="athletes" />
+
 The [Rio 2016 athletes example](../examples/athletes.md) has `overview`, `explorer`,
-`field`, and `paper` views. Each view has its own project, build, and last successful
+and `field` views. Each view has its own project, build, and last successful
 artifact. Keep shared measures and reusable controls in the notebook, and
 layout, wording, and browser dependencies in each view.
 

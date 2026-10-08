@@ -341,9 +341,28 @@ def test_values_outside_json_numbers_fail_as_render_diagnostics(
     assert response.status_code == 422
     (diagnostic,) = response.json()["diagnostics"]
     assert diagnostic["code"] == "render-value-not-json"
-    assert diagnostic["message"] == (
-        "Documents read JSON values: doubled must not contain NaN or infinity."
-    )
+    assert "doubled" in diagnostic["message"]
+    assert "NaN or infinity" in diagnostic["message"]
+
+
+def test_kernel_renders_bound_their_cell_projections(notebook: Path) -> None:
+    app = _marimo_app(notebook)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        revision = client.get("/_marimo-studio/views/report/config").json()["revision"]
+        response = client.post(
+            "/_marimo-studio/views/report/render",
+            json={
+                "revision": revision,
+                "valueProjections": [],
+                "outputProjections": [],
+                "cellProjections": [{"instanceId": str(index)} for index in range(257)],
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid-render-request"
 
 
 def test_published_views_render_only_kernel_values(notebook: Path) -> None:

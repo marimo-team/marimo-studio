@@ -310,10 +310,14 @@ def read_artifact_revision(
 
 
 def artifact_tree_identity(project: ViewProject, root: Path) -> TreeVersion | None:
-    """Capture bounded artifact metadata without reading file contents."""
+    """Capture bounded artifact metadata without reading file contents.
+
+    A document revision holds its public files and its private template, each
+    within the artifact file budget, beside ``artifact.json``.
+    """
     return FileTree(project.root).tree_version(
         root,
-        max_entries=ARTIFACT_OUTPUT_BUDGET.max_files + 2,
+        max_entries=2 * ARTIFACT_OUTPUT_BUDGET.max_files + 3,
     )
 
 

@@ -112,6 +112,7 @@ def test_typst_values_are_read_from_literal_value_calls(tmp_path: Path) -> None:
     project = _project(
         tmp_path,
         """#import "marimo.typ": marimo_value
+#let opening = "/*"
 // marimo_value("commented")
 /* marimo_value("block") */
 = Report #marimo_value("title", default: [Untitled])
@@ -128,8 +129,8 @@ Call value("prose") in running text.
     assert inspection.diagnostics == ()
     assert inspection.sites == ()
     assert [(item.target, item.source) for item in inspection.render_values] == [
-        ("title", SourceLocation(MAIN, 4, 11)),
-        ('lookup["north"]', SourceLocation(MAIN, 6, 8)),
+        ("title", SourceLocation(MAIN, 5, 11)),
+        ('lookup["north"]', SourceLocation(MAIN, 7, 8)),
     ]
     assert {item.path.as_posix() for item in inspection.documents} == {
         "AGENTS.md",

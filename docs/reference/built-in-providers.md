@@ -401,8 +401,8 @@ marimo.typ
 current notebook value for `selector`, or `default` before the notebook has a
 value.
 Write each selector as a string literal so Studio can find the values the
-document reads. Values arrive as JSON. Project tables in the notebook, for
-example with `df.to_dicts()`.
+document reads. Values arrive as JSON, so convert a dataframe in the notebook
+before the document reads it, for example with `rows = df.to_dicts()`.
 
 `marimo.typ` also defines `marimo_output(selector, default: none, ..args)`. It
 places a notebook value as an image with

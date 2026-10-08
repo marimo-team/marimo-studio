@@ -103,7 +103,7 @@ class CheckedView:
     documents: tuple[PurePosixPath, ...]
     published: Mapping[PurePosixPath, bytes]
     warnings: tuple[str, ...]
-    rendered: bytes | None
+    rendered: bytes | None = None
 
 
 def _describe(item: StudioDiagnostic | ProjectDiagnostic) -> str:

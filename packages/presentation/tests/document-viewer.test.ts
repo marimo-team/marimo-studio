@@ -354,6 +354,48 @@ test("shows a Prepared view's rendition for the state the reader selects", async
   ]);
 });
 
+test("falls back to the published document when a rendition request fails", async () => {
+  vi.stubGlobal("marimoStudio", { state: preparedState("c".repeat(64)) });
+  commitRuntimeConfig(
+    runtimeConfig({
+      runtime: { id: "zero-python", instance: "prepared", data: {}, urls: {} },
+      mode: "run",
+    }),
+  );
+  stubFetch([
+    () => {
+      throw new TypeError("Failed to fetch");
+    },
+    () => svg(),
+  ]);
+  const { viewer, host } = mount();
+
+  settle(host, 1);
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+  expect(calls.map(({ url }) => new URL(url).pathname)).toEqual([
+    `/renditions/${"c".repeat(64)}.svg`,
+    "/card.svg",
+  ]);
+});
+
+test("shows the published document before the prepared state API is installed", async () => {
+  vi.stubGlobal("marimoStudio", undefined);
+  commitRuntimeConfig(
+    runtimeConfig({
+      runtime: { id: "zero-python", instance: "prepared", data: {}, urls: {} },
+      mode: "run",
+    }),
+  );
+  stubFetch([() => svg()]);
+  const { viewer, host } = mount();
+
+  settle(host, 1);
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+  expect(calls.map(({ url }) => new URL(url).pathname)).toEqual(["/card.svg"]);
+});
+
 test("posts the output each cell host shows", async () => {
   stubFetch([() => svg()]);
   document.body.innerHTML = `

@@ -64,11 +64,14 @@ class DocumentRenders:
         outputs: Mapping[str, Representation],
         cells: Mapping[str, Representation],
     ) -> Rendition:
-        normalized, encoded = canonical_values(values)
-        key = (
-            snapshot.artifact.artifact_revision,
-            render_key(encoded, outputs, cells),
-        )
+        def keyed() -> tuple[dict[str, JsonValue], tuple[str, bytes]]:
+            normalized, encoded = canonical_values(values)
+            key = render_key(encoded, outputs, cells)
+            return normalized, (snapshot.artifact.artifact_revision, key)
+
+        # Encoding megabytes of values and hashing output bytes stays off the
+        # event loop.
+        normalized, key = await asyncio.to_thread(keyed)
         cancellation = ProviderCancellation()
         with self._lock:
             if self._closed:
@@ -92,6 +95,10 @@ class DocumentRenders:
         try:
             rendition = await asyncio.shield(work)
         except asyncio.CancelledError:
+            # Closing the owner cancels queued work, which the reader sees as a
+            # transient result. Otherwise the request itself was cancelled.
+            if work.cancelled():
+                raise RenderUnavailable("Document rendering has stopped") from None
             cancellation.cancel()
             await asyncio.wait({work})
             raise
@@ -152,6 +159,9 @@ class DocumentRenders:
             if cancellation.cancelled:
                 raise RenderUnavailable("The render request ended") from error
             raise
+        # A render can finish after close() or its request cancelled it.
+        if cancellation.cancelled:
+            raise RenderUnavailable("The render request ended")
         self._remember(key, rendition)
         return rendition
 

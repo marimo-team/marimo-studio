@@ -21,6 +21,7 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
+    RenderCell,
     SourceDocument,
     SourceLocation,
     ViewProject,
@@ -783,3 +784,23 @@ def test_provider_starter_files_respect_the_project_input_budget(
 
     with pytest.raises(ConfigurationError, match=message):
         installed.create(provider.starter, provider_starter_context(tmp_path))
+
+
+def test_documents_can_read_as_many_cells_as_cell_hosts(tmp_path: Path) -> None:
+    provider = ProviderStub("example/html", "html")
+    reads = tuple(
+        RenderCell(
+            f"cell_{index}",
+            SourceLocation(PurePosixPath("index.html"), 1, 1),
+            ("image/png",),
+        )
+        for index in range(200)
+    )
+    provider.inspection = replace(inspection(), render_cells=reads)
+    registry = ProviderRegistry((candidate("html", provider),))
+    installed = registry.get(registry.ids[0])
+
+    view = ViewProject("dashboard", tmp_path, tmp_path / "view.toml", installed.key, {})
+    inspected = installed.inspect(inspection_request(view))
+
+    assert len(inspected.render_cells) == 200
