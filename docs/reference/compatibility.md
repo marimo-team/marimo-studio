@@ -162,7 +162,7 @@ embedding path. Browser and Prepared runtimes keep opaque-origin isolation.
 
 ## Third-party view providers
 
-Studio 0.2 requires provider API version `1`. Set
+Studio 0.3 requires provider API version `1`. Set
 `ProviderInfo.api_version=PROVIDER_API_VERSION` and declare `marimo-studio`
 as a dependency. Test the provider against each Studio minor release it supports.
 
