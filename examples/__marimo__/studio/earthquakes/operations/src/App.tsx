@@ -103,6 +103,8 @@ export const App = () => {
                   1,
                 )
               }+ · ${eventSummary.status}`
+              : hasError
+              ? "Filter unavailable"
               : "Loading filter"}
           </div>
         </header>

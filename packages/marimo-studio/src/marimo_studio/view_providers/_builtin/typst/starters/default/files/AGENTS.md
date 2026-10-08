@@ -89,7 +89,8 @@ that output is an image, such as a cell that ends with a matplotlib figure:
 
 Use any Typst feature: page setup, show rules, tables, figures, bibliographies,
 and math. Add images, fonts, data files, and more `.typ` files to this project.
-Every file here except `AGENTS.md` and `DESIGN.md` is a build input.
+Every file here is a build input except `AGENTS.md`, `DESIGN.md`, and hidden
+entries such as `.gitignore`.
 
 Studio compiles with Typst's embedded fonts and the fonts in this project's
 `fonts/` directory, so the PDF looks the same on every machine. Add font files

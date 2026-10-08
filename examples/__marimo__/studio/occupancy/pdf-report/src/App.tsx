@@ -76,7 +76,11 @@ export const App = () => {
         ? "Occupancy score evidence."
         : `Occupancy score evidence at threshold ${model.default_threshold.toFixed(2)}, with ${
           percent(selected.accuracy)
-        } accuracy.`,
+        } accuracy${
+          summary.occupied > 0
+            ? ` and ${percent(selected.recall)} recall.`
+            : ". Recall is unavailable because no reading is occupied."
+        }`,
     ];
   }, [report]);
 

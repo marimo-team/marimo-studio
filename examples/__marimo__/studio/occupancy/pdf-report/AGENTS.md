@@ -26,9 +26,11 @@ observations.
 
 `src/pdf/` holds the pdfcn Takumi components copied from the registry, as pdfcn
 intends: the project owns them. Keep its `LICENSE` beside them. Local changes
-are deliberate: the graph rounds its axis to whole steps, and the page number
-keeps the spaces around its counters. `src/report/theme.ts` is the pdfcn theme
-for the Architect's Field Report in `DESIGN.md`.
+are deliberate: the graph rounds its axis to whole steps and labels fractional
+steps with two decimals, the page number keeps the spaces around its counters,
+`DataTable` keys its rows directly so striped tables stripe them, and `Section`
+honors `noWrap`. `src/report/theme.ts` is the pdfcn theme for the Architect's
+Field Report in `DESIGN.md`.
 
 Takumi's WebAssembly module loads from jsDelivr with a pinned version and a
 Subresource Integrity digest in `src/report/render.tsx`. Update both together

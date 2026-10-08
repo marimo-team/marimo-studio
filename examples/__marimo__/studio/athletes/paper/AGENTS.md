@@ -79,8 +79,9 @@ renders as source code only.
 Callouts, columns, tabsets, cross-references, citations, and themes work as in
 any Quarto HTML document. Set document options in the YAML front matter or a
 `_quarto.yml` beside `index.qmd`. Add images, bibliographies, and
-stylesheets to this project. Every file here except `AGENTS.md` and `DESIGN.md`
-is a build input, so a change rebuilds the view.
+stylesheets to this project. Every file here is a build input, so a change
+rebuilds the view, except `AGENTS.md`, `DESIGN.md`, hidden entries such as
+`.gitignore`, and Quarto's output in `_site/`, `_freeze/`, and `index_files/`.
 
 Studio wraps the page body in `#app-shell`. Leave that ID to Studio.
 

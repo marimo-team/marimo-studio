@@ -24,7 +24,11 @@ const prepare = () => {
       if (!response.ok) throw new Error(`Inter ${weight} is unavailable (${response.status})`);
       return { name: "Inter", data: await response.arrayBuffer() };
     }));
-  })();
+  })().catch((error: unknown) => {
+    // Let the next render retry a failed download.
+    ready = undefined;
+    throw error;
+  });
   return ready;
 };
 

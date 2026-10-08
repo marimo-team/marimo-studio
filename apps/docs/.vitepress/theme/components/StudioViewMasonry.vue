@@ -57,16 +57,21 @@ for (const tile of interleaved) {
 }
 // Keep two posters from one notebook from stacking directly. Swap a repeated
 // tile with one below the first row that fits between different neighbors.
-const repeats = (tiles: typeof interleaved, index: number): boolean =>
-  [index - 1, index + 1].some((other) => tiles[other]?.family === tiles[index]?.family);
-for (const { tiles } of columns) {
+// Narrower pages fall back to two columns, which stack a column's last tile
+// above the next column's first, so that tile counts as a neighbor too.
+for (const [column, { tiles }] of columns.entries()) {
+  const after = columns[column + 1]?.tiles[0];
+  const repeats = (index: number): boolean =>
+    [tiles[index - 1], tiles[index + 1] ?? after].some(
+      (other) => other?.family === tiles[index]?.family,
+    );
   for (let index = 1; index < tiles.length; index += 1) {
-    if (!repeats(tiles, index)) {
+    if (!repeats(index)) {
       continue;
     }
     for (let other = 1; other < tiles.length; other += 1) {
       [tiles[index], tiles[other]] = [tiles[other], tiles[index]];
-      if (!repeats(tiles, index) && !repeats(tiles, other)) {
+      if (!repeats(index) && !repeats(other)) {
         break;
       }
       [tiles[index], tiles[other]] = [tiles[other], tiles[index]];

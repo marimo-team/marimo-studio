@@ -114,7 +114,8 @@ export const fmtNum = (v: number): string => {
     return `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}K`;
   }
   if (!Number.isInteger(v)) {
-    return v.toFixed(1);
+    // Two decimals keep fractional axis steps such as 0.25 exact.
+    return String(Math.round(v * 100) / 100);
   }
   return String(v);
 };

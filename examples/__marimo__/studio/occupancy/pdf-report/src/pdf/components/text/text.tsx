@@ -22,7 +22,7 @@ export type TextDecoration = "underline" | "line-through" | "none";
  */
 export interface TextProps extends PDFComponentProps {
   /**
-   * @default 'base'
+   * Type scale step. Omit it to use the theme's body size.
    */
   variant?: TextVariant;
   /**

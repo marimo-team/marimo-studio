@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 
 import {
   Table,
@@ -63,38 +62,36 @@ export const DataTable = <T extends Record<string, unknown>>({
       <TableBody>
         {data.map((row, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: DataTable has no row id; order is stable for static data
-          <Fragment key={i}>
-            <TableRow>
-              {columns.map((col) => {
-                const value = row[col.key];
-                const rendered = col.render ? col.render(value, row) : null;
-                const text = rendered === null ? formatValue(value) : null;
-                return (
-                  <TableCell
-                    key={col.key}
-                    align={col.align ?? "left"}
-                    width={col.width}
-                    style={isCompact ? compact.cell : undefined}
-                  >
-                    {isCompact
-                      ? (rendered ?? (
-                          <PDFText
-                            style={[
-                              compact.text,
-                              col.align
-                                ? ({ textAlign: col.align } as Style)
-                                : {},
-                            ]}
-                          >
-                            {text}
-                          </PDFText>
-                        ))
-                      : (rendered ?? text)}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-          </Fragment>
+          <TableRow key={i}>
+            {columns.map((col) => {
+              const value = row[col.key];
+              const rendered = col.render ? col.render(value, row) : null;
+              const text = rendered === null ? formatValue(value) : null;
+              return (
+                <TableCell
+                  key={col.key}
+                  align={col.align ?? "left"}
+                  width={col.width}
+                  style={isCompact ? compact.cell : undefined}
+                >
+                  {isCompact
+                    ? (rendered ?? (
+                        <PDFText
+                          style={[
+                            compact.text,
+                            col.align
+                              ? ({ textAlign: col.align } as Style)
+                              : {},
+                          ]}
+                        >
+                          {text}
+                        </PDFText>
+                      ))
+                    : (rendered ?? text)}
+                </TableCell>
+              );
+            })}
+          </TableRow>
         ))}
       </TableBody>
       {footer && (

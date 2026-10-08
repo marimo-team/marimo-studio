@@ -149,7 +149,7 @@ def problem_data(np):
         radians = np.radians(direction)
         return pull_strength * np.array([np.cos(radians), np.sin(radians)])
 
-    return G, h, pull
+    return G, h, pull, pull_strength
 
 
 @app.cell(hide_code=True)

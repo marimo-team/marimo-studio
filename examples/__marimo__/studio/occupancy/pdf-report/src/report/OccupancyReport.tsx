@@ -114,8 +114,10 @@ const tenths = (rows: readonly ThresholdEvidence[]) =>
 export const OccupancyReport = ({ analysis }: { analysis: OccupancyAnalysis }) => {
   const { summary, model } = analysis;
   const occupied = summary.occupied > 0;
-  const selected = model.evidence.find((row) => Math.abs(row.threshold - model.default_threshold) < 1e-6) ??
-    model.evidence[0];
+  const selected = model.evidence.find((row) => Math.abs(row.threshold - model.default_threshold) < 1e-6);
+  if (selected === undefined) {
+    throw new Error(`The model evidence has no row at threshold ${model.default_threshold}.`);
+  }
   const busiest = analysis.profile_summary.highest_occupancy_day;
   const widest = analysis.profile_summary.widest_sensor_separation;
   const period = `${momentLabel(summary.period_start)} – ${momentLabel(summary.period_end)}`;
@@ -139,7 +141,7 @@ export const OccupancyReport = ({ analysis }: { analysis: OccupancyAnalysis }) =
           </View>
 
           <Kicker>01 / Room use</Kicker>
-          <Heading level={2} noMargin>Room use summary</Heading>
+          <Heading level={2} weight="semibold" noMargin>Room use summary</Heading>
           <Text variant="sm" color="mutedForeground">
             {occupied
               ? `${summary.room} was marked occupied in ${percent(summary.occupancy_rate)} of the selected readings. The report summarizes the room-use pattern, compares sensor conditions, and checks the occupancy score.`
@@ -232,10 +234,11 @@ export const OccupancyReport = ({ analysis }: { analysis: OccupancyAnalysis }) =
         {/* Page 2: sensor conditions */}
         <Page size="A4" style={[styles.page, styles.pageBreak]}>
           <Kicker>02 / Sensor conditions</Kicker>
-          <Heading level={2} noMargin>Sensor conditions by room state</Heading>
+          <Heading level={2} weight="semibold" noMargin>Sensor conditions by room state</Heading>
           <Text variant="sm" color="mutedForeground">
-            Each row compares the mean reading while the room was occupied with the mean while it was vacant.
-            Separation is the gap between the two means as a share of the sensor's observed range.
+            {occupied
+              ? "Each row compares the mean reading while the room was occupied with the mean while it was vacant. Separation is the gap between the two means as a share of the sensor's observed range."
+              : "Each row gives the mean reading while the room was vacant and the sensor's observed range. No reading is occupied, so the occupied mean and the separation are empty."}
           </Text>
 
           <DataTable
@@ -263,20 +266,31 @@ export const OccupancyReport = ({ analysis }: { analysis: OccupancyAnalysis }) =
 
           <View style={[styles.row, { marginTop: 14 }]}>
             <View style={[styles.panel, styles.chartPanel]}>
-              <PdfGraph
-                variant="horizontal-bar"
-                title="Separation by sensor"
-                subtitle="Gap between occupied and vacant means"
-                data={analysis.sensor_profiles.map((sensor) => ({
-                  label: sensor.label,
-                  value: Math.round((sensor.relative_separation ?? 0) * 100),
-                  color: widest !== null && sensor.key === widest.key ? chartColors.occupied : chartColors.vacant,
-                }))}
-                showValues
-                legend="none"
-                width={226}
-                height={160}
-              />
+              {occupied
+                ? (
+                  <PdfGraph
+                    variant="horizontal-bar"
+                    title="Separation by sensor"
+                    subtitle="Gap between occupied and vacant means"
+                    data={analysis.sensor_profiles.map((sensor) => ({
+                      label: sensor.label,
+                      value: Math.round((sensor.relative_separation ?? 0) * 100),
+                      color: widest !== null && sensor.key === widest.key ? chartColors.occupied : chartColors.vacant,
+                    }))}
+                    showValues
+                    legend="none"
+                    width={226}
+                    height={160}
+                  />
+                )
+                : (
+                  <>
+                    <Text style={styles.panelTitle} noMargin>Separation by sensor</Text>
+                    <Text variant="sm" color="mutedForeground" noMargin>
+                      No reading in this scope is occupied, so no sensor separates the room states.
+                    </Text>
+                  </>
+                )}
             </View>
             <View style={[styles.panel, styles.chartPanel]}>
               <PdfGraph
@@ -337,7 +351,7 @@ export const OccupancyReport = ({ analysis }: { analysis: OccupancyAnalysis }) =
         {/* Page 3: model evidence */}
         <Page size="A4" style={styles.page}>
           <Kicker>03 / Model evidence</Kicker>
-          <Heading level={2} noMargin>Occupancy score evidence</Heading>
+          <Heading level={2} weight="semibold" noMargin>Occupancy score evidence</Heading>
           <Text variant="sm" color="mutedForeground">
             A transparent score combines normalized light and CO₂ readings. Readings at or above the threshold
             count as occupied. The evidence is in-sample: the score is checked against the readings it describes.
@@ -380,11 +394,14 @@ export const OccupancyReport = ({ analysis }: { analysis: OccupancyAnalysis }) =
             <PdfGraph
               variant="line"
               title="Classification quality by threshold"
-              subtitle="Accuracy, precision, and recall in percent"
+              subtitle={occupied ? "Accuracy, precision, and recall in percent" : "Accuracy and precision in percent"}
               data={[
                 { name: "Accuracy", color: chartColors.ink, data: tenths(model.evidence).map((row) => ({ label: thresholdLabel(row), value: Math.round(row.accuracy * 1000) / 10 })) },
                 { name: "Precision", color: chartColors.vacant, data: tenths(model.evidence).map((row) => ({ label: thresholdLabel(row), value: Math.round(row.precision * 1000) / 10 })) },
-                { name: "Recall", color: chartColors.occupied, data: tenths(model.evidence).map((row) => ({ label: thresholdLabel(row), value: Math.round(row.recall * 1000) / 10 })) },
+                // Recall is undefined without occupied readings.
+                ...(occupied
+                  ? [{ name: "Recall", color: chartColors.occupied, data: tenths(model.evidence).map((row) => ({ label: thresholdLabel(row), value: Math.round(row.recall * 1000) / 10 })) }]
+                  : []),
               ]}
               legend="bottom"
               showGrid

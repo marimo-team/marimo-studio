@@ -266,9 +266,9 @@ site. A `main` build receives the base path from GitHub Pages, uploads
 
 Pull requests that change the site or its examples build the complete
 root-based site. Pull requests that change product code run `examples:smoke`,
-which exports the Earthquake watch story and briefing, a plain HTML view and a
-React view, and the Quadratic programs Typst report through the same export
-path. `make docs-build` builds the complete site locally.
+which exports three views through the same export path: the Earthquake watch
+story (plain HTML), its briefing (React), and the Quadratic programs report
+(Typst). `make docs-build` builds the complete site locally.
 
 ## Version parity
 

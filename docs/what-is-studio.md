@@ -55,8 +55,10 @@ keeps live. HTML, React, Svelte, Notebook Kit, and
 [Quarto](https://quarto.org/) views are pages, so moving a control reruns the
 affected cells and updates every result on the page. A _rendered document_ is a
 file that Studio renders from the notebook's values and outputs. A
-[Typst](https://typst.app/) view compiles a PDF, and Studio compiles it again
-when a result it reads changes. A PDF holds no controls, so a Typst document
+[Typst](https://typst.app/) view compiles a PDF. In the editor and in
+Python-runtime apps, Studio compiles it again when a result it reads changes.
+[Rendered documents](reference/projections.md#rendered-documents) lists what
+each runtime and export shows. A PDF holds no controls, so a Typst document
 places values, outputs, and the images that cells show.
 
 In the [Quadratic programs](examples/quadratic-programs.md) views at the top

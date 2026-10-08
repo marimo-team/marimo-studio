@@ -151,7 +151,8 @@ R^2 = 1 - \frac{S_{yy} - \hat\beta S_{xy}}{S_{yy}}.
 \end{gathered}
 $$ {#eq-se}
 
-A test of $H_0\colon \beta = \beta_0$ and the 95% interval for $\beta$ use
+When the errors are also independent and normally distributed, a test of
+$H_0\colon \beta = \beta_0$ and the 95% interval for $\beta$ use
 
 $$
 \begin{gathered}

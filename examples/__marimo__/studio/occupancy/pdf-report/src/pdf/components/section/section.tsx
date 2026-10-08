@@ -89,6 +89,7 @@ export const Section = ({
   border,
   variant = "default",
   accentColor,
+  noWrap = false,
   children,
   style,
 }: SectionProps) => {
@@ -137,5 +138,9 @@ export const Section = ({
   if (style) {
     styleArray.push(...[style].flat());
   }
-  return <View style={styleArray}>{children}</View>;
+  return (
+    <View wrap={!noWrap} style={styleArray}>
+      {children}
+    </View>
+  );
 };

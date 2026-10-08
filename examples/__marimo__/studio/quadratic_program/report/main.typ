@@ -7,7 +7,8 @@
 #let sweep = marimo_value("sweep", default: none)
 #let P = marimo_value("curvature.value", default: none)
 #let direction = marimo_value("pull_direction.value", default: none)
-#let ready = (solution, region, bowl, sweep, P, direction).all(item => item != none)
+#let strength = marimo_value("pull_strength", default: none)
+#let ready = (solution, region, bowl, sweep, P, direction, strength).all(item => item != none)
 
 // The unit normal g and offset h of each wall, recovered from the two
 // endpoints the notebook draws: the midpoint of a wall is g scaled by h.
@@ -78,7 +79,7 @@ let normals = wall-normals(region)
 let (x1, x2) = solution.optimum
 let (c1, c2) = solution.center
 let angle = direction * 1deg
-let (q1, q2) = (7 * calc.cos(angle), 7 * calc.sin(angle))
+let (q1, q2) = (strength * calc.cos(angle), strength * calc.sin(angle))
 let active = range(normals.len()).filter(index => solution.active.at(index))
 let inside = active.len() == 0
 
@@ -108,7 +109,7 @@ The curvature and the pull of the linear term are
 $
   P = mat(#num(P.at(0).at(0), digits: 1), #num(P.at(0).at(1), digits: 1) ; #num(P.at(1).at(0), digits: 1), #num(P.at(1).at(1), digits: 1)),
   quad
-  q = 7 vec(cos #direction degree, sin #direction degree) = vec(#num(q1, digits: 2), #num(q2, digits: 2)).
+  q = #num(strength, digits: 0) vec(cos #direction degree, sin #direction degree) = vec(#num(q1, digits: 2), #num(q2, digits: 2)).
 $
 
 #grid(
@@ -121,10 +122,11 @@ $
 
     In @problem, the shaded region satisfies every inequality, and the gray
     ellipses are level curves of the objective around the bottom of the bowl.
-    The solution $x^star$ is the point where the smallest reachable level
-    curve, in red, touches the region.#if not inside [ Red walls are active:
-    they hold the solution in place.] else [ Here the bottom of the bowl is
-    already feasible, so no wall is active.]
+    The solution $x^star$ is the lowest point of the bowl inside the
+    region.#if not inside [ There the smallest reachable level curve, in red,
+    touches the region, and the red walls are active: they hold the solution in
+    place.] else [ Here the bottom of the bowl is already feasible, so no wall
+    is active.]
   ],
   [
     #figure(
