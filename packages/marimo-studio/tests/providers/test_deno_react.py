@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+from marimo_studio._views.inspection import inspection_request
 from marimo_studio.view_providers._artifact_sites import artifact_sites
 from marimo_studio.view_providers._builtin import _deno
 from marimo_studio.view_providers._builtin._deno import cache as _deno_cache
@@ -353,8 +354,9 @@ def test_react_points_a_failed_package_download_to_the_network(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The project's own cache starts empty, and the proxy refuses connections,
-    # so Deno must download packages and fails. Deno routes through ALL_PROXY
+    # The inspection gets its own empty cache, since the process-owned one may
+    # hold packages from an earlier test, and the proxy refuses connections, so
+    # Deno must download packages and fails. Deno routes through ALL_PROXY
     # before HTTPS_PROXY, so an inherited ALL_PROXY must not apply.
     monkeypatch.setattr(
         _deno_runtime, "ensure_cache_directory", _deno_cache.ensure_cache_directory
@@ -364,7 +366,9 @@ def test_react_points_a_failed_package_download_to_the_network(
         monkeypatch.delenv(name, raising=False)
     _root, project = _project(tmp_path, react_provider, "marimo-studio/react")
 
-    inspection = _inspect(react_provider, project)
+    inspection = react_provider.inspect(
+        inspection_request(project, cache_root=tmp_path / "inspection-cache")
+    )
 
     assert [item.code for item in inspection.diagnostics] == [
         "provider-analysis-failed"
