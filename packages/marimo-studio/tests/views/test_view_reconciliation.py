@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -248,4 +249,22 @@ def test_unbuilt_view_manifest_can_be_inspected_for_repair(notebook_path: Path) 
     assert inspected.build is None
     assert inspected.latest_build.phase == "unbuilt"
     assert inspected.freshness == "failed"
+    assert inspected.files[0].path == PurePosixPath("view.toml")
+
+
+def test_manifest_repair_reads_a_receipt_from_an_earlier_studio_as_unbuilt(
+    notebook_path: Path,
+) -> None:
+    studio = published_dashboard(notebook_path)
+    root = studio.view("dashboard").root
+    receipt_path = root / ".artifacts" / "development.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["schema"] = 1
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    (root / "view.toml").write_text("provider = [")
+
+    inspected = asyncio.run(open_workspace(notebook_path).view("dashboard").inspect())
+
+    assert inspected.build is None
+    assert inspected.latest_build.phase == "unbuilt"
     assert inspected.files[0].path == PurePosixPath("view.toml")

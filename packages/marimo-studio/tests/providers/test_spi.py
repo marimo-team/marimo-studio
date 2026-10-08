@@ -20,6 +20,7 @@ from marimo_studio.view_providers import (
     ProjectionSite,
     ProviderAvailability,
     ProviderInfo,
+    ProviderStarter,
     SourceDocument,
     SourceLocation,
     ViewProject,
@@ -176,6 +177,18 @@ def test_starter_files_cannot_claim_core_or_ambiguous_paths(
             provider.starter,
             provider_starter_context(tmp_path),
         )
+
+
+def test_starters_cannot_declare_overlapping_documents() -> None:
+    starter = ProviderStarter(
+        "default",
+        "Page",
+        "A page.",
+        (PurePosixPath("src"), PurePosixPath("src/index.html")),
+    )
+
+    with pytest.raises(ConfigurationError, match="overlapping"):
+        starters_module.validate_starters("example/html", (starter,))
 
 
 def test_starter_plan_uses_targets_from_its_notebook_context(
@@ -500,6 +513,10 @@ def test_provider_site_accepts_native_cell_names_and_configured_aliases(
             BuildInput(PurePosixPath("view.toml"), "file"),
             BuildInput(PurePosixPath("SRC"), "directory"),
             BuildInput(PurePosixPath("src/App.tsx"), "file"),
+        ),
+        (
+            BuildInput(PurePosixPath("index.html"), "file"),
+            BuildInput(PurePosixPath("VIEW.TOML"), "file"),
         ),
     ),
 )

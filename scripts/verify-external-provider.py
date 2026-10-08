@@ -34,12 +34,16 @@ def verify() -> None:
     with TemporaryDirectory() as directory:
         notebook = Path(directory, "external.py")
         notebook.write_text(_NOTEBOOK, encoding="utf-8")
-        (report,) = check_provider(f"{_DISTRIBUTION}/report", notebook=notebook)
-    page = report.published[PurePosixPath("index.html")].decode()
+        reports = check_provider(f"{_DISTRIBUTION}/report", notebook=notebook)
+    if len(reports) != 1:
+        raise AssertionError(f"External report offers {len(reports)} starters, not 1")
+    page = reports[0].published[PurePosixPath("index.html")].decode()
     if 'data-external-build="ready"' not in page:
         raise AssertionError("External report build did not run")
-    (web,) = check_provider(f"{_DISTRIBUTION}/web")
-    if PurePosixPath("src/scripts/app.js") not in web.published:
+    webs = check_provider(f"{_DISTRIBUTION}/web")
+    if len(webs) != 1:
+        raise AssertionError(f"External web offers {len(webs)} starters, not 1")
+    if not webs[0].published.get(PurePosixPath("src/scripts/app.js")):
         raise AssertionError("External web build did not publish its scripts")
 
 

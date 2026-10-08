@@ -39,6 +39,7 @@ from marimo_studio.view_providers import (
     SourceLocation,
     ViewProject,
     ViewProvider,
+    project_path,
 )
 from marimo_studio.view_providers._host._shapes import (
     MANIFEST_PATH,
@@ -121,6 +122,11 @@ def _failed_inspection(root: Path, diagnostic: ProjectDiagnostic) -> ProjectInsp
     """Describe a project whose ``inspect()`` raised ``diagnostic``."""
     source = diagnostic.source
     if source is None or source.path == MANIFEST_PATH:
+        return ProjectInspection((), (), diagnostics=(diagnostic,))
+    try:
+        project_path(source.path, field="Diagnostic source")
+    except ValueError:
+        # Validation reports the unsafe path. Keep it off the filesystem.
         return ProjectInspection((), (), diagnostics=(diagnostic,))
     file = root.joinpath(*source.path.parts)
     if file.is_symlink() or not file.is_file():
@@ -300,6 +306,11 @@ class ProviderConformance:
         manifest = MANIFEST_PATH
         if not covered(manifest):
             scope.append(BuildInput(manifest, "file"))
+            # A declared `VIEW.TOML` misses the exact match above and would
+            # collide by case with the manifest Studio adds.
+            require_disjoint_paths(
+                (item.path for item in scope), self.key, "build input"
+            )
         document_set = set(document_paths)
         diagnostic_sources = {*document_set, manifest}
         self._diagnostics(value.diagnostics, "diagnostics", diagnostic_sources)

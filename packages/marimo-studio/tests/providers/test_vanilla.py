@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from html.parser import HTMLParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -219,6 +219,27 @@ def test_vanilla_rejects_other_wildcard_values(tmp_path: Path, allow: str) -> No
     assert diagnostic.message == 'data-marimo-allow must be the literal "*".'
     assert diagnostic.source is not None
     assert diagnostic.source.line == 2
+
+
+def test_vanilla_host_diagnostics_keep_linked_sources_in_source(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    (project.root / "style.css").write_text("main { color: black; }", encoding="utf-8")
+    (project.root / "index.html").write_text(
+        "<!doctype html><html><head><title>Linked</title>"
+        '<link rel="stylesheet" href="style.css"></head><body>'
+        '<main id="app-shell"><span mo-value="rows" data-marimo-allow="all"></span>'
+        "</main></body></html>",
+        encoding="utf-8",
+    )
+
+    inspection = provider.inspect(inspection_request(project))
+
+    assert [item.code for item in inspection.diagnostics] == [
+        "projection-wildcard-invalid"
+    ]
+    assert PurePosixPath("style.css") in {item.path for item in inspection.documents}
 
 
 def test_vanilla_rejects_nested_projection_hosts(tmp_path: Path) -> None:

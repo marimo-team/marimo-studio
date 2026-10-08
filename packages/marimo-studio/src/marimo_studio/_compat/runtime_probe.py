@@ -238,11 +238,12 @@ async def probe_runtime_in_worker(
                     )
                     error = rendered.errors.get(selector) or rendered.errors.get("*")
                     output = rendered.outputs.get(selector)
+                    # Views can read one target with different accept lists, so
+                    # a failure in any view stands for the target.
                     if error is not None:
                         outputs.pop(selector, None)
-                        output_errors[selector] = error
-                    elif output is not None:
-                        output_errors.pop(selector, None)
+                        output_errors.setdefault(selector, error)
+                    elif output is not None and selector not in output_errors:
                         outputs[selector] = output
             output_result = OutputRenderResult(
                 outputs=outputs,

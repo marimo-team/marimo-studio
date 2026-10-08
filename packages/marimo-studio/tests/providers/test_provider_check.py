@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import sys
 from collections.abc import Callable, Iterator
@@ -12,7 +13,11 @@ from typing import cast
 import pytest
 
 from marimo_studio.view_providers import ViewProvider
-from marimo_studio.view_providers.testing import ProviderCheckError, check_provider
+from marimo_studio.view_providers.testing import (
+    CheckedView,
+    ProviderCheckError,
+    check_provider,
+)
 
 # A provider package that publishes page.md as HTML. Each test appends the
 # behavior it checks.
@@ -188,11 +193,54 @@ def test_inspect_that_writes_to_the_project_fails_the_check(
         check_provider(provider)
 
 
-def test_provider_packages_may_import_the_test_kit(
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "from marimo_studio.view_providers.testing import check_provider",
+        "from marimo_studio.view_providers import *",
+    ),
+)
+def test_provider_packages_may_import_the_public_modules(
     install: Callable[[str], ViewProvider],
+    statement: str,
 ) -> None:
-    provider = install(
-        "from marimo_studio.view_providers.testing import check_provider\n"
-    )
+    provider = install(f"{statement}\n")
 
     assert check_provider(provider)
+
+
+def test_namespace_package_providers_keep_the_sdk_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "namespace_views"
+    package.mkdir()
+    (package / "page.py").write_text(
+        PROVIDER
+        + "from marimo_studio._filesystem import paths\n"
+        + "\n\nprovider = PageProvider()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        provider = importlib.import_module("namespace_views.page").provider
+        with pytest.raises(ProviderCheckError, match=r"marimo_studio\._filesystem"):
+            check_provider(provider)
+    finally:
+        for name in [
+            name for name in sys.modules if name.startswith("namespace_views")
+        ]:
+            del sys.modules[name]
+
+
+def test_provider_check_runs_inside_a_running_event_loop(
+    install: Callable[[str], ViewProvider],
+) -> None:
+    provider = install("")
+
+    async def check_from_async_code() -> tuple[CheckedView, ...]:
+        return check_provider(provider)
+
+    (view,) = asyncio.run(check_from_async_code())
+
+    assert PurePosixPath("index.html") in view.published

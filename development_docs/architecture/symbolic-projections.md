@@ -37,10 +37,9 @@ output data: a base64 data URL, wrapped in a marimo mimebundle with the display
 size of a PNG rendered at `MEDIA_SCALE`, as marimo sends its own high-density
 figures. The zero-python loader builds the same data from the `media`
 exporter's `BlobAsset` metadata, and `output_representation()` decodes it
-back into a representation. Matplotlib PDF and SVG bytes are deterministic within one matplotlib
-version. Value targets, output targets, and kernel authorization records parse
-through marimo-export's `ValueSelector`, which owns the selector grammar and
-its limits.
+back into a representation. Value targets, output targets, and kernel
+authorization records parse through marimo-export's `ValueSelector`, which
+owns the selector grammar and its limits.
 
 Every provider can declare literal targets. A provider analyzer may also
 authorize a finite target set or explicit wildcard access. An analyzer that

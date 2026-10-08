@@ -466,7 +466,7 @@ leave publication to Studio.
 ## Check external tools
 
 `availability()` reports whether the provider can run. `probe_tool()` runs a
-tool's version command and compares the first dotted number it prints:
+tool's version command and compares the first dotted version it prints:
 
 ```python
 def availability(self):
@@ -782,7 +782,9 @@ type. Report the message as a `projection-accept-invalid` diagnostic at the
 host, and keep reporting the file's other hosts.
 
 `probe_tool()` finds `command[0]` on `PATH` unless it is a path, runs it, and
-compares the first dotted number in its output with `minimum`. The command has
+compares the first dotted version in its output with `minimum`. It reads
+standard error when standard output has none, and a prerelease such as
+`2.9.5-rc.1` compares below its release. The command has
 30 seconds to finish. An unavailable result carries a `reason`, such as a
 timeout, an exit status, or an old version, and `install` as its `action`. The
 process remembers a reported version until the executable changes, and checks
@@ -832,8 +834,9 @@ options of each view. `CheckedView.starter` is the starter ID, `documents` lists
 documents, and `warnings` lists the build's warning diagnostics.
 
 It raises `ProviderCheckError`, an `AssertionError`, with the message, hint,
-and location Studio would show for the first problem found. It runs its own
-event loop, so call it from synchronous code, such as a plain pytest test. The check also
+and location Studio would show for the first problem found. It blocks until
+the check finishes, and inside a running event loop, such as an async test or
+a notebook cell, it runs the check on a worker thread. The check also
 fails when `inspect()` changes the project, when two inspections differ, when
 inspection reports an error, and when the package that defines the provider
 imports Studio modules outside `marimo_studio.view_providers` and

@@ -441,7 +441,26 @@ const literal = (item: AstNode): string | null => {
 const acceptOf = (node: AstNode): string | null | undefined => {
   const matches = attributes(node, "accept");
   if (matches.length === 0) return undefined;
-  return matches.length === 1 ? literal(matches[0]) : null;
+  if (matches.length !== 1) return null;
+  const text = literal(matches[0]);
+  if (text !== null) return text;
+  // `accept={"image/png"}` is a string literal inside an expression tag.
+  const expression = attributeExpression(matches[0]);
+  if (expression?.type === "Literal" && typeof expression.value === "string") {
+    return expression.value.trim();
+  }
+  if (
+    expression?.type === "TemplateLiteral" &&
+    Array.isArray(expression.expressions) &&
+    expression.expressions.length === 0 &&
+    Array.isArray(expression.quasis) && expression.quasis.length === 1
+  ) {
+    const cooked = (expression.quasis[0] as AstNode).value as {
+      cooked?: unknown;
+    };
+    return typeof cooked?.cooked === "string" ? cooked.cooked.trim() : null;
+  }
+  return null;
 };
 
 const attributeExpression = (item: AstNode): AstNode | null => {

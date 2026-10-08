@@ -107,9 +107,9 @@ const EMPTY_RESOURCES = Object.freeze({
 const outputLoader = (
   output: ExportOutput,
   loaders: ZeroPythonProjectionLoaders,
-  ownerCellId: string,
+  ownerCellId: () => string,
 ) =>
-  output.codec === "marimo.blob-asset.msgpack.v1" ? loaders.media(ownerCellId) : loaders.output;
+  output.codec === "marimo.blob-asset.msgpack.v1" ? loaders.media(ownerCellId()) : loaders.output;
 
 const preparedArrowLoader = () => {
   const base = arrowTableLoader();
@@ -174,7 +174,7 @@ export const loadPreparedProjectionSnapshot = async (
     ...values.map(({ name, output }) => [name, valueLoader(output, loaders)]),
     ...Object.entries(projections.outputs).map(([selector, name]) => [
       name,
-      outputLoader(state.output(name), loaders, ownerCell(selector)),
+      outputLoader(state.output(name), loaders, () => ownerCell(selector)),
     ]),
     ...Object.values(projections.cells).map((name) => [name, loaders.cell]),
   ]);

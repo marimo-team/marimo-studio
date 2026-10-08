@@ -293,6 +293,14 @@ def _builtin_provider_violations(
                 )
         tree = ast.parse(path_by_module[module].read_text(encoding="utf-8"))
         for node in ast.walk(tree):
+            # Attribute access on a module import would reach private SDK names.
+            if isinstance(node, ast.Import) and any(
+                alias.name == VIEW_PROVIDER_PACKAGE for alias in node.names
+            ):
+                failures.append(
+                    f"built-in provider imports the SDK module instead of its "
+                    f"public names: {module}"
+                )
             if (
                 isinstance(node, ast.ImportFrom)
                 and node.module == VIEW_PROVIDER_PACKAGE

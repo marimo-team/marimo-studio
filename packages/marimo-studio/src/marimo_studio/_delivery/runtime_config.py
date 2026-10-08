@@ -123,6 +123,7 @@ def runtime_projection_revision(
                 "id": site["id"],
                 "kind": site["kind"],
                 "targets": site["targets"],
+                "accept": site.get("accept", []),
             }
             for site in sites
         ],

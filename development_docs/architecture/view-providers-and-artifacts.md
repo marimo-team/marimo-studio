@@ -104,7 +104,8 @@ IDs.
 
 Provider provenance hashes the distribution, its version, the provider key,
 Studio's build contract version, and the tool version from `availability()`.
-A provider release or tool upgrade therefore changes the artifact revision.
+These feed the project revision, so a provider release or tool upgrade makes the
+published artifact stale and the view builds again.
 
 ## Provider layout
 

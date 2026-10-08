@@ -215,13 +215,30 @@ class ProviderProjectSpec:
         return tuple(documents)
 
 
-def _regular_files(root: Path) -> list[Path]:
-    """List regular files below ``root``. Studio bounds the published output."""
+# Studio publishes at most this many files, so a larger tree fails before the
+# walk holds it in memory.
+_MAX_TREE_ENTRIES = 4_096
+
+
+def _regular_files(
+    root: Path,
+    label: str,
+    cancellation: ProviderCancellation | None,
+) -> list[Path]:
+    """List regular files below ``root``, stopping at Studio's file limit."""
     files: list[Path] = []
+    entries = 0
     for directory, names, filenames in os.walk(root):
+        if cancellation is not None:
+            cancellation.raise_if_cancelled("Deno public asset staging")
+        entries += len(names) + len(filenames)
+        if entries > _MAX_TREE_ENTRIES:
+            raise ValueError(
+                f"{label} has more than {_MAX_TREE_ENTRIES} files and directories"
+            )
         for name in (*names, *filenames):
             if Path(directory, name).is_symlink():
-                raise ValueError(f"Public asset tree contains a symlink: {name}")
+                raise ValueError(f"{label} contains a symlink: {name}")
         files.extend(Path(directory, name) for name in filenames)
     return files
 
@@ -247,8 +264,8 @@ def _copy_public_assets(
         return
     if source.is_symlink() or not source.is_dir():
         raise ValueError(f"Public asset root must be a directory: {public}")
-    output_files = _regular_files(output)
-    source_files = _regular_files(source)
+    output_files = _regular_files(output, "Provider output", cancellation)
+    source_files = _regular_files(source, "Public asset tree", cancellation)
     occupied: dict[str, PurePosixPath] = {}
 
     for path in sorted(output_files):

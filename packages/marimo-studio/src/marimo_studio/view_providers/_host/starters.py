@@ -72,6 +72,7 @@ def validate_starters(provider: str, value: object) -> tuple[ProviderStarter, ..
         if not documents:
             raise conformance_error(provider, f"starter {key!r} requires a document")
         require_unique(documents, provider, "starter documents")
+        require_disjoint_paths(documents, provider, "starter document")
         keys.append(key)
         starters.append(item)
     require_unique(tuple(keys), provider, "starter keys")

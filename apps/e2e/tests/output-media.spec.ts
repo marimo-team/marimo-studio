@@ -43,6 +43,10 @@ const page = `<!doctype html>
 const imageSize = async (preview: FrameLocator, host: string) => {
   const image = preview.locator(`#${host} marimo-output img`);
   await expect(image).toBeVisible();
+  // A data URL decodes after the image becomes visible.
+  await expect
+    .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+    .toBeGreaterThan(0);
   return image.evaluate((element: HTMLImageElement) => {
     const box = element.getBoundingClientRect();
     return { width: box.width, natural: element.naturalWidth };

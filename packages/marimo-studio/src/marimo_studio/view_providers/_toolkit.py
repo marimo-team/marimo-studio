@@ -36,7 +36,12 @@ STUDIO_FILES = frozenset(
         PurePosixPath("DESIGN.md"),
     }
 )
-_VERSION = re.compile(r"\d+(?:\.\d+)+")
+# A dotted version with its prerelease suffix, such as 2.9.5-rc.1, so a
+# prerelease compares below its release.
+_VERSION = re.compile(
+    r"\d+(?:\.\d+)+(?:[-.]?(?:a|b|c|rc|alpha|beta|pre|preview|dev)(?:[-.]?\d+)?)?",
+    re.IGNORECASE,
+)
 
 
 def project_path(value: object, *, field: str = "Project path") -> PurePosixPath:
@@ -62,14 +67,29 @@ def project_files(
     ``ProviderError`` for a symlink or a project over Studio's input limits.
     """
     root = project.root
-    names = {entry.name for entry in os.scandir(root)}
-    skipped = {
-        name
-        for name in names
-        if name.startswith(".")
-        or name in exclude
-        or (roots is not None and name not in roots)
-    }
+    limit = BUILD_INPUT_BUDGET.max_files
+    skipped: set[str] = set()
+    try:
+        with os.scandir(root) as entries:
+            for count, entry in enumerate(entries, 1):
+                # Skipped entries still cost a scan, so they count too.
+                if count > limit:
+                    raise ProviderError(
+                        f"View project has more than {limit} top-level entries.",
+                        code="build-input-invalid",
+                    )
+                name = entry.name
+                if (
+                    name.startswith(".")
+                    or name in exclude
+                    or (roots is not None and name not in roots)
+                ):
+                    skipped.add(name)
+    except OSError as error:
+        raise ProviderError(
+            f"Could not list the view project: {error.strerror or error}",
+            code="build-input-invalid",
+        ) from error
     cancellation = current_provider_cancellation()
     try:
         files = bounded_regular_files(
@@ -124,7 +144,8 @@ def probe_tool(
     """Run a tool's version command and report whether it is new enough.
 
     ``command[0]`` is found on ``PATH`` unless it is a path. The version is the
-    first dotted number the command prints. This process remembers a reported
+    first dotted version the command prints, on standard output or else on standard
+    error, with any prerelease suffix. This process remembers a reported
     version until the executable changes. ``install`` tells the user how to
     install or update the tool. Raises ``ProviderCommandError`` when the
     operation is cancelled.
@@ -217,7 +238,10 @@ def _reported_version(
         return None, f"{shown} did not finish within {_PROBE_TIMEOUT:g} seconds."
     if completed.returncode != 0:
         return None, f"{shown} exited with status {completed.returncode}."
-    match = _VERSION.search(completed.stdout.decode("utf-8", errors="replace"))
+    # Some tools, such as Java, print their version to standard error.
+    match = _VERSION.search(
+        completed.stdout.decode("utf-8", errors="replace")
+    ) or _VERSION.search(completed.stderr.decode("utf-8", errors="replace"))
     if match is None:
         return None, f"{shown} did not report a version."
     return match.group(0), ""

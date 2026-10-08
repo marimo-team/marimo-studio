@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 
 from marimo_studio._artifacts.inputs import build_input_state, project_source_snapshot
 from marimo_studio._artifacts.repository import read_artifact_state
@@ -41,7 +42,11 @@ def inspect_view_manifest(
     studio: StudioDefinition, name: str, error: Exception
 ) -> ViewInspection:
     """Inspect the manifest repair document and retained publication receipts."""
-    from marimo_studio._artifacts.codec import decode_profile_state, read_json
+    from marimo_studio._artifacts.codec import (
+        ArtifactFormatError,
+        decode_profile_state,
+        read_json,
+    )
     from marimo_studio._artifacts.paths import assert_secure_path
     from marimo_studio._artifacts.records import ViewBuildState
     from marimo_studio._views.sources import read_view_manifest_with_owner
@@ -50,13 +55,14 @@ def inspect_view_manifest(
     root = studio.view_root / name
     pointer = root / ".artifacts" / "development.json"
     assert_secure_path(root, pointer, "Artifact profile receipt")
-    receipt = (
-        decode_profile_state(
-            read_json(root, pointer, "artifact profile receipt"), "development"
-        )
-        if pointer.exists() or pointer.is_symlink()
-        else None
-    )
+    receipt = None
+    if pointer.exists() or pointer.is_symlink():
+        # A receipt from another Studio version describes nothing this version
+        # can publish, so the repair reads the view as unbuilt.
+        with suppress(ArtifactFormatError):
+            receipt = decode_profile_state(
+                read_json(root, pointer, "artifact profile receipt"), "development"
+            )
     current = read_view_manifest_with_owner(studio, name)
     if current.view_generation != observed.view_generation:
         raise ViewGenerationConflictError(name, current.view_generation)

@@ -156,7 +156,14 @@ for (const path of paths) {
         { cell: "name", output: "value", value: "mo-value" }[kind];
       const target = attrs.get(attribute)?.trim();
       const acceptValue = attrs.get("accept");
-      if (acceptValue?.includes("${")) {
+      // Parsing sees expressions masked, so locate them in the original text.
+      const acceptRange = attributeValueRange(source, node, "accept");
+      if (
+        acceptRange &&
+        source.expressions.some((expression) =>
+          contains(acceptRange, expression)
+        )
+      ) {
         report(offset, "projection-accept-dynamic", projectionAcceptDynamic());
         continue;
       }

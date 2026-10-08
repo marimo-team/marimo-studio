@@ -30,6 +30,7 @@ from marimo_studio.view_providers._artifact_sites import (
     artifact_sites,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
+from marimo_studio.view_providers._validation import accept_diagnostics
 
 from ..provider_test_support import (
     ProviderStub,
@@ -381,3 +382,21 @@ def test_hosts_of_one_output_accept_the_same_media_types(
     assert conflict.message == (
         "chart is read as marimo's output here and as image/svg+xml at index.html:4."
     )
+
+
+def test_accept_conflicts_report_each_host_once() -> None:
+    targets = tuple(f"chart_{index}" for index in range(100))
+    sites = tuple(
+        ProjectionSite(
+            "output",
+            targets,
+            SourceLocation(ENTRY, line, 1),
+            line,
+            ("image/png",) if line % 2 else ("image/svg+xml",),
+        )
+        for line in range(1, 6)
+    )
+
+    conflicts = accept_diagnostics(sites)
+
+    assert [item.source.line for item in conflicts if item.source] == [2, 4]

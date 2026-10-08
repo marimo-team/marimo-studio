@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
@@ -21,6 +22,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._builtin import _deno
 from marimo_studio.view_providers._builtin._deno import analysis as _deno_analysis
+from marimo_studio.view_providers._builtin._deno import cache as _deno_cache
 from marimo_studio.view_providers._builtin._deno import runtime as _deno_runtime
 from marimo_studio.view_providers._builtin._deno.project import (
     copy_public_assets,
@@ -225,6 +227,19 @@ def test_public_assets_reject_case_equivalent_generated_paths(tmp_path: Path) ->
         copy_public_assets(work, output)
 
 
+def test_public_assets_stop_at_the_published_file_limit(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    output = tmp_path / "output"
+    (work / "public").mkdir(parents=True)
+    (work / "public" / "logo.svg").write_text("public", encoding="utf-8")
+    output.mkdir()
+    for index in range(4_097):
+        (output / f"{index}.js").touch()
+
+    with pytest.raises(ValueError, match="more than 4096 files"):
+        copy_public_assets(work, output)
+
+
 def test_bundle_download_failure_points_to_the_network() -> None:
     diagnostic = failure(
         "React provider",
@@ -237,3 +252,28 @@ def test_bundle_download_failure_points_to_the_network() -> None:
 
     assert "network connection" in diagnostic.hint
     assert "AGENTS.md" not in diagnostic.hint
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="Windows creates the cache through path operations"
+)
+def test_deno_cache_refuses_a_directory_replaced_after_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path.resolve() / "view"
+    (project / ".artifacts").mkdir(parents=True)
+    outside = tmp_path.resolve() / "outside"
+    outside.mkdir()
+    cache_root = project / ".artifacts" / ".cache"
+    _deno_cache.ensure_cache_directory(cache_root, PurePosixPath("deno"))
+    (project / ".artifacts").rename(tmp_path / "previous-artifacts")
+    (project / ".artifacts").symlink_to(outside, target_is_directory=True)
+    # Another process swaps the directory after Studio resolved the path.
+    monkeypatch.setattr(Path, "resolve", lambda path, strict=False: path)
+
+    with pytest.raises(ValueError, match="regular directories"):
+        _deno_cache.ensure_cache_directory(cache_root, PurePosixPath("deno"))
+
+    monkeypatch.undo()
+    assert list(outside.iterdir()) == []

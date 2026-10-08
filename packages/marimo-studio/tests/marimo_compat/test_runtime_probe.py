@@ -357,3 +357,41 @@ if __name__ == "__main__":
 
     assert set(result.outputs.outputs) == {"first", "second"}
     assert result.outputs.errors == {}
+
+
+def test_runtime_probe_keeps_one_view_output_failure_across_views(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "views.py"
+    notebook.write_text(
+        """\
+import marimo
+
+__generated_with = "__MARIMO_VERSION__"
+app = marimo.App()
+
+
+@app.cell
+def _():
+    label = "plain text"
+    return (label,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".replace("__MARIMO_VERSION__", marimo.__version__),
+        encoding="utf-8",
+    )
+
+    result = asyncio.run(
+        probe_runtime_in_worker(
+            notebook,
+            cell_ids=(),
+            value_selector_groups=(),
+            output_groups=({"label": ("image/png",)}, {"label": ()}),
+            timeout=10,
+        )
+    )
+
+    assert result.outputs.errors["label"].code == "output-media-unavailable"
+    assert "label" not in result.outputs.outputs

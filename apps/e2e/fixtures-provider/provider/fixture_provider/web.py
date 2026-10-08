@@ -106,7 +106,7 @@ class MultiFileProvider:
         )
         return ProjectInspection(
             documents=tuple(
-                SourceDocument(path, _LANGUAGES[path.suffix], "edit")
+                SourceDocument(path, _LANGUAGES[path.suffix.lower()], "edit")
                 for path in documents
             ),
             inputs=tuple(BuildInput(path, "file") for path in documents),

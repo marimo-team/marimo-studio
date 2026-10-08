@@ -192,6 +192,7 @@ def accept_diagnostics(
     for site in sites:
         if site.kind != "output" or site.targets == "*":
             continue
+        # One conflict per host keeps the diagnostics within the site count.
         for target in site.targets:
             expected = first.setdefault(target, site)
             if site.accept != expected.accept:
@@ -207,6 +208,7 @@ def accept_diagnostics(
                         site.source,
                     )
                 )
+                break
     return tuple(conflicts)
 
 
@@ -226,6 +228,7 @@ def validate_artifact_site(value: object) -> ArtifactSite:
         "*" if value.targets is None else value.targets,
     )
     _validate_accept(value.kind, value.accept)
+    _validate_page_media(value.accept)
     return value
 
 

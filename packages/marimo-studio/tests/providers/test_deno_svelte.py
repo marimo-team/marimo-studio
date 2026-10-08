@@ -33,6 +33,26 @@ pytestmark = [
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_svelte_output_hosts_read_string_literal_accept_expressions(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    (root / "src" / "App.svelte").write_text(
+        """<marimo-output value="chart" accept={"image/png"}></marimo-output>
+<marimo-output value="table" accept={`image/svg+xml`}></marimo-output>
+""",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert inspection.diagnostics == ()
+    assert [site.accept for site in inspection.sites] == [
+        ("image/png",),
+        ("image/svg+xml",),
+    ]
+
+
 def test_svelte_inspection_tracks_literal_site_identity_and_kind(
     tmp_path: Path,
 ) -> None:

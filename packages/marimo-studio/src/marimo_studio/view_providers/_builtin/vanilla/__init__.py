@@ -125,14 +125,8 @@ class VanillaProvider:
             )
         except (ConfigurationError, FileNotFoundError) as error:
             return _entry_failure(entry_path, error)
+        # A host diagnostic leaves the linked CSS and JavaScript in Source.
         sites, site_diagnostics = html_sites(entry_path, source)
-        if site_diagnostics:
-            return ProjectInspection(
-                documents=(entry,),
-                inputs=VanillaSourceGraph.inputs_for(entry_path),
-                sites=sites,
-                diagnostics=site_diagnostics,
-            )
         try:
             graph = VanillaSourceGraph.analyze(project, entry)
         except VanillaSourceGraphError as error:
@@ -140,12 +134,15 @@ class VanillaProvider:
                 documents=(entry, *error.direct_documents),
                 inputs=error.inputs,
                 sites=sites,
-                diagnostics=(_source_diagnostic(entry_path, error.cause),),
+                # Malformed HTML fails both scans, so report it once.
+                diagnostics=site_diagnostics
+                or (_source_diagnostic(entry_path, error.cause),),
             )
         return ProjectInspection(
             documents=graph.documents,
             inputs=graph.inputs,
             sites=sites,
+            diagnostics=site_diagnostics,
         )
 
     def build(self, request: BuildRequest) -> BuildResult:

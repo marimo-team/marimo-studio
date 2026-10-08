@@ -111,6 +111,10 @@ def test_notebook_html_cells_and_template_declare_source_located_mounts(
         ),
         ("<marimo-cell></marimo-cell>", "projection-target-missing"),
         (
+            '<marimo-output value="chart" accept="${media}"></marimo-output>',
+            "projection-accept-dynamic",
+        ),
+        (
             '<marimo-cell name="controls" data-marimo-allow="maybe"></marimo-cell>',
             "projection-wildcard-invalid",
         ),

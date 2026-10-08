@@ -83,6 +83,31 @@ def test_project_files_stop_at_the_project_input_limit(
         project_files(project)
 
 
+def test_project_files_count_skipped_top_level_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path / "view")
+    for index in range(3):
+        project.root.joinpath(f".hidden-{index}").mkdir()
+    monkeypatch.setattr(
+        toolkit,
+        "BUILD_INPUT_BUDGET",
+        FileBudget(max_files=2, max_file_bytes=1024, max_total_bytes=4096),
+    )
+
+    with pytest.raises(ProviderError, match="more than 2 top-level entries"):
+        project_files(project)
+
+
+def test_project_files_report_an_unreadable_project(tmp_path: Path) -> None:
+    project = _project(tmp_path / "view")
+    project.root.rmdir()
+
+    with pytest.raises(ProviderError, match="Could not list the view project"):
+        project_files(project)
+
+
 def test_copy_inputs_copies_build_inputs_until_cancelled(tmp_path: Path) -> None:
     project = _project(tmp_path / "view")
     project.root.joinpath("index.html").write_text("page", encoding="utf-8")
@@ -135,6 +160,7 @@ def test_probe_tool_names_a_version_command_that_fails(tmp_path: Path) -> None:
         ("tool 2.9.5 (stable)", True, "2.9.5"),
         ("tool 2.10.0", True, "2.10.0"),
         ("tool 2.9.4", False, "2.9.4"),
+        ("tool 2.9.5-rc.1", False, "2.9.5-rc.1"),
         ("unknown", False, None),
     ),
 )
@@ -149,6 +175,15 @@ def test_probe_tool_compares_the_reported_version(
     availability = probe_tool((str(tool), "--version"), minimum="2.9.5", install="x")
 
     assert (availability.available, availability.version) == (available, version)
+
+
+@posix_only
+def test_probe_tool_reads_a_version_from_standard_error(tmp_path: Path) -> None:
+    tool = _tool(tmp_path / "bin", 'echo "tool 3.0.1" >&2')
+
+    availability = probe_tool((str(tool), "--version"), minimum="3.0", install="x")
+
+    assert (availability.available, availability.version) == (True, "3.0.1")
 
 
 def test_probe_tool_reports_a_missing_command(tmp_path: Path) -> None:

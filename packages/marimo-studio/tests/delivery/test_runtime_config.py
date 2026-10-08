@@ -310,3 +310,7 @@ def test_projection_revision_tracks_its_runtime_contract() -> None:
         )
         != baseline
     )
+    assert (
+        revision(selected_sites=({**sites[0], "accept": ["image/svg+xml"]},))
+        != baseline
+    )

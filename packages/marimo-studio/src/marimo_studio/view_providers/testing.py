@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextvars
 import hashlib
 import sys
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Coroutine, Iterable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from dataclasses import dataclass
 from importlib.metadata import EntryPoint
@@ -148,10 +150,18 @@ def _private_imports(module: str) -> tuple[str, ...]:
         files: Iterable[Path] = (Path(origin),) if origin else ()
     else:
         spec = find_spec(package)
-        if spec is None or spec.origin is None:
+        if spec is None:
             return ()
-        root = Path(spec.origin)
-        files = root.parent.rglob("*.py") if root.name == "__init__.py" else (root,)
+        if spec.origin is not None:
+            root = Path(spec.origin)
+            files = root.parent.rglob("*.py") if root.name == "__init__.py" else (root,)
+        else:
+            # A namespace package has no __init__.py, only search locations.
+            files = (
+                path
+                for location in spec.submodule_search_locations or ()
+                for path in Path(location).rglob("*.py")
+            )
     found: set[str] = set()
     for path in files:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -162,7 +172,7 @@ def _private_imports(module: str) -> tuple[str, ...]:
                     found.update(
                         f"{_SDK}.{alias.name}"
                         for alias in node.names
-                        if alias.name not in sdk
+                        if alias.name != "*" and alias.name not in sdk
                     )
                 elif node.module == "marimo_studio":
                     found.update(f"marimo_studio.{alias.name}" for alias in node.names)
@@ -257,6 +267,32 @@ async def _inspection(view: View, starter: str) -> ViewInspection:
     return inspection
 
 
+def _run(
+    check: Coroutine[object, object, tuple[CheckedView, ...]],
+) -> tuple[CheckedView, ...]:
+    """Run ``check`` to completion and block until it finishes.
+
+    A caller that already runs an event loop, such as an async test or a
+    notebook cell, gets the check on a worker thread with the caller's context.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        running = False
+    else:
+        running = True
+    # Outside the except block, so a failed check has no chained loop error.
+    if not running:
+        return asyncio.run(check)
+    context = contextvars.copy_context()
+
+    def run() -> tuple[CheckedView, ...]:
+        return context.run(lambda: asyncio.run(check))
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(run).result()
+
+
 def check_provider(
     provider: ViewProvider | str,
     *,
@@ -288,7 +324,7 @@ def check_provider(
         )
         with selected:
             try:
-                return asyncio.run(
+                return _run(
                     _check(
                         provider if isinstance(provider, str) else key,
                         target,

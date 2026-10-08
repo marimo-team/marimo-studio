@@ -767,12 +767,15 @@ async def read_probe_values(
     max_json_bytes: int | None = None,
 ) -> ValueReadResult:
     """Read selectors granted by one internal runtime probe lease."""
-    expected_selectors = frozenset(selectors)
+    # The kernel serializes values in request order against one JSON budget,
+    # so keep the caller's order and use a set only to validate the result.
+    ordered = tuple(dict.fromkeys(selectors))
+    expected_selectors = frozenset(ordered)
     result = await _invoke_session_function(
         session,
         function_name=FUNCTION_NAME,
         args={
-            **probe_value_arguments(expected_selectors, consumer_id),
+            **probe_value_arguments(ordered, consumer_id),
             "max_json_bytes": max_json_bytes,
         },
         consumer_id=consumer_id,

@@ -380,7 +380,9 @@ def _bootstrap_requirements(
     )
 
 
-def _installed_requirement_satisfies(value: str) -> bool:
+def _installed_requirement_satisfies(
+    value: str, seen: frozenset[str] = frozenset()
+) -> bool:
     requirement = Requirement(value)
     if requirement.url is not None:
         return False
@@ -422,6 +424,17 @@ def _installed_requirement_satisfies(value: str) -> bool:
     for dependency in optional:
         if dependency.url is not None:
             return False
+        # An extra such as `recommended` can require Studio's own extras.
+        if (
+            dependency.extras
+            and canonicalize_name(dependency.name) == _STUDIO_DISTRIBUTION
+        ):
+            nested = ",".join(sorted(dependency.extras))
+            if nested in seen or not _installed_requirement_satisfies(
+                str(dependency), seen | {nested}
+            ):
+                return False
+            continue
         try:
             dependency_version = Version(version(dependency.name))
         except PackageNotFoundError:

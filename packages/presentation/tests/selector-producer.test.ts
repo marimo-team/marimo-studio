@@ -11,3 +11,10 @@ test("a value selector's producer is the runtime cell that defines its root", ()
   expect(selectorProducerCell(config, "missing.figure")).toBeUndefined();
   expect(selectorProducerCell(config, "chart._private")).toBeUndefined();
 });
+
+test("a selector over the target byte limit has no producer", () => {
+  const config = projectionRuntimeConfig([projectionRequest("chart", "output")]);
+  const key = "x".repeat(config.projectionPolicy.maxTargetBytes);
+
+  expect(selectorProducerCell(config, `chart[${JSON.stringify(key)}]`)).toBeUndefined();
+});

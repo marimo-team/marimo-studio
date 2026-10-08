@@ -95,8 +95,12 @@ def instrument_sites(
                 )
             line, column = _position(content, offset)
             # Providers count columns in their own units, such as UTF-16, so
-            # only the line is comparable. The byte check above keeps the
-            # offset inside a start tag.
+            # only the line is comparable. The byte check above only requires
+            # a tag continuation at the offset. Attribute values can contain
+            # `>`, as JSX arrow functions do, so the bytes cannot prove the
+            # offset is inside the start tag. An offset in text leaves the host
+            # without its attribute, which publication reports as
+            # `projection-site-missing`.
             if line < site.source.line:
                 raise _site_error(
                     site,

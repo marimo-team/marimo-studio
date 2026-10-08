@@ -222,6 +222,9 @@ export const selectorProducerCell = (
   config: RuntimeConfig,
   selector: string,
 ): string | undefined => {
+  if (new TextEncoder().encode(selector).length > config.projectionPolicy.maxTargetBytes) {
+    return undefined;
+  }
   const parsed = parseSelector(selector, config.projectionPolicy.maxPathSteps);
   const target = parsed.ok
     ? ownRecordValue(config.projectionTargets.variables, parsed.value.variable)
