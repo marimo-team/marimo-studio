@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { studioClientId, studioEditorSessionId } from "./authoring-test-support.ts";
 import {
+  captureRetiringPreviewReads,
   selectWorkspaceMode,
   editorSlider,
   expect,
@@ -274,6 +275,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   );
   expect(projectResponse.ok()).toBe(true);
   const project = viewProjectSchema.parse(await projectResponse.json());
+  const retiringReads = await captureRetiringPreviewReads(page, browserDiagnostics);
   const saved = await page.evaluate(
     async ({ catalogGeneration, content, sourceUrl, token, viewGeneration }) => {
       const current = await fetch(sourceUrl, { cache: "no-store" });
@@ -304,6 +306,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   );
   expect(saved).toBe(204);
   await expect(preview.getByRole("heading", { name: "Hosted mount lifecycle" })).toBeVisible();
+  retiringReads.recovered();
   const persisted = await page.request.get(
     `${baseUrl()}/_marimo-studio/views/dashboard/source/index.html`,
   );
