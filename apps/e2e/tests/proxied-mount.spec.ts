@@ -6,6 +6,7 @@ import { proxiedNotebookPath } from "../scripts/paths.ts";
 import { saveShortcut, selectAllShortcut } from "./authoring-test-support.ts";
 import {
   type BrowserDiagnostics,
+  captureRetiringPreviewReads,
   editorSlider,
   expect,
   expectPreviewRevisionSwap,
@@ -51,6 +52,7 @@ const proxiedPath = (suffix: string) =>
 // Saves the dashboard through the Source editor, whose requests resolve
 // beneath the proxy prefix.
 const replaceDashboardSource = async (page: Page, diagnostics: BrowserDiagnostics) => {
+  const retiringReads = await captureRetiringPreviewReads(page, diagnostics);
   // Saving retires the editor's earlier write for the same document.
   const replacedSourceWrite = diagnostics.expectRequestAbort({
     origin: new URL(proxiedUrl()).origin,
@@ -74,6 +76,7 @@ const replaceDashboardSource = async (page: Page, diagnostics: BrowserDiagnostic
   await expect(
     previewFrame(page).getByRole("heading", { name: "Proxied dashboard" }),
   ).toBeVisible();
+  retiringReads.recovered();
   await recoverRequestAbort(replacedSourceWrite);
 };
 
