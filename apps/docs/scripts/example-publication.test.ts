@@ -3,10 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 
+import { documentationExampleFamilies } from "../examples.ts";
 import {
   type ExamplePublicationFileSystem,
   type ExamplePublicationPaths,
   publishExamples,
+  pruneExamples,
   validatePreparedExample,
 } from "./example-publication.ts";
 
@@ -145,3 +147,33 @@ test.each(["missing config", "malformed config", "wrong runtime", "missing manif
     });
   },
 );
+
+test("a complete publication drops exports the catalog no longer lists", async () => {
+  const root = await mkdtemp(join(tmpdir(), "marimo-studio-docs-prune-"));
+  const [family] = documentationExampleFamilies;
+  const [view, retiredView] = family.views;
+  try {
+    for (const target of [
+      `${family.slug}/notebook`,
+      `${family.slug}/${view.key}`,
+      `${family.slug}/${retiredView.key}`,
+      "retired-family/notebook",
+    ]) {
+      await mkdir(join(root, target), { recursive: true });
+      await writeFile(join(root, target, "index.html"), "export");
+    }
+
+    await pruneExamples(root, [{ ...family, views: [view] }]);
+
+    await expect(readFile(join(root, family.slug, "notebook", "index.html"), "utf8")).resolves.toBe(
+      "export",
+    );
+    await expect(readFile(join(root, family.slug, view.key, "index.html"), "utf8")).resolves.toBe(
+      "export",
+    );
+    await expectMissing(join(root, family.slug, retiredView.key));
+    await expectMissing(join(root, "retired-family"));
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});

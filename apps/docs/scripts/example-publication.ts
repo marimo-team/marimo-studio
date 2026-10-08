@@ -1,5 +1,7 @@
-import { readFile, rename, rm, stat } from "node:fs/promises";
+import { readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+
+import type { DocumentationExampleFamily } from "../examples.ts";
 
 export const validatePreparedExample = async (
   root: string,
@@ -104,5 +106,32 @@ export const publishExamples = async (
 
   if (movedPrevious) {
     await operations.remove(paths.previous);
+  }
+};
+
+// A complete run owns the publication, so it removes exports the catalog no
+// longer lists. Selective runs leave every other export in place.
+export const pruneExamples = async (
+  root: string,
+  families: readonly DocumentationExampleFamily[],
+): Promise<void> => {
+  const targets = new Map(
+    families.map((family) => [
+      family.slug,
+      new Set(["notebook", ...family.views.map((view) => view.key)]),
+    ]),
+  );
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const family = join(root, entry.name);
+    const listed = targets.get(entry.name);
+    if (listed === undefined || !entry.isDirectory()) {
+      await rm(family, { force: true, recursive: true });
+      continue;
+    }
+    for (const target of await readdir(family)) {
+      if (!listed.has(target)) {
+        await rm(join(family, target), { force: true, recursive: true });
+      }
+    }
   }
 };

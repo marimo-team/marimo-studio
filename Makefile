@@ -100,8 +100,9 @@ e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-pa
 e2e-ui: _browser-ready build _prepare-browser-tests ## Open the browser test runner.
 	$(PNPM) --filter @marimo-studio/e2e e2e:ui
 
+# EXAMPLES takes examples:build selectors, for example EXAMPLES='--family athletes'.
 docs-examples: _frontend-ready build ## Export examples for the documentation site.
-	$(VP) run --filter @marimo-studio/docs examples:build
+	$(VP) run --filter @marimo-studio/docs examples:build $(EXAMPLES)
 
 docs-thumbnails: _browser-ready ## Capture example thumbnails and landing posters from exported views.
 	@test -d apps/docs/public/examples || $(MAKE) docs-examples
@@ -115,7 +116,7 @@ docs-showcase: _browser-ready ## Render example showcase images from exported ex
 docs-build: _frontend-ready build ## Build the VitePress documentation.
 	$(VP) run --filter @marimo-studio/docs build
 
-docs-serve: _frontend-ready build ## Serve documentation through Portless.
+docs-serve: _frontend-ready ## Serve documentation through Portless.
 	$(PORTLESS_ENV) BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
 
 docs-preview: _frontend-ready ## Preview built documentation through Portless.
