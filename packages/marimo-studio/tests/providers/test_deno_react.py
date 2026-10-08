@@ -315,13 +315,14 @@ def test_react_points_a_failed_package_download_to_the_network(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The project's own cache starts empty, and the proxy refuses connections,
-    # so Deno must download packages and fails.
+    # so Deno must download packages and fails. Deno routes through ALL_PROXY
+    # before HTTPS_PROXY, so an inherited ALL_PROXY must not apply.
     monkeypatch.setattr(
         _deno_runtime, "ensure_cache_directory", _deno_cache.ensure_cache_directory
     )
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
-    monkeypatch.delenv("NO_PROXY", raising=False)
-    monkeypatch.delenv("no_proxy", raising=False)
+    for name in ("ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
     _root, project = _project(tmp_path, react_provider, "marimo-studio/react")
 
     inspection = _inspect(react_provider, project)
