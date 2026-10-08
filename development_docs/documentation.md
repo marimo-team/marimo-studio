@@ -131,7 +131,7 @@ captured. Inspect the images before committing them.
 The README opens with `apps/docs/public/showcase/marimo-studio-wall-THEME.webp`,
 which places every example notebook above its views on a receding plane. Each
 family also has a fan, `marimo-studio-fan-FAMILY-THEME.webp`, with the notebook
-raised behind its three views. Every image has `light` and `dark` variants for
+raised behind its views. Every image has `light` and `dark` variants for
 GitHub's color schemes and keeps a transparent background. The plain file is a
 2400px WebP at quality 0.9 for READMEs and pages, and the `@2x` file is the
 4800px lossless master. Render them again after a visible view change or when
@@ -266,8 +266,9 @@ site. A `main` build receives the base path from GitHub Pages, uploads
 
 Pull requests that change the site or its examples build the complete
 root-based site. Pull requests that change product code run `examples:smoke`,
-which exports two Earthquake watch views, a plain HTML view and a React view,
-through the same export path. `make docs-build` builds the complete site locally.
+which exports the Earthquake watch story and briefing, a plain HTML view and a
+React view, and the Quadratic programs Typst report through the same export
+path. `make docs-build` builds the complete site locally.
 
 ## Version parity
 

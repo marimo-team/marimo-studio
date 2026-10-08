@@ -1,0 +1,151 @@
+---
+title: "One week of earthquakes"
+subtitle: "A seismic bulletin from the USGS weekly feed"
+author: "Earthquake Watch"
+abstract: |
+  The United States Geological Survey publishes every magnitude 2.5 and
+  larger earthquake it records worldwide. This bulletin reads one week of that
+  feed: where the ground moved, how activity rose and fell from day to day, how
+  much more energy a larger magnitude carries, and how the count of events
+  falls as magnitude rises.
+bibliography: references.bib
+resources:
+  - charts.js
+format:
+  html:
+    theme: [cosmo, bulletin.scss]
+    include-in-header: fonts.html
+    toc: true
+    toc-location: left
+    toc-title: "In this bulletin"
+    toc-depth: 2
+    reference-location: margin
+    citation-location: margin
+    fig-cap-location: bottom
+    html-math-method: katex
+    smooth-scroll: true
+    page-layout: article
+---
+
+<span hidden data-source="events" mo-value="events"></span>
+<span hidden data-source="weekly" mo-value="seismic_analysis.weekly"></span>
+<span hidden data-source="activity" mo-value="seismic_analysis.activity"></span>
+<span hidden data-source="strongest" mo-value="seismic_analysis.strongest"></span>
+<span hidden data-source="frequency" mo-value="seismic_analysis.frequency"></span>
+
+```{=html}
+<div class="figures-strip" aria-label="The week in numbers">
+  <div><span class="figure-label">Events recorded</span><strong data-figure="events">—</strong></div>
+  <div><span class="figure-label">Largest magnitude</span><strong data-figure="maximum">—</strong></div>
+  <div><span class="figure-label">Felt reports</span><strong data-figure="felt">—</strong></div>
+  <div><span class="figure-label">Tsunami flags</span><strong data-figure="tsunami" class="signal">—</strong></div>
+</div>
+```
+
+## Where the ground moved
+
+The feed covers {{< marimo value="seismic_analysis.weekly.days" >}} days,
+from {{< marimo value="seismic_analysis.weekly.period_start" >}} to
+{{< marimo value="seismic_analysis.weekly.period_end" >}}. Most epicenters
+trace the boundaries of tectonic plates: the Pacific Ring of Fire, the
+Alpine–Himalayan belt, and the mid-ocean ridges. @fig-map places every event,
+sized by magnitude.
+
+::: {#fig-map .column-page}
+```{=html}
+<div class="chart chart-map" id="map-chart" role="img" aria-label="World map of the week's epicenters"></div>
+```
+
+Epicenters of the week's events. Circle area follows magnitude, and events of
+magnitude 6 or larger are outlined in dark red.
+:::
+
+::: {.column-margin}
+**Reading the map.** Each circle is one epicenter, the point on the surface
+above where a rupture began. Hover a circle for its place, magnitude, and USGS
+review status.
+:::
+
+## Activity through the week
+
+A single large earthquake brings aftershocks, so a busy day often follows a
+strong event.
+
+::: {#fig-days}
+```{=html}
+<div class="chart chart-days" id="days-chart" role="img" aria-label="Events per day with the largest magnitude of each day"></div>
+```
+
+Events per day. The label above each bar is that day's largest magnitude.
+:::
+
+## The strongest events
+
+```{=html}
+<table class="strongest" id="strongest-table">
+  <thead><tr><th>Magnitude</th><th>Place</th><th>Time (UTC)</th><th>Felt reports</th></tr></thead>
+  <tbody><tr><td colspan="4" class="pending">Loading the week's events</td></tr></tbody>
+</table>
+```
+
+::: {.callout-note appearance="simple"}
+## Felt reports
+
+USGS collects "Did You Feel It?" reports from the public. A count measures how
+many people reported shaking, which depends on population near the epicenter
+as much as on the earthquake itself.
+:::
+
+## Magnitude is logarithmic
+
+Earthquake magnitude is a logarithmic measure of recorded ground-motion
+amplitude. One magnitude unit corresponds to about ten times the amplitude and
+roughly 32 times the released energy [@gutenberg1956]. Choose a comparison
+magnitude for the week's largest event.
+
+{{< marimo cell="magnitude_reference_control" >}}
+
+{{< marimo cell="magnitude_comparison" >}}
+
+## Frequency and magnitude
+
+Small earthquakes vastly outnumber large ones. The Gutenberg–Richter relation
+describes the cumulative count of events at or above magnitude $m$ as a line
+on a logarithmic scale [@gutenberg1944]. @fig-gutenberg compares the observed
+counts with a straight-line fit. A global feed records small events unevenly,
+so the observed curve flattens at its low end.
+
+::: {#fig-gutenberg}
+```{=html}
+<div class="chart chart-gutenberg" id="gutenberg-chart" role="img" aria-label="Cumulative event counts by magnitude with the fitted Gutenberg–Richter line"></div>
+```
+
+Cumulative events at or above each magnitude, on a logarithmic count scale.
+Points are observed. The line is the descriptive fit, drawn across its range.
+:::
+
+{{< marimo cell="frequency_magnitude_relation" >}}
+
+{{< marimo cell="frequency_threshold_control" >}}
+
+{{< marimo cell="frequency_threshold_summary" >}}
+
+::: {.callout-warning appearance="simple"}
+## One week is a snapshot
+
+The fit summarizes a single global week. Treat the b-value as a description
+of this record rather than an estimate of regional hazard, which needs long
+catalogs for one region.
+:::
+
+## About the data
+
+The week holds {{< marimo value="seismic_analysis.weekly.source_events" >}}
+events, {{< marimo value="seismic_analysis.weekly.qualified_events" >}} of them
+at or above magnitude
+{{< marimo value="seismic_analysis.weekly.catalog_minimum_magnitude" >}}.
+Every record keeps its time, epicenter coordinates, review status, and USGS
+event page. The record is the USGS GeoJSON summary feed of magnitude 2.5 and
+larger earthquakes for 22 to 29 January 2024 [@usgsfeed].
+
+<script type="module" src="charts.js"></script>

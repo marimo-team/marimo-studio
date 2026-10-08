@@ -1,6 +1,6 @@
 ---
 title: Examples
-description: Compare live views that share one marimo notebook per example.
+description: Compare the views that share one marimo notebook per example.
 sidebar: false
 aside: false
 outline: false
@@ -9,15 +9,16 @@ pageClass: studio-example-page
 
 # Examples
 
-Each example notebook backs several live views, from lecture decks and linked
-explorers to operations maps and printable reports. Open an example to compare
-how each view presents one analysis.
+Each example notebook backs several views, from lecture decks and linked
+explorers to typeset articles and PDF reports. Open an example to compare how
+each view presents one analysis. The published views run from prepared
+notebook states, without a Python kernel.
 
 <div class="studio-example-gallery">
-  <StudioExampleCard family="quadratic-programs">A lecture deck, a reading explainer, and an interactive geometry lab.</StudioExampleCard>
-  <StudioExampleCard family="athletes">An overview report, a linked Mosaic explorer, and a Three.js field presentation.</StudioExampleCard>
-  <StudioExampleCard family="earthquakes">A scroll-driven story, an operations map, and a Reveal.js briefing.</StudioExampleCard>
-  <StudioExampleCard family="occupancy">A room monitor, an interactive model review, and a printable PDF report.</StudioExampleCard>
+  <StudioExampleCard family="quadratic-programs">A lecture deck, a reading explainer, an interactive geometry lab, and a typeset Typst report.</StudioExampleCard>
+  <StudioExampleCard family="athletes">An overview report, a linked Mosaic explorer, a Three.js field presentation, and a Quarto paper.</StudioExampleCard>
+  <StudioExampleCard family="earthquakes">A scroll-driven story, an operations map, a Reveal.js briefing, and a Quarto bulletin.</StudioExampleCard>
+  <StudioExampleCard family="occupancy">A room monitor, an interactive model review, and a pdfcn PDF report.</StudioExampleCard>
 </div>
 
 ## Run an example locally

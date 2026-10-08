@@ -9,7 +9,7 @@ describe("documentation example selection", () => {
 
     expect(selection.complete).toBe(true);
     expect(selection.notebooks).toBe(4);
-    expect(selection.views).toBe(12);
+    expect(selection.views).toBe(15);
   });
 
   it("unions family, notebook, and view selectors", () => {
@@ -25,7 +25,7 @@ describe("documentation example selection", () => {
 
     expect(selection.complete).toBe(false);
     expect(selection.notebooks).toBe(2);
-    expect(selection.views).toBe(4);
+    expect(selection.views).toBe(5);
     expect(
       selection.families.map(({ family, notebook, views }) => ({
         slug: family.slug,
@@ -36,7 +36,7 @@ describe("documentation example selection", () => {
       {
         slug: "athletes",
         notebook: true,
-        views: ["overview", "explorer", "field"],
+        views: ["overview", "explorer", "field", "paper"],
       },
       { slug: "earthquakes", notebook: true, views: [] },
       { slug: "occupancy", notebook: false, views: ["monitor"] },

@@ -115,7 +115,6 @@ export default defineConfig({
     nav: [
       { text: "Overview", link: routes.whatIsStudio },
       { text: "Guide", link: routes.guide.index },
-      { text: "Agents", link: routes.guide.codingAgents },
       { text: "Examples", link: routes.examples.index },
       { text: "Reference", link: routes.reference.index },
       { text: "Project", items: projectItems },

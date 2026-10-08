@@ -150,6 +150,7 @@ def test_state_space_rejects_invalid_contracts(
     [
         "athletes/field",
         "athletes/overview",
+        "earthquakes/bulletin",
         "earthquakes/operations",
         "occupancy/monitor",
         "occupancy/model-review",

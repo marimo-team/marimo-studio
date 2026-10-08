@@ -213,6 +213,7 @@ const markLoaded = (): void => {
   gap: 1.5rem;
   align-items: center;
   min-width: 0;
+  padding-block: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }

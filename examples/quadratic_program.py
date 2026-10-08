@@ -308,8 +308,9 @@ def feasible_region(G, combinations, h, np):
 
 @app.cell
 def level_curves(bowl, draw_problem, region, solution):
-    draw_problem(region, bowl, solution)
-    return
+    problem_figure = draw_problem(region, bowl, solution)
+    problem_figure
+    return (problem_figure,)
 
 
 @app.cell(hide_code=True)
@@ -370,8 +371,9 @@ def sweep(pull, solve):
 
 @app.cell
 def sensitivity_plot(draw_sweep, pull_direction, sweep):
-    draw_sweep(sweep, pull_direction.value)
-    return
+    sweep_figure = draw_sweep(sweep, pull_direction.value)
+    sweep_figure
+    return (sweep_figure,)
 
 
 @app.cell(hide_code=True)

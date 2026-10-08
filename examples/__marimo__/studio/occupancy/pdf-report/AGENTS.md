@@ -6,42 +6,37 @@ this starter.
 
 ## Project intent
 
-Build a three-page A4 facilities brief for building operators and analytical
-reviewers. Compose the notebook-owned `occupancy_analysis` snapshot into the
-document. Mount `analysis_scope_control` so the notebook recomputes every
-report input from the selected observations. Show the selected scope and
-observation count beside the control. Render once with `@react-pdf/renderer`,
-then share that PDF blob between the named download and regular browser
-preview. Render the same bytes with PDF.js in every runtime so the workbench
-keeps one light page well across Server, WebAssembly, and static delivery.
+Compose a three-page A4 facilities brief for building operators and analytical
+reviewers from the notebook-owned `occupancy_analysis` snapshot. Page one
+states the scope, occupancy rate, daily rhythm, and an operational reading.
+Page two compares occupied and vacant sensor conditions and lists the daily
+register. Page three explains the occupancy score, shows how accuracy,
+precision, and recall move with the threshold, and lists the errors farthest
+from the default threshold. Every sentence must stay true for each scope,
+including a scope with no occupied readings.
 
-Use native React PDF SVG primitives for charts so the report stays sharp when
-printed. Keep each page fixed to A4 portrait, use explicit page composition, and
-repeat the report identity and page count through fixed page furniture. Follow
-the Architect's Field Report in `DESIGN.md`: chalk paper, deep teal ink,
-hairline rules, Inter for every text role, and one restrained orange signal. Keep the observation scope as a compact field tag
-whose insets follow its text.
+The browser builds the PDF. `src/report/OccupancyReport.tsx` lays the pages out
+with [pdfcn](https://github.com/shadcn-labs/pdfcn) components, and
+`src/report/render.tsx` renders them to PDF bytes with
+[Takumi](https://takumi.kane.tw/docs/pdf), a WebAssembly layout engine that
+writes vector PDF. `src/ReportViewer.tsx` paints the same bytes with PDF.js, and
+the download link serves them. Mount `analysis_scope_control` beside the
+preview so the notebook recomputes every report input from the selected
+observations.
 
-Keep the environmental graphic in a top-down plan view with labeled signal
-leaders. Each line identifies a room boundary, fixture, access path, occupied
-position, or sensor channel.
+`src/pdf/` holds the pdfcn Takumi components copied from the registry, as pdfcn
+intends: the project owns them. Keep its `LICENSE` beside them. Local changes
+are deliberate: the graph rounds its axis to whole steps, and the page number
+keeps the spaces around its counters. `src/report/theme.ts` is the pdfcn theme
+for the Architect's Field Report in `DESIGN.md`.
 
-Pin `@react-pdf/renderer` to `4.8.1`, `pdfjs-dist` to `5.4.149`, and `events` to
-`3.3.0`. `src/install-node-events.ts` maps the one CommonJS `node:events`
-lookup left by Deno's browser bundle to React PDF's browser events dependency.
-`public/pdf.worker.min.mjs` is the corresponding PDF.js worker and is copied
-into the published artifact.
-
-Resolve the WOFF files under `public/fonts` through
-`src/install-report-fonts.ts`, then register the same asset URLs with React PDF
-and the browser. The SIL Open Font License files travel with the published
-artifact. `fontMetrics` in `src/report/theme.ts` records Inter's ascent and cap
-height. React PDF places each baseline one ascent below the top of its text
-box, so `capCenter`, `capTop`, and `capInset` align glyphs with marks, rings,
-and fills. Update those metrics with the font.
-
-The pinned `@fontsource/inter` package owns the source files. Run `deno task sync:fonts` after changing their versions
-or selected weights, then commit the public fonts and license files together.
+Takumi's WebAssembly module loads from jsDelivr with a pinned version and a
+Subresource Integrity digest in `src/report/render.tsx`. Update both together
+with the `takumi-pdf` version in `deno.json`. `public/fonts` holds Inter
+Regular, Medium, SemiBold, and Bold, subset to Latin text and the symbols the
+report uses, with the SIL Open Font License in `OFL.txt`. The report embeds
+them, and the workbench uses them for its own text. `public/pdf.worker.min.mjs`
+is the PDF.js worker that matches the pinned `pdfjs-dist`.
 
 ## Use the supplied Studio integration
 
@@ -59,20 +54,15 @@ type Row = { id: string; label: string };
 const { hostRef, value: rows } = useMarimoValue<MarimoTable<Row>>("rows");
 
 return (
-  <>
+  <section>
     <span ref={hostRef} hidden mo-value="rows" />
     <output>{rows?.numRows ?? 0}</output>
-  </>
+  </section>
 );
 ```
 
 Use the supplied declarations as the type contract. A custom-element type error
 indicates a missing declaration reference or an invalid attribute.
-
-Subscribe to `occupancy_analysis` as one projection. It commits the summary,
-profiles, sensor comparisons, and finite threshold evidence together so a
-scope change composes one notebook generation. Build the report from the
-declared default threshold in that snapshot.
 
 Eager dataframes arrive as a shared `MarimoTable` backed by Flechette. Use
 [https://github.com/uwdata/flechette](https://github.com/uwdata/flechette) as
@@ -84,18 +74,22 @@ fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
 
 ## Add dependencies
 
-Run Deno's package manager from the view root so it updates `deno.json` and
-`deno.lock` together:
+Studio builds with the frozen `deno.lock`, so builds never change dependencies.
+Add a package with one intentional update from the view root. Run the Deno from
+`marimo-studio[deno]` through the Python interpreter of the environment that
+runs Studio, so the update and later builds use the same Deno. From marimo code
+mode, that interpreter is the kernel's `sys.executable`.
 
 ```console
-deno add --frozen=false --save-exact \
+python -m deno add --frozen=false --save-exact \
   npm:d3@7 \
   npm:@observablehq/plot@0.6 \
   npm:arquero@8 \
   jsr:@std/csv@1
 ```
 
-Import the aliases written to `deno.json`:
+The command updates `deno.json` and `deno.lock` together. Import the aliases it
+writes to `deno.json`:
 
 ```ts
 import * as d3 from "d3";
@@ -110,8 +104,7 @@ through JSR. Deno also accepts registry package subpaths and explicit local
 aliases when a package's documentation calls for them.
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
-`deno.json` and `deno.lock` after adding or changing a dependency. Use
-`--frozen=false` for that intentional update. Normal builds remain frozen.
+`deno.json` and `deno.lock` after adding or changing a dependency.
 
 ## Work within the React project
 
@@ -128,10 +121,33 @@ Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
 Studio's React build runs type checking before bundling. Treat that build as the
 acceptance boundary for declarations, imports, and packaged assets.
 
-## Visual direction
+## Load remote font stylesheets
 
-Keep the presentation calm and focused on the data. Use the current view CSS
-as the visual baseline: restrained headings, readable labels, neutral surfaces,
-fine borders, and color for selection or analytical meaning. Preserve the
-view's distinct audience and interaction model. Check phone, tablet, desktop,
-and short landscape layouts, including populated controls and long values.
+Link remote font stylesheets from `src/index.html` with
+`<link rel="stylesheet">`. The Deno CSS bundler cannot load Google Fonts through
+CSS `@import`. Linked stylesheets require browser network access and a hosting
+policy that permits the stylesheet and font origins. Keep a fallback font in the
+view's CSS.
+
+## Link custom results to notebook inputs
+
+Keep projection hosts explicit in authored source. Custom regions need every
+kernel input, a readable label, and a rendering-source reference such as
+`{"path":"src/App.tsx"}`. Keep these attributes on authored elements outside
+native output subtrees. Follow the installed Studio skill's
+`references/projections.md` for the shared contract:
+
+```python
+import marimo_studio
+
+print(marimo_studio.agent.skill().file("references/projections.md").read_text())
+```
+
+## Maintain project ignore rules
+
+You own this view project's `.gitignore`. When adding libraries, extensions, or
+build tools, ignore their generated files, caches, local configuration, and
+secrets. Keep authored source, dependency manifests, and lockfiles tracked.
+Studio supplies workspace rules for its own artifacts and locks. Check
+`git status --short --ignored` after running new tooling and update the view's
+ignore rules before committing.

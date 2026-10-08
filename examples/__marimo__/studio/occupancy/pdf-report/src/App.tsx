@@ -1,33 +1,48 @@
 /// <reference path="./marimo-studio.d.ts" />
 
-import { usePDF } from "@react-pdf/renderer";
 // @deno-types="npm:@types/react@19.2.10"
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useMarimoValue } from "./lib/use-marimo-value.ts";
-import { ReportViewer } from "./ReportViewer.tsx";
-import { OccupancyReport } from "./report/OccupancyReport.tsx";
-import type {
-  DailyReading,
-  HourlyReading,
-  OccupancyReportData,
-  OccupancySummary,
-  PreparedModel,
-  RoomProfileSummary,
-  SensorProfile,
-} from "./report/types.ts";
+import { renderReport } from "./report/render.tsx";
+import { grouped, percent } from "./report/format.ts";
+import type { OccupancyAnalysis } from "./report/types.ts";
+import { type PdfInstance, ReportViewer } from "./ReportViewer.tsx";
 
-interface OccupancyAnalysis {
-  readonly selection: {
-    readonly scope: string;
-  };
-  readonly summary: OccupancySummary;
-  readonly hourly_room_profile: readonly HourlyReading[];
-  readonly daily_room_profile: readonly DailyReading[];
-  readonly sensor_profiles: readonly SensorProfile[];
-  readonly profile_summary: RoomProfileSummary;
-  readonly model: PreparedModel;
-}
+const LOADING: PdfInstance = { blob: null, error: null, loading: true, url: null };
+
+/** Render the report whenever the notebook's snapshot changes. */
+const useReportPdf = (analysis: OccupancyAnalysis | undefined): PdfInstance => {
+  const [instance, setInstance] = useState<PdfInstance>(LOADING);
+
+  useEffect(() => {
+    if (analysis === undefined) {
+      setInstance(LOADING);
+      return;
+    }
+    let active = true;
+    let url: string | null = null;
+    setInstance((current) => ({ ...current, loading: true }));
+    renderReport(analysis).then(
+      (blob) => {
+        if (!active) return;
+        url = URL.createObjectURL(blob);
+        setInstance({ blob, error: null, loading: false, url });
+      },
+      (error: unknown) => {
+        if (!active) return;
+        console.error(error);
+        setInstance({ blob: null, error: String(error), loading: false, url: null });
+      },
+    );
+    return () => {
+      active = false;
+      if (url !== null) URL.revokeObjectURL(url);
+    };
+  }, [analysis]);
+
+  return instance;
+};
 
 const LoadingReport = () => (
   <div className="loading-report" role="status">
@@ -37,203 +52,83 @@ const LoadingReport = () => (
       <i />
       <i />
     </span>
-    <span>Composing the facilities report</span>
+    <span>Composing the field report</span>
   </div>
 );
 
-const ReportWorkbench = ({
-  report,
-  unavailable,
-}: {
-  report?: OccupancyReportData;
-  unavailable: boolean;
-}) => {
-  const document = useMemo(
-    () => report ? <OccupancyReport report={report} /> : undefined,
-    [report],
-  );
-  const [instance] = usePDF({ document });
-  const ready = document !== undefined && instance.blob !== null &&
-    instance.url !== null && !instance.loading && instance.error === null;
-  const pageSummaries = useMemo(
-    () =>
-      report
-        ? [
-          `${report.room} executive summary for ${report.period.scope_label}. ${
-            (report.period.occupancy_rate * 100).toFixed(1)
-          }% occupied across ${
-            report.period.observations.toLocaleString("en")
-          } readings.`,
-          report.period.occupied > 0
-            ? "Environmental profile comparing occupied and vacant carbon dioxide, light, temperature, and humidity readings."
-            : "Environmental profile for a scope with no occupied observations. Vacant sensor readings provide the reference profile.",
-          report.period.occupied > 0
-            ? `Model evidence at the default threshold ${
-              report.model.threshold.toFixed(2)
-            }, with ${(report.model.accuracy * 100).toFixed(1)}% accuracy and ${
-              (report.model.recall * 100).toFixed(1)
-            }% recall.`
-            : `Model evidence at the default threshold ${
-              report.model.threshold.toFixed(2)
-            }, with ${
-              (report.model.accuracy * 100).toFixed(1)
-            }% accuracy. Recall is unavailable for this scope.`,
-        ]
-        : [],
-    [report],
-  );
-
-  return (
-    <main
-      data-marimo-lens-inputs="analysis-data"
-      className="report-workbench"
-      aria-busy={!ready}
-    >
-      <header className="workbench-header">
-        <div className="workbench-title">
-          <p>{report?.room ?? "Room"}</p>
-          <h1>Occupancy field report</h1>
-        </div>
-        <div className="workbench-actions">
-          <span className="document-spec">A4 · 3 pages</span>
-          {ready
-            ? (
-              <a
-                className="download-report"
-                href={instance.url ?? undefined}
-                download="room-01-occupancy-report.pdf"
-              >
-                Download PDF
-              </a>
-            )
-            : (
-              <span className="download-report is-disabled">
-                Preparing PDF
-              </span>
-            )}
-        </div>
-      </header>
-
-      {unavailable || instance.error
-        ? (
-          <div className="report-error" role="alert">
-            The notebook report data could not be loaded. Reload the view to
-            retry.
-          </div>
-        )
-        : null}
-
-      <section className="scope-strip" aria-label="Observation scope">
-        <marimo-cell name="analysis_scope_control" />
-        <p className="scope-readout" aria-live="polite">
-          <span hidden mo-value="occupancy_analysis.summary.observations" />
-          <span>Included in PDF</span>
-          <strong>
-            {report
-              ? `${report.period.observations.toLocaleString("en")} readings`
-              : "Preparing data"}
-          </strong>
-        </p>
-      </section>
-
-      <section
-        className="viewer-stage"
-        aria-label="A4 occupancy report preview"
-      >
-        {ready
-          ? (
-            <ReportViewer
-              instance={instance}
-              pageSummaries={pageSummaries}
-            />
-          )
-          : <LoadingReport />}
-      </section>
-    </main>
-  );
-};
-
 export const App = () => {
   const analysis = useMarimoValue<OccupancyAnalysis>("occupancy_analysis");
-  const report = useMemo<OccupancyReportData | undefined>(() => {
-    const value = analysis.value;
-    if (value === undefined) return undefined;
-    const selectedModel = value.model.evidence.find((row) =>
-      Math.abs(row.threshold - value.model.default_threshold) < 0.001
-    );
-    if (selectedModel === undefined) return undefined;
-
-    return {
-      room: value.summary.room,
-      period: {
-        start: value.summary.period_start,
-        end: value.summary.period_end,
-        scope_label: value.summary.scope_label,
-        observations: value.summary.observations,
-        occupied: value.summary.occupied,
-        occupancy_rate: value.summary.occupancy_rate,
-        reading_interval_minutes: value.summary.reading_interval_minutes,
-        estimated_occupied_hours: value.summary.estimated_occupied_hours,
-      },
-      hourly: value.hourly_room_profile,
-      daily: value.daily_room_profile,
-      sensors: value.sensor_profiles,
-      profile_summary: value.profile_summary,
-      model: {
-        ...selectedModel,
-        co2_weight: value.model.co2_weight,
-        light_weight: value.model.light_weight,
-        normalization: value.model.normalization,
-        normalization_quantile: value.model.normalization_quantile,
-        threshold_maximum: value.model.threshold_maximum,
-        threshold_minimum: value.model.threshold_minimum,
-        threshold_step: value.model.threshold_step,
-        curve: value.model.evidence,
-        errors: selectedModel.errors.slice(0, 6),
-      },
-    };
-  }, [analysis.value]);
-  const reportRevision = useMemo(
-    () => report ? JSON.stringify(report) : "loading",
-    [report],
-  );
+  const report = analysis.value;
+  const instance = useReportPdf(report);
+  const ready = instance.blob !== null && instance.url !== null && !instance.loading;
+  const pageSummaries = useMemo(() => {
+    if (report === undefined) return [];
+    const { summary, model } = report;
+    const selected = model.evidence.find((row) => Math.abs(row.threshold - model.default_threshold) < 1e-6);
+    return [
+      `${summary.room} room use for ${summary.scope_label}: ${percent(summary.occupancy_rate)} occupied across ${
+        grouped(summary.observations)
+      } readings.`,
+      summary.occupied > 0
+        ? "Sensor conditions comparing occupied and vacant carbon dioxide, light, temperature, and humidity, with the daily register."
+        : "Sensor conditions for a scope with no occupied readings, with the daily register.",
+      selected === undefined
+        ? "Occupancy score evidence."
+        : `Occupancy score evidence at threshold ${model.default_threshold.toFixed(2)}, with ${
+          percent(selected.accuracy)
+        } accuracy.`,
+    ];
+  }, [report]);
 
   return (
     <>
-      <span
-        ref={analysis.hostRef}
-        aria-hidden="true"
-        hidden
-        id="analysis-data"
-        mo-value="occupancy_analysis"
-      />
+      <span ref={analysis.hostRef} aria-hidden="true" hidden id="analysis-data" mo-value="occupancy_analysis" />
       <span id="report-summary" hidden mo-value="occupancy_analysis.summary" />
-      <span
-        id="report-hourly"
-        hidden
-        mo-value="occupancy_analysis.hourly_room_profile"
-      />
-      <span
-        id="report-daily"
-        hidden
-        mo-value="occupancy_analysis.daily_room_profile"
-      />
-      <span
-        id="report-sensors"
-        hidden
-        mo-value="occupancy_analysis.sensor_profiles"
-      />
-      <span
-        id="report-profile"
-        hidden
-        mo-value="occupancy_analysis.profile_summary"
-      />
+      <span id="report-hourly" hidden mo-value="occupancy_analysis.hourly_room_profile" />
+      <span id="report-daily" hidden mo-value="occupancy_analysis.daily_room_profile" />
+      <span id="report-sensors" hidden mo-value="occupancy_analysis.sensor_profiles" />
+      <span id="report-profile" hidden mo-value="occupancy_analysis.profile_summary" />
       <span id="report-model" hidden mo-value="occupancy_analysis.model" />
-      <ReportWorkbench
-        key={reportRevision}
-        report={report}
-        unavailable={analysis.error}
-      />
+
+      <main data-marimo-lens-inputs="analysis-data" className="report-workbench" aria-busy={!ready}>
+        <header className="workbench-header">
+          <div className="workbench-title">
+            <p>{report?.summary.room ?? "Room"}</p>
+            <h1>Occupancy field report</h1>
+          </div>
+          <div className="workbench-actions">
+            <span className="document-spec">A4 · 3 pages</span>
+            {ready
+              ? (
+                <a className="download-report" href={instance.url ?? undefined} download="room-01-occupancy-report.pdf">
+                  Download PDF
+                </a>
+              )
+              : <span className="download-report is-disabled">Preparing PDF</span>}
+          </div>
+        </header>
+
+        {analysis.error || instance.error
+          ? (
+            <div className="report-error" role="alert">
+              The report could not be composed. Reload the page to retry.
+            </div>
+          )
+          : null}
+
+        <section className="scope-strip" aria-label="Observation scope">
+          <marimo-cell name="analysis_scope_control" />
+          <p className="scope-readout" aria-live="polite">
+            <span hidden mo-value="occupancy_analysis.summary.observations" />
+            <span>Included in PDF</span>
+            <strong>{report ? `${grouped(report.summary.observations)} readings` : "Preparing data"}</strong>
+          </p>
+        </section>
+
+        <section className="viewer-stage" aria-label="A4 occupancy report preview">
+          {ready ? <ReportViewer instance={instance} pageSummaries={pageSummaries} /> : <LoadingReport />}
+        </section>
+      </main>
     </>
   );
 };

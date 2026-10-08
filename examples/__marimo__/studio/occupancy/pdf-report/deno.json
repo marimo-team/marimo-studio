@@ -8,32 +8,37 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "jsxImportSourceTypes": "npm:@types/react@19.2.10",
-    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2023"
+    ],
     "strict": true,
     "types": [
-      "./src/marimo-studio.d.ts",
       "npm:@types/react@19.2.10",
       "npm:@types/react-dom@19.2.3"
     ]
   },
   "imports": {
-    "@fontsource/inter": "npm:@fontsource/inter@5.3.0",
-    "@react-pdf/renderer": "npm:@react-pdf/renderer@4.8.1",
-    "events": "npm:events@3.3.0",
+    "@takumi-rs/helpers": "npm:@takumi-rs/helpers@2.10.0",
     "pdfjs-dist": "npm:pdfjs-dist@5.4.149",
     "react": "npm:react@19.2.4",
-    "react/jsx-runtime": "npm:react@19.2.4/jsx-runtime",
     "react-dom/client": "npm:react-dom@19.2.4/client",
+    "react/jsx-runtime": "npm:react@19.2.4/jsx-runtime",
+    "takumi-pdf": "npm:takumi-pdf@0.11.0",
+    "takumi-pdf/no-init": "npm:takumi-pdf@0.11.0/no-init",
+    "takumi-pdf/primitives": "npm:takumi-pdf@0.11.0/primitives",
     "typescript": "npm:typescript@6.0.3"
   },
-  "tasks": {
-    "sync:fonts": "deno run --unstable-raw-imports --allow-write=public/fonts scripts/sync-fonts.ts"
-  },
   "fmt": {
-    "include": ["deno.json", "scripts/", "src/"]
+    "include": [
+      "deno.json",
+      "src/"
+    ]
   },
   "lint": {
-    "include": ["scripts/", "src/"]
+    "include": [
+      "src/"
+    ]
   }
 }

@@ -238,9 +238,18 @@ nav {
   display: flex;
   gap: 1.5rem;
   align-items: center;
-  padding-bottom: 0.75rem;
+  padding-block: 4px calc(0.75rem - 4px);
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+/* Labels can outgrow a phone width. The faded edge shows that the tabs scroll. */
+@media (max-width: 720px) {
+  nav {
+    gap: 1rem;
+    padding-right: 1.5rem;
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
 }
 
 nav::-webkit-scrollbar {
