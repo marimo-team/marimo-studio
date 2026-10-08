@@ -39,6 +39,7 @@ _SITE_ATTRIBUTE = "data-marimo-studio-site"
 _DISPLAY_MATH = re.compile(r"(?<!\\)\$\$.*?(?<!\\)\$\$", re.DOTALL)
 _INLINE_MATH = re.compile(r"(?<![\\$])\$(?=[^\s$])(?:\\.|[^$\\\n])*?(?<=\S)\$(?!\d)")
 _FRONT_MATTER_END = re.compile(r"^(?:---|\.\.\.)\s*$")
+_DIV_FENCE = re.compile(r"^ {0,3}:{3,}")
 _INDENTED = re.compile(r"^(?: {4}|\t)")
 _LIST_ITEM = re.compile(r"^ {0,3}(?:[-*+]|\d+[.)])\s")
 _ESCAPED_TAG = re.compile(r"(?<!\\)(?:\\\\)*\\<")
@@ -64,6 +65,19 @@ def _line_spans(text: str) -> list[tuple[int, int, str]]:
     return spans
 
 
+def _indentation(line: str) -> int:
+    """Return the column where ``line``'s content starts, with tabs at 4."""
+    width = 0
+    for character in line:
+        if character == " ":
+            width += 1
+        elif character == "\t":
+            width += 4 - width % 4
+        else:
+            break
+    return width
+
+
 def _block_regions(text: str) -> list[tuple[int, int]]:
     lines = _line_spans(text)
     regions: list[tuple[int, int]] = []
@@ -75,27 +89,28 @@ def _block_regions(text: str) -> list[tuple[int, int]]:
                 index = closing + 1
                 break
     in_list = False
+    list_indent = 0
     previous_blank = True
     while index < len(lines):
         start, _end, line = lines[index]
         blank = not line.strip()
-        if (
-            not blank
-            and previous_blank
-            and not in_list
-            and _INDENTED.match(line) is not None
-        ):
+        # Inside a list item, indented code starts four columns past the item's
+        # content.
+        code_indent = list_indent + 4 if in_list else 4
+        if not blank and previous_blank and _indentation(line) >= code_indent:
             while index < len(lines) and (
-                not lines[index][2].strip() or _INDENTED.match(lines[index][2])
+                not lines[index][2].strip()
+                or _indentation(lines[index][2]) >= code_indent
             ):
                 index += 1
             regions.append((start, lines[index - 1][1]))
             previous_blank = True
             continue
         if not blank and _INDENTED.match(line) is None:
-            in_list = _LIST_ITEM.match(line) is not None or (
-                in_list and not previous_blank
-            )
+            item = _LIST_ITEM.match(line)
+            if item is not None:
+                list_indent = item.end()
+            in_list = item is not None or (in_list and not previous_blank)
         previous_blank = blank
         opening = _FENCE.match(line)
         if opening is None:
@@ -135,6 +150,13 @@ def _inline_code_regions(
             index = pending[0][1]
             continue
         if text[index] != "`":
+            index += 1
+            continue
+        # A backslash-escaped backtick is literal text, not a code span opener.
+        backslashes = 0
+        while backslashes < index and text[index - backslashes - 1] == "\\":
+            backslashes += 1
+        if backslashes % 2:
             index += 1
             continue
         run = index
@@ -240,8 +262,12 @@ def _standalone(text: str, match: re.Match[str]) -> bool:
     if lines[line_number].strip() != match.group(0):
         return False
     neighbors = (line_number - 1, line_number + 1)
+    # A fenced div marker, such as `::: {.callout-note}`, also ends a paragraph.
     return all(
-        index < 0 or index >= len(lines) or not lines[index].strip()
+        index < 0
+        or index >= len(lines)
+        or not lines[index].strip()
+        or _DIV_FENCE.match(lines[index]) is not None
         for index in neighbors
     )
 

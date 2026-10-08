@@ -178,7 +178,14 @@ class QuartoProvider:
         entry = _entry(project)
         # Quarto writes rendered output into these directories, and the entry
         # document's figures beside it in `<stem>_files`.
-        files = project_files(project, exclude={*_OUTPUT_ROOTS, f"{entry.stem}_files"})
+        generated = entry.parent / f"{entry.stem}_files"
+        files = tuple(
+            path
+            for path in project_files(
+                project, exclude={*_OUTPUT_ROOTS, f"{entry.stem}_files"}
+            )
+            if not path.is_relative_to(generated)
+        )
         documents = tuple(
             SourceDocument(path, _LANGUAGES[path.suffix.lower()], "edit")
             for path in files

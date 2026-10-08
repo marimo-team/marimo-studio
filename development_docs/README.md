@@ -68,8 +68,12 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/),
 environments:
 
 ```console
+corepack enable pnpm
 make setup
 ```
+
+`corepack enable pnpm` lets Node.js provide the pnpm version that
+`package.json` pins.
 
 `make setup` installs the pixi environment of system tools, the Python and
 [pnpm](https://pnpm.io/) JavaScript workspaces, prepares the pinned Marimo

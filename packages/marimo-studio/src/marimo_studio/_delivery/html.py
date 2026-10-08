@@ -20,17 +20,24 @@ from marimo_studio.view_providers._document import (
 _MARIMO_FILENAME = Element("marimo-filename")
 # Presentation frames have an opaque origin, where Web Storage access throws.
 # Generated sites such as Quarto read localStorage while loading, so give each
-# document an in-memory localStorage before authored scripts run. Session
-# storage keeps throwing: session preservation detects that and replays the
-# runtime session through the trusted wrapper.
+# document an in-memory localStorage before authored scripts run. It answers
+# the Storage methods and named properties, such as `localStorage.theme = "x"`.
+# Session storage keeps throwing: session preservation detects that and replays
+# the runtime session through the trusted wrapper.
 _STORAGE_FALLBACK = (
-    "(()=>{try{void window.localStorage}catch{const s=new Map();"
+    "(()=>{try{void window.localStorage}catch{const s=new Map(),k=String;"
+    "const api={get length(){return s.size},key:i=>Array.from(s.keys())[i]??null,"
+    "getItem:n=>s.has(k(n))?s.get(k(n)):null,setItem:(n,v)=>{s.set(k(n),k(v))},"
+    "removeItem:n=>{s.delete(k(n))},clear:()=>{s.clear()}};"
+    "const storage=new Proxy(api,{"
+    "get:(t,n)=>n in t?t[n]:typeof n==='string'&&s.has(n)?s.get(n):undefined,"
+    "set:(t,n,v)=>{if(n in t)return false;s.set(k(n),k(v));return true},"
+    "deleteProperty:(t,n)=>{s.delete(k(n));return true},"
+    "has:(t,n)=>n in t||s.has(k(n)),ownKeys:()=>[...s.keys()],"
+    "getOwnPropertyDescriptor:(t,n)=>s.has(k(n))?"
+    "{value:s.get(k(n)),writable:true,enumerable:true,configurable:true}:undefined});"
     "Object.defineProperty(window,'localStorage',{configurable:true,"
-    "enumerable:true,value:Object.freeze({get length(){return s.size},"
-    "key:i=>Array.from(s.keys())[i]??null,"
-    "getItem:k=>s.has(String(k))?s.get(String(k)):null,"
-    "setItem:(k,v)=>{s.set(String(k),String(v))},"
-    "removeItem:k=>{s.delete(String(k))},clear:()=>{s.clear()}})})}})();"
+    "enumerable:true,get:()=>storage})}})();"
 )
 
 

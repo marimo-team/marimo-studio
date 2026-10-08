@@ -32,7 +32,8 @@ function Para(element)
     end
   end
   local text = table.concat(markup)
-  local rest = text
+  -- HTML tag names ignore case, so match a lowercase copy and keep the markup.
+  local rest = text:lower()
   repeat
     rest = after_host(rest)
     if rest == nil then

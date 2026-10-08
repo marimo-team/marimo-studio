@@ -77,7 +77,9 @@ Escaped \\<marimo-cell name="escaped"></marimo-cell> text.
 
     <marimo-output value="in_list"></marimo-output>
 
-<marimo-cell name="chart"></marimo-cell>
+        <marimo-cell name="list_code"></marimo-cell>
+
+\\`<marimo-cell name="chart"></marimo-cell>\\`
 """
 
 
@@ -123,7 +125,7 @@ def test_hosts_are_found_where_pandoc_keeps_raw_html(tmp_path: Path) -> None:
         ("output", ("raw_block",), 12),
         ("cell", ("raw_inline",), 16),
         ("output", ("in_list",), 26),
-        ("cell", ("chart",), 28),
+        ("cell", ("chart",), 30),
     ]
     starts = (
         b'<span mo-value="total"',
@@ -156,6 +158,10 @@ Inline {{< marimo cell="inline" >}} cell.
 {{< marimo cell="both" output="both" >}}
 
 {{< marimo cell="forged" data-marimo-studio-site="site-1" >}}
+
+::: {.callout-note}
+{{< marimo output="callout" >}}
+:::
 """
 
 
@@ -172,6 +178,7 @@ def test_marimo_shortcodes_are_projection_sites(tmp_path: Path) -> None:
         ("value", ("summary.rate",), 5, 14),
         ("cell", ("chart",), 8, 1),
         ("output", ("table",), 10, 1),
+        ("output", ("callout",), 23, 1),
     ]
     # Studio inserts the site attribute as one more shortcode parameter.
     for site in inspection.sites:
@@ -283,6 +290,26 @@ def test_every_project_file_except_guidance_is_a_build_input(
     }
 
 
+def test_a_nested_entry_keeps_its_generated_figures_out_of_the_build(
+    tmp_path: Path,
+) -> None:
+    project = _project(
+        tmp_path,
+        options={"entrypoint": "pages/report.qmd"},
+        files={
+            "pages/report.qmd": "# Report\n",
+            "pages/report_files/figure.png": "png",
+        },
+    )
+
+    inspection = inspect_view_project_sync(project)
+
+    assert "pages/report_files/figure.png" not in {
+        item.path.as_posix() for item in inspection.inputs
+    }
+    assert "pages/report.qmd" in {item.path.as_posix() for item in inspection.inputs}
+
+
 @pytest.mark.quarto
 @pytest.mark.skipif(
     not provider.availability().available,
@@ -310,7 +337,7 @@ def test_quarto_starter_renders_live_hosts_inside_the_app_shell(
         "---\ntitle: Rooms\n---\n\n"
         'Occupancy is <span mo-value="total"></span> today.\n\n'
         '<marimo-cell name="chart"></marimo-cell>\n'
-        '<marimo-output value="table"></marimo-output>\n',
+        '<MARIMO-OUTPUT value="table"></MARIMO-OUTPUT>\n',
     )
 
     published = publish(project)

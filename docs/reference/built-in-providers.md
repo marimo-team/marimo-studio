@@ -319,10 +319,12 @@ document stay unexecuted. Compute in the notebook and project results into the
 page. Studio wraps the rendered page body in `<div id="app-shell">`, so authored
 source must leave `id="app-shell"` unused.
 
-Every project file except `AGENTS.md` and `DESIGN.md` is a build input. Images,
-includes, stylesheets, and bibliographies that the document references rebuild
-the view when they change. Hidden directories, `_site/`, `_freeze/`, and
-`*_files/` directories at the project root stay outside the build.
+Every project file is a build input, so images, includes, stylesheets, and
+bibliographies that the document references rebuild the view when they change.
+`view.toml`, `AGENTS.md`, `DESIGN.md`, hidden top-level entries such as
+`.gitignore`, the `_site/` and `_freeze/` directories, and the
+`<stem>_files/` directory that Quarto writes beside the entry document stay
+outside the build.
 
 The provider runs the `quarto` command on `PATH`. Install Quarto 1.9.38 or newer
 with [pixi](https://pixi.prefix.dev/), a package manager that installs
@@ -354,6 +356,11 @@ Deno with Studio's, so install Quarto with `pixi global install quarto` there.
 
 Builds keep Quarto's caches beneath the view's `.artifacts/.cache`, apart from
 the user cache that other Quarto installations share.
+
+On Windows, Quarto keeps a render cache in a SQLite file inside the build
+directory, and SQLite opens it only when its path stays under 260 characters.
+When a build reports `unable to open database file`, move the notebook to a
+shorter directory, such as `C:\work\analysis`.
 
 ### Options
 

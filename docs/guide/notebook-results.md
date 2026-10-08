@@ -15,7 +15,7 @@ that matches what the frontend needs:
 | Browser value   | `<span mo-value="metrics.total">` | JSON-compatible data or an eager dataframe consumed by browser code |
 
 All projection hosts belong inside `#app-shell`. A Quarto document writes them
-as `marimo` shortcodes, and Studio supplies `#app-shell`. See
+as `marimo` shortcodes or raw HTML hosts, and Studio supplies `#app-shell`. See
 [Quarto document](frontend-options.md#quarto-document).
 
 ## Place a complete cell

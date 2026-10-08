@@ -171,8 +171,8 @@ marimo-studio view create report --target analysis.py \
 ```
 
 Write `index.qmd` as Quarto Markdown and place notebook results with the
-`marimo` shortcode. Put each `cell` or `output` shortcode on its own line, and
-a `value` shortcode inside a sentence:
+`marimo` shortcode. Put each `cell` or `output` shortcode on its own line with a
+blank line before and after it, and a `value` shortcode inside a sentence:
 
 ```markdown
 Rooms in use today: {{< marimo value="summary.rooms" >}}.

@@ -99,9 +99,23 @@ jobs:
         uses: ./.github/actions/setup-pixi
 
       - name: Test ${{ matrix.profile }} contracts
+        if: matrix.profile != 'quarto'
         uses: ./.github/actions/test-python
         with:
           profile: ${{ matrix.profile }}
+          python-version: "3.12"
+
+      # Quarto keeps a render cache in a SQLite file that Windows opens only
+      # below 260 characters, so the Quarto contracts use short temporary paths.
+      - name: Test quarto contracts
+        if: matrix.profile == 'quarto'
+        uses: ./.github/actions/test-python
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          PYTEST_ADDOPTS: --basetemp=${{ runner.temp }}/p
+        with:
+          profile: quarto
           python-version: "3.12"
 
   installed-package:
