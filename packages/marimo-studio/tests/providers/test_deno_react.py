@@ -10,6 +10,8 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from marimo_studio.view_providers._bundled import _deno
+from marimo_studio.view_providers._bundled._deno import cache as _deno_cache
+from marimo_studio.view_providers._bundled._deno import runtime as _deno_runtime
 from marimo_studio.view_providers._bundled.deno_react import build as _react_build
 from marimo_studio.view_providers._bundled.deno_react import provider as react_provider
 from marimo_studio.view_providers._host import provider_registry
@@ -302,6 +304,34 @@ def test_react_points_an_unadded_package_to_the_dependency_workflow(
     assert [item.code for item in report.diagnostics] == ["react-check-failed"]
     assert "vega-embed" in report.diagnostics[0].message
     assert "AGENTS.md" in report.diagnostics[0].hint
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_react_points_a_failed_package_download_to_the_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The project's own cache starts empty, and the proxy refuses connections,
+    # so Deno must download packages and fails. Deno routes through ALL_PROXY
+    # before HTTPS_PROXY, so an inherited ALL_PROXY must not apply.
+    monkeypatch.setattr(
+        _deno_runtime, "ensure_cache_directory", _deno_cache.ensure_cache_directory
+    )
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    for name in ("ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    _root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+
+    inspection = _inspect(react_provider, project)
+
+    assert [item.code for item in inspection.diagnostics] == [
+        "provider-analysis-failed"
+    ]
+    assert "Failed caching npm package" in inspection.diagnostics[0].message
+    assert "network connection" in inspection.diagnostics[0].hint
 
 
 @pytest.mark.skipif(

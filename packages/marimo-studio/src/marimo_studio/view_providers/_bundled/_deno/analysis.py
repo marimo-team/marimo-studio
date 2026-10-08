@@ -68,6 +68,9 @@ def _analysis_failure(message: str) -> SourceAnalysis:
                 code="provider-analysis-failed",
                 severity="error",
                 message=message,
+                hint=_deno.DOWNLOAD_FAILURE_HINT
+                if _deno.download_failed(message)
+                else "",
             ),
         ),
         (),

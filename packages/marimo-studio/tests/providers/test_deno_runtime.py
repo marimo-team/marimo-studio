@@ -486,3 +486,17 @@ def test_public_asset_merge_stops_at_the_combined_output_limit(
         copy_public_assets(work, output)
 
     assert visited == 2
+
+
+def test_bundle_download_failure_points_to_the_network() -> None:
+    diagnostic = _deno_project.failure(
+        "React provider",
+        "react-build-failed",
+        "bundle source",
+        "error: failed to download esbuild package tarball @esbuild/linux-x64@0.25.5 "
+        "from https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.25.5.tgz\n"
+        "Caused by:\n    0: error reading a body from connection",
+    )
+
+    assert "network connection" in diagnostic.hint
+    assert "AGENTS.md" not in diagnostic.hint
