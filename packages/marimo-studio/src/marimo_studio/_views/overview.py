@@ -102,9 +102,7 @@ def overview(
                 path=view.root,
                 default=name == definition.default_view,
                 provider=view.provider,
-                documents=tuple(
-                    item.path.as_posix() for item in inspection.editor_documents
-                ),
+                documents=tuple(item.path.as_posix() for item in inspection.documents),
                 artifact_revision=(
                     artifact.artifact_revision if artifact is not None else None
                 ),

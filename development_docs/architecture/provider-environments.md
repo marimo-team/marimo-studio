@@ -91,7 +91,7 @@ activated environment.
 Provider keys use `distribution/entry-point` form. Studio derives the owning
 distribution from that key without importing it.
 
-Bundled providers map to these launch requirements:
+Built-in providers map to these launch requirements:
 
 | Provider                | Bootstrap requirement |
 | ----------------------- | --------------------- |
@@ -105,7 +105,7 @@ metadata raises `dependency-error` with the distribution name.
 Studio combines requirements in this order:
 
 1. Start with the invoking `marimo-studio==<version>` requirement.
-2. Add extras required by bundled providers.
+2. Add extras required by built-in providers.
 3. Collect the target's active requirement for every external provider.
 4. Apply [PEP 508](https://peps.python.org/pep-0508/) environment markers,
    which condition dependencies on Python or platform properties.
@@ -159,7 +159,7 @@ becomes a bounded `process-output` warning.
 
 ## Provider execution
 
-The registry loads bundled providers in process. Installed third-party
+The registry loads built-in providers in process. Installed third-party
 providers run each `availability`, `starters`, `create`, `inspect`, and `build`
 operation in an owned worker process.
 
@@ -189,7 +189,7 @@ current user's filesystem, process, environment, and network authority.
 
 ## Contract tests
 
-- Compose PEP 723 and project dependencies for bundled and external providers.
+- Compose PEP 723 and project dependencies for built-in and external providers.
 - Cover markers, extras, exact pins, ranges, direct URLs, uv sources, and
   conflict cases.
 - Verify frozen project execution and editable checkout selection.

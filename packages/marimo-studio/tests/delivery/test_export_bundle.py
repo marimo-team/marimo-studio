@@ -118,7 +118,7 @@ def test_export_view_writes_a_complete_static_bundle(
     assert config["showCellLogs"] is load_studio(notebook_path).show_cell_logs
     assert config["projectionTargets"]["cells"]["cell-2"]["status"] == "ready"
     assert config["projectionTargets"]["variables"]["doubled"]["status"] == "ready"
-    assert {site["kind"] for site in config["mounts"]} == {
+    assert {site["kind"] for site in config["sites"]} == {
         "cell",
         "output",
         "value",

@@ -7,7 +7,7 @@ executable cell and dependency information.
 
 The registry validates the requested runtime against workspace configuration
 and returns a common projection record. Changing execution environment does
-not change the published artifact or the meaning of its notebook mounts.
+not change the published artifact or the meaning of its projection sites.
 """
 
 from __future__ import annotations

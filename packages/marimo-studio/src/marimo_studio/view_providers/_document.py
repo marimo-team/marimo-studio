@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from marimo_studio.errors import ViewProjectError
-from marimo_studio.view_providers._css_resources import css_resource_urls
-from marimo_studio.view_providers._mounts import MOUNT_ATTRIBUTE
-from marimo_studio.view_providers._targets import parse_value_target
+from marimo_export.values import ValueSelector
 
-_PROJECTION_USAGE_HINT = (
+from marimo_studio.errors import ViewProjectError
+from marimo_studio.view_providers._artifact_sites import SITE_ATTRIBUTE
+from marimo_studio.view_providers._css_resources import css_resource_urls
+
+PROJECTION_USAGE_HINT = (
     'Use <marimo-cell name="..."> for a complete cell display, '
     '<marimo-output value="..."> for one Python object, or mo-value="..." '
     "when browser code needs JSON-compatible data."
@@ -38,14 +39,15 @@ _VOID_ELEMENTS = {
 
 
 @dataclass(frozen=True)
-class HTMLMountDeclaration:
-    """One normalized projection declaration and its UTF-8 insertion offset."""
+class HTMLHost:
+    """One projection host and its UTF-8 insertion offset."""
 
     kind: Literal["cell", "output", "value"]
     target: str
     position: tuple[int, int]
     insertion_offset: int
     allow: str | None = None
+    accept: str | None = None
 
 
 @dataclass(frozen=True)
@@ -211,9 +213,10 @@ def _srcset_urls(source: str) -> tuple[str, ...]:
 class HTMLDocumentParser(HTMLParser):
     """Collect projection hosts and enforce the replaceable shell boundary."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, resources: bool = True) -> None:
         super().__init__()
-        self.mounts: list[HTMLMountDeclaration] = []
+        self._resources = resources
+        self.hosts: list[HTMLHost] = []
         self.resources: list[HTMLResource] = []
         self.local_resources: list[HTMLResource] = []
         self.inline_scripts: list[HTMLInlineScript] = []
@@ -226,7 +229,7 @@ class HTMLDocumentParser(HTMLParser):
         self.has_reserved_runtime_markup = False
         self.canonical_head_order = True
         self._document_phase = "before-html"
-        self.authored_mount_declaration_position: tuple[int, int] | None = None
+        self.authored_site_attribute_position: tuple[int, int] | None = None
         self.authored_source_revision_position: tuple[int, int] | None = None
         self.import_map_position: tuple[int, int] | None = None
         self.base_href_position: tuple[int, int] | None = None
@@ -296,7 +299,11 @@ class HTMLDocumentParser(HTMLParser):
                 line, column = self.getpos()
                 self.inline_scripts.append(HTMLInlineScript(data, (line, column + 1)))
             return
-        if not self._open_tags or self._open_tags[-1][0] != "style":
+        if (
+            not self._resources
+            or not self._open_tags
+            or self._open_tags[-1][0] != "style"
+        ):
             return
         line, column = self.getpos()
         resource_line = line
@@ -359,7 +366,7 @@ class HTMLDocumentParser(HTMLParser):
             self._inline_script = (
                 "src" not in attributes and script_type in _EXECUTABLE_SCRIPT_TYPES
             )
-        inline_style = attributes.get("style")
+        inline_style = attributes.get("style") if self._resources else None
         if inline_style is not None:
             for value, _ in css_resource_urls(inline_style):
                 resource = HTMLResource(tag, "style", value, position)
@@ -367,7 +374,7 @@ class HTMLDocumentParser(HTMLParser):
                 if _resource_is_local(value, position):
                     self.local_resources.append(resource)
         responsive_attribute = "imagesrcset" if tag == "link" else "srcset"
-        responsive = attributes.get(responsive_attribute)
+        responsive = attributes.get(responsive_attribute) if self._resources else None
         if responsive is not None:
             for value in _srcset_urls(responsive):
                 resource = HTMLResource(
@@ -379,15 +386,15 @@ class HTMLDocumentParser(HTMLParser):
                 self.resources.append(resource)
                 if _resource_is_local(value, position):
                     self.local_resources.append(resource)
-        fetched = _FETCHED_ATTRIBUTES.get(tag, ())
-        if tag in _FETCHED_SVG_HREF_TAGS:
+        fetched = _FETCHED_ATTRIBUTES.get(tag, ()) if self._resources else ()
+        if self._resources and tag in _FETCHED_SVG_HREF_TAGS:
             fetched = (*fetched, "href", "xlink:href")
         relations: set[str] = set()
         if tag == "link":
             relations = {
                 item.casefold() for item in (attributes.get("rel") or "").split()
             }
-            if relations & _FETCHED_LINK_RELATIONS:
+            if self._resources and relations & _FETCHED_LINK_RELATIONS:
                 fetched = ("href",)
         for attribute in fetched:
             value = attributes.get(attribute)
@@ -409,10 +416,10 @@ class HTMLDocumentParser(HTMLParser):
             if _resource_is_local(value, position):
                 self.local_resources.append(resource)
         if (
-            MOUNT_ATTRIBUTE in attributes
-            and self.authored_mount_declaration_position is None
+            SITE_ATTRIBUTE in attributes
+            and self.authored_site_attribute_position is None
         ):
-            self.authored_mount_declaration_position = position
+            self.authored_site_attribute_position = position
         if (
             "data-marimo-studio-source-revision" in attributes
             and self.authored_source_revision_position is None
@@ -445,7 +452,7 @@ class HTMLDocumentParser(HTMLParser):
                     "<marimo-cell> requires a non-empty name.",
                     line=line,
                     column=column + 1,
-                    hint=_PROJECTION_USAGE_HINT,
+                    hint=PROJECTION_USAGE_HINT,
                 )
             declarations.append(("cell", alias.strip()))
         if "mo-value" in attributes:
@@ -455,17 +462,17 @@ class HTMLDocumentParser(HTMLParser):
                     "mo-value requires a non-empty selector.",
                     line=line,
                     column=column + 1,
-                    hint=_PROJECTION_USAGE_HINT,
+                    hint=PROJECTION_USAGE_HINT,
                 )
             try:
-                reference = parse_value_target(source)
+                selector = ValueSelector(source.strip())
             except ValueError as error:
                 raise ViewProjectError(
                     f"Invalid mo-value reference {source!r} at line {line}: {error}",
                     line=line,
                     column=column + 1,
                 ) from error
-            declarations.append(("value", reference.source))
+            declarations.append(("value", selector.source))
         if tag == "marimo-output":
             source = attributes.get("value")
             if source is None:
@@ -473,23 +480,23 @@ class HTMLDocumentParser(HTMLParser):
                     "<marimo-output> requires a non-empty value.",
                     line=line,
                     column=column + 1,
-                    hint=_PROJECTION_USAGE_HINT,
+                    hint=PROJECTION_USAGE_HINT,
                 )
             try:
-                reference = parse_value_target(source)
+                selector = ValueSelector(source.strip())
             except ValueError as error:
                 raise ViewProjectError(
                     f"Invalid marimo-output value {source!r} at line {line}: {error}",
                     line=line,
                     column=column + 1,
                 ) from error
-            declarations.append(("output", reference.source))
+            declarations.append(("output", selector.source))
         if len(declarations) > 1:
             raise ViewProjectError(
                 "One element cannot declare more than one projection kind.",
                 line=line,
                 column=column + 1,
-                hint=_PROJECTION_USAGE_HINT,
+                hint=PROJECTION_USAGE_HINT,
             )
         if declarations:
             if any(is_projection for _, _, is_projection in self._open_tags):
@@ -500,8 +507,8 @@ class HTMLDocumentParser(HTMLParser):
                     column=column + 1,
                 )
             kind, target = declarations[0]
-            self.mounts.append(
-                HTMLMountDeclaration(
+            self.hosts.append(
+                HTMLHost(
                     kind,
                     target,
                     position,
@@ -511,6 +518,7 @@ class HTMLDocumentParser(HTMLParser):
                         if "data-marimo-allow" in attributes
                         else None
                     ),
+                    (attributes["accept"] or "") if "accept" in attributes else None,
                 )
             )
         if self_closing:
@@ -581,4 +589,8 @@ def validate_html_document(
         raise ViewProjectError(
             f'{source}: expected one element with id="app-shell"',
             source=source,
+            hint=(
+                'Wrap the page content in one <div id="app-shell"> and keep every '
+                "projection host inside it."
+            ),
         )

@@ -42,7 +42,7 @@ def _run_worker(request_path: Path, response_path: Path) -> int:
                 notebook,
                 cell_ids=request["cell_ids"],
                 value_selector_groups=request["value_selector_groups"],
-                output_selector_groups=request["output_selector_groups"],
+                output_groups=request["output_groups"],
                 show_tracebacks=request["show_tracebacks"],
                 timeout=request["timeout"],
                 max_json_bytes=request["max_json_bytes"],

@@ -2,7 +2,7 @@
 
 A project revision combines the view name, provider package identity, provider
 build semantics, explicit view options, ``view.toml``, and every file in the
-bounded input scope returned by inspection. Generated artifact state stays
+bounded build inputs returned by inspection. Generated artifact state stays
 outside that identity, so a build output cannot make its own source appear
 changed.
 
@@ -27,7 +27,7 @@ from types import MappingProxyType
 from typing import BinaryIO, cast
 
 from marimo_studio._artifacts.limits import (
-    PROJECT_INPUT_BUDGET,
+    BUILD_INPUT_BUDGET,
     FileBudgetTracker,
 )
 from marimo_studio._artifacts.paths import (
@@ -41,8 +41,8 @@ from marimo_studio._filesystem.tree import bounded_tree_entries
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
+    BuildInput,
     JsonValue,
-    ProjectInput,
     ProjectInspection,
     ViewProject,
 )
@@ -59,7 +59,7 @@ class ProjectSnapshot:
 
 
 @dataclass(frozen=True)
-class ProjectInputFileState:
+class BuildInputFileState:
     device: int
     inode: int
     mode: int
@@ -69,9 +69,9 @@ class ProjectInputFileState:
 
 
 @dataclass(frozen=True)
-class ProjectInputState:
+class BuildInputState:
     paths: tuple[PurePosixPath, ...]
-    files: Mapping[PurePosixPath, ProjectInputFileState]
+    files: Mapping[PurePosixPath, BuildInputFileState]
     directories: Mapping[PurePosixPath, tuple[int, int, int, str]]
     absent: tuple[PurePosixPath, ...]
 
@@ -79,7 +79,7 @@ class ProjectInputState:
 @dataclass(frozen=True)
 class ProjectRevisionSnapshot:
     revision: str
-    state: ProjectInputState
+    state: BuildInputState
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ class ProjectSourceSnapshot:
     revision: str | None
     files: Mapping[PurePosixPath, str | None]
     inspection: ProjectInspection
-    state: ProjectInputState
+    state: BuildInputState
 
 
 def project_source_snapshot(
@@ -98,28 +98,25 @@ def project_source_snapshot(
     """Capture bounded build inputs and authored documents, including missing files."""
     scope = replace(
         inspection,
-        input_scope=tuple(
+        inputs=tuple(
             dict.fromkeys(
                 (
-                    *inspection.input_scope,
-                    ProjectInput(_manifest_path(project), "file"),
-                    *(
-                        ProjectInput(item.path, "file")
-                        for item in inspection.editor_documents
-                    ),
+                    *inspection.inputs,
+                    BuildInput(_manifest_path(project), "file"),
+                    *(BuildInput(item.path, "file") for item in inspection.documents),
                 )
             )
         ),
     )
-    before = project_input_state(project, scope, allow_missing_manifest=True)
+    before = build_input_state(project, scope, allow_missing_manifest=True)
     build_paths = project_input_paths(project, inspection)
-    budget = FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project sources")
+    budget = FileBudgetTracker(BUILD_INPUT_BUDGET, "View project sources")
     budget.require_count(len(before.paths) + len(before.absent))
     digests = {
         path: _capture_entry(project.root, _input_entry(project, path), budget)
         for path in before.paths
     }
-    after = project_input_state(project, scope, allow_missing_manifest=True)
+    after = build_input_state(project, scope, allow_missing_manifest=True)
     if before != after:
         raise ConfigurationError(
             f"View project {project.name!r} changed while its sources were inspected"
@@ -144,9 +141,7 @@ def _input_entry(project: ViewProject, value: PurePosixPath) -> _InputEntry:
         "View project input path",
     )
     if relative.parts[0] == ".artifacts":
-        raise ConfigurationError(
-            "View project inputs must not include artifact control files"
-        )
+        raise ConfigurationError("Build inputs must not include artifact control files")
     return relative, project.root.joinpath(*relative.parts), "View project input"
 
 
@@ -231,7 +226,7 @@ def project_input_paths(
     project: ViewProject,
     inspection: ProjectInspection,
 ) -> tuple[PurePosixPath, ...]:
-    """Enumerate one provider input scope through Studio's file budget."""
+    """Enumerate a provider's build inputs through Studio's file budget."""
     return _input_catalog(project, inspection)[0]
 
 
@@ -246,7 +241,7 @@ def _input_catalog(
     directories: set[PurePosixPath] = set()
     absent: set[PurePosixPath] = set()
     seen_entries: set[Path] = set()
-    for item in inspection.input_scope:
+    for item in inspection.inputs:
         target = project.root.joinpath(*item.path.parts)
         if not target.exists() and not target.is_symlink():
             absent.add(item.path)
@@ -257,8 +252,8 @@ def _input_catalog(
         directories.add(item.path)
         discovered = bounded_tree_entries(
             target,
-            max_entries=PROJECT_INPUT_BUDGET.max_files,
-            label="View project inputs",
+            max_entries=BUILD_INPUT_BUDGET.max_files,
+            label="Build inputs",
             excluded_paths=(artifact_root(project),),
             seen=seen_entries,
             cancelled=(
@@ -269,13 +264,11 @@ def _input_catalog(
             relative = PurePosixPath(entry.path.relative_to(project.root).as_posix())
             if entry.kind == "symlink":
                 raise ConfigurationError(
-                    f"View project inputs contain a symlink: {entry.path}"
+                    f"Build inputs contain a symlink: {entry.path}"
                 )
             (directories if entry.kind == "directory" else paths).add(relative)
     ordered = tuple(sorted(paths, key=PurePosixPath.as_posix))
-    FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project inputs").require_count(
-        len(ordered)
-    )
+    FileBudgetTracker(BUILD_INPUT_BUDGET, "Build inputs").require_count(len(ordered))
     return (
         ordered,
         tuple(sorted(directories, key=PurePosixPath.as_posix)),
@@ -302,13 +295,13 @@ def _entry_state(tree: FileTree, path: Path) -> os.stat_result:
     return state
 
 
-def project_input_state(
+def build_input_state(
     project: ViewProject,
     inspection: ProjectInspection,
     *,
-    observed: ProjectInputState | None = None,
+    observed: BuildInputState | None = None,
     allow_missing_manifest: bool = False,
-) -> ProjectInputState:
+) -> BuildInputState:
     """Capture bounded input metadata without reading file contents."""
     tree = FileTree(project.root)
     if observed is None:
@@ -353,13 +346,13 @@ def project_input_state(
             state.st_mode,
             hashlib.sha256(b"\0".join(names)).hexdigest(),
         )
-    states: dict[PurePosixPath, ProjectInputFileState] = {}
+    states: dict[PurePosixPath, BuildInputFileState] = {}
     for relative in paths:
         path = project.root.joinpath(*relative.parts)
         state = _entry_state(tree, path)
         if not stat.S_ISREG(state.st_mode):
             raise ConfigurationError(f"View project input is not a file: {path}")
-        states[relative] = ProjectInputFileState(
+        states[relative] = BuildInputFileState(
             state.st_dev,
             state.st_ino,
             state.st_mode,
@@ -367,7 +360,7 @@ def project_input_state(
             state.st_mtime_ns,
             state.st_ctime_ns,
         )
-    return ProjectInputState(
+    return BuildInputState(
         paths, MappingProxyType(states), MappingProxyType(directories), absent
     )
 
@@ -382,7 +375,7 @@ def project_revision_snapshot(
     expected_state_paths = tuple(
         sorted({*revision_paths, _manifest_path(project)}, key=PurePosixPath.as_posix)
     )
-    before = project_input_state(project, inspection)
+    before = build_input_state(project, inspection)
     if before.paths != expected_state_paths:
         raise ConfigurationError(
             f"View project {project.name!r} changed while its inputs were captured"
@@ -393,7 +386,7 @@ def project_revision_snapshot(
         provenance,
         input_paths=revision_paths,
     )
-    after = project_input_state(project, inspection)
+    after = build_input_state(project, inspection)
     if before != after:
         raise ConfigurationError(
             f"View project {project.name!r} changed while its inputs were captured"
@@ -415,7 +408,7 @@ def project_revision(
         else tuple(sorted(set(input_paths), key=PurePosixPath.as_posix))
     )
     entries = tuple(_input_entry(project, path) for path in paths)
-    budget = FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project inputs")
+    budget = FileBudgetTracker(BUILD_INPUT_BUDGET, "Build inputs")
     budget.require_count(len(entries))
     input_digests: dict[PurePosixPath, bytes] = {}
     for entry in entries:
@@ -433,9 +426,9 @@ def snapshot_project(
     tree = FileTree(project.root)
     tree.ensure_directory(snapshot_root)
     manifest_relative = _manifest_path(project)
-    before = project_input_state(project, inspection)
+    before = build_input_state(project, inspection)
     entries = tuple(_input_entry(project, path) for path in before.paths)
-    budget = FileBudgetTracker(PROJECT_INPUT_BUDGET, "View project inputs")
+    budget = FileBudgetTracker(BUILD_INPUT_BUDGET, "Build inputs")
     budget.require_count(len(entries))
     input_digests: dict[PurePosixPath, bytes] = {}
     for relative, source, label in entries:
@@ -461,7 +454,7 @@ def snapshot_project(
             )
         ),
     )
-    after = project_input_state(project, inspection)
+    after = build_input_state(project, inspection)
     if before != after:
         raise ConfigurationError(
             f"View project {project.name!r} changed while its snapshot was captured"

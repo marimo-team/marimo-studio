@@ -49,8 +49,46 @@ target enters `data-state="error"` with diagnostic code
 <marimo-output value="chart"></marimo-output>
 ```
 
-`value` selects a Python value. marimo renders the selected object through its
-native output renderer and keeps the result current when its producer reruns.
+`value` selects a Python value, so assign the figure or object to a notebook
+variable, such as `chart = plot_revenue(rows)`. marimo renders the selected
+object through its native output renderer and keeps the result current when its
+producer reruns.
+
+`accept` shows the value as an image instead. List image types in order of
+preference, separated by spaces or commas:
+
+```html
+<marimo-output value="chart" accept="image/svg+xml image/png"></marimo-output>
+```
+
+Studio renders the value in the first listed type it supports through
+marimo-export's
+[`represent()`](https://marimo-team.github.io/marimo-export/reference/python/values).
+The notebook's own output settings stay unchanged, so the notebook can show a
+PNG while the page shows a sharp SVG.
+
+- A page host accepts `image/svg+xml`, `image/png`, `image/jpeg`, and
+  `image/gif`, the images marimo's output renderer shows.
+- A matplotlib figure or axes renders as SVG or PNG. A PNG displays at the size
+  marimo shows the figure, with twice the pixels, so it stays sharp on
+  high-density screens.
+- An Altair chart renders as SVG or PNG with `vl-convert-python`. The Browser
+  runtime has no `vl-convert-python`, so leave `accept` off to show the
+  interactive chart there. Read the chart itself, not a `mo.ui.altair_chart`
+  wrapper.
+- Other values use their display methods.
+- A figure keeps the style it was drawn with, including the dark style marimo
+  applies when the editor uses its dark theme.
+
+A value without an accepted type puts the host in `data-state="error"` with
+code `output-media-unavailable`. Studio reads `accept` when it builds the view,
+so a script that changes the attribute later has no effect.
+
+A view reads each output target in one form. Every literal host that names a
+target in `value` lists the same media types. A different list reports `output-accept-conflict` at its source
+location. A host with `data-marimo-allow="*"` shows each target in the form
+its literal hosts declare, and an `accept` on that host reports
+`projection-accept-invalid`.
 
 One presentation can mount an output target once. A second host for the same
 target enters `data-state="error"` with diagnostic code
@@ -99,8 +137,11 @@ lookup["north-region"]
 
 The root uses Python identifier syntax. Dot selection rejects names that start
 with `_`. Bracket indexes must be JavaScript safe integers. A selector may
-contain at most 64 path steps and 4,096 UTF-8 bytes. See [Limits](limits.md) for
-the complete projection budget.
+contain at most 64 path steps and 4,096 UTF-8 bytes. Studio parses selectors
+with marimo-export's
+[`ValueSelector`](https://marimo-team.github.io/marimo-export/reference/python/values#valueselector),
+so a view and a Prepared export accept the same selectors. See
+[Limits](limits.md) for the complete projection budget.
 
 ### Value codecs
 
@@ -176,13 +217,14 @@ for the presentation.
 
 ## Authored sites and dynamic targets
 
-A view provider records each authored projection as a mount declaration. A
-build adds `data-marimo-studio-site` to the corresponding artifact host. View
-source should leave that attribute to the provider build.
+A view provider reports each authored projection host as a projection site.
+Studio adds `data-marimo-studio-site` to the host in the build snapshot, and
+the attribute carries the site into the built page. Leave that attribute to
+Studio.
 
-A mount with a finite `allowed_targets` set can request those targets. A mount
-with `allowed_targets=None` permits a dynamic target of the declared kind.
-Bundled React and Svelte providers infer finite targets from literals and
+A site with a finite target set can request those targets. A site with targets
+`"*"` permits a dynamic target of the declared kind.
+Built-in React and Svelte providers infer finite targets from literals and
 bounded constant expressions. Add `data-marimo-allow="*"` when a framework
 expression intentionally selects its target at runtime:
 

@@ -1,0 +1,56 @@
+"""Create a notebook HTML view populated with native Marimo displays."""
+
+from __future__ import annotations
+
+import html
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import (
+    PackagedStarter,
+    ProviderStarter,
+    StarterContext,
+    StarterMarkers,
+)
+
+
+def _markers(context: StarterContext) -> StarterMarkers:
+    targets = context.output_cells
+    return StarterMarkers(
+        values={
+            "__NOTEBOOK_CELL_HOSTS_HTML__": "\n".join(
+                f'    <marimo-cell name="{html.escape(target.target, quote=True)}"'
+                "></marimo-cell>"
+                for target in targets
+            )
+        },
+        cell_targets=targets,
+    )
+
+
+starter = PackagedStarter(
+    info=ProviderStarter(
+        key="default",
+        title="Observable Notebook Kit",
+        summary=(
+            "An Observable notebook page with every notebook output in place, "
+            "plus a generator that reads live notebook values."
+        ),
+        documents=tuple(
+            PurePosixPath(path)
+            for path in (
+                "AGENTS.md",
+                "src/index.html",
+                "src/page.tmpl",
+                "src/style.css",
+                "src/lib/marimo-value.js",
+                "src/lib/studio-notebook.ts",
+                "package.json",
+                "deno.json",
+                "vite.config.ts",
+                "deno.lock",
+            )
+        ),
+    ),
+    package=__name__,
+    markers=_markers,
+)

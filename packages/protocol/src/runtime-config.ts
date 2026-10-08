@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import {
-  mountDeclarationSchema,
+  artifactSiteSchema,
   projectionPolicySchema,
   projectionTargetsSchema,
   runtimeBindingsSchema,
@@ -79,7 +79,7 @@ const runtimeConfigFields = {
     .optional(),
   showCellLogs: z.boolean(),
   projectionTargets: projectionTargetsSchema,
-  mounts: z.array(mountDeclarationSchema),
+  sites: z.array(artifactSiteSchema),
   projectionPolicy: projectionPolicySchema,
   runtimeBindings: runtimeBindingsSchema,
   diagnostics: z.array(projectionDiagnosticSchema),

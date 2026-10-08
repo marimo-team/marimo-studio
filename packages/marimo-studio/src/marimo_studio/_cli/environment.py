@@ -63,7 +63,7 @@ from marimo_studio._workspace.python_project import (
 )
 from marimo_studio.errors import ConfigurationError, DependencyError
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_REQUIREMENTS,
+    BUILTIN_PROVIDER_REQUIREMENTS,
 )
 
 SANDBOX_ENV = "MARIMO_STUDIO_SANDBOX_BOOTSTRAPPED"
@@ -355,7 +355,7 @@ def _bootstrap_requirements(
     requirements = bootstrap_launch_requirements(
         studio_requirement=f"marimo-studio=={_package_version()}",
         provider_ids=provider_ids,
-        bundled_requirements=BUNDLED_PROVIDER_REQUIREMENTS,
+        builtin_requirements=BUILTIN_PROVIDER_REQUIREMENTS,
         notebook_metadata=notebook_metadata,
         project_metadata=project_metadata,
         marker_environment=marker_environment,
@@ -380,7 +380,9 @@ def _bootstrap_requirements(
     )
 
 
-def _installed_requirement_satisfies(value: str) -> bool:
+def _installed_requirement_satisfies(
+    value: str, seen: frozenset[str] = frozenset()
+) -> bool:
     requirement = Requirement(value)
     if requirement.url is not None:
         return False
@@ -395,32 +397,44 @@ def _installed_requirement_satisfies(value: str) -> bool:
         return False
     if not requirement.extras:
         return True
-    if canonicalize_name(
-        requirement.name
-    ) != _STUDIO_DISTRIBUTION or requirement.extras != {"deno"}:
+    if canonicalize_name(requirement.name) != _STUDIO_DISTRIBUTION:
         return False
     base_environment = {key: str(value) for key, value in default_environment().items()}
     base_environment["extra"] = ""
-    extra_environment = {**base_environment, "extra": "deno"}
+    declared = [Requirement(value) for value in requires(requirement.name) or ()]
     optional = []
-    for value in requires(requirement.name) or ():
-        dependency = Requirement(value)
-        marker = dependency.marker
-        if marker is None or marker.evaluate(
-            environment=base_environment,
-            context="requirement",
-        ):
-            continue
-        if marker.evaluate(
-            environment=extra_environment,
-            context="requirement",
-        ):
-            optional.append(dependency)
-    if not optional:
-        return False
+    for extra in sorted(requirement.extras):
+        extra_environment = {**base_environment, "extra": extra}
+        selected = [
+            dependency
+            for dependency in declared
+            if dependency.marker is not None
+            and not dependency.marker.evaluate(
+                environment=base_environment,
+                context="requirement",
+            )
+            and dependency.marker.evaluate(
+                environment=extra_environment,
+                context="requirement",
+            )
+        ]
+        if not selected:
+            return False
+        optional.extend(selected)
     for dependency in optional:
         if dependency.url is not None:
             return False
+        # An extra such as `recommended` can require Studio's own extras.
+        if (
+            dependency.extras
+            and canonicalize_name(dependency.name) == _STUDIO_DISTRIBUTION
+        ):
+            nested = ",".join(sorted(dependency.extras))
+            if nested in seen or not _installed_requirement_satisfies(
+                str(dependency), seen | {nested}
+            ):
+                return False
+            continue
         try:
             dependency_version = Version(version(dependency.name))
         except PackageNotFoundError:

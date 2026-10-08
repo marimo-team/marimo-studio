@@ -24,13 +24,18 @@ from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildResult,
+    InspectionRequest,
     JsonValue,
     ProjectInspection,
+    ProjectionSite,
     ProviderAvailability,
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
+    SourceDocument,
+    SourceLocation,
     StarterContext,
     StarterPlan,
     ViewProject,
@@ -183,10 +188,10 @@ class _CatalogProvider(ProviderStub):
         if os.environ.get("MARIMO_STUDIO_PROVIDER_BLOCK") == operation:
             threading.Event().wait(30)
 
-    def availability(self, project: ViewProject | None = None):
+    def availability(self):
         self._record("availability")
         self._block("availability")
-        return super().availability(project)
+        return super().availability()
 
     def starters(self):
         self._record("starters")
@@ -223,11 +228,7 @@ class _ContextProvider(ProviderStub):
 
 
 class _EnvironmentProvider(ProviderStub):
-    def availability(
-        self,
-        project: ViewProject | None = None,
-    ) -> ProviderAvailability:
-        del project
+    def availability(self) -> ProviderAvailability:
         key_visible = "_MARIMO_STUDIO_PROJECTION_AUTHORIZATION_KEY" in os.environ
         marker_visible = (
             os.environ.get("MARIMO_STUDIO_PROVIDER_ENV_MARKER") == "visible"
@@ -250,8 +251,8 @@ class _BlockingDescriptionProvider:
         threading.Event().wait(30)
         raise AssertionError("Unreachable")
 
-    def availability(self, project: ViewProject | None = None):
-        return self._provider.availability(project)
+    def availability(self):
+        return self._provider.availability()
 
     def starters(self):
         return self._provider.starters()
@@ -277,6 +278,33 @@ create_tree_provider = _CreateProcessTreeProvider(
     "default",
 )
 delayed_provider = _DelayedProvider("test-process/delayed", "default")
+
+
+class _SitesProvider(ProviderStub):
+    def inspect(self, request: InspectionRequest) -> ProjectInspection:
+        del request
+        card = PurePosixPath("card.txt")
+        return ProjectInspection(
+            documents=(SourceDocument(card, "plaintext", "edit"),),
+            inputs=(
+                BuildInput(card, "file"),
+                BuildInput(PurePosixPath("view.toml"), "file"),
+            ),
+            sites=(
+                ProjectionSite("value", ("total",), SourceLocation(card, 1, 2), 5),
+                ProjectionSite("cell", "*", SourceLocation(card, 2, 1), 9),
+                ProjectionSite(
+                    "output",
+                    ("chart",),
+                    SourceLocation(card, 3, 1),
+                    12,
+                    ("image/svg+xml", "image/png"),
+                ),
+            ),
+        )
+
+
+sites_provider = _SitesProvider("test-process/sites", "default")
 catalog_provider = _CatalogProvider("test-process/catalog", "default")
 context_provider = _ContextProvider("test-process/context", "default")
 environment_provider = _EnvironmentProvider("test-process/environment", "default")
@@ -381,6 +409,20 @@ if __name__ == "__main__":
         "targets": [target.to_dict() for target in context.cell_targets.values()],
     }
     assert plan.cell_targets == tuple(context.cell_targets.values())
+
+
+def test_isolated_provider_round_trips_projection_sites(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    installed = _registry("sites", "sites_provider").get("test-process/sites")
+    project = _project(tmp_path, "test-process/sites")
+    project.root.joinpath("card.txt").write_text("Total\n\n\n", encoding="utf-8")
+
+    inspected = installed.inspect(inspection_request(project))
+
+    assert inspected == sites_provider.inspect(inspection_request(project))
 
 
 def test_create_process_rejects_oversized_request_before_worker_start(

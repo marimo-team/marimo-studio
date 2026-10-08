@@ -181,7 +181,7 @@ marimo-studio view inspect VIEW [--target PATH] [--json]
 ```
 
 Inspects current filesystem content and returns the project `root`, ownership,
-source documents, file revisions, diagnostics, and development publication
+Source documents, file revisions, diagnostics, and development publication
 state. `files_complete` reports whether source and build-input discovery
 completed. `project_revision` identifies current inputs, while
 `published_project_revision` identifies the retained artifact's inputs.
@@ -196,7 +196,7 @@ values.
 marimo-studio view read VIEW DOCUMENT [--target PATH] [--json]
 ```
 
-Reads one authorized UTF-8 source document and its current source revision.
+Reads one authorized UTF-8 Source document and its current source revision.
 
 Use `--json` before editing. The JSON result includes `revision`,
 `catalog_generation`, and `view_generation` from the same source read. Human

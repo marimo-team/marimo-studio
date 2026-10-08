@@ -22,6 +22,7 @@ from marimo_studio.errors import (
     WorkspaceGenerationConflictError,
 )
 from marimo_studio.view_providers import ViewProject
+from marimo_studio.view_providers._artifact_sites import artifact_sites
 from marimo_studio.view_providers._host import provider_registry
 
 
@@ -154,10 +155,10 @@ def test_explicit_mounts_resolve_without_provider_inspection(
     resolved = resolve_studio(
         studio,
         view_name="dashboard",
-        published_mounts={"dashboard": inspection.mounts},
+        published_sites={"dashboard": artifact_sites(inspection.sites)},
     )
 
-    assert resolved.view("dashboard").mounts == inspection.mounts
+    assert resolved.view("dashboard").sites == artifact_sites(inspection.sites)
 
 
 def test_view_mutation_lock_is_reentrant_for_nested_same_thread_owners(

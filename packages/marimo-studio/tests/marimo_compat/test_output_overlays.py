@@ -83,7 +83,7 @@ def test_output_callback_retains_overlay_resources_and_uses_the_output_wire_cont
 
             def read():
                 return renderer.render(
-                    {}, (), (), set(), consumer_id="view", max_output_bytes=10_000
+                    {}, {}, (), {}, consumer_id="view", max_output_bytes=10_000
                 )
 
             first = read()
@@ -130,7 +130,7 @@ def test_kernel_overlays_are_development_outputs(
             assert bridge._activate(context, tmp_path / "notebook.py", None)
             assert bridge._output_renderer is not None
             result = bridge._output_renderer.render(
-                {}, (), (), set(), consumer_id="view", max_output_bytes=10_000
+                {}, {}, (), {}, consumer_id="view", max_output_bytes=10_000
             )
             assert bool(result.overlays) is edit
             bridge._close()

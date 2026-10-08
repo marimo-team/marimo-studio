@@ -170,7 +170,7 @@ def test_bootstrap_requirements_follow_saved_provider_identities() -> None:
     requirements = bootstrap_launch_requirements(
         studio_requirement="marimo-studio==1.2.3",
         provider_ids=("marimo-studio/react", "example-suite/report"),
-        bundled_requirements={
+        builtin_requirements={
             "marimo-studio/react": "marimo-studio[deno]",
         },
         notebook_metadata={
@@ -194,7 +194,7 @@ def test_external_provider_requires_an_active_durable_dependency() -> None:
         bootstrap_launch_requirements(
             studio_requirement="marimo-studio==1.2.3",
             provider_ids=("example-suite/report",),
-            bundled_requirements={},
+            builtin_requirements={},
             notebook_metadata={
                 "dependencies": ['example-suite==4.5.6 ; sys_platform == "win32"'],
             },

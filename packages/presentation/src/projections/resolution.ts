@@ -1,5 +1,5 @@
 import type {
-  MountDeclaration,
+  ArtifactSite,
   ProjectionKind,
   ProjectionRequest,
   ProjectionTarget,
@@ -32,7 +32,7 @@ export interface RuntimeProjectionRequest extends ProjectionRequest {
 
 export interface ResolvedProjection {
   readonly request: RuntimeProjectionRequest;
-  readonly site: MountDeclaration;
+  readonly site: ArtifactSite;
   readonly producer: string;
   readonly producerLabel?: string;
   readonly variable: string | null;
@@ -84,7 +84,7 @@ const failure = (
   request: RuntimeProjectionRequest,
   code: string,
   message: string,
-  site?: MountDeclaration,
+  site?: ArtifactSite,
 ): ProjectionFailure => ({
   ok: false,
   error: {
@@ -154,11 +154,7 @@ const parseSelector = (target: string, maxPathSteps: number): ParsedSelectorResu
           };
         }
         if (!projectionStringIsWellFormed(selectedKey.data)) {
-          return {
-            ok: false,
-            code: PROJECTION_UNPAIRED_SURROGATE_CODE,
-            message: "Projection targets and instance IDs require well-formed Unicode.",
-          };
+          return { ok: false, message: "Bracket object keys must be well-formed Unicode." };
         }
         path.push({ kind: "item", value: selectedKey.data });
         position += consumed + 1;
@@ -195,7 +191,7 @@ const oneProducer = (
   request: RuntimeProjectionRequest,
   target: ProjectionTarget | undefined,
   noun: string,
-  site: MountDeclaration,
+  site: ArtifactSite,
 ): ProducerResolution => {
   const codeNoun = noun === "cell" ? "" : `-${noun}`;
   if (target === undefined) {
@@ -219,6 +215,23 @@ const oneProducer = (
     );
   }
   return { ok: true, value: target };
+};
+
+/** Return the runtime cell that produces a value selector's root variable. */
+export const selectorProducerCell = (
+  config: RuntimeConfig,
+  selector: string,
+): string | undefined => {
+  if (new TextEncoder().encode(selector).length > config.projectionPolicy.maxTargetBytes) {
+    return undefined;
+  }
+  const parsed = parseSelector(selector, config.projectionPolicy.maxPathSteps);
+  const target = parsed.ok
+    ? ownRecordValue(config.projectionTargets.variables, parsed.value.variable)
+    : undefined;
+  return target?.status === "ready"
+    ? ownRecordValue(config.runtimeBindings.cellRefs, target.producer)
+    : undefined;
 };
 
 export const resolveProjection = (
@@ -253,7 +266,7 @@ export const resolveProjection = (
     );
   }
   const matches =
-    context?.site(request.siteId) ?? config.mounts.filter((site) => site.id === request.siteId);
+    context?.site(request.siteId) ?? config.sites.filter((site) => site.id === request.siteId);
   if (matches.length !== 1) {
     return failure(
       request,
@@ -280,11 +293,11 @@ export const resolveProjection = (
       site,
     );
   }
-  if (site.allowedTargets !== null && !site.allowedTargets.includes(request.target)) {
+  if (site.targets !== null && !site.targets.includes(request.target)) {
     return failure(
       request,
       "projection-target-not-allowed",
-      `Projection target ${JSON.stringify(request.target)} is not allowed by this mount. ` +
+      `Projection target ${JSON.stringify(request.target)} is not allowed by this site. ` +
         'Add data-marimo-allow="*" to a host whose target changes at runtime.',
       site,
     );
@@ -342,7 +355,7 @@ export const resolveProjection = (
 interface ProjectionResolutionContext {
   activeIndex(host: Element): number | undefined;
   hosts(): readonly Element[];
-  site(id: string): readonly MountDeclaration[];
+  site(id: string): readonly ArtifactSite[];
   targetRank(kind: ProjectionKind, target: string): number | undefined;
 }
 
@@ -350,8 +363,8 @@ const createProjectionResolutionContext = (
   config: RuntimeConfig,
   root: ParentNode,
 ): ProjectionResolutionContext => {
-  const sites = new Map<string, MountDeclaration[]>();
-  config.mounts.forEach((site) => {
+  const sites = new Map<string, ArtifactSite[]>();
+  config.sites.forEach((site) => {
     const matches = sites.get(site.id) ?? [];
     matches.push(site);
     sites.set(site.id, matches);

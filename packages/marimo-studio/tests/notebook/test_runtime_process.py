@@ -67,7 +67,7 @@ def test_isolated_probe_uses_the_runtime_process_budget(
             tmp_path / "analysis.py",
             cell_ids=("cell",),
             value_selector_groups=(("value",),),
-            output_selector_groups=(("output",),),
+            output_groups=({"output": ()},),
             show_tracebacks=True,
             timeout=42,
             max_json_bytes=1024,
@@ -81,7 +81,7 @@ def test_isolated_probe_uses_the_runtime_process_budget(
         "notebook": str(tmp_path / "analysis.py"),
         "cellIds": ["cell"],
         "valueSelectorGroups": [["value"]],
-        "outputSelectorGroups": [["output"]],
+        "outputGroups": [{"output": []}],
         "showTracebacks": True,
         "timeout": 42,
         "maxJsonBytes": 1024,
@@ -103,7 +103,7 @@ def test_isolated_probe_rejects_an_invalid_timeout(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
                 timeout=timeout,
             )
@@ -121,7 +121,7 @@ def test_isolated_probe_rejects_an_invalid_json_budget(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
                 max_json_bytes=max_json_bytes,
             )
@@ -135,7 +135,7 @@ def test_isolated_probe_rejects_an_oversized_request(tmp_path: Path) -> None:
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(("x" * 262_144,),),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
             )
         )
@@ -160,7 +160,7 @@ def test_isolated_probe_enforces_the_process_request_budget(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
             )
         )
@@ -218,7 +218,7 @@ def test_isolated_probe_runs_request_files_outside_the_event_loop(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
             )
         finally:
@@ -264,7 +264,7 @@ def test_isolated_probe_maps_the_process_deadline_to_the_runtime_budget(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
                 timeout=3,
             )
@@ -311,7 +311,7 @@ def test_isolated_probe_rejects_invalid_process_responses(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
             )
         )
@@ -345,7 +345,7 @@ def test_isolated_probe_does_not_expose_worker_stderr(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
             )
         )
@@ -369,7 +369,7 @@ def test_isolated_probe_rejects_a_changed_source_generation(
                     notebook_path,
                     cell_ids=(),
                     value_selector_groups=(),
-                    output_selector_groups=(),
+                    output_groups=(),
                     show_tracebacks=False,
                     source_generation=generation,
                 )
@@ -402,7 +402,7 @@ def test_cancelled_probe_surfaces_process_tree_cleanup_failure(
                 tmp_path / "analysis.py",
                 cell_ids=(),
                 value_selector_groups=(),
-                output_selector_groups=(),
+                output_groups=(),
                 show_tracebacks=False,
             )
         )

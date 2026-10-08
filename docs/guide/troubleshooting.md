@@ -76,7 +76,7 @@ Repair the source-located diagnostic and build again.
 If another author saved first, compare **Your edits** with **Saved version**.
 Use the reported recovery file before overwriting an uncertain replacement.
 
-## A source document is missing
+## A Source document is missing
 
 The view provider controls the Source catalog. Check `view.toml`, then inspect
 the project. For the Vanilla provider, local CSS and JavaScript appear after
@@ -189,7 +189,7 @@ marimo-studio view build dashboard \
 marimo-studio validate dashboard --target analysis.py
 ```
 
-For a Prepared export, check that every projection mount has finite targets and
+For a Prepared export, check that every projection site has finite targets and
 that `states.yaml` uses accepted frontend values. Increase
 `--prepare-timeout` when the configured state set needs more than 30 seconds
 to execute:

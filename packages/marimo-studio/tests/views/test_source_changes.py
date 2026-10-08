@@ -24,7 +24,7 @@ from marimo_studio._views.publication_hold import (
     release_publication_hold,
 )
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.view_providers import InspectionRequest, ProjectInput
+from marimo_studio.view_providers import BuildInput, InspectionRequest
 from marimo_studio.view_providers._host import provider_registry
 
 from ..app_helpers import created_one_view
@@ -47,13 +47,13 @@ def _watch_only_registry(
             inspection = registered.inspect(request)
             return replace(
                 inspection,
-                editor_documents=(),
-                input_scope=(ProjectInput(watch_root, "directory"),),
-                mounts=(),
+                documents=(),
+                inputs=(BuildInput(watch_root, "directory"),),
+                sites=(),
             )
 
-        def provenance(self, inspection: Any) -> Any:
-            return registered.provenance(inspection)
+        def provenance(self) -> Any:
+            return registered.provenance()
 
     provider = Provider()
     registry = SimpleNamespace(
@@ -122,7 +122,7 @@ def test_publication_hold_release_and_expiry_trigger_reconciliation(
     assert producer.catalog()[2] == project_revision
 
 
-def test_catalog_watches_editor_documents_outside_build_inputs(
+def test_catalog_watches_source_documents_outside_build_inputs(
     notebook_path: Path,
 ) -> None:
     studio = created_one_view(notebook_path)
@@ -235,10 +235,10 @@ def test_source_scan_counts_directories_toward_its_entry_limit(
     for index in range(3):
         (watched / f"empty-{index}").mkdir()
     budget = SimpleNamespace(
-        max_file_bytes=source_changes.PROJECT_INPUT_BUDGET.max_file_bytes,
+        max_file_bytes=source_changes.BUILD_INPUT_BUDGET.max_file_bytes,
         max_files=3,
     )
-    monkeypatch.setattr(source_changes, "PROJECT_INPUT_BUDGET", budget)
+    monkeypatch.setattr(source_changes, "BUILD_INPUT_BUDGET", budget)
 
     with pytest.raises(ConfigurationError, match="more than 3 entries"):
         producer.poll()
@@ -301,7 +301,7 @@ def test_windows_stamp_uses_metadata_for_an_oversized_sparse_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "large.bin"
-    size = source_changes.PROJECT_INPUT_BUDGET.max_file_bytes + 1
+    size = source_changes.BUILD_INPUT_BUDGET.max_file_bytes + 1
     with source.open("wb") as stream:
         stream.truncate(size)
 
@@ -328,7 +328,7 @@ def test_changed_file_details_ignore_unadvertised_watch_root_files(
     )
     opaque = project.root / "opaque.bin"
     with opaque.open("wb") as stream:
-        stream.truncate(source_changes.PROJECT_INPUT_BUDGET.max_file_bytes + 1)
+        stream.truncate(source_changes.BUILD_INPUT_BUDGET.max_file_bytes + 1)
     monkeypatch.setattr(
         source_changes,
         "digest_secure_file",
@@ -485,8 +485,8 @@ def test_inspection_failure_keeps_a_repair_watch(
                 raise ValueError("source is temporarily invalid")
             return registered.inspect(cast(Any, selected))
 
-        def provenance(self, inspection: Any) -> Any:
-            return registered.provenance(inspection)
+        def provenance(self) -> Any:
+            return registered.provenance()
 
     registry = SimpleNamespace(
         get=lambda _selected: Provider(),
@@ -523,8 +523,8 @@ def test_failed_reinspection_invalidates_the_previous_catalog(
                 raise ValueError("source is temporarily invalid")
             return registered.inspect(cast(Any, selected))
 
-        def provenance(self, inspection: Any) -> Any:
-            return registered.provenance(inspection)
+        def provenance(self) -> Any:
+            return registered.provenance()
 
     registry = SimpleNamespace(
         get=lambda _selected: Provider(),
@@ -532,7 +532,7 @@ def test_failed_reinspection_invalidates_the_previous_catalog(
     )
     monkeypatch.setattr(source_changes, "provider_registry", lambda: registry)
     producer = SourceChangeProducer(studio, project.name)
-    assert producer.catalog()[1].editor_documents
+    assert producer.catalog()[1].documents
 
     fail = True
     source.write_text(
@@ -549,4 +549,4 @@ def test_failed_reinspection_invalidates_the_previous_catalog(
         encoding="utf-8",
     )
     assert producer.poll() is not None
-    assert producer.catalog()[1].editor_documents
+    assert producer.catalog()[1].documents

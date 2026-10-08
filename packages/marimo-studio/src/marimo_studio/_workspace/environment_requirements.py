@@ -335,7 +335,7 @@ def bootstrap_launch_requirements(
     *,
     studio_requirement: str,
     provider_ids: Iterable[str],
-    bundled_requirements: Mapping[str, str],
+    builtin_requirements: Mapping[str, str],
     notebook_metadata: Mapping[str, object],
     project_metadata: Mapping[str, object] | None,
     marker_environment: MarkerEnvironment | None,
@@ -357,18 +357,18 @@ def bootstrap_launch_requirements(
         distribution, separator, _registration = provider_id.partition("/")
         if not separator:
             raise ConfigurationError(f"Invalid view provider identity: {provider_id!r}")
-        bundled = bundled_requirements.get(provider_id)
-        if bundled is not None:
-            requirement = Requirement(bundled)
+        declared = builtin_requirements.get(provider_id)
+        if declared is not None:
+            requirement = Requirement(declared)
             if canonicalize_name(requirement.name) != _STUDIO_DISTRIBUTION:
                 raise ConfigurationError(
-                    f"Bundled provider {provider_id!r} has an invalid requirement"
+                    f"Built-in provider {provider_id!r} has an invalid requirement"
                 )
             studio_extras.update(requirement.extras)
             continue
         name = canonicalize_name(distribution)
         if name == _STUDIO_DISTRIBUTION:
-            raise ConfigurationError(f"Unknown bundled view provider {provider_id!r}")
+            raise ConfigurationError(f"Unknown built-in view provider {provider_id!r}")
         external.add(name)
     studio_base = Requirement(_render_requirement(studio_base, studio_extras))
     studio_constraints = tuple(

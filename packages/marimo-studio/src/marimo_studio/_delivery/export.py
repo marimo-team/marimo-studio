@@ -247,8 +247,8 @@ def _wasm_runtime_config(
     cell_refs = resolved.runtime_cell_refs(None)
     paths = _StaticViewPaths.of(view_name, artifact)
     marimo_config = adapters.runtime_config(studio.notebook)
-    targets = projection_targets(resolved.symbols, artifact.mounts)
-    mounts = tuple(site.to_dict() for site in artifact.mounts)
+    targets = projection_targets(resolved.symbols, artifact.sites)
+    sites = tuple(site.to_dict() for site in artifact.sites)
     policy = projection_policy()
     source_revision = _digest(
         notebook_source,
@@ -259,7 +259,7 @@ def _wasm_runtime_config(
         view=view_name,
         runtime_id="wasm",
         runtime_instance=projection.instance,
-        mounts=mounts,
+        sites=sites,
         projection_targets=targets,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
@@ -278,7 +278,7 @@ def _wasm_runtime_config(
         projection_revision=projection_revision,
         show_cell_logs=studio.show_cell_logs,
         projection_targets=targets,
-        mounts=mounts,
+        sites=sites,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
         diagnostics=(),
@@ -336,8 +336,8 @@ def _zero_python_runtime_config(
 ) -> tuple[str, bytes, bytes, _assets.BrowserEntryClosure]:
     cell_refs = resolved.runtime_cell_refs(None)
     paths = _StaticViewPaths.of(view_name, artifact)
-    mounts = tuple(site.to_dict() for site in artifact.mounts)
-    targets = projection_targets(resolved.symbols, artifact.mounts)
+    sites = tuple(site.to_dict() for site in artifact.sites)
+    targets = projection_targets(resolved.symbols, artifact.sites)
     policy = projection_policy()
     projection_revision = runtime_projection_revision(
         source_revision=_digest(
@@ -348,7 +348,7 @@ def _zero_python_runtime_config(
         view=view_name,
         runtime_id="zero-python",
         runtime_instance=publication.instance,
-        mounts=mounts,
+        sites=sites,
         projection_targets=targets,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
@@ -368,7 +368,7 @@ def _zero_python_runtime_config(
         projection_revision=projection_revision,
         show_cell_logs=studio.show_cell_logs,
         projection_targets=targets,
-        mounts=mounts,
+        sites=sites,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
         diagnostics=(),
@@ -674,7 +674,7 @@ def _write_bundle(
             == project_revision(
                 project,
                 inspection,
-                provider_registry().get(project.provider).provenance(inspection),
+                provider_registry().get(project.provider).provenance(),
             )
             and document == lease.read_text(artifact.document)
             and notebook_source == _notebook_text(studio.notebook)
@@ -861,14 +861,14 @@ def _export_to_delivery(
                 studio,
                 notebook_source=notebook_source,
                 view_name=selected,
-                published_mounts={selected: artifact.mounts},
+                published_sites={selected: artifact.sites},
             )
         except MarimoStudioError as error:
             if _file_stamp(studio.notebook) != notebook_stamp:
                 raise _sources_changed() from error
             raise
         _projection_error(resolved, selected)
-        portability = projection_portability(artifact.mounts, runtime)
+        portability = projection_portability(artifact.sites, runtime)
         incompatible = next(
             (item for item in portability if item.status == "incompatible"),
             None,
@@ -891,7 +891,7 @@ def _export_to_delivery(
                     "the Browser runtime."
                 ),
             )
-        if runtime == "zero-python" and artifact.mounts:
+        if runtime == "zero-python" and artifact.sites:
             from marimo_studio._server.presentation.service import PresentationSnapshot
 
             source_revision = _digest(
@@ -906,7 +906,7 @@ def _export_to_delivery(
                 notebook_source=notebook_source,
                 source_revision=source_revision,
                 symbols=resolved.symbols,
-                mounts=artifact.mounts,
+                sites=artifact.sites,
                 revision=_digest(
                     selected,
                     source_revision,

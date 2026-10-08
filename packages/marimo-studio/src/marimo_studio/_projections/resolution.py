@@ -1,7 +1,7 @@
-"""Authorize one concrete mount request against the saved notebook graph.
+"""Authorize one concrete projection request against the saved notebook graph.
 
-Resolution starts from a mount site recorded in the published artifact. It
-checks the requested kind, allowed target, selector syntax, and browser-visible
+Resolution starts from a site recorded in the published artifact. It
+checks the requested kind, site target, selector syntax, and browser-visible
 size limits, then requires one unambiguous source cell or variable. The result
 includes the upstream cells Marimo must execute before that target is ready.
 
@@ -15,28 +15,30 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from marimo_export.values import MAX_SELECTOR_STEPS, ValueSelector
+
 from marimo_studio._notebook.records import CellRef
-from marimo_studio._projections.records import ValuePathStep, ValueReference
 from marimo_studio._projections.symbol_graph import NotebookSymbolGraph
-from marimo_studio._projections.values import (
-    MAX_VALUE_PATH_STEPS,
-    MAX_VALUE_REFERENCE_BYTES,
-    UnpairedUTF16SurrogateError,
-    normalize_utf16_surrogate_pairs,
-    parse_value_reference,
-)
 from marimo_studio.view_providers import (
-    MountDeclaration,
     ProjectionKind,
     SourceLocation,
 )
-from marimo_studio.view_providers._targets import validate_projection_target
+from marimo_studio.view_providers._artifact_sites import ArtifactSite, media_accept
+from marimo_studio.view_providers._targets import (
+    MAX_CELL_TARGETS,
+    MAX_TARGET_BYTES,
+    MAX_VALUE_TARGETS,
+    UnpairedUTF16SurrogateError,
+    normalize_utf16_surrogate_pairs,
+    validate_projection_target,
+)
 
 MAX_PROJECTION_INSTANCE_ID_BYTES = 256
 MAX_ACTIVE_PROJECTION_INSTANCES = 512
-MAX_UNIQUE_CELL_TARGETS = 256
-MAX_UNIQUE_OUTPUT_TARGETS = 100
-MAX_UNIQUE_VALUE_TARGETS = 100
+# One page activates at most as many unique targets as one site may declare.
+MAX_UNIQUE_CELL_TARGETS = MAX_CELL_TARGETS
+MAX_UNIQUE_OUTPUT_TARGETS = MAX_VALUE_TARGETS
+MAX_UNIQUE_VALUE_TARGETS = MAX_VALUE_TARGETS
 PROJECTION_UNPAIRED_SURROGATE_CODE = "projection-unpaired-surrogate"
 
 
@@ -89,10 +91,10 @@ class ProjectionRequest:
                 "projection-instance-id-too-large",
                 "The projection instance ID exceeds the byte limit.",
             )
-        if len(self.target.encode("utf-8")) > MAX_VALUE_REFERENCE_BYTES:
+        if len(self.target.encode("utf-8")) > MAX_TARGET_BYTES:
             raise ProjectionResolutionError(
                 "projection-target-too-large",
-                f"The projection target exceeds {MAX_VALUE_REFERENCE_BYTES} bytes.",
+                f"The projection target exceeds {MAX_TARGET_BYTES} bytes.",
             )
 
     @classmethod
@@ -135,17 +137,9 @@ class ResolvedProjection:
     kind: ProjectionKind
     source: SourceLocation
     producer: CellRef
-    variable: str | None
-    selector_path: tuple[ValuePathStep, ...]
+    selector: ValueSelector | None
     dependency_closure: tuple[CellRef, ...]
-
-    def selector_spec(self) -> tuple[str, tuple[tuple[str, str | int], ...]]:
-        if self.variable is None:
-            raise ValueError("Cell projections do not have selector specs")
-        return (
-            self.variable,
-            tuple((step.kind, step.value) for step in self.selector_path),
-        )
+    accept: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -155,18 +149,19 @@ class ResolvedProjection:
             "target": self.request.target,
             "source": self.source.to_dict(),
             "producer": str(self.producer),
-            "variable": self.variable,
+            "variable": self.selector.root if self.selector is not None else None,
             "selectorPath": [
-                {"kind": step.kind, "value": step.value} for step in self.selector_path
+                {"kind": step.kind, "value": step.key}
+                for step in (self.selector.path if self.selector is not None else ())
             ],
             "dependencyClosure": [str(ref) for ref in self.dependency_closure],
         }
 
 
 def _site_for(
-    sites: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
     request: ProjectionRequest,
-) -> MountDeclaration:
+) -> ArtifactSite:
     matches = tuple(site for site in sites if site.id == request.site_id)
     if len(matches) != 1:
         raise ProjectionResolutionError(
@@ -177,8 +172,8 @@ def _site_for(
     return site
 
 
-def _authorize_target(site: MountDeclaration, target: str) -> None:
-    if site.allowed_targets is not None and target not in site.allowed_targets:
+def _authorize_target(site: ArtifactSite, target: str) -> None:
+    if site.targets is not None and target not in site.targets:
         raise ProjectionResolutionError(
             "projection-target-not-allowed",
             f"Projection target {target!r} is not allowed by the {site.kind} host "
@@ -186,21 +181,21 @@ def _authorize_target(site: MountDeclaration, target: str) -> None:
         )
 
 
-def validate_mount_declaration(site: MountDeclaration) -> None:
+def validate_artifact_site(site: ArtifactSite) -> None:
     """Validate one provider-owned site before it enters a presentation."""
-    targets = site.allowed_targets
+    targets = site.targets
     if targets is None:
         return
     if not targets or len(set(targets)) != len(targets):
         raise ProjectionResolutionError(
-            "projection-mount-invalid",
-            f"Projection mount {site.id!r} has invalid allowed targets.",
+            "projection-site-invalid",
+            f"Projection site {site.id!r} has invalid targets.",
         )
     for target in targets:
-        if not target or len(target.encode("utf-8")) > MAX_VALUE_REFERENCE_BYTES:
+        if not target or len(target.encode("utf-8")) > MAX_TARGET_BYTES:
             raise ProjectionResolutionError(
-                "projection-mount-invalid",
-                f"Projection mount {site.id!r} contains an invalid target.",
+                "projection-site-invalid",
+                f"Projection site {site.id!r} contains an invalid target.",
             )
 
 
@@ -227,12 +222,12 @@ def _unique_ref(
 
 def resolve_projection(
     graph: NotebookSymbolGraph,
-    sites: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
     request: ProjectionRequest,
 ) -> ResolvedProjection:
     """Resolve one target through its artifact site and notebook graph."""
     site = _site_for(sites, request)
-    validate_mount_declaration(site)
+    validate_artifact_site(site)
     if not request.target:
         raise ProjectionResolutionError(
             "projection-target-empty",
@@ -251,7 +246,7 @@ def resolve_projection(
             f"Projection target {request.target!r} is invalid: {error}",
         ) from error
     _authorize_target(site, request.target)
-    reference: ValueReference | None = None
+    selector: ValueSelector | None = None
     if site.kind == "cell":
         producer = _unique_ref(
             graph.cell_targets.get(request.target, ()),
@@ -261,22 +256,11 @@ def resolve_projection(
             noun="Cell target",
         )
     else:
-        try:
-            reference = parse_value_reference(request.target)
-        except UnpairedUTF16SurrogateError as error:
-            raise ProjectionResolutionError(
-                PROJECTION_UNPAIRED_SURROGATE_CODE,
-                "Projection targets and instance IDs require well-formed Unicode.",
-            ) from error
-        except ValueError as error:
-            raise ProjectionResolutionError(
-                "projection-target-invalid",
-                f"Projection target {request.target!r} is invalid: {error}",
-            ) from error
-        variable = graph.variables.get(reference.variable)
+        selector = ValueSelector(request.target)
+        variable = graph.variables.get(selector.root)
         producer = _unique_ref(
             variable.producers if variable is not None else (),
-            target=reference.variable,
+            target=selector.root,
             missing_code=f"projection-{site.kind}-variable-not-found",
             ambiguous_code=f"projection-{site.kind}-variable-ambiguous",
             noun="Notebook variable",
@@ -286,9 +270,11 @@ def resolve_projection(
         kind=site.kind,
         source=site.source,
         producer=producer,
-        variable=reference.variable if reference is not None else None,
-        selector_path=reference.path if reference is not None else (),
+        selector=selector,
         dependency_closure=graph.dependency_closure(producer),
+        accept=media_accept(sites).get(request.target, ())
+        if site.kind == "output"
+        else (),
     )
 
 
@@ -317,25 +303,25 @@ def _target_record(
 
 def projection_targets(
     graph: NotebookSymbolGraph,
-    sites: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
 ) -> dict[str, object]:
-    """Return the target records required by one artifact's mount declarations."""
+    """Return the target records required by one artifact's sites."""
     cell_targets: set[str] = set()
     variable_targets: set[str] = set()
     all_cells = False
     all_variables = False
     for site in sites:
-        if site.allowed_targets is None:
+        if site.targets is None:
             if site.kind == "cell":
                 all_cells = True
             else:
                 all_variables = True
             continue
         if site.kind == "cell":
-            cell_targets.update(site.allowed_targets)
+            cell_targets.update(site.targets)
             continue
-        for target in site.allowed_targets:
-            variable_targets.add(parse_value_reference(target).variable)
+        for target in site.targets:
+            variable_targets.add(ValueSelector(target).root)
     if all_cells:
         cell_targets.update(graph.cell_targets)
     if all_variables:
@@ -372,7 +358,7 @@ def projection_policy() -> dict[str, int]:
         "maxUniqueCellTargets": MAX_UNIQUE_CELL_TARGETS,
         "maxUniqueOutputTargets": MAX_UNIQUE_OUTPUT_TARGETS,
         "maxUniqueValueTargets": MAX_UNIQUE_VALUE_TARGETS,
-        "maxTargetBytes": MAX_VALUE_REFERENCE_BYTES,
-        "maxPathSteps": MAX_VALUE_PATH_STEPS,
+        "maxTargetBytes": MAX_TARGET_BYTES,
+        "maxPathSteps": MAX_SELECTOR_STEPS,
         "maxInstanceIdBytes": MAX_PROJECTION_INSTANCE_ID_BYTES,
     }

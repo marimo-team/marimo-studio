@@ -13,10 +13,10 @@ from marimo_studio._projections.symbol_graph import NotebookSymbolGraph
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ViewNotFoundError
 from marimo_studio.view_providers import (
-    MountDeclaration,
     ProjectionKind,
     ViewProject,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 ProjectionSeverity = Literal["warning", "error"]
 
@@ -65,7 +65,7 @@ class ProjectionDiagnostic:
 @dataclass(frozen=True)
 class ResolvedView:
     view: ViewProject
-    mounts: tuple[MountDeclaration, ...]
+    sites: tuple[ArtifactSite, ...]
     projections: tuple[ResolvedProjection, ...]
     diagnostics: tuple[ProjectionDiagnostic, ...]
 

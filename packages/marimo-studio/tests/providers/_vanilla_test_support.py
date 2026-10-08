@@ -8,7 +8,7 @@ from marimo_studio._workspace.project_manifest import (
     load_view_project,
 )
 from marimo_studio.view_providers import ViewProject
-from marimo_studio.view_providers._bundled.vanilla import provider
+from marimo_studio.view_providers._builtin.vanilla import provider
 
 from ..provider_test_support import provider_starter_context
 

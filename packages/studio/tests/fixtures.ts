@@ -60,13 +60,13 @@ export const viewList = (
 
 export const symbolicRuntimeFields: Pick<
   RuntimeConfig,
-  "projectionTargets" | "projectionPolicy" | "mounts" | "runtimeBindings"
+  "projectionTargets" | "projectionPolicy" | "sites" | "runtimeBindings"
 > = {
   projectionTargets: {
     cells: {},
     variables: {},
   },
-  mounts: [],
+  sites: [],
   projectionPolicy: {
     maxActiveInstances: 512,
     maxUniqueCellTargets: 256,

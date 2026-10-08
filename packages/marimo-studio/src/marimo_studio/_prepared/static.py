@@ -132,7 +132,7 @@ def _compiled_export_view(
     return compile_export_view(
         snapshot.resolved,
         snapshot.view_name,
-        snapshot.mounts,
+        snapshot.sites,
         state_space=state_space,
     )
 

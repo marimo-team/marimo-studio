@@ -93,7 +93,7 @@ from marimo_studio._server.workspace_lifecycle import (
     Unconfigured,
 )
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 async def _send_studio_response(

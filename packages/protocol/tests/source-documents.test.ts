@@ -26,7 +26,7 @@ const projectPayload = () => ({
     { path: "src/theme.css", language: "css", access: "edit" as const },
     { path: "deno.lock", language: "json", access: "read" as const },
   ],
-  mounts: [],
+  sites: [],
   diagnostics: [],
   build: unbuiltView,
   artifact: null,
@@ -147,20 +147,21 @@ test("view projects require unique sites tied to declared source documents", () 
     id: "site-app",
     kind: "cell" as const,
     source: { path: "src/App.tsx", line: 1, column: 1 },
-    allowedTargets: ["chart"],
+    targets: ["chart"],
+    accept: [],
   };
-  assert.equal(parseViewProject({ ...projectPayload(), mounts: [site] }).mounts.length, 1);
-  assert.throws(() => parseViewProject({ ...projectPayload(), mounts: [site, site] }));
+  assert.equal(parseViewProject({ ...projectPayload(), sites: [site] }).sites.length, 1);
+  assert.throws(() => parseViewProject({ ...projectPayload(), sites: [site, site] }));
   assert.throws(() =>
     parseViewProject({
       ...projectPayload(),
-      mounts: [{ ...site, source: { path: "src/Hidden.tsx", line: 1, column: 1 } }],
+      sites: [{ ...site, source: { path: "src/Hidden.tsx", line: 1, column: 1 } }],
     }),
   );
   assert.throws(() =>
     parseViewProject({
       ...projectPayload(),
-      mounts: [{ ...site, source: { path: "src/../App.tsx", line: 1, column: 1 } }],
+      sites: [{ ...site, source: { path: "src/../App.tsx", line: 1, column: 1 } }],
     }),
   );
 });
@@ -187,7 +188,7 @@ test("view projects expose compact publication identity", () => {
     provider: "marimo-studio/svelte",
     provider_options: { entrypoint: "src/App.svelte", compiler: null },
     documents: [{ path: "src/App.svelte", language: "svelte", access: "edit" }],
-    mounts: [],
+    sites: [],
     diagnostics: [
       {
         code: "build-failed",

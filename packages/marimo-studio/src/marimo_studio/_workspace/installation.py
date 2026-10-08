@@ -13,7 +13,7 @@ from urllib.request import url2pathname
 
 STUDIO_DISTRIBUTION = "marimo-studio"
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 @dataclass(frozen=True)

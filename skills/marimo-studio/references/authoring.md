@@ -33,7 +33,7 @@ project-local CSS and JavaScript directly. Reference `.css` through
 
 The Vanilla provider resolves each path relative to the entry HTML.
 `view.inspect()` exposes each exact referenced file as one of the provider's
-editable source documents and adds it to the build inputs. The build copies
+editable Source documents and adds it to the build inputs. The build copies
 those files to the same paths in the browser artifact.
 
 Follow the HTML project's `AGENTS.md` for local dependency boundaries, accepted
@@ -44,9 +44,9 @@ React and Svelte view projects can grow beyond the starter files. Put focused
 components, hooks, actions, utilities, and styles beneath `src/`, then import
 them from the existing application source. Provider inspection discovers
 supported text files beneath `src/` recursively. The next inspection exposes
-each discovered file as a source document, and the provider's existing build
-input scope includes it. Create UTF-8 text with a provider-supported extension
-and keep the path inside the view project.
+each discovered file as a Source document, and it becomes a build input.
+Create UTF-8 text with a provider-supported extension and keep the path inside
+the view project.
 
 `view.toml` stores the provider and provider options. Provider inspection owns
 source discovery. A new component or utility needs an import from the

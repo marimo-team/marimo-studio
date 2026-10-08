@@ -7,6 +7,7 @@ import type { NotebookExport, OpenExportOptions } from "@marimo-team/marimo-expo
 import type { PreparedPublicationRefreshOptions } from "@marimo-team/marimo-export/prepared";
 
 import { parseJsonValue } from "@marimo-studio/presentation/json";
+import { selectorProducerCell } from "@marimo-studio/presentation/prepared-projections";
 import {
   PreparedPublicationRefresh,
   PreparedStateController,
@@ -53,6 +54,15 @@ export interface StudioPreparedComposition {
   ) => PreparedPublicationRefresh;
 }
 
+/** Return the runtime cell that defines a value selector's root variable. */
+const selectorOwner = (config: RuntimeConfig, selector: string): string => {
+  const owner = selectorProducerCell(config, selector);
+  if (owner === undefined) {
+    throw new TypeError(`Prepared output ${JSON.stringify(selector)} has no notebook producer.`);
+  }
+  return owner;
+};
+
 export const createStudioPreparedComposition = (options: {
   readonly root: HTMLElement;
   readonly context: () => {
@@ -80,6 +90,7 @@ export const createStudioPreparedComposition = (options: {
     }),
     source,
     options.dependencies.loaders,
+    (selector) => selectorOwner(options.context().config, selector),
   );
   const state = new PreparedStateController(renderer);
   interactions = new StudioPreparedInteractions(state, options.isDisposed);

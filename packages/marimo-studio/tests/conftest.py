@@ -16,7 +16,7 @@ from marimo_studio._compat.layout import (
     MARIMO_FRONTEND_PATCH_SHA256,
     MARIMO_RELEASE_COMMIT,
 )
-from marimo_studio.view_providers._bundled._deno import runtime as deno_runtime
+from marimo_studio.view_providers._builtin._deno import runtime as deno_runtime
 
 from .helpers import notebook_source
 

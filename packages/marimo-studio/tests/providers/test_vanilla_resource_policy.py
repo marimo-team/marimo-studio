@@ -5,7 +5,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from marimo_studio._views.inspection import inspection_request
-from marimo_studio.view_providers._bundled.vanilla import provider
+from marimo_studio.view_providers._builtin.vanilla import provider
 
 from ..provider_test_support import provider_build_request
 from ._vanilla_test_support import _project, _project_with_local_sources
@@ -31,7 +31,7 @@ def test_vanilla_rejects_self_closing_script_and_style_elements(
 
     inspection = provider.inspect(inspection_request(project))
 
-    assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
+    assert [item.code for item in inspection.diagnostics] == ["source-document-invalid"]
 
 
 def test_vanilla_rejects_import_maps(tmp_path: Path) -> None:
@@ -179,7 +179,7 @@ def test_vanilla_rejects_transitive_local_css_dependencies(
     assert diagnostic.source.path == PurePosixPath("styles/app.css")
     assert diagnostic.source.line == 2
     assert PurePosixPath("styles/app.css") in {
-        item.path for item in inspection.editor_documents
+        item.path for item in inspection.documents
     }
 
 
@@ -211,7 +211,7 @@ def test_vanilla_rejects_transitive_local_javascript_dependencies(
     assert diagnostic.source.path == PurePosixPath("scripts/app.js")
     assert diagnostic.source.line >= 2
     assert PurePosixPath("scripts/app.js") in {
-        item.path for item in inspection.editor_documents
+        item.path for item in inspection.documents
     }
 
 

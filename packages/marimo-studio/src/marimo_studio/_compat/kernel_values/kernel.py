@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from marimo_export.integration import is_owned_session, keep_cached_cells_compatible
 from marimo_export.observations import ObservationLedger, install_observation_ledger
+from marimo_export.values import ValueSelector
 
 from marimo_studio._compat.execution_markers import (
     is_execution_command,
@@ -54,6 +55,7 @@ from marimo_studio._compat.kernel_values.selectors import (
 )
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS, QUERY_OPERATION_QUERY_PARAM
 from marimo_studio._notebook.cell_refs import cell_refs
+from marimo_studio._projections.resolution import MAX_UNIQUE_OUTPUT_TARGETS
 from marimo_studio._projections.runtime_records import (
     MAX_OUTPUT_BYTES,
     VALUE_LIMITS,
@@ -61,7 +63,6 @@ from marimo_studio._projections.runtime_records import (
     ValueReadError,
     ValueReadResult,
 )
-from marimo_studio._projections.values import MAX_OUTPUT_SELECTORS
 from marimo_studio._server.presentation.ports import STALE_PROJECTION_BINDING_CODE
 from marimo_studio._server.presentation.query_state import (
     query_fingerprint,
@@ -128,10 +129,10 @@ def _install_execution_markers(context: Any) -> None:
     kernel._studio_execution_markers_installed = True
 
 
-def _current_projection_specs(
+def _current_selectors(
     context: Any,
     authorized: AuthorizedProjections,
-) -> dict[str, tuple[str, tuple[tuple[str, str | int], ...]]]:
+) -> dict[str, ValueSelector]:
     graph = context._kernel.graph
     current_cells = tuple(
         RuntimeCellBinding(reference, str(cell_id))
@@ -171,10 +172,9 @@ def _current_projection_specs(
             ),
             None,
         )
-        variable = authorized.specifications[target][0]
-        if cell is None or variable not in cell.defs:
+        if cell is None or authorized.selectors[target].root not in cell.defs:
             raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
-    return authorized.specifications
+    return authorized.selectors
 
 
 @dataclass(frozen=True)
@@ -500,13 +500,11 @@ class _KernelBridgeLifespan:
                     ),
                 )
                 if inspection is not None:
-                    specifications = authorized.specifications
-                    active_specifications = active_authorized.specifications
+                    selectors = authorized.selectors
+                    active_selectors = active_authorized.selectors
                 else:
-                    specifications = _current_projection_specs(context, authorized)
-                    active_specifications = _current_projection_specs(
-                        context, active_authorized
-                    )
+                    selectors = _current_selectors(context, authorized)
+                    active_selectors = _current_selectors(context, active_authorized)
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return ValueReadResult(
@@ -533,22 +531,20 @@ class _KernelBridgeLifespan:
                             f"Selector {selector!r} is not present in a "
                             "configured view.",
                         )
-                        for selector in dict.fromkeys(
-                            (*specifications, *active_specifications)
-                        )
+                        for selector in dict.fromkeys((*selectors, *active_selectors))
                     },
                 ).to_dict()
             value_encoder = self._value_encoder
             assert value_encoder is not None
-            if not specifications and not active_specifications:
+            if not selectors and not active_selectors:
                 value_encoder.release_consumer(args.consumer_id)
                 return ValueReadResult(values={}, errors={}).to_dict()
             kernel = context._kernel
             with kernel.lock_globals():
                 result = _read_values(
                     kernel.globals,
-                    specifications,
-                    active_specifications,
+                    selectors,
+                    active_selectors,
                     limits=VALUE_LIMITS.capped(args.max_json_bytes),
                     consumer_id=args.consumer_id,
                     revision=args.revision,
@@ -591,13 +587,11 @@ class _KernelBridgeLifespan:
                     ),
                 )
                 if inspection is not None:
-                    specifications = authorized.specifications
-                    active_specifications = active_authorized.specifications
+                    selectors = authorized.selectors
+                    active_selectors = active_authorized.selectors
                 else:
-                    specifications = _current_projection_specs(context, authorized)
-                    active_specifications = _current_projection_specs(
-                        context, active_authorized
-                    )
+                    selectors = _current_selectors(context, authorized)
+                    active_selectors = _current_selectors(context, active_authorized)
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return OutputRenderResult(
@@ -614,9 +608,7 @@ class _KernelBridgeLifespan:
                     },
                 ).to_dict()
             if not self._activate(context, filename, inspection):
-                requested = tuple(
-                    dict.fromkeys((*specifications, *active_specifications))
-                )
+                requested = tuple(dict.fromkeys((*selectors, *active_selectors)))
                 return OutputRenderResult(
                     outputs={},
                     errors={
@@ -628,11 +620,9 @@ class _KernelBridgeLifespan:
                         for selector in requested
                     },
                 ).to_dict()
-            selectors = tuple(specifications)
-            active_selectors = tuple(active_specifications)
             if (
-                len(selectors) > MAX_OUTPUT_SELECTORS
-                or len(active_selectors) > MAX_OUTPUT_SELECTORS
+                len(selectors) > MAX_UNIQUE_OUTPUT_TARGETS
+                or len(active_selectors) > MAX_UNIQUE_OUTPUT_TARGETS
             ):
                 return OutputRenderResult(
                     outputs={},
@@ -640,7 +630,7 @@ class _KernelBridgeLifespan:
                         "*": ValueReadError(
                             "too-many-selectors",
                             "An output request may contain at most "
-                            f"{MAX_OUTPUT_SELECTORS} selectors.",
+                            f"{MAX_UNIQUE_OUTPUT_TARGETS} selectors.",
                         )
                     },
                 ).to_dict()
@@ -653,7 +643,7 @@ class _KernelBridgeLifespan:
                     kernel.globals,
                     selectors,
                     active_selectors,
-                    set(active_specifications),
+                    authorized.accept,
                     consumer_id=args.consumer_id,
                     max_output_bytes=limit,
                 )

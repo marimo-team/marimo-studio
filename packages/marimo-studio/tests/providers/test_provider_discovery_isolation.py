@@ -87,7 +87,7 @@ def test_provider_python_work_does_not_consume_the_command_budget(
 
     result = installed.inspect(inspection_request(project, command_timeout=2.0))
 
-    assert result.build_fingerprint == inspection().build_fingerprint
+    assert result.inputs[0] == inspection().inputs[0]
 
 
 def test_external_catalog_and_starter_creation_stay_out_of_process(

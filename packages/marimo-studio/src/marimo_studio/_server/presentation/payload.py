@@ -164,8 +164,8 @@ async def build_runtime_config(
         client_id=client_id,
         progress=progress,
     )
-    targets = projection_targets(snapshot.symbols, snapshot.mounts)
-    mounts = tuple(site.to_dict() for site in snapshot.mounts)
+    targets = projection_targets(snapshot.symbols, snapshot.sites)
+    sites = tuple(site.to_dict() for site in snapshot.sites)
     policy = projection_policy()
     diagnostics = tuple(
         _browser_diagnostic(
@@ -180,7 +180,7 @@ async def build_runtime_config(
         view=view_name,
         runtime_id=projection.runtime_id,
         runtime_instance=projection.instance,
-        mounts=mounts,
+        sites=sites,
         projection_targets=targets,
         projection_policy=policy,
         runtime_cell_refs=projection.cell_refs,
@@ -210,7 +210,7 @@ async def build_runtime_config(
         projection_revision=projection_revision,
         show_cell_logs=resolved.workspace.show_cell_logs,
         projection_targets=targets,
-        mounts=mounts,
+        sites=sites,
         projection_policy=policy,
         runtime_cell_refs=projection.cell_refs,
         diagnostics=diagnostics,

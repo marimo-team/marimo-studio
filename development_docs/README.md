@@ -28,7 +28,7 @@ package that owns a policy or mutable resource.
 | View creation, source documents, inspection, builds, removal, or revisions  | [Product and workspace](architecture/product-and-workspace.md)                 |
 | Provider descriptors, starters, inspection, builds, or artifact storage     | [View providers and artifacts](architecture/view-providers-and-artifacts.md)   |
 | Target Python selection, provider dependencies, or CLI environment re-entry | [Provider environments](architecture/provider-environments.md)                 |
-| Notebook symbols, mount declarations, mounted instances, or ownership       | [Symbolic projections](architecture/symbolic-projections.md)                   |
+| Notebook symbols, artifact sites, mounted instances, or ownership           | [Symbolic projections](architecture/symbolic-projections.md)                   |
 | Marimo routes, sessions, saves, kernels, private APIs, or upgrades          | [Marimo integration](architecture/marimo-integration.md)                       |
 | Server routing, authentication, capabilities, or browser isolation          | [Server routing and security](architecture/server-routing-and-security.md)     |
 | Browser protocol, runtimes, Source, layout, or presentation lifecycle       | [Browser runtime and authoring](architecture/browser-runtime-and-authoring.md) |
@@ -50,7 +50,7 @@ These upstream systems define contracts that Studio integrates:
 | [Marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)                                                                                    | Coding-agent execution inside the live notebook kernel                                       |
 | [Agent Skills](https://agentskills.io/) and [Agent Plugins](https://github.com/peter-gy/agent-plugins)                                                                | Portable agent instructions and their packaged resources                                     |
 | [uv](https://docs.astral.sh/uv/) and [PEP 723](https://peps.python.org/pep-0723/)                                                                                     | Python environment selection and dependencies stored in a script                             |
-| [Deno](https://docs.deno.com/)                                                                                                                                        | Pinned JavaScript and TypeScript toolchain for bundled framework providers                   |
+| [Deno](https://docs.deno.com/)                                                                                                                                        | Pinned JavaScript and TypeScript toolchain for built-in framework providers                  |
 | [ASGI](https://asgi.readthedocs.io/en/latest/)                                                                                                                        | Interface between Studio's asynchronous Python application and a server                      |
 | [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/)                                                                                           | Browser-side notebook execution                                                              |
 | [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc) and [Flechette](https://github.com/uwdata/flechette) | Columnar dataframe transfer from Python to browser code                                      |
@@ -138,7 +138,7 @@ Studio source follows these dependency directions:
 
 ```text
 Python policy -> Studio ports -> _compat adapters -> Marimo
-              -> ViewProvider -> view_providers._bundled
+              -> ViewProvider -> view_providers._builtin
               -> artifact store
 
 Studio prepared state space -> public marimo-export Python SDK
@@ -170,10 +170,9 @@ view.toml
   -> PresentationSnapshot
 ```
 
-Provider inspection returns editor documents, one input scope, mount
-declarations, diagnostics, and a build fingerprint. Core enumerates the input
-scope for revisions, snapshots, and watching. A document can be visible in
-Source while remaining read-only. A binary asset can affect a build while
+Provider inspection returns Source documents, build inputs, projection sites,
+and diagnostics. Core enumerates the build inputs for revisions, snapshots, and watching. A document can be visible
+in Source while remaining read-only. A binary asset can affect a build while
 staying outside the text editor.
 
 ## Trace symbolic projection work
@@ -182,8 +181,8 @@ Projection changes cross a second path:
 
 ```text
 provider source
-  -> MountDeclaration
-  -> artifact instrumentation
+  -> ProjectionSite
+  -> ArtifactSite and snapshot instrumentation
   -> mounted ProjectionRequest
   -> NotebookSymbolGraph resolution
   -> runtime cell binding

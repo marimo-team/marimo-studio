@@ -18,13 +18,16 @@ from marimo_studio._compat.browser_notebook import (
     _value_bridge,
 )
 from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
-from marimo_studio._projections.runtime_records import ValueLimits
+from marimo_studio._projections.runtime_records import (
+    ValueLimits,
+    output_representation,
+)
 from marimo_studio.view_providers import (
-    MountDeclaration,
     SourceLocation,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
-from .values_test_support import _encoded_json
+from .values_test_support import _encoded_json, _selectors
 
 _REVISION = "presentation-revision"
 _SITE_ID = "site:output:dynamic"
@@ -195,17 +198,17 @@ def _format_element(context: _GeneratedContext) -> Any:
 
 def _mounts() -> list[dict[str, object]]:
     return [
-        MountDeclaration(
+        ArtifactSite(
             id=_SITE_ID,
             kind="output",
             source=SourceLocation(PurePosixPath("src/App.tsx"), 1, 1),
-            allowed_targets=None,
+            targets=None,
         ).to_dict(),
-        MountDeclaration(
+        ArtifactSite(
             id=_VALUE_SITE_ID,
             kind="value",
             source=SourceLocation(PurePosixPath("src/App.tsx"), 2, 1),
-            allowed_targets=None,
+            targets=None,
         ).to_dict(),
     ]
 
@@ -223,7 +226,7 @@ def _configure_bridge(
         {
             "revision": revision,
             "generation": generation,
-            "mounts": _mounts(),
+            "sites": _mounts(),
             "variables": variables,
         },
     )
@@ -358,6 +361,58 @@ def test_generated_output_adapter_owns_replaces_and_releases_outputs(
     assert context.cell_lifecycle_registry.dispose_attempts.count(owner) == attempts
 
 
+def test_generated_bridge_renders_an_accepted_output_for_every_host_of_its_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+    figure = figure_module.Figure(figsize=(2, 1))
+    figure.subplots().plot([1, 3, 2])
+    context.globals["chart"] = figure
+    chart_site = ArtifactSite(
+        id="site:output:chart",
+        kind="output",
+        source=SourceLocation(PurePosixPath("src/App.tsx"), 3, 1),
+        targets=("chart",),
+        accept=("image/png",),
+    )
+    configured = _call_bridge(
+        context,
+        "configure_projections",
+        {
+            "revision": _REVISION,
+            "generation": 2,
+            "sites": [*_mounts(), chart_site.to_dict()],
+            "variables": ["chart", "control"],
+        },
+    )
+    # The catalog's wildcard output site selects its target at runtime.
+    request = [{"siteId": _SITE_ID, "instanceId": "chart-0", "target": "chart"}]
+
+    result = _call_bridge(
+        context,
+        "render_values",
+        {
+            "revision": _REVISION,
+            "projections": request,
+            "active_projections": request,
+            "consumer_id": "preview-a",
+            "max_output_bytes": 1_000_000,
+        },
+    )
+
+    assert configured["applied"] is True
+    output = result["outputs"]["chart"]
+    assert output["mimetype"] == "application/vnd.marimo+mimebundle"
+    media = output_representation(output["mimetype"], output["data"])
+    assert media is not None and media.media_type == "image/png"
+    assert media.width is not None
+    assert int.from_bytes(media.data[16:20], "big") / 2 == pytest.approx(
+        media.width, abs=1
+    )
+
+
 @pytest.mark.parametrize("function_name", ["read_values", "render_values"])
 def test_generated_bridge_rejects_direct_requests_outside_its_catalog(
     monkeypatch: pytest.MonkeyPatch,
@@ -442,7 +497,7 @@ def test_generated_bridge_rejects_escaped_unpaired_surrogates(
         },
     )
 
-    assert result["errors"]["*"]["code"] == "projection-unpaired-surrogate"
+    assert result["errors"]["*"]["code"] == "projection-target-invalid"
 
 
 def test_late_timed_out_configuration_cannot_replace_a_newer_revision(
@@ -511,7 +566,7 @@ def test_generated_bridge_matches_server_selector_path_bounds(
     assert accepted["errors"][next(iter(accepted["errors"]))]["code"] == (
         "value-path-unavailable"
     )
-    assert rejected["errors"]["*"]["code"] == "projection-authorization-invalid"
+    assert rejected["errors"]["*"]["code"] == "projection-target-invalid"
 
 
 def test_generated_bridge_rejects_private_attribute_selection(
@@ -535,7 +590,7 @@ def test_generated_bridge_rejects_private_attribute_selection(
         },
     )
 
-    assert result["errors"]["*"]["code"] == "projection-authorization-invalid"
+    assert result["errors"]["*"]["code"] == "projection-target-invalid"
 
 
 @pytest.mark.parametrize(
@@ -846,9 +901,9 @@ def test_native_output_renderer_retries_and_idempotently_closes(
     renderer = KernelOutputRenderer(context)
     rendered = renderer.render(
         {"control": object()},
+        _selectors("control"),
         ("control",),
-        ("control",),
-        {"control"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=10_000,
     )
@@ -864,9 +919,9 @@ def test_native_output_renderer_retries_and_idempotently_closes(
     with pytest.raises(RuntimeError, match="already closed"):
         renderer.render(
             {},
+            {},
             (),
-            (),
-            set(),
+            {},
             consumer_id="preview-a",
             max_output_bytes=10_000,
         )

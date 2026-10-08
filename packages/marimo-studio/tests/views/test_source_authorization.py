@@ -15,16 +15,16 @@ from starlette.testclient import TestClient
 
 import marimo_studio._server.studio.routes as studio_routes
 import marimo_studio._views.sources as sources_module
-from marimo_studio._artifacts.inputs import ProjectInputState
+from marimo_studio._artifacts.inputs import BuildInputState
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildRequest,
     BuildResult,
     InspectionRequest,
-    ProjectInput,
     ProjectInspection,
     ProviderAvailability,
     ProviderInfo,
@@ -34,7 +34,7 @@ from marimo_studio.view_providers import (
     StarterPlan,
     ViewProject,
 )
-from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
+from marimo_studio.view_providers._builtin.vanilla import provider as vanilla_provider
 from marimo_studio.view_providers._host.identity import starter_id
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
@@ -55,8 +55,7 @@ class _InputAccessProvider:
         key="source-policy",
     )
 
-    def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
-        del project
+    def availability(self) -> ProviderAvailability:
         return ProviderAvailability(True)
 
     def starters(self) -> tuple[ProviderStarter, ...]:
@@ -86,13 +85,12 @@ class _InputAccessProvider:
             raise ValueError("source-access.txt must contain edit or read")
         documents = tuple(
             replace(item, access=access) if item.path == _SOURCE else item
-            for item in inspection.editor_documents
+            for item in inspection.documents
         )
         return replace(
             inspection,
-            editor_documents=documents,
-            input_scope=(*inspection.input_scope, ProjectInput(_POLICY, "file")),
-            build_fingerprint=f"{inspection.build_fingerprint}:source-policy-v1",
+            documents=documents,
+            inputs=(*inspection.inputs, BuildInput(_POLICY, "file")),
         )
 
     def build(self, request: BuildRequest) -> BuildResult:
@@ -188,12 +186,12 @@ def _put_while_the_policy_changes(
     replacement_committed = Barrier(2)
     release_validation = Barrier(2)
     state_calls = 0
-    input_state = sources_module.project_input_state
+    input_state = sources_module.build_input_state
 
     def pause_final_validation(
         selected: ViewProject,
         inspection: ProjectInspection,
-    ) -> ProjectInputState:
+    ) -> BuildInputState:
         nonlocal state_calls
         state_calls += 1
         if state_calls == 2:
@@ -201,7 +199,7 @@ def _put_while_the_policy_changes(
             release_validation.wait(timeout=5)
         return input_state(selected, inspection)
 
-    monkeypatch.setattr(sources_module, "project_input_state", pause_final_validation)
+    monkeypatch.setattr(sources_module, "build_input_state", pause_final_validation)
 
     with TestClient(app) as client, ThreadPoolExecutor(max_workers=1) as executor:
         loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")

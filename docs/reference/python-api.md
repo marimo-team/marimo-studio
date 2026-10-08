@@ -829,7 +829,7 @@ surfaces. Nested notebook records are documented under `NotebookSpec` and
 | `ProviderAvailability` | `available`, `version`, `reason`, `action`                                                                                   |
 
 `ProviderDiagnostic.to_dict()` emits `key` for `provider_key`, expands
-`ProviderInfo` into `schema`, `title`, `summary`, and `api_version`, and emits
+`ProviderInfo` into `schema`, `title`, `summary`, and `options`, and emits
 the qualified starter IDs.
 
 ### Notebook inspection records

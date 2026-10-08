@@ -37,14 +37,14 @@ def test_validation_preserves_mount_inspection_cleanup_failure(
     prepare_view(notebook_path)
 
     def fail(*_args: object, **_kwargs: object) -> object:
-        raise ProcessCleanupError("mount inspection process survived")
+        raise ProcessCleanupError("site inspection process survived")
 
     provider = provider_registry().get(
         load_studio(notebook_path).view("dashboard").provider
     )
     monkeypatch.setattr(provider, "inspect", fail)
 
-    with pytest.raises(ProcessCleanupError, match="mount inspection process survived"):
+    with pytest.raises(ProcessCleanupError, match="site inspection process survived"):
         asyncio.run(
             prepare_validation(
                 load_studio(notebook_path),
@@ -213,7 +213,7 @@ def test_runtime_check_reports_rich_output_format_failures(
     failure = next(result for result in results if result.status == "fail")
 
     assert captured["value_selector_groups"] == ()
-    assert captured["output_selector_groups"] == (("doubled",),)
+    assert captured["output_groups"] == ({"doubled": ()},)
     assert failure.name == "runtime-output:doubled"
     assert failure.code == "output-format-error"
     assert failure.message == "The rich representation failed"
@@ -332,7 +332,7 @@ if __name__ == "__main__":
     )
     results = asyncio.run(check_runtime_studio(load_studio(notebook)))
 
-    groups = cast(tuple[tuple[str, ...], ...], captured["output_selector_groups"])
+    groups = cast(tuple[dict[str, tuple[str, ...]], ...], captured["output_groups"])
     assert tuple(len(group) for group in groups) == (51, 51)
     assert all(result.status == "pass" for result in results)
 

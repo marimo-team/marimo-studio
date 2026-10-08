@@ -454,7 +454,7 @@ def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
     assert page.status_code == 200
     assert config.status_code == 200
     assert config.json()["projectionTargets"] == {"cells": {}, "variables": {}}
-    assert config.json()["mounts"] == []
+    assert config.json()["sites"] == []
     assert config.json()["runtimeBindings"]["cellRefs"] == {}
     assert config.json()["diagnostics"] == []
     assert config.json()["showCellLogs"] is True

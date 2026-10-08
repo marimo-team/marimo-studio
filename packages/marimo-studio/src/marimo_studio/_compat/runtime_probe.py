@@ -13,7 +13,6 @@ from uuid import uuid4
 
 import marimo
 
-from marimo_studio._compat.browser_notebook import selector_specs
 from marimo_studio._compat.kernel_values import (
     probe_selector_lease,
     read_probe_values,
@@ -24,6 +23,7 @@ from marimo_studio._compat.runtime_requests import instantiate_notebook_request
 from marimo_studio._notebook.source_generation import NotebookSourceGeneration
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._projections.runtime_records import (
+    OutputGroup,
     OutputRenderResult,
     RenderedOutput,
     RuntimeCell,
@@ -32,7 +32,6 @@ from marimo_studio._projections.runtime_records import (
     ValueReadError,
     ValueReadResult,
 )
-from marimo_studio._projections.values import parse_value_reference
 from marimo_studio._server.presentation.ports import ProjectionUnavailable
 from marimo_studio.errors import ProtocolError, RuntimeTimeoutError
 
@@ -89,7 +88,7 @@ async def probe_runtime_in_worker(
     *,
     cell_ids: tuple[str, ...],
     value_selector_groups: tuple[tuple[str, ...], ...] = (),
-    output_selector_groups: tuple[tuple[str, ...], ...] = (),
+    output_groups: tuple[OutputGroup, ...] = (),
     timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     show_tracebacks: bool = False,
     max_json_bytes: int | None = None,
@@ -130,12 +129,11 @@ async def probe_runtime_in_worker(
         def on_detach(self) -> None:
             return
 
-    groups = output_selector_groups
     allowed_values = tuple(
         dict.fromkeys(selector for group in value_selector_groups for selector in group)
     )
     allowed_outputs = tuple(
-        dict.fromkeys(selector for group in groups for selector in group)
+        dict.fromkeys(selector for group in output_groups for selector in group)
     )
     main_module = sys.modules["__main__"]
     manager = _build_manager(
@@ -208,12 +206,7 @@ async def probe_runtime_in_worker(
             for value_group in value_selector_groups:
                 read = await _read_values_within_deadline(
                     session,
-                    selector_specs(
-                        {
-                            selector: parse_value_reference(selector)
-                            for selector in value_group
-                        }
-                    ),
+                    value_group,
                     consumer_id=str(consumer.consumer_id),
                     max_json_bytes=max_json_bytes,
                     loop=loop,
@@ -232,18 +225,12 @@ async def probe_runtime_in_worker(
                         read_values[selector] = inspection_value(read.values[selector])
             outputs: dict[str, RenderedOutput] = {}
             output_errors: dict[str, ValueReadError] = {}
-            for group in groups:
-                active = tuple(dict.fromkeys(group))
-                for selector in active:
+            for group in output_groups:
+                for selector, accept in group.items():
                     rendered = await _render_output_within_deadline(
                         session,
-                        selector_specs({selector: parse_value_reference(selector)}),
-                        selector_specs(
-                            {
-                                active_selector: parse_value_reference(active_selector)
-                                for active_selector in active
-                            }
-                        ),
+                        {selector: accept},
+                        group,
                         consumer_id=str(consumer.consumer_id),
                         loop=loop,
                         deadline=deadline,
@@ -251,11 +238,12 @@ async def probe_runtime_in_worker(
                     )
                     error = rendered.errors.get(selector) or rendered.errors.get("*")
                     output = rendered.outputs.get(selector)
+                    # Views can read one target with different accept lists, so
+                    # a failure in any view stands for the target.
                     if error is not None:
                         outputs.pop(selector, None)
-                        output_errors[selector] = error
-                    elif output is not None:
-                        output_errors.pop(selector, None)
+                        output_errors.setdefault(selector, error)
+                    elif output is not None and selector not in output_errors:
                         outputs[selector] = output
             output_result = OutputRenderResult(
                 outputs=outputs,
@@ -293,7 +281,7 @@ async def probe_runtime_in_worker(
 
 async def _read_values_within_deadline(
     session: Any,
-    specifications: dict[str, tuple[str, tuple[tuple[str, str | int], ...]]],
+    selectors: tuple[str, ...],
     *,
     consumer_id: str,
     max_json_bytes: int | None,
@@ -304,7 +292,7 @@ async def _read_values_within_deadline(
     try:
         return await read_probe_values(
             session,
-            specifications,
+            selectors,
             consumer_id=consumer_id,
             timeout=_remaining_runtime_time(loop, deadline, timeout),
             max_json_bytes=max_json_bytes,
@@ -317,8 +305,8 @@ async def _read_values_within_deadline(
 
 async def _render_output_within_deadline(
     session: Any,
-    specifications: dict[str, tuple[str, tuple[tuple[str, str | int], ...]]],
-    active_specifications: dict[str, tuple[str, tuple[tuple[str, str | int], ...]]],
+    outputs: OutputGroup,
+    active_outputs: OutputGroup,
     *,
     consumer_id: str,
     loop: asyncio.AbstractEventLoop,
@@ -328,8 +316,8 @@ async def _render_output_within_deadline(
     try:
         return await render_probe_outputs(
             session,
-            specifications,
-            active_specifications,
+            outputs,
+            active_outputs,
             consumer_id=consumer_id,
             timeout=_remaining_runtime_time(loop, deadline, timeout),
         )

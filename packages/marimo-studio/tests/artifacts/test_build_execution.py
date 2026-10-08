@@ -30,9 +30,9 @@ from marimo_studio._views.build import build_view_project
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildRequest,
     BuildResult,
-    ProjectInput,
     ViewProject,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -49,9 +49,9 @@ def test_snapshot_copies_the_inputs_accepted_by_its_source_capture(
     provider = provider_registry().get(project.provider)
     inspection = replace(
         provider.inspect(inspection_request(project)),
-        input_scope=(ProjectInput(PurePosixPath("."), "directory"),),
+        inputs=(BuildInput(PurePosixPath("."), "directory"),),
     )
-    capture = inputs_module.project_input_state
+    capture = inputs_module.build_input_state
     added = project.root / "extra.css"
 
     def add_at_capture(*args: Any, **kwargs: Any):
@@ -59,7 +59,7 @@ def test_snapshot_copies_the_inputs_accepted_by_its_source_capture(
             added.write_text("body { color: blue; }", encoding="utf-8")
         return capture(*args, **kwargs)
 
-    monkeypatch.setattr(inputs_module, "project_input_state", add_at_capture)
+    monkeypatch.setattr(inputs_module, "build_input_state", add_at_capture)
     snapshot = inputs_module.snapshot_project(
         project,
         inspection,
@@ -91,7 +91,9 @@ def test_provider_build_reads_one_immutable_input_snapshot(
         assert request.cache_root.is_dir()
         live_document.write_text(source_b, encoding="utf-8")
         snapshot_document = request.project.root / "index.html"
-        assert snapshot_document.read_text(encoding="utf-8") == source_a
+        built = snapshot_document.read_text(encoding="utf-8")
+        assert "generation-a" in built
+        assert "generation-b" not in built
         shutil.copy2(snapshot_document, request.staging_root / "index.html")
         live_document.write_text(source_a, encoding="utf-8")
         return BuildResult(PurePosixPath("index.html"), ())
@@ -100,7 +102,7 @@ def test_provider_build_reads_one_immutable_input_snapshot(
     with publish_artifact_lease(project, "development") as lease:
         document = lease.read_text(lease.artifact.document)
 
-    assert document == source_a
+    assert "<p>generation-a</p>" in document
 
 
 def test_build_tags_its_cache_and_staging_directories(tmp_path: Path) -> None:

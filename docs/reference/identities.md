@@ -22,6 +22,7 @@ content. Generations identify replaceable owners and incarnations.
 | Provider key     | Durable `distribution/registration` identity stored in `view.toml`                                                                                         |
 | Starter          | Creation-time choice that produces initial view project files                                                                                              |
 | Artifact         | Validated immutable browser file tree produced by one build profile                                                                                        |
+| Projection host  | `<marimo-cell>`, `<marimo-output>`, or an element with `mo-value` that places one notebook result in a page                                                |
 | Presentation     | One artifact combined with notebook source, runtime configuration, projections, and browser session state                                                  |
 | Preview          | Studio surface that renders the current development presentation                                                                                           |
 | Python runtime   | Notebook execution in a server-side marimo session. Its configuration ID is `server`                                                                       |
@@ -48,10 +49,10 @@ artifact.
 
 | Revision              | Identifies                                                                                   | Changes when                                                                           |
 | --------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Source revision       | Exact UTF-8 source document content                                                          | The document bytes change. Public values use `sha256:<digest>`                         |
+| Source revision       | Exact UTF-8 Source document content                                                          | The document bytes change. Public values use `sha256:<digest>`                         |
 | Notebook revision     | Provider-visible static notebook record                                                      | Cell source, names, configuration, definitions, references, or dependency edges change |
 | Project revision      | Complete normalized build-input snapshot plus provider provenance                            | A declared build input or provider build identity changes                              |
-| Artifact revision     | Complete validated browser file tree and projection declarations                             | Any published artifact file or mount declaration changes                               |
+| Artifact revision     | Complete validated browser file tree and projection declarations                             | Any published artifact file or projection site changes                                 |
 | Presentation revision | Selected view, saved notebook and configuration, build profile, and artifact                 | Any input to the delivered presentation changes                                        |
 | Projection revision   | Presentation projection targets, policy, runtime bindings, diagnostics, and runtime instance | Projection authorization or runtime binding state changes                              |
 

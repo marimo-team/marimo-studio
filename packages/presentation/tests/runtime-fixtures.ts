@@ -31,14 +31,14 @@ export const projectionRequest = (
 
 export const symbolicRuntimeFields: Pick<
   RuntimeConfig,
-  "projectionRevision" | "projectionTargets" | "projectionPolicy" | "mounts" | "runtimeBindings"
+  "projectionRevision" | "projectionTargets" | "projectionPolicy" | "sites" | "runtimeBindings"
 > = {
   projectionRevision: projectionRevisionFor("empty"),
   projectionTargets: {
     cells: {},
     variables: {},
   },
-  mounts: [],
+  sites: [],
   projectionPolicy: {
     maxActiveInstances: 512,
     maxUniqueCellTargets: 256,
@@ -121,11 +121,12 @@ export const projectionRuntimeConfig = (
         ]),
       ),
     },
-    mounts: requests.map((request, index) => ({
+    sites: requests.map((request, index) => ({
       id: request.siteId,
       kind: request.kind,
       source: { path: "src/App.tsx", line: index + 1, column: 1 },
-      allowedTargets: [request.target],
+      targets: [request.target],
+      accept: [],
     })),
     runtimeBindings: {
       cellRefs: Object.fromEntries(

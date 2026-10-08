@@ -289,13 +289,13 @@ def _run_worker(
             )
         else:
             with snapshot:
-                mounts = {name: snapshot.artifacts[name].mounts for name in views}
+                sites = {name: snapshot.artifacts[name].sites for name in views}
             checks = asyncio.run(
                 check_runtime_studio(
                     studio,
                     view_name=request.view_name,
                     timeout=timeout,
-                    _published_mounts=mounts,
+                    _published_sites=sites,
                 )
             )
             if expected is not None and _source_revisions(studio, views) != expected:

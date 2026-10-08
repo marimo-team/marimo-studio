@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from marimo_studio.view_providers import ProviderCancellation
+from marimo_studio._processes.operation import ProviderCancellation
 
 
 class _ProviderCancellationFacade(ProviderCancellation):

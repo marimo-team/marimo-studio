@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-MAX_OUTPUT_BYTES = 1_000_000
+from marimo_export.values import Representation
+
+from marimo_studio._projections.media_output import MIMEBUNDLE
+
+MAX_OUTPUT_BYTES = 5_000_000
+# Figures and charts render PNG images with twice the pixels of their display
+# size, so they stay sharp on high-density screens.
+MEDIA_SCALE = 2.0
+
+# One view's output targets, each with the media types its sites accept. An
+# empty accept list reads marimo's native output.
+OutputGroup = Mapping[str, tuple[str, ...]]
 
 
 @dataclass(frozen=True)
@@ -90,6 +104,58 @@ class RenderedOutput:
             "timestamp": self.timestamp,
             "resetUiObjectIds": list(self.reset_ui_object_ids),
         }
+
+
+def output_representation(
+    mimetype: str,
+    data: object,
+    accept: tuple[str, ...] = (),
+) -> Representation | None:
+    """Decode marimo output data as base64 media.
+
+    Without ``accept``, the output must be one media item, as ``media_output()``
+    writes it. With ``accept``, a cell's output, possibly a mimebundle of several
+    types, yields the first listed type it carries. Returns None when the output
+    carries no such media.
+    """
+    size: object = None
+    if mimetype == MIMEBUNDLE:
+        try:
+            bundle = json.loads(data) if isinstance(data, str) else data
+        except ValueError:
+            return None
+        if not isinstance(bundle, dict):
+            return None
+        bundle = dict(bundle)
+        metadata = bundle.pop("__metadata__", None)
+        if accept:
+            mimetype = next((item for item in accept if item in bundle), "")
+        elif len(bundle) == 1:
+            (mimetype,) = bundle
+        else:
+            return None
+        data = bundle.get(mimetype)
+        size = metadata.get(mimetype) if isinstance(metadata, dict) else None
+    elif accept and mimetype not in accept:
+        return None
+    if not isinstance(data, str):
+        return None
+    header, comma, payload = data.partition(",")
+    if header != f"data:{mimetype};base64" or not comma:
+        return None
+    try:
+        content = base64.b64decode(payload, validate=True)
+    except ValueError:
+        return None
+    if not content:
+        return None
+    sizes = size if isinstance(size, dict) else {}
+    try:
+        return Representation(
+            mimetype, content, sizes.get("width"), sizes.get("height")
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass(frozen=True)

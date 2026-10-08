@@ -1,11 +1,11 @@
 ---
 title: Compatibility and support
-description: Supported Python, marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for marimo-studio 0.2.
+description: Supported Python, marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for marimo-studio 0.3.
 ---
 
 # Compatibility and support
 
-`marimo-studio` 0.2 is the current compatibility line. The notebook-to-view
+`marimo-studio` 0.3 is the current compatibility line. The notebook-to-view
 workflow, projection elements, and last-successful build behavior are supported
 product contracts. Before 1.0, CLI, Python, provider, and saved configuration
 contracts may change between minor releases.
@@ -70,7 +70,7 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 
 ## Supported environment
 
-| Component                        | 0.2.0 contract                                                                       |
+| Component                        | 0.3.0 contract                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------------ |
 | Python                           | 3.10 through 3.14                                                                    |
 | marimo                           | 0.25.1                                                                               |
@@ -162,9 +162,10 @@ embedding path. Browser and Prepared runtimes keep opaque-origin isolation.
 
 ## Third-party view providers
 
-Studio 0.3 requires provider API version `1`. Set
-`ProviderInfo.api_version=PROVIDER_API_VERSION` and declare `marimo-studio`
-as a dependency. Test the provider against each Studio minor release it supports.
+Declare `marimo-studio` as a dependency bounded to the minor line the provider
+has tested, such as `marimo-studio>=0.4,<0.5`. Test the provider against each
+Studio minor release it supports with
+[`check_provider()`](provider-api.md#check-provider).
 
 The [View provider API](provider-api.md) defines process execution,
 permissions, cancellation, build inputs, output validation, and conformance

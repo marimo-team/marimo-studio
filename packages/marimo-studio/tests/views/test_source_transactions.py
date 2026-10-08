@@ -453,9 +453,9 @@ def test_source_write_revalidates_catalog_identity_after_waiting_for_view_lock(
             return inspection
         return replace(
             inspection,
-            editor_documents=tuple(
+            documents=tuple(
                 replace(item, access="read") if item.path.as_posix() == path else item
-                for item in inspection.editor_documents
+                for item in inspection.documents
             ),
         )
 
@@ -465,7 +465,7 @@ def test_source_write_revalidates_catalog_identity_after_waiting_for_view_lock(
     prepared = PreparedSourceWrite(
         project,
         inspection,
-        project_revision(project, inspection, provider.provenance(inspection)),
+        project_revision(project, inspection, provider.provenance()),
         spec,
     )
     current = read_project_source(
@@ -516,7 +516,7 @@ def test_source_input_hashing_finishes_before_the_mutation_lock(
     prepared = PreparedSourceWrite(
         project,
         inspection,
-        project_revision(project, inspection, provider.provenance(inspection)),
+        project_revision(project, inspection, provider.provenance()),
         spec,
     )
     current = read_project_source(studio, project, spec)

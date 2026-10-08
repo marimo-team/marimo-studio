@@ -15,3 +15,8 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 module-name = "fixture_provider"
+
+# The fixture keeps one version while its source changes, so uv rebuilds it
+# when its project file or Python sources change.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "fixture_provider/**/*.py" }]

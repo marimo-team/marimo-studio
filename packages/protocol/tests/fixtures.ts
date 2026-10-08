@@ -47,7 +47,7 @@ export const unbuiltView: ViewBuildState = {
 
 export const symbolicRuntimeFields: Pick<
   RuntimeConfig,
-  "projectionTargets" | "projectionPolicy" | "mounts" | "runtimeBindings"
+  "projectionTargets" | "projectionPolicy" | "sites" | "runtimeBindings"
 > = {
   projectionTargets: {
     cells: {
@@ -65,12 +65,13 @@ export const symbolicRuntimeFields: Pick<
       },
     },
   },
-  mounts: [
+  sites: [
     {
       id: "site:plot",
       kind: "cell",
       source: { path: "src/index.html", line: 1, column: 1 },
-      allowedTargets: ["plot"],
+      targets: ["plot"],
+      accept: [],
     },
   ],
   projectionPolicy: {

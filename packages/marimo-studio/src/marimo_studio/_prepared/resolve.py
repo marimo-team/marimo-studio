@@ -49,7 +49,7 @@ def resolve_prepared_view(
     compiled = compile_export_view(
         snapshot.resolved,
         snapshot.view_name,
-        snapshot.mounts,
+        snapshot.sites,
         state_space=state_space,
     )
     plan = session.plan(spec=compiled.spec, repository=repository, progress=progress)
@@ -63,7 +63,7 @@ def resolve_prepared_view(
         compile_export_view(
             snapshot.resolved,
             snapshot.view_name,
-            snapshot.mounts,
+            snapshot.sites,
             state_space=StateSpace(default_state="baseline", states=states),
         ),
         current,

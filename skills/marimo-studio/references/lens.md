@@ -63,5 +63,5 @@ Use the packaged Lens skill for the feedback lifecycle. Pass the
 captured `SelectionReference` to Lens activity and reveal calls. Use its
 `cells` as notebook provenance and `target["sources"]` for exact value selectors.
 For a DOM target, use `documentPath`,
-`domSelector`, and the active Studio view to locate the owning source document,
+`domSelector`, and the active Studio view to locate the owning Source document,
 then build, show, and validate that view before resolving the selection.

@@ -102,7 +102,7 @@ def test_wildcard_value_hosts_authorize_runtime_selectors(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
-        site = next(item for item in config["mounts"] if item["kind"] == "value")
+        site = next(item for item in config["sites"] if item["kind"] == "value")
         projection = {"siteId": site["id"], "instanceId": "value-1", "target": "x"}
         response = client.post(
             _view_support_url(config, "values"),
@@ -114,7 +114,7 @@ def test_wildcard_value_hosts_authorize_runtime_selectors(
             },
         )
 
-    assert site["allowedTargets"] is None
+    assert site["targets"] is None
     assert response.status_code == 200, response.text
     assert requested == ["x"]
 
@@ -215,7 +215,7 @@ def test_output_requests_reject_duplicate_mounted_owners(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
-        sites = [site for site in config["mounts"] if site["kind"] == "output"]
+        sites = [site for site in config["sites"] if site["kind"] == "output"]
         active = [
             {
                 "siteId": site["id"],

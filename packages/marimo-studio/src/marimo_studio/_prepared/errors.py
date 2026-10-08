@@ -82,10 +82,8 @@ def _projection_details(
         "target": target,
         "sources": [
             site.source.to_dict()
-            for site in snapshot.mounts
-            if site.kind == kind
-            and site.allowed_targets is not None
-            and target in site.allowed_targets
+            for site in snapshot.sites
+            if site.kind == kind and site.targets is not None and target in site.targets
         ],
     }
 
@@ -113,8 +111,8 @@ def publication_error(
         else tuple(
             dict.fromkeys(
                 (site.kind, target)
-                for site in snapshot.mounts
-                for target in site.allowed_targets or ()
+                for site in snapshot.sites
+                for target in site.targets or ()
             )
         )
     )

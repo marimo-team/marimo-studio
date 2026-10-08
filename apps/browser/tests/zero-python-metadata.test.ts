@@ -81,7 +81,11 @@ describe("Studio prepared metadata", () => {
     expect(() =>
       parseStudioPreparedManifest({
         ...current,
-        projections: { values: { [invalidHost]: "value:doubled" }, outputs: {}, cells: {} },
+        projections: {
+          values: { [invalidHost]: "value:doubled" },
+          outputs: {},
+          cells: {},
+        },
       }),
     ).toThrow(/metadata is invalid/);
     expect(() =>
@@ -149,11 +153,19 @@ describe("Studio prepared metadata", () => {
     });
     const initial = parseStudioPreparedManifest({
       ...studioManifest(notebookExport, { mode: "baseline" }),
-      projections: { values: { metric: projectionNames.value }, outputs: {}, cells: {} },
+      projections: {
+        values: { metric: projectionNames.value },
+        outputs: {},
+        cells: {},
+      },
     });
     const renamed = parseStudioPreparedManifest({
       ...studioManifest(notebookExport, { mode: "baseline" }),
-      projections: { values: { headline: projectionNames.value }, outputs: {}, cells: {} },
+      projections: {
+        values: { headline: projectionNames.value },
+        outputs: {},
+        cells: {},
+      },
     });
 
     expect(() =>

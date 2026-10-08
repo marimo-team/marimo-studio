@@ -109,7 +109,7 @@ const sourceProject = {
   provider: "marimo-studio/vanilla",
   provider_options: {},
   documents: [{ path: "index.html", language: "html", access: "edit" as const }],
-  mounts: [],
+  sites: [],
   diagnostics: [],
   build: unbuiltView,
   artifact: null,

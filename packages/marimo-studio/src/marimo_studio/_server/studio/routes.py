@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
-from marimo_studio._artifacts.inputs import project_input_state
+from marimo_studio._artifacts.inputs import build_input_state
 from marimo_studio._hosts.marimohub import host_persistence
 from marimo_studio._processes.ownership import (
     propagate_cancellation,
@@ -80,6 +80,7 @@ from marimo_studio.errors import (
     ViewGenerationConflictError,
     WorkspaceGenerationConflictError,
 )
+from marimo_studio.view_providers._artifact_sites import inspection_sites
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.package_policy import DEFAULT_STARTER_ID
 
@@ -586,7 +587,7 @@ async def _prepare_source_write(
         catalog = await development.project_catalog(studio, view_name)
         spec = source_spec(catalog.inspection, name, view_name)
         state = await asyncio.to_thread(
-            project_input_state,
+            build_input_state,
             catalog.project,
             catalog.inspection,
         )
@@ -670,7 +671,7 @@ def _project_payload(
     inspection = catalog.inspection
     state = view_project_state(project, inspection, input_id=catalog.input_id)
     artifact = state.artifact
-    documents = [spec.to_dict() for spec in inspection.editor_documents]
+    documents = [spec.to_dict() for spec in inspection.documents]
     return {
         "schema": 1,
         "catalog_generation": catalog_generation,
@@ -679,7 +680,7 @@ def _project_payload(
         "provider": project.provider,
         "provider_options": dict(project.options),
         "documents": documents,
-        "mounts": [item.to_dict() for item in inspection.mounts],
+        "sites": [item.to_dict() for item in inspection_sites(inspection)],
         "diagnostics": [item.to_dict() for item in inspection.diagnostics],
         "build": state.build.to_dict(),
         "artifact": (

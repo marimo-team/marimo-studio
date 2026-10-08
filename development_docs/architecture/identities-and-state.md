@@ -28,9 +28,9 @@ does not provide that context.
 | Source document revision | `_views`                            | UTF-8 Source content changes                                                                 | A conditional Source save based on stale content                             |
 | Notebook revision        | `_notebook`                         | Saved notebook bytes change                                                                  | Inspection, runtime validation, or execution against another saved notebook  |
 | Project revision         | `_artifacts`                        | Provider identity, build fingerprint, or declared build input changes                        | Publishing a candidate built from older inputs                               |
-| Artifact revision        | `_artifacts`                        | The validated browser file tree, entry document, or mount declarations change                | Serving or pinning another immutable artifact                                |
+| Artifact revision        | `_artifacts`                        | The validated browser file tree, entry document, or artifact sites change                    | Serving or pinning another immutable artifact                                |
 | Presentation revision    | `_server.presentation`              | The coherent artifact, notebook graph, source, configuration, or presentation record changes | Runtime configuration, browser reads, or evidence from another page snapshot |
-| Projection revision      | `_delivery` and `packages/protocol` | Notebook bindings, runtime, mounts, targets, policies, or projection diagnostics change      | Reusing projected state after its authorization inputs change                |
+| Projection revision      | `_delivery` and `packages/protocol` | Notebook bindings, runtime, sites, targets, policies, or projection diagnostics change       | Reusing projected state after its authorization inputs change                |
 
 `catalog_generation` and `view_generation` travel together on Source, create,
 remove, and validation requests. A document revision cannot substitute for
