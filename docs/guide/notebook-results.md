@@ -1,22 +1,25 @@
 ---
 title: Place notebook results in a view
-description: Use complete cells, rendered outputs, and browser values in view source documents.
+description: Place complete cells, rendered outputs, and values in a view.
 ---
 
 # Place notebook results in a view
 
-View source requests notebook results through projection hosts. Choose the host
-that matches what the frontend needs:
+A view places a cell, an output, or a value through a projection host. Choose
+the host that matches what the view needs:
 
 | Result          | View source                       | Use it for                                                          |
 | --------------- | --------------------------------- | ------------------------------------------------------------------- |
 | Complete cell   | `<marimo-cell name="summary">`    | Native controls, output, logs, errors, and reactive behavior        |
 | Rendered output | `<marimo-output value="chart">`   | One Python value rendered through marimo's native output system     |
-| Browser value   | `<span mo-value="metrics.total">` | JSON-compatible data or an eager dataframe consumed by browser code |
+| Value           | `<span mo-value="metrics.total">` | JSON-compatible data or an eager dataframe consumed by browser code |
 
-All projection hosts belong inside `#app-shell`. A Quarto document writes them
-as `marimo` shortcodes or raw HTML hosts, and Studio supplies `#app-shell`. See
-[Quarto document](frontend-options.md#quarto-document).
+Write hosts in HTML, JSX, or Svelte inside `#app-shell`. A Quarto document
+writes them as `marimo` shortcodes or raw HTML hosts, and Studio supplies
+`#app-shell`. A Typst document reads values with `marimo_value()`, places
+outputs with `marimo_output()`, and places the image a cell shows with
+`marimo_cell()`. See [Quarto document](frontend-options.md#quarto-document) and
+[Typst PDF](frontend-options.md#typst-pdf).
 
 ## Place a complete cell
 

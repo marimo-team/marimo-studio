@@ -31,6 +31,8 @@ class ViewProvider(Protocol):
     def create(self, starter, context) -> StarterPlan: ...
     def inspect(self, request) -> ProjectInspection: ...
     def build(self, request) -> BuildResult: ...
+    # optional, for rendered documents
+    def render(self, request) -> BuildResult: ...
 ```
 
 Provider methods are synchronous. Built-in providers run in process. Server
@@ -54,7 +56,7 @@ reads. Conformance rejects any other option with
 `provider-options-invalid` before it calls the provider, and the remaining
 options reach the provider as a detached JSON-compatible mapping. The provider
 validates their values, usually through `ViewProject.path_option()`. A
-`ProviderError` from `inspect()` or `build()` becomes an error
+`ProviderError` from `inspect()`, `build()`, or `render()` becomes an error
 diagnostic. Any other exception is a provider failure. Final registry
 diagnostics contain the safe key when available, distribution, version,
 availability, accepted starters, and load or runtime errors.
@@ -87,6 +89,7 @@ project configuration.
 - projection sites, each with a source location and a UTF-8 byte offset inside
   the host start tag
 - diagnostics
+- render values read by a rendered document
 
 Conformance adds Studio-owned `view.toml` to the build inputs, and adds
 `AGENTS.md` and `DESIGN.md` to the Source documents when they exist. Core
@@ -94,7 +97,8 @@ watches both sets and enumerates the build inputs for revisions and snapshots.
 Source documents outside the build inputs remain exact provider-authorized
 source paths without affecting build identity. Conformance validates path types,
 control namespaces, document identity, diagnostic shape, and site placement
-inside build inputs.
+inside build inputs. A render value whose target is invalid becomes a
+`render-value-invalid` diagnostic at its source.
 
 Core derives an `ArtifactSite` from each projection site in
 `_artifact_sites.py`. A site ID
@@ -128,6 +132,7 @@ view_providers/
     deno_svelte/      provider, source check, analyzer, and vertical starter packages
     deno_obsnotebook/ provider, notebook HTML analyzer, and vertical starter packages
     quarto/           provider, Markdown site scanner, marimo shortcode extension, Lua filter, and starter
+    typst/            provider, value scanner, compile script, and starter
 ```
 
 The SDK re-exports the operation types from `_processes/operation.py`, so a
@@ -215,6 +220,58 @@ run before the mutation and publication locks.
 
 Providers never receive artifact receipts, pins, presentations, sessions,
 browser clients, or agent requests.
+
+## Document views
+
+A provider with `render()` publishes rendered documents, and its build document
+is a template entry of any type. For other providers, an `.html` build document
+is a live page, and a PDF, SVG, or PNG publishes behind a generated viewer
+page.
+
+`_views/documents.py` composes document views, and its `render_document()`
+renders a fresh template copy for builds, live renders, and static exports. For
+a document, `compose_view()` ingests the staging tree into a directory only
+Studio writes. A template becomes the revision's private `template/` directory,
+and Studio renders it once with empty values to validate it and publish the
+first document, and writes a viewer `index.html` whose `<marimo-document>`
+holds one hidden `mo-value` host per value target, one hidden
+`marimo-output` host per output target, and one hidden `marimo-cell` host per
+cell target. The manifest records the template files
+and the renderer fingerprint, and both belong to the artifact revision
+identity. Asset routes and static exports read the public file catalog, so
+template files stay private.
+
+`_server/presentation/document_renders.py::DocumentRenders` owns live render
+workers and cached renditions on `NotebookScope`, and
+`_server/presentation/documents.py` serves the render route. The Python runtime reads render values and outputs through
+`read_kernel_values()` and `read_kernel_outputs()`, the same authorized reads
+as the value and output routes, and cell outputs from the marimo session
+through `read_session_cells()`. Edit mode also accepts the values, outputs, and
+cell outputs that a browser runtime's hosts show, as `marimoValue` and
+`marimoOutput`. `_projections/runtime_records.py::output_representation()`
+turns each marimo output into bytes by media type for the provider. For a cell
+it picks the first accepted type in marimo's mimebundle. An output it cannot
+decode leaves the template's default. Each render belongs to its HTTP request: a
+client disconnect cancels the provider commands and waits for them to stop
+before the route returns. Renders run on two owned worker threads in a fresh
+copy of the template, with a 60 second command budget. A template copy that
+fails integrity verification marks the publication stale, so the next build
+repairs it. A 64 MiB LRU cache keyed by artifact revision and the digest of
+canonical values, output bytes, and cell bytes serves repeated renders. A
+worker stores each rendition before it takes the next request, so identical
+requests queued behind it reuse the rendition. Closing the scope
+cancels active renders, waits for the workers, and drops the cache.
+
+The `<marimo-document>` viewer keeps one render request in flight. Values that
+change meanwhile queue one more render after it settles, so the document
+catches up with the latest values.
+
+Zero-python static export renders the template once per prepared state into
+`renditions/<state fingerprint><ext>` through `_delivery/documents.py`, from
+each state's exported values, outputs, and cell snapshots. The browser viewer selects the
+rendition for the current state. WASM static export publishes the build-time
+document, which the viewer shows with a note that current values are
+unavailable.
 
 ## Publication
 

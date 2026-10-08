@@ -19,7 +19,7 @@ import math
 from collections.abc import Collection, Mapping
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
-from typing import cast
+from typing import TypeVar, cast
 
 from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET
 from marimo_studio.view_providers import (
@@ -27,6 +27,7 @@ from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
     BuildResult,
+    DocumentProvider,
     InspectionRequest,
     JsonValue,
     ProjectDiagnostic,
@@ -35,6 +36,11 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     ProviderError,
     ProviderInfo,
+    RenderCell,
+    RenderOutput,
+    RenderRequest,
+    RenderValue,
+    Representation,
     SourceDocument,
     SourceLocation,
     ViewProject,
@@ -59,10 +65,17 @@ from marimo_studio.view_providers._host._shapes import (
     require_unique,
 )
 from marimo_studio.view_providers._host.records import ProviderProvenance
+from marimo_studio.view_providers._records import DOCUMENT_MEDIA_TYPES
+from marimo_studio.view_providers._targets import (
+    MAX_VALUE_TARGETS,
+    validate_projection_target,
+)
 from marimo_studio.view_providers._validation import (
+    InvalidTargetError,
     accept_diagnostics,
     validate_project_diagnostic,
     validate_projection_site,
+    validate_render_value,
 )
 
 _PROFILES = frozenset({"development", "production"})
@@ -71,6 +84,7 @@ _GUIDANCE_DOCUMENTS = (PurePosixPath("AGENTS.md"), PurePosixPath("DESIGN.md"))
 _MAX_OPTIONS = 256
 _MAX_BUILD_INPUTS = BUILD_INPUT_BUDGET.max_files
 _MAX_SITES = 512
+_Read = TypeVar("_Read", RenderValue, RenderOutput, RenderCell)
 _MAX_SITE_BYTES = 1024 * 1024
 _MAX_DIAGNOSTICS = 512
 _MAX_DIAGNOSTIC_BYTES = 1024 * 1024
@@ -78,14 +92,18 @@ _UNAVAILABLE_REASON = "The provider reported that it is unavailable."
 _UNAVAILABLE_ACTION = "Repair the provider installation or choose another provider."
 
 
-def provider_methods(provider: object) -> None:
-    """Check that a provider implements its methods synchronously."""
+def provider_methods(provider: object) -> bool:
+    """Check a provider's synchronous methods and return whether it renders."""
     for method in ("availability", "starters", "create", "inspect", "build"):
         operation = getattr(provider, method, None)
         if not callable(operation):
             raise ValueError(f"provider requires {method}()")
         if inspect.iscoroutinefunction(operation):
             raise ValueError(f"provider {method}() must be synchronous")
+    render = getattr(provider, "render", None)
+    if inspect.iscoroutinefunction(render):
+        raise ValueError("provider render() must be synchronous")
+    return callable(render)
 
 
 # Source opens a raised error's file so the author can repair it there. Editor
@@ -348,16 +366,65 @@ class ProviderConformance:
             self.key,
             "projection site offsets",
         )
+        invalid_reads: list[ProjectDiagnostic] = []
+
+        def reads(items: object, record: type[_Read], kind: str) -> tuple[_Read, ...]:
+            label = f"render {kind}s"
+            validated: list[_Read] = []
+            for item in checked_tuple(items, self.key, label, maximum=_MAX_SITES):
+                if not isinstance(item, record):
+                    raise conformance_error(
+                        self.key, f"requires {label} to be {record.__name__} records"
+                    )
+                try:
+                    validate_render_value(item, documents=document_set)
+                except InvalidTargetError as error:
+                    invalid_reads.append(
+                        ProjectDiagnostic(
+                            f"render-{kind}-invalid",
+                            "error",
+                            str(error),
+                            (
+                                'Read a cell by its name, such as "summary".'
+                                if kind == "cell"
+                                else f'Read a {kind} such as "summary" or '
+                                '"summary.total".'
+                            ),
+                            error.source,
+                        )
+                    )
+                    continue
+                except ValueError as error:
+                    raise conformance_error(self.key, str(error)) from error
+                require_input(item.source.path, f"a render {kind}")
+                validated.append(item)
+            if len({item.target for item in validated}) > MAX_VALUE_TARGETS:
+                raise conformance_error(
+                    self.key,
+                    f"limits {label} to {MAX_VALUE_TARGETS} unique targets",
+                )
+            return tuple(validated)
+
+        render_values = reads(value.render_values, RenderValue, "value")
+        render_outputs = reads(value.render_outputs, RenderOutput, "output")
+        render_cells = reads(value.render_cells, RenderCell, "cell")
         return replace(
             value,
             documents=(*accepted, *guidance),
             inputs=tuple(scope),
-            diagnostics=(*value.diagnostics, *accept_diagnostics(sites)),
+            render_values=render_values,
+            render_outputs=render_outputs,
+            render_cells=render_cells,
+            diagnostics=(
+                *value.diagnostics,
+                *invalid_reads,
+                *accept_diagnostics(sites, (*render_outputs, *render_cells)),
+            ),
         )
 
     def _operation_owners(
         self,
-        value: InspectionRequest | BuildRequest,
+        value: InspectionRequest | BuildRequest | RenderRequest,
         operation: str,
     ) -> None:
         if not isinstance(value.cancellation, ProviderCancellation):
@@ -449,6 +516,14 @@ class ProviderConformance:
             }
             result = BuildResult(None, (_located(error.diagnostic, documents),))
         return self.validate_build_result(request, result)
+
+    def render(self, provider: DocumentProvider, request: RenderRequest) -> BuildResult:
+        """Render with ``provider``. A raised ``ProviderError`` fails the render."""
+        try:
+            result = provider.render(request)
+        except ProviderError as error:
+            result = BuildResult(None, (error.diagnostic,))
+        return self.validate_render_result(request, result)
 
     def validate_inspection_request(self, value: object) -> InspectionRequest:
         if not isinstance(value, InspectionRequest):
@@ -544,6 +619,88 @@ class ProviderConformance:
                 f"returned missing build document {document.as_posix()!r}",
             )
         return replace(value, document=document, diagnostics=normalized_diagnostics)
+
+    def validate_render_request(self, value: object) -> RenderRequest:
+        if not isinstance(value, RenderRequest):
+            raise conformance_error(self.key, "requires a RenderRequest record")
+        template = core_path(value.template_root, self.key, "render template root")
+        output = core_path(value.output_root, self.key, "render output root")
+        if not template.is_dir() or not output.is_dir() or any(output.iterdir()):
+            raise conformance_error(
+                self.key,
+                "requires a template directory and an empty output directory",
+            )
+        if overlaps(template, output):
+            raise conformance_error(
+                self.key, "requires separate template and output roots"
+            )
+        document = provider_path(value.document, self.key, "render document")
+        if not template.joinpath(*document.parts).is_file():
+            raise conformance_error(
+                self.key, f"has no render document {document.as_posix()!r}"
+            )
+        if not isinstance(value.values, Mapping):
+            raise conformance_error(self.key, "requires render values to be a mapping")
+        for target in value.values:
+            try:
+                validate_projection_target("value", target)
+            except ValueError as error:
+                raise conformance_error(
+                    self.key,
+                    f"received an invalid render target: {error}",
+                ) from error
+        for kind, media in (("output", value.outputs), ("cell", value.cells)):
+            if not isinstance(media, Mapping):
+                raise conformance_error(
+                    self.key, f"requires render {kind}s to be a mapping"
+                )
+            for target, representation in media.items():
+                try:
+                    validate_projection_target(kind, target)
+                except ValueError as error:
+                    raise conformance_error(
+                        self.key,
+                        f"received an invalid render target: {error}",
+                    ) from error
+                if not isinstance(representation, Representation):
+                    raise conformance_error(
+                        self.key,
+                        f"requires a Representation for render {kind} {target!r}",
+                    )
+        self._operation_owners(value, "render")
+        return replace(value, template_root=template, output_root=output)
+
+    def validate_render_result(
+        self,
+        request: RenderRequest,
+        value: object,
+    ) -> BuildResult:
+        if not isinstance(value, BuildResult):
+            raise conformance_error(self.key, "requires a BuildResult record")
+        diagnostics = self._diagnostics(value.diagnostics, "render diagnostics", None)
+        if value.document is None:
+            if not any(item.severity == "error" for item in diagnostics):
+                raise conformance_error(
+                    self.key, "rendered no document or error diagnostic"
+                )
+            return replace(value, diagnostics=diagnostics)
+        document = provider_path(value.document, self.key, "rendered document")
+        if document.suffix.lower() not in DOCUMENT_MEDIA_TYPES:
+            raise conformance_error(
+                self.key,
+                f"rendered {document.as_posix()!r}. Studio displays "
+                f"{', '.join(sorted(DOCUMENT_MEDIA_TYPES))} documents",
+            )
+        output = request.output_root.joinpath(*document.parts)
+        if (
+            not output.is_file()
+            or output.resolve()
+            != request.output_root.resolve().joinpath(*document.parts)
+        ):
+            raise conformance_error(
+                self.key, f"rendered no file at {document.as_posix()!r}"
+            )
+        return replace(value, document=document, diagnostics=diagnostics)
 
     def validate_profile(self, value: object) -> BuildProfile:
         if not isinstance(value, str) or value not in _PROFILES:

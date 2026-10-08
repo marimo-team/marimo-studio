@@ -81,9 +81,10 @@ which stores dependencies and tool configuration inside the notebook file:
 
 The **HTML document** starter needs no extra packages. React, Svelte, Reveal.js
 slides, and Notebook Kit starters need `marimo-studio[deno]>=0.3.0` in
-`dependencies` and network access to the npm registry. The **Quarto document**
-starter runs the `quarto` command, so the sandbox image must provide Quarto
-1.9.38 or newer on `PATH`.
+`dependencies` and network access to the npm registry. The **Typst report**
+starter needs `marimo-studio[typst]`. The **Quarto document** starter runs the
+`quarto` command, so the sandbox image must provide Quarto 1.9.38 or newer on
+`PATH`.
 
 **Browse files** is read-only while an editor session runs, so stop the session
 first. The saved header creates a new notebook version. Dependency changes apply
@@ -271,10 +272,10 @@ view.
 
 ## Troubleshoot
 
-| Symptom                                                           | Fix                                                                                                                                         |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| The notebook page shows the marimo editor with no Studio toolbar  | Check that `dependencies` lists `marimo-studio`, then stop and restart the session                                                          |
-| **Add view** warns that view files are lost when the session ends | Set `MARIMOHUB_PERSIST_WORKSPACE=workspace` on the hub. For a Git-synced notebook, commit `notebook.py` and the view folder before you stop |
-| **Run as app** shows the notebook instead of the view             | Run mode serves the notebook as a marimo app while the view root contains no view. See [Persist view projects](#persist-view-projects)      |
-| A starter asks for `marimo-studio[deno]`                          | Change the dependency to `marimo-studio[deno]>=0.3.0` and restart the session                                                               |
-| Preview reports **The preview cannot reach the Studio server.**   | See [Serve Preview behind a sign-in](#serve-preview-behind-a-sign-in)                                                                       |
+| Symptom                                                            | Fix                                                                                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| The notebook page shows the marimo editor with no Studio toolbar   | Check that `dependencies` lists `marimo-studio`, then stop and restart the session                                                          |
+| **Add view** warns that view files are lost when the session ends  | Set `MARIMOHUB_PERSIST_WORKSPACE=workspace` on the hub. For a Git-synced notebook, commit `notebook.py` and the view folder before you stop |
+| **Run as app** shows the notebook instead of the view              | Run mode serves the notebook as a marimo app while the view root contains no view. See [Persist view projects](#persist-view-projects)      |
+| A starter asks for `marimo-studio[deno]` or `marimo-studio[typst]` | Add that extra to the dependency, for example `marimo-studio[deno]>=0.3.0`, and restart the session                                         |
+| Preview reports **The preview cannot reach the Studio server.**    | See [Serve Preview behind a sign-in](#serve-preview-behind-a-sign-in)                                                                       |

@@ -42,6 +42,7 @@ from marimo_studio._artifacts.limits import (
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._composition import create_export_adapters
+from marimo_studio._delivery.documents import write_static_renditions
 from marimo_studio._delivery.export_output import (
     ensure_output_parent as _ensure_output_parent,
 )
@@ -946,8 +947,9 @@ def _export_to_delivery(
                     runtime=runtime,
                 ),
             )
+            bundle = FileTree(delivery.path)
             files = _write_bundle(
-                FileTree(delivery.path),
+                bundle,
                 adapters,
                 studio,
                 resolved,
@@ -960,6 +962,8 @@ def _export_to_delivery(
                 runtime,
                 publication,
             )
+            if publication is not None:
+                files += write_static_renditions(lease, publication, bundle)
             files += _materialize_publication(delivery, selected, publication)
             _emit_progress(
                 progress,

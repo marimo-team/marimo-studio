@@ -16,6 +16,9 @@ from marimo_studio.view_providers._records import (
     ProjectDiagnostic,
     ProjectionKind,
     ProjectionSite,
+    RenderCell,
+    RenderOutput,
+    RenderValue,
     SourceLocation,
 )
 from marimo_studio.view_providers._targets import (
@@ -113,7 +116,7 @@ def validate_projection_site(
         raise ValueError("Projection site kind is invalid")
     _validate_source_location(value.source, documents, label="Projection source")
     _validate_targets(value.kind, value.targets)
-    _validate_accept(value.kind, value.accept)
+    _validate_accept(value.kind, value.accept, optional=True)
     _validate_page_media(value.accept)
     if (
         type(value.offset) is not int
@@ -122,6 +125,14 @@ def validate_projection_site(
     ):
         raise ValueError("Projection site offset must be a non-negative byte offset")
     return value
+
+
+class InvalidTargetError(ValueError):
+    """A record names a notebook target that does not parse."""
+
+    def __init__(self, message: str, source: SourceLocation) -> None:
+        super().__init__(message)
+        self.source = source
 
 
 # Images marimo's output renderer shows in a page's <marimo-output> host.
@@ -153,13 +164,19 @@ def _validate_page_media(accept: Iterable[str]) -> None:
             )
 
 
-def _validate_accept(kind: str, accept: object) -> None:
+def _validate_accept(
+    kind: str,
+    accept: object,
+    *,
+    optional: bool,
+    kinds: Collection[str] = ("output",),
+) -> None:
     if not isinstance(accept, tuple):
         raise ValueError("accept must be a tuple of media types")
-    if not accept:
+    if not accept and optional:
         return
-    if kind != "output":
-        raise ValueError("Only output sites accept media types")
+    if kind not in kinds:
+        raise ValueError(f"Only {' and '.join(kinds)} sites accept media types")
     try:
         normalized = normalize_accept(accept)
     except (TypeError, ValueError) as error:
@@ -168,14 +185,44 @@ def _validate_accept(kind: str, accept: object) -> None:
         raise ValueError("Output accept lists use lowercase type/subtype media types")
 
 
+def render_read_kind(value: RenderValue | RenderOutput | RenderCell) -> ProjectionKind:
+    if isinstance(value, RenderCell):
+        return "cell"
+    return "output" if isinstance(value, RenderOutput) else "value"
+
+
+def validate_render_value(
+    value: object,
+    *,
+    documents: Collection[PurePosixPath] | None = None,
+) -> RenderValue | RenderOutput | RenderCell:
+    """Validate a document's value, output, or cell read and its target."""
+    if not isinstance(value, (RenderValue, RenderOutput, RenderCell)):
+        raise ValueError(
+            "Render reads must be RenderValue, RenderOutput, or RenderCell records"
+        )
+    kind = render_read_kind(value)
+    source = _validate_source_location(
+        value.source, documents, label=f"Render {kind} source"
+    )
+    if not isinstance(value, RenderValue):
+        _validate_accept(kind, value.accept, optional=False, kinds=("output", "cell"))
+    try:
+        validate_projection_target(kind, value.target)
+    except ValueError as error:
+        raise InvalidTargetError(str(error), source) from error
+    return value
+
+
 def accept_diagnostics(
     sites: Collection[ProjectionSite],
+    reads: Iterable[RenderOutput | RenderCell],
 ) -> tuple[ProjectDiagnostic, ...]:
-    """Report output hosts whose media types the view cannot resolve.
+    """Report output and cell reads whose media types the view cannot resolve.
 
-    A view reads each output target once, so every host of one target accepts
-    the same media types. A host that selects its target at runtime reads it in
-    the media types its literal hosts declare.
+    A view reads each output or cell target once, so every host and document
+    read of one target accepts the same media types. A host that selects its
+    target at runtime reads it in the media types its literal reads declare.
     """
     conflicts = [
         ProjectDiagnostic(
@@ -188,27 +235,36 @@ def accept_diagnostics(
         for site in sites
         if site.kind == "output" and site.targets == "*" and site.accept
     ]
-    first: dict[str, ProjectionSite] = {}
-    for site in sites:
-        if site.kind != "output" or site.targets == "*":
-            continue
-        # One conflict per host keeps the diagnostics within the site count.
-        for target in site.targets:
-            expected = first.setdefault(target, site)
-            if site.accept != expected.accept:
-                location = expected.source
+    first: dict[tuple[str, str], tuple[tuple[str, ...], SourceLocation]] = {}
+
+    def check(
+        kind: str,
+        targets: Iterable[str],
+        accept: tuple[str, ...],
+        source: SourceLocation,
+    ) -> None:
+        # One conflict per host or read keeps the diagnostics within the
+        # site and read counts.
+        for target in targets:
+            expected, location = first.setdefault((kind, target), (accept, source))
+            if accept != expected:
                 conflicts.append(
                     ProjectDiagnostic(
                         "output-accept-conflict",
                         "error",
-                        f"{target} is read as {_media(site.accept)} here and as "
-                        f"{_media(expected.accept)} at "
-                        f"{location.path}:{location.line}.",
-                        "Give every read of one output the same accept list.",
-                        site.source,
+                        f"{target} is read as {_media(accept)} here and as "
+                        f"{_media(expected)} at {location.path}:{location.line}.",
+                        f"Give every read of one {kind} the same accept list.",
+                        source,
                     )
                 )
-                break
+                return
+
+    for site in sites:
+        if site.kind == "output" and site.targets != "*":
+            check("output", site.targets, site.accept, site.source)
+    for read in reads:
+        check(render_read_kind(read), (read.target,), read.accept, read.source)
     return tuple(conflicts)
 
 
@@ -227,8 +283,7 @@ def validate_artifact_site(value: object) -> ArtifactSite:
         value.kind,
         "*" if value.targets is None else value.targets,
     )
-    _validate_accept(value.kind, value.accept)
-    _validate_page_media(value.accept)
+    _validate_accept(value.kind, value.accept, optional=True, kinds=("output", "cell"))
     return value
 
 

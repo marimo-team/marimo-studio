@@ -12,7 +12,7 @@ A release contains one coordinated compatibility unit:
 - `marimo-studio` Python package and CLI
 - Marimo server middleware, kernel lifespan, and agent capability entry points
 - `marimo_studio.view_provider` entry points
-- Vanilla, React, Svelte, Notebook Kit, and Quarto provider implementations
+- Vanilla, React, Svelte, Notebook Kit, Quarto, and Typst provider implementations
 - Provider analyzers and project starters
 - Provider guides and the Marimo Studio
   [Agent Plugin](https://github.com/peter-gy/agent-plugins)

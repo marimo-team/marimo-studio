@@ -299,7 +299,7 @@ def install_browser_bridge(
             ):
                 raise ValueError("A projection site is invalid.")
             accept = site["accept"]
-            if not isinstance(accept, list) or (accept and site["kind"] != "output"):
+            if not isinstance(accept, list) or (accept and site["kind"] == "value"):
                 raise ValueError("A projection site is invalid.")
             if accept and list(_studio_values.normalize_accept(accept)) != accept:
                 raise ValueError("A projection site is invalid.")

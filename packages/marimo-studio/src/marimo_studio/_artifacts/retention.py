@@ -70,6 +70,19 @@ def _integrity_error(path: PurePosixPath) -> ArtifactIntegrityError:
     )
 
 
+def _verified_bytes(root: Path, record: ArtifactFile, label: str) -> bytes:
+    try:
+        payload = read_secure_bytes(root, root.joinpath(*record.path.parts), label)
+    except (OSError, ConfigurationError) as error:
+        raise _integrity_error(record.path) from error
+    if (
+        len(payload) != record.size
+        or hashlib.sha256(payload).hexdigest() != record.sha256
+    ):
+        raise _integrity_error(record.path)
+    return payload
+
+
 def _verified_snapshot(
     source: BinaryIO,
     record: ArtifactFile,
@@ -470,20 +483,7 @@ class ArtifactLease:
             raise ConfigurationError(
                 f"Artifact file is absent from its manifest: {path.as_posix()}"
             )
-        try:
-            payload = read_secure_bytes(
-                self.artifact.root,
-                self.artifact.root.joinpath(*path.parts),
-                "Artifact file",
-            )
-        except (OSError, ConfigurationError) as error:
-            raise _integrity_error(path) from error
-        if (
-            len(payload) != record.size
-            or hashlib.sha256(payload).hexdigest() != record.sha256
-        ):
-            raise _integrity_error(path)
-        return payload
+        return _verified_bytes(self.artifact.root, record, "Artifact file")
 
     def read_bytes(self, path: str | PurePosixPath) -> bytes:
         """Return one manifest-listed file after verifying its size and digest."""
@@ -493,6 +493,23 @@ class ArtifactLease:
                 raise RuntimeError("Artifact lease is closed")
             self._ensure_live_locked()
             return self._read_locked(relative)
+
+    def copy_template(self, destination: Path) -> None:
+        """Copy the verified private render template into a new directory."""
+        template = self.artifact.template
+        if template is None:
+            raise ConfigurationError("Artifact has no render template")
+        root = self.artifact.root.parent / "template"
+        destination.mkdir()
+        with self._lock:
+            if self._owner is None:
+                raise RuntimeError("Artifact lease is closed")
+            self._ensure_live_locked()
+            for record in template.files:
+                payload = _verified_bytes(root, record, "Artifact template file")
+                target = destination.joinpath(*record.path.parts)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(payload)
 
     def read_text(
         self,

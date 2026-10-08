@@ -16,6 +16,7 @@ from marimo_studio._artifacts.records import (
     ArtifactManifest,
     ArtifactProfileState,
     ArtifactPublication,
+    ArtifactTemplate,
     ViewBuildPhase,
     ViewBuildState,
 )
@@ -215,29 +216,42 @@ def _diagnostic(value: object, label: str) -> ProjectDiagnostic:
         raise ConfigurationError(str(error)) from error
 
 
+def _file_records(files: tuple[ArtifactFile, ...]) -> list[dict[str, object]]:
+    return [
+        {"path": item.path.as_posix(), "sha256": item.sha256, "size": item.size}
+        for item in files
+    ]
+
+
 def _artifact_identity(
     document: str,
     files: tuple[ArtifactFile, ...],
     sites: tuple[ArtifactSite, ...],
+    template: ArtifactTemplate | None = None,
 ) -> dict[str, object]:
-    return {
+    identity: dict[str, object] = {
         "schema": 2,
         "document": document,
-        "files": [
-            {"path": item.path.as_posix(), "sha256": item.sha256, "size": item.size}
-            for item in files
-        ],
+        "files": _file_records(files),
         "sites": [item.to_dict() for item in sites],
     }
+    if template is not None:
+        identity["template"] = {
+            "document": template.document.as_posix(),
+            "files": _file_records(template.files),
+            "renderer": template.renderer,
+        }
+    return identity
 
 
 def artifact_revision(
     document: str,
     files: tuple[ArtifactFile, ...],
     sites: tuple[ArtifactSite, ...],
+    template: ArtifactTemplate | None = None,
 ) -> str:
     encoded = json.dumps(
-        _artifact_identity(document, files, sites),
+        _artifact_identity(document, files, sites, template),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -249,6 +263,7 @@ def artifact_manifest(
     document: object,
     files: tuple[ArtifactFile, ...],
     sites: tuple[ArtifactSite, ...],
+    template: ArtifactTemplate | None = None,
 ) -> ArtifactManifest:
     path = normalized_artifact_path(document, "Artifact document path")
     if path not in {item.path for item in files}:
@@ -267,8 +282,12 @@ def artifact_manifest(
         _invalid("Artifact file manifest contains case-equivalent paths")
     if len({site.id for site in sites}) != len(sites):
         _invalid("Artifact projection sites must have unique IDs")
-    revision = artifact_revision(path.as_posix(), files, sites)
-    return ArtifactManifest(revision, path, files, sites)
+    if template is not None and template.document not in {
+        item.path for item in template.files
+    }:
+        _invalid("Artifact template document is not present in its file manifest")
+    revision = artifact_revision(path.as_posix(), files, sites, template)
+    return ArtifactManifest(revision, path, files, sites, template)
 
 
 def artifact_manifest_dict(manifest: ArtifactManifest) -> dict[str, object]:
@@ -277,6 +296,7 @@ def artifact_manifest_dict(manifest: ArtifactManifest) -> dict[str, object]:
             manifest.document.as_posix(),
             manifest.files,
             manifest.sites,
+            manifest.template,
         ),
         "artifact_revision": manifest.artifact_revision,
     }
@@ -296,11 +316,10 @@ def _artifact_files(value: object, label: str) -> tuple[ArtifactFile, ...]:
 
 def decode_artifact_manifest(value: object) -> ArtifactManifest:
     _require_schema(value, 2, "Artifact manifest")
-    data = _object(
-        value,
-        {"schema", "artifact_revision", "document", "files", "sites"},
-        "Artifact manifest",
-    )
+    fields = {"schema", "artifact_revision", "document", "files", "sites"}
+    if isinstance(value, dict) and "template" in value:
+        fields.add("template")
+    data = _object(value, fields, "Artifact manifest")
     if type(data["schema"]) is not int:
         _invalid("Artifact manifest schema is invalid")
     files = _artifact_files(data["files"], "Artifact files")
@@ -308,7 +327,27 @@ def decode_artifact_manifest(value: object) -> ArtifactManifest:
         _artifact_site(item, "Artifact projection site")
         for item in _array(data["sites"], "Artifact projection sites", maximum=512)
     )
-    manifest = artifact_manifest(data["document"], files, sites)
+    template = None
+    if "template" in data:
+        template_data = _object(
+            data["template"],
+            {"document", "files", "renderer"},
+            "Artifact template",
+        )
+        template = ArtifactTemplate(
+            normalized_artifact_path(
+                template_data["document"],
+                "Artifact template document",
+            ),
+            _artifact_files(template_data["files"], "Artifact template files"),
+            _string(template_data["renderer"], "Artifact template renderer"),
+        )
+    manifest = artifact_manifest(
+        data["document"],
+        files,
+        sites,
+        template,
+    )
     if (
         _revision(data["artifact_revision"], "Artifact revision")
         != manifest.artifact_revision

@@ -23,6 +23,7 @@
     "@marimo-studio/runtime": "workspace:*",
     "@marimo-team/marimo-export": "catalog:",
     "jotai": "catalog:",
+    "pdfjs-dist": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "zod": "catalog:"

@@ -129,11 +129,13 @@ it("preserves verified Arrow bytes and table behavior for Studio values", async 
 
 it("shows accepted media outputs as marimo output data owned by their producer", async () => {
   const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const pdf = new TextEncoder().encode("%PDF-1.7");
   const png = new TextEncoder().encode("PNG pixels");
   const notebookExport = notebookExportFixture({
     inputs: [{ mode: "baseline" }],
     output: (state, name) => {
       if (name === "figure") return mediaOutput(state, name, "image/svg+xml", svg);
+      if (name === "document") return mediaOutput(state, name, "application/pdf", pdf);
       return mediaOutput(state, name, "image/png", png, { width: 300, height: 200 });
     },
   });
@@ -142,7 +144,7 @@ it("shows accepted media outputs as marimo output data owned by their producer",
     notebookExport.defaultState,
     {
       values: {},
-      outputs: { chart: "figure", preview: "thumbnail" },
+      outputs: { chart: "figure", report: "document", preview: "thumbnail" },
       cells: {},
     },
     createZeroPythonProjectionLoaders(),
@@ -161,13 +163,21 @@ it("shows accepted media outputs as marimo output data owned by their producer",
       },
     },
     {
+      selector: "report",
+      ownerCellId: "cell-report",
+      output: {
+        mimetype: "application/pdf",
+        data: `data:application/pdf;base64,${btoa("%PDF-1.7")}`,
+      },
+    },
+    {
       selector: "preview",
       ownerCellId: "cell-preview",
       output: { mimetype: "application/vnd.marimo+mimebundle" },
     },
   ]);
   // marimo shows a high-density image through a mimebundle carrying its display size.
-  const preview = snapshot.outputs[1]?.output?.data;
+  const preview = snapshot.outputs[2]?.output?.data;
   expect(preview).toEqual(expect.any(String));
   // SAFETY: The assertion above checked that the mimebundle data is a string.
   expect(JSON.parse(preview as string)).toEqual({

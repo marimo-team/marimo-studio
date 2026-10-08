@@ -84,8 +84,9 @@ A value without an accepted type puts the host in `data-state="error"` with
 code `output-media-unavailable`. Studio reads `accept` when it builds the view,
 so a script that changes the attribute later has no effect.
 
-A view reads each output target in one form. Every literal host that names a
-target in `value` lists the same media types. A different list reports `output-accept-conflict` at its source
+A view reads each output target in one form. Every literal host of a target,
+one that names it in `value`, and every document read of it list the same
+media types. A different list reports `output-accept-conflict` at its source
 location. A host with `data-marimo-allow="*"` shows each target in the form
 its literal hosts declare, and an `accept` on that host reports
 `projection-accept-invalid`.
@@ -247,6 +248,57 @@ assertions verify the rendered results of a dynamic site.
 Changing `name`, `value`, or `mo-value` releases the prior target and resolves
 the same DOM instance against the new target. Removing the host releases its
 projection ownership.
+
+## Rendered documents
+
+A rendered document, such as the PDF that the Typst provider compiles, reads
+notebook values and outputs when Studio renders it. The view page shows the
+document in a `<marimo-document>` viewer. Studio renders it again when a value
+or output it reads changes.
+The viewer keeps the last document on screen while a new one renders and shows
+render errors beside it.
+
+```typst
+#import "marimo.typ": marimo_output, marimo_value
+
+= Occupancy
+Rooms in use: #marimo_value("summary.rooms", default: 0)
+
+#marimo_output("occupancy_chart", width: 100%)
+```
+
+Values reach the renderer as portable JSON. A table value, such as a
+dataframe, fails with `render-value-not-json`. Convert it in the notebook, for
+example with `df.to_dicts()`. Outputs reach the renderer in the first media
+type the document accepts that the value supports, such as PDF for a
+matplotlib figure in a Typst report. An output without an accepted type
+renders with the template's default, and the viewer names it. A `zero-python`
+export renders every output in every prepared state, so the export stops when
+one state's value has no accepted type. A cell read receives the cell's output
+as marimo shows it, in the first accepted type the output carries, such as PNG
+for a matplotlib figure. A cell whose output has no accepted type, such as
+text or a table, renders with the template's default.
+
+Each runtime supplies values from a different place:
+
+| Runtime                      | Values come from                            | Document                                   |
+| ---------------------------- | ------------------------------------------- | ------------------------------------------ |
+| Python, edit and run mode    | The reader's kernel session, read by Studio | Rendered by Studio for each value change   |
+| Browser, edit mode           | The notebook state in the editor tab        | Rendered by Studio for each value change   |
+| Prepared, edit mode          | The prepared state the preview shows        | Rendered by Studio for each state change   |
+| Browser, run mode            | Unavailable                                 | The document rendered at build time        |
+| Static export, `zero-python` | Each prepared notebook state                | One document per state, rendered at export |
+| Static export, `wasm`        | Unavailable                                 | The document rendered at build time        |
+
+Outputs and cells follow the same rows. They come from the reader's kernel
+session, from the preview's `marimo-output` and `marimo-cell` hosts, or from
+each prepared state.
+
+Studio renders documents from session values for published views and refuses
+values posted in run mode with `render-values-unverified`. Where no current
+values reach the document, the viewer shows the build-time document with the
+note `Showing the document without current notebook values.` A `wasm` export,
+and a `zero-python` export state without a rendition, show the same note.
 
 ## Presentation readiness
 

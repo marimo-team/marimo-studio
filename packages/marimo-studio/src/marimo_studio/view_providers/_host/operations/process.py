@@ -23,6 +23,7 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
+    RenderRequest,
     StarterContext,
     StarterPlan,
 )
@@ -32,8 +33,9 @@ from .codec import (
     build_result_from_payload,
     inspection_from_payload,
     inspection_payload,
+    media_payload,
     project_payload,
-    provider_info_from_payload,
+    provider_description_from_payload,
     starter_context_payload,
     starter_payload,
     starter_plan_from_payload,
@@ -126,12 +128,39 @@ def build_in_provider_process(
     )
 
 
+def render_in_provider_process(
+    spec: ProviderProcessSpec,
+    request: RenderRequest,
+) -> BuildResult:
+    payload: dict[str, object] = {
+        "schema": 1,
+        "operation": "render",
+        "provider": spec.to_dict(),
+        "request": {
+            "template_root": str(request.template_root),
+            "document": request.document.as_posix(),
+            "values": dict(request.values),
+            "outputs": media_payload(request.outputs),
+            "cells": media_payload(request.cells),
+            "output_root": str(request.output_root),
+            "command_timeout": request.command_timeout,
+        },
+    }
+    return build_result_from_payload(
+        _run_provider_process(
+            payload,
+            request.cancellation,
+            _operation_timeout(request.command_timeout),
+        )
+    )
+
+
 def describe_in_provider_process(
     spec: ProviderProcessSpec,
     cancellation: ProviderCancellation,
     timeout: float = DEFAULT_PROVIDER_EXTENSION_TIMEOUT,
-) -> ProviderInfo:
-    return provider_info_from_payload(
+) -> tuple[ProviderInfo, bool]:
+    return provider_description_from_payload(
         _run_provider_process(
             {
                 "schema": 1,

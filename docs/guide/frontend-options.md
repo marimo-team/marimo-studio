@@ -11,7 +11,7 @@ structure, imported assets, or a larger module graph makes the view project
 easier to maintain. Choose [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
 for reactive JavaScript, Markdown, and HTML cells. Choose
 [Quarto](https://quarto.org/) for a Markdown document with publishing
-typography.
+typography, and [Typst](https://typst.app/) for a typeset PDF.
 
 Each starter places notebook results by name, as
 [Place notebook results in a view](notebook-results.md) describes. To use
@@ -26,6 +26,7 @@ another framework, see
 | `marimo-studio/svelte:default`       | Svelte applications with concise reactive browser state   |
 | `marimo-studio/notebook-kit:default` | Observable notebook HTML with reactive presentation cells |
 | `marimo-studio/quarto:default`       | Quarto Markdown documents with live notebook results      |
+| `marimo-studio/typst:default`        | Typeset PDF reports that render with notebook values      |
 
 For React, Svelte, and Notebook Kit, install the Deno toolchain in the
 notebook's Python project before running dependency commands:
@@ -183,7 +184,53 @@ Rooms in use today: {{< marimo value="summary.rooms" >}}.
 Studio renders the document with `--no-execute`, so computation stays in the
 notebook. See the
 [Quarto provider reference](../reference/built-in-providers.md#marimo-studio-quarto)
-for raw HTML hosts, `.md` entry documents, includes, and build inputs.
+for raw HTML hosts, `.md` entry documents, includes, and build inputs. The **Bulletin** view of
+[Earthquake watch](../examples/earthquakes.md) is a complete Quarto article
+with citations, callouts, and notebook-driven figures.
+
+## Typst PDF
+
+[Typst](https://typst.app/docs/) typesets papers and reports from markup.
+Install the compiler in the notebook's Python project and create a view:
+
+```console
+uv add 'marimo-studio[typst]'
+marimo-studio view create report --target analysis.py \
+  --starter marimo-studio/typst:default
+```
+
+`main.typ` reads notebook values through `marimo_value()` and places notebook
+figures through `marimo_output()`, both from the starter's `marimo.typ`. Before
+the notebook has values, `marimo_value()` returns its `default` and
+`marimo_output()` places nothing. Give each `marimo_value()` a default that the
+surrounding markup can format:
+
+```typst
+#import "marimo.typ": marimo_output, marimo_value
+
+Rooms in use: #marimo_value("summary.rooms", default: 0)
+
+#marimo_output("occupancy_chart", width: 100%)
+```
+
+The view shows the PDF. A Python runtime view renders it again for each
+change of a value or output it reads, and a Prepared export renders one PDF for
+each prepared state. A Browser runtime app and a `wasm` export show the PDF
+rendered at build time. `marimo_output()` places a notebook figure as a vector
+image, a PDF for a matplotlib figure and an SVG for an Altair chart, so the
+document and the notebook share one chart and the notebook keeps its own output
+settings. `marimo_cell("name")` places a named cell's output as marimo shows
+it, typically a PNG for a matplotlib figure.
+Return tables to the document as lists of dictionaries, for example with
+`df.to_dicts()`. See the
+[Typst provider reference](../reference/built-in-providers.md#marimo-studio-typst)
+for figures, fonts, and export behavior. The **Report** view of
+[Quadratic programs](../examples/quadratic-programs.md) is a complete Typst
+document that embeds the notebook's matplotlib figures.
+
+A page can also draw a PDF in the browser from `mo-value` data with a
+JavaScript PDF library, which works in every runtime. The **Field report** view of
+[Building occupancy](../examples/occupancy.md) uses pdfcn.
 
 ## Inspect installed starters
 

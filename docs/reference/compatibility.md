@@ -16,9 +16,9 @@ Add Studio to the notebook or project dependencies:
 dependencies = ["marimo-studio"]
 ```
 
-Use `marimo-studio[deno]` to enable every bundled starter. The `deno` extra
-supplies the Deno toolchain that the React, Reveal.js, Svelte, and Notebook Kit
-starters build with.
+The `deno` extra supplies the Deno toolchain that the React, Reveal.js, Svelte,
+and Notebook Kit starters build with. The `typst` extra supplies the Typst
+compiler for the Typst starter.
 
 ## Upgrade from 0.0.6
 
@@ -78,6 +78,7 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 | [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment    |
 | [pixi](https://pixi.prefix.dev/) | Optional. Runs Studio in a pixi workspace and installs Quarto from conda-forge       |
 | [Quarto](https://quarto.org/)    | 1.9.38 or newer for the Quarto provider                                              |
+| [Typst](https://typst.app/)      | The `typst` extra for the Typst provider                                             |
 | Browser acceptance               | Current Chromium on Linux and Windows                                                |
 
 Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),

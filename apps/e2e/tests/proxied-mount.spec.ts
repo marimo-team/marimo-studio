@@ -156,6 +156,27 @@ test("switches preview runtimes beneath a stripped proxy prefix", async ({
   await expect(prepared.locator('[mo-value="metric"]')).toHaveText("42");
 });
 
+test("renders a Typst document beneath a stripped proxy prefix", async ({ page, studioCli }) => {
+  await studioCli.addWorkspaceView(proxiedNotebookPath, "report", "marimo-studio/typst:default");
+  await writeFile(
+    proxiedWorkspacePath("__marimo__/studio/notebook/report/main.typ"),
+    [
+      '#import "marimo.typ": marimo_value',
+      "#set page(width: 12cm, height: auto)",
+      '= Metric is #marimo_value("metric", default: "pending")',
+      "",
+    ].join("\n"),
+  );
+  await studioCli.buildWorkspaceView("report", proxiedNotebookPath);
+
+  await page.goto(`${proxiedUrl()}studio/report/`);
+  const viewer = (await waitForPreview(page)).locator("marimo-document");
+  await expect(viewer.locator(".textLayer")).toContainText("Metric is 42");
+  await editorSlider(page, /^Proxied scale/).press("End");
+  await expect(viewer.locator(".textLayer")).toContainText("Metric is 63");
+  await expect(viewer).toHaveAttribute("data-state", "ready");
+});
+
 // An agent shares a preview URL, then rewrites the view source on disk. The
 // open tab follows each build and keeps the public address it was given.
 for (const runtime of ["server", "wasm", "zero-python"] as const) {

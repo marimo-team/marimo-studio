@@ -105,11 +105,15 @@ const isOutputMimetype = (value: string): value is CellOutput["mimetype"] =>
 const isOutputChannel = (value: string): value is CellOutput["channel"] =>
   Object.hasOwn(outputChannels, value);
 
-export const toMarimoCellOutput = (output: MarimoCellOutputSnapshot): CellOutput => {
-  const channel: string = output.channel;
+const outputChannel = (channel: string): CellOutput["channel"] => {
   if (!isOutputChannel(channel)) {
     throw new Error(`Marimo cannot render projected output channel ${channel}`);
   }
+  return channel;
+};
+
+export const toMarimoCellOutput = (output: MarimoCellOutputSnapshot): CellOutput => {
+  const channel = outputChannel(output.channel);
   if (!isOutputMimetype(output.mimetype)) {
     throw new Error(`Marimo cannot render projected output type ${output.mimetype}`);
   }
@@ -125,13 +129,19 @@ export const toMarimoCellOutput = (output: MarimoCellOutputSnapshot): CellOutput
   return cellOutput;
 };
 
-const toCellOutput = (output: ProjectedOutputUpdate): CellOutput =>
-  toMarimoCellOutput({
-    channel: output.channel ?? "output",
-    mimetype: output.mimetype,
-    data: output.data,
-    timestamp: output.timestamp,
-  });
+// marimo displays only its own output types. Other media, such as the PDF a
+// hidden document host carries, holds no virtual files or controls.
+const projectedCellOutput = (output: ProjectedOutputUpdate): CellOutput | undefined => {
+  const channel = outputChannel(output.channel ?? "output");
+  return isOutputMimetype(output.mimetype)
+    ? toMarimoCellOutput({
+        channel,
+        mimetype: output.mimetype,
+        data: output.data,
+        timestamp: output.timestamp,
+      })
+    : undefined;
+};
 
 const ensureProjectedOutputOwner = (ownerCellId: CellId, executionTime: number): void => {
   store.set(notebookAtom, (state) => {
@@ -160,16 +170,16 @@ const ensureProjectedOutputOwner = (ownerCellId: CellId, executionTime: number):
 
 export const reconcileProjectedOutput = (output: ProjectedOutputUpdate): void => {
   const ownerCellId = parseCellId(output.ownerCellId);
-  const cellOutput = toCellOutput(output);
+  const cellOutput = projectedCellOutput(output);
   reconcileProjectedOutputState(
     output,
     UI_ELEMENT_REGISTRY.entries,
     () => VirtualFileTracker.INSTANCE.removeForCellId(ownerCellId),
-    () =>
-      VirtualFileTracker.INSTANCE.track({
-        cell_id: ownerCellId,
-        output: cellOutput,
-      }),
+    () => {
+      if (cellOutput) {
+        VirtualFileTracker.INSTANCE.track({ cell_id: ownerCellId, output: cellOutput });
+      }
+    },
     (objectIds) => suppressReplacedControlValues(UI_ELEMENT_REGISTRY, objectIds),
   );
 };
@@ -250,11 +260,18 @@ export const ProjectedOutputArea = ({
   stale: boolean;
 }) => {
   const ownerCellId = parseCellId(output.ownerCellId);
-  const projectedOutput = toCellOutput(output);
+  const projectedOutput = projectedCellOutput(output);
   const registered = useProjectedOutputOwner(ownerCellId, output.timestamp);
 
   if (!registered) {
     return null;
+  }
+  if (projectedOutput === undefined) {
+    return (
+      <div className="marimo-cell-diagnostic" role="status">
+        {`marimo cannot show ${output.mimetype} output.`}
+      </div>
+    );
   }
 
   return (

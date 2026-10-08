@@ -56,6 +56,11 @@ from marimo_studio._processes.provider_runner import (
     create_provider_runner,
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError
+from marimo_studio._views.documents import (
+    DocumentRenderer,
+    compose_view,
+    renderer_missing,
+)
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._views.instrumentation import (
     authored_diagnostics,
@@ -82,11 +87,12 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ViewProject,
 )
+from marimo_studio.view_providers._artifact_sites import render_sites
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.records import ProviderProvenance
 
 
-class BuildProvider(Protocol):
+class BuildProvider(DocumentRenderer, Protocol):
     def availability(self) -> ProviderAvailability: ...
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
@@ -559,6 +565,19 @@ def _publish_locked(
             held = _publication_hold_diagnostic(project)
             if held is not None:
                 record_build_failure(project, profile, (held,), started, revision)
+            reads_notebook = (
+                snapshot_inspection.render_values
+                or snapshot_inspection.render_outputs
+                or snapshot_inspection.render_cells
+            )
+            if reads_notebook and not provider.renders:
+                record_build_failure(
+                    project,
+                    profile,
+                    (renderer_missing(),),
+                    started,
+                    revision,
+                )
             try:
                 sites, insertions = instrument_sites(
                     snapshot.root,
@@ -639,14 +658,60 @@ def _publish_locked(
                     started,
                     revision,
                 )
+            try:
+                output = compose_view(
+                    generation_root=candidate.generation_root,
+                    files_root=candidate.files_root,
+                    document=report.document,
+                    sites=sites,
+                    document_sites=render_sites(
+                        snapshot_inspection.render_values,
+                        snapshot_inspection.render_outputs,
+                        snapshot_inspection.render_cells,
+                    ),
+                    title=project.name,
+                    renderer=provider,
+                    renderer_fingerprint=provenance.build_fingerprint,
+                    cancellation=cancellation,
+                )
+            except DiagnosticsError as error:
+                record_build_failure(
+                    project,
+                    profile,
+                    error.diagnostics,
+                    started,
+                    revision,
+                )
+            except ViewProjectError:
+                raise
+            except (OSError, ConfigurationError) as error:
+                record_build_failure(
+                    project,
+                    profile,
+                    (
+                        ProjectDiagnostic(
+                            code="artifact-validation-failed",
+                            severity="error",
+                            message=str(error),
+                            hint="Fix the provider output and build the view again.",
+                        ),
+                    ),
+                    started,
+                    revision,
+                )
+            report = replace(
+                report,
+                diagnostics=(*report.diagnostics, *output.diagnostics),
+            )
             prepared = prepare_artifact_publication(
                 project,
                 profile,
                 candidate,
-                sites,
-                report.document,
+                output.sites,
+                output.document,
                 revision,
                 started,
+                template=output.template,
             )
             report = replace(
                 report,

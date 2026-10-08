@@ -44,6 +44,7 @@ from marimo_studio._artifacts.records import (
     ArtifactPublication,
     ArtifactRevision,
     ArtifactRevisionSnapshot,
+    ArtifactTemplate,
     ViewArtifact,
     ViewBuildState,
 )
@@ -101,6 +102,15 @@ class ArtifactCandidate:
     files_root: Path
     work_root: Path
     cache_root: Path
+
+
+@dataclass(frozen=True)
+class TemplateCandidate:
+    """Private provider output that Studio renders after publication."""
+
+    root: Path
+    document: PurePosixPath
+    renderer: str
 
 
 @dataclass(frozen=True)
@@ -408,6 +418,8 @@ def prepare_artifact_publication(
     document: PurePosixPath,
     project_revision: str,
     started: float,
+    *,
+    template: TemplateCandidate | None,
 ) -> PreparedArtifactPublication:
     """Validate and copy one candidate before its receipt transaction."""
     tree = FileTree(project.root)
@@ -433,7 +445,26 @@ def prepare_artifact_publication(
         published_files = publication_root / "files"
         files = ingest_publication_files(project, candidate.files_root, published_files)
         validate_document(published_files, document)
-        manifest = artifact_manifest(document.as_posix(), files, sites)
+        template_record = None
+        if template is not None:
+            template_record = ArtifactTemplate(
+                normalized_artifact_path(
+                    template.document.as_posix(),
+                    "Artifact template document",
+                ),
+                ingest_publication_files(
+                    project,
+                    template.root,
+                    publication_root / "template",
+                ),
+                template.renderer,
+            )
+        manifest = artifact_manifest(
+            document.as_posix(),
+            files,
+            sites,
+            template_record,
+        )
     except (OSError, ConfigurationError, ViewProjectError) as error:
         record_build_failure(
             project,

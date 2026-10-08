@@ -163,10 +163,12 @@ def _declare_studio(
     requirement: str,
 ) -> None:
     react = ProviderStub("marimo-studio/react", "react")
+    typst = ProviderStub("marimo-studio/typst", "typst")
     vanilla = ProviderStub("marimo-studio/vanilla", "vanilla")
     registry = ProviderRegistry(
         (
             candidate("react", react, distribution="marimo-studio"),
+            candidate("typst", typst, distribution="marimo-studio"),
             candidate("vanilla", vanilla, distribution="marimo-studio"),
         ),
         BUILTIN_PROVIDER_REQUIREMENTS,
@@ -190,6 +192,19 @@ def test_setup_keeps_a_declared_direct_studio_reference(
     prepare_view(notebook_path, "report", starter="marimo-studio/vanilla:vanilla")
 
     assert _dependencies(notebook_path) == (f"marimo-studio[deno] @ {wheel}",)
+
+
+def test_setup_adds_every_provider_extra_to_a_direct_studio_reference(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = (notebook_path.parent / "marimo_studio-9.9.9-py3-none-any.whl").as_uri()
+    _declare_studio(notebook_path, monkeypatch, f"marimo-studio @ {wheel}")
+
+    prepare_view(notebook_path, "dashboard", starter="marimo-studio/react:react")
+    prepare_view(notebook_path, "paper", starter="marimo-studio/typst:typst")
+
+    assert _dependencies(notebook_path) == (f"marimo-studio[deno,typst] @ {wheel}",)
 
 
 def test_setup_pins_a_direct_studio_reference_limited_by_a_marker(

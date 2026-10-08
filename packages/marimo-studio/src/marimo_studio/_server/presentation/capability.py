@@ -84,9 +84,10 @@ _ARTIFACT_PATTERN = re.compile(
 )
 _VIEW_SUPPORT_PATTERN = re.compile(
     rf"{re.escape(SUPPORT_PATH)}/views/(?P<view>{_VIEW_PATTERN})/"
-    r"(?P<route>config|values|outputs|dev/events|zero-python/(?:current|"
+    r"(?P<route>config|values|outputs|render|dev/events|zero-python/(?:current|"
     r"[0-9a-f]{64}/(?:index\.json|assets/.+)))"
 )
+_SESSION_POST_ROUTES = frozenset({"outputs", "render", "values"})
 _RUNTIME_ASSET_PATTERN = re.compile(rf"{re.escape(SUPPORT_PATH)}/assets/.+")
 _NATIVE_READ_PATTERN = re.compile(r"/(?:@file/.+|public/.+|public-files-sw\.js)")
 
@@ -355,7 +356,7 @@ def presentation_target_allowed(
     if method == "POST":
         match = _VIEW_SUPPORT_PATTERN.fullmatch(route.target)
         return route.target in _NATIVE_POST_ROUTES or (
-            match is not None and match.group("route") in {"values", "outputs"}
+            match is not None and match.group("route") in _SESSION_POST_ROUTES
         )
     return False
 
@@ -368,7 +369,7 @@ def presentation_target_session_header(target: str, method: str) -> str | None:
         target in _NATIVE_POST_ROUTES
         or (
             (match := _VIEW_SUPPORT_PATTERN.fullmatch(target)) is not None
-            and match.group("route") in {"values", "outputs"}
+            and match.group("route") in _SESSION_POST_ROUTES
         )
     ):
         return "Marimo-Session-Id"

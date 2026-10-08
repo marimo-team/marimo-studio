@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Literal, Protocol
+
+from marimo_export.values import Representation
 
 from marimo_studio._filesystem.paths import validate_relative_path
 from marimo_studio._notebook.records import CellRef, NotebookSpec
@@ -154,7 +157,7 @@ class SourceLocation:
 class ProviderError(Exception):
     """Report a problem with a view project as a diagnostic.
 
-    Raise it from ``inspect()`` or ``build()``. Studio shows
+    Raise it from ``inspect()``, ``build()``, or ``render()``. Studio shows
     ``message`` and ``hint`` beside ``source`` instead of a provider failure.
     """
 
@@ -200,6 +203,61 @@ class ProjectionSite:
 
 
 @dataclass(frozen=True)
+class RenderValue:
+    """Locate one notebook value that a rendered document reads as JSON."""
+
+    target: str
+    source: SourceLocation
+
+    def to_dict(self) -> dict[str, object]:
+        return {"target": self.target, "source": self.source.to_dict()}
+
+
+@dataclass(frozen=True)
+class RenderOutput:
+    """Locate one notebook value that a rendered document places as media.
+
+    ``accept`` lists the media types the document can place, in order of
+    preference, such as ``("application/pdf", "image/svg+xml", "image/png")``.
+    Studio renders the value in the first type it supports, so a matplotlib
+    figure arrives as a vector image with the notebook's settings unchanged.
+    """
+
+    target: str
+    source: SourceLocation
+    accept: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "target": self.target,
+            "source": self.source.to_dict(),
+            "accept": list(self.accept),
+        }
+
+
+@dataclass(frozen=True)
+class RenderCell:
+    """Locate one notebook cell whose rendered output a document places as media.
+
+    ``target`` is the cell's name. ``accept`` lists the media types the document
+    can place, in order of preference. Studio passes the cell's output as marimo
+    rendered it, in the first listed type the output carries, so a cell that
+    shows a matplotlib figure arrives as a PNG image.
+    """
+
+    target: str
+    source: SourceLocation
+    accept: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "target": self.target,
+            "source": self.source.to_dict(),
+            "accept": list(self.accept),
+        }
+
+
+@dataclass(frozen=True)
 class ProjectDiagnostic:
     code: str
     severity: Literal["warning", "error"]
@@ -229,14 +287,20 @@ class ProjectInspection:
     inputs: tuple[BuildInput, ...]
     sites: tuple[ProjectionSite, ...] = ()
     diagnostics: tuple[ProjectDiagnostic, ...] = ()
+    render_values: tuple[RenderValue, ...] = ()
+    render_outputs: tuple[RenderOutput, ...] = ()
+    render_cells: tuple[RenderCell, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schema": 2,
+            "schema": 3,
             "documents": [item.to_dict() for item in self.documents],
             "inputs": [item.to_dict() for item in self.inputs],
             "sites": [item.to_dict() for item in self.sites],
             "diagnostics": [item.to_dict() for item in self.diagnostics],
+            "render_values": [item.to_dict() for item in self.render_values],
+            "render_outputs": [item.to_dict() for item in self.render_outputs],
+            "render_cells": [item.to_dict() for item in self.render_cells],
         }
 
 
@@ -339,6 +403,40 @@ class BuildResult:
     diagnostics: tuple[ProjectDiagnostic, ...] = ()
 
 
+@dataclass(frozen=True)
+class RenderRequest:
+    """Render one published document template with current notebook values.
+
+    ``values`` holds canonical JSON for each available value target.
+    ``outputs`` holds each available output target in the first media type of
+    its ``RenderOutput.accept`` that the value supports. ``cells`` holds the
+    rendered output of each available cell in the first media type of its
+    ``RenderCell.accept`` that the output carries. A target that is absent has
+    no current value, and the template applies its default. All three come
+    from the notebook a reader is viewing and are untrusted data.
+    """
+
+    template_root: Path
+    document: PurePosixPath
+    values: Mapping[str, JsonValue]
+    outputs: Mapping[str, Representation]
+    cells: Mapping[str, Representation]
+    output_root: Path
+    cancellation: ProviderCancellation
+    runner: ProviderRunner
+    command_timeout: float
+
+
+# Rendered documents a viewer page can display, by file suffix.
+DOCUMENT_MEDIA_TYPES = MappingProxyType(
+    {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+    }
+)
+
+
 class ViewProvider(Protocol):
     """Create, inspect, and build one kind of view project."""
 
@@ -357,3 +455,15 @@ class ViewProvider(Protocol):
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
 
     def build(self, request: BuildRequest) -> BuildResult: ...
+
+
+class DocumentProvider(ViewProvider, Protocol):
+    """Build a document template and render it with notebook values.
+
+    ``build()`` returns the template entry. Studio renders it with ``render()``
+    once without values when it builds the view, then again whenever a reader's
+    values change. ``render()`` returns the rendered file beneath
+    ``output_root``, or no document with an error diagnostic.
+    """
+
+    def render(self, request: RenderRequest) -> BuildResult: ...

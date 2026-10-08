@@ -61,6 +61,21 @@ module, which a Prepared export also uses. Targets `"*"` represent a dynamic
 site and avoid enumerating its target set during inspection. Runtime policy
 still applies to active instances and unique targets. Prepared export requires finite targets on every site.
 
+## Rendered documents
+
+| Boundary                                      |  Limit |
+| --------------------------------------------- | -----: |
+| Encoded render values for one render          |  8 MiB |
+| Rendered outputs for one render               | 16 MiB |
+| Rendered document                             | 64 MiB |
+| Provider commands during one render           |   60 s |
+| Prepared states rendered by one static export |    256 |
+
+Render values or outputs over their budget fail with `document-values-too-large`
+or `document-outputs-too-large`. A larger rendered document fails with
+`document-render-too-large`, and an export with more prepared states fails with
+`document-render-states-exceeded`.
+
 ## Active presentation projections
 
 | Boundary                    |             Limit | Browser diagnostic               |

@@ -21,6 +21,7 @@ from marimo_studio.view_providers import (
     ProjectionSite,
     ProviderAvailability,
     ProviderInfo,
+    RenderValue,
     SourceDocument,
     SourceLocation,
     ViewProject,
@@ -28,6 +29,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._artifact_sites import (
     artifact_sites,
+    inspection_sites,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 from marimo_studio.view_providers._validation import accept_diagnostics
@@ -258,6 +260,20 @@ def test_site_ids_survive_layout_edits_and_number_repeated_targets() -> None:
     assert len({site.id for site in before}) == 3
 
 
+def test_projection_hosts_and_render_reads_of_one_target_get_distinct_ids() -> None:
+    (site,), _ = html_sites(ENTRY, _page('<span mo-value="summary"></span>'))
+    inspection = ProjectInspection(
+        documents=(SourceDocument(ENTRY, "html", "edit"),),
+        inputs=(BuildInput(ENTRY, "file"),),
+        sites=(site,),
+        render_values=(RenderValue("summary", SourceLocation(ENTRY, 1, 1)),),
+    )
+
+    ids = [item.id for item in inspection_sites(inspection)]
+
+    assert len(ids) == len(set(ids)) == 2
+
+
 @pytest.mark.parametrize("problem", ("outside-inputs", "duplicate-offset"))
 def test_provider_sites_must_be_unique_build_inputs(
     tmp_path: Path,
@@ -397,6 +413,6 @@ def test_accept_conflicts_report_each_host_once() -> None:
         for line in range(1, 6)
     )
 
-    conflicts = accept_diagnostics(sites)
+    conflicts = accept_diagnostics(sites, ())
 
     assert [item.source.line for item in conflicts if item.source] == [2, 4]

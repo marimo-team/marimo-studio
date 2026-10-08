@@ -77,6 +77,46 @@ class PageProvider:
         return BuildResult(PurePosixPath("index.html"))
 """
 
+# Keep page.md as a template and render it as an SVG with the notebook's metric.
+DOCUMENT = """
+from marimo_studio.view_providers import ProjectDiagnostic, RenderValue
+
+
+def inspect(self, request):
+    return ProjectInspection(
+        documents=(SourceDocument(PAGE, "markdown", "edit"),),
+        inputs=(BuildInput(PAGE, "file"),),
+        render_values=(RenderValue("metric", SourceLocation(PAGE, 1, 1)),),
+    )
+
+
+def build(self, request):
+    template = (request.project.root / PAGE).read_bytes()
+    (request.staging_root / PAGE).write_bytes(template)
+    return BuildResult(PAGE)
+
+
+def render(self, request):
+    metric = request.values.get("metric")
+    if metric == "broken":
+        problem = ProjectDiagnostic(
+            "page-render-error",
+            "error",
+            "page.md cannot show this metric.",
+            source=SourceLocation(PAGE, 1, 1),
+        )
+        return BuildResult(None, (problem,))
+    (request.output_root / "page.svg").write_text(
+        f'<svg xmlns="http://www.w3.org/2000/svg"><text>{metric!r}</text></svg>'
+    )
+    return BuildResult(PurePosixPath("page.svg"))
+
+
+PageProvider.inspect = inspect
+PageProvider.build = build
+PageProvider.render = render
+"""
+
 
 @pytest.fixture
 def install(
@@ -191,6 +231,25 @@ def test_inspect_that_writes_to_the_project_fails_the_check(
 
     with pytest.raises(ProviderCheckError, match=r"inspect\(\) changed the project"):
         check_provider(provider)
+
+
+def test_render_receives_values_as_studio_supplies_them(
+    install: Callable[[str], ViewProvider],
+) -> None:
+    (view,) = check_provider(install(DOCUMENT), values={"metric": 2.0})
+
+    assert view.rendered is not None
+    assert b"<text>2</text>" in view.rendered
+
+
+def test_render_errors_fail_the_check_at_their_location(
+    install: Callable[[str], ViewProvider],
+) -> None:
+    with pytest.raises(
+        ProviderCheckError,
+        match=r"page\.md:1:1: page\.md cannot show this metric\.",
+    ):
+        check_provider(install(DOCUMENT), values={"metric": "broken"})
 
 
 @pytest.mark.parametrize(

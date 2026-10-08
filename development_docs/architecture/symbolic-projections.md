@@ -21,11 +21,22 @@ source path, line, column, kind, targets, and the byte offset inside its start
 tag. Core derives the trusted site ID and inserts it at that offset
 in the disposable build snapshot, not authored source.
 
-Accept lists belong to output targets. Inspection gives every literal host of
-a target the same list and rejects one on a `"*"` site, so resolution, kernel
+A rendered document declares `RenderValue`, `RenderOutput`, and `RenderCell`
+records in place of sites. Core turns each distinct value target into one value
+site on a hidden `mo-value` host in the generated viewer page, each output
+target into one output artifact site with the read's accept list and a hidden
+`marimo-output` host, and each cell target into one cell artifact site with its
+accept list and a hidden `marimo-cell` host. Render reads travel the ordinary
+projection paths and authorization, and the hosts' update events trigger the
+next render. Read sites use their own ID namespace, so a page host and a read
+of one target never share an ID.
+
+Accept lists belong to output targets. Inspection gives every literal read of a
+target the same list and rejects one on a `"*"` site, so resolution, kernel
 authorization records, the Pyodide bridge, and the Prepared compiler look up a
 target's list from its literal sites. Page sites accept images marimo's
-renderer shows.
+renderer shows. Hosts render nothing for other media, such as the PDF a hidden
+document host carries for the renderer.
 
 An output with an accept list renders through marimo-export's
 `values.represent()` in every runtime: the kernel output renderer, the Pyodide
@@ -36,10 +47,10 @@ neither package installed. `media_output()` carries a representation as marimo
 output data: a base64 data URL, wrapped in a marimo mimebundle with the display
 size of a PNG rendered at `MEDIA_SCALE`, as marimo sends its own high-density
 figures. The zero-python loader builds the same data from the `media`
-exporter's `BlobAsset` metadata, and `output_representation()` decodes it
-back into a representation. Value targets, output targets, and kernel
-authorization records parse through marimo-export's `ValueSelector`, which
-owns the selector grammar and its limits.
+exporter's `BlobAsset` metadata, and `output_representation()` decodes posted
+outputs. Value targets, output targets, and kernel authorization records parse
+through marimo-export's `ValueSelector`, which owns the selector grammar and
+its limits.
 
 Every provider can declare literal targets. A provider analyzer may also
 authorize a finite target set or explicit wildcard access. An analyzer that

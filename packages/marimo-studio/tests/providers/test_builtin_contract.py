@@ -77,8 +77,10 @@ def test_builtin_provider_passes_the_provider_check(name: str, placement: str) -
     )
 
     with selected as key:
-        views = check_provider(key)
+        views = check_provider(key, values={"report": {"total": 7}, "metric": 7})
 
     for view in views:
         assert view.published, view.starter
         assert view.warnings == (), view.starter
+        if view.rendered is not None:
+            assert view.rendered[:5] in {b"%PDF-", b"<svg ", b"\x89PNG\r"}
