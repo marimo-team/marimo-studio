@@ -134,12 +134,12 @@ def test_build_repairs_each_replaceable_generated_state(
         assert str(artifact_root(project)) in warnings[0], damage
 
 
-def _project_built_by_studio_0_2(tmp_path: Path) -> ViewProject:
+def _project_built_by_studio_0_3(tmp_path: Path) -> ViewProject:
     project = _project(tmp_path)
     publish_artifact_lease(project, "development").close()
     published = read_artifact_state(project, "development").artifact
     assert published is not None
-    # Studio 0.2 wrote schema 1 records: the receipt carried a provider API
+    # Studio 0.3 wrote schema 1 records: the receipt carried a provider API
     # version, and the manifest stored projection sites as "mounts".
     receipt = _read_json(_profile_path(project))
     receipt["schema"] = 1
@@ -153,8 +153,8 @@ def _project_built_by_studio_0_2(tmp_path: Path) -> ViewProject:
     return project
 
 
-def test_readers_treat_state_from_studio_0_2_as_unbuilt(tmp_path: Path) -> None:
-    project = _project_built_by_studio_0_2(tmp_path)
+def test_readers_treat_state_from_studio_0_3_as_unbuilt(tmp_path: Path) -> None:
+    project = _project_built_by_studio_0_3(tmp_path)
 
     state = read_artifact_state(project, "development")
 
@@ -163,12 +163,12 @@ def test_readers_treat_state_from_studio_0_2_as_unbuilt(tmp_path: Path) -> None:
     assert lease_published_artifact(project, "development") is None
 
 
-def test_build_replaces_state_from_studio_0_2(
+def test_build_replaces_state_from_studio_0_3(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.INFO, logger="marimo.studio")
-    project = _project_built_by_studio_0_2(tmp_path)
+    project = _project_built_by_studio_0_3(tmp_path)
 
     publish_artifact_lease(project, "development").close()
 
