@@ -321,11 +321,12 @@ export const captureRetiringPreviewReads = async (
     .locator('iframe[data-preview-runtime-frame="server"]')
     .elementHandle();
   const frame = await frameElement?.contentFrame().finally(() => frameElement.dispose());
-  const revision = await previewFrame(page)
-    .locator("html")
-    .getAttribute("data-marimo-studio-revision");
-  if (frame === null || frame === undefined || revision === null) {
+  if (frame === null || frame === undefined) {
     throw new Error("The server preview frame is unavailable.");
+  }
+  const revision = await frame.locator("html").getAttribute("data-marimo-studio-revision");
+  if (revision === null) {
+    throw new Error("The server preview has no presentation revision.");
   }
   return captureRetiringProjectionReads(frame, revision, diagnostics);
 };
