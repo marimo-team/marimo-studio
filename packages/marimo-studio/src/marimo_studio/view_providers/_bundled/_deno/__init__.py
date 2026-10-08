@@ -17,6 +17,9 @@ from marimo_studio.view_providers._bundled._deno.files import (
     project_inventory as project_inventory,
 )
 from marimo_studio.view_providers._bundled._deno.runtime import (
+    DOWNLOAD_FAILURE_HINT as DOWNLOAD_FAILURE_HINT,
+)
+from marimo_studio.view_providers._bundled._deno.runtime import (
     DenoExecution as DenoExecution,
 )
 from marimo_studio.view_providers._bundled._deno.runtime import (
@@ -30,4 +33,7 @@ from marimo_studio.view_providers._bundled._deno.runtime import (
 )
 from marimo_studio.view_providers._bundled._deno.runtime import (
     deno_binary as deno_binary,
+)
+from marimo_studio.view_providers._bundled._deno.runtime import (
+    download_failed as download_failed,
 )

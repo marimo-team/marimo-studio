@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from importlib import import_module
@@ -34,6 +35,18 @@ DENO_MIN_VERSION = "2.9.5"
 INSTALL_ACTION = (
     "Install marimo-studio[deno] in the Python environment that runs Studio."
 )
+DOWNLOAD_FAILURE_HINT = (
+    "Deno could not download a package. Check the network connection and any "
+    "proxy or npm registry settings, then build the view again."
+)
+# Deno's messages for a failed npm tarball, npm registry metadata request,
+# esbuild or TypeScript compiler tarball, and fetch, as Deno formats them.
+_DOWNLOAD_FAILURE = re.compile(
+    r"Failed caching npm package '"
+    r"|Failed loading https?://\S+ for package \""
+    r"|failed to download (?:esbuild package|the TypeScript compiler) tarball"
+    r"|error sending request (?:for url \(|from \S+ for )"
+)
 _AVAILABILITY_TIMEOUT = 15.0
 _SAFE_ENVIRONMENT = frozenset(
     {
@@ -62,6 +75,11 @@ _NETWORK_ENVIRONMENT = frozenset(
         "SSL_CERT_FILE",
     }
 )
+
+
+def download_failed(output: str) -> bool:
+    """Return whether Deno output reports a failed package download."""
+    return _DOWNLOAD_FAILURE.search(output) is not None
 
 
 class DenoExecutionError(RuntimeError):

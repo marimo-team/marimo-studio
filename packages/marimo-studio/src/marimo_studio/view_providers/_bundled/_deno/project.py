@@ -343,7 +343,11 @@ def failure(
         code=code,
         severity="error",
         message=f"{provider} could not {operation}: {output.strip()}",
-        hint=MISSING_DEPENDENCY_HINT,
+        hint=(
+            _deno.DOWNLOAD_FAILURE_HINT
+            if _deno.download_failed(output)
+            else MISSING_DEPENDENCY_HINT
+        ),
     )
 
 
