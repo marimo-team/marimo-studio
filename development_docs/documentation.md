@@ -62,7 +62,7 @@ site. Each family names one notebook and every view exported from it.
 5. Checks links to sibling views against the family allowlist.
 6. Replaces that export's directory under `apps/docs/public/examples`. A failed
    export keeps its previous copy, and exports finished before it stay
-   published.
+   published. A complete run then removes exports the catalog no longer lists.
 
 The published example tree contains one static notebook and one Prepared
 runtime export per named view. Generated example files are build evidence.
@@ -217,7 +217,7 @@ minutes per view. Pass selectors in `EXAMPLES` to export only what changed:
 ```console
 make docs-examples EXAMPLES='--family athletes'
 make docs-examples EXAMPLES='--notebook earthquakes'
-make docs-examples EXAMPLES='--view occupancy/monitor --view athletes/paper'
+make docs-examples EXAMPLES='--view occupancy/monitor --view athletes/field'
 ```
 
 Selectors may be repeated and combined. `--family` selects its notebook and

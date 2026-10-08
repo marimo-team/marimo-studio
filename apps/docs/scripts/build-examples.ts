@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { constants } from "node:os";
@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { documentationExampleFamilies, type DocumentationExampleFamily } from "../examples.ts";
-import { publishExamples, validatePreparedExample } from "./example-publication.ts";
+import { publishExamples, pruneExamples, validatePreparedExample } from "./example-publication.ts";
 import { selectDocumentationExamples } from "./example-selection.ts";
 
 interface ExportResult {
@@ -59,6 +59,15 @@ const isFile = async (path: string): Promise<boolean> => {
 };
 
 let activeCommand: ChildProcess | undefined;
+let activePublication: Promise<void> | undefined;
+
+const stopCommand = (pid: number, signal: NodeJS.Signals): void => {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    process.kill(-pid, signal);
+  }
+};
 
 const run = (command: string, arguments_: readonly string[]): Promise<CommandResult> =>
   new Promise((resolveCommand, rejectCommand) => {
@@ -71,9 +80,10 @@ const run = (command: string, arguments_: readonly string[]): Promise<CommandRes
         MARIMO_EXPORT_REPOSITORY:
           process.env.MARIMO_EXPORT_REPOSITORY ?? join(cacheRoot, "export-repository"),
       },
-      // Its own process group lets a signal stop the whole export tree, the way a
-      // terminal interrupt does.
-      detached: true,
+      // On POSIX, its own process group lets a signal stop the whole export tree,
+      // the way a terminal interrupt does. On Windows, a detached child opens a
+      // console window, and `taskkill /T` stops the tree.
+      detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     activeCommand = child;
@@ -251,29 +261,37 @@ const main = async (): Promise<void> => {
   const stagingRoot = await mkdtemp(join(cacheRoot, "docs-examples-"));
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
-      // Stop the export first, so it can't write into staging after removal.
-      const stop = (): never => {
+      // Stop the export so it can't write into staging after removal, and let a
+      // started publication finish or roll back, since staging holds the
+      // previous copy while it runs.
+      const command = activeCommand;
+      const stopped =
+        command?.pid === undefined
+          ? undefined
+          : new Promise((resolveStop) => command.once("close", resolveStop));
+      if (command?.pid !== undefined) {
+        stopCommand(command.pid, signal);
+      }
+      void Promise.allSettled([stopped, activePublication]).then(() => {
         rmSync(stagingRoot, { force: true, recursive: true });
         process.exit(128 + constants.signals[signal]);
-      };
-      const command = activeCommand;
-      if (command?.pid === undefined) {
-        stop();
-      } else {
-        command.once("close", stop);
-        process.kill(-command.pid, signal);
-      }
+      });
     });
   }
   // Publish each export as soon as it validates, so an interrupted or failed run
   // keeps every finished export and the last valid copy of the rest.
   const publish = async (slug: string, target: string): Promise<void> => {
     await mkdir(join(destinationRoot, slug), { recursive: true });
-    await publishExamples({
+    activePublication = publishExamples({
       destination: join(destinationRoot, slug, target),
       previous: join(stagingRoot, "previous"),
       staging: join(stagingRoot, slug, target),
     });
+    try {
+      await activePublication;
+    } finally {
+      activePublication = undefined;
+    }
   };
   try {
     for (const { family, notebook, views } of selection.families) {
@@ -286,6 +304,9 @@ const main = async (): Promise<void> => {
         await validateView(stagingRoot, family, view.key);
         await publish(family.slug, view.key);
       }
+    }
+    if (selection.complete) {
+      await pruneExamples(destinationRoot, documentationExampleFamilies);
     }
     console.log(
       `Exported ${selection.notebooks} static notebooks and ${selection.views} live documentation views.`,
