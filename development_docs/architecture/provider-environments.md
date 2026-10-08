@@ -57,7 +57,8 @@ its manifest declares Python packages: `pixi.toml` with `python` or PyPI
 dependencies, or `pyproject.toml` with `[tool.pixi.workspace]`.
 `python_project.project_environment()` applies the precedence in one directory:
 that `pixi.toml`, then the pixi pyproject, then a uv project. A `pixi.toml`
-that installs only system tools leaves the directory to uv.
+that installs only system tools, like this repository's, leaves the directory
+to uv.
 
 Studio runs in place in a pixi workspace and never re-enters it. pixi
 activation exports `PIXI_PROJECT_MANIFEST` and `CONDA_PREFIX`. A command that

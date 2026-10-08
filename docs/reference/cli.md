@@ -156,6 +156,7 @@ local CSS and JavaScript files. `--starter` selects another installed starter.
 
 A completed creation returns exact `launch_requirements` in JSON and prints an
 environment-aware launch command. Project notebooks use `uv run` with
+`--no-sandbox`, and notebooks in a pixi workspace use `pixi run` with
 `--no-sandbox`. Standalone notebooks use `uvx` with `--sandbox`. Install and run
 requirements for reviewed providers.
 

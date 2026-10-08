@@ -19,6 +19,10 @@ with uv. Notebook code still has access to your files and network. `--watch`
 reloads the notebook when a coding agent or another editor changes the file,
 so Notebook and Preview show the saved code.
 
+To keep Python packages and system tools such as Quarto in one project
+environment, start Studio from a
+[pixi workspace](../reference/built-in-providers.md#marimo-studio-quarto).
+
 Click **Add view** in the Studio toolbar. Name the view `dashboard`, choose
 **HTML document**, and review the files it will create. For an untitled notebook,
 save it when prompted so the view has a stable location beside the notebook.

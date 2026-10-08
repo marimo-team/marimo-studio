@@ -6,8 +6,9 @@ description: Provider keys, starter IDs, Source documents, requirements, and pro
 # Built-in view providers
 
 Studio includes view providers for plain HTML, [React](https://react.dev/),
-[Svelte](https://svelte.dev/), and
-[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit). A provider key selects the view
+[Svelte](https://svelte.dev/),
+[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit), and
+[Quarto](https://quarto.org/). A provider key selects the view
 project's inspection and build contract. A starter ID selects the files created
 for a new view project.
 
@@ -28,6 +29,7 @@ input and is not stored in `view.toml`.
 | `marimo-studio/react`        | `marimo-studio/react:default`, `marimo-studio/react:reveal` | `marimo-studio[deno]`    |
 | `marimo-studio/svelte`       | `marimo-studio/svelte:default`                              | `marimo-studio[deno]`    |
 | `marimo-studio/notebook-kit` | `marimo-studio/notebook-kit:default`                        | `marimo-studio[deno]`    |
+| `marimo-studio/quarto`       | `marimo-studio/quarto:default`                              | Quarto 1.9.38 or newer   |
 
 Run `marimo-studio starters --json` for the installed catalog and current
 availability. The `documents` field lists the Source documents a new view
@@ -243,6 +245,121 @@ bundled. Notebook Kit's `npm:` and `jsr:` imports use remote browser modules.
 | `config`      | Project-relative POSIX path | `deno.json`      | Selects the Deno configuration                                       |
 | `lockfile`    | Project-relative POSIX path | `deno.lock`      | Selects the frozen Deno lockfile                                     |
 | `vite_config` | Project-relative POSIX path | `vite.config.ts` | Selects the Vite configuration                                       |
+
+## `marimo-studio/quarto`
+
+The Quarto provider renders a [Quarto](https://quarto.org/) Markdown document
+to an HTML page. Quarto is a publishing system that turns Markdown with front
+matter into styled documents through [Pandoc](https://pandoc.org/). Notebook
+results appear in the page through the `marimo`
+[shortcode](https://quarto.org/docs/extensions/shortcodes.html), which Studio
+installs as a Quarto extension for each build:
+
+```markdown
+---
+title: Occupancy
+---
+
+Rooms in use today: {{< marimo value="summary.rooms" >}}.
+
+{{< marimo cell="occupancy_chart" >}}
+```
+
+::: v-pre
+
+| Shortcode                      | Renders                                          |
+| ------------------------------ | ------------------------------------------------ |
+| `{{< marimo cell="name" >}}`   | `<marimo-cell name="name">`, a complete cell     |
+| `{{< marimo output="name" >}}` | `<marimo-output value="name">`, a value's output |
+| `{{< marimo value="path" >}}`  | `<span mo-value="path">`, a JSON value           |
+
+Put a `cell` or `output` shortcode alone on its line with a blank line before
+and after it, so the host renders at full width outside a paragraph. Studio
+reports `projection-host-inline` for one inside running text. A `value`
+shortcode belongs inside a sentence.
+
+An `output` shortcode takes the same
+[`accept`](projections.md#rendered-outputs) image list as a `marimo-output`
+host, such as `{{< marimo output="chart" accept="image/svg+xml image/png" >}}`,
+to show a figure as a sharp SVG with the notebook's output settings unchanged.
+
+:::
+
+Raw HTML hosts work in the same documents. Use them when the host needs its own
+element or attributes, such as `<strong mo-value="summary.rooms"></strong>`. A
+`marimo-cell` or `marimo-output` element on its own line with blank lines
+around it stays an HTML block. Shortcodes and hosts inside front matter, code,
+math, and other shortcodes stay unbound.
+
+The default starter creates these provider-owned files:
+
+```text
+AGENTS.md
+index.qmd
+```
+
+::: v-pre
+
+`index.qmd` contains one `{{< marimo cell="name" >}}` for each enabled notebook
+cell that may display output.
+
+:::
+
+The entry document can be `.qmd`, `.md`, or `.markdown`, and Quarto's
+[`include`](https://quarto.org/docs/authoring/includes.html) shortcode pulls in
+other Markdown files. Studio scans the entry document and every file it
+includes for hosts, and lists them in Source. Like Quarto, it resolves an
+include path from the entry document's directory, and a path that starts with
+`/` from the directory that holds `_quarto.yml`. An include that points at a
+missing file reports `build-input-missing`, and one that leaves the view
+project reports `build-input-invalid`.
+
+The provider runs `quarto render` with `--no-execute`, so code chunks in the
+document stay unexecuted. Compute in the notebook and project results into the
+page. Studio wraps the rendered page body in `<div id="app-shell">`, so authored
+source must leave `id="app-shell"` unused.
+
+Every project file except `AGENTS.md` and `DESIGN.md` is a build input. Images,
+includes, stylesheets, and bibliographies that the document references rebuild
+the view when they change. Hidden directories, `_site/`, `_freeze/`, and
+`*_files/` directories at the project root stay outside the build.
+
+The provider runs the `quarto` command on `PATH`. Install Quarto 1.9.38 or newer
+with [pixi](https://pixi.prefix.dev/), a package manager that installs
+[conda-forge](https://conda-forge.org/) packages:
+
+```console
+pixi global install quarto
+```
+
+`pixi global` puts `quarto` on `PATH` for every way of starting marimo. A pixi
+workspace keeps Quarto, Python, and Studio in one project environment instead,
+and `pixi run` starts marimo with that environment activated:
+
+```console
+pixi init
+pixi add python quarto
+pixi add --pypi marimo-studio
+pixi run marimo edit analysis.py --no-sandbox --watch
+```
+
+conda-forge Quarto finds Pandoc and its resources through environment
+activation. Start marimo with `pixi run` or inside `pixi shell`, or `doctor` and
+`starters` report Quarto as unavailable. The
+[Quarto installer](https://quarto.org/docs/get-started/) works as well.
+
+conda-forge Quarto pins its own Deno. A workspace that also adds
+`marimo-studio[deno]` for React, Svelte, or Notebook Kit views replaces that
+Deno with Studio's, so install Quarto with `pixi global install quarto` there.
+
+Builds keep Quarto's caches beneath the view's `.artifacts/.cache`, apart from
+the user cache that other Quarto installations share.
+
+### Options
+
+| Option       | Type                        | Default     | Contract                                                                  |
+| ------------ | --------------------------- | ----------- | ------------------------------------------------------------------------- |
+| `entrypoint` | Project-relative POSIX path | `index.qmd` | Selects the Quarto document. It must end in `.qmd`, `.md`, or `.markdown` |
 
 ## Deno availability
 

@@ -1,0 +1,14 @@
+# System tools for developing marimo-studio, installed from conda-forge.
+# uv owns the Python environment (uv.lock) and pnpm owns JavaScript
+# (pnpm-lock.yaml). Make and scripts/python-test.sh run the commands that need
+# these tools through `pixi run`, which activates the environment.
+[workspace]
+name = "marimo-studio"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
+requires-pixi = ">=0.81"
+exclude-newer = "7d"
+
+[dependencies]
+# The Quarto view provider renders documents with the Quarto CLI.
+quarto = ">=1.9.38"

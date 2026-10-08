@@ -57,6 +57,11 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
   --starter marimo-studio/react:default
 ```
 
+The Quarto starter needs the `quarto` command. Install it with
+`pixi global install quarto`. When `starters` reports
+`Studio found Quarto in a pixi or conda environment that is not activated.`,
+start marimo through `pixi run` or inside `pixi shell`.
+
 After creation, Studio derives the provider requirement from the saved
 manifest. Keep a third-party provider distribution in the notebook or Python
 project dependencies.

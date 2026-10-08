@@ -180,12 +180,16 @@ jobs:
         with:
           prepare-marimo-frontend: "true"
 
+      # Quarto renders the Quarto example views.
+      - name: Set up pixi
+        uses: ./.github/actions/setup-pixi
+
       - name: Build browser assets
         run: make build
 
       - name: Export the example family
         run: >-
-          pnpm --filter @marimo-studio/docs examples:build --family ${{ matrix.family }}
+          pixi run --locked pnpm --filter @marimo-studio/docs examples:build --family ${{ matrix.family }}
 
       - name: Upload the exported family
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

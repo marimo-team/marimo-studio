@@ -35,6 +35,7 @@ _ENTRY_POINTS = {
     ("marimo.kernel.lifespan", "marimo-studio"),
     ("marimo.server.asgi.middleware", "marimo-studio"),
     ("marimo_studio.view_provider", "notebook-kit"),
+    ("marimo_studio.view_provider", "quarto"),
     ("marimo_studio.view_provider", "react"),
     ("marimo_studio.view_provider", "svelte"),
     ("marimo_studio.view_provider", "vanilla"),
@@ -316,6 +317,7 @@ def _verify_views(*, deno: bool) -> None:
             catalog = {item.id: item for item in await workspace.starters()}
             expected = {
                 "marimo-studio/notebook-kit:default",
+                "marimo-studio/quarto:default",
                 "marimo-studio/react:default",
                 "marimo-studio/react:reveal",
                 "marimo-studio/svelte:default",

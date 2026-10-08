@@ -86,11 +86,17 @@ jobs:
             os: macos-latest
           - profile: deno
             os: windows-latest
+          - profile: quarto
+            os: windows-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Set up pixi
+        if: matrix.profile == 'quarto'
+        uses: ./.github/actions/setup-pixi
 
       - name: Test ${{ matrix.profile }} contracts
         uses: ./.github/actions/test-python

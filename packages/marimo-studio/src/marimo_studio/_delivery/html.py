@@ -18,6 +18,20 @@ from marimo_studio.view_providers._document import (
 )
 
 _MARIMO_FILENAME = Element("marimo-filename")
+# Presentation frames have an opaque origin, where Web Storage access throws.
+# Generated sites such as Quarto read localStorage while loading, so give each
+# document an in-memory localStorage before authored scripts run. Session
+# storage keeps throwing: session preservation detects that and replays the
+# runtime session through the trusted wrapper.
+_STORAGE_FALLBACK = (
+    "(()=>{try{void window.localStorage}catch{const s=new Map();"
+    "Object.defineProperty(window,'localStorage',{configurable:true,"
+    "enumerable:true,value:Object.freeze({get length(){return s.size},"
+    "key:i=>Array.from(s.keys())[i]??null,"
+    "getItem:k=>s.has(String(k))?s.get(String(k)):null,"
+    "setItem:(k,v)=>{s.set(String(k),String(v))},"
+    "removeItem:k=>{s.delete(String(k))},clear:()=>{s.clear()}})})}})();"
+)
 
 
 def node_list(*nodes: object) -> list[Node]:
@@ -71,6 +85,7 @@ def runtime_head(
     ).replace("<", "\\u003c")
     return fragment[
         node_list(
+            script({"data-marimo-studio-runtime": True})[Markup(_STORAGE_FALLBACK)],
             *(
                 link(
                     {

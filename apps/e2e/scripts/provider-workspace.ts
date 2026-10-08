@@ -105,6 +105,7 @@ const candidates: Candidate[] = [
     ],
   },
   { view: "dashboard", starter: "marimo-studio-e2e-provider/report:default" },
+  { view: "article", starter: "marimo-studio/quarto:default" },
 ];
 
 export class ProviderWorkspace {

@@ -94,7 +94,11 @@ file. `--no-token` serves the editor on localhost without an access token,
 which lets `pair notebook list` find it. Studio needs `marimo-studio` in the
 marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
-Notebook Kit starters. `help(marimo._code_mode)` then lists Studio as the
+Notebook Kit starters. The Quarto starter needs the `quarto` command from
+https://quarto.org/docs/get-started/ or `pixi global install quarto`. A
+notebook in a pixi workspace runs Studio through
+`pixi run marimo edit notebook.py --no-sandbox --watch`.
+`help(marimo._code_mode)` then lists Studio as the
 `studio` capability, and sandboxed kernels import the same Studio as the
 server. For views across several notebooks, serve their folder as
 [setup](references/setup.md#serve-several-notebooks) describes. Create, edit,

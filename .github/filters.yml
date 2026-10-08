@@ -214,6 +214,9 @@ quality:
 
 python_contracts:
   - *python_inputs
+  - ".github/actions/setup-pixi/**"
+  - "pixi.toml"
+  - "pixi.lock"
 
 frontend_contracts:
   - *frontend_inputs
@@ -278,6 +281,7 @@ main_browser:
   - "!apps/e2e/tests/provider-runtime.spec.ts"
   - "!apps/e2e/tests/provider-reveal.spec.ts"
   - "!apps/e2e/tests/external-provider.spec.ts"
+  - "!apps/e2e/tests/provider-quarto.spec.ts"
   - "apps/e2e/scripts/collaborative-workspace.ts"
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
@@ -295,10 +299,14 @@ provider_browser:
   - "apps/e2e/tests/provider-runtime.spec.ts"
   - "apps/e2e/tests/provider-reveal.spec.ts"
   - "apps/e2e/tests/external-provider.spec.ts"
+  - "apps/e2e/tests/provider-quarto.spec.ts"
   - "apps/e2e/tests/!(*.spec).ts"
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
   - apps/e2e/scripts/provider-workspace.ts
+  - ".github/actions/setup-pixi/**"
+  - "pixi.toml"
+  - "pixi.lock"
   - apps/e2e/scripts/export-repository.ts
   - apps/e2e/tests/provider-fixture.ts
 

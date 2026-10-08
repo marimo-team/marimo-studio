@@ -127,6 +127,7 @@ view_providers/
     deno_react/       provider, build, analyzer, and vertical starter packages
     deno_svelte/      provider, source check, analyzer, and vertical starter packages
     deno_obsnotebook/ provider, notebook HTML analyzer, and vertical starter packages
+    quarto/           provider, Markdown site scanner, marimo shortcode extension, Lua filter, and starter
 ```
 
 The SDK re-exports the operation types from `_processes/operation.py`, so a

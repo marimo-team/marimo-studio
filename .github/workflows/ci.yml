@@ -253,6 +253,28 @@ jobs:
           profile: deno
           python-version: "3.12"
 
+  quarto:
+    name: Quarto provider (Linux)
+    needs: changes
+    if: >-
+      needs.changes.outputs.python_contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pixi
+        uses: ./.github/actions/setup-pixi
+
+      - name: Test Quarto provider contracts
+        uses: ./.github/actions/test-python
+        with:
+          profile: quarto
+          python-version: "3.12"
+
   installed-package:
     name: Installed package and provider (Linux)
     needs: [changes, package]
@@ -302,6 +324,7 @@ jobs:
       - python-compat
       - native-process
       - deno
+      - quarto
       - installed-package
     runs-on: ubuntu-latest
     timeout-minutes: 1
@@ -330,6 +353,8 @@ jobs:
           PYTHON_STANDARD: ${{ needs.python-standard.result }}
           QUALITY_REQUIRED: ${{ needs.changes.outputs.quality == 'true' }}
           QUALITY: ${{ needs.quality.result }}
+          QUARTO_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
+          QUARTO: ${{ needs.quarto.result }}
         run: |
           scripts/check-workflow-results.sh \
             Changes true "$CHANGES" \
@@ -340,4 +365,5 @@ jobs:
             Package "$PACKAGE_REQUIRED" "$PACKAGE" \
             Python-compat "$PYTHON_COMPAT_REQUIRED" "$PYTHON_COMPAT" \
             Python-standard "$PYTHON_STANDARD_REQUIRED" "$PYTHON_STANDARD" \
-            Quality "$QUALITY_REQUIRED" "$QUALITY"
+            Quality "$QUALITY_REQUIRED" "$QUALITY" \
+            Quarto "$QUARTO_REQUIRED" "$QUARTO"

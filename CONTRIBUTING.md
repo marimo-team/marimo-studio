@@ -12,9 +12,10 @@ artifact, projection, and runtime ownership boundaries.
 
 ## Set up
 
-The repository uses Python, `uv`, Node.js, pnpm, Deno, and Chromium. Their
-supported versions are declared in `pyproject.toml`, `package.json`, and the
-lockfiles.
+The repository uses Python, `uv`, Node.js, pnpm, Deno, Chromium, and
+[pixi](https://pixi.prefix.dev/). Their supported versions are declared in
+`pyproject.toml`, `package.json`, `pixi.toml`, and the lockfiles. Install uv,
+Node.js, and pixi first.
 
 ```console
 make setup

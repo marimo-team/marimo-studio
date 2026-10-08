@@ -48,6 +48,7 @@ studio = "marimo_studio.agent"
 
 [project.entry-points."marimo_studio.view_provider"]
 notebook-kit = "marimo_studio.view_providers._builtin.deno_obsnotebook:provider"
+quarto = "marimo_studio.view_providers._builtin.quarto:provider"
 react = "marimo_studio.view_providers._builtin.deno_react:provider"
 svelte = "marimo_studio.view_providers._builtin.deno_svelte:provider"
 vanilla = "marimo_studio.view_providers._builtin.vanilla:provider"
