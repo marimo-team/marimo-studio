@@ -113,7 +113,8 @@ jobs:
         env:
           TEMP: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
-          PYTEST_ADDOPTS: --basetemp=${{ runner.temp }}/p
+          # pytest splits this like a shell, so quote the Windows path.
+          PYTEST_ADDOPTS: --basetemp='${{ runner.temp }}\p'
         with:
           profile: quarto
           python-version: "3.12"
