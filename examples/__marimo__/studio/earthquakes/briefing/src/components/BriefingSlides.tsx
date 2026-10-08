@@ -40,7 +40,7 @@ export const CoverSlide = ({ model }: { model: BriefingModel }) => (
           Compare logarithmic scale, event frequency, and the choices hidden
           inside a data filter.
         </p>
-        <ol className="cover-questions" aria-label="Lesson questions">
+        <ol className="cover-questions" aria-label="Questions">
           <li>
             <span>01</span> How much larger is a larger earthquake?
           </li>
@@ -107,7 +107,7 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
           <h2>A catalog reflects its selection rules.</h2>
           <p className="slide-intro">
             Before interpreting a pattern, separate the published feed, the
-            numerical rule, and the question the learner will answer.
+            numerical rule, and the question being asked.
           </p>
         </header>
 
@@ -119,7 +119,7 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
               <strong>
                 {weekly ? integer.format(weekly.source_events) : "…"}
               </strong>
-              <p>records in the fixed USGS weekly snapshot</p>
+              <p>events in the USGS weekly feed</p>
             </article>
             <article className="catalog-step fragment" data-fragment-index="0">
               <span
@@ -131,9 +131,8 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
                 {weekly ? integer.format(weekly.qualified_events) : "…"}
               </strong>
               <p>
-                records satisfy the computed
-                M{weekly?.catalog_minimum_magnitude.toFixed(1) ??
-                  "…"}+ threshold
+                events at M{weekly?.catalog_minimum_magnitude.toFixed(1) ??
+                  "…"} or above
               </p>
             </article>
             <article
@@ -144,7 +143,7 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
               <span hidden mo-value="seismic_analysis.weekly.period_end" />
               <span>Interpretation</span>
               <strong>{formatPeriod(weekly)}</strong>
-              <p>one bounded observation window for linked comparisons</p>
+              <p>the window every comparison uses</p>
             </article>
             <p className="catalog-footnote fragment" data-fragment-index="1">
               {belowThreshold === 1 && belowThresholdEvent
@@ -232,7 +231,7 @@ export const TempoSlide = ({ model }: { model: BriefingModel }) => {
             value={`M${model.maximumDailyMagnitude.toFixed(1)}`}
           />
           <blockquote>
-            “Most events” and “largest event” are separate analytical claims.
+            The busiest day was not the day of the largest earthquake.
           </blockquote>
         </div>
       </div>
@@ -538,7 +537,7 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
               data-marimo-lens-detail="Browser filter · seismic_analysis.events"
               aria-live="polite"
             >
-              <span>Current analytical set</span>
+              <span>Selected events</span>
               <strong>{summary ? integer.format(summary.events) : "…"}</strong>
               <p>
                 M{summary?.minimum_magnitude.toFixed(1) ?? "…"}+ ·{" "}

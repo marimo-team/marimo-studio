@@ -27,9 +27,9 @@ def introduction(mo):
     mo.md("""
     # Earthquake Watch
 
-    A fixed USGS weekly feed supports analysis of activity over time,
-    logarithmic magnitude, cumulative event frequency, epicenter locations,
-    felt reports, source significance, and review status.
+    One week of the USGS earthquake feed, 22 to 29 January 2024: activity over
+    time, logarithmic magnitude, cumulative event frequency, epicenter
+    locations, felt reports, source significance, and review status.
     """)
     return
 
@@ -52,8 +52,8 @@ def data_context(mo):
     mo.md("""
     ## Weekly event feed
 
-    The committed USGS GeoJSON feed supplies event properties, source links,
-    and epicenter coordinates for the weekly record.
+    The USGS GeoJSON feed supplies event properties, source links, and
+    epicenter coordinates for the week.
     """)
     return
 
@@ -117,9 +117,8 @@ def filter_context(mo):
     mo.md("""
     ## Filter the catalog
 
-    Magnitude and review status define a reproducible subset. Weekly totals
-    remain based on the complete source snapshot, which makes the effect of
-    each selection visible.
+    Filter the week by magnitude and review status. Weekly totals still count
+    every event, so each filter shows how much of the week it keeps.
     """)
     return
 
@@ -514,12 +513,11 @@ def catalog_analysis(
         },
     }
     mo.md(f"""
-    ### Catalog analysis
+    ### Catalog summary
 
-    **{weekly_summary["source_events"]} events**, **{len(_daily_rows)} daily
-    observations**, and **{len(magnitude_exceedance)} magnitude thresholds** are
-    collected with the complete magnitude and frequency relations in
-    `seismic_analysis`.
+    The analysis covers **{weekly_summary["source_events"]} events** on
+    **{len(_daily_rows)} calendar days** and
+    **{len(magnitude_exceedance)} magnitude thresholds**.
     """)
     return (seismic_analysis,)
 
@@ -530,9 +528,8 @@ def weekly_conclusion(events, mo, source_metadata):
     ## Weekly context
 
     The weekly feed contains **{source_metadata["count"]} USGS events** with
-    a maximum magnitude of **{events["magnitude"].max():.1f}**. Every record
-    retains its time, epicenter coordinates, review status, and source URL for
-    subsequent analysis.
+    a maximum magnitude of **{events["magnitude"].max():.1f}**. Each event
+    links to its USGS event page with its time, epicenter, and review status.
     """)
     return
 

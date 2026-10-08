@@ -43,9 +43,8 @@ export const ErrorEvidence = ({
         <h2 id="errors-heading">Misclassified training readings</h2>
       </div>
       <p>
-        Showing {Math.min(rows.length, visibleErrors)} sampled readings from
-        {" "}
-        {total ?? rows.length} errors.
+        The {Math.min(rows.length, visibleErrors)} errors farthest from the
+        threshold, of {total ?? rows.length}.
       </p>
     </div>
     <div

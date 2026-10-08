@@ -10,7 +10,7 @@
     "install-browser": "playwright install --with-deps chromium",
     "examples:build": "node scripts/build-examples.ts",
     "examples:check": "node scripts/build-examples.ts --check",
-    "examples:smoke": "node scripts/build-examples.ts --view earthquakes/story --view earthquakes/briefing",
+    "examples:smoke": "node scripts/build-examples.ts --view earthquakes/story --view earthquakes/briefing --view quadratic-programs/report",
     "site:build": "pnpm test && pnpm examples:check && vitepress build && pnpm verify",
     "preview": "portless run --name preview.docs.marimo-studio pnpm run preview:server",
     "preview:server": "node scripts/serve-docs.ts preview",

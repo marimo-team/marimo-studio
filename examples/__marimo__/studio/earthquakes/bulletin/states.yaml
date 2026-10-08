@@ -1,0 +1,21 @@
+schema: marimo-export.states.v1
+default_state: matrix-000000
+matrix:
+  comparison_magnitude:
+    - 4.0
+    - 2.5
+    - 3.0
+    - 3.5
+    - 4.5
+    - 5.0
+    - 5.5
+    - 6.0
+    - 6.5
+    - 7.0
+  frequency_threshold:
+    - 4.5
+    - 3.0
+    - 3.5
+    - 4.0
+    - 5.0
+    - 5.5

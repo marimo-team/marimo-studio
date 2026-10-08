@@ -2,17 +2,20 @@
 layout: home
 title: marimo-studio
 titleTemplate: false
-description: Turn reactive Python into reports, apps, and presentations with a coding agent.
+description: Turn reactive Python into apps, presentations, articles, and PDF reports with a coding agent.
 
 hero:
-  text: Web views for reactive Python notebooks
-  tagline: Turn reactive Python into reports, apps, and presentations. Work with a coding agent, and keep every view connected to your analysis.
+  text: One reactive notebook, many views
+  tagline: Turn reactive Python into apps, presentations, articles, and PDF reports. Work with a coding agent, and keep every view connected to your analysis.
   image:
     light: /brand/marimo-studio-lockup-stacked-light.svg
     dark: /brand/marimo-studio-lockup-stacked-dark.svg
     alt: marimo-studio
   actions:
     - theme: brand
+      text: What is Studio?
+      link: ./what-is-studio
+    - theme: alt
       text: Get started
       link: ./guide/getting-started
     - theme: alt
@@ -30,7 +33,7 @@ features:
     link: ./what-is-studio
   - icon:
       src: /icons/gallery-vertical-end.svg
-      alt: Named web views
+      alt: Named views
       width: "24"
       height: "24"
     title: Named views
@@ -54,18 +57,11 @@ features:
     link: ./guide/run-and-share
 ---
 
-## Example: Quadratic programs
-
-Teach the same optimization problem as a lecture, a reading page, or a hands-on
-lab. Each view reads from the same Python notebook.
-
-<StudioViewStack family="quadratic-programs" />
-
-## Example views
+## Examples
 
 Each example notebook backs several views: slide decks, reading pages, linked
-explorers, maps, monitors, and printable reports. Open a view to compare it
-with its siblings and the notebook behind them.
+explorers, maps, monitors, typeset articles, and PDF reports. Open a view to
+compare it with its siblings and the notebook behind them.
 
 <StudioViewMasonry />
 

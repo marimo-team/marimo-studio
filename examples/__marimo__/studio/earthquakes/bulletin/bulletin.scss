@@ -1,0 +1,238 @@
+/*-- scss:defaults --*/
+// The Earthquake Watch broadsheet palette, shared with the Story view.
+$body-bg: #fafaf8;
+$body-color: #171716;
+$text-muted: #64615b;
+$primary: #b45435;
+$link-color: #b45435;
+$border-color: #d9dcd7;
+$font-family-sans-serif: "IBM Plex Sans", system-ui, sans-serif;
+$font-family-monospace: "IBM Plex Mono", ui-monospace, monospace;
+$headings-font-family: "Source Serif 4", Georgia, serif;
+$headings-font-weight: 500;
+$toc-color: #64615b;
+$callout-color-note: #3a4d45;
+$callout-color-warning: #dc8c46;
+
+/*-- scss:rules --*/
+body {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.08rem;
+  line-height: 1.65;
+}
+
+#title-block-header {
+  border-bottom: 1px solid #1d1d1b;
+  padding-bottom: 1.4rem;
+  margin-bottom: 1.6rem;
+
+  .title {
+    font-size: clamp(2.6rem, 6vw, 4.2rem);
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+  }
+
+  .subtitle {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-style: italic;
+    color: #64615b;
+    font-size: 1.35rem;
+    margin-top: 0.6rem;
+  }
+
+  .quarto-title-meta-heading,
+  .abstract-title {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #b45435;
+  }
+
+  .abstract {
+    font-size: 1.02rem;
+    color: #3b3a36;
+  }
+}
+
+h2 {
+  font-size: 1.85rem;
+  letter-spacing: -0.02em;
+  margin-top: 2.8rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #d9dcd7;
+}
+
+#TOC,
+.sidebar nav[role="doc-toc"] {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.86rem;
+
+  h2 {
+    margin-top: 0;
+    padding-top: 0;
+    border: 0;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+}
+
+.column-margin,
+.margin-aside {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #64615b;
+}
+
+figcaption,
+.figure-caption {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.86rem;
+  color: #64615b;
+}
+
+.callout {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.92rem;
+}
+
+.figures-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid #d9dcd7;
+  margin: -0.4rem 0 1.2rem;
+
+  > div {
+    padding: 0.9rem 1rem 1rem 0;
+  }
+
+  > div + div {
+    padding-left: 1rem;
+    border-left: 1px solid #d9dcd7;
+  }
+
+  .figure-label {
+    display: block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #64615b;
+  }
+
+  strong {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .signal {
+    color: #b45435;
+  }
+}
+
+@media (max-width: 640px) {
+  .figures-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > div:nth-child(3) {
+      padding-left: 0;
+      border-left: 0;
+    }
+
+    > div:nth-child(n + 3) {
+      border-top: 1px solid #d9dcd7;
+    }
+  }
+}
+
+.chart {
+  width: 100%;
+  min-height: 12rem;
+  font-family: "IBM Plex Sans", sans-serif;
+}
+
+.chart svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+table.strongest {
+  width: 100%;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.9rem;
+  border-collapse: collapse;
+  margin: 0.6rem 0 1.6rem;
+  font-variant-numeric: tabular-nums;
+
+  th {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #64615b;
+    border-bottom: 1px solid #1d1d1b;
+    padding: 0.4rem 0.6rem 0.4rem 0;
+    text-align: left;
+  }
+
+  td {
+    border-bottom: 1px solid #d9dcd7;
+    padding: 0.5rem 0.6rem 0.5rem 0;
+    vertical-align: top;
+  }
+
+  td:last-child,
+  th:last-child {
+    text-align: right;
+  }
+
+  .magnitude {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .strong {
+    color: #b45435;
+  }
+
+  .pending {
+    color: #64615b;
+  }
+}
+
+// Computed results sit in quiet panels apart from the bulletin's prose.
+marimo-cell {
+  display: block;
+  margin: 1.4rem 0;
+  padding: 0.9rem 1.25rem;
+  background: #f2f1ec;
+  border-left: 2px solid #dc8c46;
+}
+
+marimo-cell + marimo-cell {
+  margin-top: -1.4rem;
+  padding-top: 0.4rem;
+}
+
+// Citation entries in the margin carry long URLs.
+.csl-entry,
+.column-margin,
+.margin-aside {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  table.strongest {
+    font-size: 0.8rem;
+  }
+}
