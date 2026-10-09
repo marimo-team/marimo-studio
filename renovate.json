@@ -1,0 +1,68 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["local>marimo-team/.github:renovate-config"],
+  "timezone": "Etc/UTC",
+  "schedule": ["* 0-4 * * 1"],
+  "updateNotScheduled": false,
+  "prConcurrentLimit": 2,
+  "branchConcurrentLimit": 2,
+  "prHourlyLimit": 1,
+  "automerge": false,
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "packageRules": [
+    {
+      "description": "Match pnpm's 20160-minute release-age gate, overriding the shared npm preset's three days.",
+      "matchDatasources": ["npm"],
+      "minimumReleaseAge": "14 days"
+    },
+    {
+      "description": "Preserve pnpm's exemption for coordinated marimo-team releases.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@marimo-team/*"],
+      "minimumReleaseAge": "0 days"
+    },
+    {
+      "description": "Preserve uv's explicit release-age exemptions.",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "agent-plugins",
+        "marimo",
+        "marimo-export",
+        "marimo-lens",
+        "marimo-studio"
+      ],
+      "minimumReleaseAge": "0 days"
+    },
+    {
+      "description": "Keep major upgrades in the dashboard until a maintainer requests them.",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Treat minor upgrades of pre-1.0 dependencies as potentially breaking changes.",
+      "matchCurrentVersion": "/^0\\./",
+      "matchUpdateTypes": ["minor"],
+      "groupName": "pre-1.0 minor dependencies",
+      "groupSlug": "pre-1-minor",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Review Marimo compatibility and coordinated Python/browser export releases together, including non-major updates.",
+      "matchPackageNames": [
+        "marimo",
+        "marimo-export",
+        "@marimo-team/frontend",
+        "@marimo-team/marimo-export"
+      ],
+      "groupName": "Marimo compatibility",
+      "groupSlug": "marimo-compatibility",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "The development Python version is a deliberate test target within the supported Python range.",
+      "matchManagers": ["pyenv"],
+      "enabled": false
+    }
+  ]
+}
