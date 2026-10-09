@@ -37,7 +37,8 @@
         "column": 5
       },
       "targets": ["result"],
-      "accept": []
+      "accept": [],
+      "size": null
     }
   ],
   "projectionPolicy": {

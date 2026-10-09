@@ -125,6 +125,8 @@ def install_browser_bridge(
         "sites": {},
         "variables": frozenset(),
         "accept": {},
+        "rows": frozenset(),
+        "sizes": {},
     }
 
     def _studio_projection_bridge_ready(args):
@@ -175,13 +177,14 @@ def install_browser_bridge(
             "Project fewer or smaller values from that cell.",
         )
 
-    def _studio_encode_value(selector, value, json_read, arrow_read):
+    def _studio_encode_value(selector, value, json_read, arrow_read, rows):
+        """Encode a table as Arrow, or as JSON rows when ``rows`` is set."""
         arrow_limit = min(
             _studio_config_max_arrow_value_bytes,
             _studio_config_max_arrow_read_bytes - arrow_read,
         )
         try:
-            ipc = _dataframe_ipc(value, arrow_limit)
+            ipc = None if rows else _dataframe_ipc(value, arrow_limit)
         except _ArrowMaterializationRequired as error:
             raise _StudioProjectionError(
                 "arrow-materialization-required",
@@ -219,32 +222,33 @@ def install_browser_bridge(
                 "byteLength": len(ipc),
             }, len(ipc)
         try:
-            text = _studio_json.dumps(
-                value,
-                allow_nan=False,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-        except Exception as error:
+            data = _studio_values.represent(value, ["application/json"]).data
+        except _studio_values.RepresentationTooLarge as error:
+            raise _StudioProjectionError(
+                "value-too-large",
+                " ".join(
+                    (f"Selector {selector!r} is too large to read.", *error.reasons)
+                ),
+            ) from error
+        except _studio_values.RepresentationError as error:
             raise _StudioProjectionError(
                 "not-json-serializable",
-                f"Selector {selector!r} cannot be serialized as JSON: {error}",
+                " ".join((f"Selector {selector!r} has no JSON form.", *error.reasons)),
             ) from error
-        data = text.encode("utf-8")
         if len(data) > _studio_config_max_json_value_bytes:
             raise _StudioProjectionError(
                 "value-too-large",
                 f"Selector {selector!r} encodes {len(data):,} bytes of JSON, "
                 f"above the {_studio_config_max_json_value_bytes:,}-byte limit. "
-                "Return the data as a pandas, Polars, or PyArrow table to send "
-                "it as Arrow.",
+                "Filter or aggregate it in the notebook, or select a smaller "
+                "part of it.",
             )
         if json_read + len(data) > _studio_config_max_json_read_bytes:
             raise _studio_read_too_large("JSON", _studio_config_max_json_read_bytes)
         return {
             "codec": "json-v1",
             "fingerprint": _studio_fingerprint(data),
-            "value": _studio_json.loads(text),
+            "value": _studio_json.loads(data),
         }, len(data)
 
     def _studio_configure_projections(args):
@@ -265,7 +269,7 @@ def install_browser_bridge(
         for site in args.sites:
             if (
                 not isinstance(site, dict)
-                or set(site) != {"id", "kind", "source", "targets", "accept"}
+                or set(site) != {"id", "kind", "source", "targets", "accept", "size"}
                 or not isinstance(site["id"], str)
                 or not site["id"]
                 or site["id"] in sites
@@ -299,10 +303,22 @@ def install_browser_bridge(
             ):
                 raise ValueError("A projection site is invalid.")
             accept = site["accept"]
-            if not isinstance(accept, list) or (accept and site["kind"] == "value"):
+            if not isinstance(accept, list) or (
+                site["kind"] == "value" and accept not in ([], ["application/json"])
+            ):
                 raise ValueError("A projection site is invalid.")
             if accept and list(_studio_values.normalize_accept(accept)) != accept:
                 raise ValueError("A projection site is invalid.")
+            size = site["size"]
+            if size is not None:
+                if (
+                    site["kind"] != "output"
+                    or not accept
+                    or not isinstance(size, dict)
+                    or set(size) != {"width", "height"}
+                ):
+                    raise ValueError("A projection site is invalid.")
+                _studio_values.Size(size["width"], size["height"])
             sites[site["id"]] = site
         if (
             not isinstance(args.variables, list)
@@ -335,19 +351,30 @@ def install_browser_bridge(
                 "generation": generation,
                 "applied": True,
             }
-        # The same map as Studio's media_accept(): each literal output
-        # target's media types, from its first site.
+        # The same maps as Studio's media_accept() and media_sizes(): each
+        # literal output target's media types and size, and each value target
+        # a document reads as JSON rows.
         accept = {}
+        rows = set()
+        sizes = {}
         for site in sites.values():
-            if site["kind"] == "output":
-                for target in site["targets"] or ():
+            for target in site["targets"] or ():
+                if site["kind"] == "output":
                     accept.setdefault(target, tuple(site["accept"]))
+                    if site["size"] is not None:
+                        sizes[target] = _studio_values.Size(
+                            site["size"]["width"], site["size"]["height"]
+                        )
+                elif site["kind"] == "value" and site["accept"]:
+                    rows.add(target)
         _studio_projection_authorization.update(
             generation=generation,
             revision=revision,
             sites=sites,
             variables=variables,
             accept=accept,
+            rows=frozenset(rows),
+            sizes=sizes,
         )
         return {
             "revision": revision,
@@ -463,7 +490,11 @@ def install_browser_bridge(
                     continue
                 try:
                     encoded, size = _studio_encode_value(
-                        selector, value, json_read, arrow_read
+                        selector,
+                        value,
+                        json_read,
+                        arrow_read,
+                        selector in _studio_projection_authorization["rows"],
                     )
                 except _StudioProjectionError as error:
                     errors[selector] = _studio_error(error.code, error)
@@ -664,12 +695,12 @@ def install_browser_bridge(
         else:
             _studio_ui_owners.pop(identity, None)
 
-    def _studio_format(owner, value, accept):
+    def _studio_format(owner, value, accept, size):
         """Return output data in the first accepted media type, or as marimo."""
         if accept:
             return _studio_media.media_output(
                 _studio_values.represent(
-                    value, accept, scale=_studio_config_media_scale
+                    value, accept, scale=_studio_config_media_scale, size=size
                 )
             )
         with (
@@ -765,8 +796,9 @@ def install_browser_bridge(
                     continue
                 owner = _studio_owner(consumer_id, selector)
                 accept = _studio_projection_authorization["accept"].get(selector, ())
+                drawn = _studio_projection_authorization["sizes"].get(selector)
                 try:
-                    mimetype, data = _studio_format(owner, value, accept)
+                    mimetype, data = _studio_format(owner, value, accept, drawn)
                 except _studio_values.RepresentationError as error:
                     failed.add((consumer_id, selector))
                     errors[selector] = _studio_error(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import datetime
 import io
 import math
 import sys
@@ -217,6 +218,29 @@ def test_kernel_projection_encodes_empty_eager_dataframes() -> None:
     decoded = pa.ipc.open_stream(io.BytesIO(ipc)).read_all()
     assert decoded.column_names == ["value", "label"]
     assert decoded.num_rows == 0
+
+
+def test_document_reads_receive_tables_as_rows_and_dates_as_text() -> None:
+    import polars as pl
+
+    frame = pl.DataFrame(
+        {
+            "day": [datetime.date(2015, 2, 4)],
+            "read": [datetime.datetime(2015, 2, 4, 9, 41)],
+        }
+    )
+    result = _read_values(
+        {"frame": frame, "start": datetime.datetime(2015, 2, 4, 17, 51), "peak": None},
+        _selectors("frame", "start", "peak.label"),
+        rows={"frame"},
+    )
+
+    assert result.errors == {}
+    assert result.values == {
+        "frame": _encoded_json([{"day": "2015-02-04", "read": "2015-02-04T09:41:00"}]),
+        "start": _encoded_json("2015-02-04T17:51:00"),
+        "peak.label": _encoded_json(None),
+    }
 
 
 def test_kernel_projection_sends_dataframes_beyond_the_json_limit() -> None:

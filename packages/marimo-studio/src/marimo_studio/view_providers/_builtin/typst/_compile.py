@@ -1,12 +1,15 @@
 """Compile one Typst document with notebook inputs in a separate process.
 
 Usage: python _compile.py ROOT ENTRY INPUTS OUTPUT
+       python _compile.py ROOT ENTRY INPUTS --sizes
 
 INPUTS is a JSON object of Typst ``sys.inputs`` strings.
 
 The script imports only the typst package, so Studio can start it quickly and
 stop it at its deadline. It prints one JSON object with the compiler warnings,
-or with the first error, and exits with status 1 when compilation fails.
+or with the first error, and exits with status 1 when compilation fails. With
+``--sizes`` it writes no PDF and adds the ``<marimo-size>`` records that
+``marimo_output()`` places, which give the size each output is placed at.
 
 The compile clock is fixed at the Unix epoch, so the same template and inputs
 produce the same PDF bytes and artifact revision on every build.
@@ -58,8 +61,24 @@ def main() -> int:
     if not isinstance(document, bytes):
         print(json.dumps({"error": {"message": "Typst returned no PDF document."}}))
         return 1
-    Path(output).write_bytes(document)
-    print(json.dumps({"warnings": [_diagnostic(item) for item in warnings]}))
+    report: dict[str, object] = {"warnings": [_diagnostic(item) for item in warnings]}
+    if output == "--sizes":
+        # The compile above reports errors at their source, which a query
+        # does not, so the query runs on a document that compiles.
+        report["sizes"] = json.loads(
+            typst.query(
+                str(Path(root) / entry),
+                "<marimo-size>",
+                field="value",
+                root=root,
+                font_paths=[str(fonts)] if fonts.is_dir() else [],
+                ignore_system_fonts=True,
+                sys_inputs=inputs,
+            )
+        )
+    else:
+        Path(output).write_bytes(document)
+    print(json.dumps(report))
     return 0
 
 

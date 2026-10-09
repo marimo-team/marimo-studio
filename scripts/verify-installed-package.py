@@ -159,7 +159,7 @@ assert set(marimo_studio.view_providers.__all__) == {
     "ProjectionSite", "ProviderAvailability", "ProviderCancellation",
     "ProviderCommandError", "ProviderCommandResult", "ProviderError",
     "ProviderInfo", "ProviderRunner", "ProviderStarter", "RenderCell",
-    "RenderOutput", "RenderRequest", "RenderValue", "Representation",
+    "RenderOutput", "RenderRequest", "RenderValue", "Representation", "Size",
     "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
     "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
@@ -218,7 +218,7 @@ assert tuple(field.name for field in fields(providers.RenderRequest)) == (
     "cancellation", "runner", "command_timeout",
 )
 assert tuple(field.name for field in fields(providers.BuildResult)) == (
-    "document", "diagnostics",
+    "document", "diagnostics", "output_sizes",
 )
 assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",
@@ -406,9 +406,9 @@ def main() -> None:
     installed_version = version(_DISTRIBUTION)
     marimo_export = distribution("marimo-export")
     marimo_export_version = marimo_export.version
-    if marimo_export_version not in SpecifierSet(">=0.1.4"):
+    if marimo_export_version not in SpecifierSet(">=0.1.5"):
         raise AssertionError(
-            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.4"
+            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.5"
         )
     if marimo_export.read_text("direct_url.json") is not None:
         raise AssertionError("Installed marimo-export came from a direct source")

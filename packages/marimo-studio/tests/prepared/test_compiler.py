@@ -6,6 +6,7 @@ from typing import cast
 
 import pytest
 from marimo_export import StateSpace
+from marimo_export.values import Size
 
 from marimo_studio._prepared.compiler import compile_export_view
 from marimo_studio._server.presentation.service import NotebookPresentation
@@ -59,6 +60,39 @@ def test_compiler_exports_accepting_outputs_as_media(notebook_path: Path) -> Non
         "exporter": {
             "name": "media",
             "options": {"accept": ["image/svg+xml", "image/png"], "scale": 2.0},
+            "dependencies": [],
+        },
+    }
+
+
+def test_compiler_exports_document_reads_as_json_and_sized_media(
+    notebook_path: Path,
+) -> None:
+    snapshot = _snapshot(notebook_path)
+    sites = tuple(
+        replace(site, accept=("application/pdf",), size=Size(250.38))
+        if site.kind == "output"
+        else replace(site, accept=("application/json",))
+        if site.kind == "value"
+        else site
+        for site in snapshot.sites
+    )
+
+    compiled = compile_export_view(snapshot.resolved, snapshot.view_name, sites)
+
+    outputs = cast(dict[str, object], compiled.spec.to_value()["outputs"])
+    assert outputs["value:doubled"] == {
+        "source": {"kind": "json", "selector": "doubled"}
+    }
+    assert outputs["output:doubled"] == {
+        "source": {"kind": "export", "selector": "doubled"},
+        "exporter": {
+            "name": "media",
+            "options": {
+                "accept": ["application/pdf"],
+                "scale": 2.0,
+                "size": {"width": 250.38, "height": None},
+            },
             "dependencies": [],
         },
     }

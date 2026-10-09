@@ -98,16 +98,14 @@ def renderer_missing() -> ProjectDiagnostic:
     )
 
 
-def value_not_json(target: str, problem: str | None = None) -> ProjectDiagnostic:
-    """Report a render value that is a table or is not portable JSON."""
+def value_not_json(target: str, problem: str) -> ProjectDiagnostic:
+    """Report a render value that has no portable JSON form."""
     return ProjectDiagnostic(
         "render-value-not-json",
         "error",
-        f"Documents read JSON values: {problem}."
-        if problem
-        else f"{target} is a table, and documents read JSON values.",
-        "Project tables as a list of dictionaries in the notebook, for example "
-        "with df.to_dicts().",
+        f"{target} has no JSON form: {problem.rstrip('.')}.",
+        "Read a table, a dictionary, a list, text, a number, or a date, or "
+        "select one of its fields.",
     )
 
 

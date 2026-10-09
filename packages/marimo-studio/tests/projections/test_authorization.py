@@ -8,10 +8,10 @@ import sys
 from dataclasses import replace
 from pathlib import PurePosixPath
 from types import SimpleNamespace
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pytest
-from marimo_export.values import ValueSelector
+from marimo_export.values import Size, ValueSelector
 
 from marimo_studio._compat.kernel_values.authorization import (
     BoundProjection,
@@ -282,6 +282,89 @@ def test_output_accept_lists_are_covered_by_the_server_signature() -> None:
         )
 
     assert authorized.accept == {"summary.total": ("image/svg+xml", "image/png")}
+
+
+def test_output_sizes_are_covered_by_the_server_signature() -> None:
+    bound = _bound_with_upstream("output")
+    sized = BoundProjection(
+        replace(bound.projection, accept=("application/pdf",), size=Size(250.38)),
+        bound.dependency_bindings,
+    )
+    arguments = authorized_output_arguments("revision-1", (sized,), (sized,), "doc")
+    tampered = json.loads(json.dumps(arguments))
+    tampered["projections"][0]["size"] = {"width": 3_600, "height": 3_600}
+
+    authorized, _active = verify_output_arguments(
+        revision=arguments["revision"],
+        projections=arguments["projections"],
+        active_projections=arguments["active_projections"],
+        consumer_id=arguments["consumer_id"],
+        authorization=arguments["authorization"],
+    )
+    with pytest.raises(ProjectionAuthorizationError, match="authorization"):
+        verify_output_arguments(
+            revision=tampered["revision"],
+            projections=tampered["projections"],
+            active_projections=tampered["active_projections"],
+            consumer_id=tampered["consumer_id"],
+            authorization=tampered["authorization"],
+        )
+
+    assert authorized.sizes == {"summary.total": Size(250.38)}
+
+
+@pytest.mark.parametrize(
+    ("kind", "accept", "size"),
+    (
+        ("value", ["image/png"], None),
+        ("value", ["application/json"], {"width": 200, "height": None}),
+        ("output", [], {"width": 200, "height": None}),
+        ("output", ["application/pdf"], {"width": 0, "height": None}),
+    ),
+)
+def test_records_read_values_as_json_and_size_only_accepting_outputs(
+    kind: Literal["value", "output"], accept: list[str], size: object
+) -> None:
+    bound = _bound_with_upstream(kind)
+    arguments = (
+        authorized_value_arguments("revision-1", (bound,), "doc")
+        if kind == "value"
+        else authorized_output_arguments("revision-1", (bound,), (bound,), "doc")
+    )
+    records = cast(list[dict[str, object]], arguments["projections"])
+    active = cast(list[dict[str, object]], arguments["active_projections"])
+    for record in (*records, *active):
+        record["accept"] = accept
+        record["size"] = size
+    verify = verify_value_arguments if kind == "value" else verify_output_arguments
+
+    with pytest.raises(ProjectionAuthorizationError, match=r"accept list|size"):
+        verify(
+            revision=arguments["revision"],
+            projections=arguments["projections"],
+            active_projections=arguments["active_projections"],
+            consumer_id=arguments["consumer_id"],
+            authorization=arguments["authorization"],
+        )
+
+
+def test_document_value_records_read_tables_as_json() -> None:
+    bound = _bound_with_upstream()
+    document = BoundProjection(
+        replace(bound.projection, accept=("application/json",)),
+        bound.dependency_bindings,
+    )
+    arguments = authorized_value_arguments("revision-1", (document,), "document")
+
+    authorized = verify_value_arguments(
+        revision=arguments["revision"],
+        projections=arguments["projections"],
+        active_projections=arguments["active_projections"],
+        consumer_id=arguments["consumer_id"],
+        authorization=arguments["authorization"],
+    )
+
+    assert authorized.accept == {"summary.total": ("application/json",)}
 
 
 def test_dependency_closure_is_covered_by_the_server_signature() -> None:

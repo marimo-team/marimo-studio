@@ -128,6 +128,7 @@ const configWithValues = (selectors: readonly string[], namespaceSite?: string):
           source: { path: "src/App.tsx", line: 1, column: 1 },
           targets: [selector],
           accept: [],
+          size: null,
         }))
       : [
           {
@@ -136,6 +137,7 @@ const configWithValues = (selectors: readonly string[], namespaceSite?: string):
             source: { path: "src/App.tsx", line: 1, column: 1 },
             targets: null,
             accept: [],
+            size: null,
           },
         ],
   runtimeBindings: {
@@ -798,6 +800,7 @@ test("changing a value source site reconnects the same projection instance", asy
         source: { path: "src/App.tsx", line: 1, column: 1 },
         targets: ["report"],
         accept: [],
+        size: null,
       },
       {
         id: "site:value:second",
@@ -805,6 +808,7 @@ test("changing a value source site reconnects the same projection instance", asy
         source: { path: "src/App.tsx", line: 2, column: 1 },
         targets: ["report"],
         accept: [],
+        size: null,
       },
     ],
   });

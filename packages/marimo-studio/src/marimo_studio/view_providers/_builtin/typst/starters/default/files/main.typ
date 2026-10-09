@@ -73,7 +73,7 @@ __REPORT_BINDING_TYP__
     page again whenever the notebook changes it.
 
     ```python
-    report = {"rooms": 12, "occupancy": 0.71, "readings": table.to_dicts()}
+    report = {"rooms": 12, "occupancy": 0.71, "readings": table}
     ```
   ]
 } else {

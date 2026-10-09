@@ -72,6 +72,7 @@ export const symbolicRuntimeFields: Pick<
       source: { path: "src/index.html", line: 1, column: 1 },
       targets: ["plot"],
       accept: [],
+      size: null,
     },
   ],
   projectionPolicy: {

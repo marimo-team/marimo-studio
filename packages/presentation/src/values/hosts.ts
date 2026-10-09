@@ -102,10 +102,6 @@ declare global {
 export const isMarimoValueHost = (host: HTMLElement): host is MarimoValueHost =>
   Object.getOwnPropertyDescriptor(host, "marimoValue")?.get instanceof Function;
 
-/** Return the codec of the value a host currently shows. */
-export const valueHostCodec = (host: HTMLElement): DecodedValue["codec"] | undefined =>
-  renderedValues.get(host)?.codec;
-
 const prepareHost = (host: HTMLElement): MarimoValueHost => {
   if (!preparedHosts.has(host)) {
     Object.defineProperty(host, "marimoValue", {

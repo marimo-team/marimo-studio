@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import sys
 import weakref
 from collections.abc import Callable, Iterator
@@ -23,6 +24,7 @@ from marimo_studio._projections.runtime_records import (
     output_representation,
 )
 from marimo_studio.view_providers import (
+    Size,
     SourceLocation,
 )
 from marimo_studio.view_providers._artifact_sites import ArtifactSite
@@ -411,6 +413,70 @@ def test_generated_bridge_renders_an_accepted_output_for_every_host_of_its_targe
     assert int.from_bytes(media.data[16:20], "big") / 2 == pytest.approx(
         media.width, abs=1
     )
+
+
+def test_generated_bridge_reads_document_tables_as_rows_and_draws_figures_at_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    polars = pytest.importorskip("polars")
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().plot([1, 3, 2])
+    context.globals["chart"] = figure
+    context.globals["days"] = polars.DataFrame(
+        {"day": [datetime.date(2015, 2, 4)], "rate": [0.5]}
+    )
+    here = SourceLocation(PurePosixPath("main.tex"), 1, 1)
+    chart_site = ArtifactSite(
+        "site:read:chart", "output", here, ("chart",), ("application/pdf",), Size(200)
+    )
+    days_site = ArtifactSite(
+        "site:read:days", "value", here, ("days",), ("application/json",)
+    )
+    _call_bridge(
+        context,
+        "configure_projections",
+        {
+            "revision": _REVISION,
+            "generation": 2,
+            "sites": [chart_site.to_dict(), days_site.to_dict()],
+            "variables": ["chart", "days"],
+        },
+    )
+
+    def request(site: ArtifactSite) -> list[dict[str, str]]:
+        assert site.targets is not None
+        target = site.targets[0]
+        return [{"siteId": site.id, "instanceId": f"{site.id}-0", "target": target}]
+
+    values = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": request(days_site),
+            "active_projections": request(days_site),
+        },
+    )
+    outputs = _call_bridge(
+        context,
+        "render_values",
+        {
+            "revision": _REVISION,
+            "projections": request(chart_site),
+            "active_projections": request(chart_site),
+            "consumer_id": "document",
+            "max_output_bytes": 1_000_000,
+        },
+    )
+
+    assert values["values"]["days"]["value"] == [{"day": "2015-02-04", "rate": 0.5}]
+    output = outputs["outputs"]["chart"]
+    media = output_representation(output["mimetype"], output["data"])
+    assert media is not None and media.media_type == "application/pdf"
+    assert b"/MediaBox [ 0 0 200 66.6666666667 ]" in media.data
 
 
 @pytest.mark.parametrize("function_name", ["read_values", "render_values"])

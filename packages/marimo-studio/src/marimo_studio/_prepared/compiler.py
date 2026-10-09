@@ -20,7 +20,7 @@ from marimo_studio._projections.resolved import ResolvedStudio
 from marimo_studio._projections.runtime_records import MEDIA_SCALE
 from marimo_studio.errors import PublicationError
 from marimo_studio.view_providers import ProjectionKind
-from marimo_studio.view_providers._artifact_sites import ArtifactSite
+from marimo_studio.view_providers._artifact_sites import JSON_ACCEPT, ArtifactSite
 
 _ProjectionIdentity = tuple[ProjectionKind, str]
 
@@ -65,9 +65,16 @@ def _output_spec(
 ) -> OutputSpec:
     target = projection.request.target
     if projection.kind == "value":
+        # A document reads JSON, with tables as rows. Other views keep native
+        # values, so tables export as Arrow.
+        if projection.accept == JSON_ACCEPT:
+            return OutputSpec.json(target)
         return OutputSpec.native(target)
     if projection.kind == "output" and projection.accept:
-        return OutputSpec.export(target, media(projection.accept, scale=MEDIA_SCALE))
+        return OutputSpec.export(
+            target,
+            media(projection.accept, scale=MEDIA_SCALE, size=projection.size),
+        )
     if projection.kind == "output":
         return OutputSpec.output(target)
     cell = resolved.notebook.by_ref().get(projection.producer)

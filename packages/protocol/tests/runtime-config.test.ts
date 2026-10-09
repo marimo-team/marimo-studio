@@ -104,6 +104,27 @@ test("document cell reads list the media types they accept", () => {
   assert.deepEqual(parsed.sites[0]?.accept, ["image/png"]);
 });
 
+test("document reads carry their JSON value accept list and measured output size", () => {
+  const parsed = parseRuntimeConfig(
+    runtimeConfig({
+      sites: [
+        { ...symbolicRuntimeFields.sites[0], kind: "value", accept: ["application/json"] },
+        {
+          ...symbolicRuntimeFields.sites[0],
+          id: "site-output",
+          kind: "output",
+          accept: ["application/pdf"],
+          size: { width: 250.38, height: null },
+        },
+      ],
+    }),
+    configUrl,
+  );
+
+  assert.deepEqual(parsed.sites[0]?.accept, ["application/json"]);
+  assert.deepEqual(parsed.sites[1]?.size, { width: 250.38, height: null });
+});
+
 test("runtime configuration resolves the Python delivery fixture beneath a proxy prefix", () => {
   const fixture = JSON.parse(
     readFileSync(new URL("../fixtures/runtime-config.json", import.meta.url), "utf8"),
@@ -195,6 +216,19 @@ test("runtime configuration rejects malformed contracts", () => {
     }),
     runtimeConfig({
       sites: [{ ...symbolicRuntimeFields.sites[0], kind: "value", accept: ["image/png"] }],
+    }),
+    runtimeConfig({
+      sites: [{ ...symbolicRuntimeFields.sites[0], size: { width: 200, height: null } }],
+    }),
+    runtimeConfig({
+      sites: [
+        {
+          ...symbolicRuntimeFields.sites[0],
+          kind: "output",
+          accept: ["application/pdf"],
+          size: { width: 0, height: null },
+        },
+      ],
     }),
     runtimeConfig({
       sites: [

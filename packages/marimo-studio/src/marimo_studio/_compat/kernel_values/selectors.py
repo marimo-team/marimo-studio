@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 
 from marimo_export.values import ValueSelector
 
@@ -29,7 +29,9 @@ def _read_values(
     consumer_id: str = "",
     revision: str = "",
     encoder: ValueEncoder | None = None,
+    rows: Collection[str] = (),
 ) -> ValueReadResult:
+    """Read ``selectors`` as JSON, or as Arrow for tables outside ``rows``."""
     owned_encoder = encoder is None
     if encoder is None:
         encoder = ValueEncoder()
@@ -92,6 +94,7 @@ def _read_values(
             limits=limits,
             json_read=json_read,
             arrow_read=arrow_read,
+            rows=selector in rows,
         )
         if error is not None:
             fail(selector, error)

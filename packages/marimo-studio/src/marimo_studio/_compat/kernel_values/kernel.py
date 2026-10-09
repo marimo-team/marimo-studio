@@ -70,6 +70,7 @@ from marimo_studio._server.presentation.query_state import (
 )
 from marimo_studio._workspace.config import discover_studio_definition
 from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
+from marimo_studio.view_providers._artifact_sites import JSON_ACCEPT
 
 _PROBE_LEASE_QUERY_PARAM = "_marimo_studio_probe_lease"
 _MAX_QUERY_OPERATIONS = 256
@@ -549,6 +550,11 @@ class _KernelBridgeLifespan:
                     consumer_id=args.consumer_id,
                     revision=args.revision,
                     encoder=value_encoder,
+                    rows={
+                        target
+                        for target, accept in authorized.accept.items()
+                        if accept == JSON_ACCEPT
+                    },
                 )
             return ValueReadResult(
                 result.values,
@@ -646,6 +652,7 @@ class _KernelBridgeLifespan:
                     authorized.accept,
                     consumer_id=args.consumer_id,
                     max_output_bytes=limit,
+                    sizes=authorized.sizes,
                 )
             return result.to_dict()
 

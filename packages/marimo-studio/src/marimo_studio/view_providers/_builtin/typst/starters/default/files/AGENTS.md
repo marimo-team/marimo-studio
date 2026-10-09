@@ -28,21 +28,23 @@ Total revenue: #marimo_value("metrics.total", default: [—])
 - A selector names a notebook variable, optionally followed by `.field` and
   `[index]` steps, such as `marimo_value("rows[0].name")`.
 - Values arrive as JSON: `none`, booleans, integers, floats, strings, arrays,
-  and dictionaries. Whole floats such as `2.0` arrive as integers.
+  and dictionaries. Whole floats such as `2.0` arrive as integers. A pandas,
+  Polars, or PyArrow table arrives as an array of row dictionaries, and a
+  date, datetime, or time as ISO 8601 text such as `2015-02-04T09:41:00`.
 - Give every call a `default`. A document must compile before the notebook
-  has values, and Studio checks that when it builds the view.
-- Project tables in the notebook before reading them here, for example
-  `rows = df.to_dicts()`. Dataframes are not JSON values.
+  has values, and Studio checks that when it builds the view. A value that is
+  `none`, or a step through `none` such as `peak.label` while `peak` is
+  `None`, also returns the `default`.
 
-Keep computation in the notebook and layout here. Prefer one dictionary per
-section, such as `report`, over many separate values.
+Keep computation in the notebook and presentation here: read the notebook's
+own results, and format numbers, dates, and labels in the document.
 
 ## Place notebook figures
 
 Draw charts in the notebook and place them with `marimo_output()` from
 `marimo.typ`. `marimo_output()` places a notebook value as an image, whatever
 output settings the notebook uses. A matplotlib figure arrives as a PDF with
-selectable text, and an Altair chart as an SVG:
+embedded TrueType text, and an Altair chart as a PDF:
 
 ```typst
 #import "marimo.typ": marimo_output
@@ -59,8 +61,11 @@ selectable text, and an Altair chart as an SVG:
   such as `revenue_chart = plot_revenue(rows)`.
 - Altair charts need `vl-convert-python` in the notebook's environment.
 - Named arguments such as `width`, `height`, `fit`, and `alt` pass through to
-  `image()`. Set the figure's size in the notebook, such as
-  `figsize=(7, 3.5)`, so its text keeps a readable size at the placed width.
+  `image()`. Studio's build measures the width each output is placed at, and
+  its absolute `height` when given, then draws a matplotlib figure or Altair
+  chart again at that size, so its text keeps the point size the notebook set.
+  The notebook's `figsize` sets the aspect ratio. `marimo_output()` measures
+  its container with `layout()`, so it places a block.
 - `marimo_output()` returns its `default`, `none` unless given, until the
   output is available, and when the notebook cell fails, the value has no
   image form, or the image exceeds the runtime output limit. The view names
@@ -99,8 +104,8 @@ first use and need network access.
 
 The compile clock is fixed at 1970-01-01, so `datetime.today()` returns that
 date. Pass dates from the notebook instead, for example
-`report_date = date.today().isoformat()` read with
-`marimo_value("report_date")`.
+`report_date = date.today()` read with `marimo_value("report_date")` as ISO
+8601 text.
 
 The project also compiles outside Studio with `typst compile main.typ`. Every
 `marimo_value()` and `marimo_output()` call then returns its default.

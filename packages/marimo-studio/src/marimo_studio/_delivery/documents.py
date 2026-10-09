@@ -57,12 +57,9 @@ def _state_values(
     values: dict[str, object] = {}
     for target, name in bindings.items():
         output = state.output(name)
-        if output.codec == "marimo.scalar.v1":
-            values[target] = output.scalar()
-        elif output.codec == "marimo.json.v1":
-            values[target] = output.json()
-        else:
-            raise _publication_error(value_not_json(target))
+        if output.codec != "marimo.json.v1":
+            raise _publication_error(value_not_json(target, "it exported as a table"))
+        values[target] = output.json()
     try:
         return canonical_values(values)
     except DiagnosticsError as error:

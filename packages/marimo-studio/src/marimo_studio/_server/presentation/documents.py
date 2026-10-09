@@ -91,7 +91,7 @@ def _kernel_values(result: ValueReadResult) -> dict[str, object] | JSONResponse:
     values: dict[str, object] = {}
     for target, descriptor in result.values.items():
         if not isinstance(descriptor, dict) or descriptor.get("codec") != "json-v1":
-            return _failure((value_not_json(target),))
+            return _failure((value_not_json(target, "it arrived as a table"),))
         values[target] = descriptor["value"]
     return values
 
