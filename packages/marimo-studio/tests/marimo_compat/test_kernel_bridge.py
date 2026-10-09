@@ -10,11 +10,15 @@ from typing import Any, cast
 import pytest
 
 import marimo_studio._compat.kernel_values.kernel as kernel_values_module
+from marimo_studio._compat.execution_markers import parse_marker
 from marimo_studio._compat.kernel_values.authorization import (
     authorized_output_arguments,
     authorized_value_arguments,
 )
-from marimo_studio._compat.kernel_values.kernel import _KernelBridgeLifespan
+from marimo_studio._compat.kernel_values.kernel import (
+    _install_execution_markers,
+    _KernelBridgeLifespan,
+)
 from marimo_studio._compat.kernel_values.query_authorization import (
     authorized_query_arguments,
 )
@@ -29,6 +33,84 @@ from .values_test_support import (
     _encoded_json,
     _native_output_context,
 )
+
+
+def test_execution_markers_follow_kernel_dispatch_and_report_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._messaging import notification_utils
+    from marimo._runtime.commands import ExecuteStaleCellsCommand
+
+    notifications: list[object] = []
+
+    class Kernel:
+        async def handle_message(self, request: object) -> None:
+            if isinstance(request, ExecuteStaleCellsCommand):
+                raise RuntimeError("dispatch failed")
+
+    context = SimpleNamespace(_kernel=Kernel(), stream=object())
+    monkeypatch.setattr(kernel_values_module, "is_owned_session", lambda: False)
+    monkeypatch.setattr(
+        notification_utils,
+        "broadcast_notification",
+        lambda notification, _stream: notifications.append(notification),
+    )
+    _install_execution_markers(context)
+
+    with pytest.raises(RuntimeError, match="dispatch failed"):
+        asyncio.run(context._kernel.handle_message(ExecuteStaleCellsCommand()))
+
+    markers = [
+        parse_marker(getattr(notification, "run_id", None))
+        for notification in notifications
+    ]
+    assert markers[0] is not None
+    assert markers[1] is not None
+    assert markers[0][0:2] == ("start", "ExecuteStaleCellsCommand")
+    assert markers[1][0:2] == ("failed", "ExecuteStaleCellsCommand")
+    assert markers[0][2] == markers[1][2]
+
+
+def test_execution_markers_follow_the_enqueued_kernel_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._messaging import notification_utils
+    from marimo._runtime.commands import ExecuteStaleCellsCommand
+
+    notifications: list[object] = []
+    enqueued: list[object] = []
+    handled: list[object] = []
+
+    class Kernel:
+        def enqueue_control_request(self, request: object) -> None:
+            enqueued.append(request)
+
+        async def handle_message(self, request: object) -> None:
+            handled.append(request)
+
+    context = SimpleNamespace(_kernel=Kernel(), stream=object())
+    monkeypatch.setattr(kernel_values_module, "is_owned_session", lambda: False)
+    monkeypatch.setattr(
+        notification_utils,
+        "broadcast_notification",
+        lambda notification, _stream: notifications.append(notification),
+    )
+    _install_execution_markers(context)
+
+    request = ExecuteStaleCellsCommand()
+    context._kernel.enqueue_control_request(request)
+    assert notifications == []
+    asyncio.run(context._kernel.handle_message(enqueued.pop(0)))
+
+    markers = [
+        parse_marker(getattr(notification, "run_id", None))
+        for notification in notifications
+    ]
+    assert handled == [request]
+    assert [marker[0:2] for marker in markers if marker is not None] == [
+        ("start", "ExecuteStaleCellsCommand"),
+        ("done", "ExecuteStaleCellsCommand"),
+    ]
 
 
 def test_untitled_kernel_activates_after_rename(
@@ -201,6 +283,7 @@ def test_kernel_lifespan_rejects_retry_after_setup_failure(
         "_marimo_studio",
         "_marimo_studio",
         "_marimo_studio",
+        "_marimo_studio",
     ]
     assert context.function_registry.deleted == ["_marimo_studio"]
 
@@ -308,6 +391,7 @@ default = "dashboard"
                 "_marimo_studio",
                 "_marimo_studio",
                 "_marimo_studio",
+                "_marimo_studio",
             ]
 
     asyncio.run(exercise())
@@ -349,6 +433,9 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
             self.lock_count += 1
             yield
 
+        async def handle_message(self, _request: object) -> None:
+            return
+
     cache_activations: list[bool] = []
     cache_releases: list[bool] = []
 
@@ -378,6 +465,7 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
                 "read_values",
                 "render_values",
                 "sync_query",
+                "execution_barrier",
             }
             read = functions["read_values"]
             projection = _bound_projection("summary.papers")
@@ -389,7 +477,6 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
                         **authorized_value_arguments(
                             "revision-1", (projection,), "preview-a"
                         ),
-                        "max_value_bytes": 1_000,
                     }
                 ),
             )
@@ -424,10 +511,10 @@ default = "dashboard"
                         **authorized_value_arguments(
                             "revision-1", (projection,), "preview-a"
                         ),
-                        "max_value_bytes": 1_000,
                     }
                 ),
             )
+            assert current._kernel._studio_execution_markers_installed
             assert after["values"] == {
                 "summary.papers": _encoded_json(3_877),
             }
@@ -444,7 +531,6 @@ default = "dashboard"
                         **authorized_value_arguments(
                             "revision-1", (projection,), "preview-a"
                         ),
-                        "max_value_bytes": 1_000,
                     }
                 ),
             )
@@ -453,7 +539,6 @@ default = "dashboard"
             forged_value = {
                 **authorized_value_arguments("revision-1", (projection,), "preview-a"),
                 "authorization": "0" * 64,
-                "max_value_bytes": 1_000,
             }
             rejected_value = cast(dict[str, Any], read(forged_value))
             assert rejected_value["errors"]["*"]["code"] == (

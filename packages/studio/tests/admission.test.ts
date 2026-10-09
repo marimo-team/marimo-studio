@@ -517,3 +517,67 @@ it("starts the document transition before releasing a completed build's loading 
   admission.viewReady("revision-2", "s_123456", "active");
   expect(admission.isReady).toBe(true);
 });
+
+const notebookError: BrowserDiagnostic = {
+  ...diagnostic,
+  code: "notebook-source-error",
+  severity: "error",
+  message: "More than one notebook cell defines the same name.",
+};
+
+const failedRefresh = () => {
+  const owner = admitted();
+  owner.admission.buildStarted("active");
+  owner.admission.buildCompleted("revision-2", "active");
+  owner.admission.receiverUnready();
+  owner.admission.viewError(notebookError, null, "active");
+  owner.effects.postMessage.mockClear();
+  return owner;
+};
+
+it("retries a failed document refresh when a newer revision is built", () => {
+  const { admission, effects } = failedRefresh();
+
+  admission.buildStarted("active");
+  admission.buildCompleted("revision-3", "active");
+
+  expect(effects.postMessage.mock.calls.map(([message]) => message)).toEqual([
+    { type: "marimo-studio:presentation-refresh", phase: "pending" },
+    { type: "marimo-studio:presentation-change" },
+    { type: "marimo-studio:presentation-refresh", phase: "settled" },
+  ]);
+  admission.receiverUnready();
+  admission.receiverReady("revision-3", "current", "active");
+  admission.viewReady("revision-3", "s_123456", "active");
+  expect(admission.isReady).toBe(true);
+});
+
+it("keeps a failed document refresh failed when its revision is built again", () => {
+  const { admission, effects } = failedRefresh();
+
+  admission.buildStarted("active");
+  admission.buildCompleted("revision-2", "active");
+
+  expect(effects.postMessage.mock.calls.map(([message]) => message)).toEqual([
+    { type: "marimo-studio:presentation-refresh", phase: "pending" },
+    { type: "marimo-studio:presentation-refresh", phase: "settled" },
+  ]);
+  expect(admission.snapshot.view).toBe("failed");
+});
+
+it("keeps a failure attached to the revision its document reported", () => {
+  const owner = admitted();
+  owner.admission.buildStarted("active");
+  owner.admission.buildCompleted("revision-2", "active");
+  owner.admission.receiverUnready();
+  owner.admission.viewError(notebookError, "revision-3", "active");
+  owner.effects.postMessage.mockClear();
+
+  owner.admission.buildStarted("active");
+  owner.admission.buildCompleted("revision-3", "active");
+
+  expect(owner.effects.postMessage).not.toHaveBeenCalledWith({
+    type: "marimo-studio:presentation-change",
+  });
+  expect(owner.admission.snapshot.view).toBe("failed");
+});

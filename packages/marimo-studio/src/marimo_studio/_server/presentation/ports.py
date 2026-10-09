@@ -85,6 +85,3 @@ class KernelProjectionHost(Protocol):
         query_generation: int,
         deadline: float,
     ) -> None: ...
-
-
-SelectorSpec = tuple[str, tuple[tuple[str, str | int], ...]]

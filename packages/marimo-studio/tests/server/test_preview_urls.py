@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from collections.abc import MutableMapping
+from collections.abc import Awaitable, Callable, MutableMapping
 from html import unescape
 from pathlib import Path
 from unittest.mock import Mock
@@ -17,6 +17,7 @@ from starlette.testclient import TestClient
 from marimo_studio._artifacts.lock import build_lock
 from marimo_studio._artifacts.publication import record_build_started
 from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.revisions import capture_source_snapshot
@@ -36,6 +37,15 @@ from .app_test_support import (
 
 ENDPOINT = "/_marimo-studio/views/dashboard/preview"
 REVISION = "marimo_studio_revision"
+
+
+async def _session_binding(
+    registry: StudioClientRegistry,
+    client_id: str,
+    session_for_client: Callable[[StudioClientRegistry, str], Awaitable[str | None]],
+) -> tuple[str | None, int | None]:
+    session = await session_for_client(registry, client_id)
+    return session, None
 
 
 def _enable_wasm(notebook: Path) -> None:
@@ -89,6 +99,100 @@ def test_wasm_preview_opens_without_an_editor_or_browser_client(
     assert "allow-same-origin" not in policy
     assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
+
+
+def test_trusted_server_preview_keeps_the_host_origin(
+    notebook_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from marimo_studio._compat.server.session_state import PrivateSessionState
+
+    configured(notebook_path)
+    app = marimo_app(
+        notebook_path,
+        programmatic=True,
+        security_policy=SecurityPolicy(trusted_server_runtime=True),
+    )
+    edit_mode(app)
+    ready = False
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        _client_id: str,
+    ) -> str:
+        return "s_123456"
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        PrivateSessionState,
+        "has_notebook_session",
+        lambda *_args: ready,
+    )
+    monkeypatch.setattr(
+        PrivateSessionState,
+        "exists",
+        lambda *_args: ready,
+    )
+    monkeypatch.setattr(
+        PrivateSessionState,
+        "ensure_started",
+        lambda *_args: ready,
+    )
+
+    with TestClient(app) as client:
+        params = {
+            "runtime": "server",
+            "marimo_studio_client": "browser-client-1234",
+            "marimo_studio_lifecycle": "1",
+        }
+        waiting = client.get("/dashboard/", params=params)
+        ready = True
+        document = client.get("/dashboard/", params=params)
+
+    assert waiting.status_code == 202
+    assert waiting.headers.get("content-security-policy") is None
+    assert document.status_code == 200
+    assert "sandbox" not in document.headers.get("content-security-policy", "")
+
+
+@pytest.mark.parametrize("trusted", [False, True])
+def test_owned_preview_head_preserves_runtime_isolation(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    trusted: bool,
+) -> None:
+    from marimo_studio._compat.server.session_state import PrivateSessionState
+
+    configured(notebook_path)
+    app = marimo_app(
+        notebook_path,
+        programmatic=True,
+        security_policy=SecurityPolicy(trusted_server_runtime=trusted),
+    )
+    edit_mode(app)
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        _client_id: str,
+    ) -> str:
+        return "s_123456"
+
+    monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(PrivateSessionState, "has_notebook_session", lambda *_: True)
+    monkeypatch.setattr(PrivateSessionState, "exists", lambda *_: True)
+    monkeypatch.setattr(PrivateSessionState, "ensure_started", lambda *_: True)
+
+    with TestClient(app) as client:
+        document = client.head(
+            "/dashboard/",
+            params={
+                "runtime": "server",
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
+        )
+    assert document.status_code == 200
+    has_sandbox = "sandbox" in document.headers.get("content-security-policy", "")
+    assert has_sandbox is not trusted
 
 
 def test_preview_preserves_mounted_directory_notebook_routing(
@@ -189,6 +293,100 @@ def test_studio_redirects_stay_on_the_request_origin(
     assert (location.scheme, location.netloc) == ("", "")
     assert target.path == expected
     assert added_query <= parse_qs(target.query).keys()
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/studio/executive/?id=7", "/proxy/token/executive/?id=7"),
+        ("/studio/?id=7", "/proxy/token/?id=7"),
+    ],
+)
+def test_run_mode_opens_the_view_a_workspace_path_names(
+    notebook_path: Path,
+    path: str,
+    expected: str,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+    # A proxy that strips /proxy/token forwards the rest. The browser
+    # resolves Location against its own URL.
+    browser_url = f"https://hub.example/proxy/token{path}"
+
+    with TestClient(app) as client:
+        redirect = client.get(path, follow_redirects=False)
+        page = client.get(path)
+
+    target = urlsplit(urljoin(browser_url, redirect.headers["location"]))
+    assert redirect.status_code == 307
+    assert f"{target.path}?{target.query}" == expected
+    assert page.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "path", ["/studio/Not%20a%20view/", "/studio/assets/", "/studio/dashboard/x/"]
+)
+def test_run_mode_workspace_paths_need_a_view_name(
+    notebook_path: Path,
+    path: str,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+
+    with TestClient(app) as client:
+        response = client.get(path, follow_redirects=False)
+
+    assert response.status_code == 404
+
+
+def test_run_mode_workspace_redirect_signs_in_without_repeating_the_token(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, token="secret")
+
+    with TestClient(app) as client:
+        redirect = client.get(
+            "/studio/executive/?access_token=secret&id=7", follow_redirects=False
+        )
+        page = client.get(
+            urljoin("http://testserver/studio/executive/", redirect.headers["location"])
+        )
+
+    target = urlsplit(
+        urljoin("http://testserver/studio/executive/", redirect.headers["location"])
+    )
+    assert redirect.status_code == 307
+    assert "set-cookie" in redirect.headers
+    assert (target.path, parse_qs(target.query)) == ("/executive/", {"id": ["7"]})
+    assert page.status_code == 200
+
+
+def test_run_mode_workspace_redirect_does_not_reveal_which_views_exist(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path, token="secret")
+
+    with TestClient(app) as client:
+        existing = client.get("/studio/executive/", follow_redirects=False)
+        missing = client.get("/studio/missing/", follow_redirects=False)
+
+    assert (existing.status_code, missing.status_code) == (307, 307)
+    assert existing.headers["location"] == "../../executive/"
+    assert missing.headers["location"] == "../../missing/"
+
+
+def test_run_mode_workspace_paths_redirect_only_page_requests(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+
+    with TestClient(app) as client:
+        response = client.post("/studio/executive/", follow_redirects=False)
+
+    assert response.status_code != 307
 
 
 @pytest.mark.parametrize(
@@ -348,7 +546,7 @@ def test_exact_preview_only_reads_matching_publication_during_an_active_build(
     edit_mode(app)
     with TestClient(app) as client, build_lock(project) as acquired:
         assert acquired
-        record_build_started(project, "development", project_revision, None)
+        record_build_started(project, "development", project_revision)
         resolved = client.get(ENDPOINT, params={"runtime": "wasm", "exact": "1"})
         if source_changed:
             assert resolved.status_code == 409
@@ -603,6 +801,13 @@ def test_session_bound_preview_retains_and_revalidates_its_editor(
 
     monkeypatch.setattr(StudioClientRegistry, "session_target", target)
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, selected: _session_binding(
+            registry, selected, session_for_client
+        ),
+    )
 
     async def live_cells(*_args, **_kwargs):
         return None
@@ -765,6 +970,13 @@ def test_runtime_config_revalidates_editor_after_preparation(
         return {"runtime": {"id": "server"}}
 
     monkeypatch.setattr(StudioClientRegistry, "session_for_client", session_for_client)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_binding_for_client",
+        lambda registry, selected: _session_binding(
+            registry, selected, session_for_client
+        ),
+    )
     monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: session_exists)
     monkeypatch.setattr(PrivateSessionState, "ensure_started", lambda *_args: True)
     monkeypatch.setattr(

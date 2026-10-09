@@ -14,6 +14,7 @@ export class StudioPreparedRenderer implements PreparedStatePort {
     private readonly renderer: PreparedProjectionHandle,
     private readonly source: StudioPreparedManifestSource,
     private readonly loaders: ZeroPythonProjectionLoaders,
+    private readonly ownerCell: (selector: string) => string,
   ) {}
 
   async apply(change: PreparedStateChange, signal: AbortSignal): Promise<void> {
@@ -22,6 +23,7 @@ export class StudioPreparedRenderer implements PreparedStatePort {
       change.next.state,
       metadata.projections,
       this.loaders,
+      this.ownerCell,
       signal,
     );
     signal.throwIfAborted();

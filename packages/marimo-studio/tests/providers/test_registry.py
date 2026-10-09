@@ -15,7 +15,6 @@ from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
-    PROVIDER_API_VERSION,
     ProviderAvailability,
     ViewProject,
 )
@@ -169,10 +168,7 @@ def test_provider_registry_isolates_invalid_candidates() -> None:
     healthy = ProviderStub("example/healthy", "healthy")
     broken = ProviderStub("example/broken", "broken")
     malformed = ProviderStub("example/malformed", "malformed")
-    broken.info = replace(
-        broken.info,
-        api_version=PROVIDER_API_VERSION + 1,
-    )
+    broken.info = replace(broken.info, options=cast(Any, {"entrypoint"}))
     registry = ProviderRegistry(
         (
             candidate("broken", broken),
@@ -190,25 +186,11 @@ def test_provider_registry_isolates_invalid_candidates() -> None:
     diagnostics = {item.registration: item for item in registry.diagnostics()}
     assert diagnostics["healthy"].loaded
     assert diagnostics["broken"].provider_key == "test-broken/broken"
-    assert "API version" in (diagnostics["broken"].error or "")
+    assert "frozenset" in (diagnostics["broken"].error or "")
     assert diagnostics["INVALID REGISTRATION"].provider_key is None
     assert "entry-point identity is invalid" in (
         diagnostics["INVALID REGISTRATION"].error or ""
     )
-
-
-@pytest.mark.parametrize("api_version", (3.0, True))
-def test_provider_api_version_requires_an_integer(api_version: object) -> None:
-    provider = ProviderStub("example/version", "default")
-    provider.info = replace(
-        provider.info,
-        api_version=cast(Any, api_version),
-    )
-
-    registry = ProviderRegistry((candidate("version", provider),))
-
-    assert registry.ids == ()
-    assert "API version" in (registry.diagnostics()[0].error or "")
 
 
 def test_registration_and_starter_keys_are_distribution_scoped() -> None:
@@ -283,6 +265,18 @@ def test_malformed_catalog_results_are_isolated_to_the_provider(
     diagnostic = registry.diagnostics()[0]
     assert diagnostic.loaded is False
     assert message in (diagnostic.error or "")
+
+
+def test_duplicate_starter_keys_are_reported_for_the_provider() -> None:
+    provider = ProviderStub("example/catalog", "default")
+    cast(Any, provider).starters = lambda: (provider.starter, provider.starter)
+    registry = ProviderRegistry((candidate("catalog", provider),))
+    key = registry.ids[0]
+
+    assert registry.get(key).starters() == ()
+
+    error = registry.diagnostics()[0].error or ""
+    assert f"View provider {key!r} requires unique starter keys" in error
 
 
 @pytest.mark.parametrize("operation", ("availability", "starters"))

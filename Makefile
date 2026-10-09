@@ -4,13 +4,14 @@ SHELL := /bin/bash
 
 UV ?= uv
 PNPM ?= pnpm
+PIXI ?= pixi
 VP := $(PNPM) exec vp
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
 PYTHON_PATHS := $(PY_PACKAGE) scripts
-FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tools/example-showcase tsconfig.json vite.config.ts
-TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
-DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_obsnotebook $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
+FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tools/example-showcase tsconfig.json tsconfig.node.json vite.config.ts
+TYPECHECK_PATHS := .github/actions/pr-validation apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
+DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/deno_obsnotebook $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_builtin/deno_svelte
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
 # Portless binds its default proxy port 443 through sudo. Without a terminal,
 # reuse a proxy already answering there, or start the unprivileged proxy.
@@ -27,7 +28,8 @@ PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: ## Prepare dependencies, browser assets, and Chromium.
+setup: ## Prepare dependencies, system tools, browser assets, and Chromium.
+	$(PIXI) install --locked
 	$(UV) sync --locked --reinstall-package marimo-studio
 	$(PNPM) install --frozen-lockfile
 	$(MAKE) _prepare-frontend
@@ -53,13 +55,13 @@ _architecture-check:
 
 _workflow-check:
 	./scripts/check-workflow-results.test.sh
-	node --test .github/actions/pr-validation/*.test.mjs
+	$(VP) test run .github/actions/pr-validation
 
 lint: _frontend-ready _anti-slop-check _architecture-check _provider-sources-check _workflow-check ## Check formatting, source, workflows, and shell scripts.
 	$(UV) run ruff format --check $(PYTHON_PATHS)
 	$(UV) run ruff check $(PYTHON_PATHS)
 	$(VP) fmt --check $(FORMAT_PATHS)
-	$(VP) lint apps packages vite.config.ts
+	$(VP) lint .github/actions/pr-validation apps packages vite.config.ts
 	uvx --from actionlint-py==1.7.12.24 actionlint \
 		-ignore 'unexpected key "queue" for "concurrency" section' \
 		.github/workflows/*.yml
@@ -94,14 +96,17 @@ _prepare-browser-tests: _frontend-ready
 
 e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
 	$(PNPM) --filter @marimo-studio/e2e e2e
-	$(PNPM) --filter @marimo-studio/e2e e2e:providers
+	$(PIXI) run --locked $(PNPM) --filter @marimo-studio/e2e e2e:providers
 	$(PNPM) --filter @marimo-studio/e2e e2e:installed
 
 e2e-ui: _browser-ready build _prepare-browser-tests ## Open the browser test runner.
 	$(PNPM) --filter @marimo-studio/e2e e2e:ui
 
+# Example exports run in the pixi environment, which provides the Quarto CLI
+# that the Quarto example views render with. EXAMPLES takes examples:build
+# selectors, for example EXAMPLES='--family athletes'.
 docs-examples: _frontend-ready build ## Export examples for the documentation site.
-	$(VP) run --filter @marimo-studio/docs examples:build
+	$(PIXI) run --locked $(VP) run --filter @marimo-studio/docs examples:build $(EXAMPLES)
 
 docs-thumbnails: _browser-ready ## Capture example thumbnails and landing posters from exported views.
 	@test -d apps/docs/public/examples || $(MAKE) docs-examples
@@ -113,9 +118,9 @@ docs-showcase: _browser-ready ## Render example showcase images from exported ex
 	node tools/example-showcase/render.ts
 
 docs-build: _frontend-ready build ## Build the VitePress documentation.
-	$(VP) run --filter @marimo-studio/docs build
+	$(PIXI) run --locked $(VP) run --filter @marimo-studio/docs build
 
-docs-serve: _frontend-ready build ## Serve documentation through Portless.
+docs-serve: _frontend-ready ## Serve documentation through Portless.
 	$(PORTLESS_ENV) BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
 
 docs-preview: _frontend-ready ## Preview built documentation through Portless.

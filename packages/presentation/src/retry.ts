@@ -6,6 +6,19 @@ interface RetryOptions<T> {
   signal?: AbortSignal;
 }
 
+export const boundedRetryAfterExhaustion = (
+  delays: readonly number[],
+  retryWhen: (cause: unknown) => boolean,
+): ((cause: unknown) => number | undefined) => {
+  let nextDelay = 0;
+  return (cause) => {
+    if (!retryWhen(cause)) {
+      return undefined;
+    }
+    return delays[nextDelay++];
+  };
+};
+
 const wait = (delay: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) {

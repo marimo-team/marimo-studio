@@ -1,13 +1,14 @@
 ---
 title: Built-in view providers
-description: Provider keys, starter IDs, source documents, requirements, and view.toml options included with Studio.
+description: Provider keys, starter IDs, Source documents, requirements, and provider options included with Studio.
 ---
 
 # Built-in view providers
 
 Studio includes view providers for plain HTML, [React](https://react.dev/),
-[Svelte](https://svelte.dev/), and
-[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit). A provider key selects the view
+[Svelte](https://svelte.dev/),
+[Observable Notebook Kit](https://observablehq.com/notebook-kit/kit),
+[Quarto](https://quarto.org/), and [Typst](https://typst.app/). A provider key selects the view
 project's inspection and build contract. A starter ID selects the files created
 for a new view project.
 
@@ -28,10 +29,13 @@ input and is not stored in `view.toml`.
 | `marimo-studio/react`        | `marimo-studio/react:default`, `marimo-studio/react:reveal` | `marimo-studio[deno]`    |
 | `marimo-studio/svelte`       | `marimo-studio/svelte:default`                              | `marimo-studio[deno]`    |
 | `marimo-studio/notebook-kit` | `marimo-studio/notebook-kit:default`                        | `marimo-studio[deno]`    |
+| `marimo-studio/quarto`       | `marimo-studio/quarto:default`                              | Quarto 1.9.38 or newer   |
+| `marimo-studio/typst`        | `marimo-studio/typst:default`                               | `marimo-studio[typst]`   |
 
 Run `marimo-studio starters --json` for the installed catalog and current
-availability. The `documents` field is the starter's initial Source document
-plan. `view create --dry-run` reports every file Studio will create or update.
+availability. The `documents` field lists the Source documents a new view
+starts with. `view create --dry-run` reports every file Studio will create or
+update.
 
 ## `marimo-studio/vanilla`
 
@@ -87,7 +91,7 @@ appears in Source as read-only.
 
 ### React starter
 
-`marimo-studio/react:default` creates this initial Source document plan:
+`marimo-studio/react:default` starts with these Source documents:
 
 ```text
 AGENTS.md
@@ -128,7 +132,7 @@ template sites that request notebook results, and builds an HTML artifact with
 [Vite](https://vite.dev/), a frontend build tool, through the pinned Deno
 toolchain. `deno.lock` and `src/vite-env.d.ts` appear in Source as read-only.
 
-The default starter creates this initial Source document plan:
+The default starter starts with these Source documents:
 
 ```text
 AGENTS.md
@@ -242,6 +246,220 @@ bundled. Notebook Kit's `npm:` and `jsr:` imports use remote browser modules.
 | `config`      | Project-relative POSIX path | `deno.json`      | Selects the Deno configuration                                       |
 | `lockfile`    | Project-relative POSIX path | `deno.lock`      | Selects the frozen Deno lockfile                                     |
 | `vite_config` | Project-relative POSIX path | `vite.config.ts` | Selects the Vite configuration                                       |
+
+## `marimo-studio/quarto`
+
+The Quarto provider renders a [Quarto](https://quarto.org/) Markdown document
+to an HTML page. Quarto is a publishing system that turns Markdown with front
+matter into styled documents through [Pandoc](https://pandoc.org/). Notebook
+results appear in the page through the `marimo`
+[shortcode](https://quarto.org/docs/extensions/shortcodes.html), which Studio
+installs as a Quarto extension for each build:
+
+```markdown
+---
+title: Occupancy
+---
+
+Rooms in use today: {{< marimo value="summary.rooms" >}}.
+
+{{< marimo cell="occupancy_chart" >}}
+```
+
+::: v-pre
+
+| Shortcode                      | Renders                                          |
+| ------------------------------ | ------------------------------------------------ |
+| `{{< marimo cell="name" >}}`   | `<marimo-cell name="name">`, a complete cell     |
+| `{{< marimo output="name" >}}` | `<marimo-output value="name">`, a value's output |
+| `{{< marimo value="path" >}}`  | `<span mo-value="path">`, a JSON value           |
+
+Put a `cell` or `output` shortcode alone on its line with a blank line before
+and after it, so the host renders at full width outside a paragraph. Studio
+reports `projection-host-inline` for one inside running text. A `value`
+shortcode belongs inside a sentence.
+
+An `output` shortcode takes the same
+[`accept`](projections.md#rendered-outputs) image list as a `marimo-output`
+host, such as `{{< marimo output="chart" accept="image/svg+xml image/png" >}}`,
+to show a figure as a sharp SVG with the notebook's output settings unchanged.
+
+:::
+
+Raw HTML hosts work in the same documents. Use them when the host needs its own
+element or attributes, such as `<strong mo-value="summary.rooms"></strong>`. A
+`marimo-cell` or `marimo-output` element on its own line with blank lines
+around it stays an HTML block. Shortcodes and hosts inside front matter, code,
+math, and other shortcodes stay unbound.
+
+The default starter creates these provider-owned files:
+
+```text
+AGENTS.md
+index.qmd
+```
+
+::: v-pre
+
+`index.qmd` contains one `{{< marimo cell="name" >}}` for each enabled notebook
+cell that may display output.
+
+:::
+
+The entry document can be `.qmd`, `.md`, or `.markdown`, and Quarto's
+[`include`](https://quarto.org/docs/authoring/includes.html) shortcode pulls in
+other Markdown files. Studio scans the entry document and every file it
+includes for hosts, and lists them in Source. Like Quarto, it resolves an
+include path from the entry document's directory, and a path that starts with
+`/` from the directory that holds `_quarto.yml`. An include that points at a
+missing file reports `build-input-missing`, and one that leaves the view
+project reports `build-input-invalid`.
+
+The provider runs `quarto render` with `--no-execute`, so code chunks in the
+document stay unexecuted. Compute in the notebook and project results into the
+page. Studio wraps the rendered page body in `<div id="app-shell">`, so authored
+source must leave `id="app-shell"` unused.
+
+Every project file is a build input, so images, includes, stylesheets, and
+bibliographies that the document references rebuild the view when they change.
+`view.toml`, `AGENTS.md`, `DESIGN.md`, hidden top-level entries such as
+`.gitignore`, the `_site/` and `_freeze/` directories, and the
+`<stem>_files/` directory that Quarto writes beside the entry document stay
+outside the build.
+
+The provider runs the `quarto` command on `PATH`. Install Quarto 1.9.38 or newer
+with [pixi](https://pixi.prefix.dev/), a package manager that installs
+[conda-forge](https://conda-forge.org/) packages:
+
+```console
+pixi global install quarto
+```
+
+`pixi global` puts `quarto` on `PATH` for every way of starting marimo. A pixi
+workspace keeps Quarto, Python, and Studio in one project environment instead,
+and `pixi run` starts marimo with that environment activated:
+
+```console
+pixi init
+pixi add python quarto
+pixi add --pypi marimo-studio
+pixi run marimo edit analysis.py --no-sandbox --watch
+```
+
+conda-forge Quarto finds Pandoc and its resources through environment
+activation. Start marimo with `pixi run` or inside `pixi shell`, or `doctor` and
+`starters` report Quarto as unavailable. The
+[Quarto installer](https://quarto.org/docs/get-started/) works as well.
+
+conda-forge Quarto pins its own Deno. A workspace that also adds
+`marimo-studio[deno]` for React, Svelte, or Notebook Kit views replaces that
+Deno with Studio's, so install Quarto with `pixi global install quarto` there.
+
+Builds keep Quarto's caches beneath the view's `.artifacts/.cache`, apart from
+the user cache that other Quarto installations share.
+
+On Windows, Quarto keeps a render cache in a SQLite file inside the build
+directory, and SQLite opens it only when its path stays under 260 characters.
+When a build reports `unable to open database file`, move the notebook to a
+shorter directory, such as `C:\work\analysis`.
+
+### Options
+
+| Option       | Type                        | Default     | Contract                                                                  |
+| ------------ | --------------------------- | ----------- | ------------------------------------------------------------------------- |
+| `entrypoint` | Project-relative POSIX path | `index.qmd` | Selects the Quarto document. It must end in `.qmd`, `.md`, or `.markdown` |
+
+## `marimo-studio/typst`
+
+The Typst provider renders a [Typst](https://typst.app/docs/) document to PDF.
+Typst is a markup-based typesetting system for papers, reports, and slides.
+Studio renders `main.typ` when it builds the view, then again whenever a
+notebook value or output the document reads changes. The view page shows the
+PDF with selectable text and a download link.
+
+```typst
+#import "marimo.typ": marimo_output, marimo_value
+
+= Occupancy
+Rooms in use: #marimo_value("summary.rooms", default: 0)
+
+#figure(
+  marimo_output("occupancy_chart", width: 100%),
+  caption: [Rooms in use by hour.],
+)
+```
+
+The default starter creates these provider-owned files:
+
+```text
+AGENTS.md
+main.typ
+marimo.typ
+```
+
+`marimo.typ` defines `marimo_value(selector, default: none)`. It returns the
+current notebook value for `selector`, or `default` before the notebook has a
+value.
+Write each selector as a string literal so Studio can find the values the
+document reads. Values arrive as JSON, so convert a dataframe in the notebook
+before the document reads it, for example with `rows = df.to_dicts()`.
+
+`marimo.typ` also defines `marimo_output(selector, default: none, ..args)`. It
+places a notebook value as an image with
+[`image()`](https://typst.app/docs/reference/visualize/image/), so the report
+shows the chart the notebook draws. Named arguments such as `width`, `height`,
+and `alt` pass through to `image()`.
+
+The selector names a notebook variable, so assign the figure to one, such as
+`revenue_chart = plot_revenue(rows)`. Studio renders the value in the first of
+PDF, SVG, PNG, JPEG, WebP, and GIF that it supports, whatever output settings
+the notebook uses. A matplotlib figure or axes arrives as a PDF, so lines stay
+sharp and text stays selectable. An Altair chart arrives as an SVG and needs
+`vl-convert-python` in the notebook's environment, which the Browser runtime
+lacks. Other values use their display methods, such as a PIL image's PNG.
+
+A vector figure scales to the width `marimo_output()` gives it, and its text
+scales with it. A figure drawn at 7 inches and placed 15 cm wide prints its
+labels at about 85% of their drawn size. Choose the width in the template
+first, and draw the figure near that size when labels need to stay larger.
+
+An output that is unavailable, fails in the notebook, has no image form, or
+exceeds the 5,000,000-byte output limit leaves `marimo_output()` at its default,
+and the view names it beside the document.
+
+`marimo_cell(name, default: none, ..args)` places the output of the notebook
+cell called `name` as marimo shows it, when that output is a PDF, SVG, PNG,
+JPEG, WebP, or GIF image. A cell that ends with a matplotlib figure arrives as
+a PNG. Name the cell in the notebook, for example `def revenue_plot():`. A cell
+that has not run, or that shows text or a table, leaves `marimo_cell()` at its
+default. Prefer `marimo_output()` with the figure's variable when a vector PDF
+matters.
+
+Studio checks the document by rendering it with every `marimo_value()`,
+`marimo_output()`, and `marimo_cell()` call at its default. A compile error
+fails the build at its source line and keeps the last published view. Each
+render runs in a child process with a 60 second deadline.
+
+Renders use Typst's embedded fonts and the font files in the project's
+`fonts/` directory, and a compile clock fixed at 1970-01-01, so the same
+template and values produce the same PDF on every machine. Pass dates from the
+notebook in place of `datetime.today()`. Imports
+of `@preview` packages download them on first use and need network access.
+
+The project also compiles outside Studio with `typst compile main.typ`, where
+every `marimo_value()`, `marimo_output()`, and `marimo_cell()` call returns its
+default.
+
+Install the Typst compiler with `pip install "marimo-studio[typst]"` in the
+environment that runs Studio, or with `pixi add --pypi "marimo-studio[typst]"`
+in a pixi workspace. [Rendered documents](projections.md#rendered-documents)
+lists how each runtime supplies values to the document.
+
+### Options
+
+| Option       | Type                        | Default    | Contract                                          |
+| ------------ | --------------------------- | ---------- | ------------------------------------------------- |
+| `entrypoint` | Project-relative POSIX path | `main.typ` | Selects the Typst document. It must end in `.typ` |
 
 ## Deno availability
 

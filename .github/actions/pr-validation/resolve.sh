@@ -38,7 +38,11 @@ latest_base="$(
         )] | sort_by(.created_at, .run_attempt) | reverse | .[0] // null' \
         <<< "$base_runs"
 )"
-if [[ "$(jq -r '.status // ""' <<< "$latest_base")" != "completed" || \
+base_status="$(jq -r '.status // ""' <<< "$latest_base")"
+if [[ -n "$base_status" && "$base_status" != "completed" && "${VALIDATION_PENDING:-full}" == "changed" ]]; then
+    record changed "The comparison base is still running $VALIDATION_WORKFLOW. Validate the changed files."
+fi
+if [[ "$base_status" != "completed" || \
       "$(jq -r '.conclusion // ""' <<< "$latest_base")" != "success" ]]; then
     record full "The comparison base has no successful $VALIDATION_WORKFLOW run. Complete validation is required."
 fi

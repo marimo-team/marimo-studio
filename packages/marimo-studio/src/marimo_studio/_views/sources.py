@@ -22,11 +22,11 @@ import tomlkit
 from tomlkit.exceptions import ParseError
 
 from marimo_studio._artifacts.inputs import (
-    ProjectInputState,
-    project_input_state,
+    BuildInputState,
+    build_input_state,
     project_revision_snapshot,
 )
-from marimo_studio._artifacts.limits import PROJECT_INPUT_BUDGET
+from marimo_studio._artifacts.limits import BUILD_INPUT_BUDGET
 from marimo_studio._filesystem.errors import (
     ConcurrentChangeError,
     FileTooLargeError,
@@ -78,7 +78,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._host import provider_registry
 
-SOURCE_DOCUMENT_MAX_BYTES = PROJECT_INPUT_BUDGET.max_file_bytes
+SOURCE_DOCUMENT_MAX_BYTES = BUILD_INPUT_BUDGET.max_file_bytes
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ class PreparedSourceWrite:
     inspection: ProjectInspection
     input_id: str
     spec: SourceDocumentSpec
-    input_state: ProjectInputState | None = None
+    input_state: BuildInputState | None = None
 
 
 @dataclass(frozen=True)
@@ -132,7 +132,7 @@ def source_spec(
     relative = source_path(name)
     if relative == VIEW_MANIFEST_PATH:
         return VIEW_MANIFEST_DOCUMENT
-    matches = [item for item in inspection.editor_documents if item.path == relative]
+    matches = [item for item in inspection.documents if item.path == relative]
     if len(matches) != 1:
         raise SourceNotFoundError(
             f"Unknown source document {relative.as_posix()!r} in view {view_name!r}."
@@ -660,7 +660,7 @@ def write_source(
         snapshot = project_revision_snapshot(
             project,
             inspection,
-            provider.provenance(inspection),
+            provider.provenance(),
         )
     except (ConfigurationError, OSError, ValueError) as error:
         with (
@@ -727,7 +727,7 @@ def write_project_source(
             project_revision_snapshot(
                 project,
                 prepared.inspection,
-                provider.provenance(prepared.inspection),
+                provider.provenance(),
             )
             if prepared.input_state is None
             else None
@@ -774,7 +774,7 @@ def write_project_source(
         tree = FileTree(current_project.root)
         try:
             try:
-                current_input_state = project_input_state(
+                current_input_state = build_input_state(
                     current_project,
                     prepared.inspection,
                 )
@@ -788,7 +788,7 @@ def write_project_source(
                 path, content.encode(), expect=expected_identity
             )
             try:
-                final_input_state = project_input_state(
+                final_input_state = build_input_state(
                     current_project,
                     prepared.inspection,
                 )
@@ -845,8 +845,8 @@ def write_project_source(
 
 
 def _authorization_inputs_match(
-    expected: ProjectInputState,
-    current: ProjectInputState,
+    expected: BuildInputState,
+    current: BuildInputState,
     target: PurePosixPath,
 ) -> bool:
     return expected.paths == current.paths and all(

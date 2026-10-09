@@ -85,12 +85,12 @@ def test_validation_rejects_source_mutation_between_static_and_runtime_stages(
         studio: StudioWorkspace,
         *,
         view_name: str | None = None,
-        _published_mounts: Any = None,
+        _published_sites: Any = None,
     ):
         report = native_check(
             studio,
             view_name=view_name,
-            _published_mounts=_published_mounts,
+            _published_sites=_published_sites,
         )
         document.write_text(
             document.read_text(encoding="utf-8").replace(
@@ -160,14 +160,12 @@ def test_static_validation_rejects_changed_provider_mounts(
     inspect = provider.inspect
     changed = False
 
-    def inspect_mounts(request: Any):
+    def inspect_sites(request: Any):
         inspection = inspect(request)
         return (
             replace(
                 inspection,
-                mounts=tuple(
-                    replace(mount, allowed_targets=None) for mount in inspection.mounts
-                ),
+                sites=tuple(replace(site, targets="*") for site in inspection.sites),
             )
             if changed
             else inspection
@@ -179,7 +177,7 @@ def test_static_validation_rejects_changed_provider_mounts(
         changed = True
         return result
 
-    monkeypatch.setattr(provider, "inspect", inspect_mounts)
+    monkeypatch.setattr(provider, "inspect", inspect_sites)
     monkeypatch.setattr(provider, "build", change_mounts)
 
     report = asyncio.run(workspace.validate(level="static", view="dashboard"))
@@ -367,12 +365,12 @@ def test_invalid_static_source_matches_python_and_cli_validation(
         studio: StudioWorkspace,
         *,
         view_name: str | None = None,
-        _published_mounts: Any = None,
+        _published_sites: Any = None,
     ):
         report = native_check(
             studio,
             view_name=view_name,
-            _published_mounts=_published_mounts,
+            _published_sites=_published_sites,
         )
         source.write_text(
             original.replace('id="app-shell"', 'id="broken-shell"'),

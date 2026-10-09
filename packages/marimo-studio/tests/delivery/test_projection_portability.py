@@ -8,7 +8,7 @@ import pytest
 from marimo_studio._delivery.export import export_view
 from marimo_studio._views.api import prepare_view
 from marimo_studio.errors import PublicationError
-from marimo_studio.view_providers._bundled import _deno
+from marimo_studio.view_providers._builtin import _deno
 
 from ..helpers import replace_app_shell
 

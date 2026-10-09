@@ -6,6 +6,7 @@
   "exports": {
     "./runtime-status": "./src/runtime-status.ts",
     "./development-events": "./src/development-events.ts",
+    "./document-render": "./src/document-render.ts",
     "./errors": "./src/errors.ts",
     "./frame-bridge": "./src/frame-bridge.ts",
     "./host-session": "./src/host-session.ts",

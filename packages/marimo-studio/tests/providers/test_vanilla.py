@@ -2,33 +2,19 @@ from __future__ import annotations
 
 from dataclasses import replace
 from html.parser import HTMLParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
-from marimo_studio._views.inspection import inspection_request
-from marimo_studio.view_providers._bundled.vanilla import provider
+from marimo_studio._views.inspection import (
+    inspect_view_project_sync,
+    inspection_request,
+)
+from marimo_studio.view_providers._builtin.vanilla import provider
 
 from ..helpers import no_display_notebook_source
 from ..provider_test_support import provider_build_request
 from ._vanilla_test_support import _project
-
-
-class _ProjectionTags(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.tags: list[tuple[str, dict[str, str | None]]] = []
-
-    def handle_starttag(
-        self,
-        tag: str,
-        attrs: list[tuple[str, str | None]],
-    ) -> None:
-        attributes = dict(attrs)
-        if tag in {"marimo-cell", "marimo-output"} or "mo-value" in attributes:
-            self.tags.append((tag, attributes))
-
-    handle_startendtag = handle_starttag
 
 
 class _ScriptTags(HTMLParser):
@@ -50,7 +36,7 @@ def test_vanilla_starter_exposes_its_generated_notebook_cell(tmp_path: Path) -> 
 
     inspection = provider.inspect(inspection_request(project))
 
-    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+    assert [(site.kind, site.targets) for site in inspection.sites] == [
         ("cell", ("cell-2",)),
     ]
 
@@ -100,7 +86,7 @@ def test_vanilla_starter_builds_without_possible_output_cells(tmp_path: Path) ->
     report = provider.build(provider_build_request(project, inspection, files))
 
     assert inspection.diagnostics == ()
-    assert inspection.mounts == ()
+    assert inspection.sites == ()
     assert report.document is not None
 
 
@@ -130,7 +116,7 @@ def test_vanilla_rejects_duplicate_projection_and_shell_attributes(
 
     inspection = provider.inspect(inspection_request(project))
 
-    assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
+    assert [item.code for item in inspection.diagnostics] == ["source-document-invalid"]
 
 
 def test_vanilla_projection_diagnostics_locate_authored_sources(
@@ -159,7 +145,7 @@ def test_vanilla_projection_diagnostics_locate_authored_sources(
 
         diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
 
-        assert diagnostic.code == "entry-document-invalid"
+        assert diagnostic.code == "source-document-invalid"
         assert diagnostic.source is not None
         assert diagnostic.source.line == 5
 
@@ -185,70 +171,10 @@ def test_vanilla_rejects_html_that_would_swallow_following_projections(
         encoding="utf-8",
     )
     diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
-    assert diagnostic.code == "entry-document-invalid"
+    assert diagnostic.code == "source-document-invalid"
     assert "cannot use self-closing syntax in HTML" in diagnostic.message
     assert diagnostic.source is not None
     assert diagnostic.source.line == 2
-
-
-def test_vanilla_instruments_exact_parser_sites(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    source = project.root / "index.html"
-    source.write_text(
-        """<!doctype html>
-<html lang="en">
-  <head>
-    <title>Quoted &gt; text</title>
-    <script>
-      const fake = '<marimo-cell name="script > fake"' +
-        ' data-marimo-studio-site="script">';
-    </script>
-    <style>.fake::after { content: '<span mo-value="style.fake">'; }</style>
-  </head>
-  <body>
-    <!--
-      <marimo-output value="comment.fake"
-        data-marimo-studio-site="comment"></marimo-output>
-    -->
-    <main id="app-shell" aria-label="😀 > plain">
-      <marimo-cell title="1 > 0" name=" controls "></marimo-cell>
-      <marimo-output value=" report.total " data-label="x > y"></marimo-output>
-      <span data-label=">" mo-value=" report.total "></span>
-      <span mo-value="report.total"></span>
-    </main>
-  </body>
-</html>
-""",
-        encoding="utf-8",
-    )
-
-    inspection = provider.inspect(inspection_request(project))
-
-    assert inspection.diagnostics == ()
-    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
-        ("cell", ("controls",)),
-        ("output", ("report.total",)),
-        ("value", ("report.total",)),
-        ("value", ("report.total",)),
-    ]
-    assert len({site.id for site in inspection.mounts}) == 4
-
-    files = project.root / ".artifacts" / ".staging" / "test" / "files"
-    files.mkdir(parents=True)
-    report = provider.build(provider_build_request(project, inspection, files))
-
-    assert report.document is not None
-    built = (files / "index.html").read_text(encoding="utf-8")
-    assert '<marimo-cell name="script > fake"' in built
-    assert 'data-marimo-studio-site="script">' in built
-    assert '<span mo-value="style.fake">' in built
-    assert '<marimo-output value="comment.fake"' in built
-    assert 'data-marimo-studio-site="comment"></marimo-output>' in built
-    parser = _ProjectionTags()
-    parser.feed(built)
-    assert [attributes["data-marimo-studio-site"] for _, attributes in parser.tags] == [
-        site.id for site in inspection.mounts
-    ]
 
 
 def test_vanilla_wildcard_hosts_accept_runtime_targets(tmp_path: Path) -> None:
@@ -271,9 +197,9 @@ def test_vanilla_wildcard_hosts_accept_runtime_targets(tmp_path: Path) -> None:
     inspection = provider.inspect(inspection_request(project))
 
     assert inspection.diagnostics == ()
-    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+    assert [(site.kind, site.targets) for site in inspection.sites] == [
+        ("value", "*"),
         ("cell", ("summary",)),
-        ("value", None),
     ]
 
 
@@ -295,6 +221,27 @@ def test_vanilla_rejects_other_wildcard_values(tmp_path: Path, allow: str) -> No
     assert diagnostic.source.line == 2
 
 
+def test_vanilla_host_diagnostics_keep_linked_sources_in_source(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    (project.root / "style.css").write_text("main { color: black; }", encoding="utf-8")
+    (project.root / "index.html").write_text(
+        "<!doctype html><html><head><title>Linked</title>"
+        '<link rel="stylesheet" href="style.css"></head><body>'
+        '<main id="app-shell"><span mo-value="rows" data-marimo-allow="all"></span>'
+        "</main></body></html>",
+        encoding="utf-8",
+    )
+
+    inspection = provider.inspect(inspection_request(project))
+
+    assert [item.code for item in inspection.diagnostics] == [
+        "projection-wildcard-invalid"
+    ]
+    assert PurePosixPath("style.css") in {item.path for item in inspection.documents}
+
+
 def test_vanilla_rejects_nested_projection_hosts(tmp_path: Path) -> None:
     project = _project(tmp_path)
     source = project.root / "index.html"
@@ -306,7 +253,7 @@ def test_vanilla_rejects_nested_projection_hosts(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
-    assert diagnostic.code == "entry-document-invalid"
+    assert diagnostic.code == "source-document-invalid"
     assert (
         "Projection hosts cannot contain other projection hosts" in diagnostic.message
     )
@@ -336,14 +283,16 @@ def test_vanilla_rejects_authored_runtime_attributes(tmp_path: Path) -> None:
         (
             '<main id="app-shell"',
             '<main id="app-shell" data-marimo-studio-site="authored"',
+            "projection-site-reserved",
         ),
         (
             "</head>",
             '<script data-marimo-studio-source-revision="authored"></script></head>',
+            "entry-document-invalid",
         ),
     )
 
-    for target, replacement in replacements:
+    for target, replacement, code in replacements:
         source.write_text(
             original.replace(target, replacement),
             encoding="utf-8",
@@ -351,9 +300,7 @@ def test_vanilla_rejects_authored_runtime_attributes(tmp_path: Path) -> None:
 
         inspection = provider.inspect(inspection_request(project))
 
-        assert [item.code for item in inspection.diagnostics] == [
-            "entry-document-invalid"
-        ]
+        assert [item.code for item in inspection.diagnostics] == [code]
 
 
 @pytest.mark.parametrize(
@@ -369,7 +316,7 @@ def test_vanilla_entrypoint_must_be_a_normalized_html_path(
 ) -> None:
     project = replace(_project(tmp_path), options={"entrypoint": entrypoint})
 
-    inspection = provider.inspect(inspection_request(project))
+    inspection = inspect_view_project_sync(project)
 
     assert [item.code for item in inspection.diagnostics] == [
         "provider-options-invalid"

@@ -8,14 +8,13 @@ from pathlib import Path
 from types import MappingProxyType
 
 from marimo_studio._artifacts.inputs import (
-    ProjectInputState,
-    project_input_state,
+    BuildInputState,
+    build_input_state,
     project_revision_snapshot,
 )
 from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._notebook.ports import NotebookInspector
 from marimo_studio._notebook.records import CellRef, NotebookSpec
-from marimo_studio._notebook.source_snapshot import inspect_notebook_source
 from marimo_studio._views.catalog import resolve_starter
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.records import Starter
@@ -48,7 +47,7 @@ _WORKSPACE_IGNORE_RULES = ("/.locks/", "*/.artifacts/")
 class PreparedExistingView:
     project: ViewProject
     inspection: ProjectInspection
-    input_state: ProjectInputState
+    input_state: BuildInputState
 
 
 @dataclass(frozen=True)
@@ -130,7 +129,7 @@ def prepare_existing_view(project: ViewProject) -> PreparedExistingView:
     snapshot = project_revision_snapshot(
         project,
         inspection,
-        provider.provenance(inspection),
+        provider.provenance(),
     )
     return PreparedExistingView(project, inspection, snapshot.state)
 
@@ -239,11 +238,10 @@ def prepare_starter(
             initial,
         )
 
-    planned_notebook = inspect_notebook_source(
+    planned_notebook = inspect_notebook(
         notebook_path,
-        configured,
-        inspect_notebook,
         include_code=True,
+        source=configured,
     )
     planned = _provider_plans(
         provider,
@@ -397,11 +395,10 @@ def _configuration_transition(
             prospective = (
                 saved.notebook
                 if configured == saved.source
-                else inspect_notebook_source(
+                else inspect_notebook(
                     notebook_path,
-                    configured,
-                    inspect_notebook,
                     include_code=True,
+                    source=configured,
                 )
             )
             if prospective.revision != prepared.planned_notebook.revision:
@@ -501,7 +498,7 @@ def _selected_view(
         if (
             project == prepared_existing.project
             and project is not None
-            and project_input_state(project, prepared_existing.inspection)
+            and build_input_state(project, prepared_existing.inspection)
             == prepared_existing.input_state
         ):
             return _SelectedView(
@@ -510,7 +507,7 @@ def _selected_view(
                     project.manifest,
                     *(
                         project.root / item.path
-                        for item in prepared_existing.inspection.editor_documents
+                        for item in prepared_existing.inspection.documents
                     ),
                 ),
             )
@@ -540,7 +537,7 @@ def _selected_view(
                 project.provider,
                 (
                     project.manifest,
-                    *(project.root / item.path for item in inspection.editor_documents),
+                    *(project.root / item.path for item in inspection.documents),
                 ),
             )
         raise ConfigurationError(

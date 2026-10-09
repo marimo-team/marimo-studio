@@ -103,7 +103,9 @@ export const App = () => {
                   1,
                 )
               }+ · ${eventSummary.status}`
-              : "Awaiting filter state"}
+              : hasError
+              ? "Filter unavailable"
+              : "Loading filter"}
           </div>
         </header>
 
@@ -171,8 +173,8 @@ export const App = () => {
         </div>
 
         <footer className="operations-footer">
-          Fixed USGS weekly snapshot · Positions show epicenters · Marker size
-          encodes magnitude
+          USGS weekly feed, 22–29 Jan 2024 · Circles mark epicenters, sized by
+          magnitude
         </footer>
       </main>
     </>

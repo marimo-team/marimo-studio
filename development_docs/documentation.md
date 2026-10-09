@@ -60,7 +60,9 @@ site. Each family names one notebook and every view exported from it.
    static delivery preflight, relative document base, and relative asset URL
    policy.
 5. Checks links to sibling views against the family allowlist.
-6. Replaces `apps/docs/public/examples` as one directory transaction.
+6. Replaces that export's directory under `apps/docs/public/examples`. A failed
+   export keeps its previous copy, and exports finished before it stay
+   published. A complete run then removes exports the catalog no longer lists.
 
 The published example tree contains one static notebook and one Prepared
 runtime export per named view. Generated example files are build evidence.
@@ -129,7 +131,7 @@ captured. Inspect the images before committing them.
 The README opens with `apps/docs/public/showcase/marimo-studio-wall-THEME.webp`,
 which places every example notebook above its views on a receding plane. Each
 family also has a fan, `marimo-studio-fan-FAMILY-THEME.webp`, with the notebook
-raised behind its three views. Every image has `light` and `dark` variants for
+raised behind its views. Every image has `light` and `dark` variants for
 GitHub's color schemes and keeps a transparent background. The plain file is a
 2400px WebP at quality 0.9 for READMEs and pages, and the `@2x` file is the
 4800px lossless master. Render them again after a visible view change or when
@@ -179,6 +181,11 @@ Serve the same source locally with:
 make docs-serve
 ```
 
+The server starts immediately and serves the examples already exported to
+`apps/docs/public/examples`. It lists any missing exports when it starts. Run
+`make docs-examples` alongside it, and each example appears on reload once its
+export finishes.
+
 [Portless](https://portless.sh/) assigns the VitePress server an available port
 and exposes it at `https://docs.marimo-studio.localhost/`. Linked Git worktrees
 receive a branch prefix, so each running workspace has its own URL. Use the URL
@@ -203,25 +210,20 @@ The development server uses an empty deployment base. Inspect the landing page,
 changed pages, navigation, search, code blocks, tables, examples, and local
 links at desktop and narrow widths.
 
-Run `make docs-examples` when iterating on exported example inputs. Run
-`make build` first when presentation or runtime assets changed.
-
-Rebuild one part of an existing complete example publication with explicit
-selectors:
+Run `make docs-examples` when iterating on exported example inputs. It builds
+the browser assets first, then exports every notebook and view, about two
+minutes per view. Pass selectors in `EXAMPLES` to export only what changed:
 
 ```console
-pnpm --filter @marimo-studio/docs examples:build -- --family athletes
-pnpm --filter @marimo-studio/docs examples:build -- --notebook earthquakes
-pnpm --filter @marimo-studio/docs examples:build -- --view occupancy/monitor
+make docs-examples EXAMPLES='--family athletes'
+make docs-examples EXAMPLES='--notebook earthquakes'
+make docs-examples EXAMPLES='--view occupancy/monitor --view athletes/field'
 ```
 
 Selectors may be repeated and combined. `--family` selects its notebook and
 every view. `--notebook` selects one notebook export. `--view` accepts an exact
-`FAMILY/VIEW` identity. A selective run seeds its private staging directory
-from the current complete publication, replaces the selected targets, checks
-the resulting full tree, and publishes it atomically. Run the command without
-selectors to create the initial complete publication and before release or CI
-handoff.
+`FAMILY/VIEW` identity. Each selected export replaces only its own directory.
+`examples:check` validates that the publication is complete.
 
 ## Build verification
 
@@ -256,12 +258,17 @@ project URL, which `agent-plugins read marimo-studio` includes in the briefing.
 
 ## Deployment
 
-`.github/workflows/pages.yml` runs `make docs-build` for pull requests and
-`main`. A `main` build receives the base path from GitHub Pages, uploads
+`.github/workflows/pages.yml` exports each example family in its own job with
+`examples:build --family SLUG`. A final job downloads the families,
+runs `examples:check` to validate the assembled publication, and builds the
+site. A `main` build receives the base path from GitHub Pages, uploads
 `apps/docs/.vitepress/dist`, then deploys that exact artifact.
 
-Pull requests prove the documentation source and root-based site build. A
-`main` build verifies the Pages base path before deployment.
+Pull requests that change the site or its examples build the complete
+root-based site. Pull requests that change product code run `examples:smoke`,
+which exports three views through the same export path: the Earthquake watch
+story (plain HTML), its briefing (React), and the Quadratic programs report
+(Typst). `make docs-build` builds the complete site locally.
 
 ## Version parity
 

@@ -17,10 +17,10 @@ from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._validation.runtime import run_runtime_checks
 from marimo_studio._validation.static_rules import check_studio as _check_studio
-from marimo_studio._views.inspection import inspect_view_mounts
+from marimo_studio._views.inspection import inspect_view_sites
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
-from marimo_studio.view_providers import MountDeclaration
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ def check_studio(
     studio: StudioWorkspace,
     *,
     view_name: str | None = None,
-    _published_mounts: Mapping[str, tuple[MountDeclaration, ...]] | None = None,
+    _published_sites: Mapping[str, tuple[ArtifactSite, ...]] | None = None,
 ) -> CheckReport:
     """Validate the notebook, view projects, projections, and packaged runtime."""
     compatibility = _compatibility_check()
@@ -96,9 +96,9 @@ def check_studio(
             *_check_studio(
                 studio,
                 inspect_notebook=inspect_notebook,
-                inspect_mounts=inspect_view_mounts,
+                inspect_sites=inspect_view_sites,
                 view_name=view_name,
-                published_mounts=_published_mounts,
+                published_sites=_published_sites,
             ),
             compatibility,
         ),
@@ -110,7 +110,7 @@ async def check_runtime_studio(
     *,
     view_name: str | None = None,
     timeout: float = DEFAULT_RUNTIME_TIMEOUT,
-    _published_mounts: Mapping[str, tuple[MountDeclaration, ...]] | None = None,
+    _published_sites: Mapping[str, tuple[ArtifactSite, ...]] | None = None,
 ) -> tuple[CheckResult, ...]:
     """Execute the complete notebook and verify selected projected results."""
     return await run_runtime_checks(
@@ -119,5 +119,5 @@ async def check_runtime_studio(
         view_name=view_name,
         probe_runtime=create_worker_runtime_probe(),
         timeout=timeout,
-        published_mounts=_published_mounts,
+        published_sites=_published_sites,
     )

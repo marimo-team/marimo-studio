@@ -18,7 +18,7 @@ import marimo_studio._views.build as build_module
 from marimo_studio._artifacts.inputs import project_revision
 from marimo_studio._artifacts.limits import (
     ARTIFACT_OUTPUT_BUDGET,
-    PROJECT_INPUT_BUDGET,
+    BUILD_INPUT_BUDGET,
     FileBudget,
 )
 from marimo_studio._artifacts.paths import artifact_root
@@ -34,11 +34,11 @@ from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.project_manifest import load_view_project
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildProfile,
     BuildRequest,
     BuildResult,
     InspectionRequest,
-    ProjectInput,
     ProjectInspection,
     ProviderAvailability,
     ProviderStarter,
@@ -46,7 +46,7 @@ from marimo_studio.view_providers import (
     StarterPlan,
     ViewProject,
 )
-from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
+from marimo_studio.view_providers._builtin.vanilla import provider as vanilla_provider
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
@@ -92,8 +92,8 @@ class _ExternalVanillaProvider:
     def __init__(self) -> None:
         self.info = vanilla_provider.info
 
-    def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
-        return vanilla_provider.availability(project)
+    def availability(self) -> ProviderAvailability:
+        return vanilla_provider.availability()
 
     def starters(self) -> tuple[ProviderStarter, ...]:
         return ()
@@ -154,7 +154,7 @@ def test_project_input_budgets_fail_before_provider_build(
 ) -> None:
     project = _project(tmp_path)
     provider = provider_registry().get(project.provider)
-    monkeypatch.setattr(artifact_inputs, "PROJECT_INPUT_BUDGET", budget)
+    monkeypatch.setattr(artifact_inputs, "BUILD_INPUT_BUDGET", budget)
     monkeypatch.setattr(
         provider,
         "build",
@@ -174,10 +174,10 @@ def test_project_revision_rejects_a_sparse_input_before_reading_payloads(
     inspection = provider.inspect(inspection_request(project))
     oversized = project.root / "oversized.bin"
     with oversized.open("wb") as stream:
-        stream.truncate(PROJECT_INPUT_BUDGET.max_file_bytes + 1)
+        stream.truncate(BUILD_INPUT_BUDGET.max_file_bytes + 1)
     inspection = replace(
         inspection,
-        input_scope=(ProjectInput(PurePosixPath("oversized.bin"), "file"),),
+        inputs=(BuildInput(PurePosixPath("oversized.bin"), "file"),),
     )
     verified_secure_file = artifact_inputs.verified_secure_file
 
@@ -202,7 +202,7 @@ def test_project_revision_rejects_a_sparse_input_before_reading_payloads(
     )
 
     with pytest.raises(ConfigurationError, match="Reduce the file size"):
-        project_revision(project, inspection, provider.provenance(inspection))
+        project_revision(project, inspection, provider.provenance())
 
 
 def test_artifact_document_budget_is_checked_before_its_payload_is_read(
@@ -343,7 +343,7 @@ def test_project_revision_canonically_includes_project_configuration(
     project = _project(tmp_path)
     provider = provider_registry().get(project.provider)
     inspection = provider.inspect(inspection_request(project))
-    provenance = provider.provenance(inspection)
+    provenance = provider.provenance()
     base = project_revision(project, inspection, provenance)
     reordered = replace(
         project,
@@ -397,7 +397,7 @@ def test_live_manifest_is_revalidated_before_artifact_control_creation(
     "field,value",
     (
         ("schema", True),
-        ("schema", 2),
+        ("schema", 1),
         ("artifact_revision", "sha256:" + "0" * 64),
     ),
     ids=("schema-type", "schema-version", "artifact-revision"),
@@ -448,11 +448,11 @@ def test_artifact_manifest_rejects_duplicate_json_fields(tmp_path: Path) -> None
             "browser-safe",
         ),
         (
-            lambda site: site.update(allowedTargets=[]),
-            "allowed targets",
+            lambda site: site.update(targets=[]),
+            "targets must be a non-empty tuple",
         ),
         (
-            lambda site: site.update(kind="value", allowedTargets=["report..total"]),
+            lambda site: site.update(kind="value", targets=["report..total"]),
             "dot selection",
         ),
     ),
@@ -460,7 +460,7 @@ def test_artifact_manifest_rejects_duplicate_json_fields(tmp_path: Path) -> None
         "site-id",
         "source-line-positive",
         "source-line-browser-safe",
-        "allowed-targets",
+        "targets",
         "value-target-path",
     ),
 )
@@ -473,7 +473,7 @@ def test_persisted_mounts_use_canonical_validation(
     artifact = publish_artifact(project, "development")
     manifest_path = _manifest_path(artifact)
     manifest = _read_json(manifest_path)
-    mutate(manifest["mounts"][0])
+    mutate(manifest["sites"][0])
     _write_json(manifest_path, manifest)
 
     with pytest.raises(ConfigurationError, match=message):
@@ -549,9 +549,7 @@ def test_artifact_read_rejects_missing_and_extra_files(
     "mutate",
     (
         lambda state: state.update(schema=True),
-        lambda state: state.update(schema=2),
         lambda state: state.update(extra="field"),
-        lambda state: state["published"]["provider"].update(api_version=0),
         lambda state: state["published"]["provider"].update(
             build_fingerprint="invalid"
         ),
@@ -569,9 +567,7 @@ def test_artifact_read_rejects_missing_and_extra_files(
     ),
     ids=(
         "schema-type",
-        "schema-version",
         "top-level-field",
-        "provider-api-version",
         "provider-build-fingerprint",
         "provider-field",
         "duration",

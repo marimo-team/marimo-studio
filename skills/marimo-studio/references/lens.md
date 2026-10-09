@@ -28,8 +28,8 @@ None
 
 The final `None` keeps the Lens dock on the projected Studio surface. Rendering
 `studio_lens` as the notebook cell output also mounts a notebook dock. Studio
-skips marimo's automatic Lens in a notebook that imports Lens, so `studio_lens`
-is the notebook's only Lens.
+skips its automatic Lens when the notebook constructs its own Lens, so
+`studio_lens` is the notebook's only Lens.
 
 Project the value once in each view that should collect feedback. Link custom
 rendered regions to their existing notebook input hosts:
@@ -63,5 +63,5 @@ Use the packaged Lens skill for the feedback lifecycle. Pass the
 captured `SelectionReference` to Lens activity and reveal calls. Use its
 `cells` as notebook provenance and `target["sources"]` for exact value selectors.
 For a DOM target, use `documentPath`,
-`domSelector`, and the active Studio view to locate the owning source document,
+`domSelector`, and the active Studio view to locate the owning Source document,
 then build, show, and validate that view before resolving the selection.

@@ -31,6 +31,37 @@ class RuntimeSyncError(MarimoStudioError):
     transient = True
 
 
+class RuntimeKernelExitError(RuntimeSyncError):
+    """The notebook kernel stopped while Studio was reading runtime state."""
+
+    code = "runtime-startup-failed"
+    status_code = 500
+    transient = False
+    public_hint = "Reload the editor to restart the Python runtime."
+
+
+class RuntimeExecutionPendingError(RuntimeSyncError):
+    """The notebook is still executing cells needed by the preview."""
+
+    def __init__(self) -> None:
+        super().__init__("Waiting for changed notebook cells to finish running.")
+
+
+class RuntimeSyncRequiredError(RuntimeSyncError):
+    """The notebook cells required by the preview need a fresh execution."""
+
+    code = "runtime-sync-required"
+    transient = False
+    public_hint = (
+        "Run the changed notebook cells in the editor, then retry the preview."
+    )
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Run the changed notebook cells to update the Python runtime preview."
+        )
+
+
 class ViewRetirementInProgress(MarimoStudioError):
     """A view-scoped operation was superseded by the view's removal or rename."""
 

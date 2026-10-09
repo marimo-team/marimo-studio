@@ -29,6 +29,7 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
         starterCatalog={model.snapshot.starterCatalog}
         starters={model.starters}
         viewRoot={model.snapshot.viewRoot}
+        persistence={model.snapshot.persistence}
         onCancel={model.actions.cancelCreate}
         onNameChange={model.actions.setName}
         onRetryStarters={model.actions.retryStarters}

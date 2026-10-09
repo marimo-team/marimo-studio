@@ -120,20 +120,22 @@ const configWithValues = (selectors: readonly string[], namespaceSite?: string):
       ]),
     ),
   },
-  mounts:
+  sites:
     namespaceSite === undefined
       ? selectors.map((selector) => ({
           id: `site:value:${selector}`,
           kind: "value" as const,
           source: { path: "src/App.tsx", line: 1, column: 1 },
-          allowedTargets: [selector],
+          targets: [selector],
+          accept: [],
         }))
       : [
           {
             id: namespaceSite,
             kind: "value",
             source: { path: "src/App.tsx", line: 1, column: 1 },
-            allowedTargets: null,
+            targets: null,
+            accept: [],
           },
         ],
   runtimeBindings: {
@@ -789,18 +791,20 @@ test("changing a value source site reconnects the same projection instance", asy
   const next = configWithValues(["report"]);
   await installConfig({
     ...next,
-    mounts: [
+    sites: [
       {
         id: "site:value:first",
         kind: "value",
         source: { path: "src/App.tsx", line: 1, column: 1 },
-        allowedTargets: ["report"],
+        targets: ["report"],
+        accept: [],
       },
       {
         id: "site:value:second",
         kind: "value",
         source: { path: "src/App.tsx", line: 2, column: 1 },
-        allowedTargets: ["report"],
+        targets: ["report"],
+        accept: [],
       },
     ],
   });

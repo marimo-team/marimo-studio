@@ -58,6 +58,9 @@ Every routed notebook resolves to one state:
 | Ready                   | `Ready`        | Studio, Source, Preview, and support routes                                                                         | Default or named presentation           |
 | Invalid                 | `Invalid`      | Repair document and structured support errors                                                                       | Structured or plain configuration error |
 
+Run mode redirects `/studio/` and `/studio/<view>/` before it resolves the
+lifecycle, so the redirect never reveals the state or whether the view exists.
+
 `WorkspaceLifecycleResolver` coalesces filesystem resolution off the event
 loop. Shutdown cancels the current resolution task and closes the notebook
 scope.
@@ -66,7 +69,7 @@ scope.
 
 | Route family                                      | Owner                           | Authority                                                                 |
 | ------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| `/studio/` and `/studio/<view>/`                  | Studio authoring document       | Edit mode and Marimo read access                                          |
+| `/studio/` and `/studio/<view>/`                  | Studio authoring document       | Edit mode and Marimo read access. Run mode redirects to `/` or `/<view>/` |
 | Edit-mode `/`                                     | Studio or native Marimo         | Composition-time `StudioRoutePolicy` and Marimo authentication            |
 | `/<view>/` and run-mode `/`                       | Presentation delivery           | Marimo read access plus presentation session assignment                   |
 | `/<view>/_marimo-studio/artifacts/<revision>/...` | Artifact server                 | Read access or matching revision capability plus artifact lease           |
@@ -152,10 +155,10 @@ owns browser-client transfer and `NativeSessionAdmission`.
 
 Provider-authored pages receive two signed capability forms:
 
-| Capability | Bound identity                                                                 | Allowed work                                                                            |
-| ---------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Renewal    | Notebook file key, mode, base URL, view, presentation session, runtime session | Fetch the current document, runtime configuration, and the view's development events    |
-| Revision   | Renewal identity plus presentation revision and artifact revision              | Read exact assets, values, outputs, runtime support, and admitted native session routes |
+| Capability | Bound identity                                                                 | Allowed work                                                                                                |
+| ---------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Renewal    | Notebook file key, mode, base URL, view, presentation session, runtime session | Fetch the current document, runtime configuration, and the view's development events                        |
+| Revision   | Renewal identity plus presentation revision and artifact revision              | Read exact assets, values, outputs, rendered documents, runtime support, and admitted native session routes |
 
 The handler validates the signature, target, method, scope type, view,
 presentation session header, runtime mode, and runtime-session assignment.
@@ -206,17 +209,34 @@ and diagnostic messages. The wrapper accepts child messages from
 the iframe window with origin `null` and parent messages from the same-origin
 Studio window.
 
-Presentation responses enforce a sandbox content security policy, a null-origin
-CORS audience, no referrer, and explicit exposed headers. Studio documents use
-no-store, `nosniff`, and same-origin referrer policy. The native editor bridge
-and outer edit documents use one `SecurityPolicy` for `frame-ancestors`.
+Trusted server deployments may set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1`.
+A marimohub sandbox context with proxy exposure enables the same policy
+when the variable is unset, because the hub already serves notebook output on
+its own origin. For a Server runtime, the view document renders directly on the host origin,
+the workspace preview omits the iframe sandbox, and presentation transport
+responses keep the host origin. The setting is process-wide and belongs to the
+deployment trust boundary. Browser and Prepared runtimes continue through the
+opaque-origin path.
+
+Presentation responses enforce a sandbox content security policy by default, a
+null-origin CORS audience, no referrer, and explicit exposed headers. Trusted
+Server runtime documents are the deliberate same-origin exception. They give
+authored code access to the host's cookies, local storage, parent document, and
+same-origin requests, so enable the policy only when that code shares the
+authenticated host's trust boundary. Studio documents use no-store,
+`nosniff`, and same-origin referrer policy. The native editor bridge and outer
+edit documents use one `SecurityPolicy` for `frame-ancestors`.
 Every document owner resolves it for its request through
 `PresentationMiddleware`. The policy always includes `'self'` and may include
 canonical origins loaded from `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` during
 server composition. Trusted host scripts carried in Marimo's server-level
-`html_head` remain in the outer Studio document. Their bounded
-`data-parent-origin` declarations extend the same policy for host-managed
-embedding without importing host code.
+`html_head` remain in the outer Studio document and in top-level run-mode view
+documents. When the isolation wrapper serves a view, it extends its nonce to
+their `<script>` and `<style>` elements. Trusted Server runtime documents carry
+no Content Security Policy, so the scripts run as written. Opaque child
+documents and unframed previews omit them.
+Their bounded `data-parent-origin` declarations extend the same policy for
+host-managed embedding without importing host code.
 
 ## Session admission
 

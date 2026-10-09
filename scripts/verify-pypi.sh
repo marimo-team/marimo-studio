@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${RELEASE_VERSION:-}"
-if [[ -z "$version" ]]; then
-	ref_name="${GITHUB_REF_NAME:-}"
-	version="${ref_name#v}"
+if [[ "$#" -ne 1 || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	printf 'Usage: %s X.Y.Z\n' "$0" >&2
+	exit 2
 fi
 
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-	printf 'ERROR: Release version must use final-version form X.Y.Z: %s\n' "$version" >&2
-	exit 1
-fi
+version="$1"
 
 probe_version() {
 	uv run \

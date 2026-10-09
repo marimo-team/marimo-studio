@@ -27,7 +27,6 @@ interface OutputFunctionInvocation {
     projections: OutputReadRequest["projections"];
     active_projections: OutputReadRequest["activeProjections"];
     consumer_id: string;
-    max_output_bytes: number;
   };
 }
 
@@ -47,7 +46,6 @@ export const createWasmOutputRequest =
         projections: request.projections.map(projectionWireRequest),
         active_projections: request.activeProjections.map(projectionWireRequest),
         consumer_id: consumerId,
-        max_output_bytes: 1_000_000,
       },
     };
     return functionResultSchema.parse(await invoke(invocation));

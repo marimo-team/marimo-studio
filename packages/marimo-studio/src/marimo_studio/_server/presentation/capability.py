@@ -14,17 +14,26 @@ from marimo_studio._server.presentation.isolation import PRESENTATION_SANDBOX
 from marimo_studio._server.records import ServerContext
 
 PRESENTATION_PATH = f"{SUPPORT_PATH}/presentation"
-PRESENTATION_RESPONSE_HEADERS = {
-    "Access-Control-Allow-Origin": "null",
-    "Access-Control-Expose-Headers": (
-        "ETag, Marimo-Studio-Error, Marimo-Studio-Hint, "
-        "Marimo-Studio-Revision, Marimo-Studio-Support-Url, Retry-After"
-    ),
-    "Content-Security-Policy": f"sandbox {PRESENTATION_SANDBOX}",
-    "Cross-Origin-Resource-Policy": "cross-origin",
-    "Referrer-Policy": "no-referrer",
-    "Vary": "Origin",
-}
+
+
+def presentation_response_headers(*, sandbox: bool = True) -> dict[str, str]:
+    """Return transport headers for an authored presentation response."""
+    headers = {
+        "Access-Control-Expose-Headers": (
+            "ETag, Marimo-Studio-Error, Marimo-Studio-Hint, "
+            "Marimo-Studio-Revision, Marimo-Studio-Support-Url, Retry-After"
+        ),
+        "Cross-Origin-Resource-Policy": "cross-origin",
+        "Referrer-Policy": "no-referrer",
+    }
+    if sandbox:
+        headers["Access-Control-Allow-Origin"] = "null"
+        headers["Vary"] = "Origin"
+        headers["Content-Security-Policy"] = f"sandbox {PRESENTATION_SANDBOX}"
+    return headers
+
+
+PRESENTATION_RESPONSE_HEADERS = presentation_response_headers()
 
 CapabilityKind = Literal["renewal", "revision"]
 
@@ -75,9 +84,10 @@ _ARTIFACT_PATTERN = re.compile(
 )
 _VIEW_SUPPORT_PATTERN = re.compile(
     rf"{re.escape(SUPPORT_PATH)}/views/(?P<view>{_VIEW_PATTERN})/"
-    r"(?P<route>config|values|outputs|dev/events|zero-python/(?:current|"
+    r"(?P<route>config|values|outputs|render|dev/events|zero-python/(?:current|"
     r"[0-9a-f]{64}/(?:index\.json|assets/.+)))"
 )
+_SESSION_POST_ROUTES = frozenset({"outputs", "render", "values"})
 _RUNTIME_ASSET_PATTERN = re.compile(rf"{re.escape(SUPPORT_PATH)}/assets/.+")
 _NATIVE_READ_PATTERN = re.compile(r"/(?:@file/.+|public/.+|public-files-sw\.js)")
 
@@ -346,7 +356,7 @@ def presentation_target_allowed(
     if method == "POST":
         match = _VIEW_SUPPORT_PATTERN.fullmatch(route.target)
         return route.target in _NATIVE_POST_ROUTES or (
-            match is not None and match.group("route") in {"values", "outputs"}
+            match is not None and match.group("route") in _SESSION_POST_ROUTES
         )
     return False
 
@@ -359,7 +369,7 @@ def presentation_target_session_header(target: str, method: str) -> str | None:
         target in _NATIVE_POST_ROUTES
         or (
             (match := _VIEW_SUPPORT_PATTERN.fullmatch(target)) is not None
-            and match.group("route") in {"values", "outputs"}
+            and match.group("route") in _SESSION_POST_ROUTES
         )
     ):
         return "Marimo-Session-Id"

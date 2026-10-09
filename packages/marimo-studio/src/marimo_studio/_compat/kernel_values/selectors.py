@@ -3,60 +3,29 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 
-from marimo_studio._compat.kernel_values.models import DEFAULT_MAX_VALUE_BYTES
+from marimo_export.values import ValueSelector
+
 from marimo_studio._compat.kernel_values.representations import (
+    JSON_CODEC,
     EncodedValue,
     ValueEncoder,
 )
-from marimo_studio._projections.runtime_records import ValueReadError, ValueReadResult
-from marimo_studio._projections.values import (
-    parse_value_reference,
-    resolve_value_reference,
+from marimo_studio._projections.runtime_records import (
+    VALUE_LIMITS,
+    ValueLimits,
+    ValueReadError,
+    ValueReadResult,
 )
-from marimo_studio._server.presentation.ports import SelectorSpec
-
-
-def normalize_selector_spec(selector: str, value: object) -> SelectorSpec:
-    """Validate a serialized selector spec against its canonical target."""
-    if (
-        not isinstance(value, (list, tuple))
-        or len(value) != 2
-        or not isinstance(value[0], str)
-        or not isinstance(value[1], (list, tuple))
-    ):
-        raise ValueError("selector spec must contain a variable and path")
-    path: list[tuple[str, str | int]] = []
-    for raw_step in value[1]:
-        if (
-            not isinstance(raw_step, (list, tuple))
-            or len(raw_step) != 2
-            or raw_step[0] not in {"attribute", "item"}
-            or not isinstance(raw_step[1], (str, int))
-            or isinstance(raw_step[1], bool)
-            or (raw_step[0] == "attribute" and not isinstance(raw_step[1], str))
-        ):
-            raise ValueError("selector spec contains an invalid path step")
-        path.append((raw_step[0], raw_step[1]))
-    reference = parse_value_reference(selector)
-    expected: SelectorSpec = (
-        reference.variable,
-        tuple((step.kind, step.value) for step in reference.path),
-    )
-    normalized: SelectorSpec = (value[0], tuple(path))
-    if normalized != expected:
-        raise ValueError("selector spec does not match its target")
-    return normalized
 
 
 def _read_values(
     namespace: Mapping[str, object],
-    specifications: Mapping[str, SelectorSpec],
-    active_specifications: Mapping[str, SelectorSpec] | None = None,
+    selectors: Mapping[str, ValueSelector],
+    active: Iterable[str] | None = None,
     *,
-    max_value_bytes: int,
-    max_response_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+    limits: ValueLimits = VALUE_LIMITS,
     consumer_id: str = "",
     revision: str = "",
     encoder: ValueEncoder | None = None,
@@ -64,9 +33,7 @@ def _read_values(
     owned_encoder = encoder is None
     if encoder is None:
         encoder = ValueEncoder()
-    active_selectors = set(
-        specifications if active_specifications is None else active_specifications
-    )
+    active_selectors = set(selectors if active is None else active)
     encoder.release_other_revisions(consumer_id, revision)
     encoder.release_inactive(
         consumer_id=consumer_id,
@@ -76,7 +43,8 @@ def _read_values(
     values: dict[str, object] = {}
     errors: dict[str, ValueReadError] = {}
     prepared: list[tuple[str, EncodedValue]] = []
-    total = 0
+    json_read = 0
+    arrow_read = 0
 
     def fail(selector: str, error: ValueReadError) -> None:
         encoder.release_selector(
@@ -86,7 +54,7 @@ def _read_values(
         )
         errors[selector] = error
 
-    for selector, specification in specifications.items():
+    for selector, parsed in selectors.items():
         if selector not in active_selectors:
             fail(
                 selector,
@@ -96,19 +64,17 @@ def _read_values(
                 ),
             )
             continue
-        reference = parse_value_reference(selector)
-        assert specification[0] == reference.variable
-        if reference.variable not in namespace:
+        if parsed.root not in namespace:
             fail(
                 selector,
                 ValueReadError(
                     "missing-variable",
-                    f"Variable {reference.variable!r} is not defined",
+                    f"Variable {parsed.root!r} is not defined",
                 ),
             )
             continue
         try:
-            value = resolve_value_reference(namespace, reference)
+            value = parsed.resolve(namespace)
         except Exception as error:
             fail(
                 selector,
@@ -123,23 +89,18 @@ def _read_values(
             consumer_id=consumer_id,
             revision=revision,
             selector=selector,
-            max_value_bytes=max_value_bytes,
+            limits=limits,
+            json_read=json_read,
+            arrow_read=arrow_read,
         )
         if error is not None:
             fail(selector, error)
             continue
         assert encoded is not None
-        if total + encoded.byte_length > max_response_bytes:
-            encoder.discard(encoded)
-            fail(
-                selector,
-                ValueReadError(
-                    "response-too-large",
-                    "The value response exceeds the aggregate byte limit.",
-                ),
-            )
-            continue
-        total += encoded.byte_length
+        if encoded.payload["codec"] == JSON_CODEC:
+            json_read += encoded.byte_length
+        else:
+            arrow_read += encoded.byte_length
         values[selector] = encoded.payload
         prepared.append((selector, encoded))
     result = ValueReadResult(values, errors)
@@ -149,7 +110,7 @@ def _read_values(
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    if len(payload.encode("utf-8")) <= max_response_bytes:
+    if len(payload.encode("utf-8")) <= limits.response_bytes:
         for index, (selector, encoded) in enumerate(prepared):
             try:
                 if encoded.resource is None:
@@ -180,7 +141,7 @@ def _read_values(
         return result
     for _selector, encoded in prepared:
         encoder.discard(encoded)
-    for selector in specifications:
+    for selector in selectors:
         encoder.release_selector(
             consumer_id=consumer_id,
             revision=revision,

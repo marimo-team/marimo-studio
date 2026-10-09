@@ -18,7 +18,7 @@
 
 <p align="center">
   <b>One reactive notebook. Many views.</b><br>
-  Turn a <a href="https://marimo.io/">marimo</a> notebook into reports, apps, and presentations, by hand or with a coding agent.
+  Turn a <a href="https://marimo.io/">marimo</a> notebook into apps, presentations, articles, and PDF reports, by hand or with a coding agent.
 </p>
 
 <p align="center">
@@ -28,10 +28,11 @@
 </p>
 
 Studio keeps data, computation, and controls in the notebook and gives each
-audience its own view, such as a report, a dashboard, a lab, or a slide deck.
-Views render the notebook's live cells and controls, so changing an input
-updates the results that depend on it. Each view is its own frontend project,
-and every result it shows traces back to the notebook cell that computed it.
+audience its own view, such as a dashboard, a slide deck, an article, or a PDF
+report. A view places the notebook's cells, outputs, and values by name. Web
+pages keep them live, so changing an input updates every result that depends
+on it, and Typst documents render again with the new values. Every result a
+view shows traces back to the notebook cell that computed it.
 
 Studio is experimental and changing rapidly. Pin `marimo-studio` and
 third-party view providers in saved projects.
@@ -73,14 +74,17 @@ walks through a complete first view.
 
 ## Examples
 
-Each example notebook serves three views, built with different frontend stacks.
+Each example notebook backs several views, each built with its own document
+technology.
 
-| Notebook                                                                                      | Views                                                                                                                                                                                                                                                                                                             | Built with                                                |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs) | [Lecture](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs/lecture/index.html) · [Explainer](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs/explainer/index.html) · [Lab](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs/lab/index.html) | React, Reveal.js, HTML, Svelte, D3                        |
-| [Rio 2016 athletes](https://marimo-team.github.io/marimo-studio/examples/athletes)            | [Overview](https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html) · [Explorer](https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html) · [Field](https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html)                           | HTML, Svelte, Mosaic, Shower, Three.js                    |
-| [Earthquake watch](https://marimo-team.github.io/marimo-studio/examples/earthquakes)          | [Story](https://marimo-team.github.io/marimo-studio/examples/earthquakes/story/index.html) · [Operations](https://marimo-team.github.io/marimo-studio/examples/earthquakes/operations/index.html) · [Briefing](https://marimo-team.github.io/marimo-studio/examples/earthquakes/briefing/index.html)              | HTML, Observable Plot, React, MapLibre, Reveal.js, D3     |
-| [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy)          | [Monitor](https://marimo-team.github.io/marimo-studio/examples/occupancy/monitor/index.html) · [Model review](https://marimo-team.github.io/marimo-studio/examples/occupancy/model-review/index.html) · [PDF report](https://marimo-team.github.io/marimo-studio/examples/occupancy/pdf-report/index.html)        | Notebook Kit, Observable Plot, React, Recharts, React PDF |
+- [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs): a Reveal.js lecture, an HTML
+  explainer, a Svelte and D3 lab, and a Typst PDF report.
+- [Rio 2016 athletes](https://marimo-team.github.io/marimo-studio/examples/athletes): an HTML overview, a Mosaic explorer, a
+  Three.js presentation, and a Quarto paper typeset with KaTeX.
+- [Earthquake watch](https://marimo-team.github.io/marimo-studio/examples/earthquakes): an Observable Plot story, a MapLibre
+  operations map, a Reveal.js briefing, and a Quarto bulletin.
+- [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy): a Notebook Kit monitor, a Recharts
+  model review, and a pdfcn PDF report.
 
 ## Run or export a view
 

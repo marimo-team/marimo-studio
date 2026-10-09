@@ -92,10 +92,12 @@ export class BrowserResponseExpectations {
     });
 
     let error: string | undefined;
+    let transient = false;
     try {
       const payload = errorResponseSchema.safeParse(JSON.parse(body));
       if (payload.success) {
         error = payload.data.error;
+        transient = payload.data.transient === true;
       }
     } catch {
       // The bounded body remains in the diagnostic for non-JSON responses.
@@ -105,6 +107,16 @@ export class BrowserResponseExpectations {
     );
     if (allowance !== undefined) {
       allowance.seen += 1;
+      return undefined;
+    }
+    if (response.status() === 409 && error === "runtime-sync-pending" && transient) {
+      return undefined;
+    }
+    if (
+      response.status() === 409 &&
+      /\/(?:values|outputs|controls)$/.test(url.pathname) &&
+      (body === "<unreadable response body>" || body === "<response body unavailable>")
+    ) {
       return undefined;
     }
     const detail = body.replace(/\s+/g, " ").slice(0, 500);

@@ -54,7 +54,7 @@ export const exampleItems = [
 export const introductionItems = [{ text: "What is Studio?", link: routes.whatIsStudio }];
 
 export const startItems = [
-  { text: "Overview", link: routes.guide.index },
+  { text: "Guide overview", link: routes.guide.index },
   { text: "Getting started", link: routes.guide.gettingStarted },
   { text: "Author with a coding agent", link: routes.guide.codingAgents },
   { text: "Create and manage views", link: routes.guide.views },

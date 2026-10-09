@@ -4,7 +4,7 @@ Provider output is a candidate, not trusted application state. Studio copies
 its files out of provider scratch space into a directory that only Studio
 writes, enforces file and path limits, validates the entry document and
 complete manifest, and computes a content-addressed revision from the browser
-files and notebook mount declarations.
+files and artifact sites.
 
 Studio makes the candidate current for the selected build profile only after it
 is complete and the caller confirms that the live project still matches the
@@ -15,15 +15,17 @@ the last working page remains available.
 
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NoReturn
 
 from marimo_studio._artifacts.codec import (
+    ArtifactFormatError,
     artifact_manifest,
     artifact_manifest_dict,
     encode_json,
@@ -42,6 +44,7 @@ from marimo_studio._artifacts.records import (
     ArtifactPublication,
     ArtifactRevision,
     ArtifactRevisionSnapshot,
+    ArtifactTemplate,
     ViewArtifact,
     ViewBuildState,
 )
@@ -65,7 +68,12 @@ from marimo_studio._artifacts.retention import (
     prune_artifacts_locked,
     quarantine_artifact_revision_locked,
 )
-from marimo_studio._filesystem.files import ABSENT, FileTree, TreeVersion
+from marimo_studio._filesystem.files import (
+    ABSENT,
+    ConditionalWriteError,
+    FileTree,
+    TreeVersion,
+)
 from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
@@ -75,13 +83,15 @@ from marimo_studio.view_providers import (
     ProjectInspection,
     ViewProject,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 from marimo_studio.view_providers._host.records import ProviderProvenance
+
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 @dataclass(frozen=True)
 class ArtifactBuildPreparation:
     current: ViewArtifact | None
-    recovery_diagnostic: ProjectDiagnostic | None
     current_snapshot: ArtifactRevisionSnapshot | None
 
 
@@ -90,7 +100,17 @@ class ArtifactCandidate:
     generation_root: Path
     snapshot: ProjectSnapshot
     files_root: Path
+    work_root: Path
     cache_root: Path
+
+
+@dataclass(frozen=True)
+class TemplateCandidate:
+    """Private provider output that Studio renders after publication."""
+
+    root: Path
+    document: PurePosixPath
+    renderer: str
 
 
 @dataclass(frozen=True)
@@ -180,7 +200,6 @@ def prepare_artifact_build(
 ) -> ArtifactBuildPreparation:
     """Recover generated state and return the verified current publication."""
     prepare_control_directories(project)
-    recovery: ProjectDiagnostic | None = None
     with artifact_lock(project) as acquired:
         if not acquired:
             raise RuntimeError("Blocking artifact lock was not acquired")
@@ -209,13 +228,66 @@ def prepare_artifact_build(
             prune_artifacts_locked(project)
             current = None
             current_snapshot = None
-            recovery = ProjectDiagnostic(
-                code="artifact-state-repaired",
-                severity="warning",
-                message="Generated artifact state was reset before this build.",
-                hint=str(error),
-            )
-        return ArtifactBuildPreparation(current, recovery, current_snapshot)
+            # The build that follows replaces the discarded state, so the
+            # person has nothing to act on. Operators see the reason here.
+            if isinstance(error, ArtifactFormatError):
+                _LOGGER.info(
+                    "Rebuilding view %r (%s profile) because another Studio "
+                    "version wrote its stored artifact: %s.",
+                    project.name,
+                    profile,
+                    error,
+                )
+            else:
+                _LOGGER.warning(
+                    "Rebuilding view %r (%s profile) because its stored artifact "
+                    "is unreadable: %s. Studio discarded the generated state in "
+                    "%s. If this repeats, check whether another tool changes "
+                    "that directory.",
+                    project.name,
+                    profile,
+                    error,
+                    artifact_root(project),
+                )
+        return ArtifactBuildPreparation(current, current_snapshot)
+
+
+# https://bford.info/cachedir/ marks a directory that tools can rebuild.
+# Workspace hosts and backup tools skip it, which keeps a provider's dependency
+# cache and unfinished build candidates out of saved workspaces while view
+# sources and revisions stay.
+_CACHE_DIRECTORY_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
+_CACHE_DIRECTORY_TAG = (
+    _CACHE_DIRECTORY_SIGNATURE
+    + b"\n# marimo Studio recreates this directory on demand.\n"
+)
+
+
+def _tag_cache_directory(tree: FileTree, directory: Path) -> None:
+    tag = directory / "CACHEDIR.TAG"
+    try:
+        try:
+            current = tree.read(tag)
+        except FileNotFoundError:
+            current = None
+        if current is not None and current.content.startswith(
+            _CACHE_DIRECTORY_SIGNATURE
+        ):
+            return
+        tree.write(
+            tag,
+            _CACHE_DIRECTORY_TAG,
+            expect=ABSENT if current is None else current.version,
+        )
+    except ConditionalWriteError:
+        return
+    except OSError as error:
+        _LOGGER.warning(
+            "Could not tag %s as a cache directory, so saved workspaces and "
+            "backups include it. Check that the directory is writable: %s",
+            directory,
+            error,
+        )
 
 
 @contextmanager
@@ -229,10 +301,13 @@ def capture_artifact_candidate(
     )
     tree = FileTree(project.root)
     tree.create_directory(generation_root)
+    _tag_cache_directory(tree, generation_root.parent)
     try:
         captured = snapshot_project(project, inspection, generation_root / "project")
         files_root = artifact_root(captured.project) / "build" / "files"
+        work_root = files_root.parent / "work"
         tree.ensure_directory(files_root)
+        tree.ensure_directory(work_root)
         cache_root = artifact_root(project) / ".cache"
         ensure_secure_directory(project.root, cache_root, "Artifact provider cache")
         assert_secure_path(
@@ -241,7 +316,14 @@ def capture_artifact_candidate(
             "Artifact provider cache",
             final_kind="directory",
         )
-        yield ArtifactCandidate(generation_root, captured, files_root, cache_root)
+        _tag_cache_directory(tree, cache_root)
+        yield ArtifactCandidate(
+            generation_root,
+            captured,
+            files_root,
+            work_root,
+            cache_root,
+        )
     finally:
         with suppress(OSError):
             tree.remove(generation_root)
@@ -310,7 +392,6 @@ def record_build_started(
     project: ViewProject,
     profile: BuildProfile,
     project_revision: str,
-    recovery: ProjectDiagnostic | None,
 ) -> None:
     with artifact_lock(project) as acquired:
         if not acquired:
@@ -324,7 +405,7 @@ def record_build_started(
             artifact_revision=(
                 published.artifact_revision if published is not None else None
             ),
-            diagnostics=(recovery,) if recovery is not None else (),
+            diagnostics=(),
         )
         write_profile_state(project, profile_state(profile, published, building))
 
@@ -333,10 +414,12 @@ def prepare_artifact_publication(
     project: ViewProject,
     profile: BuildProfile,
     candidate: ArtifactCandidate,
-    inspection: ProjectInspection,
-    report: BuildResult,
+    sites: tuple[ArtifactSite, ...],
+    document: PurePosixPath,
     project_revision: str,
     started: float,
+    *,
+    template: TemplateCandidate | None,
 ) -> PreparedArtifactPublication:
     """Validate and copy one candidate before its receipt transaction."""
     tree = FileTree(project.root)
@@ -354,17 +437,34 @@ def prepare_artifact_publication(
             "Artifact candidate files",
             final_kind="directory",
         )
-        if report.document is None:
-            raise ConfigurationError("Provider produced no artifact document")
         document = normalized_artifact_path(
-            report.document.as_posix(),
+            document.as_posix(),
             "Artifact document path",
         )
         tree.create_directory(publication_root)
         published_files = publication_root / "files"
         files = ingest_publication_files(project, candidate.files_root, published_files)
         validate_document(published_files, document)
-        manifest = artifact_manifest(document.as_posix(), files, inspection.mounts)
+        template_record = None
+        if template is not None:
+            template_record = ArtifactTemplate(
+                normalized_artifact_path(
+                    template.document.as_posix(),
+                    "Artifact template document",
+                ),
+                ingest_publication_files(
+                    project,
+                    template.root,
+                    publication_root / "template",
+                ),
+                template.renderer,
+            )
+        manifest = artifact_manifest(
+            document.as_posix(),
+            files,
+            sites,
+            template_record,
+        )
     except (OSError, ConfigurationError, ViewProjectError) as error:
         record_build_failure(
             project,
@@ -415,7 +515,6 @@ def publish_artifact_candidate(
     report: BuildResult,
     project_revision: str,
     started: float,
-    recovery: ProjectDiagnostic | None,
     existing_snapshot: ArtifactRevisionSnapshot | None,
     control: ProviderOperationControl,
     *,
@@ -477,14 +576,11 @@ def publish_artifact_candidate(
                 else ArtifactRevision(destination / "files", manifest)
             )
             duration_ms = round((time.monotonic() - started) * 1_000)
-            diagnostics = (
-                (recovery,) if recovery is not None else ()
-            ) + report.diagnostics
             publication = ArtifactPublication(
                 project_revision,
                 manifest.artifact_revision,
                 provenance,
-                diagnostics,
+                report.diagnostics,
                 duration_ms,
             )
             completed = ViewBuildState(
@@ -492,7 +588,7 @@ def publish_artifact_candidate(
                 phase="published",
                 project_revision=project_revision,
                 artifact_revision=manifest.artifact_revision,
-                diagnostics=diagnostics,
+                diagnostics=report.diagnostics,
                 duration_ms=duration_ms,
             )
             artifact = artifact_from_publication(installed, profile, publication)

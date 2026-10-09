@@ -12,17 +12,22 @@ from typing import Any, cast
 
 import pytest
 
+from marimo_studio._compat import browser_notebook
 from marimo_studio._compat.browser_notebook import (
     WASM_PROJECTION_NAMESPACE,
     _value_bridge,
 )
 from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
+from marimo_studio._projections.runtime_records import (
+    ValueLimits,
+    output_representation,
+)
 from marimo_studio.view_providers import (
-    MountDeclaration,
     SourceLocation,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
-from .values_test_support import _encoded_json
+from .values_test_support import _encoded_json, _selectors
 
 _REVISION = "presentation-revision"
 _SITE_ID = "site:output:dynamic"
@@ -193,17 +198,17 @@ def _format_element(context: _GeneratedContext) -> Any:
 
 def _mounts() -> list[dict[str, object]]:
     return [
-        MountDeclaration(
+        ArtifactSite(
             id=_SITE_ID,
             kind="output",
             source=SourceLocation(PurePosixPath("src/App.tsx"), 1, 1),
-            allowed_targets=None,
+            targets=None,
         ).to_dict(),
-        MountDeclaration(
+        ArtifactSite(
             id=_VALUE_SITE_ID,
             kind="value",
             source=SourceLocation(PurePosixPath("src/App.tsx"), 2, 1),
-            allowed_targets=None,
+            targets=None,
         ).to_dict(),
     ]
 
@@ -221,7 +226,7 @@ def _configure_bridge(
         {
             "revision": revision,
             "generation": generation,
-            "mounts": _mounts(),
+            "sites": _mounts(),
             "variables": variables,
         },
     )
@@ -356,6 +361,58 @@ def test_generated_output_adapter_owns_replaces_and_releases_outputs(
     assert context.cell_lifecycle_registry.dispose_attempts.count(owner) == attempts
 
 
+def test_generated_bridge_renders_an_accepted_output_for_every_host_of_its_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+    figure = figure_module.Figure(figsize=(2, 1))
+    figure.subplots().plot([1, 3, 2])
+    context.globals["chart"] = figure
+    chart_site = ArtifactSite(
+        id="site:output:chart",
+        kind="output",
+        source=SourceLocation(PurePosixPath("src/App.tsx"), 3, 1),
+        targets=("chart",),
+        accept=("image/png",),
+    )
+    configured = _call_bridge(
+        context,
+        "configure_projections",
+        {
+            "revision": _REVISION,
+            "generation": 2,
+            "sites": [*_mounts(), chart_site.to_dict()],
+            "variables": ["chart", "control"],
+        },
+    )
+    # The catalog's wildcard output site selects its target at runtime.
+    request = [{"siteId": _SITE_ID, "instanceId": "chart-0", "target": "chart"}]
+
+    result = _call_bridge(
+        context,
+        "render_values",
+        {
+            "revision": _REVISION,
+            "projections": request,
+            "active_projections": request,
+            "consumer_id": "preview-a",
+            "max_output_bytes": 1_000_000,
+        },
+    )
+
+    assert configured["applied"] is True
+    output = result["outputs"]["chart"]
+    assert output["mimetype"] == "application/vnd.marimo+mimebundle"
+    media = output_representation(output["mimetype"], output["data"])
+    assert media is not None and media.media_type == "image/png"
+    assert media.width is not None
+    assert int.from_bytes(media.data[16:20], "big") / 2 == pytest.approx(
+        media.width, abs=1
+    )
+
+
 @pytest.mark.parametrize("function_name", ["read_values", "render_values"])
 def test_generated_bridge_rejects_direct_requests_outside_its_catalog(
     monkeypatch: pytest.MonkeyPatch,
@@ -378,8 +435,6 @@ def test_generated_bridge_rejects_direct_requests_outside_its_catalog(
             consumer_id="preview-a",
             max_output_bytes=10_000,
         )
-    else:
-        payload["max_value_bytes"] = 10_000
 
     result = _call_bridge(context, function_name, payload)
 
@@ -410,7 +465,6 @@ def test_generated_bridge_rejects_unpaired_utf16_surrogates(
         {
             "revision": _REVISION,
             "projections": [request],
-            "max_value_bytes": 10_000,
         },
     )
 
@@ -440,11 +494,10 @@ def test_generated_bridge_rejects_escaped_unpaired_surrogates(
                     "target": target,
                 }
             ],
-            "max_value_bytes": 1_000,
         },
     )
 
-    assert result["errors"]["*"]["code"] == "projection-unpaired-surrogate"
+    assert result["errors"]["*"]["code"] == "projection-target-invalid"
 
 
 def test_late_timed_out_configuration_cannot_replace_a_newer_revision(
@@ -480,7 +533,6 @@ def test_late_timed_out_configuration_cannot_replace_a_newer_revision(
                     "target": "current",
                 }
             ],
-            "max_value_bytes": 1_000,
         },
     )
     assert current == {"values": {"current": _encoded_json(42)}, "errors": {}}
@@ -505,7 +557,6 @@ def test_generated_bridge_matches_server_selector_path_bounds(
                         "target": target,
                     }
                 ],
-                "max_value_bytes": 1_000,
             },
         )
 
@@ -515,7 +566,7 @@ def test_generated_bridge_matches_server_selector_path_bounds(
     assert accepted["errors"][next(iter(accepted["errors"]))]["code"] == (
         "value-path-unavailable"
     )
-    assert rejected["errors"]["*"]["code"] == "projection-authorization-invalid"
+    assert rejected["errors"]["*"]["code"] == "projection-target-invalid"
 
 
 def test_generated_bridge_rejects_private_attribute_selection(
@@ -536,11 +587,10 @@ def test_generated_bridge_rejects_private_attribute_selection(
                     "target": "control.__dict__",
                 }
             ],
-            "max_value_bytes": 1_000,
         },
     )
 
-    assert result["errors"]["*"]["code"] == "projection-authorization-invalid"
+    assert result["errors"]["*"]["code"] == "projection-target-invalid"
 
 
 @pytest.mark.parametrize(
@@ -572,7 +622,6 @@ def test_generated_bridge_uses_json_string_selector_grammar(
                     "target": target,
                 }
             ],
-            "max_value_bytes": 1_000,
         },
     )
 
@@ -623,7 +672,6 @@ def test_generated_bridge_reports_dataframe_conversion_errors(
                     "target": "control",
                 }
             ],
-            "max_value_bytes": 10_000,
         },
     )
 
@@ -650,19 +698,18 @@ def test_generated_bridge_reports_inactive_value_selectors(
             "revision": _REVISION,
             "projections": [request],
             "active_projections": [],
-            "max_value_bytes": 1_000,
         },
     )
     assert inactive["errors"]["control"]["code"] == "inactive-selector"
 
 
-def test_generated_bridge_allows_bounded_data_url_expansion(
+def test_generated_bridge_sends_arrow_values_beyond_the_json_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import pyarrow as pa
 
     context = _GeneratedContext()
-    context.globals["control"] = pa.table({"blob": [b"x" * 900_000]})
+    context.globals["control"] = pa.table({"blob": [b"x" * 3_000_000]})
     _install_generated_adapter(monkeypatch, context)
 
     result = _call_bridge(
@@ -673,21 +720,20 @@ def test_generated_bridge_allows_bounded_data_url_expansion(
             "projections": [
                 {
                     "siteId": _VALUE_SITE_ID,
-                    "instanceId": "projection-near-limit",
+                    "instanceId": "projection-large-table",
                     "target": "control",
                 }
             ],
-            "max_value_bytes": 1_000_000,
         },
     )
 
     payload = result["values"]["control"]
     assert payload["codec"] == "arrow-ipc-v1"
-    assert 900_000 < payload["byteLength"] < 1_000_000
-    assert len(payload["dataUrl"].encode("utf-8")) > 1_000_000
+    assert payload["byteLength"] > 3_000_000
+    assert payload["dataUrl"].startswith("data:")
 
 
-def test_generated_bridge_bounds_the_aggregate_value_response(
+def test_generated_bridge_bounds_json_values_per_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     context = _GeneratedContext()
@@ -713,12 +759,76 @@ def test_generated_bridge_bounds_the_aggregate_value_response(
                 }
                 for selector in ("first", "second")
             ],
-            "max_value_bytes": 1_000_000,
         },
     )
 
     assert set(result["values"]) == {"first"}
     assert result["errors"]["second"]["code"] == "response-too-large"
+
+
+def _read_bridge_values(
+    context: _GeneratedContext, selectors: tuple[str, ...]
+) -> dict[str, Any]:
+    _configure_bridge(
+        context,
+        revision=_REVISION,
+        generation=2,
+        variables=list(selectors),
+    )
+    return _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": f"projection-{selector}",
+                    "target": selector,
+                }
+                for selector in selectors
+            ],
+        },
+    )
+
+
+def test_generated_bridge_budgets_arrow_values_apart_from_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pyarrow as pa
+
+    monkeypatch.setattr(
+        browser_notebook, "BROWSER_VALUE_LIMITS", ValueLimits(arrow_read_bytes=12_000)
+    )
+    context = _GeneratedContext()
+    table = pa.table({"value": list(range(1_000))})
+    context.globals.update(first=table, second=table, label="x" * 900_000)
+    _install_generated_adapter(monkeypatch, context)
+
+    result = _read_bridge_values(context, ("first", "second", "label"))
+
+    assert set(result["values"]) == {"first", "label"}
+    assert result["errors"]["second"]["code"] == "response-too-large"
+    assert "Arrow values read from one cell" in result["errors"]["second"]["message"]
+
+
+def test_generated_bridge_stops_encoding_at_the_arrow_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pyarrow as pa
+
+    monkeypatch.setattr(
+        browser_notebook, "BROWSER_VALUE_LIMITS", ValueLimits(arrow_value_bytes=1_000)
+    )
+    context = _GeneratedContext()
+    context.globals["control"] = pa.table({"value": list(range(10_000))})
+    _install_generated_adapter(monkeypatch, context)
+
+    result = _read_bridge_values(context, ("control",))
+
+    assert result["values"] == {}
+    assert result["errors"]["control"]["code"] == "value-too-large"
+    assert "more than 1,000 bytes" in result["errors"]["control"]["message"]
 
 
 def test_generated_output_adapter_retries_release_after_cleanup_failure(
@@ -791,9 +901,9 @@ def test_native_output_renderer_retries_and_idempotently_closes(
     renderer = KernelOutputRenderer(context)
     rendered = renderer.render(
         {"control": object()},
+        _selectors("control"),
         ("control",),
-        ("control",),
-        {"control"},
+        {},
         consumer_id="preview-a",
         max_output_bytes=10_000,
     )
@@ -809,9 +919,9 @@ def test_native_output_renderer_retries_and_idempotently_closes(
     with pytest.raises(RuntimeError, match="already closed"):
         renderer.render(
             {},
+            {},
             (),
-            (),
-            set(),
+            {},
             consumer_id="preview-a",
             max_output_bytes=10_000,
         )

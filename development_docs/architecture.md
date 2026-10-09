@@ -22,7 +22,7 @@ notebook configuration
 | `_views`                   | View creation, Source capabilities, inspection, and builds                      |
 | `view_providers`           | Public provider records and document rules                                      |
 | `view_providers._host`     | Entry-point discovery, conformance, and contained calls                         |
-| `view_providers._bundled`  | Starter files, source analysis, and candidate builds                            |
+| `view_providers._builtin`  | Starter files, source analysis, and candidate builds                            |
 | `_artifacts`               | Snapshots, immutable revisions, leases, and profile state                       |
 | `_validation`              | Static and runtime evidence plus repair issues                                  |
 | `_delivery`                | Live and static runtime composition                                             |
@@ -41,6 +41,7 @@ notebook configuration
 | `_composition.py`          | Concrete Python adapter construction                                            |
 | `_entrypoints.py`          | Marimo middleware and kernel plugin entry points                                |
 | `_compat`                  | Private Marimo Python imports and reversible integration                        |
+| `_hosts`                   | Notebook host contracts, such as marimohub's sandbox context                    |
 | `_release_checks`          | Browser asset budgets and package metadata checks                               |
 | `packages/protocol`        | Serializable browser records                                                    |
 | `packages/runtime`         | Runtime registry and mounted-session interface                                  |
@@ -105,7 +106,7 @@ canonical revision, generation, session, and readiness ledger.
 - Product policy depends on Studio records and ports.
 - Private Marimo Python imports stay in `_compat`.
 - Private Marimo frontend imports stay in `packages/marimo-frontend`.
-- Frontend syntax stays in `view_providers._bundled`.
+- Frontend syntax stays in `view_providers._builtin`.
 - Providers do not receive artifact, presentation, session, browser, or agent
   owners.
 - Protocol performs no I/O.

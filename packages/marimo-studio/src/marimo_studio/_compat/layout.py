@@ -137,7 +137,7 @@ _SYMBOLS = {
         _source_contract(
             "marimo._session.managers.ipc",
             "IPCKernelManagerImpl.__init__",
-            "406097cedbf70cbff9091e9fb0dea0bcc83d23c25d7dc273975a3846ca908c5b",
+            "a202968e6173c5eaa147820261b4f6db8a09241af46658f9f54787f4540ed6b1",
         ),
         _source_contract(
             "marimo._session.managers.app_host",
@@ -308,33 +308,6 @@ _SYMBOLS = {
             "6473a9377a00158029d74303b69bf5217f75d94c62d3b798f04dab181b6d5ac7",
         ),
     ),
-    "lens-mount-policy": (
-        SymbolContract(
-            "marimo._runtime.runner.hooks_lens",
-            "mount_lens",
-            _parameters(
-                ("cell", "POSITIONAL_OR_KEYWORD", False),
-                ("ctx", "POSITIONAL_OR_KEYWORD", False),
-                ("result", "POSITIONAL_OR_KEYWORD", False),
-            ),
-            "7dfc24c0a1c4ff767c3888e33ce59448da9b2e11b9e763af987aca053d0bf5b9",
-        ),
-        _source_contract(
-            "marimo._runtime.runner.hooks",
-            "_HookList.add",
-            "f512376cc0d128c6529b9a2f6db6d884fdfda5347cf3a6871020eb975ba4bb84",
-        ),
-        _source_contract(
-            "marimo._runtime.runner.hooks",
-            "_HookList.sorted_hooks.fget",
-            "9714abce2444ff496860c1f8a4b275dee2f02d2bff8d2704c1ed64bd4a07440b",
-        ),
-        _source_contract(
-            "marimo._runtime.runner.hooks",
-            "NotebookCellHooks.copy",
-            "7a21d82d77b4a7f6ad0d4d5637b40c3c105477f8f4d54b7da448f43a9ff1e446",
-        ),
-    ),
     "sandbox-studio-runtime": (
         SymbolContract(
             "marimo._environments.overlay",
@@ -358,7 +331,7 @@ _SYMBOLS = {
         _source_contract(
             "marimo._session.managers.ipc",
             "IPCKernelManagerImpl.start_kernel",
-            "090a5be3b647330a2d67093c6f5520e905765544adb3655d9b1c05097ee32c83",
+            "bfa2ae017860e1fb6252063e9900203f09e3ac8db452053a29f258b186bfc8eb",
         ),
         _source_contract(
             "marimo._session.app_host.pool",

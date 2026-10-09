@@ -61,12 +61,13 @@ const mountedConfig = (kind: Extract<ProjectionKind, "cell" | "output">): Runtim
         },
       },
     },
-    mounts: [
+    sites: [
       {
         id: `site:test:${kind}`,
         kind,
         source: { path: "src/App.tsx", line: 1, column: 1 },
-        allowedTargets: null,
+        targets: null,
+        accept: [],
       },
     ],
     runtimeBindings: {

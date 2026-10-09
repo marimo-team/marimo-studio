@@ -11,22 +11,24 @@ content. Generations identify replaceable owners and incarnations.
 
 ## Product terms
 
-| Term             | Contract                                                                                                                                                   |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notebook         | Saved marimo Python file that owns data, computation, controls, and reactive behavior                                                                      |
-| View             | Stable name and route for one presentation of a notebook                                                                                                   |
-| View project     | Directory containing `view.toml`, authored frontend source, and provider configuration for one view                                                        |
-| Source document  | UTF-8 text file authorized by provider inspection or the Studio-owned `view.toml`                                                                          |
-| Build input      | File or bounded directory included in the immutable snapshot used by a build                                                                               |
-| View provider    | Installed Python extension that offers starters, inspects a view project, and builds browser files                                                         |
-| Provider key     | Durable `distribution/registration` identity stored in `view.toml`                                                                                         |
-| Starter          | Creation-time choice that produces initial view project files                                                                                              |
-| Artifact         | Validated immutable browser file tree produced by one build profile                                                                                        |
-| Presentation     | One artifact combined with notebook source, runtime configuration, projections, and browser session state                                                  |
-| Preview          | Studio surface that renders the current development presentation                                                                                           |
-| Python runtime   | Notebook execution in a server-side marimo session. Its configuration ID is `server`                                                                       |
-| Browser runtime  | Notebook execution in a browser worker through [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/). Its configuration ID is `wasm` |
-| Prepared runtime | Browser rendering from verified outputs computed during export. Its static runtime ID is `zero-python`                                                     |
+| Term              | Contract                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notebook          | Saved marimo Python file that owns data, computation, controls, and reactive behavior                                                                      |
+| View              | Stable name and route for one presentation of a notebook                                                                                                   |
+| View project      | Directory containing `view.toml`, authored frontend source, and provider configuration for one view                                                        |
+| Source document   | UTF-8 text file authorized by provider inspection or the Studio-owned `view.toml`                                                                          |
+| Build input       | File or bounded directory included in the immutable snapshot used by a build                                                                               |
+| View provider     | Installed Python extension that offers starters, inspects a view project, and builds browser files                                                         |
+| Provider key      | Durable `distribution/registration` identity stored in `view.toml`                                                                                         |
+| Starter           | Creation-time choice that produces initial view project files                                                                                              |
+| Artifact          | Validated immutable browser file tree produced by one build profile                                                                                        |
+| Projection host   | `<marimo-cell>`, `<marimo-output>`, or an element with `mo-value` that places one notebook result in a page                                                |
+| Rendered document | PDF, SVG, or PNG that Studio renders from a provider template with the notebook's values and outputs                                                       |
+| Presentation      | One artifact combined with notebook source, runtime configuration, projections, and browser session state                                                  |
+| Preview           | Studio surface that renders the current development presentation                                                                                           |
+| Python runtime    | Notebook execution in a server-side marimo session. Its configuration ID is `server`                                                                       |
+| Browser runtime   | Notebook execution in a browser worker through [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/). Its configuration ID is `wasm` |
+| Prepared runtime  | Browser rendering from verified outputs computed during export. Its static runtime ID is `zero-python`                                                     |
 
 Source documents and build inputs are separate allowlists. A read-only lockfile
 can affect a build without accepting Source writes. An editable guidance file
@@ -48,10 +50,10 @@ artifact.
 
 | Revision              | Identifies                                                                                   | Changes when                                                                           |
 | --------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Source revision       | Exact UTF-8 source document content                                                          | The document bytes change. Public values use `sha256:<digest>`                         |
+| Source revision       | Exact UTF-8 Source document content                                                          | The document bytes change. Public values use `sha256:<digest>`                         |
 | Notebook revision     | Provider-visible static notebook record                                                      | Cell source, names, configuration, definitions, references, or dependency edges change |
 | Project revision      | Complete normalized build-input snapshot plus provider provenance                            | A declared build input or provider build identity changes                              |
-| Artifact revision     | Complete validated browser file tree and projection declarations                             | Any published artifact file or mount declaration changes                               |
+| Artifact revision     | Complete validated browser file tree and projection declarations                             | Any published artifact file or projection site changes                                 |
 | Presentation revision | Selected view, saved notebook and configuration, build profile, and artifact                 | Any input to the delivered presentation changes                                        |
 | Projection revision   | Presentation projection targets, policy, runtime bindings, diagnostics, and runtime instance | Projection authorization or runtime binding state changes                              |
 

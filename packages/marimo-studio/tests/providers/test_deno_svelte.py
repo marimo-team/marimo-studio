@@ -8,9 +8,11 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from marimo_studio.view_providers._bundled import _deno
-from marimo_studio.view_providers._bundled._deno import vite_project as _vite_build
-from marimo_studio.view_providers._bundled.deno_svelte import (
+from marimo_studio.view_providers import ProviderError
+from marimo_studio.view_providers._artifact_sites import artifact_sites
+from marimo_studio.view_providers._builtin import _deno
+from marimo_studio.view_providers._builtin._deno import vite_project as _vite_build
+from marimo_studio.view_providers._builtin.deno_svelte import (
     provider as svelte_provider,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -19,7 +21,7 @@ from ..deno_provider_test_support import build_provider as _build
 from ..deno_provider_test_support import inspect_provider as _inspect
 from ..deno_provider_test_support import project as _project
 from ..helpers import no_display_notebook_source
-from ..provider_test_support import provider_build_request
+from ..provider_test_support import provider_build_request, publish
 
 pytestmark = [
     pytest.mark.deno,
@@ -31,6 +33,26 @@ pytestmark = [
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_svelte_output_hosts_read_string_literal_accept_expressions(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    (root / "src" / "App.svelte").write_text(
+        """<marimo-output value="chart" accept={"image/png"}></marimo-output>
+<marimo-output value="table" accept={`image/svg+xml`}></marimo-output>
+""",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert inspection.diagnostics == ()
+    assert [site.accept for site in inspection.sites] == [
+        ("image/png",),
+        ("image/svg+xml",),
+    ]
+
+
 def test_svelte_inspection_tracks_literal_site_identity_and_kind(
     tmp_path: Path,
 ) -> None:
@@ -51,17 +73,17 @@ def test_svelte_inspection_tracks_literal_site_identity_and_kind(
 
     inspection = _inspect(svelte_provider, project)
 
-    assert [site.kind for site in inspection.mounts] == [
+    assert [site.kind for site in inspection.sites] == [
         "value",
         "output",
         "cell",
     ]
-    assert [site.allowed_targets for site in inspection.mounts] == [
+    assert [site.targets for site in inspection.sites] == [
         ("report.total",),
-        None,
+        "*",
         ("controls",),
     ]
-    assert [site.source.line for site in inspection.mounts] == [5, 6, 7]
+    assert [site.source.line for site in inspection.sites] == [5, 6, 7]
 
     source.write_text(
         """<main>
@@ -72,7 +94,7 @@ def test_svelte_inspection_tracks_literal_site_identity_and_kind(
 """,
         encoding="utf-8",
     )
-    padded_sites = _inspect(svelte_provider, project).mounts
+    padded_sites = _inspect(svelte_provider, project).sites
     source.write_text(
         """<main>
   <div mo-value="report.total"></div>
@@ -82,15 +104,15 @@ def test_svelte_inspection_tracks_literal_site_identity_and_kind(
 """,
         encoding="utf-8",
     )
-    canonical_sites = _inspect(svelte_provider, project).mounts
+    canonical_sites = _inspect(svelte_provider, project).sites
 
-    assert {site.kind: site.allowed_targets for site in padded_sites} == {
+    assert {site.kind: site.targets for site in padded_sites} == {
         "cell": ("controls",),
         "output": ("summary",),
         "value": ("report.total",),
     }
-    assert {site.kind: site.id for site in padded_sites} == {
-        site.kind: site.id for site in canonical_sites
+    assert {site.kind: site.id for site in artifact_sites(padded_sites)} == {
+        site.kind: site.id for site in artifact_sites(canonical_sites)
     }
 
     source.write_text(
@@ -100,7 +122,7 @@ def test_svelte_inspection_tracks_literal_site_identity_and_kind(
     conflict = _inspect(svelte_provider, project)
 
     assert [item.code for item in conflict.diagnostics] == ["projection-kind-conflict"]
-    assert conflict.mounts == ()
+    assert conflict.sites == ()
 
 
 @pytest.mark.skipif(
@@ -114,7 +136,7 @@ def test_svelte_default_starter_declares_notebook_cell_targets(
 
     inspection = _inspect(svelte_provider, project)
 
-    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+    assert [(site.kind, site.targets) for site in inspection.sites] == [
         ("cell", ("cell-2",)),
     ]
 
@@ -147,7 +169,7 @@ def test_svelte_keeps_mutated_static_domains_fail_closed(
     assert [item.code for item in inspection.diagnostics] == [
         "projection-site-reserved"
     ]
-    assert inspection.mounts == ()
+    assert inspection.sites == ()
 
 
 @pytest.mark.skipif(
@@ -172,7 +194,7 @@ def test_svelte_starter_builds_without_possible_output_cells(tmp_path: Path) -> 
     )
 
     assert inspection.diagnostics == ()
-    assert inspection.mounts == ()
+    assert inspection.sites == ()
     assert report.document is not None
 
 
@@ -245,17 +267,17 @@ def test_svelte_each_extracts_bounded_and_wildcard_mounts(
 
     inspection = _inspect(svelte_provider, project)
 
-    assert [site.kind for site in inspection.mounts] == [
+    assert [site.kind for site in inspection.sites] == [
         "cell",
         "cell",
         "cell",
         "value",
         "output",
     ]
-    assert [site.allowed_targets for site in inspection.mounts] == [
+    assert [site.targets for site in inspection.sites] == [
         ("overview", "detail"),
         ("imported", "detail"),
-        None,
+        "*",
         ("report.total", "report.change"),
         ("summary", "detail_table"),
     ]
@@ -494,35 +516,23 @@ def test_registered_svelte_starter_builds_typed_projections_and_reports_warnings
     )
     provider = provider_registry().get(project.provider)
     inspection = _inspect(provider, project)
-    files = root / ".artifacts" / ".staging" / "build" / "files"
-    files.mkdir(parents=True)
-    cache_root = tmp_path / "live" / ".artifacts" / ".cache"
-    cache_root.parent.mkdir(parents=True)
 
-    report = _build(
-        provider,
-        provider_build_request(
-            project,
-            inspection,
-            files,
-            cache_root=cache_root,
-        ),
-    )
+    published = publish(project)
 
     instructions = next(
-        item
-        for item in inspection.editor_documents
-        if item.path.as_posix() == "AGENTS.md"
+        item for item in inspection.documents if item.path.as_posix() == "AGENTS.md"
     )
     assert (instructions.language, instructions.access) == ("markdown", "edit")
-    assert report.document is not None
     assert "svelte-check-css-unused-selector" in {
-        diagnostic.code for diagnostic in report.diagnostics
+        diagnostic.code for diagnostic in published.diagnostics
     }
     javascript = "\n".join(
-        path.read_text(encoding="utf-8") for path in files.rglob("*.js")
+        content.decode("utf-8")
+        for path, content in published.files.items()
+        if path.suffix == ".js"
     )
-    assert all(site.id in javascript for site in inspection.mounts)
+    assert published.sites == artifact_sites(inspection.sites)
+    assert all(site.id in javascript for site in published.sites)
 
 
 @pytest.mark.skipif(
@@ -544,11 +554,7 @@ def test_svelte_revalidates_tsconfig_before_installation(
     files = root / ".artifacts" / ".staging" / "invalid-options" / "files"
     files.mkdir(parents=True)
 
-    report = _build(
-        svelte_provider,
-        provider_build_request(project, inspection, files),
-    )
+    with pytest.raises(ProviderError, match="tsconfig") as raised:
+        _build(svelte_provider, provider_build_request(project, inspection, files))
 
-    assert report.document is None
-    assert [item.code for item in report.diagnostics] == ["provider-options-invalid"]
-    assert "tsconfig" in report.diagnostics[0].message
+    assert raised.value.diagnostic.code == "provider-options-invalid"

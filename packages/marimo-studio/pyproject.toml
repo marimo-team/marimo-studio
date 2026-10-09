@@ -1,6 +1,6 @@
 [project]
 name = "marimo-studio"
-version = "0.2.3"
+version = "0.3.0"
 description = "Custom views for marimo notebooks"
 readme = "README.md"
 license = "Apache-2.0"
@@ -11,8 +11,8 @@ dependencies = [
   "agent-plugins>=0.2.4",
   "click>=8.2",
   "htpy>=26.5.1",
-  "marimo==0.25.0",
-  "marimo-export>=0.1.0",
+  "marimo==0.25.1",
+  "marimo-export>=0.1.4",
   "markupsafe>=3",
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",
@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 deno = ["deno>=2.9.5"]
 lens = ["marimo-lens>=0.2.3"]
+typst = ["typst>=0.15"]
 recommended = ["marimo-studio[deno,lens]"]
 
 [project.urls]
@@ -47,10 +48,12 @@ marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 studio = "marimo_studio.agent"
 
 [project.entry-points."marimo_studio.view_provider"]
-notebook-kit = "marimo_studio.view_providers._bundled.deno_obsnotebook:provider"
-react = "marimo_studio.view_providers._bundled.deno_react:provider"
-svelte = "marimo_studio.view_providers._bundled.deno_svelte:provider"
-vanilla = "marimo_studio.view_providers._bundled.vanilla:provider"
+notebook-kit = "marimo_studio.view_providers._builtin.deno_obsnotebook:provider"
+quarto = "marimo_studio.view_providers._builtin.quarto:provider"
+react = "marimo_studio.view_providers._builtin.deno_react:provider"
+svelte = "marimo_studio.view_providers._builtin.deno_svelte:provider"
+typst = "marimo_studio.view_providers._builtin.typst:provider"
+vanilla = "marimo_studio.view_providers._builtin.vanilla:provider"
 
 [tool.ruff]
 src = ["src"]

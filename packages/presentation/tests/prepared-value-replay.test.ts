@@ -118,10 +118,7 @@ test("unrelated value-host activity does not rewrite committed prepared hosts", 
   commitRuntimeConfig({
     ...config,
     projectionRevision: "c".repeat(64),
-    mounts: [
-      ...config.mounts,
-      { ...config.mounts[0]!, id: "other-value", allowedTargets: ["report.total"] },
-    ],
+    sites: [...config.sites, { ...config.sites[0]!, id: "other-value", targets: ["report.total"] }],
   });
   const host = createHost();
   projectionHosts.connect();

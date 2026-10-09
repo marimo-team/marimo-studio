@@ -9,7 +9,7 @@ Studio bounds source inspection, provider processes, build snapshots, browser
 artifacts, projection requests, and validation waits. Limits apply before
 publication or mutation commit unless the table names a browser boundary.
 
-## Names and source documents
+## Names and Source documents
 
 | Boundary                                              |           Limit | Failure or diagnostic                             |
 | ----------------------------------------------------- | --------------: | ------------------------------------------------- |
@@ -37,26 +37,44 @@ missing entry document, and a document without one `head`, one `body`, and one
 `#app-shell`.
 
 Static export combines the artifact with Studio runtime assets and notebook
-public files. Prepared export adds verified output assets. Browser export
-adds notebook source. Each copied tree is checked against the artifact file
-budget before the staged directory can replace the destination.
+public files. Prepared export adds verified output assets, each within
+marimo-export's 64 MiB asset and 512 MiB export limits. Browser export adds
+notebook source. Each copied tree is checked against the artifact file budget
+before the staged directory can replace the destination.
 
 ## Projection declarations
 
-| Boundary                                           |             Limit |
-| -------------------------------------------------- | ----------------: |
-| Mount declarations returned by provider inspection |               512 |
-| Encoded mount declarations                         |             1 MiB |
-| Finite cell targets on one mount                   |               256 |
-| Finite output targets on one mount                 |               100 |
-| Finite value targets on one mount                  |               100 |
-| Projection target                                  | 4,096 UTF-8 bytes |
-| Value selector path                                |          64 steps |
-| Projection site ID                                 |    128 characters |
+| Boundary                                         |             Limit |
+| ------------------------------------------------ | ----------------: |
+| Projection sites returned by provider inspection |               512 |
+| Encoded projection sites                         |             1 MiB |
+| Finite cell targets on one site                  |               256 |
+| Finite output targets on one site                |               100 |
+| Finite value targets on one site                 |               100 |
+| Projection target                                | 4,096 UTF-8 bytes |
+| Value selector path                              |          64 steps |
+| Media types in one output accept list            |                32 |
 
-`allowed_targets=None` represents a dynamic mount and avoids enumerating its
-target set during inspection. Runtime policy still applies to active instances
-and unique targets. Prepared export requires finite targets on every mount.
+Value selectors and accept lists follow marimo-export's
+[`values`](https://marimo-team.github.io/marimo-export/reference/python/values)
+module, which a Prepared export also uses. Targets `"*"` represent a dynamic
+site and avoid enumerating its target set during inspection. Runtime policy
+still applies to active instances and unique targets. Prepared export requires finite targets on every site.
+
+## Rendered documents
+
+| Boundary                                      |  Limit |
+| --------------------------------------------- | -----: |
+| Encoded render values for one render          |  8 MiB |
+| Rendered outputs for one render               | 16 MiB |
+| Rendered document                             | 64 MiB |
+| Provider commands during one render           |   60 s |
+| Prepared states rendered by one static export |    256 |
+
+Render values or outputs over their budget fail with `document-values-too-large`
+or `document-outputs-too-large`. A larger rendered document fails with
+`document-render-too-large`, and an export with more prepared states fails with
+`document-render-states-exceeded`.
 
 ## Active presentation projections
 
@@ -76,12 +94,41 @@ target.
 
 ## Runtime payloads
 
-| Boundary                              |           Limit | Failure                      |
-| ------------------------------------- | --------------: | ---------------------------- |
-| Encoded browser runtime configuration |          16 MiB | `runtime-config-too-large`   |
-| One projected JSON or Arrow value     | 1,000,000 bytes | Value read or decode error   |
-| One rendered output request set       |   100 selectors | Capability or protocol error |
-| Browser client response               | 5,000,000 bytes | Live request failure         |
+| Boundary                                          |           Limit | Failure                                    |
+| ------------------------------------------------- | --------------: | ------------------------------------------ |
+| Encoded browser runtime configuration             |          16 MiB | `runtime-config-too-large`                 |
+| One projected JSON value                          | 1,000,000 bytes | `value-too-large`                          |
+| JSON values in one value read                     | 1,000,000 bytes | `response-too-large`                       |
+| One projected Arrow value                         |          64 MiB | `value-too-large`                          |
+| Arrow values in one value read                    |         128 MiB | `response-too-large`                       |
+| Arrow values in one Browser runtime value read    |          64 MiB | `response-too-large`                       |
+| One rendered output, and the outputs of a request | 5,000,000 bytes | `output-too-large` or `response-too-large` |
+| One rendered output request set                   |   100 selectors | Capability or protocol error               |
+| Browser client response                           | 5,000,000 bytes | Live request failure                       |
+
+The Python and Browser runtimes enforce the value limits. A value read carries
+the values that a view projects from one producer cell, and `marimo-studio
+check` reads them the same way. Eager pandas, Polars, and PyArrow tables travel
+as
+[Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc),
+a columnar binary format. Collect lazy dataframes in the notebook before
+projecting them. Other values travel as JSON, so return a table to project more
+than 1,000,000 bytes.
+
+The Python runtime publishes Arrow values through marimo's shared memory. A
+container's default 64 MiB `/dev/shm` holds about one large value, so start
+containers with a larger `--shm-size`. A value that does not fit travels
+inline, which takes longer to load.
+
+The Browser runtime passes Arrow values from its worker as base64 text, so a
+value read there carries at most 64 MiB of Arrow. A 60 MB value took about 8
+seconds to appear in Chromium on a Linux workstation. `marimo-studio check`
+applies the Python runtime budgets.
+
+The Prepared runtime stores each value as a
+[marimo-export](https://github.com/marimo-team/marimo-export) asset. One asset
+holds at most 64 MiB, and one export holds at most 512 MiB of unique assets
+across its prepared states.
 
 Browser runtime configuration contains saved notebook source, projection
 declarations, runtime bindings, and presentation settings. Prepared runtime
@@ -94,7 +141,7 @@ reaches 16 MiB.
 | Boundary                                  |                         Limit |
 | ----------------------------------------- | ----------------------------: |
 | Starters per provider                     |                           256 |
-| Advertised documents per starter          |                           256 |
+| Source documents per starter              |                           256 |
 | Options in one view project               |                           256 |
 | Cell targets consumed by one starter plan |                           256 |
 | Provider inspection diagnostics           | 512 records and 1 MiB encoded |

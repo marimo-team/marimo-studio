@@ -1,0 +1,156 @@
+/*-- scss:defaults --*/
+// A journal preprint. Prose uses KaTeX's Computer Modern face, which Quarto
+// already loads for the math, so text and equations share one typeface.
+$body-bg: #fffffc;
+$body-color: #1b1b1a;
+$text-muted: #5d5c58;
+$primary: #2a4f7c;
+$link-color: #2a4f7c;
+$border-color: #c9c8c2;
+$font-family-sans-serif: KaTeX_Main, "Latin Modern Roman", "Times New Roman", serif;
+$headings-font-family: KaTeX_Main, "Latin Modern Roman", "Times New Roman", serif;
+$headings-font-weight: 700;
+$callout-color-warning: #8a6d3b;
+
+/*-- scss:rules --*/
+body {
+  font-size: 1.14rem;
+  line-height: 1.5;
+}
+
+main {
+  hyphens: auto;
+}
+
+// Justify like a typeset page only where lines are long enough to avoid
+// wide gaps.
+@media (min-width: 768px) {
+  main p {
+    text-align: justify;
+  }
+}
+
+#title-block-header {
+  text-align: center;
+  margin-bottom: 2rem;
+
+  .title {
+    font-size: 2.1rem;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .subtitle {
+    font-style: italic;
+    font-size: 1.25rem;
+    color: $text-muted;
+  }
+
+  .quarto-title-meta {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .abstract {
+    max-width: 34rem;
+    margin: 1.6rem auto 0;
+    font-size: 0.98rem;
+
+    .block-title {
+      font-weight: 700;
+      font-size: 0.98rem;
+      text-align: center;
+      margin-bottom: 0.4rem;
+    }
+  }
+}
+
+h1,
+h2 {
+  font-size: 1.35rem;
+  margin-top: 2.2rem;
+  border-bottom: 0;
+}
+
+.header-section-number {
+  margin-right: 0.35em;
+}
+
+// Quarto marks every theorem-like environment with .theorem. As in amsthm,
+// theorems and propositions set their body in italic, definitions upright.
+.theorem {
+  margin: 1.2rem 0;
+  font-style: italic;
+
+  .theorem-title {
+    font-style: normal;
+  }
+}
+
+.theorem.definition {
+  font-style: normal;
+}
+
+.proof {
+  margin: 1rem 0 1.4rem;
+
+  > p:last-child::after {
+    content: "\220E";
+    float: right;
+  }
+}
+
+.katex-display {
+  margin: 1.1rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+// Prose and math share KaTeX's face, so inline math keeps the text size.
+// Displayed math is set slightly larger, and at text size on phone-sized
+// pages that cannot hold a full display line.
+.katex {
+  font-size: 1em;
+}
+
+.katex-display > .katex {
+  font-size: 1.1em;
+}
+
+@media (max-width: 576px) {
+  .katex-display > .katex {
+    font-size: 1em;
+  }
+}
+
+// booktabs: rules above and below the table and under its head, no verticals.
+table {
+  border-top: 1.5px solid $body-color;
+  border-bottom: 1.5px solid $body-color;
+  font-variant-numeric: tabular-nums;
+
+  thead th {
+    border-bottom: 0.8px solid $body-color;
+  }
+
+  td,
+  th {
+    border: 0;
+    padding: 0.3rem 0.9rem;
+  }
+}
+
+caption {
+  caption-side: top;
+  color: $body-color;
+  font-size: 0.98rem;
+}
+
+// Live notebook results keep marimo's styles inside a quiet panel.
+marimo-cell {
+  display: block;
+  margin: 1.2rem 0;
+  padding: 0.6rem 1rem;
+  border-left: 2px solid $border-color;
+  text-align: left;
+}

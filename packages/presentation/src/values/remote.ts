@@ -11,7 +11,7 @@ import {
   notifyProjectionBindingStale,
   projectionBindingIsStale,
 } from "../projections/staleness.ts";
-import { retry } from "../retry.ts";
+import { boundedRetryAfterExhaustion, retry } from "../retry.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
 import { serverRuntimeDataSchema } from "../runtime/server-config.ts";
 import { createValueDecoder, ValueDecodeError } from "./codecs.ts";
@@ -21,6 +21,7 @@ export class ValueRequestError extends Error {
     message: string,
     readonly code: string,
     readonly transient: boolean,
+    readonly hint?: string,
   ) {
     super(message);
     this.name = "ValueRequestError";
@@ -93,7 +94,7 @@ export const readServerValues = async (
       const message = detail.message ?? `Value request failed with ${response.status}`;
       const code = detail.error ?? "value-request-failed";
       const transient = detail.transient ?? false;
-      const error = new ValueRequestError(message, code, transient);
+      const error = new ValueRequestError(message, code, transient, detail.hint);
       notifyProjectionBindingStale(error, config.projectionRevision);
       throw error;
     }
@@ -114,6 +115,7 @@ export const readServerValues = async (
   });
 
 const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;
+const RUNTIME_SYNC_RETRY_DELAYS = [5_000, 5_000, 5_000] as const;
 
 export const readServerValuesWithRetry = async (
   request: ValueReadRequest,
@@ -132,5 +134,9 @@ export const readServerValuesWithRetry = async (
     },
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof ValueRequestError && error.transient,
+    retryAfterExhaustion: boundedRetryAfterExhaustion(
+      RUNTIME_SYNC_RETRY_DELAYS,
+      (error) => error instanceof ValueRequestError && error.code === "runtime-sync-pending",
+    ),
     signal,
   });

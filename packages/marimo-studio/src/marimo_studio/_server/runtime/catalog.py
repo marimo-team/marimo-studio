@@ -7,18 +7,19 @@ executable cell and dependency information.
 
 The registry validates the requested runtime against workspace configuration
 and returns a common projection record. Changing execution environment does
-not change the published artifact or the meaning of its notebook mounts.
+not change the published artifact or the meaning of its projection sites.
 """
 
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from marimo_studio._delivery.browser_ports import BrowserRuntimeProjector
 from marimo_studio._notebook.cell_refs import safe_cell_ref_matches
-from marimo_studio._notebook.records import CellRef
+from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.capability import (
     presentation_revision_capability,
@@ -35,7 +36,11 @@ from marimo_studio._workspace.models import (
     StudioWorkspace,
 )
 from marimo_studio.errors import RuntimeSelectionError
-from marimo_studio.errors._internal import RuntimeSyncError
+from marimo_studio.errors._internal import (
+    RuntimeExecutionPendingError,
+    RuntimeSyncError,
+    RuntimeSyncRequiredError,
+)
 
 if TYPE_CHECKING:
     from marimo_studio._server.notebook_scope import NotebookScopeRegistry
@@ -78,6 +83,55 @@ def _digest(*values: str) -> str:
         digest.update(value.encode("utf-8"))
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def runtime_cell_bindings(
+    snapshot: PresentationSnapshot,
+    cells: LiveCellSnapshot | None,
+) -> dict[str, str]:
+    """Resolve artifact cell references against one stable live-cell snapshot."""
+    bindings = snapshot.resolved.runtime_cell_refs(cells)
+    if cells is None:
+        return bindings
+    empty_references = {
+        str(cell.ref)
+        for cell in snapshot.resolved.notebook.cells
+        if cell.code_sha256 == hashlib.sha256(b"").hexdigest()
+    }
+    current_matches = safe_cell_ref_matches(
+        {reference: CellRef.parse(reference) for reference in bindings},
+        (
+            (reference, runtime_id)
+            for runtime_id, reference in cells.current_refs.items()
+        ),
+    )
+    if cells.execution_pending:
+        raise RuntimeExecutionPendingError()
+    if any(
+        (reference not in empty_references or runtime_id in cells.current_refs)
+        and current_matches.get(reference) != runtime_id
+        for reference, runtime_id in bindings.items()
+    ):
+        raise RuntimeSyncRequiredError()
+    return bindings
+
+
+async def revalidate_runtime_cells(
+    sessions: SessionState,
+    context: ServerContext,
+    session_id: str,
+    expected: LiveCellSnapshot | None,
+) -> None:
+    """Reject a read that crossed a session replacement or execution event."""
+    current = await sessions.live_cells(
+        context,
+        session_id,
+        include_dependency_closures=False,
+    )
+    if current != expected:
+        raise RuntimeSyncError(
+            "The Marimo session changed while Studio read runtime state."
+        )
 
 
 class ServerRuntime:
@@ -136,33 +190,7 @@ class ServerRuntime:
             session_id,
             include_dependency_closures=False,
         )
-        bindings = snapshot.resolved.runtime_cell_refs(cells)
-        current_matches = (
-            safe_cell_ref_matches(
-                {reference: CellRef.parse(reference) for reference in bindings},
-                (
-                    (reference, runtime_id)
-                    for runtime_id, reference in cells.current_refs.items()
-                ),
-            )
-            if cells is not None
-            else bindings
-        )
-        # Marimo can append an empty cell without issuing an execution request.
-        empty_references = {
-            str(cell.ref)
-            for cell in snapshot.resolved.notebook.cells
-            if cell.code_sha256 == hashlib.sha256(b"").hexdigest()
-        }
-        if cells is not None and any(
-            (reference not in empty_references or runtime_id in cells.current_refs)
-            and current_matches.get(reference) != runtime_id
-            for reference, runtime_id in bindings.items()
-        ):
-            raise RuntimeSyncError(
-                "Run the changed notebook cells to update the Python runtime preview."
-            )
-        return bindings
+        return runtime_cell_bindings(snapshot, cells)
 
     def _projection(
         self,
@@ -430,6 +458,38 @@ class RuntimeRegistry:
         )
         self._require_open()
         return projection
+
+    async def revalidate_server_bindings(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        runtime_id: str,
+        session_id: str | None,
+        expected: Mapping[str, str],
+        expected_snapshot: LiveCellSnapshot | None = None,
+    ) -> None:
+        """Check server bindings again immediately before returning a config."""
+        provider = self._by_id.get(runtime_id)
+        if not isinstance(provider, ServerRuntime):
+            return
+        cells = await provider._sessions.live_cells(
+            context,
+            session_id,
+            include_dependency_closures=False,
+        )
+        if expected_snapshot is not None and (
+            cells is None
+            or cells.owner != expected_snapshot.owner
+            or cells.generation != expected_snapshot.generation
+        ):
+            raise RuntimeSyncError(
+                "The Marimo session changed while Studio built runtime configuration."
+            )
+        current = runtime_cell_bindings(snapshot, cells)
+        if current != dict(expected):
+            raise RuntimeSyncError(
+                "The notebook session changed while Studio built runtime configuration."
+            )
 
 
 def create_runtime_registry(

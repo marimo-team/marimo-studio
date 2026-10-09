@@ -3,23 +3,16 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
-from typing import cast
+import importlib
+import sys
+from collections.abc import Iterator
+from pathlib import Path, PurePosixPath
 
-from marimo_studio._artifacts.repository import validate_document
-from marimo_studio._views.inspection import inspection_request
-from marimo_studio._workspace.project_manifest import (
-    encode_view_manifest,
-    load_view_project,
-)
-from marimo_studio.view_providers import ViewProvider
-from marimo_studio.view_providers._host.registry import ProviderRegistry
+import pytest
 
-from ..provider_test_support import (
-    candidate,
-    provider_build_request,
-    provider_starter_context,
-)
+from marimo_studio.view_providers.testing import check_provider
+
+GUIDE = Path("docs/guide/view-providers.md")
 
 
 def _documentation_paths() -> tuple[Path, ...]:
@@ -37,6 +30,32 @@ def _python_blocks(document: str) -> tuple[str, ...]:
     return tuple(section.split("\n```", 1)[0] for section in sections)
 
 
+def _guide_module(after: str) -> str:
+    """Return the first Python block that follows ``after`` in the guide."""
+    document = GUIDE.read_text(encoding="utf-8")
+    return _python_blocks(document.split(after, 1)[1])[0]
+
+
+@pytest.fixture
+def acme_views(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    package = tmp_path / "acme_views"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        _guide_module("Replace `src/acme_views/__init__.py` with:"),
+        encoding="utf-8",
+    )
+    (package / "card.py").write_text(
+        _guide_module("`src/acme_views/card.py`:"),
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    yield
+    for name in [
+        name for name in sys.modules if name.partition(".")[0] == "acme_views"
+    ]:
+        del sys.modules[name]
+
+
 def test_every_python_example_compiles() -> None:
     compiled = 0
     for path in _documentation_paths():
@@ -46,44 +65,22 @@ def test_every_python_example_compiles() -> None:
     assert compiled > 0
 
 
-def test_documented_provider_builds_a_complete_html_artifact(tmp_path) -> None:
-    document = Path("docs/reference/provider-api.md").read_text(encoding="utf-8")
-    source = _python_blocks(document.split("## Minimal provider", 1)[1])[0]
-    namespace: dict[str, object] = {}
-    exec(compile(source, "provider-api.md", "exec"), namespace)
-    provider = cast(ViewProvider, namespace["provider"])
-    registry = ProviderRegistry(
-        (candidate("report", provider, distribution="acme-views"),)
-    )
-    installed = registry.get("acme-views/report")
-    root = tmp_path / "report"
-    root.mkdir()
-    starter = installed.starters()[0]
-    plan = installed.create(
-        starter,
-        provider_starter_context(tmp_path, view_name="report"),
-    )
-    for relative, payload in plan.files.items():
-        path = root.joinpath(*relative.parts)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(payload)
-    (root / "view.toml").write_text(
-        encode_view_manifest(installed.key),
-        encoding="utf-8",
-    )
-    project = load_view_project(root)
-    inspection = installed.inspect(inspection_request(project))
-    staging = tmp_path / "staging"
-    staging.mkdir()
+@pytest.mark.usefixtures("acme_views")
+def test_guide_report_provider_publishes_the_notebook_cells() -> None:
+    provider = importlib.import_module("acme_views").provider
 
-    result = installed.build(
-        provider_build_request(
-            project,
-            inspection,
-            staging,
-            cache_root=tmp_path / "cache-owner" / ".artifacts" / ".cache",
-        )
-    )
+    (view,) = check_provider(provider)
 
-    assert result.document is not None
-    validate_document(staging, result.document)
+    page = view.published[PurePosixPath("index.html")].decode()
+    assert '<marimo-cell name="' in page
+    assert "data-marimo-studio-site" in page
+
+
+@pytest.mark.usefixtures("acme_views")
+def test_guide_card_provider_renders_the_report_total() -> None:
+    provider = importlib.import_module("acme_views.card").provider
+
+    (view,) = check_provider(provider, values={"report.total": 1234})
+
+    assert view.rendered is not None
+    assert b"Total: 1234" in view.rendered

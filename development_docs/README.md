@@ -28,7 +28,7 @@ package that owns a policy or mutable resource.
 | View creation, source documents, inspection, builds, removal, or revisions  | [Product and workspace](architecture/product-and-workspace.md)                 |
 | Provider descriptors, starters, inspection, builds, or artifact storage     | [View providers and artifacts](architecture/view-providers-and-artifacts.md)   |
 | Target Python selection, provider dependencies, or CLI environment re-entry | [Provider environments](architecture/provider-environments.md)                 |
-| Notebook symbols, mount declarations, mounted instances, or ownership       | [Symbolic projections](architecture/symbolic-projections.md)                   |
+| Notebook symbols, artifact sites, mounted instances, or ownership           | [Symbolic projections](architecture/symbolic-projections.md)                   |
 | Marimo routes, sessions, saves, kernels, private APIs, or upgrades          | [Marimo integration](architecture/marimo-integration.md)                       |
 | Server routing, authentication, capabilities, or browser isolation          | [Server routing and security](architecture/server-routing-and-security.md)     |
 | Browser protocol, runtimes, Source, layout, or presentation lifecycle       | [Browser runtime and authoring](architecture/browser-runtime-and-authoring.md) |
@@ -50,7 +50,8 @@ These upstream systems define contracts that Studio integrates:
 | [Marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)                                                                                    | Coding-agent execution inside the live notebook kernel                                       |
 | [Agent Skills](https://agentskills.io/) and [Agent Plugins](https://github.com/peter-gy/agent-plugins)                                                                | Portable agent instructions and their packaged resources                                     |
 | [uv](https://docs.astral.sh/uv/) and [PEP 723](https://peps.python.org/pep-0723/)                                                                                     | Python environment selection and dependencies stored in a script                             |
-| [Deno](https://docs.deno.com/)                                                                                                                                        | Pinned JavaScript and TypeScript toolchain for bundled framework providers                   |
+| [pixi](https://pixi.prefix.dev/) and [conda-forge](https://conda-forge.org/)                                                                                          | System tools such as Quarto, and pixi workspaces that own a notebook's environment           |
+| [Deno](https://docs.deno.com/)                                                                                                                                        | Pinned JavaScript and TypeScript toolchain for built-in framework providers                  |
 | [ASGI](https://asgi.readthedocs.io/en/latest/)                                                                                                                        | Interface between Studio's asynchronous Python application and a server                      |
 | [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/)                                                                                           | Browser-side notebook execution                                                              |
 | [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc) and [Flechette](https://github.com/uwdata/flechette) | Columnar dataframe transfer from Python to browser code                                      |
@@ -61,20 +62,34 @@ for each integration.
 
 ## Install the workspace
 
-Install the locked Python and JavaScript environments:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/),
+[Node.js](https://nodejs.org/) 24.11 or newer, and
+[pixi](https://pixi.prefix.dev/latest/installation/), then the locked
+environments:
 
 ```console
+corepack enable pnpm
 make setup
 ```
 
-`make setup` installs the Python and [pnpm](https://pnpm.io/) JavaScript
-workspaces, prepares the pinned Marimo
+`corepack enable pnpm` lets Node.js provide the pnpm version that
+`package.json` pins.
+
+`make setup` installs the pixi environment of system tools, the Python and
+[pnpm](https://pnpm.io/) JavaScript workspaces, prepares the pinned Marimo
 frontend source, builds Studio's browser assets, and installs Chromium for
 browser acceptance tests. It also prepares the pinned Pyodide test payload in
 `apps/e2e/.cache/pyodide`. Python tooling runs through `uv`. Browser and
 documentation tooling runs through the pnpm workspace, where
 [Vite Plus](https://viteplus.dev/guide) owns formatting, linting, TypeScript
 checks, tests, builds, and task execution.
+
+pixi installs the system tools from conda-forge that neither uv nor pnpm
+provide, locked in `pixi.lock`. It provides Quarto for the Quarto provider.
+Commands that need it run through `pixi run`, which activates the environment.
+`make e2e` does this for the provider browser suite, and
+`./scripts/python-test.sh` does it for the `all` and `quarto` profiles. Run
+`pixi shell` to use the tools in an interactive shell.
 
 Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
@@ -138,7 +153,7 @@ Studio source follows these dependency directions:
 
 ```text
 Python policy -> Studio ports -> _compat adapters -> Marimo
-              -> ViewProvider -> view_providers._bundled
+              -> ViewProvider -> view_providers._builtin
               -> artifact store
 
 Studio prepared state space -> public marimo-export Python SDK
@@ -170,11 +185,11 @@ view.toml
   -> PresentationSnapshot
 ```
 
-Provider inspection returns editor documents, one input scope, mount
-declarations, diagnostics, and a build fingerprint. Core enumerates the input
-scope for revisions, snapshots, and watching. A document can be visible in
-Source while remaining read-only. A binary asset can affect a build while
-staying outside the text editor.
+Provider inspection returns Source documents, build inputs, projection sites,
+diagnostics, and the values and outputs a rendered document reads. Core
+enumerates the build inputs for revisions, snapshots, and watching. A document
+can be visible in Source while remaining read-only. A binary asset can affect a
+build while staying outside the text editor.
 
 ## Trace symbolic projection work
 
@@ -182,8 +197,8 @@ Projection changes cross a second path:
 
 ```text
 provider source
-  -> MountDeclaration
-  -> artifact instrumentation
+  -> ProjectionSite
+  -> ArtifactSite and snapshot instrumentation
   -> mounted ProjectionRequest
   -> NotebookSymbolGraph resolution
   -> runtime cell binding
@@ -227,18 +242,48 @@ Basedpyright analyzes the distributed package against Python 3.10 and analyzes
 tests and contributor scripts against Python 3.11. Error diagnostics fail the
 type-check gate.
 
+### Validation stages
+
+Pull requests run the Linux contracts that cover most regressions. The macOS and
+Windows contracts and the complete documentation site run after merge, on
+`main`:
+
+| Stage        | Workflow            | Contracts                                                                                                                    |
+| ------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Pull request | CI                  | Quality, Python on Linux, supported Python on Linux and Windows, Linux native, Deno, and Quarto contracts, frontend, package |
+| Pull request | Browser acceptance  | Linux browser shards, provider and installed-package browser contracts, Windows process unit contracts                       |
+| Pull request | GitHub Pages        | Documentation contracts, and an export of three example views when product code changes                                      |
+| After merge  | Platform acceptance | macOS and Windows native and Deno contracts, Windows Quarto contracts, installed package, and Windows browser suites         |
+| After merge  | GitHub Pages        | Every example family in parallel, then the assembled site and its deployment                                                 |
+
+A pull request runs the after-merge stage itself in three cases:
+
+- It changes a path in the `platform_sensitive` filter, such as process,
+  filesystem, provider-host, or Deno runtime code, a lockfile, or a workflow.
+  Platform acceptance then runs the contracts that its changes select. A change
+  to Platform acceptance itself selects every platform contract.
+- Platform acceptance last failed on the pull request's base. The pull request
+  then runs every platform contract, so a fix proves itself on every platform.
+- It changes the documentation site or its examples. GitHub Pages then builds
+  the complete site.
+
+`.github/filters.yml` owns the path selection. Required checks for merging are
+`CI gate`, `Browser acceptance gate`, `Platform gate`, and `Documentation gate`.
+A red after-merge run on `main` is fixed forward with a pull request.
+
 ### Inspect CI evidence
 
-The CI, Browser acceptance, and GitHub Pages workflows retain results for
-seven days:
+The CI, Browser acceptance, Platform acceptance, and GitHub Pages workflows
+retain results for seven days:
 
-| Artifact                          | Evidence                                                                      |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `python-<profile>-<version>-<os>` | JUnit test results, with the longest cases also printed in the job log        |
-| `frontend-test-timings`           | Package test output, including Vitest phase timings                           |
-| `installed-verification-<os>`     | Elapsed time and exit status for each installed-package phase                 |
-| `browser-report`                  | Merged Playwright results across selected suites and platforms                |
-| `documentation-example-timings`   | Export command arguments, duration, and exit status for each selected example |
+| Artifact                          | Evidence                                                                   |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `python-<profile>-<version>-<os>` | JUnit test results, with the longest cases also printed in the job log     |
+| `frontend-test-timings`           | Package test output, including Vitest phase timings                        |
+| `installed-verification-<os>`     | Elapsed time and exit status for each installed-package phase              |
+| `browser-report`                  | Merged Playwright results across the selected Linux suites                 |
+| `windows-browser-report`          | Merged Playwright results across the selected Windows suites               |
+| `documentation-example-timings-*` | Export command arguments, duration, and exit status for one example family |
 
 Browser acceptance builds one browser artifact and package candidate, then
 passes them and the pinned Pyodide test payload to the selected source and

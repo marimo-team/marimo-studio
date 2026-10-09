@@ -18,10 +18,16 @@ import { useDeliveryTimeout } from "../use-delivery-timeout";
 import { useLatest } from "../use-latest";
 import { valueCellFailure, valueCellModel } from "./value-cell-model";
 
-const requestFailure = (cause: unknown): ValueReadError => ({
-  code: cause instanceof ValueRequestError ? cause.code : "value-request-failed",
-  message: errorMessage(cause),
-});
+const requestFailure = (cause: unknown): ValueReadError => {
+  const failure: ValueReadError = {
+    code: cause instanceof ValueRequestError ? cause.code : "value-request-failed",
+    message: errorMessage(cause),
+  };
+  if (cause instanceof ValueRequestError && cause.hint) {
+    failure.hint = cause.hint;
+  }
+  return failure;
+};
 
 export const useRuntimeValue = ({
   projectionRevision,

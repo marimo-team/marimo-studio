@@ -40,6 +40,7 @@ def _open_handle(
     *,
     share: int,
     disposition: int = _OPEN_EXISTING,
+    follow_data_reparse: bool = False,
 ) -> int:
     import ctypes
     from ctypes import wintypes
@@ -56,21 +57,6 @@ def _open_handle(
         wintypes.HANDLE,
     )
     create_file.restype = wintypes.HANDLE
-    handle = create_file(
-        str(path),
-        access,
-        share,
-        None,
-        disposition,
-        flags | _FILE_FLAG_OPEN_REPARSE_POINT,
-        None,
-    )
-    if handle == ctypes.c_void_p(-1).value:
-        # The Windows error code selects the OSError subclass, so a missing
-        # path raises FileNotFoundError and a sharing violation raises
-        # PermissionError.
-        error = cast(Any, ctypes).get_last_error()
-        raise OSError(0, f"Could not open {label.lower()}", str(path), error)
 
     # GetFileInformationByHandle reports attributes on every local and
     # network filesystem, including exFAT and FAT32.
@@ -88,19 +74,88 @@ def _open_handle(
             ("file_index_low", wintypes.DWORD),
         ]
 
-    information = ByHandleFileInformation()
     get_information = kernel32.GetFileInformationByHandle
     get_information.argtypes = (wintypes.HANDLE, wintypes.LPVOID)
     get_information.restype = wintypes.BOOL
-    if not get_information(handle, ctypes.byref(information)):
+
+    def inspect_handle(handle: int) -> ByHandleFileInformation:
+        information = ByHandleFileInformation()
+        if not get_information(handle, ctypes.byref(information)):
+            error = cast(Any, ctypes).get_last_error()
+            raise UnsafePathError(error, f"Could not inspect {label.lower()}: {path}")
+        return information
+
+    def file_identity(
+        information: ByHandleFileInformation,
+    ) -> tuple[int, int, int]:
+        return (
+            int(information.volume_serial_number),
+            int(information.file_index_high),
+            int(information.file_index_low),
+        )
+
+    def create_file_handle(open_reparse_point: bool) -> int:
+        return int(
+            create_file(
+                str(path),
+                access,
+                share,
+                None,
+                disposition,
+                flags | (_FILE_FLAG_OPEN_REPARSE_POINT if open_reparse_point else 0),
+                None,
+            )
+        )
+
+    handle = create_file_handle(True)
+    if handle == ctypes.c_void_p(-1).value:
+        # The Windows error code selects the OSError subclass, so a missing
+        # path raises FileNotFoundError and a sharing violation raises
+        # PermissionError.
         error = cast(Any, ctypes).get_last_error()
+        raise OSError(0, f"Could not open {label.lower()}", str(path), error)
+
+    try:
+        information = inspect_handle(handle)
+    except BaseException:
         close_handle(handle)
-        raise UnsafePathError(error, f"Could not inspect {label.lower()}: {path}")
-    if information.file_attributes & _FILE_ATTRIBUTE_REPARSE_POINT and (
-        _reparse_tag(kernel32, handle) & NAME_SURROGATE
-    ):
-        close_handle(handle)
-        raise UnsafePathError(f"{label} is a symlink or junction: {path}")
+        raise
+    if information.file_attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+        if _reparse_tag(kernel32, handle) & NAME_SURROGATE:
+            close_handle(handle)
+            raise UnsafePathError(f"{label} is a symlink or junction: {path}")
+        if follow_data_reparse:
+            # Cloud files use data reparse points. Reopening without
+            # OPEN_REPARSE_POINT lets the registered filter hydrate the file
+            # or populate the directory while name-surrogate links remain
+            # refused above. Keep the inspected handle open until the second
+            # handle has been checked so a concurrent replacement is detected
+            # before either handle is returned.
+            reopened_handle = create_file_handle(False)
+            if reopened_handle == ctypes.c_void_p(-1).value:
+                error = cast(Any, ctypes).get_last_error()
+                close_handle(handle)
+                raise OSError(0, f"Could not open {label.lower()}", str(path), error)
+            try:
+                reopened_information = inspect_handle(reopened_handle)
+                if (
+                    reopened_information.file_attributes & _FILE_ATTRIBUTE_REPARSE_POINT
+                    and (_reparse_tag(kernel32, reopened_handle) & NAME_SURROGATE)
+                ):
+                    raise UnsafePathError(f"{label} is a symlink or junction: {path}")
+                # Hydrating a data reparse point preserves its file identity.
+                # A different identity means the path changed while it was
+                # being reopened, even when the replacement target is regular.
+                initial_identity = file_identity(information)
+                reopened_identity = file_identity(reopened_information)
+                if initial_identity != reopened_identity:
+                    raise UnsafePathError(f"{label} changed while opening: {path}")
+            except BaseException:
+                close_handle(reopened_handle)
+                close_handle(handle)
+                raise
+            close_handle(handle)
+            handle = reopened_handle
     return int(handle)
 
 
@@ -148,6 +203,7 @@ def open_directory_handle(path: Path) -> int:
         _FILE_FLAG_BACKUP_SEMANTICS,
         "Directory",
         share=_FILE_SHARE_READ_WRITE,
+        follow_data_reparse=True,
     )
 
 
@@ -215,7 +271,7 @@ def close_handle(handle: int) -> None:
 
 
 def open_file(path: Path, flags: int, *, create: bool = False) -> int:
-    """Open one regular file as a descriptor without following a link.
+    """Open one regular file without following a path-redirecting link.
 
     The handle shares read, write, and delete access, so other processes can
     rename or remove the file while it is open, as POSIX allows. ``create``
@@ -231,7 +287,13 @@ def open_file(path: Path, flags: int, *, create: bool = False) -> int:
         access = _GENERIC_READ
     disposition = _CREATE_NEW if create else _OPEN_EXISTING
     handle = _open_handle(
-        path, access, 0, "File", share=_FILE_SHARE_ALL, disposition=disposition
+        path,
+        access,
+        0,
+        "File",
+        share=_FILE_SHARE_ALL,
+        disposition=disposition,
+        follow_data_reparse=True,
     )
     try:
         descriptor = cast(Any, msvcrt).open_osfhandle(

@@ -59,6 +59,17 @@ make typecheck
 make lint
 ```
 
+TypeScript helper scripts run directly with Node, for example
+`node packages/marimo-frontend/scripts/check.ts`. Node removes type
+annotations when it loads a file
+([type stripping](https://nodejs.org/api/typescript.html#type-stripping)), so
+scripts use erasable syntax: `import type` for types, `.ts` extensions in
+relative imports, and no `enum`, `namespace`, or constructor parameter
+properties. `apps/browser/scripts`, `apps/e2e/scripts`,
+`packages/marimo-frontend/scripts`, and `.github/actions/pr-validation` each
+have a `tsconfig.json` that extends `tsconfig.node.json`, so `make typecheck`
+rejects code that Node would reject at load time.
+
 Build browser entry points after changing protocol, runtime, presentation,
 Studio, browser composition, or Marimo frontend code:
 
@@ -81,10 +92,10 @@ and worker identity under `test-results/blob-<suite>/` and
 `test-results/playwright-<suite>/`. Worker restarts receive a new worker ID,
 so concurrent runs and replacement workers keep separate files and services.
 
-E2E tooling belongs to the `@marimo-studio/e2e` workspace. Its scripts run
-directly with Node as erasable TypeScript; `pnpm --filter @marimo-studio/e2e
-typecheck` checks the Node module boundary. `ServerHandle` owns each backend
-and route, and each workspace owns its services and preparation commands.
+E2E tooling belongs to the `@marimo-studio/e2e` workspace, and
+`pnpm --filter @marimo-studio/e2e typecheck` checks its scripts. `ServerHandle`
+owns each backend and route, and each workspace owns its services and
+preparation commands.
 
 E2E services use the Portless SDK through worker-owned loopback proxies. Each
 proxy and backend binds an OS-assigned port. The backend retains its socket and
@@ -164,9 +175,9 @@ Authoring uses these protocol areas:
 | View project          | View, provider, documents, diagnostics, artifact state                   |
 | Source document       | Relative path, language, access, label, and content revision             |
 | Projection targets    | Target names, ready producers, dependency closures, and ambiguity        |
-| Mount declarations    | Mount ID, source location, kind, and allowed targets                     |
+| Artifact sites        | Site ID, source location, kind, and targets                              |
 | Mounted results       | Instance ID, target, phase, runtime cell, and error                      |
-| Runtime configuration | Presentation, runtime, projection targets, mounts, and cell bindings     |
+| Runtime configuration | Presentation, runtime, projection targets, sites, and cell bindings      |
 | Development events    | Project, build, presentation, views, ready, activate, and session events |
 
 Avoid duplicating validation constants across producers and consumers. Let the

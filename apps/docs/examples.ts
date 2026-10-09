@@ -20,6 +20,11 @@ export const documentationTechnologies = {
     name: "MapLibre",
     projectUrl: "https://github.com/maplibre/maplibre-gl-js",
   },
+  katex: {
+    description: "A fast typesetting library for TeX math in web pages.",
+    name: "KaTeX",
+    projectUrl: "https://github.com/KaTeX/KaTeX",
+  },
   marimo: {
     description: "Reactive Python notebooks for data, computation, controls, and reusable results.",
     name: "marimo",
@@ -30,6 +35,12 @@ export const documentationTechnologies = {
     name: "Mosaic",
     projectUrl: "https://github.com/uwdata/mosaic",
   },
+  quarto: {
+    description:
+      "A publishing system that renders Markdown with front matter into styled documents.",
+    name: "Quarto",
+    projectUrl: "https://github.com/quarto-dev/quarto-cli",
+  },
   observablePlot: {
     description: "A concise JavaScript API for exploratory data visualization.",
     name: "Observable Plot",
@@ -39,11 +50,6 @@ export const documentationTechnologies = {
     description: "A component library for building interactive web interfaces.",
     name: "React",
     projectUrl: "https://github.com/facebook/react",
-  },
-  reactPdf: {
-    description: "A React renderer for composing PDF documents in the browser or on a server.",
-    name: "React PDF",
-    projectUrl: "https://github.com/diegomura/react-pdf",
   },
   recharts: {
     description: "A composable charting library built with React.",
@@ -64,6 +70,16 @@ export const documentationTechnologies = {
     description: "A compiler-based framework for concise reactive web interfaces.",
     name: "Svelte",
     projectUrl: "https://github.com/sveltejs/svelte",
+  },
+  pdfcn: {
+    description: "Customizable shadcn-style PDF components for React, rendered with Takumi.",
+    name: "pdfcn",
+    projectUrl: "https://github.com/shadcn-labs/pdfcn",
+  },
+  typst: {
+    description: "A markup-based typesetting system for papers, reports, and PDF documents.",
+    name: "Typst",
+    projectUrl: "https://github.com/typst/typst",
   },
   threeJs: {
     description: "A JavaScript 3D rendering library for the web.",
@@ -133,6 +149,12 @@ export const documentationExampleFamilies = [
         poster: "wide",
         technologies: [documentationTechnologies.svelte, documentationTechnologies.d3],
       },
+      {
+        key: "report",
+        label: "Report",
+        poster: "tall",
+        technologies: [documentationTechnologies.typst],
+      },
     ],
   },
   {
@@ -161,6 +183,12 @@ export const documentationExampleFamilies = [
           documentationTechnologies.shower,
           documentationTechnologies.threeJs,
         ],
+      },
+      {
+        key: "paper",
+        label: "Paper",
+        poster: "tall",
+        technologies: [documentationTechnologies.quarto, documentationTechnologies.katex],
       },
     ],
   },
@@ -194,6 +222,12 @@ export const documentationExampleFamilies = [
           documentationTechnologies.d3,
         ],
       },
+      {
+        key: "bulletin",
+        label: "Bulletin",
+        poster: "tall",
+        technologies: [documentationTechnologies.quarto, documentationTechnologies.observablePlot],
+      },
     ],
   },
   {
@@ -213,14 +247,14 @@ export const documentationExampleFamilies = [
       {
         key: "model-review",
         label: "Model review",
-        poster: "tall",
+        poster: "wide",
         technologies: [documentationTechnologies.react, documentationTechnologies.recharts],
       },
       {
         key: "pdf-report",
-        label: "PDF report",
+        label: "Field report",
         poster: "tall",
-        technologies: [documentationTechnologies.react, documentationTechnologies.reactPdf],
+        technologies: [documentationTechnologies.react, documentationTechnologies.pdfcn],
       },
     ],
   },

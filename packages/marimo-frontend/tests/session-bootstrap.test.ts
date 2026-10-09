@@ -33,12 +33,16 @@ describe("Session bootstrap", () => {
     expect(isSessionId(undefined)).toBe(false);
   });
 
-  test("loads Marimo's session after preflight", async () => {
+  test("resumes the URL session that preflight authorized", async () => {
     window.history.replaceState({}, "", "?session_id=s_abc123");
 
     expect(() => currentSessionId()).toThrow("has not been bootstrapped");
 
-    const preflight = vi.fn();
+    const authorized = "s_abc123";
+    if (!isSessionId(authorized)) {
+      throw new Error("Expected a Marimo session id");
+    }
+    const preflight = vi.fn(() => authorized);
     const sessionId = await bootstrapSession(preflight);
 
     expect(preflight).toHaveBeenCalledOnce();

@@ -7,6 +7,8 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Literal, NoReturn, cast
 
+from marimo_export.values import MAX_ACCEPTED_MEDIA_TYPES
+
 from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._artifacts.paths import normalized_artifact_path, read_secure_bytes
 from marimo_studio._artifacts.records import (
@@ -14,6 +16,7 @@ from marimo_studio._artifacts.records import (
     ArtifactManifest,
     ArtifactProfileState,
     ArtifactPublication,
+    ArtifactTemplate,
     ViewBuildPhase,
     ViewBuildState,
 )
@@ -21,15 +24,15 @@ from marimo_studio._workspace.models import RESERVED_VIEW_ASSET_NAMES
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
     BuildProfile,
-    MountDeclaration,
     ProjectDiagnostic,
     ProjectionKind,
     SourceLocation,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 from marimo_studio.view_providers._host.records import ProviderProvenance
 from marimo_studio.view_providers._targets import MAX_CELL_TARGETS
 from marimo_studio.view_providers._validation import (
-    validate_mount_declaration,
+    validate_artifact_site,
     validate_project_diagnostic,
 )
 
@@ -38,8 +41,23 @@ _PHASES = frozenset({"unbuilt", "building", "failed", "published", "stale"})
 _CONTROL_FILE_MAX_BYTES = 16 * 1024 * 1024
 
 
+class ArtifactFormatError(ConfigurationError):
+    """Stored artifact state was written in another Studio format."""
+
+
 def _invalid(message: str) -> NoReturn:
     raise ConfigurationError(message)
+
+
+def _require_schema(value: object, schema: int, label: str) -> None:
+    # Read the schema before the fields, so a record from another Studio
+    # version reads as a format change and a damaged record reads as damage.
+    found = value.get("schema") if isinstance(value, dict) else None
+    if type(found) is int and found != schema:
+        raise ArtifactFormatError(
+            f"{label} uses schema {found}, and this Studio version reads "
+            f"schema {schema}"
+        )
 
 
 def _object(value: object, fields: set[str], label: str) -> dict[str, object]:
@@ -124,27 +142,30 @@ def _projection_source_location(value: object, label: str) -> SourceLocation:
     )
 
 
-def _mount_declaration(value: object, label: str) -> MountDeclaration:
-    data = _object(value, {"id", "kind", "source", "allowedTargets"}, label)
+def _artifact_site(value: object, label: str) -> ArtifactSite:
+    data = _object(value, {"id", "kind", "source", "targets", "accept"}, label)
     kind = _string(data["kind"], f"{label} kind")
-    raw_targets = data["allowedTargets"]
-    allowed_targets = (
+    raw_targets = data["targets"]
+    targets = (
         None
         if raw_targets is None
         else _string_array(
             raw_targets,
-            f"{label} allowed targets",
+            f"{label} targets",
             maximum=MAX_CELL_TARGETS,
         )
     )
-    site = MountDeclaration(
+    site = ArtifactSite(
         id=_string(data["id"], f"{label} id"),
         kind=cast(ProjectionKind, kind),
         source=_projection_source_location(data["source"], f"{label} source"),
-        allowed_targets=allowed_targets,
+        targets=targets,
+        accept=_string_array(
+            data["accept"], f"{label} accept", maximum=MAX_ACCEPTED_MEDIA_TYPES
+        ),
     )
     try:
-        return validate_mount_declaration(site)
+        return validate_artifact_site(site)
     except ValueError as error:
         raise ConfigurationError(str(error)) from error
 
@@ -159,21 +180,14 @@ def _provider_provenance(
             "key",
             "distribution",
             "version",
-            "api_version",
             "build_fingerprint",
         },
         label,
-    )
-    api_version = _integer(
-        data["api_version"],
-        f"{label} API version",
-        minimum=1,
     )
     return ProviderProvenance(
         key=_string(data["key"], f"{label} key"),
         distribution=_string(data["distribution"], f"{label} distribution"),
         version=_string(data["version"], f"{label} version"),
-        api_version=api_version,
         build_fingerprint=_revision(
             data["build_fingerprint"],
             f"{label} build fingerprint",
@@ -202,29 +216,42 @@ def _diagnostic(value: object, label: str) -> ProjectDiagnostic:
         raise ConfigurationError(str(error)) from error
 
 
+def _file_records(files: tuple[ArtifactFile, ...]) -> list[dict[str, object]]:
+    return [
+        {"path": item.path.as_posix(), "sha256": item.sha256, "size": item.size}
+        for item in files
+    ]
+
+
 def _artifact_identity(
     document: str,
     files: tuple[ArtifactFile, ...],
-    sites: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
+    template: ArtifactTemplate | None = None,
 ) -> dict[str, object]:
-    return {
-        "schema": 1,
+    identity: dict[str, object] = {
+        "schema": 2,
         "document": document,
-        "files": [
-            {"path": item.path.as_posix(), "sha256": item.sha256, "size": item.size}
-            for item in files
-        ],
-        "mounts": [item.to_dict() for item in sites],
+        "files": _file_records(files),
+        "sites": [item.to_dict() for item in sites],
     }
+    if template is not None:
+        identity["template"] = {
+            "document": template.document.as_posix(),
+            "files": _file_records(template.files),
+            "renderer": template.renderer,
+        }
+    return identity
 
 
 def artifact_revision(
     document: str,
     files: tuple[ArtifactFile, ...],
-    sites: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
+    template: ArtifactTemplate | None = None,
 ) -> str:
     encoded = json.dumps(
-        _artifact_identity(document, files, sites),
+        _artifact_identity(document, files, sites, template),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -235,7 +262,8 @@ def artifact_revision(
 def artifact_manifest(
     document: object,
     files: tuple[ArtifactFile, ...],
-    sites: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
+    template: ArtifactTemplate | None = None,
 ) -> ArtifactManifest:
     path = normalized_artifact_path(document, "Artifact document path")
     if path not in {item.path for item in files}:
@@ -254,8 +282,12 @@ def artifact_manifest(
         _invalid("Artifact file manifest contains case-equivalent paths")
     if len({site.id for site in sites}) != len(sites):
         _invalid("Artifact projection sites must have unique IDs")
-    revision = artifact_revision(path.as_posix(), files, sites)
-    return ArtifactManifest(revision, path, files, sites)
+    if template is not None and template.document not in {
+        item.path for item in template.files
+    }:
+        _invalid("Artifact template document is not present in its file manifest")
+    revision = artifact_revision(path.as_posix(), files, sites, template)
+    return ArtifactManifest(revision, path, files, sites, template)
 
 
 def artifact_manifest_dict(manifest: ArtifactManifest) -> dict[str, object]:
@@ -263,50 +295,58 @@ def artifact_manifest_dict(manifest: ArtifactManifest) -> dict[str, object]:
         **_artifact_identity(
             manifest.document.as_posix(),
             manifest.files,
-            manifest.mounts,
+            manifest.sites,
+            manifest.template,
         ),
         "artifact_revision": manifest.artifact_revision,
     }
 
 
-def decode_artifact_manifest(value: object) -> ArtifactManifest:
-    data = _object(
-        value,
-        {
-            "schema",
-            "artifact_revision",
-            "document",
-            "files",
-            "mounts",
-        },
-        "Artifact manifest",
-    )
-    if type(data["schema"]) is not int or data["schema"] != 1:
-        _invalid("Artifact manifest uses an unsupported schema")
-    files = tuple(
+def _artifact_files(value: object, label: str) -> tuple[ArtifactFile, ...]:
+    return tuple(
         ArtifactFile(
-            normalized_artifact_path(
-                item_data["path"],
-                "Artifact file path",
-            ),
-            _sha256(item_data["sha256"], "Artifact file digest"),
-            _integer(item_data["size"], "Artifact file size"),
+            normalized_artifact_path(item_data["path"], f"{label} path"),
+            _sha256(item_data["sha256"], f"{label} digest"),
+            _integer(item_data["size"], f"{label} size"),
         )
-        for item in _array(
-            data["files"],
-            "Artifact files",
-            maximum=ARTIFACT_OUTPUT_BUDGET.max_files,
-        )
-        for item_data in [_object(item, {"path", "sha256", "size"}, "Artifact file")]
+        for item in _array(value, label, maximum=ARTIFACT_OUTPUT_BUDGET.max_files)
+        for item_data in [_object(item, {"path", "sha256", "size"}, label)]
     )
+
+
+def decode_artifact_manifest(value: object) -> ArtifactManifest:
+    _require_schema(value, 2, "Artifact manifest")
+    fields = {"schema", "artifact_revision", "document", "files", "sites"}
+    if isinstance(value, dict) and "template" in value:
+        fields.add("template")
+    data = _object(value, fields, "Artifact manifest")
+    if type(data["schema"]) is not int:
+        _invalid("Artifact manifest schema is invalid")
+    files = _artifact_files(data["files"], "Artifact files")
     sites = tuple(
-        _mount_declaration(item, "Artifact projection site")
-        for item in _array(data["mounts"], "Artifact projection sites", maximum=512)
+        _artifact_site(item, "Artifact projection site")
+        for item in _array(data["sites"], "Artifact projection sites", maximum=512)
     )
+    template = None
+    if "template" in data:
+        template_data = _object(
+            data["template"],
+            {"document", "files", "renderer"},
+            "Artifact template",
+        )
+        template = ArtifactTemplate(
+            normalized_artifact_path(
+                template_data["document"],
+                "Artifact template document",
+            ),
+            _artifact_files(template_data["files"], "Artifact template files"),
+            _string(template_data["renderer"], "Artifact template renderer"),
+        )
     manifest = artifact_manifest(
         data["document"],
         files,
         sites,
+        template,
     )
     if (
         _revision(data["artifact_revision"], "Artifact revision")
@@ -370,7 +410,7 @@ def profile_state(
 
 def profile_state_dict(state: ArtifactProfileState) -> dict[str, object]:
     return {
-        "schema": 1,
+        "schema": 2,
         "profile": state.profile,
         "published": (
             {
@@ -396,14 +436,11 @@ def profile_state_dict(state: ArtifactProfileState) -> dict[str, object]:
 def decode_profile_state(
     value: object, expected_profile: BuildProfile
 ) -> ArtifactProfileState:
+    _require_schema(value, 2, "Artifact profile")
     data = _object(
         value, {"schema", "profile", "published", "build"}, "Artifact profile"
     )
-    if (
-        type(data["schema"]) is not int
-        or data["schema"] != 1
-        or data["profile"] != expected_profile
-    ):
+    if type(data["schema"]) is not int or data["profile"] != expected_profile:
         _invalid("Artifact profile identity is invalid")
     raw_build = _object(
         data["build"],

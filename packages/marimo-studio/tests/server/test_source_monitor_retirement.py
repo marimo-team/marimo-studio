@@ -58,8 +58,8 @@ def test_committed_retirement_evicts_monitor_before_provider_recreation(
                 )
             )
 
-        def provenance(self, inspection: Any) -> Any:
-            return builtin.provenance(inspection)
+        def provenance(self) -> Any:
+            return builtin.provenance()
 
     old_provider = Provider()
     new_provider = Provider()

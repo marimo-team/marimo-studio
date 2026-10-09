@@ -75,12 +75,16 @@ export const createViewRequestSchema = z
   })
   .strict();
 
+/** Files the notebook host saves when the session ends, or `null` outside such a host. */
+export const hostPersistenceSchema = z.enum(["workspace", "source", "none"]).nullable();
+
 const viewListFields = {
   schema: z.literal(1),
   generation: ownerGenerationSchema,
   default_view: viewNameSchema,
   default_starter: starterIdSchema,
   view_root: z.string().min(1),
+  persistence: hostPersistenceSchema,
   views: z.array(viewSummarySchema),
   starters: z.array(starterSchema),
 };
@@ -160,6 +164,7 @@ export const deletedViewSchema = z
     }
   });
 
+export type HostPersistence = z.infer<typeof hostPersistenceSchema>;
 export type ViewList = z.infer<typeof viewListSchema>;
 export type CreatedView = z.infer<typeof createdViewSchema>;
 export type CreateViewRequest = z.infer<typeof createViewRequestSchema>;

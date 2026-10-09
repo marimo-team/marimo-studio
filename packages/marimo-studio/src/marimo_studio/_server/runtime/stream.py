@@ -17,7 +17,7 @@ from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgr
 from marimo_studio._server.streaming import OwnedStreamingResponse
 from marimo_studio.errors import MarimoStudioError
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("marimo.studio")
 RUNTIME_STREAM_MEDIA_TYPE = "application/x-ndjson"
 
 

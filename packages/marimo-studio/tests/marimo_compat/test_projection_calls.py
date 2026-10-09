@@ -22,7 +22,9 @@ from marimo_studio._compat.kernel_values.query_authorization import (
 from marimo_studio._compat.kernel_values.session import (
     _FunctionResultWaiter,
     _parse_result,
+    wait_for_session_barrier,
 )
+from marimo_studio._projections.runtime_records import VALUE_LIMITS, ValueLimits
 from marimo_studio._server.presentation.ports import (
     ProjectionUnavailable,
     QuerySyncUnavailable,
@@ -118,29 +120,85 @@ def test_kernel_value_result_parser_rejects_invalid_arrow_descriptors(
     assert raised.value.code == "invalid-value-response"
 
 
-def test_kernel_value_result_parser_enforces_request_ownership_and_limits() -> None:
+def _arrow_descriptor(byte_length: int) -> dict[str, object]:
+    return {
+        "codec": "arrow-ipc-v1",
+        "fingerprint": "sha256:" + "a" * 64,
+        "dataUrl": "./@file/frame.arrow",
+        "byteLength": byte_length,
+    }
+
+
+def test_kernel_value_result_parser_bounds_arrow_values_per_value_and_per_read() -> (
+    None
+):
+    parsed = _parse_result(
+        {
+            "values": {
+                "first": _arrow_descriptor(64 * 1024 * 1024),
+                "second": _arrow_descriptor(64 * 1024 * 1024),
+            },
+            "errors": {},
+        }
+    )
+
+    assert set(parsed.values) == {"first", "second"}
+    with pytest.raises(ProjectionUnavailable, match="invalid encoded value"):
+        _parse_result(
+            {"values": {"frame": _arrow_descriptor(64 * 1024 * 1024 + 1)}, "errors": {}}
+        )
+    with pytest.raises(ProjectionUnavailable, match="aggregate byte limit"):
+        _parse_result(
+            {
+                "values": {
+                    "first": _arrow_descriptor(64 * 1024 * 1024),
+                    "second": _arrow_descriptor(64 * 1024 * 1024),
+                    "third": _arrow_descriptor(1),
+                },
+                "errors": {},
+            }
+        )
+
+
+def test_kernel_value_result_parser_caps_only_json_for_a_caller_limit() -> None:
+    limits = VALUE_LIMITS.capped(32)
+
     with pytest.raises(ProjectionUnavailable, match="invalid encoded value"):
         _parse_result(
             {"values": {"large": _encoded_json("x" * 64)}, "errors": {}},
-            max_value_bytes=32,
+            limits=limits,
+        )
+    parsed = _parse_result(
+        {"values": {"frame": _arrow_descriptor(2_000_000)}, "errors": {}},
+        limits=limits,
+    )
+    assert set(parsed.values) == {"frame"}
+
+
+def test_kernel_value_result_parser_enforces_request_ownership_and_limits() -> None:
+    with pytest.raises(ProjectionUnavailable, match="invalid encoded value"):
+        _parse_result(
+            {"values": {"large": _encoded_json("x" * 1_000_000)}, "errors": {}}
         )
 
     with pytest.raises(ProjectionUnavailable, match="aggregate byte limit"):
         _parse_result(
             {
                 "values": {
-                    "first": _encoded_json("x" * 20),
-                    "second": _encoded_json("y" * 20),
+                    "first": _encoded_json("x" * 600_000),
+                    "second": _encoded_json("y" * 600_000),
                 },
                 "errors": {},
-            },
-            max_value_bytes=30,
+            }
         )
 
     with pytest.raises(ProjectionUnavailable, match="exceeds its byte limit"):
         _parse_result(
-            {"values": {"small": _encoded_json(1)}, "errors": {}},
-            max_value_bytes=100,
+            {
+                "values": {"text": _encoded_json("x" * 90)},
+                "errors": {"other": {"code": "failed", "message": "y" * 2_000}},
+            },
+            limits=ValueLimits(json_read_bytes=100, arrow_read_bytes=3),
         )
 
     with pytest.raises(ProjectionUnavailable, match="authorized request"):
@@ -425,6 +483,64 @@ def test_output_timeout_is_terminal_after_one_kernel_dispatch() -> None:
     assert raised.value.transient is False
 
 
+def test_timed_out_session_barriers_retain_capacity_until_kernel_completion() -> None:
+    from marimo._messaging.notification import (
+        FunctionCallResultNotification,
+        HumanReadableStatus,
+    )
+    from marimo._messaging.serde import serialize_kernel_message
+
+    consumer = object()
+
+    class Session:
+        def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, "editor")
+            self.calls: list[tuple[Any, Any]] = []
+            self.waiter: Any = None
+
+        @contextmanager
+        def scoped(self, waiter: object):
+            self.waiter = waiter
+            yield
+
+        def put_control_request(self, request: object, **__: object) -> None:
+            self.calls.append((request, self.waiter))
+
+    session = Session()
+
+    async def exercise() -> None:
+        for _index in range(3):
+            with pytest.raises(ProjectionUnavailable) as raised:
+                await wait_for_session_barrier(
+                    session,
+                    consumer_id="editor",
+                    timeout=0,
+                )
+            assert raised.value.code == "read-timeout"
+        state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)
+        assert state is not None
+        assert state.active == 3
+        for request, waiter in session.calls:
+            waiter.on_notification_sent(
+                session,
+                serialize_kernel_message(
+                    FunctionCallResultNotification(
+                        function_call_id=request.function_call_id,
+                        return_value={"status": "settled"},
+                        status=HumanReadableStatus(code="ok"),
+                        found=True,
+                    )
+                ),
+            )
+        await asyncio.sleep(0)
+        assert state.active == 0
+
+    asyncio.run(exercise())
+    state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)
+    assert state is not None
+    assert state.active == 0
+
+
 def test_timed_out_projection_calls_cannot_grow_the_session_backlog(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -654,7 +770,6 @@ def test_output_consumer_detach_finishes_read_and_releases_owners() -> None:
     assert cleanup.args["projections"] == []
     assert cleanup.args["active_projections"] == []
     assert cleanup.args["consumer_id"] == "preview-a"
-    assert cleanup.args["max_output_bytes"] == 1_000_000
     assert isinstance(cleanup.args["authorization"], str)
     assert origin is None
     assert consumer.detached is True
@@ -782,7 +897,6 @@ def test_value_detach_cancels_the_read_and_queues_resource_cleanup() -> None:
     assert cleanup.args["revision"] == "revision-1"
     assert cleanup.args["projections"] == []
     assert cleanup.args["consumer_id"] == "preview-value"
-    assert cleanup.args["max_value_bytes"] == 1_000_000
     assert isinstance(cleanup.args["authorization"], str)
     assert origin is None
     assert consumer.detached is True

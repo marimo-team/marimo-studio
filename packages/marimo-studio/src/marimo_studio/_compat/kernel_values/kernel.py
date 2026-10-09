@@ -4,18 +4,24 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from types import TracebackType
-from typing import Any
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 from marimo_export.integration import is_owned_session, keep_cached_cells_compatible
 from marimo_export.observations import ObservationLedger, install_observation_ledger
+from marimo_export.values import ValueSelector
 
+from marimo_studio._compat.execution_markers import (
+    is_execution_command,
+    is_observation_command,
+    make_marker,
+)
 from marimo_studio._compat.kernel_values.authorization import (
     STALE_PROJECTION_BINDING_MESSAGE,
     AuthorizedProjections,
@@ -27,16 +33,14 @@ from marimo_studio._compat.kernel_values.authorization import (
 from marimo_studio._compat.kernel_values.dependencies import (
     current_dependency_closure,
 )
-from marimo_studio._compat.kernel_values.lens import (
-    LensMountPolicy,
-    lens_overlay,
-)
+from marimo_studio._compat.kernel_values.lens import lens_overlay
 from marimo_studio._compat.kernel_values.models import (
-    DEFAULT_MAX_VALUE_BYTES,
+    BARRIER_FUNCTION_NAME,
     FUNCTION_NAME,
     NAMESPACE,
     OUTPUT_FUNCTION_NAME,
     QUERY_FUNCTION_NAME,
+    ExecutionBarrierArgs,
     ReadValuesArgs,
     RenderValuesArgs,
     SyncQueryArgs,
@@ -51,28 +55,84 @@ from marimo_studio._compat.kernel_values.selectors import (
 )
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS, QUERY_OPERATION_QUERY_PARAM
 from marimo_studio._notebook.cell_refs import cell_refs
+from marimo_studio._projections.resolution import MAX_UNIQUE_OUTPUT_TARGETS
 from marimo_studio._projections.runtime_records import (
+    MAX_OUTPUT_BYTES,
+    VALUE_LIMITS,
     OutputRenderResult,
     ValueReadError,
     ValueReadResult,
 )
-from marimo_studio._projections.values import MAX_OUTPUT_SELECTORS
 from marimo_studio._server.presentation.ports import STALE_PROJECTION_BINDING_CODE
 from marimo_studio._server.presentation.query_state import (
     query_fingerprint,
     valid_query_operation_id,
 )
 from marimo_studio._workspace.config import discover_studio_definition
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
 
 _PROBE_LEASE_QUERY_PARAM = "_marimo_studio_probe_lease"
 _MAX_QUERY_OPERATIONS = 256
 
 
-def _current_projection_specs(
+def _install_execution_markers(context: Any) -> None:
+    """Expose command admission and completion through the kernel stream.
+
+    Session events observe only host-originated requests. Kernel callbacks can
+    enqueue execution directly, so the marker is emitted when the kernel
+    begins handling the command. That boundary sees both host and kernel
+    requests after Marimo's queue has applied its batching rules. The marker
+    uses ``CompletedRunNotification`` because it is already carried by the
+    kernel stream. The Studio session consumes these private packets before
+    Marimo broadcasts them to consumers.
+    """
+    if is_owned_session():
+        return
+    kernel = context._kernel
+    if getattr(kernel, "_studio_execution_markers_installed", False):
+        return
+    original_handle = getattr(kernel, "handle_message", None)
+    if not callable(original_handle):
+        return
+    handle_message = cast(Callable[[Any], Awaitable[None]], original_handle)
+    from marimo._messaging.notification import CompletedRunNotification
+    from marimo._messaging.notification_utils import broadcast_notification
+
+    def emit(
+        phase: Literal["start", "done", "failed"],
+        name: str,
+        token: str,
+    ) -> None:
+        broadcast_notification(
+            CompletedRunNotification(run_id=make_marker(phase, name, token)),
+            context.stream,
+        )
+
+    async def handle(request: Any) -> None:
+        name = type(request).__name__
+        if not is_execution_command(name):
+            await handle_message(request)
+            return
+        token = uuid4().hex
+        if is_observation_command(request):
+            token = f"observation:{token}"
+        emit("start", name, token)
+        try:
+            await handle_message(request)
+        except BaseException:
+            emit("failed", name, token)
+            raise
+        else:
+            emit("done", name, token)
+
+    kernel.handle_message = handle
+    kernel._studio_execution_markers_installed = True
+
+
+def _current_selectors(
     context: Any,
     authorized: AuthorizedProjections,
-) -> dict[str, tuple[str, tuple[tuple[str, str | int], ...]]]:
+) -> dict[str, ValueSelector]:
     graph = context._kernel.graph
     current_cells = tuple(
         RuntimeCellBinding(reference, str(cell_id))
@@ -112,10 +172,9 @@ def _current_projection_specs(
             ),
             None,
         )
-        variable = authorized.specifications[target][0]
-        if cell is None or variable not in cell.defs:
+        if cell is None or authorized.selectors[target].root not in cell.defs:
             raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
-    return authorized.specifications
+    return authorized.selectors
 
 
 @dataclass(frozen=True)
@@ -268,7 +327,12 @@ def _is_studio_notebook(filename: Path | None) -> bool:
         return False
     try:
         return discover_studio_definition(filename) is not None
-    except (OSError, UnicodeError, ConfigurationError):
+    except (
+        OSError,
+        UnicodeError,
+        ConfigurationError,
+        WorkspaceGenerationConflictError,
+    ):
         return False
 
 
@@ -276,7 +340,6 @@ class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
-        self._lens_mount: LensMountPolicy | None = None
         self._value_encoder: ValueEncoder | None = None
         self._query_generations: dict[str, tuple[int, int]] = {}
         self._query_operations: dict[tuple[str, str], tuple[str, tuple[int, int]]] = {}
@@ -299,6 +362,8 @@ class _KernelBridgeLifespan:
         configured = _is_studio_notebook(filename)
         if inspection is None and not configured:
             return False
+        if inspection is None:
+            _install_execution_markers(context)
         from marimo._session.model import SessionMode
 
         edit_preview = (
@@ -369,6 +434,14 @@ class _KernelBridgeLifespan:
         context = get_context()
         if not isinstance(context, KernelRuntimeContext):
             return
+        query_params = getattr(context, "query_params", None)
+        get_query_param = getattr(query_params, "get", None)
+        is_probe = (
+            callable(get_query_param)
+            and get_query_param(_PROBE_LEASE_QUERY_PARAM) is not None
+        )
+        if _is_studio_notebook(_kernel_filename(context)) and not is_probe:
+            _install_execution_markers(context)
         self._entered_lifespan = _guard_entered_lifespan(context, self._resume)
         try:
             self._enter(
@@ -402,13 +475,6 @@ class _KernelBridgeLifespan:
         from marimo._messaging.notification_utils import broadcast_notification
 
         filename = filename or _kernel_filename(context)
-        if self._lens_mount is None and not is_owned_session():
-            lens_mount = LensMountPolicy(
-                context,
-                lambda: _is_studio_notebook(_kernel_filename(context)),
-            )
-            lens_mount.open()
-            self._lens_mount = lens_mount
         inspection = (
             _claim_probe_selector_lease(context, filename)
             if filename is not None
@@ -434,13 +500,11 @@ class _KernelBridgeLifespan:
                     ),
                 )
                 if inspection is not None:
-                    specifications = authorized.specifications
-                    active_specifications = active_authorized.specifications
+                    selectors = authorized.selectors
+                    active_selectors = active_authorized.selectors
                 else:
-                    specifications = _current_projection_specs(context, authorized)
-                    active_specifications = _current_projection_specs(
-                        context, active_authorized
-                    )
+                    selectors = _current_selectors(context, authorized)
+                    active_selectors = _current_selectors(context, active_authorized)
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return ValueReadResult(
@@ -467,24 +531,21 @@ class _KernelBridgeLifespan:
                             f"Selector {selector!r} is not present in a "
                             "configured view.",
                         )
-                        for selector in dict.fromkeys(
-                            (*specifications, *active_specifications)
-                        )
+                        for selector in dict.fromkeys((*selectors, *active_selectors))
                     },
                 ).to_dict()
-            limit = max(1, min(args.max_value_bytes, DEFAULT_MAX_VALUE_BYTES))
             value_encoder = self._value_encoder
             assert value_encoder is not None
-            if not specifications and not active_specifications:
+            if not selectors and not active_selectors:
                 value_encoder.release_consumer(args.consumer_id)
                 return ValueReadResult(values={}, errors={}).to_dict()
             kernel = context._kernel
             with kernel.lock_globals():
                 result = _read_values(
                     kernel.globals,
-                    specifications,
-                    active_specifications,
-                    max_value_bytes=limit,
+                    selectors,
+                    active_selectors,
+                    limits=VALUE_LIMITS.capped(args.max_json_bytes),
                     consumer_id=args.consumer_id,
                     revision=args.revision,
                     encoder=value_encoder,
@@ -499,6 +560,20 @@ class _KernelBridgeLifespan:
         context.function_registry.register(NAMESPACE, function)
         self._registry = context.function_registry
 
+        def execution_barrier(_args: ExecutionBarrierArgs) -> dict[str, str]:
+            # Reaching this function means the native control queue has
+            # crossed the request boundary. Keep it separate from value reads
+            # so a snapshot never releases the browser's Arrow resources.
+            return {"status": "settled"}
+
+        barrier_function = function_type(
+            BARRIER_FUNCTION_NAME,
+            ExecutionBarrierArgs,
+            execution_barrier,
+        )
+        barrier_function.cell_id = cell_id_type("__marimo_studio_barrier__")
+        context.function_registry.register(NAMESPACE, barrier_function)
+
         def render_outputs(args: RenderValuesArgs) -> dict[str, object]:
             try:
                 authorized, active_authorized = verify_output_arguments(
@@ -512,13 +587,11 @@ class _KernelBridgeLifespan:
                     ),
                 )
                 if inspection is not None:
-                    specifications = authorized.specifications
-                    active_specifications = active_authorized.specifications
+                    selectors = authorized.selectors
+                    active_selectors = active_authorized.selectors
                 else:
-                    specifications = _current_projection_specs(context, authorized)
-                    active_specifications = _current_projection_specs(
-                        context, active_authorized
-                    )
+                    selectors = _current_selectors(context, authorized)
+                    active_selectors = _current_selectors(context, active_authorized)
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return OutputRenderResult(
@@ -535,9 +608,7 @@ class _KernelBridgeLifespan:
                     },
                 ).to_dict()
             if not self._activate(context, filename, inspection):
-                requested = tuple(
-                    dict.fromkeys((*specifications, *active_specifications))
-                )
+                requested = tuple(dict.fromkeys((*selectors, *active_selectors)))
                 return OutputRenderResult(
                     outputs={},
                     errors={
@@ -549,11 +620,9 @@ class _KernelBridgeLifespan:
                         for selector in requested
                     },
                 ).to_dict()
-            selectors = tuple(specifications)
-            active_selectors = tuple(active_specifications)
             if (
-                len(selectors) > MAX_OUTPUT_SELECTORS
-                or len(active_selectors) > MAX_OUTPUT_SELECTORS
+                len(selectors) > MAX_UNIQUE_OUTPUT_TARGETS
+                or len(active_selectors) > MAX_UNIQUE_OUTPUT_TARGETS
             ):
                 return OutputRenderResult(
                     outputs={},
@@ -561,11 +630,11 @@ class _KernelBridgeLifespan:
                         "*": ValueReadError(
                             "too-many-selectors",
                             "An output request may contain at most "
-                            f"{MAX_OUTPUT_SELECTORS} selectors.",
+                            f"{MAX_UNIQUE_OUTPUT_TARGETS} selectors.",
                         )
                     },
                 ).to_dict()
-            limit = max(1, min(args.max_output_bytes, DEFAULT_MAX_VALUE_BYTES))
+            limit = max(1, min(args.max_output_bytes, MAX_OUTPUT_BYTES))
             kernel = context._kernel
             output_renderer = self._output_renderer
             assert output_renderer is not None
@@ -574,7 +643,7 @@ class _KernelBridgeLifespan:
                     kernel.globals,
                     selectors,
                     active_selectors,
-                    set(active_specifications),
+                    authorized.accept,
                     consumer_id=args.consumer_id,
                     max_output_bytes=limit,
                 )
@@ -712,13 +781,6 @@ class _KernelBridgeLifespan:
 
     def _close(self) -> None:
         failure: BaseException | None = None
-        if self._lens_mount is not None:
-            try:
-                self._lens_mount.close()
-            except BaseException as error:
-                failure = error
-            else:
-                self._lens_mount = None
         if self._value_encoder is not None:
             try:
                 self._value_encoder.close()

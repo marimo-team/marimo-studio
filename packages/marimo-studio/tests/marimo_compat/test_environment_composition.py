@@ -17,15 +17,15 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import ConfigurationError, DependencyError
 from marimo_studio.view_providers import ProviderAvailability
-from marimo_studio.view_providers._bundled import _deno
-from marimo_studio.view_providers._bundled.deno_react import (
+from marimo_studio.view_providers._builtin import _deno
+from marimo_studio.view_providers._builtin.deno_react import (
     provider as react_provider,
 )
-from marimo_studio.view_providers._bundled.deno_svelte import (
+from marimo_studio.view_providers._builtin.deno_svelte import (
     provider as svelte_provider,
 )
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_REQUIREMENTS,
+    BUILTIN_PROVIDER_REQUIREMENTS,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
@@ -96,7 +96,7 @@ build-backend = "uv_build"
                 candidate("report", report, distribution="example-suite"),
                 candidate("web", web, distribution="example-suite"),
             ),
-            BUNDLED_PROVIDER_REQUIREMENTS,
+            BUILTIN_PROVIDER_REQUIREMENTS,
         ),
     )
     prepare_view(
@@ -131,9 +131,9 @@ build-backend = "uv_build"
             "python",
             "-c",
             "from importlib.metadata import version; import example_suite; "
-            "from marimo_studio.view_providers._bundled.deno_react import "
+            "from marimo_studio.view_providers._builtin.deno_react import "
             "provider as react; "
-            "from marimo_studio.view_providers._bundled.deno_svelte import "
+            "from marimo_studio.view_providers._builtin.deno_svelte import "
             "provider as svelte; "
             "print(':'.join((version('marimo-studio'), version('deno'), "
             "version('example-suite'), example_suite.VALUE, react.info.title, "

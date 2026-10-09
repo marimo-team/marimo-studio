@@ -213,6 +213,9 @@ const markLoaded = (): void => {
   gap: 1.5rem;
   align-items: center;
   min-width: 0;
+  /* Room for the tabs' focus ring, which the scrolling nav would clip. */
+  padding: 5px;
+  margin-inline: -5px;
   overflow-x: auto;
   scrollbar-width: none;
 }

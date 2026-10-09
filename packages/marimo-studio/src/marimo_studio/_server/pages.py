@@ -42,13 +42,12 @@ from marimo_studio._server.headers import DOCUMENT_HEADERS, edit_document_header
 from marimo_studio._server.ports import SessionReplay, SessionState
 from marimo_studio._server.presentation.capability import (
     PRESENTATION_PATH,
-    PRESENTATION_RESPONSE_HEADERS,
     presentation_renewal_path,
+    presentation_response_headers,
     presentation_revision_path,
     presentation_storage_scope,
 )
 from marimo_studio._server.presentation.isolation import (
-    PRESENTATION_SANDBOX,
     isolated_presentation_document,
     isolation_content_security_policy,
 )
@@ -109,6 +108,21 @@ def page_redirect(request: Request, relative: str, page: bool) -> Response | Non
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
 
+def run_view_redirect(request: Request, target: str) -> Response:
+    """Redirect a workspace path to the view that run mode serves at `target`.
+
+    Marimo's authentication sets its session cookie on this response, so the
+    redirect drops `access_token` from the query.
+    """
+    query = [
+        (key, value)
+        for key, value in request.query_params.multi_items()
+        if key != "access_token"
+    ]
+    reference = request_reference(request, with_query(target, query))
+    return RedirectResponse(reference, status_code=307, headers=DOCUMENT_HEADERS)
+
+
 def studio_landing_redirect(
     request: Request,
     view_name: str,
@@ -156,6 +170,7 @@ async def document_response(
     runtimes: RuntimeRegistry,
     marimo_version: str,
     presentation_session: PresentationSession,
+    security_policy: SecurityPolicy,
     trusted_shell: bool = True,
 ) -> Response:
     """Render one custom view document against the active Marimo server."""
@@ -187,6 +202,9 @@ async def document_response(
         request.query_params.get("runtime"),
     )
     runtime_explicit = request.query_params.get("runtime") is not None
+    same_origin_server = (
+        security_policy.trusted_server_runtime and runtime.id == "server"
+    )
     if expected_revisions and snapshot.revision != expected_revisions[0]:
         raise AgentRequestError(
             "presentation-revision-mismatch",
@@ -278,6 +296,15 @@ async def document_response(
         trusted_shell
         and not unframed
         and not (context.mode == "edit" and studio_owned_request(request))
+        and not same_origin_server
+    )
+    # A host frames run-mode views as its app pages. Its trusted head, such as
+    # marimohub's notebook bridge, runs in the top-level view document as it
+    # would on marimo's own page. Opaque child and preview documents skip it.
+    host_head = (
+        context.trusted_html_head
+        if context.mode == "run" and trusted_shell and not unframed
+        else None
     )
     if isolated:
         nonce = secrets.token_urlsafe(18)
@@ -327,13 +354,15 @@ async def document_response(
                 runtime_explicit=runtime_explicit,
                 title_text=f"{snapshot.view_name} view",
                 nonce=nonce,
+                host_head=host_head,
             ),
             headers=shell_headers,
         )
     runtime_headers = dict(headers)
-    if context.mode == "edit" or unframed:
-        runtime_headers.update(PRESENTATION_RESPONSE_HEADERS)
-        runtime_headers["Content-Security-Policy"] = f"sandbox {PRESENTATION_SANDBOX}"
+    if context.mode == "edit" or unframed or not trusted_shell:
+        runtime_headers.update(
+            presentation_response_headers(sandbox=not same_origin_server)
+        )
     return HTMLResponse(
         render_presentation_document(
             snapshot,
@@ -355,6 +384,7 @@ async def document_response(
             ),
             editor_session_id=request.query_params.get(EDITOR_SESSION_QUERY_PARAM),
             lifecycle_id=frame_identity[1] if frame_identity is not None else None,
+            host_head=host_head,
         ),
         headers=runtime_headers,
     )
@@ -394,6 +424,7 @@ def studio_response(
             state="ready",
             config=studio,
             selected=selected,
+            trusted_server_runtime=security_policy.trusted_server_runtime,
         ),
         headers=edit_document_headers(security_policy),
     )
@@ -428,6 +459,7 @@ def initialization_response(
             state="needs-view",
             default_view=default_view,
             generation=generation,
+            trusted_server_runtime=security_policy.trusted_server_runtime,
         ),
         headers=edit_document_headers(security_policy),
     )
@@ -478,6 +510,7 @@ def unconfigured_response(
             native_session_id,
             request_path=request_path(request),
             state="unconfigured",
+            trusted_server_runtime=security_policy.trusted_server_runtime,
         ),
         headers=edit_document_headers(security_policy),
     )
@@ -557,7 +590,10 @@ def error_response(
         edit_document_headers(security_policy) if edit_mode else DOCUMENT_HEADERS
     )
     headers = {**document_headers, "Marimo-Studio-Error": code}
-    if hint:
+    # New HTTP fields carry visible ASCII only (RFC 9110, section 5.5), and
+    # clients decode other header bytes inconsistently. The body always carries
+    # the hint, including one that names a non-ASCII notebook file.
+    if hint and hint.isascii():
         headers["Marimo-Studio-Hint"] = hint
     if transient:
         headers.update(

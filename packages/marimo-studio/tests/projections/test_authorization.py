@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import PurePosixPath
 from types import SimpleNamespace
 from typing import Any, Literal
 
 import pytest
+from marimo_export.values import ValueSelector
 
 from marimo_studio._compat.kernel_values.authorization import (
     BoundProjection,
@@ -27,20 +29,18 @@ from marimo_studio._compat.kernel_values.authorization_key import (
     verify_kernel_authorization,
 )
 from marimo_studio._compat.kernel_values.host import _bind_live_projections
-from marimo_studio._compat.kernel_values.kernel import _current_projection_specs
+from marimo_studio._compat.kernel_values.kernel import _current_selectors
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef
 from marimo_studio._projections.resolution import (
     ProjectionRequest,
     ResolvedProjection,
 )
-from marimo_studio._projections.values import parse_value_reference
 from marimo_studio._server.presentation.ports import ProjectionUnavailable
 from marimo_studio.view_providers import SourceLocation
 
 
 def _projection() -> ResolvedProjection:
-    reference = parse_value_reference("summary.total")
     producer = CellRef("0" * 64, "1" * 64)
     return ResolvedProjection(
         request=ProjectionRequest(
@@ -51,8 +51,7 @@ def _projection() -> ResolvedProjection:
         kind="value",
         source=SourceLocation(PurePosixPath("src/App.tsx"), 2, 3),
         producer=producer,
-        variable=reference.variable,
-        selector_path=reference.path,
+        selector=ValueSelector("summary.total"),
         dependency_closure=(producer,),
     )
 
@@ -63,7 +62,6 @@ def _projection_with_upstream(
     upstream_code = "source = 1"
     producer_code = "summary = {'total': source}"
     upstream, producer = cell_refs((upstream_code, producer_code))
-    reference = parse_value_reference("summary.total")
     projection = ResolvedProjection(
         request=ProjectionRequest(
             site_id=f"site:{kind}:summary",
@@ -73,8 +71,7 @@ def _projection_with_upstream(
         kind=kind,
         source=SourceLocation(PurePosixPath("src/App.tsx"), 2, 3),
         producer=producer,
-        variable=None if kind == "cell" else reference.variable,
-        selector_path=() if kind == "cell" else reference.path,
+        selector=None if kind == "cell" else ValueSelector("summary.total"),
         dependency_closure=(upstream, producer),
     )
     return projection, (
@@ -129,7 +126,6 @@ def _projection_with_unresolved_reference(
 ) -> tuple[ResolvedProjection, str]:
     producer_code = "summary = missing"
     producer = cell_refs((producer_code,))[0]
-    reference = parse_value_reference("summary")
     return (
         ResolvedProjection(
             request=ProjectionRequest(
@@ -140,8 +136,7 @@ def _projection_with_unresolved_reference(
             kind=kind,
             source=SourceLocation(PurePosixPath("src/App.tsx"), 2, 3),
             producer=producer,
-            variable=None if kind == "cell" else reference.variable,
-            selector_path=(),
+            selector=None if kind == "cell" else ValueSelector("summary"),
             dependency_closure=(producer,),
         ),
         producer_code,
@@ -234,7 +229,9 @@ authorized = verify_value_arguments(
 )
 json.dump(
     {
-        "specifications": authorized.specifications,
+        "selectors": {
+            target: selector.source for target, selector in authorized.selectors.items()
+        },
         "bindings": {
             target: [str(binding.producer), binding.runtime_cell_id]
             for target, binding in authorized.bindings.items()
@@ -251,9 +248,40 @@ json.dump(
     )
     assert child.returncode == 0, child.stderr
     assert json.loads(child.stdout) == {
-        "specifications": {"summary.total": ["summary", [["attribute", "total"]]]},
+        "selectors": {"summary.total": "summary.total"},
         "bindings": {"summary.total": [str(_projection().producer), "runtime-summary"]},
     }
+
+
+def test_output_accept_lists_are_covered_by_the_server_signature() -> None:
+    bound = _bound_with_upstream("output")
+    accepting = BoundProjection(
+        replace(bound.projection, accept=("image/svg+xml", "image/png")),
+        bound.dependency_bindings,
+    )
+    arguments = authorized_output_arguments(
+        "revision-1", (accepting,), (accepting,), "preview-a"
+    )
+    tampered = json.loads(json.dumps(arguments))
+    tampered["projections"][0]["accept"] = ["text/html"]
+
+    authorized, _active = verify_output_arguments(
+        revision=arguments["revision"],
+        projections=arguments["projections"],
+        active_projections=arguments["active_projections"],
+        consumer_id=arguments["consumer_id"],
+        authorization=arguments["authorization"],
+    )
+    with pytest.raises(ProjectionAuthorizationError, match="authorization"):
+        verify_output_arguments(
+            revision=tampered["revision"],
+            projections=tampered["projections"],
+            active_projections=tampered["active_projections"],
+            consumer_id=tampered["consumer_id"],
+            authorization=tampered["authorization"],
+        )
+
+    assert authorized.accept == {"summary.total": ("image/svg+xml", "image/png")}
 
 
 def test_dependency_closure_is_covered_by_the_server_signature() -> None:
@@ -397,22 +425,16 @@ def test_kernel_accepts_a_server_authorized_edit_with_the_same_closure(
     context = SimpleNamespace(_kernel=SimpleNamespace(graph=graph))
     authorized = _verify_bound_projection(kind, bound, revision="revision-1")
 
-    assert _current_projection_specs(context, authorized)["summary.total"][0] == (
-        "summary"
-    )
+    assert _current_selectors(context, authorized)["summary.total"].root == "summary"
     cells["runtime-upstream"].code = "source = 2"
-    assert _current_projection_specs(context, authorized)["summary.total"][0] == (
-        "summary"
-    )
+    assert _current_selectors(context, authorized)["summary.total"].root == "summary"
 
     cells["runtime-upstream"].code = "source = 1"
     cells["runtime-unrelated"] = SimpleNamespace(
         code="unrelated = 2",
         defs={"unrelated"},
     )
-    assert _current_projection_specs(context, authorized)["summary.total"][0] == (
-        "summary"
-    )
+    assert _current_selectors(context, authorized)["summary.total"].root == "summary"
 
 
 @pytest.mark.parametrize("kind", ["value", "output"])
@@ -444,9 +466,7 @@ def test_kernel_accepts_a_live_closure_after_graph_reinsertion(
     )
     authorized = _verify_bound_projection(kind, rebound, revision="revision-2")
 
-    assert _current_projection_specs(context, authorized)["summary.total"][0] == (
-        "summary"
-    )
+    assert _current_selectors(context, authorized)["summary.total"].root == "summary"
 
 
 @pytest.mark.parametrize("kind", ["value", "output"])
@@ -463,11 +483,11 @@ def test_kernel_rejects_a_new_producer_after_capability_binding(
     context = SimpleNamespace(_kernel=SimpleNamespace(graph=graph))
     authorized = _verify_bound_projection(kind, bound, revision="revision-1")
 
-    assert _current_projection_specs(context, authorized)["summary"][0] == "summary"
+    assert _current_selectors(context, authorized)["summary"].root == "summary"
     cells["runtime-missing"] = SimpleNamespace(
         code="missing = 2",
         defs={"missing"},
     )
     graph.parents["runtime-summary"] = {"runtime-missing"}
     with pytest.raises(ProjectionAuthorizationError, match="dependency closure"):
-        _current_projection_specs(context, authorized)
+        _current_selectors(context, authorized)

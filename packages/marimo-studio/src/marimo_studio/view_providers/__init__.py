@@ -1,17 +1,28 @@
-"""Define the public contract for frontend view providers.
+"""Define the public SDK for frontend view providers.
 
-A provider reports availability, offers starter projects, describes the files
-shown in Source, declares which inputs affect a build, identifies where a page
-mounts notebook results, and produces candidate browser files. Bundled and
-installed third-party providers use the same request and result records.
+A provider reports availability, offers starters, and inspects a view project
+for its Source documents, build inputs, projection sites, and the values and
+outputs a document renders.
+It then builds the entry document beneath the staging root in its request.
+Built-in and installed third-party providers use the same records, and import
+every Studio name from this module.
 
-Provider methods are synchronous. Creation receives a saved notebook snapshot
-and returns starter files with their selected cell targets. Inspection returns
-a read-only project description. Building writes browser files beneath the
-staging root supplied in its request before returning the entry document and
-diagnostics. Studio supplies cancellation and a bounded command runner,
-captures immutable inputs, validates provider output, and owns durable
-workspace state, publication, sessions, and notebook authorization.
+Provider methods are synchronous. ``create()`` receives a saved notebook
+snapshot and returns starter files with the cell targets they use.
+``inspect()`` describes the project without changing it. Studio assigns each
+projection site its ID and adds the site attribute to the build snapshot before
+it calls ``build()``. A ``DocumentProvider`` builds a document template, and
+Studio renders it with ``render()`` whenever the notebook values it reads
+change. Raise ``ProviderError`` for a problem the author can fix in the
+project.
+
+The helpers cover work that every provider repeats: ``project_files`` and
+``copy_inputs`` list and copy build inputs, ``probe_tool`` checks an external
+tool, ``html_sites`` finds projection sites in HTML, ``parse_accept`` reads an
+output host's ``accept`` attribute, and ``PackagedStarter`` with
+``create_starter`` ships starter files as package data.
+``marimo_studio.view_providers.testing.check_provider`` runs a provider
+through the same steps as Studio.
 """
 
 from marimo_studio._notebook.records import (
@@ -22,29 +33,35 @@ from marimo_studio._notebook.records import (
     NotebookSpec,
     SourceSpan,
 )
-from marimo_studio.view_providers._mounts import mount_attribute
-from marimo_studio.view_providers._operation import (
+from marimo_studio._processes.operation import (
     ProviderCancellation,
+    ProviderCommandError,
     ProviderCommandResult,
     ProviderRunner,
 )
 from marimo_studio.view_providers._records import (
-    PROVIDER_API_VERSION,
+    BuildInput,
+    BuildInputKind,
     BuildProfile,
     BuildRequest,
     BuildResult,
     DocumentAccess,
+    DocumentProvider,
     InspectionRequest,
     JsonValue,
-    MountDeclaration,
     ProjectDiagnostic,
-    ProjectInput,
-    ProjectInputKind,
     ProjectInspection,
     ProjectionKind,
+    ProjectionSite,
     ProviderAvailability,
+    ProviderError,
     ProviderInfo,
     ProviderStarter,
+    RenderCell,
+    RenderOutput,
+    RenderRequest,
+    RenderValue,
+    Representation,
     SourceDocument,
     SourceLocation,
     StarterCellTarget,
@@ -53,9 +70,24 @@ from marimo_studio.view_providers._records import (
     ViewProject,
     ViewProvider,
 )
+from marimo_studio.view_providers._sites import html_sites
+from marimo_studio.view_providers._starters import (
+    PackagedStarter,
+    StarterMarkers,
+    create_starter,
+    script_json,
+)
+from marimo_studio.view_providers._toolkit import (
+    copy_inputs,
+    probe_tool,
+    project_files,
+    project_path,
+)
+from marimo_studio.view_providers._validation import parse_accept
 
 __all__ = [
-    "PROVIDER_API_VERSION",
+    "BuildInput",
+    "BuildInputKind",
     "BuildProfile",
     "BuildRequest",
     "BuildResult",
@@ -64,28 +96,43 @@ __all__ = [
     "CellRef",
     "CellSpec",
     "DocumentAccess",
+    "DocumentProvider",
     "InspectionRequest",
     "JsonValue",
-    "MountDeclaration",
     "NotebookSpec",
+    "PackagedStarter",
     "ProjectDiagnostic",
-    "ProjectInput",
-    "ProjectInputKind",
     "ProjectInspection",
     "ProjectionKind",
+    "ProjectionSite",
     "ProviderAvailability",
     "ProviderCancellation",
+    "ProviderCommandError",
     "ProviderCommandResult",
+    "ProviderError",
     "ProviderInfo",
     "ProviderRunner",
     "ProviderStarter",
+    "RenderCell",
+    "RenderOutput",
+    "RenderRequest",
+    "RenderValue",
+    "Representation",
     "SourceDocument",
     "SourceLocation",
     "SourceSpan",
     "StarterCellTarget",
     "StarterContext",
+    "StarterMarkers",
     "StarterPlan",
     "ViewProject",
     "ViewProvider",
-    "mount_attribute",
+    "copy_inputs",
+    "create_starter",
+    "html_sites",
+    "parse_accept",
+    "probe_tool",
+    "project_files",
+    "project_path",
+    "script_json",
 ]

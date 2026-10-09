@@ -1,0 +1,180 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import picomatch from "picomatch";
+import { test } from "vite-plus/test";
+import { parse } from "yaml";
+
+// Filter entries nest lists through YAML aliases.
+type Patterns = string | Patterns[];
+
+const filters: Readonly<Record<string, Patterns>> = parse(
+  await readFile(new URL("../../filters.yml", import.meta.url), "utf8"),
+);
+const flatten = (patterns: Patterns): readonly string[] =>
+  Array.isArray(patterns) ? patterns.flatMap(flatten) : [patterns];
+const names = [
+  "main_browser",
+  "provider_browser",
+  "installed_browser",
+  "windows_lifecycle",
+  "windows_unit",
+];
+
+// paths-filter applies its locked picomatch with dotfiles and the some-with-excludes
+// predicate. The root catalog pins the same picomatch version.
+const matches = (name: string, path: string): boolean => {
+  const patterns = flatten(filters[name]);
+  return picomatch(
+    patterns.filter((pattern) => !pattern.startsWith("!")),
+    {
+      dot: true,
+      ignore: patterns
+        .filter((pattern) => pattern.startsWith("!"))
+        .map((pattern) => pattern.slice(1)),
+    },
+  )(path);
+};
+const selected = (path: string) => names.filter((name) => matches(name, path));
+
+test("main workspace changes select live browser and Windows lifecycle acceptance", () => {
+  assert.deepEqual(selected("apps/e2e/scripts/main-workspace.ts"), [
+    "main_browser",
+    "windows_lifecycle",
+    "windows_unit",
+  ]);
+});
+
+test("provider workspace changes select provider browser acceptance", () => {
+  assert.deepEqual(selected("apps/e2e/scripts/provider-workspace.ts"), [
+    "provider_browser",
+    "windows_unit",
+  ]);
+  assert.deepEqual(selected("apps/e2e/tests/provider-fixture.ts"), [
+    "provider_browser",
+    "windows_unit",
+  ]);
+});
+
+test("export repository isolation selects every workspace consumer", () => {
+  assert.deepEqual(selected("apps/e2e/scripts/export-repository.ts"), [
+    "main_browser",
+    "provider_browser",
+    "windows_lifecycle",
+    "windows_unit",
+  ]);
+});
+
+test("notebook service ownership selects every server consumer", () => {
+  for (const path of [
+    "apps/e2e/scripts/notebook-services.ts",
+    "apps/e2e/scripts/notebook-process-supervisor.ts",
+    "apps/e2e/scripts/_compat/server.py",
+    "apps/e2e/scripts/_compat/endpoint.py",
+  ]) {
+    assert.deepEqual(
+      selected(path),
+      [
+        "main_browser",
+        "provider_browser",
+        "installed_browser",
+        "windows_lifecycle",
+        "windows_unit",
+      ],
+      path,
+    );
+  }
+});
+
+test("shared browser diagnostics select installed acceptance as well", () => {
+  assert.deepEqual(selected("apps/e2e/tests/browser-diagnostics.ts"), [
+    "main_browser",
+    "provider_browser",
+    "installed_browser",
+    "windows_lifecycle",
+    "windows_unit",
+  ]);
+});
+
+test("prepared Python assets select every browser consumer", () => {
+  assert.deepEqual(selected("apps/e2e/scripts/prepare-pyodide.ts"), [
+    "main_browser",
+    "provider_browser",
+    "installed_browser",
+    "windows_lifecycle",
+    "windows_unit",
+  ]);
+});
+
+test("Notebook Kit spec changes select their owning provider suite", () => {
+  assert.deepEqual(selected("apps/e2e/tests/provider-notebook.spec.ts"), ["provider_browser"]);
+});
+
+test("provider preview spec changes select their owning provider suite", () => {
+  assert.deepEqual(selected("apps/e2e/tests/provider-preview.spec.ts"), ["provider_browser"]);
+});
+
+test("process, filesystem, and dependency changes run platform contracts on the pull request", () => {
+  for (const path of [
+    "packages/marimo-studio/src/marimo_studio/_filesystem/_windows.py",
+    "packages/marimo-studio/src/marimo_studio/_processes/provider_runner.py",
+    "packages/marimo-studio/src/marimo_studio/view_providers/_host/registry.py",
+    "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/runtime.py",
+    "uv.lock",
+    "pnpm-lock.yaml",
+    ".github/workflows/platforms.yml",
+    "apps/e2e/package.json",
+    "apps/e2e/scripts/process-group.ts",
+  ]) {
+    assert.equal(matches("platform_sensitive", path), true, path);
+  }
+});
+
+test("platform workflow changes own every platform contract", () => {
+  assert.equal(matches("platform_control", ".github/workflows/platforms.yml"), true);
+  assert.equal(matches("platform_control", ".github/workflows/pages.yml"), false);
+});
+
+test("publication script changes run their shell-boundary tests", () => {
+  for (const path of [
+    "scripts/check-release.sh",
+    "scripts/preview-version.sh",
+    "scripts/publish-preview.sh",
+    "scripts/release.sh",
+    "scripts/require-release-checks.sh",
+    "scripts/verify-pypi.sh",
+    "scripts/write-dist-checksums.py",
+  ]) {
+    assert.equal(matches("python_contracts", path), true, path);
+  }
+});
+
+test("portable product changes defer platform contracts until after merge", () => {
+  for (const path of [
+    "packages/marimo-studio/src/marimo_studio/_projections/resolution.py",
+    "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/build.py",
+    "packages/presentation/src/runtime/wasm.ts",
+    "docs/guide/views.md",
+  ]) {
+    assert.equal(matches("platform_sensitive", path), false, path);
+  }
+});
+
+test("documentation and example changes build the complete site on the pull request", () => {
+  for (const path of [
+    "docs/guide/views.md",
+    "apps/docs/examples.ts",
+    "examples/athletes.py",
+    "examples/__marimo__/studio/athletes/overview/index.html",
+    ".github/workflows/pages.yml",
+  ]) {
+    assert.equal(matches("docs_site", path), true, path);
+  }
+  assert.equal(
+    matches("docs_site", "packages/marimo-studio/src/marimo_studio/_projections/resolution.py"),
+    false,
+  );
+  assert.equal(
+    matches("pages", "packages/marimo-studio/src/marimo_studio/_projections/resolution.py"),
+    true,
+  );
+});

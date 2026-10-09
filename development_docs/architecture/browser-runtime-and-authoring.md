@@ -73,7 +73,7 @@ Runtime configuration carries:
   Server transport root and the Prepared manifest
 - Root, public root, document root, and support URLs
 - Precomputed projection targets and dependency closures
-- Artifact mount declarations
+- Artifact sites
 - Projection policy and semantic-to-runtime cell bindings
 - Projection diagnostics
 - Marimo app, user, and override configuration
@@ -92,7 +92,7 @@ fixture is parsed by the Zod protocol tests.
 
 The presentation revision identifies the exact page snapshot used for browser
 requests and evidence. The projection revision identifies the notebook,
-runtime, mounts, targets, bindings, policy, and diagnostics that own projected
+runtime, sites, targets, bindings, policy, and diagnostics that own projected
 state. A stylesheet or non-projection markup edit advances the presentation
 revision while retaining live values, outputs, controls, and cell portals.
 
@@ -561,6 +561,11 @@ public keys, retains repeated values in request order, and excludes private
 routing keys. Reload and direct document navigation offer the session when the
 target has that query. The replay marker and session parameter leave the
 visible URL after the runtime opens.
+
+Marimo resumes the document URL's `session_id` outside its editor only when
+replay preflight authorizes that exact session. Preflight authorizes a
+remembered session whose query matches and the server-assigned renewal
+session. Any other `session_id` starts a fresh native session.
 
 `PrivateSessionReplay` owns the reversible Marimo server patch and the
 application's registered notebook sessions. The application lifespan installs

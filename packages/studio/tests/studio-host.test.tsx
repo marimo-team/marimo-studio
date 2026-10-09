@@ -46,6 +46,7 @@ const ready: StudioBootstrap = {
   views: ["dashboard"],
   runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
+  trustedServerRuntime: false,
   clientId: host.clientId,
   serverInstance: host.serverInstance,
   serverToken: host.serverToken,
@@ -108,7 +109,7 @@ const sourceProject = {
   provider: "marimo-studio/vanilla",
   provider_options: {},
   documents: [{ path: "index.html", language: "html", access: "edit" as const }],
-  mounts: [],
+  sites: [],
   diagnostics: [],
   build: unbuiltView,
   artifact: null,
@@ -406,6 +407,36 @@ it("shows first-view starter documents and unavailable recovery", async () => {
   expect(screen.getByRole("radio")).toBeDisabled();
   expect(screen.getByRole("button", { name: "Create view" })).toBeDisabled();
 });
+
+it.each([
+  ["source", "A hub administrator can set MARIMOHUB_PERSIST_WORKSPACE=workspace to keep them."],
+  ["none", "commit notebook.py and the view folder before you stop the session."],
+] as const)(
+  "warns before creating views that a %s hub session discards",
+  async (persistence, next) => {
+    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ ...viewList([], "dashboard"), persistence })),
+    );
+    const editorFrame = document.createElement("iframe");
+
+    render(
+      <StudioHost
+        host={host}
+        editorFrame={editorFrame}
+        editorSource={editorFrame.src}
+        publishBootstrap={vi.fn()}
+        brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+      />,
+    );
+
+    await userEvent.click(screen.getByText("Add view", { exact: true }));
+    const create = await screen.findByRole("button", { name: "Create view" });
+    expect(create).toHaveAccessibleDescription(expect.stringContaining(next));
+    expect(create).toBeEnabled();
+  },
+);
 
 it("opens an already-created first view after a bootstrap retry", async () => {
   vi.stubGlobal("EventSource", EventSourceStub);

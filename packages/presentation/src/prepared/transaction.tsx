@@ -119,7 +119,6 @@ const reconcileSnapshot = (
     if (projected.output === null) {
       continue;
     }
-    toMarimoCellOutput(projected.output);
     reconcileProjectedOutput(
       outputUpdate(
         projected.ownerCellId,

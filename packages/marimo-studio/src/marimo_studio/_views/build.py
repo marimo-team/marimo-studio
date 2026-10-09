@@ -18,13 +18,14 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import Protocol
 
 from marimo_studio._artifacts.inputs import (
-    ProjectInputState,
-    project_input_state,
+    BuildInputState,
+    build_input_state,
     project_revision_snapshot,
     snapshot_revision,
 )
@@ -55,9 +56,19 @@ from marimo_studio._processes.provider_runner import (
     create_provider_runner,
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError
+from marimo_studio._views.documents import (
+    DocumentRenderer,
+    compose_view,
+    renderer_missing,
+)
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._views.instrumentation import (
+    authored_diagnostics,
+    instrument_sites,
+    missing_site_diagnostics,
+)
 from marimo_studio._views.publication_hold import read_publication_hold
-from marimo_studio._views.records import ViewBuild
+from marimo_studio._views.records import DiagnosticsError, ViewBuild
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.mutation_lock import view_build_lock, view_mutation_lock
 from marimo_studio._workspace.project_manifest import load_view_project
@@ -76,21 +87,19 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ViewProject,
 )
+from marimo_studio.view_providers._artifact_sites import render_sites
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.records import ProviderProvenance
 
 
-class BuildProvider(Protocol):
-    def availability(
-        self,
-        project: ViewProject | None = None,
-    ) -> ProviderAvailability: ...
+class BuildProvider(DocumentRenderer, Protocol):
+    def availability(self) -> ProviderAvailability: ...
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
 
     def build(self, request: BuildRequest) -> BuildResult: ...
 
-    def provenance(self, inspection: ProjectInspection) -> ProviderProvenance: ...
+    def provenance(self) -> ProviderProvenance: ...
 
 
 def _inspection_failures(
@@ -128,7 +137,7 @@ def _inspect_provider(
     provider: BuildProvider,
     started: float,
 ) -> ProjectInspection:
-    availability = provider.availability(project)
+    availability = provider.availability()
     if not availability.available:
         detail = f": {availability.reason}" if availability.reason else ""
         action = f" {availability.action}" if availability.action else ""
@@ -211,10 +220,10 @@ def _inspect_snapshot(
 def _project_stability_failure(
     project: ViewProject,
     inspection: ProjectInspection,
-    expected_state: ProjectInputState,
+    expected_state: BuildInputState,
 ) -> ProjectDiagnostic | None:
     try:
-        actual_state = project_input_state(
+        actual_state = build_input_state(
             project,
             inspection,
             observed=expected_state,
@@ -243,13 +252,13 @@ def _capture_commit_state(
     expected_revision: str,
     started: float,
     provider: BuildProvider,
-) -> ProjectInputState:
+) -> BuildInputState:
     """Hash live inputs outside the mutation lock and retain cheap identities."""
     try:
         captured = project_revision_snapshot(
             project,
             inspection,
-            provider.provenance(inspection),
+            provider.provenance(),
         )
     except Exception as error:
         record_build_failure(
@@ -291,7 +300,7 @@ def _stable_artifact_commit(
     profile: BuildProfile,
     inspection: ProjectInspection,
     expected_revision: str,
-    expected_state: ProjectInputState,
+    expected_state: BuildInputState,
     started: float,
     expected_generation: str | None,
     *,
@@ -416,7 +425,7 @@ def _publish_locked(
         assert input_id is not None
         try:
             current = project_revision_snapshot(
-                project, inspection, provider.provenance(inspection)
+                project, inspection, provider.provenance()
             )
         except (ConfigurationError, OSError) as error:
             raise_process_cleanup(error)
@@ -494,7 +503,7 @@ def _publish_locked(
                 started,
                 candidate.cache_root,
             )
-            provenance = provider.provenance(snapshot_inspection)
+            provenance = provider.provenance()
             revision = snapshot_revision(
                 candidate.snapshot,
                 provenance,
@@ -556,11 +565,36 @@ def _publish_locked(
             held = _publication_hold_diagnostic(project)
             if held is not None:
                 record_build_failure(project, profile, (held,), started, revision)
+            reads_notebook = (
+                snapshot_inspection.render_values
+                or snapshot_inspection.render_outputs
+                or snapshot_inspection.render_cells
+            )
+            if reads_notebook and not provider.renders:
+                record_build_failure(
+                    project,
+                    profile,
+                    (renderer_missing(),),
+                    started,
+                    revision,
+                )
+            try:
+                sites, insertions = instrument_sites(
+                    snapshot.root,
+                    snapshot_inspection.sites,
+                )
+            except DiagnosticsError as error:
+                record_build_failure(
+                    project,
+                    profile,
+                    error.diagnostics,
+                    started,
+                    revision,
+                )
             record_build_started(
                 project,
                 profile,
                 revision,
-                preparation.recovery_diagnostic,
             )
             command_timeout = DEFAULT_PROVIDER_COMMAND_TIMEOUT
             request = BuildRequest(
@@ -570,10 +604,11 @@ def _publish_locked(
                 project_revision=revision,
                 profile=profile,
                 staging_root=candidate.files_root,
+                work_root=candidate.work_root,
                 cache_root=candidate.cache_root,
                 cancellation=cancellation,
                 runner=create_provider_runner(
-                    snapshot,
+                    snapshot.root,
                     cancellation,
                     command_timeout,
                 ),
@@ -599,6 +634,10 @@ def _publish_locked(
                     started,
                     revision,
                 )
+            report = replace(
+                report,
+                diagnostics=authored_diagnostics(report.diagnostics, insertions),
+            )
             failures = tuple(
                 diagnostic
                 for diagnostic in report.diagnostics
@@ -619,14 +658,70 @@ def _publish_locked(
                     started,
                     revision,
                 )
+            try:
+                output = compose_view(
+                    generation_root=candidate.generation_root,
+                    files_root=candidate.files_root,
+                    document=report.document,
+                    sites=sites,
+                    document_sites=render_sites(
+                        snapshot_inspection.render_values,
+                        snapshot_inspection.render_outputs,
+                        snapshot_inspection.render_cells,
+                    ),
+                    title=project.name,
+                    renderer=provider,
+                    renderer_fingerprint=provenance.build_fingerprint,
+                    cancellation=cancellation,
+                )
+            except DiagnosticsError as error:
+                record_build_failure(
+                    project,
+                    profile,
+                    error.diagnostics,
+                    started,
+                    revision,
+                )
+            except ViewProjectError:
+                raise
+            except (OSError, ConfigurationError) as error:
+                record_build_failure(
+                    project,
+                    profile,
+                    (
+                        ProjectDiagnostic(
+                            code="artifact-validation-failed",
+                            severity="error",
+                            message=str(error),
+                            hint="Fix the provider output and build the view again.",
+                        ),
+                    ),
+                    started,
+                    revision,
+                )
+            report = replace(
+                report,
+                diagnostics=(*report.diagnostics, *output.diagnostics),
+            )
             prepared = prepare_artifact_publication(
                 project,
                 profile,
                 candidate,
-                snapshot_inspection,
-                report,
+                output.sites,
+                output.document,
                 revision,
                 started,
+                template=output.template,
+            )
+            report = replace(
+                report,
+                diagnostics=(
+                    *report.diagnostics,
+                    *missing_site_diagnostics(
+                        prepared.publication_root / "files",
+                        prepared.manifest.sites,
+                    ),
+                ),
             )
             commit_state = _capture_commit_state(
                 project,
@@ -657,7 +752,6 @@ def _publish_locked(
                     report,
                     revision,
                     started,
-                    preparation.recovery_diagnostic,
                     (
                         preparation.current_snapshot
                         if preparation.current is not None

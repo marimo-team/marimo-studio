@@ -42,6 +42,7 @@ from marimo_studio._artifacts.limits import (
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._composition import create_export_adapters
+from marimo_studio._delivery.documents import write_static_renditions
 from marimo_studio._delivery.export_output import (
     ensure_output_parent as _ensure_output_parent,
 )
@@ -89,6 +90,7 @@ from marimo_studio._workspace.mutation_lock import (
     workspace_catalog_lock,
 )
 from marimo_studio.errors import (
+    ConfigurationError,
     MarimoStudioError,
     PublicationError,
     StaticExportError,
@@ -194,6 +196,13 @@ def _file_stamp(path: Path) -> tuple[int, int, int, int]:
     return stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino
 
 
+def _notebook_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise ConfigurationError(f"Notebook is not UTF-8 text: {path}") from error
+
+
 def _destination_key(path: Path) -> tuple[str, ...]:
     return tuple(unicodedata.normalize("NFC", part).casefold() for part in path.parts)
 
@@ -239,8 +248,8 @@ def _wasm_runtime_config(
     cell_refs = resolved.runtime_cell_refs(None)
     paths = _StaticViewPaths.of(view_name, artifact)
     marimo_config = adapters.runtime_config(studio.notebook)
-    targets = projection_targets(resolved.symbols, artifact.mounts)
-    mounts = tuple(site.to_dict() for site in artifact.mounts)
+    targets = projection_targets(resolved.symbols, artifact.sites)
+    sites = tuple(site.to_dict() for site in artifact.sites)
     policy = projection_policy()
     source_revision = _digest(
         notebook_source,
@@ -251,7 +260,7 @@ def _wasm_runtime_config(
         view=view_name,
         runtime_id="wasm",
         runtime_instance=projection.instance,
-        mounts=mounts,
+        sites=sites,
         projection_targets=targets,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
@@ -270,7 +279,7 @@ def _wasm_runtime_config(
         projection_revision=projection_revision,
         show_cell_logs=studio.show_cell_logs,
         projection_targets=targets,
-        mounts=mounts,
+        sites=sites,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
         diagnostics=(),
@@ -328,8 +337,8 @@ def _zero_python_runtime_config(
 ) -> tuple[str, bytes, bytes, _assets.BrowserEntryClosure]:
     cell_refs = resolved.runtime_cell_refs(None)
     paths = _StaticViewPaths.of(view_name, artifact)
-    mounts = tuple(site.to_dict() for site in artifact.mounts)
-    targets = projection_targets(resolved.symbols, artifact.mounts)
+    sites = tuple(site.to_dict() for site in artifact.sites)
+    targets = projection_targets(resolved.symbols, artifact.sites)
     policy = projection_policy()
     projection_revision = runtime_projection_revision(
         source_revision=_digest(
@@ -340,7 +349,7 @@ def _zero_python_runtime_config(
         view=view_name,
         runtime_id="zero-python",
         runtime_instance=publication.instance,
-        mounts=mounts,
+        sites=sites,
         projection_targets=targets,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
@@ -360,7 +369,7 @@ def _zero_python_runtime_config(
         projection_revision=projection_revision,
         show_cell_logs=studio.show_cell_logs,
         projection_targets=targets,
-        mounts=mounts,
+        sites=sites,
         projection_policy=policy,
         runtime_cell_refs=cell_refs,
         diagnostics=(),
@@ -666,10 +675,10 @@ def _write_bundle(
             == project_revision(
                 project,
                 inspection,
-                provider_registry().get(project.provider).provenance(inspection),
+                provider_registry().get(project.provider).provenance(),
             )
             and document == lease.read_text(artifact.document)
-            and notebook_source == studio.notebook.read_text(encoding="utf-8")
+            and notebook_source == _notebook_text(studio.notebook)
             and notebook_stamp == _file_stamp(studio.notebook)
             and config_stamp == _file_stamp(studio.config_path)
             and (publication is None or _publication_inputs_current(publication))
@@ -678,11 +687,15 @@ def _write_bundle(
         raise_process_cleanup(error)
         stable = False
     if not stable:
-        raise StaticExportError(
-            "The static export sources changed while the bundle was written. "
-            "Run the export again."
-        )
+        raise _sources_changed()
     return len(assets) + 2 + int(config is not None) + int(manifest is not None)
+
+
+def _sources_changed() -> StaticExportError:
+    return StaticExportError(
+        "The static export sources changed while the bundle was written. "
+        "Run the export again."
+    )
 
 
 def _publication_inputs_current(publication: StaticPublication) -> bool:
@@ -843,14 +856,20 @@ def _export_to_delivery(
             document = lease.read_text(artifact.document)
         except MarimoStudioError as error:
             raise StaticExportError(str(error)) from error
-        notebook_source = studio.notebook.read_text(encoding="utf-8")
-        resolved = resolve_studio(
-            studio,
-            view_name=selected,
-            published_mounts={selected: artifact.mounts},
-        )
+        try:
+            notebook_source = _notebook_text(studio.notebook)
+            resolved = resolve_studio(
+                studio,
+                notebook_source=notebook_source,
+                view_name=selected,
+                published_sites={selected: artifact.sites},
+            )
+        except MarimoStudioError as error:
+            if _file_stamp(studio.notebook) != notebook_stamp:
+                raise _sources_changed() from error
+            raise
         _projection_error(resolved, selected)
-        portability = projection_portability(artifact.mounts, runtime)
+        portability = projection_portability(artifact.sites, runtime)
         incompatible = next(
             (item for item in portability if item.status == "incompatible"),
             None,
@@ -873,7 +892,7 @@ def _export_to_delivery(
                     "the Browser runtime."
                 ),
             )
-        if runtime == "zero-python" and artifact.mounts:
+        if runtime == "zero-python" and artifact.sites:
             from marimo_studio._server.presentation.service import PresentationSnapshot
 
             source_revision = _digest(
@@ -888,7 +907,7 @@ def _export_to_delivery(
                 notebook_source=notebook_source,
                 source_revision=source_revision,
                 symbols=resolved.symbols,
-                mounts=artifact.mounts,
+                sites=artifact.sites,
                 revision=_digest(
                     selected,
                     source_revision,
@@ -928,8 +947,9 @@ def _export_to_delivery(
                     runtime=runtime,
                 ),
             )
+            bundle = FileTree(delivery.path)
             files = _write_bundle(
-                FileTree(delivery.path),
+                bundle,
                 adapters,
                 studio,
                 resolved,
@@ -942,6 +962,8 @@ def _export_to_delivery(
                 runtime,
                 publication,
             )
+            if publication is not None:
+                files += write_static_renditions(lease, publication, bundle)
             files += _materialize_publication(delivery, selected, publication)
             _emit_progress(
                 progress,

@@ -44,7 +44,7 @@ from marimo_studio._server.lifecycle_handler import (
     LifecycleRouteHandler,
 )
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
-from marimo_studio._server.pages import authentication_redirect
+from marimo_studio._server.pages import authentication_redirect, run_view_redirect
 from marimo_studio._server.ports import ServerAdapters
 from marimo_studio._server.presentation.access import (
     PresentationCapabilityHandler,
@@ -75,6 +75,7 @@ from marimo_studio._server.routing import (
     document_view,
     is_studio_landing,
     is_support_route,
+    run_view_target,
     studio_view,
     view_asset,
     view_route_alias,
@@ -92,7 +93,7 @@ from marimo_studio._server.workspace_lifecycle import (
     Unconfigured,
 )
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 async def _send_studio_response(
@@ -118,6 +119,7 @@ class PresentationMiddleware:
         self.app = app
         self._security_policy = security_policy
         self._adapters = adapter_factory()
+        self._install_execution_tracking()
         self._route_policy = route_policy
         self._notebooks = NotebookScopeRegistry()
         self._viewless_notebooks: set[Path] = set()
@@ -152,6 +154,25 @@ class PresentationMiddleware:
             self._resolve_security_policy,
         )
 
+    def _install_execution_tracking(self) -> None:
+        pending = [self.app]
+        seen: set[int] = set()
+        while pending:
+            current = pending.pop()
+            identity = id(current)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            manager = getattr(getattr(current, "state", None), "session_manager", None)
+            if manager is not None:
+                self._adapters.session_state.prepare_manager(manager)
+                return
+            pending.extend(
+                child
+                for route in getattr(current, "routes", ())
+                if (child := getattr(route, "app", None)) is not None
+            )
+
     def _resolve_security_policy(self, scope: Scope) -> SecurityPolicy:
         """Return the framing policy shared by every edit document in a request."""
         return extend_security_policy_from_host_head(
@@ -162,6 +183,7 @@ class PresentationMiddleware:
     @asynccontextmanager
     async def lifespan(self) -> AsyncIterator[Callable[[], Awaitable[None]]]:
         """Own Studio resources for one server application lifespan."""
+        self._install_execution_tracking()
         adapters = self._adapters.lifecycle.open()
         closed = False
 
@@ -371,6 +393,15 @@ class PresentationMiddleware:
             await self.app(scope, receive, send)
             return
 
+        run_target = run_view_target(relative, location.mode)
+        if run_target is not None:
+            if presentation_access or request.method not in {"GET", "HEAD"}:
+                await self.app(scope, receive, send)
+            else:
+                await _send_studio_response(
+                    run_view_redirect(request, run_target), scope, receive, send
+                )
+            return
         landing = is_studio_landing(relative, location.mode)
         if landing and request.method not in {"GET", "HEAD"}:
             await self.app(scope, receive, send)

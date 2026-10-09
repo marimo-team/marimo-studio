@@ -94,6 +94,7 @@ def test_release_checks_require_successful_runs_for_the_release_commit(
         assert calls.read_text(encoding="utf-8").splitlines() == [
             f"ci.yml|main|{_COMMIT}|push",
             f"e2e.yml|main|{_COMMIT}|push",
+            f"platforms.yml|main|{_COMMIT}|push",
             f"pages.yml|main|{_COMMIT}|push",
         ]
 
@@ -147,7 +148,7 @@ esac
     )
 
     completed = subprocess.run(
-        [script],
+        [script, "0.1.0"],
         capture_output=True,
         text=True,
         check=False,
@@ -156,7 +157,6 @@ esac
             **os.environ,
             "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
             "PROBE_COUNT": str(probe_count),
-            "RELEASE_VERSION": "0.1.0",
             "UV_CALLS": str(calls),
         },
     )

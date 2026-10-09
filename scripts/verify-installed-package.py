@@ -35,8 +35,10 @@ _ENTRY_POINTS = {
     ("marimo.kernel.lifespan", "marimo-studio"),
     ("marimo.server.asgi.middleware", "marimo-studio"),
     ("marimo_studio.view_provider", "notebook-kit"),
+    ("marimo_studio.view_provider", "quarto"),
     ("marimo_studio.view_provider", "react"),
     ("marimo_studio.view_provider", "svelte"),
+    ("marimo_studio.view_provider", "typst"),
     ("marimo_studio.view_provider", "vanilla"),
 }
 _NOTEBOOK = """import marimo
@@ -115,6 +117,7 @@ import marimo_studio.authoring
 import marimo_studio.asgi
 import marimo_studio.errors
 import marimo_studio.view_providers
+import marimo_studio.view_providers.testing
 assert callable(marimo_studio.create_asgi_app)
 assert callable(marimo_studio.agent.current_workspace)
 assert callable(marimo_studio.authoring.open_workspace)
@@ -149,15 +152,22 @@ assert set(marimo_studio.authoring.__all__) == {
 }
 assert set(get_args(marimo_studio.authoring.StaticRuntime)) == {"zero-python", "wasm"}
 assert set(marimo_studio.view_providers.__all__) == {
-    "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
+    "BuildInput", "BuildInputKind", "BuildProfile", "BuildRequest", "BuildResult",
     "CellConfigSpec", "CellKind", "CellRef", "CellSpec", "DocumentAccess",
-    "InspectionRequest", "JsonValue", "MountDeclaration", "NotebookSpec", "ProjectDiagnostic",
-    "ProjectInput", "ProjectInputKind", "ProjectInspection", "ProjectionKind",
-    "ProviderAvailability", "ProviderCancellation", "ProviderCommandResult",
-    "ProviderInfo", "ProviderRunner", "ProviderStarter", "SourceDocument",
+    "DocumentProvider", "InspectionRequest", "JsonValue", "NotebookSpec",
+    "PackagedStarter", "ProjectDiagnostic", "ProjectInspection", "ProjectionKind",
+    "ProjectionSite", "ProviderAvailability", "ProviderCancellation",
+    "ProviderCommandError", "ProviderCommandResult", "ProviderError",
+    "ProviderInfo", "ProviderRunner", "ProviderStarter", "RenderCell",
+    "RenderOutput", "RenderRequest", "RenderValue", "Representation",
+    "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
-    "StarterPlan", "ViewProject", "ViewProvider",
-    "mount_attribute",
+    "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
+    "create_starter", "html_sites", "parse_accept", "probe_tool", "project_files",
+    "project_path", "script_json",
+}
+assert set(marimo_studio.view_providers.testing.__all__) == {
+    "CheckedView", "ProviderCheckError", "check_provider",
 }
 assert set(marimo_studio.errors.__all__) == {
     "AgentRequestError", "BindingError", "CapabilityInputError", "ConfigurationError",
@@ -174,6 +184,41 @@ assert set(marimo_studio.errors.__all__) == {
 providers = marimo_studio.view_providers
 assert tuple(signature(providers.ViewProvider.create).parameters) == (
     "self", "starter", "context",
+)
+assert tuple(signature(providers.DocumentProvider.render).parameters) == (
+    "self", "request",
+)
+assert tuple(signature(providers.html_sites).parameters) == ("path", "source")
+assert tuple(field.name for field in fields(providers.ProjectionSite)) == (
+    "kind", "targets", "source", "offset", "accept",
+)
+assert tuple(field.name for field in fields(providers.RenderOutput)) == (
+    "target", "source", "accept",
+)
+assert tuple(field.name for field in fields(providers.RenderValue)) == (
+    "target", "source",
+)
+assert tuple(field.name for field in fields(providers.RenderCell)) == (
+    "target", "source", "accept",
+)
+assert tuple(field.name for field in fields(providers.ProjectInspection)) == (
+    "documents", "inputs", "sites", "diagnostics", "render_values",
+    "render_outputs", "render_cells",
+)
+assert tuple(field.name for field in fields(providers.ProviderInfo)) == (
+    "title", "summary", "options",
+)
+assert tuple(field.name for field in fields(providers.BuildRequest)) == (
+    "project", "inspection", "inputs", "project_revision", "profile",
+    "staging_root", "work_root", "cache_root", "cancellation", "runner",
+    "command_timeout",
+)
+assert tuple(field.name for field in fields(providers.RenderRequest)) == (
+    "template_root", "document", "values", "outputs", "cells", "output_root",
+    "cancellation", "runner", "command_timeout",
+)
+assert tuple(field.name for field in fields(providers.BuildResult)) == (
+    "document", "diagnostics",
 )
 assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",
@@ -292,9 +337,11 @@ def _verify_views(*, deno: bool) -> None:
             catalog = {item.id: item for item in await workspace.starters()}
             expected = {
                 "marimo-studio/notebook-kit:default",
+                "marimo-studio/quarto:default",
                 "marimo-studio/react:default",
                 "marimo-studio/react:reveal",
                 "marimo-studio/svelte:default",
+                "marimo-studio/typst:default",
                 "marimo-studio/vanilla:default",
             }
             if set(catalog) != expected:
@@ -359,9 +406,9 @@ def main() -> None:
     installed_version = version(_DISTRIBUTION)
     marimo_export = distribution("marimo-export")
     marimo_export_version = marimo_export.version
-    if marimo_export_version not in SpecifierSet(">=0.1.0"):
+    if marimo_export_version not in SpecifierSet(">=0.1.4"):
         raise AssertionError(
-            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.0"
+            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.4"
         )
     if marimo_export.read_text("direct_url.json") is not None:
         raise AssertionError("Installed marimo-export came from a direct source")

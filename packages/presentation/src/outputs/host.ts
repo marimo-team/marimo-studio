@@ -1,3 +1,5 @@
+import type { RenderedOutput } from "@marimo-studio/protocol/output-read";
+
 import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
@@ -61,6 +63,8 @@ const releaseOutputHost = (host: MarimoOutputElement) => {
 
 export class MarimoOutputElement extends HTMLElement {
   static observedAttributes = ["value", PROJECTION_SITE_ATTRIBUTE];
+  /** The output this host shows, as marimo rendered it. */
+  marimoOutput: RenderedOutput | undefined;
   private hasRendered = false;
 
   get valueSelector(): string {

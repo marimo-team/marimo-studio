@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from marimo_studio.view_providers import MountDeclaration, ViewProject
+from marimo_studio.view_providers import ViewProject
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 
-class ViewMountInspector(Protocol):
+class ViewSiteInspector(Protocol):
     """Return validated projection sites for one provider project."""
 
-    def __call__(self, project: ViewProject) -> tuple[MountDeclaration, ...]: ...
+    def __call__(self, project: ViewProject) -> tuple[ArtifactSite, ...]: ...

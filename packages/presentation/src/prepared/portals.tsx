@@ -4,6 +4,7 @@ import {
   PreparedCellPresentation,
   ProjectedOutputArea,
 } from "@marimo-studio/marimo-frontend/prepared-presentation";
+import { renderedOutputSchema } from "@marimo-studio/protocol/output-read";
 import { useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
@@ -53,6 +54,25 @@ const PreparedOutputPortal = ({
   snapshot: PreparedOutputSnapshot | undefined;
   timestamp: number;
 }) => {
+  // A document viewer posts the media output a hidden host carries, whose data
+  // is a data URL. Native outputs with structured data stay with the host.
+  useLayoutEffect(() => {
+    const rendered = renderedOutputSchema.safeParse({
+      ownerCellId: snapshot?.ownerCellId,
+      mimetype: snapshot?.output?.mimetype,
+      data: snapshot?.output?.data,
+      timestamp,
+      resetUiObjectIds: [],
+    });
+    if (!rendered.success) {
+      return;
+    }
+    host.marimoOutput = rendered.data;
+    return () => {
+      host.marimoOutput = undefined;
+    };
+  }, [host, snapshot, timestamp]);
+
   useLayoutEffect(() => {
     const selector = host.valueSelector;
     if (snapshot === undefined) {
@@ -113,6 +133,14 @@ const PreparedCellPortal = ({
   snapshot: PreparedCellSnapshot | undefined;
   timestamp: number;
 }) => {
+  const output = snapshot?.output;
+  useLayoutEffect(() => {
+    host.marimoOutput = output ? { mimetype: output.mimetype, data: output.data } : undefined;
+    return () => {
+      host.marimoOutput = undefined;
+    };
+  }, [host, output]);
+
   useLayoutEffect(() => {
     const alias = host.cellName;
     if (snapshot === undefined) {

@@ -95,7 +95,7 @@ def test_provider_scratch_symlinks_are_discarded_before_publication(
     build = provider.build
 
     def build_with_scratch(request: Any) -> Any:
-        dependency = request.staging_root.parent / "work" / "node_modules" / "provider"
+        dependency = request.work_root / "node_modules" / "provider"
         dependency.parent.mkdir(parents=True)
         dependency.symlink_to(project.root, target_is_directory=True)
         return build(request)

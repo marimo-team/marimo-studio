@@ -30,10 +30,12 @@ authored source so provider inspection can authorize the selector.
 
 Materialize lazy or remote dataframe queries in the notebook before projecting
 them. Pandas may require PyArrow. WebAssembly notebooks need browser-compatible
-dataframe and Arrow writer packages. Each projected value must encode within
-1,000,000 bytes in every runtime. Filter, aggregate, or split larger tables into
-separate notebook values, then select one at runtime as described in
-[Select targets](#select-targets).
+dataframe and Arrow writer packages. A projected dataframe must encode within
+64 MiB of Arrow IPC in every runtime. The values a view projects from one cell
+share 1,000,000 bytes of JSON and 128 MiB of Arrow, or 64 MiB of Arrow in the
+Browser runtime. Any other value travels as JSON within 1,000,000 bytes.
+Filter, aggregate, or split larger tables into separate notebook values, then
+select one at runtime as described in [Select targets](#select-targets).
 
 ## Select targets
 
@@ -43,7 +45,7 @@ attributes. Literal `name`, `value`, and `mo-value` selectors need no wildcard.
 Add `data-marimo-allow="*"` when runtime code intentionally selects a target
 that the provider cannot enumerate from source.
 
-When a table exceeds the 1,000,000-byte value limit, publish a compact index
+When a table exceeds the 64 MiB Arrow limit, publish a compact index
 table plus a dictionary of per-item frames with string keys, such as
 `details = {str(key): frame for key, frame in groups}` and
 `default_details = details[default_key]`. Start the host on `default_details`,

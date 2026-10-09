@@ -18,8 +18,26 @@ PRIVATE_MARIMO_OWNERS = (
 VIEW_PROVIDER_PACKAGE = "marimo_studio.view_providers"
 VIEW_PROVIDER_PRIVATE_LAYERS = (
     "marimo_studio.view_providers._host",
-    "marimo_studio.view_providers._bundled",
+    "marimo_studio.view_providers._builtin",
 )
+# The provider test kit drives the real host, so it may use the private layers.
+PROVIDER_TEST_KIT = "marimo_studio.view_providers.testing"
+BUILTIN_PROVIDERS = "marimo_studio.view_providers._builtin"
+# Built-in providers import only the public provider SDK, their own package, and
+# the shared libraries listed here, so each can move into its own distribution.
+BUILTIN_SHARED_LIBRARIES = {
+    "_deno": frozenset({"deno_obsnotebook", "deno_react", "deno_svelte"}),
+}
+# Core built-in providers ship with Studio and may also use these core modules.
+CORE_BUILTIN_PROVIDERS = {
+    "vanilla": (
+        "marimo_studio._filesystem",
+        "marimo_studio.errors",
+        "marimo_studio.view_providers._css_resources",
+        "marimo_studio.view_providers._document",
+        "marimo_studio.view_providers._javascript",
+    ),
+}
 PUBLIC_AUTHORING_FACADES = (
     "marimo_studio.agent",
     "marimo_studio.authoring",
@@ -44,9 +62,10 @@ FORBIDDEN_DEPENDENCIES = {
         "marimo_studio._artifacts",
         "marimo_studio._views",
         "marimo_studio._workspace",
-        "marimo_studio.view_providers._bundled",
+        "marimo_studio.view_providers._builtin",
     ),
-    "marimo_studio.view_providers._bundled": ("marimo_studio.view_providers._host",),
+    "marimo_studio.view_providers._builtin": ("marimo_studio.view_providers._host",),
+    PROVIDER_TEST_KIT: (BUILTIN_PROVIDERS,),
     "marimo_studio._validation": ("marimo_studio.agent",),
     "marimo_studio._filesystem": (
         "marimo_studio._artifacts",
@@ -112,8 +131,15 @@ def _imports(
             if name.startswith("marimo._"):
                 private_marimo.add(name)
             target = _canonical(name, modules)
-            if target is not None and target != module:
-                internal.add(target)
+            if target is None or target == module:
+                continue
+            internal.add(target)
+            # Importing a submodule first runs every enclosing package.
+            parts = target.split(".")
+            for size in range(2, len(parts)):
+                package = ".".join(parts[:size])
+                if package in modules and not _under(module, package):
+                    internal.add(package)
     return internal, private_marimo
 
 
@@ -200,6 +226,7 @@ def violations() -> tuple[str, ...]:
         module
         for module in graph
         if _under(module, VIEW_PROVIDER_PACKAGE)
+        and module != PROVIDER_TEST_KIT
         and not any(_under(module, private) for private in VIEW_PROVIDER_PRIVATE_LAYERS)
     )
     for module in contract_modules:
@@ -208,14 +235,83 @@ def violations() -> tuple[str, ...]:
                 _under(dependency, private) for private in VIEW_PROVIDER_PRIVATE_LAYERS
             ):
                 failures.append(f"forbidden dependency: {module} -> {dependency}")
-    bundled_layer = "marimo_studio.view_providers._bundled"
     for module in sorted(
         item for item in graph if not _under(item, VIEW_PROVIDER_PACKAGE)
     ):
         for dependency in sorted(graph[module]):
-            if _under(dependency, bundled_layer):
+            if _under(dependency, BUILTIN_PROVIDERS):
                 failures.append(f"forbidden dependency: {module} -> {dependency}")
+    failures.extend(_builtin_provider_violations(graph, path_by_module))
     return tuple(failures)
+
+
+def _sdk_names() -> frozenset[str]:
+    tree = ast.parse((PACKAGE / "view_providers/__init__.py").read_text("utf-8"))
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__all__"
+                for target in node.targets
+            )
+            and isinstance(node.value, ast.List)
+        ):
+            return frozenset(
+                item.value
+                for item in node.value.elts
+                if isinstance(item, ast.Constant) and isinstance(item.value, str)
+            )
+    raise RuntimeError("marimo_studio.view_providers declares no __all__")
+
+
+def _builtin_provider_violations(
+    graph: dict[str, set[str]],
+    path_by_module: dict[str, Path],
+) -> list[str]:
+    """Keep each built-in provider on the public SDK and its declared libraries."""
+    public = _sdk_names()
+    failures: list[str] = []
+    for module in sorted(item for item in graph if _under(item, BUILTIN_PROVIDERS)):
+        if module == BUILTIN_PROVIDERS:
+            continue
+        owner = module.removeprefix(f"{BUILTIN_PROVIDERS}.").split(".")[0]
+        allowed = (
+            f"{BUILTIN_PROVIDERS}.{owner}",
+            *(
+                f"{BUILTIN_PROVIDERS}.{library}"
+                for library, users in BUILTIN_SHARED_LIBRARIES.items()
+                if owner in users
+            ),
+            *CORE_BUILTIN_PROVIDERS.get(owner, ()),
+        )
+        for dependency in sorted(graph[module]):
+            if dependency in {VIEW_PROVIDER_PACKAGE, BUILTIN_PROVIDERS}:
+                continue
+            if not any(_under(dependency, prefix) for prefix in allowed):
+                failures.append(
+                    f"built-in provider dependency: {module} -> {dependency}"
+                )
+        tree = ast.parse(path_by_module[module].read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            # Attribute access on a module import would reach private SDK names.
+            if isinstance(node, ast.Import) and any(
+                alias.name == VIEW_PROVIDER_PACKAGE for alias in node.names
+            ):
+                failures.append(
+                    f"built-in provider imports the SDK module instead of its "
+                    f"public names: {module}"
+                )
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == VIEW_PROVIDER_PACKAGE
+            ):
+                for alias in node.names:
+                    if alias.name not in public:
+                        failures.append(
+                            f"built-in provider uses a non-public SDK name: "
+                            f"{module} -> {VIEW_PROVIDER_PACKAGE}.{alias.name}"
+                        )
+    return failures
 
 
 def _fresh_import(module: str) -> str | None:

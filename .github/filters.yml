@@ -25,8 +25,20 @@ pages_control: &pages_control
   - "scripts/check-workflow-results.test.sh"
   - .github/actions/pr-validation/**
 
+# Publication scripts are tested through their shell boundary in the Python
+# suite.
+publication_scripts: &publication_scripts
+  - "scripts/check-release.sh"
+  - "scripts/preview-version.sh"
+  - "scripts/publish-preview.sh"
+  - "scripts/release.sh"
+  - "scripts/require-release-checks.sh"
+  - "scripts/verify-pypi.sh"
+  - "scripts/write-dist-checksums.py"
+
 python_inputs: &python_inputs
   - *ci_control
+  - *publication_scripts
   - ".python-version"
   - "pyproject.toml"
   - "uv.lock"
@@ -41,6 +53,7 @@ frontend_inputs: &frontend_inputs
   - "pnpm-lock.yaml"
   - "pnpm-workspace.yaml"
   - "tsconfig.json"
+  - "tsconfig.node.json"
   - "vite.config.ts"
   - "apps/browser/**"
   - "apps/e2e/**"
@@ -81,6 +94,7 @@ browser_infra: &browser_infra
   - "pnpm-workspace.yaml"
   - "pyproject.toml"
   - "tsconfig.json"
+  - "tsconfig.node.json"
   - "uv.lock"
   - "apps/e2e/package.json"
   - "apps/e2e/scripts/tsconfig.json"
@@ -103,6 +117,50 @@ notebook_services: &notebook_services
   - apps/e2e/scripts/registered-notebook-process.ts
   - apps/e2e/scripts/_compat/**
   - apps/e2e/scripts/static-server.py
+
+# Pull requests that change these paths also run the macOS and Windows
+# contracts that otherwise run after merge.
+platform_sensitive:
+  - ".github/**"
+  - "Makefile"
+  - ".python-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "pyproject.toml"
+  - "uv.lock"
+  - "pixi.toml"
+  - "pixi.lock"
+  - "packages/marimo-studio/pyproject.toml"
+  - "packages/marimo-studio/src/marimo_studio/_filesystem/**"
+  - "packages/marimo-studio/src/marimo_studio/_processes/**"
+  - "packages/marimo-studio/src/marimo_studio/_server/development/**"
+  - "packages/marimo-studio/src/marimo_studio/view_providers/_host/**"
+  - "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/**"
+  - "packages/marimo-studio/tests/filesystem/**"
+  - "packages/marimo-studio/tests/processes/**"
+  - "scripts/python-test.sh"
+  - "scripts/verify-installed-wheel.sh"
+  - "scripts/verify-installed-package.py"
+  - "apps/e2e/package.json"
+  - "apps/e2e/playwright*.ts"
+  - "apps/e2e/scripts/**"
+  - "apps/e2e/unit/**"
+
+# The platform workflow selects every platform contract when it changes.
+platform_control:
+  - ".github/workflows/platforms.yml"
+
+# Pull requests that change the documentation site or its examples build the
+# complete site. Other pull requests that reach the site export a smoke subset.
+docs_site:
+  - *pages_control
+  - "README.md"
+  - "docs/**"
+  - "apps/docs/**"
+  - "packages/marimo-studio/README.md"
+  - "skills/marimo-studio/**"
+  - "examples/**"
 
 documentation:
   - "README.md"
@@ -135,6 +193,7 @@ pages:
   - "pnpm-workspace.yaml"
   - "pyproject.toml"
   - "tsconfig.json"
+  - "tsconfig.node.json"
   - "uv.lock"
 
 quality:
@@ -155,6 +214,9 @@ quality:
 
 python_contracts:
   - *python_inputs
+  - ".github/actions/setup-pixi/**"
+  - "pixi.toml"
+  - "pixi.lock"
 
 frontend_contracts:
   - *frontend_inputs
@@ -168,6 +230,7 @@ distribution:
   - "plugin.json"
   - "pyproject.toml"
   - "tsconfig.json"
+  - "tsconfig.node.json"
   - "uv.lock"
   - "vite.config.ts"
   - "packages/marimo-studio/pyproject.toml"
@@ -177,16 +240,12 @@ distribution:
   - *browser_assets
   - "skills/marimo-studio/**"
   - "apps/e2e/fixtures-provider/provider/**"
-  - "scripts/check-release.sh"
-  - "scripts/release.sh"
-  - "scripts/require-release-checks.sh"
+  - *publication_scripts
   - "scripts/verify-dist.sh"
   - "scripts/verify-installed-wheel.sh"
   - "scripts/verify-installed-package.py"
   - "scripts/verify-external-provider.py"
-  - "scripts/verify-pypi.sh"
   - "scripts/verify-provider-bootstrap.py"
-  - "scripts/write-dist-checksums.py"
 
 installed_distribution:
   - *ci_control
@@ -196,6 +255,7 @@ installed_distribution:
   - "pnpm-workspace.yaml"
   - "pyproject.toml"
   - "tsconfig.json"
+  - "tsconfig.node.json"
   - "uv.lock"
   - "vite.config.ts"
   - "packages/marimo-studio/pyproject.toml"
@@ -221,6 +281,7 @@ main_browser:
   - "!apps/e2e/tests/provider-runtime.spec.ts"
   - "!apps/e2e/tests/provider-reveal.spec.ts"
   - "!apps/e2e/tests/external-provider.spec.ts"
+  - "!apps/e2e/tests/provider-quarto.spec.ts"
   - "apps/e2e/scripts/collaborative-workspace.ts"
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
@@ -238,10 +299,14 @@ provider_browser:
   - "apps/e2e/tests/provider-runtime.spec.ts"
   - "apps/e2e/tests/provider-reveal.spec.ts"
   - "apps/e2e/tests/external-provider.spec.ts"
+  - "apps/e2e/tests/provider-quarto.spec.ts"
   - "apps/e2e/tests/!(*.spec).ts"
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
   - apps/e2e/scripts/provider-workspace.ts
+  - ".github/actions/setup-pixi/**"
+  - "pixi.toml"
+  - "pixi.lock"
   - apps/e2e/scripts/export-repository.ts
   - apps/e2e/tests/provider-fixture.ts
 

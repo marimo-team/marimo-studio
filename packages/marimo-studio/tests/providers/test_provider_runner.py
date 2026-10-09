@@ -157,7 +157,7 @@ def test_cancelled_provider_process_finishes_when_extension_ignores_cancellation
         selected_build = replace(
             selected_build,
             cancellation=cancellation,
-            runner=create_provider_runner(project, cancellation, 1),
+            runner=create_provider_runner(project.root, cancellation, 1),
         )
 
         def invoke() -> object:
@@ -194,7 +194,7 @@ def test_provider_runner_executes_a_bounded_project_command(
         {},
     )
     cancellation = ProviderCancellation()
-    runner = create_provider_runner(project, cancellation)
+    runner = create_provider_runner(project.root, cancellation)
 
     completed = runner.run(
         [sys.executable, "-c", "print('built')"],
@@ -228,7 +228,7 @@ def test_provider_runner_requires_a_finite_positive_command_timeout(
 
     with pytest.raises(ProviderCommandError, match="finite positive number"):
         create_provider_runner(
-            project,
+            project.root,
             ProviderCancellation(),
             command_timeout=timeout,
         )
@@ -264,7 +264,7 @@ def test_provider_runner_charges_only_supervised_command_time(
     monkeypatch.setattr(provider_runner_module, "monotonic", lambda: next(times))
     monkeypatch.setattr(provider_runner_module, "ProcessSupervisor", Supervisor)
     runner = create_provider_runner(
-        project,
+        project.root,
         ProviderCancellation(),
         command_timeout=120,
     )
@@ -287,7 +287,7 @@ def test_provider_runner_rejects_cancelled_work(tmp_path: Path) -> None:
     cancellation.cancel()
 
     with pytest.raises(ProviderCommandError, match="cancelled"):
-        create_provider_runner(project, cancellation).run(
+        create_provider_runner(project.root, cancellation).run(
             [sys.executable, "-c", "raise SystemExit(0)"],
             cwd=tmp_path,
         )

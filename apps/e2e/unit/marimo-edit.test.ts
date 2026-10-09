@@ -29,7 +29,7 @@ test.each([
   [
     "a different pinned Marimo version",
     'server.version = lambda name: "0.24.2"\nserver.configure_editor_fixture()',
-    "expected version 0.25.0, found 0.24.2",
+    "expected version 0.25.1, found 0.24.2",
   ],
   [
     "missing endpoint ownership",

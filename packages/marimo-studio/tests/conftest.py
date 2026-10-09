@@ -16,7 +16,7 @@ from marimo_studio._compat.layout import (
     MARIMO_FRONTEND_PATCH_SHA256,
     MARIMO_RELEASE_COMMIT,
 )
-from marimo_studio.view_providers._bundled._deno import runtime as deno_runtime
+from marimo_studio.view_providers._builtin._deno import runtime as deno_runtime
 
 from .helpers import notebook_source
 
@@ -67,6 +67,19 @@ def filesystem_shape(
     if shape == "object-storage":
         monkeypatch.setattr(publish.os, "link", _reject_hard_link)
     return shape
+
+
+@pytest.fixture(autouse=True)
+def outside_marimohub() -> Iterator[None]:
+    """Run each test outside a marimohub session unless the test publishes one.
+
+    A private MonkeyPatch keeps the test's own ``monkeypatch`` teardown order,
+    which module fixtures that restore process globals depend on.
+    """
+    with pytest.MonkeyPatch.context() as environment:
+        environment.delenv("MARIMOHUB_CONTEXT_FILE", raising=False)
+        environment.delenv("MARIMOHUB_KERNEL_URL", raising=False)
+        yield
 
 
 @pytest.fixture(autouse=True, scope="session")

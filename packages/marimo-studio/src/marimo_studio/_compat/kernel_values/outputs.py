@@ -1,4 +1,9 @@
-"""Format permitted notebook values through Marimo's native output registry."""
+"""Format permitted notebook values for output hosts.
+
+An output with an accept list renders through marimo-export's media
+negotiation, so the notebook's own output settings stay unchanged. Other
+outputs format through Marimo's native output registry.
+"""
 
 from __future__ import annotations
 
@@ -10,15 +15,15 @@ import time
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
+from marimo_export.values import RepresentationError, ValueSelector, represent
+
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
+from marimo_studio._projections.media_output import media_output
 from marimo_studio._projections.runtime_records import (
+    MEDIA_SCALE,
     OutputRenderResult,
     RenderedOutput,
     ValueReadError,
-)
-from marimo_studio._projections.values import (
-    parse_value_reference,
-    resolve_value_reference,
 )
 
 
@@ -45,7 +50,7 @@ def _encoded_size(value: object) -> int:
 
 
 _OVERLAY_CONSUMER = "__marimo_studio_overlays__"
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger("marimo.studio")
 
 
 class KernelOutputRenderer:
@@ -73,57 +78,44 @@ class KernelOutputRenderer:
     def render(
         self,
         namespace: Mapping[str, object],
-        selectors: tuple[str, ...],
-        active_selectors: tuple[str, ...],
-        allowed: set[str],
+        selectors: Mapping[str, ValueSelector],
+        active: Iterable[str],
+        accept: Mapping[str, tuple[str, ...]],
         *,
         consumer_id: str,
         max_output_bytes: int,
     ) -> OutputRenderResult:
+        """Render requested selectors that are active, each in its accept list."""
         if self._closed:
             raise RuntimeError("The output renderer has already closed.")
-        selectors = tuple(dict.fromkeys(selectors))
-        active = set(active_selectors).intersection(allowed)
+        active = set(active)
         values: dict[str, object] = {}
         errors: dict[str, ValueReadError] = {}
-        for selector in selectors:
-            if selector not in allowed:
-                errors[selector] = ValueReadError(
-                    "unknown-selector",
-                    f"Selector {selector!r} is not authorized for this request.",
-                )
-                continue
-            if selector not in active:
-                errors[selector] = ValueReadError(
+        for source, selector in selectors.items():
+            if source not in active:
+                errors[source] = ValueReadError(
                     "inactive-selector",
-                    f"Selector {selector!r} is not mounted in the presentation.",
+                    f"Selector {source!r} is not mounted in the presentation.",
                 )
                 continue
-            try:
-                reference = parse_value_reference(selector)
-            except ValueError as error:
-                errors[selector] = ValueReadError("invalid-selector", str(error))
-                continue
-            if reference.variable not in namespace:
-                errors[selector] = ValueReadError(
+            if selector.root not in namespace:
+                errors[source] = ValueReadError(
                     "missing-variable",
-                    f"Variable {reference.variable!r} is not defined",
+                    f"Variable {selector.root!r} is not defined",
                 )
                 continue
             try:
-                value = resolve_value_reference(namespace, reference)
+                values[source] = selector.resolve(namespace)
             except Exception as error:
-                errors[selector] = ValueReadError(
+                errors[source] = ValueReadError(
                     "value-path-unavailable",
-                    f"Selector {selector!r} could not be resolved: {error}",
+                    f"Selector {source!r} could not be resolved: {error}",
                 )
-                continue
-
-            values[selector] = value
         return self._render_values(
             values,
             errors,
             active,
+            accept,
             consumer_id=consumer_id,
             max_output_bytes=max_output_bytes,
             overlays=self._render_overlays(
@@ -136,6 +128,7 @@ class KernelOutputRenderer:
         values: Mapping[str, object],
         errors: dict[str, ValueReadError],
         active: set[str],
+        accept: Mapping[str, tuple[str, ...]],
         *,
         consumer_id: str,
         max_output_bytes: int,
@@ -153,7 +146,9 @@ class KernelOutputRenderer:
         outputs: dict[str, RenderedOutput] = {}
         failed: set[tuple[str, str]] = set()
         for selector, value in values.items():
-            output, error = self._format(consumer_id, selector, value)
+            output, error = self._format(
+                consumer_id, selector, value, accept.get(selector, ())
+            )
             if error is not None:
                 failed.add((consumer_id, selector))
                 errors[selector] = error
@@ -221,6 +216,7 @@ class KernelOutputRenderer:
                 changed,
                 {},
                 set(values),
+                {},
                 consumer_id=_OVERLAY_CONSUMER,
                 max_output_bytes=max_output_bytes,
             )
@@ -269,11 +265,33 @@ class KernelOutputRenderer:
         consumer_id: str,
         selector: str,
         value: object,
+        accept: tuple[str, ...],
     ) -> tuple[RenderedOutput | None, ValueReadError | None]:
         from marimo._output.formatting import try_format
         from marimo._types.ids import CellId_t
 
         owner = CellId_t(_owner_id(consumer_id, selector))
+        if accept:
+            try:
+                representation = represent(value, accept, scale=MEDIA_SCALE)
+            except RepresentationError as error:
+                return None, ValueReadError(
+                    "output-media-unavailable",
+                    f"Selector {selector!r}: {_message(error)}",
+                )
+            except Exception as error:
+                return None, ValueReadError(
+                    "output-format-error",
+                    f"Selector {selector!r} could not be formatted: {_message(error)}",
+                )
+            mimetype, data = media_output(representation)
+            return RenderedOutput(
+                owner_cell_id=str(owner),
+                mimetype=mimetype,
+                data=data,
+                timestamp=time.time(),
+                reset_ui_object_ids=self._replacement_resets(consumer_id, selector),
+            ), None
         try:
             with (
                 self._context.with_cell_id(owner),

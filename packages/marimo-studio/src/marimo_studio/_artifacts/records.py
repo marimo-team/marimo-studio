@@ -9,9 +9,9 @@ from typing import Any, Literal
 from marimo_studio._filesystem.files import TreeVersion
 from marimo_studio.view_providers import (
     BuildProfile,
-    MountDeclaration,
     ProjectDiagnostic,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 from marimo_studio.view_providers._host.records import ProviderProvenance
 
 ViewBuildPhase = Literal["unbuilt", "building", "failed", "published", "stale"]
@@ -50,6 +50,20 @@ class ArtifactFile:
 
 
 @dataclass(frozen=True)
+class ArtifactTemplate:
+    """Describe the private build output a provider renders with values.
+
+    Template files stay beside the public files of a revision. Studio never
+    serves or exports them. ``renderer`` fingerprints the provider build that
+    produced and renders them.
+    """
+
+    document: PurePosixPath
+    files: tuple[ArtifactFile, ...]
+    renderer: str
+
+
+@dataclass(frozen=True)
 class ViewArtifact:
     """One immutable browser artifact published beneath a view project."""
 
@@ -57,14 +71,15 @@ class ViewArtifact:
     profile: BuildProfile
     document: PurePosixPath
     files: tuple[ArtifactFile, ...]
-    mounts: tuple[MountDeclaration, ...]
+    sites: tuple[ArtifactSite, ...]
     project_revision: str
     artifact_revision: str
     provider: ProviderProvenance
+    template: ArtifactTemplate | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema": 1,
+            "schema": 2,
             "root": str(self.root),
             "profile": self.profile,
             "document": self.document.as_posix(),
@@ -72,7 +87,7 @@ class ViewArtifact:
                 {"path": item.path.as_posix(), "sha256": item.sha256, "size": item.size}
                 for item in self.files
             ],
-            "mounts": [item.to_dict() for item in self.mounts],
+            "sites": [item.to_dict() for item in self.sites],
             "project_revision": self.project_revision,
             "artifact_revision": self.artifact_revision,
             "provider": self.provider.to_dict(),
@@ -86,7 +101,8 @@ class ArtifactManifest:
     artifact_revision: str
     document: PurePosixPath
     files: tuple[ArtifactFile, ...]
-    mounts: tuple[MountDeclaration, ...]
+    sites: tuple[ArtifactSite, ...]
+    template: ArtifactTemplate | None = None
 
 
 @dataclass(frozen=True)

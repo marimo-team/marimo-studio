@@ -10,22 +10,41 @@ process-wide registry so they agree about provider identity and starter
 selection.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from threading import Lock
 
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_REQUIREMENTS,
+    BUILTIN_PROVIDER_REQUIREMENTS,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
 _REGISTRY: ProviderRegistry | None = None
 _REGISTRY_LOCK = Lock()
+_SELECTED: ContextVar[ProviderRegistry | None] = ContextVar(
+    "marimo_studio_provider_registry", default=None
+)
+
+
+@contextmanager
+def selected_registry(registry: ProviderRegistry) -> Iterator[None]:
+    """Resolve providers from ``registry`` in this context and its tasks."""
+    token = _SELECTED.set(registry)
+    try:
+        yield
+    finally:
+        _SELECTED.reset(token)
 
 
 def provider_registry() -> ProviderRegistry:
-    """Return the process-wide provider registry."""
+    """Return the selected registry, or the process-wide one."""
     global _REGISTRY
+    selected = _SELECTED.get()
+    if selected is not None:
+        return selected
     if _REGISTRY is None:
         with _REGISTRY_LOCK:
             if _REGISTRY is None:
-                _REGISTRY = ProviderRegistry.discover(BUNDLED_PROVIDER_REQUIREMENTS)
+                _REGISTRY = ProviderRegistry.discover(BUILTIN_PROVIDER_REQUIREMENTS)
     return _REGISTRY

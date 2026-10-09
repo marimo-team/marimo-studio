@@ -13,7 +13,7 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import BuildResult, ProjectDiagnostic
 from marimo_studio.view_providers._host.identity import starter_id
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_REQUIREMENTS,
+    BUILTIN_PROVIDER_REQUIREMENTS,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
@@ -145,7 +145,7 @@ def test_repeated_setup_and_vanilla_preserve_the_react_requirement(
             candidate("react", react, distribution="marimo-studio"),
             candidate("vanilla", vanilla, distribution="marimo-studio"),
         ),
-        BUNDLED_PROVIDER_REQUIREMENTS,
+        BUILTIN_PROVIDER_REQUIREMENTS,
     )
     install_registry(monkeypatch, registry)
 
@@ -155,6 +155,74 @@ def test_repeated_setup_and_vanilla_preserve_the_react_requirement(
 
     dependencies = _dependencies(notebook_path)
     assert dependencies == (f"marimo-studio[deno]=={version('marimo-studio')}",)
+
+
+def _declare_studio(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    requirement: str,
+) -> None:
+    react = ProviderStub("marimo-studio/react", "react")
+    typst = ProviderStub("marimo-studio/typst", "typst")
+    vanilla = ProviderStub("marimo-studio/vanilla", "vanilla")
+    registry = ProviderRegistry(
+        (
+            candidate("react", react, distribution="marimo-studio"),
+            candidate("typst", typst, distribution="marimo-studio"),
+            candidate("vanilla", vanilla, distribution="marimo-studio"),
+        ),
+        BUILTIN_PROVIDER_REQUIREMENTS,
+    )
+    install_registry(monkeypatch, registry)
+    notebook_path.write_text(
+        f"# /// script\n# dependencies = [{requirement!r}]\n# ///\n\n"
+        + notebook_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+
+def test_setup_keeps_a_declared_direct_studio_reference(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = (notebook_path.parent / "marimo_studio-9.9.9-py3-none-any.whl").as_uri()
+    _declare_studio(notebook_path, monkeypatch, f"marimo-studio @ {wheel}")
+
+    prepare_view(notebook_path, "dashboard", starter="marimo-studio/react:react")
+    prepare_view(notebook_path, "report", starter="marimo-studio/vanilla:vanilla")
+
+    assert _dependencies(notebook_path) == (f"marimo-studio[deno] @ {wheel}",)
+
+
+def test_setup_adds_every_provider_extra_to_a_direct_studio_reference(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = (notebook_path.parent / "marimo_studio-9.9.9-py3-none-any.whl").as_uri()
+    _declare_studio(notebook_path, monkeypatch, f"marimo-studio @ {wheel}")
+
+    prepare_view(notebook_path, "dashboard", starter="marimo-studio/react:react")
+    prepare_view(notebook_path, "paper", starter="marimo-studio/typst:typst")
+
+    assert _dependencies(notebook_path) == (f"marimo-studio[deno,typst] @ {wheel}",)
+
+
+def test_setup_pins_a_direct_studio_reference_limited_by_a_marker(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = (notebook_path.parent / "marimo_studio-9.9.9-py3-none-any.whl").as_uri()
+    _declare_studio(
+        notebook_path,
+        monkeypatch,
+        f'marimo-studio @ {wheel} ; python_version >= "3.10"',
+    )
+
+    prepare_view(notebook_path, "dashboard", starter="marimo-studio/react:react")
+
+    assert _dependencies(notebook_path) == (
+        f"marimo-studio[deno]=={version('marimo-studio')}",
+    )
 
 
 def test_setup_keeps_requirements_for_every_installed_third_party_view(

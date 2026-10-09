@@ -1,14 +1,14 @@
 ---
 name: marimo-studio
 description: >-
-  Create, inspect, and refine web views of a marimo notebook. Use for Studio
+  Create, inspect, and refine views of a marimo notebook. Use for Studio
   view source, live notebook projections, browser verification, selected
   feedback, and running or exporting a named view.
 ---
 
 # Author Studio views
 
-Studio turns one reactive notebook into named web views. The notebook owns
+Studio turns one reactive notebook into named views. The notebook owns
 computation, data, controls, and domain decisions. A view owns its presentation
 and browser interaction. Studio owns view projects, builds, and delivery.
 
@@ -61,10 +61,29 @@ to read the notebook's absolute `path`, and pass `--token-file <PATH>` to every
 uvx --with marimo-studio marimo pair notebook list --url <URL> --token-file <PATH>
 ```
 
-When the notebook is not running, start it in the background. For a topic with
-no notebook, choose a new file name and marimo creates the file. marimo opens a
-Studio tab in the user's browser, and the notebook appears in the list once
-that tab connects:
+In a [marimohub](https://marimo-team.github.io/marimo-studio/guide/marimohub)
+sandbox, such as an OpenCode agent or a VS Code terminal, the hub sets
+`MARIMOHUB_KERNEL_URL` and `MARIMOHUB_KERNEL_TOKEN_FILE`. The hub owns the
+session's server. Attach to it through the sandbox's own environment, which
+already includes Studio, and pass both values to every `pair` command. Do not
+start another server or disable authentication:
+
+```console
+kernel_args=(--url "$MARIMOHUB_KERNEL_URL")
+if [[ -n "${MARIMOHUB_KERNEL_TOKEN_FILE:-}" ]]; then
+  kernel_args+=(--token-file "$MARIMOHUB_KERNEL_TOKEN_FILE")
+fi
+uv run --no-sync marimo pair notebook list "${kernel_args[@]}"
+```
+
+In a hub session, check `status().persistence` before you create a view. When
+it is `"source"` or `"none"`, tell the user that the hub discards view files
+when the session ends.
+
+Outside marimohub, when the notebook is not running, start it in the background.
+For a topic with no notebook, choose a new file name and marimo creates the
+file. marimo opens a Studio tab in the user's browser, and the notebook appears
+in the list once that tab connects:
 
 ```console
 uvx --with "marimo-studio[deno]" marimo edit notebook.py --sandbox --watch --no-token
@@ -75,9 +94,14 @@ file. `--no-token` serves the editor on localhost without an access token,
 which lets `pair notebook list` find it. Studio needs `marimo-studio` in the
 marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
-Notebook Kit starters. `help(marimo._code_mode)` then lists Studio as the
-`studio` capability, and sandboxed kernels import the same Studio as the
-server. For views across several notebooks, serve their folder as
+Notebook Kit starters, and its `typst` extra enables the Typst starter. The
+Quarto starter needs the `quarto` command from
+https://quarto.org/docs/get-started/ or `pixi global install quarto`. A
+notebook in a pixi workspace runs Studio through
+`pixi run marimo edit notebook.py --no-sandbox --watch`.
+`help(marimo._code_mode)` then lists Studio as the `studio` capability, and
+sandboxed kernels import the same Studio as the server. For views across
+several notebooks, serve their folder as
 [setup](references/setup.md#serve-several-notebooks) describes. Create, edit,
 and run cells through `marimo._code_mode`, following the `pair --help`
 workflow. Without a way to run the notebook, continue with

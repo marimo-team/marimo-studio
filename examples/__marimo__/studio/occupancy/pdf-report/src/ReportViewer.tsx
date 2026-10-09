@@ -11,8 +11,8 @@ export interface PdfInstance {
 
 const PDF_WORKER = new URL("./pdf.worker.min.mjs", import.meta.url).href;
 const PAGE_LABELS = [
-  "Executive summary",
-  "Environmental profile",
+  "Room use",
+  "Sensor conditions",
   "Model evidence",
 ] as const;
 

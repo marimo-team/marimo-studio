@@ -25,7 +25,10 @@ from marimo_studio._server.runtime.catalog import (
     ServerRuntime,
     WasmRuntime,
 )
-from marimo_studio.errors._internal import RuntimeSyncError
+from marimo_studio.errors._internal import (
+    RuntimeSyncError,
+    RuntimeSyncRequiredError,
+)
 
 
 def _snapshot(
@@ -428,3 +431,57 @@ def test_server_runtime_waits_for_saved_cell_execution(
     else:
         result = asyncio.run(project())
         assert result.cell_refs == {str(reference): "runtime-cell"}
+
+
+@pytest.mark.parametrize("execution_pending", [False, True])
+def test_server_runtime_distinguishes_required_execution_from_active_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    execution_pending: bool,
+) -> None:
+    reference = CellRef("0" * 64, "1" * 64)
+
+    class Sessions:
+        async def live_cells(self, *_args: object, **_kwargs: object):
+            return LiveCellSnapshot(
+                owner="session:first",
+                generation="1" * 64,
+                ids={reference: "runtime-cell"},
+                names={},
+                dependency_closures={},
+                current_refs=({"runtime-cell": reference} if execution_pending else {}),
+                execution_pending=execution_pending,
+            )
+
+    monkeypatch.setattr(
+        catalog_module, "presentation_revision_path", lambda *_args, **_kwargs: "/"
+    )
+    monkeypatch.setattr(
+        catalog_module,
+        "presentation_revision_capability",
+        lambda *_args, **_kwargs: "capability",
+    )
+    runtime = ServerRuntime(cast(SessionState, Sessions()))
+
+    async def project() -> RuntimeProjection:
+        return await runtime.project(
+            _snapshot(tmp_path),
+            _context(tmp_path),
+            "s_123456",
+            "binding",
+            "presentation",
+            "runtime",
+        )
+
+    if execution_pending:
+        with pytest.raises(RuntimeSyncError, match="finish running") as raised:
+            asyncio.run(project())
+        assert not isinstance(raised.value, RuntimeSyncRequiredError)
+        assert raised.value.transient is True
+    else:
+        with pytest.raises(RuntimeSyncRequiredError) as raised:
+            asyncio.run(project())
+        assert raised.value.transient is False
+        assert raised.value.public_hint == (
+            "Run the changed notebook cells in the editor, then retry the preview."
+        )

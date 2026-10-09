@@ -106,7 +106,11 @@ marimo-studio status [--target PATH] [--json]
 
 Returns the notebook, active configuration source, default view, allowed
 runtimes, cell aliases, named views, and exact `launch_requirements` for Studio
-and configured provider distributions. An unconfigured notebook includes the
+and configured provider distributions. In a
+[marimohub](../guide/marimohub.md) session, `persistence` reports which files
+the hub saves when the session ends. It is `null` outside marimohub and before
+the hub publishes the session. An
+unconfigured notebook includes the
 command that creates its first view. The command inspects every configured view
 through its provider.
 
@@ -152,6 +156,7 @@ local CSS and JavaScript files. `--starter` selects another installed starter.
 
 A completed creation returns exact `launch_requirements` in JSON and prints an
 environment-aware launch command. Project notebooks use `uv run` with
+`--no-sandbox`, and notebooks in a pixi workspace use `pixi run` with
 `--no-sandbox`. Standalone notebooks use `uvx` with `--sandbox`. Install and run
 requirements for reviewed providers.
 
@@ -177,7 +182,7 @@ marimo-studio view inspect VIEW [--target PATH] [--json]
 ```
 
 Inspects current filesystem content and returns the project `root`, ownership,
-source documents, file revisions, diagnostics, and development publication
+Source documents, file revisions, diagnostics, and development publication
 state. `files_complete` reports whether source and build-input discovery
 completed. `project_revision` identifies current inputs, while
 `published_project_revision` identifies the retained artifact's inputs.
@@ -192,7 +197,7 @@ values.
 marimo-studio view read VIEW DOCUMENT [--target PATH] [--json]
 ```
 
-Reads one authorized UTF-8 source document and its current source revision.
+Reads one authorized UTF-8 Source document and its current source revision.
 
 Use `--json` before editing. The JSON result includes `revision`,
 `catalog_generation`, and `view_generation` from the same source read. Human
@@ -324,8 +329,9 @@ returns a JSON string. Open it with your preferred browser tool. The URL keeps
 the origin and path of `--server`, including a proxy path prefix. The CLI sends
 its own request to that server URL. When it reaches the server through a local
 address, open the same path beneath the browser's public root. The server must
-expose the requested runtime. Edit-mode Python previews require an open
-notebook session. Use `MARIMO_STUDIO_SERVER_URL` to supply the server URL and
+expose the requested runtime. Edit-mode
+Python previews require an open notebook session. Use
+`MARIMO_STUDIO_SERVER_URL` to supply the server URL and
 `MARIMO_STUDIO_ACCESS_TOKEN` to authenticate the request when needed. The
 browser requires its own normal server authentication.
 

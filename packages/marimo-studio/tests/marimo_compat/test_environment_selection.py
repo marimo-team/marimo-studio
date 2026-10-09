@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from dataclasses import dataclass
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from itertools import pairwise
 from pathlib import Path
 
@@ -332,6 +332,25 @@ def test_installed_deno_extra_checks_its_exact_dependency(
 
     assert not environment_module._installed_requirement_satisfies(
         f"marimo-studio[deno]=={studio_version}"
+    )
+
+
+@pytest.mark.deno
+def test_installed_recommended_extra_checks_the_extras_it_includes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio_version = version("marimo-studio")
+    installed_version = environment_module.version
+
+    def without_lens(distribution: str) -> str:
+        if distribution == "marimo-lens":
+            raise PackageNotFoundError(distribution)
+        return installed_version(distribution)
+
+    monkeypatch.setattr(environment_module, "version", without_lens)
+
+    assert not environment_module._installed_requirement_satisfies(
+        f"marimo-studio[recommended]=={studio_version}"
     )
 
 

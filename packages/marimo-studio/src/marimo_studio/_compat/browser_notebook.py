@@ -5,26 +5,33 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
-from collections.abc import Mapping
 from importlib.metadata import packages_distributions
 from pathlib import Path
 
+import marimo_export.values
 from packaging.utils import NormalizedName, canonicalize_name
 
 from marimo_studio._compat.browser_bridge import install_browser_bridge
 from marimo_studio._compat.kernel_values.arrow import (
     _ArrowMaterializationRequired,
+    _ArrowValueTooLarge,
     _dataframe_ipc,
 )
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.notebook import run_guard_line
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS
-from marimo_studio._projections.records import ValueReference
-from marimo_studio._projections.values import MAX_OUTPUT_SELECTORS, MAX_VALUE_PATH_STEPS
+from marimo_studio._projections import media_output
+from marimo_studio._projections.resolution import (
+    MAX_UNIQUE_OUTPUT_TARGETS,
+    MAX_UNIQUE_VALUE_TARGETS,
+)
+from marimo_studio._projections.runtime_records import (
+    BROWSER_VALUE_LIMITS,
+    MAX_OUTPUT_BYTES,
+    MEDIA_SCALE,
+)
 from marimo_studio._workspace.metadata import browser_notebook_metadata_source
 
-MAX_VALUE_SELECTOR_COUNT = 100
-MAX_VALUE_BYTES = 1_000_000
 MAX_ERROR_MESSAGE_LENGTH = 1_024
 WASM_PROJECTION_NAMESPACE = "_marimo_studio_wasm"
 BROWSER_BRIDGE_CELL_NAME = "__marimo_studio_values"
@@ -56,18 +63,6 @@ def _imported_distributions(source: str) -> frozenset[NormalizedName]:
     return frozenset(imported)
 
 
-def selector_specs(
-    references: Mapping[str, ValueReference],
-) -> dict[str, tuple[str, tuple[tuple[str, str | int], ...]]]:
-    return {
-        source: (
-            reference.variable,
-            tuple((step.kind, step.value) for step in reference.path),
-        )
-        for source, reference in sorted(references.items())
-    }
-
-
 def _bridge_body() -> str:
     source = inspect.getsource(install_browser_bridge)
     module = ast.parse(source)
@@ -95,6 +90,7 @@ def _value_bridge() -> str:
         "\n\n".join(
             (
                 inspect.getsource(_ArrowMaterializationRequired),
+                inspect.getsource(_ArrowValueTooLarge),
                 inspect.getsource(_dataframe_ipc),
                 _bridge_body(),
             )
@@ -107,11 +103,17 @@ def {BROWSER_BRIDGE_CELL_NAME}():
     _studio_config_private_query_keys = frozenset({private_query_keys!r})
     _studio_config_output_owner_prefix = {OUTPUT_OWNER_PREFIX!r}
     _studio_config_namespace = {WASM_PROJECTION_NAMESPACE!r}
-    _studio_config_max_value_selector_count = {MAX_VALUE_SELECTOR_COUNT}
-    _studio_config_max_value_bytes = {MAX_VALUE_BYTES}
+    _studio_config_max_value_selector_count = {MAX_UNIQUE_VALUE_TARGETS}
+    _studio_config_max_json_value_bytes = {BROWSER_VALUE_LIMITS.json_value_bytes}
+    _studio_config_max_json_read_bytes = {BROWSER_VALUE_LIMITS.json_read_bytes}
+    _studio_config_max_arrow_value_bytes = {BROWSER_VALUE_LIMITS.arrow_value_bytes}
+    _studio_config_max_arrow_read_bytes = {BROWSER_VALUE_LIMITS.arrow_read_bytes}
+    _studio_config_max_output_bytes = {MAX_OUTPUT_BYTES}
     _studio_config_max_error_message_length = {MAX_ERROR_MESSAGE_LENGTH}
-    _studio_config_max_value_path_steps = {MAX_VALUE_PATH_STEPS}
-    _studio_config_max_output_selectors = {MAX_OUTPUT_SELECTORS}
+    _studio_config_max_output_selectors = {MAX_UNIQUE_OUTPUT_TARGETS}
+    _studio_config_media_scale = {MEDIA_SCALE!r}
+    _studio_config_values_source = {inspect.getsource(marimo_export.values)!r}
+    _studio_config_media_source = {inspect.getsource(media_output)!r}
 
 {implementation}
 """

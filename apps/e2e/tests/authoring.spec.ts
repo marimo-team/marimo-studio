@@ -61,9 +61,16 @@ test("reuses a warm view artifact with current notebook changes", async ({
     2,
   );
   await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+  // A superseded warm build can write a cancelled receipt before the published one.
   await expect
-    .poll(() => readWorkspaceFile(receiptPath).catch(() => null), { timeout: 30_000 })
-    .not.toBeNull();
+    .poll(
+      async () => {
+        const receipt = await readWorkspaceFile(receiptPath).catch(() => null);
+        return receipt === null ? null : JSON.parse(receipt).build.phase;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe("published");
   const warmedReceipt = await readWorkspaceFile(receiptPath);
 
   const metricRefresh = await captureProjectionRefresh(page, browserDiagnostics);
@@ -806,4 +813,45 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
     await live.close();
     await exact.close();
   }
+});
+
+test("recovers the preview once a broken notebook is fixed", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const notebook = await readWorkspaceFile(workspaceNotebookPath);
+  await page.goto(studioEntryUrl);
+  const preview = await waitForPreview(page);
+  const status = page.getByRole("status", { name: "View status" });
+  const failedRefresh = browserDiagnostics.expectResponse({
+    status: 500,
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
+    error: "notebook-source-error",
+  });
+  const failedRefreshConsole = browserDiagnostics.expectConsole({
+    type: "error",
+    text: /marimo-studio presentation refresh error.*More than one notebook cell defines the same name/,
+  });
+
+  try {
+    await writeWorkspaceFile(
+      workspaceNotebookPath,
+      notebook.replace(
+        'if __name__ == "__main__":',
+        '@app.cell\ndef duplicate_metric():\n    metric = 1\n    return (metric,)\n\n\nif __name__ == "__main__":',
+      ),
+    );
+    await expect(status).toContainText("Needs repair");
+    await expect(page.getByRole("alert")).toContainText(
+      "More than one notebook cell defines the same name.",
+    );
+  } finally {
+    await writeWorkspaceFile(workspaceNotebookPath, notebook);
+  }
+
+  await expect(status).toContainText("Live");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+  failedRefresh.recovered();
+  failedRefreshConsole.recovered();
 });

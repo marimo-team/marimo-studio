@@ -1,0 +1,230 @@
+---
+title: "How body mass scales with stature"
+subtitle: "An allometric note on the Rio 2016 roster"
+abstract: |
+  A body-mass index divides weight by a power of height. This note estimates
+  that power for the women and men of a selected sport, or of the whole Rio
+  2016 roster, from the log–log regression
+  $\log w = \alpha + \beta \log h + \varepsilon,$ and compares it with the
+  exponent of Quetelet's index, $\beta = 2$, and with the exponent of
+  geometric similarity, $\beta = 3$.
+bibliography: references.bib
+number-sections: true
+format:
+  html:
+    theme: [cosmo, paper.scss]
+    html-math-method: katex
+    page-layout: article
+    toc: false
+    anchor-sections: false
+---
+
+::: {.hidden}
+$$
+\gdef\E{\mathbb{E}}
+\gdef\Var{\operatorname{Var}}
+\gdef\Cov{\operatorname{Cov}}
+\gdef\se{\operatorname{se}}
+\gdef\T{\mathsf{T}}
+\gdef\vy{\mathbf{y}}
+\gdef\vtheta{\boldsymbol{\theta}}
+$$
+:::
+
+# Introduction
+
+Quetelet observed that adult weight grows roughly with the square of height
+[@quetelet1842], and his ratio $w/h^2$ became the body-mass index
+[@keys1972]. Benn proposed letting the population choose the power instead,
+with the index $w/h^p$ [@benn1971]. Huxley's law of relative growth gives the
+general form $w = a\,h^{\beta}$ [@huxley1932]. A body that keeps its shape as
+it grows gains mass with its volume, so geometric similarity predicts
+$\beta = 3$.
+
+Choose a sport to refit every quantity in this note.
+
+{{< marimo cell="sport_control" >}}
+
+The current selection is **{{< marimo value="scaling.selection" >}}**, with
+{{< marimo value="scaling.women.n" >}} women and
+{{< marimo value="scaling.men.n" >}} men who have a recorded height and
+weight.
+
+{{< marimo cell="participation" >}}
+
+# Model
+
+Taking logarithms turns the power law into a line. With $x_i = \log h_i$ and
+$y_i = \log w_i$ for athlete $i$,
+
+$$
+\begin{gathered}
+y_i = \alpha + \beta x_i + \varepsilon_i, \\
+\E[\varepsilon_i \mid x_i] = 0,
+\quad
+\Var(\varepsilon_i \mid x_i) = \sigma^2,
+\end{gathered}
+$$ {#eq-model}
+
+so that $w_i = e^{\alpha} h_i^{\beta} e^{\varepsilon_i}$. The exponent
+$\beta$ is an elasticity: one percent more height goes with about $\beta$
+percent more weight.
+
+::: {#def-height-free}
+## Height-free index
+
+For a power $p$, the index $I_p = w / h^p$ is *height-free* when
+$\Cov(\log I_p, \log h) = 0$.
+:::
+
+::: {#prp-exponent}
+## The height-free power
+
+The index $I_p$ is height-free exactly when
+
+$$
+p = \beta^\star = \frac{\Cov(\log w, \log h)}{\Var(\log h)},
+$$ {#eq-beta-star}
+
+the population slope in @eq-model.
+:::
+
+::: {.proof}
+Since $\log I_p = \log w - p \log h$,
+$$
+\begin{aligned}
+& \Cov(\log I_p, \log h) \\
+& \quad = \Cov(\log w, \log h) - p \Var(\log h),
+\end{aligned}
+$$
+which vanishes if and only if $p = \Cov(\log w, \log h) / \Var(\log h)$.
+:::
+
+# Estimation
+
+Stack the observations as $\vy = (y_1, \dots, y_n)^\T$ and
+
+$$
+X =
+\begin{pmatrix}
+1 & x_1 \\
+\vdots & \vdots \\
+1 & x_n
+\end{pmatrix},
+\qquad
+\vtheta =
+\begin{pmatrix}
+\alpha \\
+\beta
+\end{pmatrix}.
+$$
+
+Ordinary least squares minimizes $\lVert \vy - X \vtheta \rVert^2$. With
+$S_{xx} = \sum_i (x_i - \bar x)^2$,
+$S_{xy} = \sum_i (x_i - \bar x)(y_i - \bar y)$, and
+$S_{yy} = \sum_i (y_i - \bar y)^2$, the normal equations and their solution
+are
+
+$$
+\begin{gathered}
+X^\T X \hat\vtheta = X^\T \vy, \\
+\hat\beta = \frac{S_{xy}}{S_{xx}},
+\qquad
+\hat\alpha = \bar y - \hat\beta \bar x.
+\end{gathered}
+$$ {#eq-ols}
+
+::: {#thm-gauss-markov}
+## Gauss–Markov
+
+Under @eq-model with uncorrelated errors, $\hat\vtheta$ has the smallest
+variance among linear unbiased estimators of $\vtheta$.
+:::
+
+The residual variance and the standard error of the slope are
+
+$$
+\begin{gathered}
+\hat\sigma^2 = \frac{S_{yy} - \hat\beta S_{xy}}{n - 2}, \\
+\se(\hat\beta) = \frac{\hat\sigma}{\sqrt{S_{xx}}}, \\
+R^2 = 1 - \frac{S_{yy} - \hat\beta S_{xy}}{S_{yy}}.
+\end{gathered}
+$$ {#eq-se}
+
+When the errors are also independent and normally distributed, a test of
+$H_0\colon \beta = \beta_0$ and the 95% interval for $\beta$ use
+
+$$
+\begin{gathered}
+t = \frac{\hat\beta - \beta_0}{\se(\hat\beta)} \sim t_{n-2}
+\ \text{under } H_0, \\
+\hat\beta \pm t_{0.975,\,n-2} \se(\hat\beta).
+\end{gathered}
+$$ {#eq-test}
+
+The quantile $t_{0.975,\,n-2}$ follows from @eq-quantile in the appendix.
+
+# Results
+
+@tbl-fits applies @eq-ols, @eq-se, and @eq-test to the selected sport. A
+group with fewer than ten measured athletes leaves its column empty.
+
+| Quantity | Women | Men |
+| :-- | --: | --: |
+| Athletes, $n$ | {{< marimo value="scaling.women.n" >}} | {{< marimo value="scaling.men.n" >}} |
+| Intercept, $\hat\alpha$ | {{< marimo value="scaling.women.alpha" >}} | {{< marimo value="scaling.men.alpha" >}} |
+| Exponent, $\hat\beta$ | {{< marimo value="scaling.women.beta" >}} | {{< marimo value="scaling.men.beta" >}} |
+| $\se(\hat\beta)$ | {{< marimo value="scaling.women.standard_error" >}} | {{< marimo value="scaling.men.standard_error" >}} |
+| 95% interval for $\beta$ | {{< marimo value="scaling.women.interval" >}} | {{< marimo value="scaling.men.interval" >}} |
+| $t$ for $\beta_0 = 2$ | {{< marimo value="scaling.women.t_quetelet" >}} | {{< marimo value="scaling.men.t_quetelet" >}} |
+| $t$ for $\beta_0 = 3$ | {{< marimo value="scaling.women.t_isometric" >}} | {{< marimo value="scaling.men.t_isometric" >}} |
+| $R^2$ | {{< marimo value="scaling.women.r_squared" >}} | {{< marimo value="scaling.men.r_squared" >}} |
+| $\hat\sigma$ | {{< marimo value="scaling.women.sigma" >}} | {{< marimo value="scaling.men.sigma" >}} |
+
+: Log–log fits of weight on height for the selected sport. {#tbl-fits}
+
+For the selected sport, the fitted power laws are
+
+{{< marimo cell="scaling_relation" >}}
+
+An exponent between 2 and 3 places the selection between the two reference
+shapes: taller athletes are heavier than Quetelet's index allows for, and
+lighter than a scaled copy of a shorter athlete. When the 95% interval lies
+above 2, the body-mass index still rises with height in the selection, so it
+reads tall athletes as heavier for their build. By @prp-exponent, the
+height-free index for the selection divides weight by $h^{\hat\beta}$.
+
+# Limitations
+
+::: {.callout-warning appearance="simple"}
+## A cross-sectional roster
+
+The roster of the Rio 2016 Olympic Games [@rio2016] is one cross-section of
+elite athletes, selected by sport and qualification. The fit describes these athletes, not the general population.
+Athletes from one national team share training and selection, so their errors
+may correlate, and the standard errors in @tbl-fits are then too small. The
+roster records sex in two categories, and athletes without a recorded height
+or weight are excluded.
+:::
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+
+# The quantile of Student's $t$ {.appendix .unnumbered}
+
+With $\nu = n - 2$ degrees of freedom and the normal quantile
+$z = \Phi^{-1}(0.975) = 1.95996$, the Cornish–Fisher expansion of Student's
+$t$ gives [@abramowitz1964]
+
+$$
+\begin{aligned}
+t_{0.975,\,\nu}
+\approx {} & z + \frac{z^3 + z}{4\nu} + \frac{5z^5 + 16z^3 + 3z}{96\nu^2} \\
+& + \frac{3z^7 + 19z^5 + 17z^3 - 15z}{384\nu^3},
+\end{aligned}
+$$ {#eq-quantile}
+
+which is accurate to $10^{-4}$ from eight degrees of freedom. A group is
+fitted only when it has at least ten athletes.

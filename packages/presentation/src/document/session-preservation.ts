@@ -1,4 +1,4 @@
-import { isSessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
+import { isSessionId, type SessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
 import {
   DOCUMENT_LIFECYCLE_QUERY_PARAM,
   DOCUMENT_REPLAY_QUERY_PARAM,
@@ -185,7 +185,15 @@ const serverAssignedDocumentSession = (
     : undefined;
 };
 
-const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment): boolean => {
+interface ReplayPreflight {
+  replaying: boolean;
+  session?: SessionId;
+}
+
+const preflightReplay = (
+  config: RuntimeConfig,
+  environment?: SessionEnvironment,
+): ReplayPreflight => {
   const browser = environment ?? browserEnvironment();
   const url = new URL(browser.href);
   const initialUrl = url.toString();
@@ -198,6 +206,20 @@ const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment
   url.searchParams.delete(PRESENTATION_RENEWAL_QUERY_PARAM);
   stripReplay(url);
   const runtime = serverSessionConfig(config);
+  // Marimo resumes only the URL session that preflight validated: a replay
+  // checked against session storage or the server-assigned renewal session.
+  const finish = (replaying: boolean): ReplayPreflight => {
+    const sessions = url.searchParams.getAll("session_id");
+    const session = sessions.length === 1 ? sessions[0] : undefined;
+    if (!isSessionId(session)) {
+      return { replaying };
+    }
+    const assigned =
+      Boolean(browser.renewalToken) &&
+      session === browser.runtimeSessionId &&
+      session === runtime?.sessionId;
+    return replaying || assigned ? { replaying, session } : { replaying };
+  };
   if (
     browser.renewalToken &&
     browser.runtimeSessionId &&
@@ -220,7 +242,7 @@ const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment
       stripReplay(url);
     }
     commitUrl();
-    return assigned?.replaying ?? false;
+    return finish(assigned?.replaying ?? false);
   };
   if (!browser.storage) {
     return rejectUnavailableStorage();
@@ -248,7 +270,7 @@ const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment
         stripReplay(url);
       }
       commitUrl();
-      return false;
+      return finish(false);
     }
     const query = publicQueryIdentity(url);
     let explicit = url.searchParams.get("session_id");
@@ -259,20 +281,20 @@ const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment
         sessionMatchesQuery(config, browser.storage, explicit, query)
       ) {
         commitUrl();
-        return true;
+        return finish(true);
       }
       stripReplay(url);
       explicit = null;
     }
     if (browser.navigationType !== "reload" && browser.navigationType !== "back_forward") {
       commitUrl();
-      return false;
+      return finish(false);
     }
     if (isSessionId(explicit)) {
       if (sessionMatchesQuery(config, browser.storage, explicit, query)) {
         url.searchParams.set(DOCUMENT_REPLAY_QUERY_PARAM, "1");
         commitUrl();
-        return true;
+        return finish(true);
       }
       url.searchParams.delete("session_id");
     }
@@ -285,7 +307,7 @@ const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment
       url.searchParams.set("session_id", remembered);
       url.searchParams.set(DOCUMENT_REPLAY_QUERY_PARAM, "1");
       commitUrl();
-      return true;
+      return finish(true);
     }
     browser.storage.removeItem(pageKey);
     commitUrl();
@@ -295,7 +317,7 @@ const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment
     }
     throw cause;
   }
-  return false;
+  return finish(false);
 };
 
 const replayDocumentUrl = (
@@ -416,8 +438,16 @@ export class BrowserSessionReplay {
       runtimeConfigSessionId({ connected: globalThis.__MARIMO_STUDIO_SESSION_ID__ }),
   ) {}
 
+  private authorized: SessionId | undefined;
+
   preflight(config: RuntimeConfig): boolean {
-    return preflightReplay(config, this.environment);
+    const { replaying, session } = preflightReplay(config, this.environment);
+    this.authorized = session;
+    return replaying;
+  }
+
+  authorizedSession(): SessionId | undefined {
+    return this.authorized;
   }
 
   pending(): boolean {

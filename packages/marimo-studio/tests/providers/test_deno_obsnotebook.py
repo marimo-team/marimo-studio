@@ -8,12 +8,11 @@ import pytest
 
 from marimo_studio._artifacts.repository import read_build_state
 from marimo_studio._artifacts.retention import lease_published_artifact
-from marimo_studio._views.build import publish_view
+from marimo_studio._views.build import build_view_project_sync, publish_view
 from marimo_studio.errors import ViewProjectError
-from marimo_studio.view_providers._bundled.deno_obsnotebook import provider
+from marimo_studio.view_providers._builtin.deno_obsnotebook import provider
 
 from ..deno_provider_test_support import inspect_provider, project
-from ..provider_test_support import provider_build_request
 
 pytestmark = [pytest.mark.deno, pytest.mark.usefixtures("shared_deno_test_cache")]
 
@@ -54,26 +53,25 @@ def test_notebook_html_cells_and_template_declare_source_located_mounts(
     )
     inspection = inspect_provider(provider, view)
     assert inspection.diagnostics == ()
-    assert inspection.mounts[-1].source.path == PurePosixPath("src/page.tmpl")
-    assert inspection.mounts[-1].allowed_targets == ("summary",)
+    assert inspection.sites[-1].source.path == PurePosixPath("src/page.tmpl")
+    assert inspection.sites[-1].targets == ("summary",)
     assert [
-        (site.kind, site.allowed_targets, site.source.line)
-        for site in inspection.mounts[:-1]
+        (site.kind, site.targets, site.source.line) for site in inspection.sites[:-1]
     ] == [
         ("value", ("total",), 5),
         ("cell", ("controls",), 6),
-        ("output", None, 7),
+        ("output", "*", 7),
         ("cell", ("metric", "controls"), 8),
         ("cell", ("controls", "metric"), 9),
-        ("output", None, 12),
+        ("output", "*", 12),
     ]
-    documents = {item.path.as_posix(): item for item in inspection.editor_documents}
+    documents = {item.path.as_posix(): item for item in inspection.documents}
     assert documents["src/index.html"].access == "edit"
     assert documents["src/page.tmpl"].language == "html"
     assert documents["deno.lock"].access == "read"
     assert any(
         item.path == PurePosixPath("src") and item.kind == "directory"
-        for item in inspection.input_scope
+        for item in inspection.inputs
     )
 
 
@@ -113,6 +111,10 @@ def test_notebook_html_cells_and_template_declare_source_located_mounts(
         ),
         ("<marimo-cell></marimo-cell>", "projection-target-missing"),
         (
+            '<marimo-output value="chart" accept="${media}"></marimo-output>',
+            "projection-accept-dynamic",
+        ),
+        (
             '<marimo-cell name="controls" data-marimo-allow="maybe"></marimo-cell>',
             "projection-wildcard-invalid",
         ),
@@ -128,7 +130,7 @@ def test_notebook_invalid_projections_fail_closed(
     )
     inspection = inspect_provider(provider, view)
     assert [item.code for item in inspection.diagnostics] == [code]
-    assert inspection.mounts == ()
+    assert inspection.sites == ()
 
 
 def test_notebook_failed_build_retains_publication_and_recovers(tmp_path: Path) -> None:
@@ -195,9 +197,7 @@ def test_notebook_rejects_duplicate_authored_attributes_next_to_a_binding(
     )
     inspection = inspect_provider(provider, view)
     assert [item.code for item in inspection.diagnostics] == ["notebook-html-invalid"]
-    assert inspection.mounts == ()
-    output = root / ".artifacts/.staging/invalid/files"
-    output.mkdir(parents=True)
-    result = provider.build(provider_build_request(view, inspection, output))
-    assert result.document is None
-    assert [item.code for item in result.diagnostics] == ["notebook-html-invalid"]
+    assert inspection.sites == ()
+
+    with pytest.raises(ViewProjectError, match="HTML attributes must be unique"):
+        build_view_project_sync(view)

@@ -41,11 +41,11 @@ def _run_worker(request_path: Path, response_path: Path) -> int:
             create_worker_runtime_probe()(
                 notebook,
                 cell_ids=request["cell_ids"],
-                variables=request["variables"],
-                output_selector_groups=request["output_selector_groups"],
+                value_selector_groups=request["value_selector_groups"],
+                output_groups=request["output_groups"],
                 show_tracebacks=request["show_tracebacks"],
                 timeout=request["timeout"],
-                value_max_bytes=request["value_max_bytes"],
+                max_json_bytes=request["max_json_bytes"],
                 source_generation=source_generation,
             )
         )

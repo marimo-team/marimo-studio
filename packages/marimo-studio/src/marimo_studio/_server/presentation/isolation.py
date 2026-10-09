@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from functools import lru_cache
+from html.parser import HTMLParser
 from typing import cast
 
 from htpy import (
@@ -435,8 +437,13 @@ def isolated_presentation_document(
     replay_scope: str | None = None,
     title_text: str,
     nonce: str,
+    host_head: str | None = None,
 ) -> str:
-    """Return a trusted wrapper around one opaque-origin authored document."""
+    """Return a trusted wrapper around one opaque-origin authored document.
+
+    ``host_head`` is trusted head markup that a notebook host adds to marimo's
+    own pages. Its scripts and styles receive the wrapper nonce.
+    """
     config = json.dumps(
         {
             "internalRootUrl": internal_root_url,
@@ -499,6 +506,11 @@ def isolated_presentation_document(
                                     "height:100%;width:100%}"
                                 )
                             ],
+                            *(
+                                (Markup(_with_nonce(host_head, nonce)),)
+                                if host_head
+                                else ()
+                            ),
                         )
                     ],
                     body[
@@ -516,6 +528,46 @@ def isolated_presentation_document(
             ],
         )
     )
+
+
+class _NoncedElements(HTMLParser):
+    """Find where the start tags of script and style elements end their names.
+
+    The parser reads script and style bodies as raw text, so markup inside a
+    script string is left unchanged.
+    """
+
+    def __init__(self, markup: str) -> None:
+        super().__init__(convert_charrefs=False)
+        self.offsets: list[int] = []
+        self._line_starts = [0]
+        self._line_starts.extend(
+            index + 1 for index, character in enumerate(markup) if character == "\n"
+        )
+        self.feed(markup)
+        self.close()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style"}:
+            line, column = self.getpos()
+            self.offsets.append(self._line_starts[line - 1] + column + 1 + len(tag))
+
+
+@lru_cache(maxsize=4)
+def _nonce_offsets(markup: str) -> tuple[int, ...]:
+    # A host head stays fixed for the server lifetime, while each response
+    # gets a fresh nonce.
+    return tuple(_NoncedElements(markup).offsets)
+
+
+def _with_nonce(markup: str, nonce: str) -> str:
+    parts: list[str] = []
+    start = 0
+    for offset in _nonce_offsets(markup):
+        parts.extend((markup[start:offset], f' nonce="{nonce}"'))
+        start = offset
+    parts.append(markup[start:])
+    return "".join(parts)
 
 
 def isolation_content_security_policy(nonce: str) -> str:

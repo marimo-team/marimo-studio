@@ -19,6 +19,13 @@ test("shares one native kernel across Studio tabs and views", async ({
   browserDiagnostics,
 }) => {
   test.setTimeout(180_000);
+  const pendingRuntimeSync = browserDiagnostics.expectResponse({
+    status: 409,
+    path: /\/(?:values|outputs|controls)$/,
+    error: "runtime-sync-pending",
+    count: 128,
+    required: false,
+  });
   await page.goto(studioEntryUrl);
   const first = await waitForPreview(page);
   await first.getByRole("button", { name: "Widget count: 7" }).click();
@@ -117,5 +124,6 @@ test("shares one native kernel across Studio tabs and views", async ({
     const retired = browserDiagnostics.expectPageRetirement(otherView);
     await otherView.close();
     retired.recovered();
+    pendingRuntimeSync.recovered();
   }
 });

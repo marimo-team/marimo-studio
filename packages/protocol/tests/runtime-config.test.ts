@@ -78,21 +78,30 @@ test("runtime configuration accepts the browser contract", () => {
   );
 });
 
-test("cell mounts accept native names and configured aliases", () => {
+test("cell sites accept native names and configured aliases", () => {
   const targets = ["_summary", "résumé", "report-name"];
   const parsed = parseRuntimeConfig(
     runtimeConfig({
-      mounts: [
+      sites: [
         {
-          ...symbolicRuntimeFields.mounts[0],
-          allowedTargets: targets,
+          ...symbolicRuntimeFields.sites[0],
+          targets: targets,
         },
       ],
     }),
     configUrl,
   );
 
-  assert.deepEqual(parsed.mounts[0]?.allowedTargets, targets);
+  assert.deepEqual(parsed.sites[0]?.targets, targets);
+});
+
+test("document cell reads list the media types they accept", () => {
+  const parsed = parseRuntimeConfig(
+    runtimeConfig({ sites: [{ ...symbolicRuntimeFields.sites[0], accept: ["image/png"] }] }),
+    configUrl,
+  );
+
+  assert.deepEqual(parsed.sites[0]?.accept, ["image/png"]);
 });
 
 test("runtime configuration resolves the Python delivery fixture beneath a proxy prefix", () => {
@@ -174,37 +183,40 @@ test("runtime configuration rejects malformed contracts", () => {
   const malformed: JsonValue[] = [
     runtimeConfig({ projectionRevision: "not-a-sha256-digest" }),
     runtimeConfig({
-      mounts: [
+      sites: [
         {
-          ...symbolicRuntimeFields.mounts[0],
-          allowedTargets: [],
+          ...symbolicRuntimeFields.sites[0],
+          targets: [],
         },
       ],
     }),
     runtimeConfig({
-      mounts: [{ ...symbolicRuntimeFields.mounts[0], id: "SITE" }],
+      sites: [{ ...symbolicRuntimeFields.sites[0], id: "SITE" }],
     }),
     runtimeConfig({
-      mounts: [
+      sites: [{ ...symbolicRuntimeFields.sites[0], kind: "value", accept: ["image/png"] }],
+    }),
+    runtimeConfig({
+      sites: [
         {
-          ...symbolicRuntimeFields.mounts[0],
+          ...symbolicRuntimeFields.sites[0],
           source: { path: ".ARTIFACTS/site.tsx", line: 1, column: 1 },
         },
       ],
     }),
     runtimeConfig({
-      mounts: [
+      sites: [
         {
-          ...symbolicRuntimeFields.mounts[0],
-          allowedTargets: [" plot "],
+          ...symbolicRuntimeFields.sites[0],
+          targets: [" plot "],
         },
       ],
     }),
     runtimeConfig({
-      mounts: [
+      sites: [
         {
-          ...symbolicRuntimeFields.mounts[0],
-          allowedTargets: ["_"],
+          ...symbolicRuntimeFields.sites[0],
+          targets: ["_"],
         },
       ],
     }),

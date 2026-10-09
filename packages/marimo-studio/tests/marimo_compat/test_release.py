@@ -164,7 +164,9 @@ def test_browser_execution_catalog_preserves_saved_notebook_cells(
         notebook_path,
         notebook_path.read_text(encoding="utf-8"),
     )
-    static = load_static_notebook(notebook_path)
+    static = load_static_notebook(
+        notebook_path, notebook_path.read_text(encoding="utf-8")
+    )
     catalog = {cell.runtime_id: cell.code for cell in projection.execution_cells}
 
     assert {
@@ -191,7 +193,7 @@ def test_browser_projection_bootstrap_executes_in_the_native_kernel(
         probe_runtime_in_worker(
             projected,
             cell_ids=(projection.bootstrap_cell_id,),
-            variables=(),
+            value_selector_groups=(),
             timeout=10,
             show_tracebacks=True,
         )

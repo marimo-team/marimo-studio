@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from marimo_studio._delivery.urls import STUDIO_PATH, SUPPORT_PATH, authored_file_key
+from marimo_studio._delivery.urls import (
+    STUDIO_PATH,
+    SUPPORT_PATH,
+    authored_file_key,
+    view_path,
+)
 from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_ASSET_NAMES,
@@ -65,7 +70,7 @@ def could_handle(relative: str, mode: str) -> bool:
     if relative == "/" and mode in {"edit", "run"}:
         return True
     parts = relative.strip("/").split("/")
-    if is_studio_route(relative, mode):
+    if is_studio_route(relative):
         return True
     return (
         len(parts) >= 1
@@ -126,12 +131,28 @@ def studio_view(relative: str, studio: StudioWorkspace, mode: str) -> str | None
     return None
 
 
-def is_studio_route(relative: str, mode: str) -> bool:
-    """Return whether a path is an explicit Studio authoring entry."""
+def is_studio_route(relative: str) -> bool:
+    """Return whether a path names the Studio workspace or one of its views."""
     parts = relative.strip("/").split("/")
-    return (
-        mode == "edit" and parts[0] == STUDIO_PATH.strip("/") and len(parts) in {1, 2}
-    )
+    return parts[0] == STUDIO_PATH.strip("/") and len(parts) in {1, 2}
+
+
+def run_view_target(relative: str, mode: str) -> str | None:
+    """Return the run-mode view path that a workspace path names.
+
+    A notebook host can carry the editor's location into the app, so
+    ``/studio/<view>/`` opens the same view when the notebook runs as an app.
+    The view path applies the usual authentication and missing-view handling.
+    """
+    if mode != "run" or not is_studio_route(relative):
+        return None
+    parts = relative.strip("/").split("/")
+    if len(parts) == 1:
+        return "/"
+    view = parts[1]
+    if VIEW_PATTERN.fullmatch(view) is None or view in RESERVED_VIEW_NAMES:
+        return None
+    return view_path(view)
 
 
 def is_studio_landing(relative: str, mode: str) -> bool:

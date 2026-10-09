@@ -1,10 +1,12 @@
-import { spawn } from "node:child_process";
-import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { documentationExampleFamilies } from "../examples.ts";
-import { publishExamples, validatePreparedExample } from "./example-publication.ts";
+import { documentationExampleFamilies, type DocumentationExampleFamily } from "../examples.ts";
+import { publishExamples, pruneExamples, validatePreparedExample } from "./example-publication.ts";
 import { selectDocumentationExamples } from "./example-selection.ts";
 
 interface ExportResult {
@@ -36,12 +38,17 @@ const commandTimings: {
   durationMs: number;
   exitCode: number | null;
 }[] = [];
-const usage = `Usage: pnpm --filter @marimo-studio/docs examples:build [selectors]
+const usage = `Usage: pnpm --filter @marimo-studio/docs examples:build [selectors | --check]
+
+Without selectors, every notebook and view is exported. Each export replaces its
+own directory under public/examples as soon as it passes validation.
 
 Selectors may be repeated and combined:
-  --family SLUG       Rebuild one notebook and all of its views
-  --notebook SLUG     Rebuild one notebook export
-  --view FAMILY/VIEW  Rebuild one named view export`;
+  --family SLUG       Export one notebook and all of its views
+  --notebook SLUG     Export one notebook
+  --view FAMILY/VIEW  Export one named view
+
+  --check             Validate the complete publication without exporting`;
 
 const isFile = async (path: string): Promise<boolean> => {
   try {
@@ -51,11 +58,14 @@ const isFile = async (path: string): Promise<boolean> => {
   }
 };
 
-const isDirectory = async (path: string): Promise<boolean> => {
-  try {
-    return (await stat(path)).isDirectory();
-  } catch {
-    return false;
+let activeCommand: ChildProcess | undefined;
+let activePublication: Promise<void> | undefined;
+
+const stopCommand = (pid: number, signal: NodeJS.Signals): void => {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    process.kill(-pid, signal);
   }
 };
 
@@ -70,8 +80,13 @@ const run = (command: string, arguments_: readonly string[]): Promise<CommandRes
         MARIMO_EXPORT_REPOSITORY:
           process.env.MARIMO_EXPORT_REPOSITORY ?? join(cacheRoot, "export-repository"),
       },
+      // On POSIX, its own process group lets a signal stop the whole export tree,
+      // the way a terminal interrupt does. On Windows, a detached child opens a
+      // console window, and `taskkill /T` stops the tree.
+      detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
+    activeCommand = child;
     let stdout = "";
 
     child.stdout.setEncoding("utf8");
@@ -84,6 +99,7 @@ const run = (command: string, arguments_: readonly string[]): Promise<CommandRes
     });
     child.on("error", rejectCommand);
     child.on("close", (code) => {
+      activeCommand = undefined;
       commandTimings.push({
         command,
         arguments: arguments_,
@@ -191,27 +207,34 @@ const exportNotebook = async (
   }
 };
 
+const validateView = async (
+  root: string,
+  family: DocumentationExampleFamily,
+  view: string,
+): Promise<void> => {
+  const entrypoint = join(root, family.slug, view, "index.html");
+  if (!(await isFile(entrypoint))) {
+    throw new Error(`The ${family.slug}/${view} export is unavailable.`);
+  }
+  await validatePreparedExample(root, family.slug, view);
+  const document = await readFile(entrypoint, "utf8");
+  for (const match of document.matchAll(/\bhref="\.\.\/([^/"?#]+)\/index\.html"/g)) {
+    const target = match[1];
+    if (!target || !family.views.some((candidate) => candidate.key === target)) {
+      throw new Error(
+        `${family.slug}/${view} links to an unexported sibling view: ${target ?? "unknown"}`,
+      );
+    }
+  }
+};
+
 const validateExamplePublication = async (root: string): Promise<void> => {
   for (const family of documentationExampleFamilies) {
-    const notebook = join(root, family.slug, "notebook", "index.html");
-    if (!(await isFile(notebook))) {
+    if (!(await isFile(join(root, family.slug, "notebook", "index.html")))) {
       throw new Error(`The ${family.slug}/notebook export is unavailable.`);
     }
     for (const view of family.views) {
-      const entrypoint = join(root, family.slug, view.key, "index.html");
-      if (!(await isFile(entrypoint))) {
-        throw new Error(`The ${family.slug}/${view.key} export is unavailable.`);
-      }
-      await validatePreparedExample(root, family.slug, view.key);
-      const document = await readFile(entrypoint, "utf8");
-      for (const match of document.matchAll(/\bhref="\.\.\/([^/"?#]+)\/index\.html"/g)) {
-        const target = match[1];
-        if (!target || !family.views.some((candidate) => candidate.key === target)) {
-          throw new Error(
-            `${family.slug}/${view.key} links to an unexported sibling view: ${target ?? "unknown"}`,
-          );
-        }
-      }
+      await validateView(root, family, view.key);
     }
   }
 };
@@ -222,48 +245,74 @@ const main = async (): Promise<void> => {
     console.log(usage);
     return;
   }
+  if (arguments_.includes("--check")) {
+    if (arguments_.length > 1) {
+      throw new Error("--check validates the complete publication and takes no other options.");
+    }
+    await validateExamplePublication(destinationRoot);
+    const selection = selectDocumentationExamples(documentationExampleFamilies, []);
+    console.log(
+      `Validated ${selection.notebooks} static notebooks and ${selection.views} live documentation views.`,
+    );
+    return;
+  }
   const selection = selectDocumentationExamples(documentationExampleFamilies, arguments_);
   await mkdir(cacheRoot, { recursive: true });
   const stagingRoot = await mkdtemp(join(cacheRoot, "docs-examples-"));
-  try {
-    if (!selection.complete) {
-      if (!(await isDirectory(destinationRoot))) {
-        throw new Error(
-          "Selective example rebuilding requires an existing complete publication. Run the full examples build first.",
-        );
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.once(signal, () => {
+      // Stop the export so it can't write into staging after removal, and let a
+      // started publication finish or roll back, since staging holds the
+      // previous copy while it runs.
+      const command = activeCommand;
+      const stopped =
+        command?.pid === undefined
+          ? undefined
+          : new Promise((resolveStop) => command.once("close", resolveStop));
+      if (command?.pid !== undefined) {
+        stopCommand(command.pid, signal);
       }
-      await validateExamplePublication(destinationRoot);
-      await cp(destinationRoot, stagingRoot, {
-        errorOnExist: false,
-        force: true,
-        recursive: true,
+      void Promise.allSettled([stopped, activePublication]).then(() => {
+        rmSync(stagingRoot, { force: true, recursive: true });
+        process.exit(128 + constants.signals[signal]);
       });
-    }
-    for (const selected of selection.families) {
-      const { family } = selected;
-      if (selected.notebook) {
-        await exportNotebook(stagingRoot, family.notebook, family.slug);
-      }
-      for (const view of selected.views) {
-        await exportView(stagingRoot, family.notebook, family.slug, view.key);
-      }
-    }
-
-    await validateExamplePublication(stagingRoot);
-
-    await publishExamples({
-      destination: destinationRoot,
-      previous: join(cacheRoot, `docs-examples-previous-${process.pid}`),
-      staging: stagingRoot,
     });
-    const action = selection.complete ? "Exported" : "Rebuilt";
+  }
+  // Publish each export as soon as it validates, so an interrupted or failed run
+  // keeps every finished export and the last valid copy of the rest.
+  const publish = async (slug: string, target: string): Promise<void> => {
+    await mkdir(join(destinationRoot, slug), { recursive: true });
+    activePublication = publishExamples({
+      destination: join(destinationRoot, slug, target),
+      previous: join(stagingRoot, "previous"),
+      staging: join(stagingRoot, slug, target),
+    });
+    try {
+      await activePublication;
+    } finally {
+      activePublication = undefined;
+    }
+  };
+  try {
+    for (const { family, notebook, views } of selection.families) {
+      if (notebook) {
+        await exportNotebook(stagingRoot, family.notebook, family.slug);
+        await publish(family.slug, "notebook");
+      }
+      for (const view of views) {
+        await exportView(stagingRoot, family.notebook, family.slug, view.key);
+        await validateView(stagingRoot, family, view.key);
+        await publish(family.slug, view.key);
+      }
+    }
+    if (selection.complete) {
+      await pruneExamples(destinationRoot, documentationExampleFamilies);
+    }
     console.log(
-      `${action} ${selection.notebooks} static notebooks and ${selection.views} live documentation views.`,
+      `Exported ${selection.notebooks} static notebooks and ${selection.views} live documentation views.`,
     );
-  } catch (error) {
-    await rm(stagingRoot, { force: true, recursive: true });
-    throw error;
   } finally {
+    await rm(stagingRoot, { force: true, recursive: true });
     await writeFile(
       join(cacheRoot, "example-timings.json"),
       `${JSON.stringify({ schema: 1, commands: commandTimings }, null, 2)}\n`,

@@ -148,7 +148,7 @@ Every expected error exposes:
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---: | ---------------------: | ----------------------------------------------------------------------- |
 | `MarimoStudioError`                | `marimo-studio-error`                                                                                                          |  `3` |                  `500` | Base class                                                              |
 | `ConfigurationError`               | `configuration-error`                                                                                                          |  `3` |                  `500` | Fix saved configuration or source                                       |
-| `NotebookSourceError`              | `notebook-source-error`                                                                                                        |  `3` |                  `500` | Fix and save the highlighted marimo cell                                |
+| `NotebookSourceError`              | `notebook-source-error`                                                                                                        |  `3` |                  `500` | Fix the notebook problem the message names                              |
 | `ViewProjectError`                 | `view-project-error`                                                                                                           |  `3` |                  `500` | Fix the source-located provider diagnostic and rebuild                  |
 | `BindingError`                     | `binding-error`                                                                                                                |  `4` |                  `500` | Select a valid cell or alias                                            |
 | `ProtocolError`                    | `protocol-error`                                                                                                               |  `6` |                  `500` | Align installed Studio and marimo versions                              |
@@ -163,9 +163,9 @@ Every expected error exposes:
 | `RuntimeSelectionError`            | `runtime-unavailable`                                                                                                          |  `3` |                  `400` | Select a runtime listed by the workspace                                |
 | `RuntimeConfigTooLargeError`       | `runtime-config-too-large`                                                                                                     |  `3` |                  `413` | Bound projection targets or reduce notebook source                      |
 | `SourceNotFoundError`              | `source-not-found`                                                                                                             |  `3` |                  `404` | Read the current Source catalog and select an authorized path           |
-| `SourceEncodingError`              | `invalid-source-encoding`                                                                                                      |  `3` |                  `400` | Save the source document as UTF-8                                       |
+| `SourceEncodingError`              | `invalid-source-encoding`                                                                                                      |  `3` |                  `400` | Save the Source document as UTF-8                                       |
 | `SourceValidationError`            | `invalid-source-content`                                                                                                       |  `3` |                  `400` | Repair the affected source or manifest contract                         |
-| `SourceTooLargeError`              | `source-too-large`                                                                                                             |  `3` |                  `413` | Reduce the source document size                                         |
+| `SourceTooLargeError`              | `source-too-large`                                                                                                             |  `3` |                  `413` | Reduce the Source document size                                         |
 | `SourceConflictError`              | `source-conflict`                                                                                                              |  `3` |                  `412` | Read the current revision, merge, and retry                             |
 | `ViewNotFoundError`                | `view-not-found`                                                                                                               |  `3` |                  `404` | Choose an entry from `available_views`                                  |
 | `ProviderNotFoundError`            | `provider-not-found`                                                                                                           |  `3` |                  `404` | Install or choose an entry from `available_providers`                   |
@@ -181,8 +181,10 @@ Every expected error exposes:
 | `PublicationHeldError`             | `publication-held`                                                                                                             |  `3` |                  `409` | Release the hold named in `details.owner` or wait for it to expire      |
 
 Generation and incomplete-mutation errors marked `transient` require a fresh
-read before retry. `AgentRequestError` can also carry a server-supplied retry
-classification.
+read before retry. A `configuration-error` marked `transient` reports a file
+that kept changing while Studio read it, such as a notebook during repeated
+saves. Retry the operation. `AgentRequestError` can also carry a
+server-supplied retry classification.
 
 ## HTTP error responses
 
@@ -200,6 +202,11 @@ The response status equals `error.status_code`. `Marimo-Studio-Error` repeats
 the code in a response header, and expected error responses use
 `Cache-Control: no-store`. An available hint appears as `hint`. A retryable
 failure includes `transient: true`.
+
+Studio's Python runtime routes use two synchronization codes. `runtime-sync-pending`
+is transient while the editor session is applying changed cells, so the browser
+can retry the request. `runtime-sync-required` is terminal for the current
+notebook state. Run the changed cells in the editor, then retry the preview.
 
 Authentication failures use route-owned codes such as
 `authentication-required`, `edit-access-required`, `missing-server-token`, and

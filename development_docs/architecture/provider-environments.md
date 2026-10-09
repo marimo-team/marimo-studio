@@ -50,12 +50,49 @@ The bootstrap marker prevents recursive re-entry. `--sandbox` and the command's
 explicit environment options still decide whether a command may opt in or out
 where that surface exposes the choice.
 
+## Pixi workspaces
+
+A [pixi](https://pixi.prefix.dev/) workspace owns a notebook's environment when
+its manifest declares Python packages: `pixi.toml` with `python` or PyPI
+dependencies, or `pyproject.toml` with `[tool.pixi.workspace]`.
+`python_project.project_environment()` applies the precedence in one directory:
+that `pixi.toml`, then the pixi pyproject, then a uv project. A `pixi.toml`
+that installs only system tools, like this repository's, leaves the directory
+to uv.
+
+Studio runs in place in a pixi workspace and never re-enters it. pixi
+activation exports `PIXI_PROJECT_MANIFEST` and `CONDA_PREFIX`. A command that
+would bootstrap providers or re-enter the notebook environment checks both.
+When the manifest matches and `CONDA_PREFIX` is the running interpreter's
+prefix, the command continues in place. Otherwise it raises
+`dependency-error` with the
+`pixi run --manifest-path <manifest> -x marimo-studio ...` command to use.
+Both checks matter because a child such as `uvx` inherits the variables
+without running in the workspace interpreter. The workspace declares Studio,
+its extras, and external providers itself, since `pixi run` cannot add launch
+requirements the way `uv run --with` does.
+
+`doctor --dependencies` reads the declarations of the activated pixi
+environment, or `default` outside the workspace: the default feature unless
+the environment excludes it, the environment's features, and the target tables
+for the running platform. A PyPI dependency with a `git`, `url`, or `path`
+source becomes a direct reference, which the doctor reports as
+`unverified-source`.
+
+View creation treats the workspace like a uv project and writes no sandbox
+dependency list. Its next command is
+`pixi run --manifest-path <manifest> -x marimo edit <notebook> --no-sandbox --watch`.
+
+A uv re-entry child drops `CONDA_PREFIX`, `CONDA_DEFAULT_ENV`, and the `PIXI_*`
+activation variables. Otherwise uv adopts the interpreter of an enclosing
+activated environment.
+
 ## Requirement composition
 
 Provider keys use `distribution/entry-point` form. Studio derives the owning
 distribution from that key without importing it.
 
-Bundled providers map to these launch requirements:
+Built-in providers map to these launch requirements:
 
 | Provider                | Bootstrap requirement |
 | ----------------------- | --------------------- |
@@ -69,7 +106,7 @@ metadata raises `dependency-error` with the distribution name.
 Studio combines requirements in this order:
 
 1. Start with the invoking `marimo-studio==<version>` requirement.
-2. Add extras required by bundled providers.
+2. Add extras required by built-in providers.
 3. Collect the target's active requirement for every external provider.
 4. Apply [PEP 508](https://peps.python.org/pep-0508/) environment markers,
    which condition dependencies on Python or platform properties.
@@ -123,7 +160,7 @@ becomes a bounded `process-output` warning.
 
 ## Provider execution
 
-The registry loads bundled providers in process. Installed third-party
+The registry loads built-in providers in process. Installed third-party
 providers run each `availability`, `starters`, `create`, `inspect`, and `build`
 operation in an owned worker process.
 
@@ -139,6 +176,9 @@ current user's filesystem, process, environment, and network authority.
 ## Failure behavior
 
 - Missing `uv` raises `dependency-error` before process creation.
+- A command that would bootstrap providers or re-enter the environment of a
+  pixi workspace notebook, run outside the activated workspace, raises
+  `dependency-error` with the `pixi run` command.
 - Invalid metadata or requirement conflicts raise `configuration-error` before
   provider import.
 - A child exit with no structured diagnostic produces one bounded
@@ -150,7 +190,7 @@ current user's filesystem, process, environment, and network authority.
 
 ## Contract tests
 
-- Compose PEP 723 and project dependencies for bundled and external providers.
+- Compose PEP 723 and project dependencies for built-in and external providers.
 - Cover markers, extras, exact pins, ranges, direct URLs, uv sources, and
   conflict cases.
 - Verify frozen project execution and editable checkout selection.

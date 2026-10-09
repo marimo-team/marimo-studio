@@ -20,7 +20,7 @@ from marimo_studio._processes.supervisor import (
     ProcessResult,
     process_returncode_message,
 )
-from marimo_studio._projections.runtime_records import RuntimeProbe
+from marimo_studio._projections.runtime_records import OutputGroup, RuntimeProbe
 from marimo_studio.errors import ProtocolError, RuntimeTimeoutError
 
 
@@ -28,22 +28,22 @@ async def probe_runtime_isolated(
     path: Path,
     *,
     cell_ids: tuple[str, ...],
-    variables: tuple[str, ...],
-    output_selector_groups: tuple[tuple[str, ...], ...],
+    value_selector_groups: tuple[tuple[str, ...], ...],
+    output_groups: tuple[OutputGroup, ...],
     show_tracebacks: bool,
     timeout: float = DEFAULT_RUNTIME_TIMEOUT,
-    value_max_bytes: int | None = None,
+    max_json_bytes: int | None = None,
     source_generation: NotebookSourceGeneration | None = None,
 ) -> RuntimeProbe:
     """Run a notebook probe in a supervised process and decode its result."""
     request = encode_runtime_request(
         path,
         cell_ids=cell_ids,
-        variables=variables,
-        output_selector_groups=output_selector_groups,
+        value_selector_groups=value_selector_groups,
+        output_groups=output_groups,
         show_tracebacks=show_tracebacks,
         timeout=timeout,
-        value_max_bytes=value_max_bytes,
+        max_json_bytes=max_json_bytes,
         source_generation=source_generation,
     )
     try:

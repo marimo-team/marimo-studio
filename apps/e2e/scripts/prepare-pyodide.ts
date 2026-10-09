@@ -98,7 +98,7 @@ export const preparePyodidePayload = async (source: string, destination: string)
 
 const preparedPyodideSource = async () => {
   const { readMarimoSource } =
-    await import("../../../packages/marimo-frontend/scripts/metadata.mjs");
+    await import("../../../packages/marimo-frontend/scripts/metadata.ts");
   const source = await readMarimoSource();
   const require = createRequire(join(source.path, "frontend/package.json"));
   return dirname(require.resolve("pyodide/package.json"));

@@ -52,9 +52,11 @@ marimo-studio view preview dashboard --target notebook.py \
 ```
 
 The returned URL keeps the origin and path of the server URL that produced it.
-A code-mode URL uses the local address that marimo gives code mode. When the
-user's browser reaches the server through a proxy path prefix, give them the
-same path beneath their public root, such as
+A code-mode URL uses the local address that marimo gives code mode. In a
+marimohub session, a code-mode URL uses the hub's public address for the
+user's browser. Verify with `show()` when your browser lacks the user's hub
+sign-in. When the user's browser reaches the server through a
+proxy path prefix, give them the same path beneath their public root, such as
 `https://ide.example/s/f3a9/p/8000/dashboard/?runtime=server`. A Prepared
 preview follows a Studio tab. Pass `--browser-client` when more than one is
 connected.

@@ -15,7 +15,10 @@ from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.records import ServerContext
-from marimo_studio.errors._internal import RuntimeSyncError
+from marimo_studio._server.runtime.catalog import runtime_cell_bindings
+from marimo_studio.errors._internal import (
+    RuntimeSyncError,
+)
 
 
 async def control_config_response(
@@ -38,7 +41,7 @@ async def control_config_response(
     snapshot = presentation.snapshot_for_revision(view_name, revision)
     if snapshot is None:
         return _revision_unavailable()
-    session_id = await clients.session_for_client(client_id)
+    session_id, binding_generation = await clients.session_binding_for_client(client_id)
     supplied_session_id = request.headers.get("Marimo-Session-Id")
     if (
         session_id is None
@@ -51,13 +54,25 @@ async def control_config_response(
         cells = await sessions.live_cells(
             context, session_id, include_dependency_closures=False
         )
+        runtime_bindings = runtime_cell_bindings(snapshot, cells)
+        # live_cells has already crossed the native queue barrier. Reading a
+        # second barrier here makes concurrent tabs enqueue competing
+        # observations and can invalidate an otherwise stable control snapshot.
         bindings = await sessions.control_bindings(context, session_id)
-    except RuntimeSyncError:
-        return _session_pending()
-    if await clients.session_for_client(client_id) != session_id:
+    except RuntimeSyncError as error:
+        if await clients.session_binding_for_client(client_id) != (
+            session_id,
+            binding_generation,
+        ):
+            return _session_pending()
+        return _runtime_sync_response(error)
+    if await clients.session_binding_for_client(client_id) != (
+        session_id,
+        binding_generation,
+    ):
         return _session_pending()
     controls = {
-        "cells": snapshot.resolved.runtime_cell_refs(cells),
+        "cells": runtime_bindings,
         "bindings": bindings,
     }
     encoded = json.dumps(
@@ -99,7 +114,20 @@ def _session_pending() -> JSONResponse:
             "transient": True,
         },
         status_code=409,
-        headers=NO_STORE,
+        headers={**NO_STORE, "Marimo-Studio-Error": "runtime-sync-pending"},
+    )
+
+
+def _runtime_sync_response(error: RuntimeSyncError) -> JSONResponse:
+    return JSONResponse(
+        {
+            "error": error.code,
+            "message": error.public_message(),
+            "transient": error.transient,
+            **({"hint": error.public_hint} if error.public_hint else {}),
+        },
+        status_code=error.status_code,
+        headers={**NO_STORE, "Marimo-Studio-Error": error.code},
     )
 
 

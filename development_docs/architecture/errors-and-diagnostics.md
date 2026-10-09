@@ -136,16 +136,30 @@ and optional project-relative source location. Providers create diagnostics for
 their own source and build semantics. Core validates paths, shape, source
 membership, and bounded counts before exposing them.
 
-Core adds diagnostics for artifact validation, publication, recovery, stale
-inputs, and cancellation. A failed build stores its diagnostics in the latest
-attempt while retaining the current published artifact.
+Core adds diagnostics for artifact validation, publication, stale inputs, and
+cancellation. A failed build stores its diagnostics in the latest attempt while
+retaining the current published artifact.
 
 Source places provider and build diagnostics on the owning document when a
 location is present. Project-wide diagnostics remain visible at the view level.
 
+## Automatic recovery and logs
+
+Surface a diagnostic when the person or agent has something to act on. When
+Studio repairs state itself, it logs the repair. For example, a build discards
+generated artifact state that it cannot read, publishes again, and reports the
+rebuilt artifact with the provider's findings.
+
+Studio logs through `logging.getLogger("marimo.studio")`. Records propagate to
+Marimo's logger, so the console follows `marimo edit --log-level` (`WARN` by
+default) and Marimo's `marimo.log` records `INFO` and above. Log routine
+recovery, such as state written by another Studio version, at `INFO`. Log
+recovery from damaged or missing state at `WARNING`, and name the path and the
+next step if it recurs.
+
 ## Projection and browser diagnostics
 
-Projection resolution converts provider mount declarations and notebook graph
+Projection resolution converts artifact sites and notebook graph
 failures into diagnostics with view, projection kind, target, source location,
 and optional declaration ID.
 

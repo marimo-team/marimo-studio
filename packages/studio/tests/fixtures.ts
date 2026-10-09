@@ -50,6 +50,7 @@ export const viewList = (
   default_view: defaultView,
   default_starter: defaultStarter,
   view_root: "__marimo__/studio/analysis",
+  persistence: null,
   views: names.map((name, index) => ({
     generation: generations[name] ?? viewGeneration(index + 1),
     name,
@@ -59,13 +60,13 @@ export const viewList = (
 
 export const symbolicRuntimeFields: Pick<
   RuntimeConfig,
-  "projectionTargets" | "projectionPolicy" | "mounts" | "runtimeBindings"
+  "projectionTargets" | "projectionPolicy" | "sites" | "runtimeBindings"
 > = {
   projectionTargets: {
     cells: {},
     variables: {},
   },
-  mounts: [],
+  sites: [],
   projectionPolicy: {
     maxActiveInstances: 512,
     maxUniqueCellTargets: 256,

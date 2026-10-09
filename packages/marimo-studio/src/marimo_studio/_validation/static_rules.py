@@ -6,7 +6,7 @@ from collections.abc import Mapping
 
 import marimo_studio._delivery.assets as _assets
 from marimo_studio._notebook.ports import NotebookInspector
-from marimo_studio._projections.ports import ViewMountInspector
+from marimo_studio._projections.ports import ViewSiteInspector
 from marimo_studio._projections.studio import resolve_studio
 from marimo_studio._validation.check_results import (
     error_result,
@@ -16,25 +16,25 @@ from marimo_studio._validation.check_results import (
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
-from marimo_studio.view_providers import MountDeclaration
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 
 def check_studio(
     studio: StudioWorkspace,
     *,
     inspect_notebook: NotebookInspector,
-    inspect_mounts: ViewMountInspector,
+    inspect_sites: ViewSiteInspector,
     view_name: str | None = None,
-    published_mounts: Mapping[str, tuple[MountDeclaration, ...]] | None = None,
+    published_sites: Mapping[str, tuple[ArtifactSite, ...]] | None = None,
 ) -> tuple[CheckResult, ...]:
     """Validate the notebook, view projects, projections, and packaged runtime."""
     try:
         resolved = resolve_studio(
             studio,
             inspect_notebook=inspect_notebook,
-            inspect_mounts=inspect_mounts,
+            inspect_sites=inspect_sites,
             view_name=view_name,
-            published_mounts=published_mounts,
+            published_sites=published_sites,
         )
         selected = selected_views(resolved, view_name)
     except MarimoStudioError as error:
@@ -57,7 +57,7 @@ def check_studio(
             results.extend(projection_results(resolved, (name,)))
             continue
         counts = {
-            kind: sum(site.kind == kind for site in view.mounts)
+            kind: sum(site.kind == kind for site in view.sites)
             for kind in ("cell", "output", "value")
         }
         results.append(

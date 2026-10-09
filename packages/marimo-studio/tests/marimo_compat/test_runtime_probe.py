@@ -22,7 +22,6 @@ from marimo_studio._compat.runtime_probe import probe_runtime_in_worker
 from .values_test_support import (
     _encoded_json,
     _native_output_context,
-    _selector_specs,
 )
 
 
@@ -53,13 +52,13 @@ if __name__ == "__main__":
 """.replace("__MARIMO_VERSION__", marimo.__version__),
         encoding="utf-8",
     )
-    cell = load_static_notebook(notebook).cells[0]
+    cell = load_static_notebook(notebook, notebook.read_text(encoding="utf-8")).cells[0]
 
     result = asyncio.run(
         probe_runtime_in_worker(
             notebook,
             cell_ids=(cell.runtime_id,),
-            variables=("context.count",),
+            value_selector_groups=(("context.count",),),
             timeout=10,
         )
     )
@@ -68,6 +67,49 @@ if __name__ == "__main__":
     assert result.cells[cell.runtime_id].outputs
     assert result.values.values == {"context.count": 3}
     assert sys.modules["__main__"] is main_module
+
+
+def test_runtime_probe_caps_json_values_and_reports_larger_dataframes(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "runtime.py"
+    notebook.write_text(
+        """import marimo
+
+__generated_with = "__MARIMO_VERSION__"
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import polars as pl
+
+    frame = pl.DataFrame({"value": range(10_000)})
+    text = "x" * 2_000
+    return frame, text
+
+
+if __name__ == "__main__":
+    app.run()
+""".replace("__MARIMO_VERSION__", marimo.__version__),
+        encoding="utf-8",
+    )
+    cell = load_static_notebook(notebook, notebook.read_text(encoding="utf-8")).cells[0]
+
+    result = asyncio.run(
+        probe_runtime_in_worker(
+            notebook,
+            cell_ids=(cell.runtime_id,),
+            value_selector_groups=(("frame", "text"),),
+            timeout=30,
+            max_json_bytes=1_024,
+        )
+    )
+
+    frame = cast(dict[str, Any], result.values.values["frame"])
+    assert frame["codec"] == "arrow-ipc-v1"
+    assert frame["byteLength"] > 80_000
+    assert result.values.errors["text"].code == "value-too-large"
 
 
 def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
@@ -124,10 +166,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         dict[str, Any],
                         functions["read_values"](
                             {
-                                **probe_value_arguments(
-                                    _selector_specs(owned), f"probe-{owned}"
-                                ),
-                                "max_value_bytes": 1_000,
+                                **probe_value_arguments((owned,), f"probe-{owned}"),
                             }
                         ),
                     )
@@ -135,10 +174,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         dict[str, Any],
                         functions["read_values"](
                             {
-                                **probe_value_arguments(
-                                    _selector_specs(foreign), f"probe-{owned}"
-                                ),
-                                "max_value_bytes": 1_000,
+                                **probe_value_arguments((foreign,), f"probe-{owned}"),
                             }
                         ),
                     )
@@ -147,9 +183,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         functions["render_values"](
                             {
                                 **probe_output_arguments(
-                                    _selector_specs(owned),
-                                    _selector_specs(owned),
-                                    f"probe-{owned}",
+                                    {owned: ()}, {owned: ()}, f"probe-{owned}"
                                 ),
                                 "max_output_bytes": 10_000,
                             }
@@ -160,9 +194,7 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         functions["render_values"](
                             {
                                 **probe_output_arguments(
-                                    _selector_specs(foreign),
-                                    _selector_specs(foreign),
-                                    f"probe-{owned}",
+                                    {foreign: ()}, {foreign: ()}, f"probe-{owned}"
                                 ),
                                 "max_output_bytes": 10_000,
                             }
@@ -279,8 +311,8 @@ if __name__ == "__main__":
         probe_runtime_in_worker(
             notebook,
             cell_ids=(),
-            variables=(),
-            output_selector_groups=(("df",),),
+            value_selector_groups=(),
+            output_groups=({"df": ()},),
             timeout=10,
         )
     )
@@ -317,11 +349,49 @@ if __name__ == "__main__":
         probe_runtime_in_worker(
             notebook,
             cell_ids=(),
-            variables=(),
-            output_selector_groups=(("first", "second"),),
+            value_selector_groups=(),
+            output_groups=({"first": (), "second": ()},),
             timeout=10,
         )
     )
 
     assert set(result.outputs.outputs) == {"first", "second"}
     assert result.outputs.errors == {}
+
+
+def test_runtime_probe_keeps_one_view_output_failure_across_views(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "views.py"
+    notebook.write_text(
+        """\
+import marimo
+
+__generated_with = "__MARIMO_VERSION__"
+app = marimo.App()
+
+
+@app.cell
+def _():
+    label = "plain text"
+    return (label,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".replace("__MARIMO_VERSION__", marimo.__version__),
+        encoding="utf-8",
+    )
+
+    result = asyncio.run(
+        probe_runtime_in_worker(
+            notebook,
+            cell_ids=(),
+            value_selector_groups=(),
+            output_groups=({"label": ("image/png",)}, {"label": ()}),
+            timeout=10,
+        )
+    )
+
+    assert result.outputs.errors["label"].code == "output-media-unavailable"
+    assert "label" not in result.outputs.outputs

@@ -6,10 +6,10 @@ from dataclasses import dataclass, replace
 from typing import Literal, TypeAlias
 
 from marimo_studio.view_providers import (
-    MountDeclaration,
     ProjectionKind,
     SourceLocation,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 StaticRuntime: TypeAlias = Literal["zero-python", "wasm"]
 PortabilityStatus: TypeAlias = Literal[
@@ -45,13 +45,13 @@ class ProjectionPortability:
 
 
 def projection_portability(
-    mounts: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
     runtime: StaticRuntime,
 ) -> tuple[ProjectionPortability, ...]:
     """Describe every authored projection site for one static runtime."""
     results: list[ProjectionPortability] = []
-    for site in sorted(mounts, key=lambda item: item.id):
-        targets = site.allowed_targets
+    for site in sorted(sites, key=lambda item: item.id):
+        targets = site.targets
         if targets is None:
             status: PortabilityStatus = (
                 "incompatible" if runtime == "zero-python" else "supported"

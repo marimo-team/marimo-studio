@@ -57,6 +57,11 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
   --starter marimo-studio/react:default
 ```
 
+The Quarto starter needs the `quarto` command. Install it with
+`pixi global install quarto`. When `starters` reports
+`Studio found Quarto in a pixi or conda environment that is not activated.`,
+start marimo through `pixi run` or inside `pixi shell`.
+
 After creation, Studio derives the provider requirement from the saved
 manifest. Keep a third-party provider distribution in the notebook or Python
 project dependencies.
@@ -76,7 +81,7 @@ Repair the source-located diagnostic and build again.
 If another author saved first, compare **Your edits** with **Saved version**.
 Use the reported recovery file before overwriting an uncertain replacement.
 
-## A source document is missing
+## A Source document is missing
 
 The view provider controls the Source catalog. Check `view.toml`, then inspect
 the project. For the Vanilla provider, local CSS and JavaScript appear after
@@ -121,6 +126,19 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 On macOS, `--watch` misses changes when the notebook path passes through a
 symlinked folder such as `/tmp`. Open the notebook by its resolved path, for
 example `/private/tmp/analysis.py`.
+
+## Preview cannot reach the Studio server
+
+Preview runs view code in a sandboxed frame whose requests carry no cookies.
+When those requests fail for 10 seconds, Preview reports **The preview cannot
+reach the Studio server.** Check that the server is running. A login proxy that
+requires a cookie on every request rejects these requests. For trusted
+notebooks and views, set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` in the Studio
+process and restart it, as
+[Run as an ASGI application](deploy.md#run-as-an-asgi-application) describes.
+In marimohub, add the setting to the project's **Environment variables**
+integration, as [Serve Preview behind a
+sign-in](marimohub.md#serve-preview-behind-a-sign-in) describes.
 
 ## The Browser runtime does not start
 
@@ -176,7 +194,7 @@ marimo-studio view build dashboard \
 marimo-studio validate dashboard --target analysis.py
 ```
 
-For a Prepared export, check that every projection mount has finite targets and
+For a Prepared export, check that every projection site has finite targets and
 that `states.yaml` uses accepted frontend values. Increase
 `--prepare-timeout` when the configured state set needs more than 30 seconds
 to execute:

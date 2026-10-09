@@ -1,6 +1,6 @@
 ---
 title: Building occupancy
-description: Compare a room monitor, a model review, and a printable PDF report backed by one room-sensor notebook.
+description: Compare a room monitor, a model review, and a pdfcn PDF report backed by one room-sensor notebook.
 sidebar: false
 aside: false
 outline: false
@@ -30,12 +30,16 @@ accuracy, precision, recall, the curve marker, confusion counts, and error
 evidence in the browser. [Recharts](https://recharts.org/) renders the threshold
 curve as a React component.
 
-In **PDF report**, choose one of the three prepared scopes. The React view
-composes the notebook-owned room profile and model evidence into an A4 report,
-then generates the downloadable PDF in the browser.
+In **Field report**, choose one of the three prepared scopes. The React view lays
+out the notebook's `occupancy_analysis` snapshot with
+[pdfcn](https://github.com/shadcn-labs/pdfcn), a set of shadcn-style PDF
+components, as a room-use summary, a sensor comparison, and the occupancy-score
+evidence. [Takumi](https://takumi.kane.tw/docs/pdf), a WebAssembly layout
+engine, renders the three A4 pages to a vector PDF in the browser, and the view
+shows them beside a download link.
 
 Open **Notebook** to inspect the rolling calculations, room profiles, and
-threshold evaluation that all three views present.
+threshold evaluation that every view presents.
 
 ## Run locally
 
@@ -46,8 +50,9 @@ uv run marimo edit examples/occupancy.py --sandbox
 ```
 
 Studio opens `monitor`, the notebook's default view. Switch among `monitor`,
-`model-review`, and `pdf-report`. The notebook fetches the pinned occupancy CSV from
-`raw.githubusercontent.com`. The Browser runtime also needs
+`model-review`, and `pdf-report`. The notebook fetches the pinned occupancy
+CSV from `raw.githubusercontent.com`, and the Field report loads Takumi's
+WebAssembly module from jsDelivr. The Browser runtime also needs
 [Pyodide](https://pyodide.org/), the Python distribution that runs in the
 browser, and its Python packages on an uncached run.
 
@@ -56,8 +61,4 @@ browser, and its Python packages on an uncached run.
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/occupancy.py)
 - [Monitor](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/monitor)
 - [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
-- [PDF report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
-
-All three deployed views use prepared states and run without a Python kernel.
-They keep statistical definitions in the notebook. Their presentation
-code formats and presents those results for separate decisions.
+- [Field report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)

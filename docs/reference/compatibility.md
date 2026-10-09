@@ -1,11 +1,11 @@
 ---
 title: Compatibility and support
-description: Supported Python, marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for marimo-studio 0.2.
+description: Supported Python, marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for marimo-studio 0.3.
 ---
 
 # Compatibility and support
 
-`marimo-studio` 0.2 is the current compatibility line. The notebook-to-view
+`marimo-studio` 0.3 is the current compatibility line. The notebook-to-view
 workflow, projection elements, and last-successful build behavior are supported
 product contracts. Before 1.0, CLI, Python, provider, and saved configuration
 contracts may change between minor releases.
@@ -16,9 +16,9 @@ Add Studio to the notebook or project dependencies:
 dependencies = ["marimo-studio"]
 ```
 
-Use `marimo-studio[deno]` to enable every bundled starter. The `deno` extra
-supplies the Deno toolchain that the React, Reveal.js, Svelte, and Notebook Kit
-starters build with.
+The `deno` extra supplies the Deno toolchain that the React, Reveal.js, Svelte,
+and Notebook Kit starters build with. The `typst` extra supplies the Typst
+compiler for the Typst starter.
 
 ## Upgrade from 0.0.6
 
@@ -70,13 +70,16 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 
 ## Supported environment
 
-| Component                        | 0.2.0 contract                                                                       |
-| -------------------------------- | ------------------------------------------------------------------------------------ |
-| Python                           | 3.10 through 3.14                                                                    |
-| marimo                           | 0.25.0                                                                               |
-| [Deno](https://docs.deno.com/)   | 2.9.5 from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring |
-| [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment    |
-| Browser acceptance               | Current Chromium on Linux and Windows                                                |
+| Component                        | 0.3.0 contract                                                                           |
+| -------------------------------- | ---------------------------------------------------------------------------------------- |
+| Python                           | 3.10 through 3.14                                                                        |
+| marimo                           | 0.25.1                                                                                   |
+| [Deno](https://docs.deno.com/)   | 2.9.5 from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring     |
+| [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment        |
+| [pixi](https://pixi.prefix.dev/) | Optional. Runs Studio in a pixi workspace and installs Quarto from conda-forge           |
+| [Quarto](https://quarto.org/)    | 1.9.38 or newer for the Quarto provider                                                  |
+| [Typst](https://typst.app/)      | The `typst` Python package 0.15 or newer, from the `typst` extra, for the Typst provider |
+| Browser acceptance               | Current Chromium on Linux and Windows                                                    |
 
 Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),
 which lets Python create staging files beyond the default 260-character path
@@ -102,8 +105,12 @@ provides both:
 | Platform        | Supported workspace storage                                                                                     |
 | --------------- | --------------------------------------------------------------------------------------------------------------- |
 | Linux and macOS | Local ext4, XFS, Btrfs, or APFS disks, NFSv3 and NFSv4 shares, and [gVisor](https://gvisor.dev/) sandbox mounts |
-| Windows         | NTFS, ReFS, and SMB shares                                                                                      |
+| Windows         | NTFS, ReFS, SMB shares, and OneDrive or SharePoint-synced folders                                               |
 | WSL 2           | The Linux disk and NTFS drives mounted under `/mnt`                                                             |
+
+Windows cloud-sync folders use data reparse points for online files. Studio
+opens those entries through the cloud filter, while symlinks and junctions
+remain outside the workspace contract.
 
 Object-storage mounts such as [s3fs](https://github.com/s3fs-fuse/s3fs-fuse)
 and [rclone](https://rclone.org/commands/rclone_mount/) rewrite file timestamps
@@ -150,11 +157,18 @@ scripts, forms, downloads, modals, pointer lock, and popups. It withholds
 same-origin access and top-level navigation. Studio validates navigation,
 query, replay, and readiness messages at the parent boundary.
 
+Set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` for a trusted single-tenant
+deployment that needs Server runtime documents to share the authenticated host
+origin. A marimohub session with proxy exposure enables it when the variable is
+unset, because the hub already serves notebook output on its own origin. The policy covers view documents, workspace previews, and the ASGI
+embedding path. Browser and Prepared runtimes keep opaque-origin isolation.
+
 ## Third-party view providers
 
-Studio 0.2 requires provider API version `1`. Set
-`ProviderInfo.api_version=PROVIDER_API_VERSION` and declare `marimo-studio`
-as a dependency. Test the provider against each Studio minor release it supports.
+Declare `marimo-studio` as a dependency bounded to the minor line the provider
+has tested, such as `marimo-studio>=0.4,<0.5`. Test the provider against each
+Studio minor release it supports with
+[`check_provider()`](provider-api.md#check-provider).
 
 The [View provider API](provider-api.md) defines process execution,
 permissions, cancellation, build inputs, output validation, and conformance

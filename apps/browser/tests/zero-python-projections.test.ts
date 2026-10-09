@@ -1,6 +1,7 @@
 import type {
   ExportOutput,
   ExportState,
+  JsonObject,
   JsonValue,
   LoadOptions,
   MarimoCellSnapshot,
@@ -70,6 +71,7 @@ it("adds authored host bindings to canonical export snapshots", async () => {
       cells: { summary: projectionNames.cell },
     },
     createZeroPythonProjectionLoaders(),
+    (selector) => `cell-${selector}`,
     new AbortController().signal,
   );
 
@@ -110,6 +112,7 @@ it("preserves verified Arrow bytes and table behavior for Studio values", async 
     notebookExport.defaultState,
     { values: { athlete_facts: projectionNames.value }, outputs: {}, cells: {} },
     createZeroPythonProjectionLoaders(),
+    (selector) => `cell-${selector}`,
     new AbortController().signal,
   );
   const projected = snapshot.values[0]?.value;
@@ -122,6 +125,65 @@ it("preserves verified Arrow bytes and table behavior for Studio values", async 
   const source = getMarimoDataSource(projected.value);
   expect(source?.fingerprint).toBe(`sha256:${digest}`);
   expect(source?.bytes).toEqual(bytes);
+});
+
+it("shows accepted media outputs as marimo output data owned by their producer", async () => {
+  const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const pdf = new TextEncoder().encode("%PDF-1.7");
+  const png = new TextEncoder().encode("PNG pixels");
+  const notebookExport = notebookExportFixture({
+    inputs: [{ mode: "baseline" }],
+    output: (state, name) => {
+      if (name === "figure") return mediaOutput(state, name, "image/svg+xml", svg);
+      if (name === "document") return mediaOutput(state, name, "application/pdf", pdf);
+      return mediaOutput(state, name, "image/png", png, { width: 300, height: 200 });
+    },
+  });
+
+  const snapshot = await loadPreparedProjectionSnapshot(
+    notebookExport.defaultState,
+    {
+      values: {},
+      outputs: { chart: "figure", report: "document", preview: "thumbnail" },
+      cells: {},
+    },
+    createZeroPythonProjectionLoaders(),
+    (selector) => `cell-${selector}`,
+    new AbortController().signal,
+  );
+
+  expect(snapshot.outputs).toMatchObject([
+    {
+      selector: "chart",
+      ownerCellId: "cell-chart",
+      output: {
+        channel: "output",
+        mimetype: "image/svg+xml",
+        data: `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg"/>')}`,
+      },
+    },
+    {
+      selector: "report",
+      ownerCellId: "cell-report",
+      output: {
+        mimetype: "application/pdf",
+        data: `data:application/pdf;base64,${btoa("%PDF-1.7")}`,
+      },
+    },
+    {
+      selector: "preview",
+      ownerCellId: "cell-preview",
+      output: { mimetype: "application/vnd.marimo+mimebundle" },
+    },
+  ]);
+  // marimo shows a high-density image through a mimebundle carrying its display size.
+  const preview = snapshot.outputs[2]?.output?.data;
+  expect(preview).toEqual(expect.any(String));
+  // SAFETY: The assertion above checked that the mimebundle data is a string.
+  expect(JSON.parse(preview as string)).toEqual({
+    "image/png": `data:image/png;base64,${btoa("PNG pixels")}`,
+    __metadata__: { "image/png": { width: 300, height: 200 } },
+  });
 });
 
 type FixtureLoad = (
@@ -156,6 +218,41 @@ const output = (state: ExportState, name: string, fixtureLoad: FixtureLoad): Exp
     },
   };
   return result;
+};
+
+const mediaOutput = (
+  state: ExportState,
+  name: string,
+  media: string,
+  data: Uint8Array,
+  metadata: JsonObject = {},
+): ExportOutput => {
+  const [type = "", subtype = ""] = media.split("/");
+  const mediaType = { raw: media, essence: media, type, subtype, parameters: new Map() };
+  const descriptor = {
+    codec: "marimo.blob-asset.msgpack.v1" as const,
+    mediaType: media,
+    filename: null,
+    metadata,
+    provenance: { pythonType: "marimo_export.outputs.BlobAsset" },
+    asset: { sha256: "c".repeat(64), size: data.byteLength },
+  };
+  return {
+    state,
+    name,
+    codec: descriptor.codec,
+    mediaType,
+    descriptor,
+    async load<C extends OutputCodec, T>(loader: OutputLoader<C, T>, options?: LoadOptions) {
+      // SAFETY: This output advertises the BlobAsset codec and invokes its selected loader.
+      return await (loader as OutputLoader<"marimo.blob-asset.msgpack.v1", T>).load({
+        descriptor,
+        mediaType,
+        payload: { data, mediaType, filename: null, metadata },
+        signal: options?.signal,
+      });
+    },
+  };
 };
 
 const arrowOutput = (

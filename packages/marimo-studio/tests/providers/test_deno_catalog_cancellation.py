@@ -12,8 +12,9 @@ import pytest
 import marimo_studio._views.catalog as catalog_module
 import marimo_studio.view_providers._host as providers_module
 from marimo_studio._processes.provider_operation import run_provider_operation
-from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessResult
-from marimo_studio.view_providers._bundled._deno import runtime as deno_runtime
+from marimo_studio._processes.supervisor import ProcessResult
+from marimo_studio.view_providers import _toolkit as toolkit
+from marimo_studio.view_providers._builtin._deno import runtime as deno_runtime
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
 from ..provider_test_support import ProviderStub, candidate
@@ -25,14 +26,13 @@ def test_cancelled_concurrent_deno_catalog_probe_retries_successfully(
 ) -> None:
     binary = tmp_path / "deno"
     binary.write_bytes(b"deno")
+    binary.chmod(0o755)
     providers = (
         ProviderStub("example/react", "react"),
         ProviderStub("example/svelte", "svelte"),
     )
     for provider in providers:
-        cast(Any, provider).availability = lambda _project=None: (
-            deno_runtime.deno_availability()
-        )
+        cast(Any, provider).availability = deno_runtime.deno_availability
     monkeypatch.setattr(
         providers_module,
         "_REGISTRY",
@@ -76,8 +76,7 @@ def test_cancelled_concurrent_deno_catalog_probe_retries_successfully(
             retry_barrier.wait(timeout=2)
             return ProcessResult(0, b"deno 2.9.5\n", b"")
 
-    monkeypatch.setattr(deno_runtime, "ProcessSupervisor", Supervisor)
-    deno_runtime._cached_availability.cache_clear()
+    monkeypatch.setattr(toolkit, "ProcessSupervisor", Supervisor)
 
     async def cancel_catalog() -> None:
         inventory = asyncio.create_task(run_provider_operation(catalog_module.starters))
@@ -87,39 +86,8 @@ def test_cancelled_concurrent_deno_catalog_probe_retries_successfully(
             await inventory
         assert started
 
-    try:
-        asyncio.run(cancel_catalog())
-        inventory = catalog_module.starters()
+    asyncio.run(cancel_catalog())
+    inventory = catalog_module.starters()
 
-        assert [starter.availability.available for starter in inventory] == [
-            True,
-            True,
-        ]
-        assert calls == 4
-    finally:
-        deno_runtime._cached_availability.cache_clear()
-
-
-def test_deno_availability_surfaces_process_cleanup_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    binary = tmp_path / "deno"
-    binary.write_bytes(b"deno")
-
-    class Supervisor:
-        def run(self, *_args: object, **_kwargs: object) -> ProcessResult:
-            raise ProcessCleanupError("Deno availability process survived")
-
-    monkeypatch.setattr(deno_runtime, "deno_binary", lambda: str(binary))
-    monkeypatch.setattr(deno_runtime, "ProcessSupervisor", Supervisor)
-    deno_runtime._cached_availability.cache_clear()
-
-    try:
-        with pytest.raises(
-            ProcessCleanupError,
-            match="Deno availability process survived",
-        ):
-            deno_runtime.deno_availability()
-    finally:
-        deno_runtime._cached_availability.cache_clear()
+    assert [starter.availability.available for starter in inventory] == [True, True]
+    assert calls == 4

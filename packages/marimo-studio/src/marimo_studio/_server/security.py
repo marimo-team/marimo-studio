@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from marimo_studio.errors import ConfigurationError
 
 ALLOWED_EMBED_ORIGINS_ENV = "MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS"
+TRUSTED_SERVER_RUNTIME_ENV = "MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME"
 _ALLOWED_EMBED_ORIGINS_MAX_BYTES = 4096
 _ALLOWED_EMBED_ORIGINS_MAX_ENTRIES = 32
 _HOST_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", re.IGNORECASE)
@@ -25,6 +26,7 @@ class Origin:
 @dataclass(frozen=True)
 class SecurityPolicy:
     allowed_embed_origins: tuple[Origin, ...] = ()
+    trusted_server_runtime: bool = False
 
 
 DEFAULT_SECURITY_POLICY = SecurityPolicy()
@@ -53,6 +55,24 @@ def parse_allowed_embed_origins(value: str) -> SecurityPolicy:
     return _security_policy(
         raw_origins,
         encoded=value,
+    )
+
+
+def parse_trusted_server_runtime(value: str) -> bool | None:
+    """Parse the setting that shares the server runtime's browser origin.
+
+    An empty value leaves the choice to the default or the notebook host.
+    """
+    normalized = value.strip().casefold()
+    if not normalized:
+        return None
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    raise ConfigurationError(
+        f"{TRUSTED_SERVER_RUNTIME_ENV} must be one of "
+        "0, 1, false, true, no, yes, off, or on"
     )
 
 
@@ -88,7 +108,7 @@ def extend_security_policy_from_host_head(
         origins.append(origin)
         seen.add(origin.value)
         encoded_bytes = candidate_bytes
-    return SecurityPolicy(tuple(origins))
+    return SecurityPolicy(tuple(origins), policy.trusted_server_runtime)
 
 
 def _security_policy(

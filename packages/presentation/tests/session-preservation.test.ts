@@ -456,6 +456,32 @@ test("a reload restores the session remembered for its view path", () => {
   ]);
 });
 
+test("preflight authorizes Marimo to resume only a validated session", () => {
+  const storage = new Map<string, string>();
+  new BrowserSessionReplay(environment(storage).value).remember(config(true), "s_abc123");
+  const reload = new BrowserSessionReplay(environment(storage, { navigationType: "reload" }).value);
+  reload.preflight(config(true));
+  assert.equal(reload.authorizedSession(), "s_abc123");
+
+  const assigned = new BrowserSessionReplay(
+    environment(new Map(), {
+      href: "https://example.test/dashboard/",
+      renewalToken,
+      runtimeSessionId: "s_abc123",
+    }).value,
+  );
+  assigned.preflight(config(false));
+  assert.equal(assigned.authorizedSession(), "s_abc123");
+
+  const linked = new BrowserSessionReplay(
+    environment(new Map(), {
+      href: "https://example.test/dashboard/?session_id=s_link12",
+    }).value,
+  );
+  assert.equal(linked.preflight(config(true)), false);
+  assert.equal(linked.authorizedSession(), undefined);
+});
+
 test("a history return restores the session remembered for its view path", () => {
   const storage = new Map<string, string>();
   const first = environment(storage, {

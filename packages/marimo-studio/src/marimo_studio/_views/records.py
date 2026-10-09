@@ -23,6 +23,20 @@ from marimo_studio.view_providers import (
 )
 
 OverviewState = Literal["unconfigured", "needs-view", "ready"]
+HostPersistence = Literal["workspace", "source", "none"]
+"""Files a notebook host saves when the session ends.
+
+``workspace`` saves workspace files, ``source`` saves the notebook and its
+dependencies, and ``none`` saves nothing.
+"""
+
+
+class DiagnosticsError(Exception):
+    """Diagnostics that stop a build or a document render."""
+
+    def __init__(self, diagnostics: tuple[ProjectDiagnostic, ...]) -> None:
+        super().__init__(diagnostics[0].message)
+        self.diagnostics = diagnostics
 
 
 @dataclass(frozen=True)
@@ -117,6 +131,8 @@ class StudioOverview:
     bindings: dict[str, str]
     views: tuple[ViewOverview, ...]
     launch_requirements: tuple[str, ...]
+    persistence: HostPersistence | None
+    """Files the notebook host saves when the session ends, when it reports them."""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -133,6 +149,7 @@ class StudioOverview:
             "bindings": self.bindings,
             "views": [view.to_dict() for view in self.views],
             "launch_requirements": list(self.launch_requirements),
+            "persistence": self.persistence,
         }
 
 

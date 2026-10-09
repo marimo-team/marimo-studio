@@ -1,7 +1,7 @@
 """Own the coherent presentation snapshots served for one notebook.
 
 A presentation snapshot binds saved notebook source, Studio configuration,
-the notebook symbol graph, provider-declared mounts, and one leased immutable
+the notebook symbol graph, provider-declared sites, and one leased immutable
 artifact into one presentation revision. Page rendering, runtime configuration,
 projection routes, and browser documents resolve against that same captured
 state. Validation independently checks the corresponding published
@@ -66,10 +66,10 @@ from marimo_studio.errors import (
 from marimo_studio.errors._internal import ArtifactIntegrityError, RuntimeSyncError
 from marimo_studio.view_providers import (
     BuildProfile,
-    MountDeclaration,
     ProjectInspection,
     ViewProject,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 if TYPE_CHECKING:
     from marimo_studio._server.development.coordinator import DevelopmentCoordinator
@@ -92,7 +92,7 @@ class PresentationSnapshot:
     notebook_source: str
     source_revision: str
     symbols: NotebookSymbolGraph
-    mounts: tuple[MountDeclaration, ...]
+    sites: tuple[ArtifactSite, ...]
     revision: str
 
 
@@ -258,8 +258,9 @@ class NotebookPresentation:
             try:
                 resolved = resolve_studio(
                     studio,
+                    notebook_source=before.notebook_source,
                     view_name=selected,
-                    published_mounts={selected: artifact.mounts},
+                    published_sites={selected: artifact.sites},
                 )
             except MarimoStudioError:
                 try:
@@ -314,7 +315,7 @@ class NotebookPresentation:
                 notebook_source=before.notebook_source,
                 source_revision=before.source_revision,
                 symbols=resolved.symbols,
-                mounts=artifact.mounts,
+                sites=artifact.sites,
                 revision=revision,
             )
             remembered_lease = candidate_lease
@@ -525,7 +526,7 @@ class NotebookPresentation:
         inspection: ProjectInspection,
     ) -> tuple[tuple[str, int, int, int], ...]:
         stamps: list[tuple[str, int, int, int]] = []
-        for document in inspection.editor_documents:
+        for document in inspection.documents:
             path = project.root.joinpath(*document.path.parts)
             state = path.stat(follow_symlinks=False)
             stamps.append(

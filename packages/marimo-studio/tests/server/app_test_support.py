@@ -215,9 +215,9 @@ def _projection_request(
     expected = site_target or target
     site = next(
         item
-        for item in config["mounts"]
+        for item in config["sites"]
         if item["kind"] == kind
-        and (item["allowedTargets"] is None or expected in item["allowedTargets"])
+        and (item["targets"] is None or expected in item["targets"])
     )
     return {
         "siteId": site["id"],
@@ -229,9 +229,9 @@ def _projection_request(
 def _projection_targets(config: dict[str, Any], kind: str) -> set[str]:
     return {
         target
-        for site in config["mounts"]
+        for site in config["sites"]
         if site["kind"] == kind
-        for target in site["allowedTargets"] or []
+        for target in site["targets"] or []
     }
 
 
@@ -284,7 +284,8 @@ def _live_test_session(
     session = _LiveTestSession()
     session.document = document
     session.session_view = SimpleNamespace(
-        last_executed_code={row.id: row.code for row in rows}
+        last_executed_code={row.id: row.code for row in rows},
+        cell_notifications={},
     )
     session.app_file_manager = SimpleNamespace(
         app=_LiveTestApp(document),

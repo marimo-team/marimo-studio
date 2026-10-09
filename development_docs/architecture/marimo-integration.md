@@ -82,7 +82,7 @@ Route handlers read no process environment.
 
 WebAssembly export uses this bundle to add a browser notebook runtime to a
 production view artifact. Prepared export compiles the provider's immutable
-mount declarations into a marimo-export specification, resolves finite input
+artifact sites into a marimo-export specification, resolves finite input
 states through the cache-backed producer, and publishes its verified result
 index beside the artifact. Static exports open marimo-export's configured
 persistent repository. Exact producer, output-plan, and state-space identities
@@ -100,7 +100,7 @@ directory.
 `states.yaml` uses the public `marimo_export.StateSpace` schema. Studio reads
 the file through its secure filesystem boundary, then marimo-export validates
 and expands the state space. Studio infers `OutputSpec` values from the view's
-projection mounts and combines both parts into one `ExportSpec`.
+projection sites and combines both parts into one `ExportSpec`.
 
 The managed producer gives Marimo the authored notebook path as its logical
 runtime filename. Marimo therefore reads and writes the notebook's shared
@@ -176,8 +176,8 @@ assets, and adapter tests form one compatibility unit.
 
 ## Static notebook inspection
 
-The private notebook adapter compiles the saved notebook and returns
-`StaticNotebook`:
+The private notebook adapter compiles notebook source that Studio has already
+read and returns `StaticNotebook`:
 
 ```python
 StaticNotebook(
@@ -199,6 +199,34 @@ StaticNotebook(
 
 Studio converts this to `NotebookSpec` and then `NotebookSymbolGraph`. Static
 inspection compiles notebook structure and avoids running cell bodies.
+
+Marimo saves a notebook by truncating the file and writing it again, so a
+concurrent read can observe a partial notebook. `while_unchanged` in
+`_filesystem/settle.py` repeats a read that overlapped a change, after a pause
+that lets the save finish. An empty notebook counts as settled only when it
+stays empty across that pause, because a save can pause between truncating and
+writing. Three reads use it:
+
+- Workspace discovery reads the notebook's Studio configuration.
+- Saved-notebook inspection reads and compiles the notebook.
+- A presentation snapshot captures the notebook source for its revision and
+  compiles that captured source.
+
+A static export compiles the source it captured and asks for another run when
+the notebook changed during the export. A notebook that keeps changing raises a
+transient error, which clients retry.
+
+`NotebookSourceError` names the problem Marimo found, and its hint names the
+repair. Browser messages contain no filesystem paths.
+
+| Problem                         | Location in the browser message |
+| ------------------------------- | ------------------------------- |
+| Line Marimo cannot parse        | File name and line              |
+| Unparsable cell                 | Line where the cell starts      |
+| File that is not a notebook     | File name                       |
+| Notebook without cells          | File name                       |
+| Duplicate definition or a cycle | None                            |
+| Any other Marimo failure        | File name                       |
 
 Native cell names enter the cell target namespace. Configured aliases are
 resolved against semantic `CellRef` values and join the same namespace.
@@ -331,21 +359,15 @@ objects retain their native output resources; completed notebook runs refresh
 the selection through the existing output reader.
 
 In edit mode, the private Lens adapter shows `marimo_lens.notebook_lens()`, the
-notebook's open Lens. That includes anonymous outputs such as the Lens that
-Marimo mounts automatically. The preview keeps the Lens's configured selector
-and notebook ownership. A notebook with no open Lens gets no preview overlay.
+notebook's open Lens. Marimo calls `marimo_lens.automatic_lens()` after a cell
+that imports marimo runs. That function returns a Lens when the runtime has no
+open or explicitly constructed Lens, and marimo mounts the returned Lens. The
+preview keeps the Lens's configured selector and notebook ownership. A notebook
+with no open Lens gets no preview overlay.
 
 Lens gives each document its own interaction owner, so the notebook dock and the
 preview dock drive one Lens model. Lens bounds its notebook UI to Marimo's
 `#App` pane, which Studio places inside the Notebook pane.
-
-Marimo mounts its Lens after the cell that imports marimo runs, unless an
-earlier cell output already holds one. That cell usually runs before a cell that
-constructs a Lens, so a notebook that authors its own Lens would hold two. The
-kernel lifespan replaces the post-execution hook with `LensMountPolicy`, which
-skips the automatic mount when a Studio notebook imports the `Lens` widget or
-the `marimo_lens` module.
-Other notebooks keep Marimo's mount.
 
 The native renderer mounts overlays outside the artifact shell, suppressing
 widgets already projected in the view. Widget model IDs and native virtual
@@ -366,7 +388,7 @@ notebook source. The record includes:
 
 The browser worker loads the saved notebook into Marimo with automatic cell
 execution disabled. Python precomputes each available target, producer, and
-dependency closure from the notebook graph and artifact mount declarations.
+dependency closure from the notebook graph and artifact sites.
 The runtime checks mounted requests against those records, schedules required
 cells through Marimo's cell queue, and attaches each host to its worker cell.
 Dynamic retargeting schedules newly required cells while the worker and its
@@ -464,7 +486,7 @@ A Marimo upgrade changes one compatibility unit:
 5. Prepare the exact frontend source.
 6. Rebuild browser assets and verify build metadata.
 7. Run Python, frontend, Server, WebAssembly, export, and package gates.
-8. Exercise bundled Vanilla, React, and Svelte views in a live browser.
+8. Exercise built-in Vanilla, React, and Svelte views in a live browser.
 
 Use a clean local Marimo checkout at the configured commit with:
 

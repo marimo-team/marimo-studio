@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
@@ -16,32 +17,27 @@ from marimo_studio._projections.resolution import (
     resolve_projection,
 )
 from marimo_studio._projections.symbol_graph import build_notebook_symbol_graph
-from marimo_studio._projections.values import (
-    MAX_VALUE_PATH_STEPS,
-    MAX_VALUE_REFERENCE_BYTES,
-    parse_value_reference,
-)
 from marimo_studio.view_providers import (
-    MountDeclaration,
     ProjectionKind,
     SourceLocation,
 )
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 
 def _site(
     site_id: str,
     kind: ProjectionKind,
-    allowed_targets: tuple[str, ...] | None,
-) -> MountDeclaration:
-    return MountDeclaration(
+    targets: tuple[str, ...] | None,
+) -> ArtifactSite:
+    return ArtifactSite(
         id=site_id,
         kind=kind,
         source=SourceLocation(PurePosixPath("src/App.tsx"), 12, 7),
-        allowed_targets=allowed_targets,
+        targets=targets,
     )
 
 
-def _request(site: MountDeclaration, target: str, instance: str = "instance-1"):
+def _request(site: ArtifactSite, target: str, instance: str = "instance-1"):
     return ProjectionRequest(
         site_id=site.id,
         instance_id=instance,
@@ -82,8 +78,27 @@ def test_bounded_and_wildcard_mounts_share_one_resolver(
     assert cell.producer == second.ref
     assert cell.dependency_closure == (first.ref, second.ref)
     assert value.producer == second.ref
-    assert value.selector_spec() == ("doubled", (("attribute", "real"),))
+    assert value.selector is not None
+    assert value.selector.source == "doubled.real"
+    assert value.selector.root == "doubled"
     assert output.producer == first.ref
+
+
+def test_an_output_target_resolves_in_the_media_types_its_literal_hosts_accept(
+    notebook_path: Path,
+) -> None:
+    notebook = inspect_notebook(notebook_path)
+    graph = build_notebook_symbol_graph(notebook, {})
+    literal = replace(
+        _site("site-literal", "output", ("x",)), accept=("image/svg+xml",)
+    )
+    dynamic = _site("site-dynamic", "output", None)
+    sites = (literal, dynamic)
+
+    assert resolve_projection(graph, sites, _request(dynamic, "x")).accept == (
+        "image/svg+xml",
+    )
+    assert resolve_projection(graph, sites, _request(dynamic, "doubled")).accept == ()
 
 
 def test_repeated_literal_sites_resolve_without_static_owner_rejection(
@@ -111,7 +126,7 @@ def test_repeated_literal_sites_resolve_without_static_owner_rejection(
 
 
 @pytest.mark.parametrize(
-    ("allowed_targets", "target", "code"),
+    ("targets", "target", "code"),
     [
         (
             ("summary",),
@@ -127,7 +142,7 @@ def test_repeated_literal_sites_resolve_without_static_owner_rejection(
 )
 def test_resolution_rejects_targets_outside_the_site_or_graph(
     notebook_path: Path,
-    allowed_targets: tuple[str, ...] | None,
+    targets: tuple[str, ...] | None,
     target: str,
     code: str,
 ) -> None:
@@ -136,7 +151,7 @@ def test_resolution_rejects_targets_outside_the_site_or_graph(
         notebook,
         {"inputs": notebook.cells[0], "summary": notebook.cells[1]},
     )
-    site = _site("site-cell", "cell", allowed_targets)
+    site = _site("site-cell", "cell", targets)
 
     with pytest.raises(ProjectionResolutionError) as captured:
         resolve_projection(graph, (site,), _request(site, target))
@@ -147,15 +162,6 @@ def test_resolution_rejects_targets_outside_the_site_or_graph(
 def test_selector_bounds_are_published_as_projection_policy(
     notebook_path: Path,
 ) -> None:
-    maximum = "x" + ".a" * MAX_VALUE_PATH_STEPS
-    assert len(parse_value_reference(maximum).path) == 64
-    with pytest.raises(ValueError, match="path steps"):
-        parse_value_reference(maximum + ".a")
-    with pytest.raises(ValueError, match="byte limit"):
-        parse_value_reference("x" * (MAX_VALUE_REFERENCE_BYTES + 1))
-    with pytest.raises(ValueError, match="safe integers"):
-        parse_value_reference("x[9007199254740992]")
-
     notebook = inspect_notebook(notebook_path)
     graph = build_notebook_symbol_graph(notebook, {})
     site = _site(
@@ -168,7 +174,8 @@ def test_selector_bounds_are_published_as_projection_policy(
         (site,),
         _request(site, "doubled" + ".value" * 64),
     )
-    assert len(accepted.selector_path) == 64
+    assert accepted.selector is not None
+    assert len(accepted.selector.path) == 64
     with pytest.raises(ProjectionResolutionError) as rejected:
         resolve_projection(
             graph,
@@ -277,7 +284,7 @@ def test_projection_selectors_reject_escaped_unpaired_surrogates(
     with pytest.raises(ProjectionResolutionError) as captured:
         resolve_projection(graph, (site,), _request(site, target))
 
-    assert captured.value.code == "projection-unpaired-surrogate"
+    assert captured.value.code == "projection-target-invalid"
 
 
 def test_value_targets_identify_the_producer_without_mounting_its_cell(

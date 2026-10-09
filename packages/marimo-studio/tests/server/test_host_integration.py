@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
+from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -17,7 +20,11 @@ from marimo_studio._entrypoints import EDIT_ROOT_ENV, route_policy_from_environm
 from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.route_policy import StudioRoutePolicy
-from marimo_studio._server.security import Origin, SecurityPolicy
+from marimo_studio._server.security import (
+    TRUSTED_SERVER_RUNTIME_ENV,
+    Origin,
+    SecurityPolicy,
+)
 from marimo_studio._server.studio.session_handoff import (
     HostSessionTicket,
     host_session_handoff_capability_matches,
@@ -29,7 +36,13 @@ from marimo_studio.errors import WorkspaceGenerationConflictError
 from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
-from .app_test_support import _redirect_target, _studio_bootstrap, _studio_host
+from .app_test_support import (
+    Response,
+    _presentation_fallback_url,
+    _redirect_target,
+    _studio_bootstrap,
+    _studio_host,
+)
 
 _EXPLICIT_HOST = StudioRoutePolicy(edit_root="marimo")
 
@@ -84,6 +97,30 @@ def test_explicit_host_enters_a_ready_workspace_through_studio(
     assert _studio_bootstrap(workspace)["selectedView"] == studio.default_view
 
 
+@pytest.mark.parametrize(
+    ("runtime_env", "trusted"),
+    [(None, False), ("1", True)],
+)
+def test_trusted_server_runtime_marks_the_workspace_preview(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runtime_env: str | None,
+    trusted: bool,
+) -> None:
+    monkeypatch.delenv(TRUSTED_SERVER_RUNTIME_ENV, raising=False)
+    if runtime_env is not None:
+        monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, runtime_env)
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook, programmatic=True, route_policy=_EXPLICIT_HOST)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        workspace = client.get("/studio/dashboard/?session_id=s_ready1")
+
+    assert workspace.status_code == 200
+    assert _studio_bootstrap(workspace)["trustedServerRuntime"] is trusted
+
+
 def test_explicit_host_handoff_uses_the_embedding_security_policy(
     notebook_path: Path,
 ) -> None:
@@ -126,6 +163,87 @@ def test_explicit_host_documents_allow_host_declared_parent_origins(
         assert response.headers["content-security-policy"] == (
             "frame-ancestors 'self' https://host.example"
         )
+
+
+class _NativePageElements(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attrs: dict[str, dict[str, str | None]] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"marimo-user-config", "marimo-server-token"}:
+            self.attrs[tag] = dict(attrs)
+
+
+def _native_page_elements(response: Response) -> tuple[object, str | None]:
+    parser = _NativePageElements()
+    parser.feed(response.text)
+    config = parser.attrs["marimo-user-config"]["data-config"]
+    assert config is not None
+    return json.loads(config), parser.attrs["marimo-server-token"]["data-token"]
+
+
+@pytest.mark.parametrize("configured", (False, True))
+def test_edit_root_keeps_the_native_editor_page_elements(
+    notebook_path: Path,
+    configured: bool,
+) -> None:
+    notebook = _configured(notebook_path).notebook if configured else notebook_path
+    app = _marimo_app(notebook, programmatic=True)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        root = client.get("/")
+        native = client.get(_studio_host(root)["urls"]["editor"])
+
+    assert root.status_code == native.status_code == 200
+    assert _native_page_elements(root) == _native_page_elements(native)
+
+
+class _HostScripts(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.nonces: list[str | None] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if tag == "script" and "data-host-bridge" in values:
+            self.nonces.append(values.get("nonce"))
+
+
+@pytest.mark.parametrize("trusted", [False, True])
+def test_run_mode_views_run_the_host_head(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    trusted: bool,
+) -> None:
+    monkeypatch.delenv(TRUSTED_SERVER_RUNTIME_ENV, raising=False)
+    if trusted:
+        monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "1")
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook, programmatic=True)
+    mounted: Any = next(route.app for route in app.routes if isinstance(route, Mount))
+    mounted.state.html_head = (
+        '<script data-host-bridge="1">globalThis.hostBridge = true</script>'
+    )
+
+    with TestClient(app) as client:
+        page = client.get("/dashboard/")
+        child = None if trusted else client.get(_presentation_fallback_url(page)).text
+        unframed = client.get("/dashboard/?marimo_studio_unframed=1").text
+
+    scripts = _HostScripts()
+    scripts.feed(page.text)
+    assert len(scripts.nonces) == 1
+    policy = page.headers.get("content-security-policy", "")
+    nonce = re.search(r"script-src 'nonce-([^']+)'", policy)
+    assert scripts.nonces[0] == (nonce.group(1) if nonce else None)
+    assert (nonce is None) is trusted
+    for document in (child, unframed):
+        if document is not None:
+            document_scripts = _HostScripts()
+            document_scripts.feed(document)
+            assert document_scripts.nonces == []
 
 
 def test_studio_route_initializes_an_unconfigured_notebook(

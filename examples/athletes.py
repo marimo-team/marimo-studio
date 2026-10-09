@@ -42,13 +42,14 @@ def introduction(mo):
 @app.cell
 def _():
     import io
+    import math
     import urllib.request
     from datetime import date
 
     import marimo as mo
     import polars as pl
 
-    return date, io, mo, pl, urllib
+    return date, io, math, mo, pl, urllib
 
 
 @app.cell(hide_code=True)
@@ -117,7 +118,7 @@ def sport_control(athletes, mo):
 
 
 @app.cell
-def participation(athletes, pl, sport):
+def participation(athletes, mo, pl, sport):
     selected_athletes = (
         athletes
         if sport.value == "All sports"
@@ -152,8 +153,8 @@ def participation(athletes, pl, sport):
         )
         .head(20)
     )
-    selected_roster
-    return (athlete_summary,)
+    mo.plain(selected_roster)
+    return athlete_summary, selected_athletes
 
 
 @app.cell(hide_code=True)
@@ -251,6 +252,113 @@ def data_quality(athletes, pl):
         "source": "Rio 2016 athlete roster",
     }
     return (quality,)
+
+
+@app.cell(hide_code=True)
+def scaling_context(mo):
+    mo.md(r"""
+    ## How mass scales with stature
+
+    A body-mass index divides weight by a power of height. The power that
+    makes the index independent of height is the slope of $\log w$ on
+    $\log h$. The fit below estimates it for the women and men of the selected
+    sport and tests the exponents of Quetelet's index, $\beta = 2$, and of
+    geometric similarity, $\beta = 3$.
+    """)
+    return
+
+
+@app.cell
+def scaling(math, pl, selected_athletes, sport):
+    def _t_quantile(degrees):
+        # Cornish-Fisher expansion of Student's t around the normal 0.975
+        # quantile, accurate to 1e-4 from 8 degrees of freedom.
+        z = 1.959963984540054
+        return (
+            z
+            + (z**3 + z) / (4 * degrees)
+            + (5 * z**5 + 16 * z**3 + 3 * z) / (96 * degrees**2)
+            + (3 * z**7 + 19 * z**5 + 17 * z**3 - 15 * z) / (384 * degrees**3)
+        )
+
+    _fields = (
+        "alpha",
+        "beta",
+        "standard_error",
+        "interval",
+        "t_quetelet",
+        "t_isometric",
+        "r_squared",
+        "sigma",
+    )
+
+    def _fit(frame):
+        logs = frame.select(
+            pl.col("height").cast(pl.Float64).log().alias("x"),
+            pl.col("weight").cast(pl.Float64).log().alias("y"),
+        ).drop_nulls()
+        n = logs.height
+        if n < 10:
+            return {"n": f"{n:,}", **dict.fromkeys(_fields)}
+        sums = logs.select(
+            pl.col("x").mean().alias("x_mean"),
+            pl.col("y").mean().alias("y_mean"),
+            ((pl.col("x") - pl.col("x").mean()) ** 2).sum().alias("sxx"),
+            (
+                (pl.col("x") - pl.col("x").mean())
+                * (pl.col("y") - pl.col("y").mean())
+            )
+            .sum()
+            .alias("sxy"),
+            ((pl.col("y") - pl.col("y").mean()) ** 2).sum().alias("syy"),
+        ).row(0, named=True)
+        beta = sums["sxy"] / sums["sxx"]
+        alpha = sums["y_mean"] - beta * sums["x_mean"]
+        residual = sums["syy"] - beta * sums["sxy"]
+        sigma = math.sqrt(residual / (n - 2))
+        error = sigma / math.sqrt(sums["sxx"])
+        margin = _t_quantile(n - 2) * error
+        return {
+            "n": f"{n:,}",
+            "alpha": f"{alpha:.3f}",
+            "beta": f"{beta:.3f}",
+            "standard_error": f"{error:.3f}",
+            "interval": f"{beta - margin:.2f} to {beta + margin:.2f}",
+            "t_quetelet": f"{(beta - 2) / error:.1f}",
+            "t_isometric": f"{(beta - 3) / error:.1f}",
+            "r_squared": f"{1 - residual / sums['syy']:.3f}",
+            "sigma": f"{sigma:.3f}",
+        }
+
+    _sex = pl.col("sex").cast(pl.String)
+    scaling = {
+        "selection": sport.value,
+        "women": _fit(selected_athletes.filter(_sex == "female")),
+        "men": _fit(selected_athletes.filter(_sex == "male")),
+    }
+    return (scaling,)
+
+
+@app.cell
+def scaling_relation(mo, scaling):
+    def _line(label, fit):
+        if fit["beta"] is None:
+            return rf"\text{{{label}}} &: \ \text{{fewer than 10 measured athletes}}"
+        return (
+            rf"\widehat{{\log w}}_{{\text{{{label}}}}} &= {fit['alpha']}"
+            rf" + {fit['beta']}\,\log h"
+            rf" \qquad (R^2 = {fit['r_squared']})"
+        )
+
+    mo.md(
+        "$$\n\\begin{aligned}\n"
+        + _line("women", scaling["women"])
+        + r" \\"
+        + "\n"
+        + _line("men", scaling["men"])
+        + "\n\\end{aligned}\n$$"
+    )
+    return
 
 
 @app.cell(hide_code=True)

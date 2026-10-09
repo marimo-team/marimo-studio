@@ -45,7 +45,7 @@ const configureProjections = async (
           args: {
             revision: config.revision,
             generation,
-            mounts: config.mounts,
+            sites: config.sites,
             variables,
           },
         }),
@@ -86,7 +86,6 @@ const requestValues = async (
             revision: request.revision,
             projections: request.projections,
             active_projections: request.activeProjections,
-            max_value_bytes: 1_000_000,
           },
         }),
       signal,

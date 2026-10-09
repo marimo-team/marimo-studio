@@ -13,9 +13,9 @@ const generated = [
 ];
 
 const providerToolSources = [
-  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/analyzer.ts",
-  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/analyzers/**",
-  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/starters/**",
+  "packages/marimo-studio/src/marimo_studio/view_providers/_builtin/**/analyzer.ts",
+  "packages/marimo-studio/src/marimo_studio/view_providers/_builtin/**/analyzers/**",
+  "packages/marimo-studio/src/marimo_studio/view_providers/_builtin/**/starters/**",
 ];
 
 const ignored = [...generated, ...providerToolSources, ...antiSlopIgnorePatterns];
@@ -220,6 +220,22 @@ export default defineConfig({
             "WebSocket",
             "window",
             "XMLHttpRequest",
+          ],
+        },
+      },
+      {
+        files: [".github/actions/pr-validation/select.ts"],
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                {
+                  group: ["*", "!node:*", "!node:*/*"],
+                  message: "The selector runs before the workspace installs dependencies.",
+                },
+              ],
+            },
           ],
         },
       },

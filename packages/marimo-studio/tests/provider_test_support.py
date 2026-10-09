@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from importlib.metadata import EntryPoint
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
@@ -13,14 +14,17 @@ import marimo_studio._views.creation_plan as creation_plan_module
 import marimo_studio.view_providers._host as providers_module
 from marimo_studio._artifacts.inputs import project_input_paths
 from marimo_studio._artifacts.paths import artifact_root
+from marimo_studio._artifacts.repository import read_profile_state
 from marimo_studio._processes.provider_runner import create_provider_runner
+from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildProfile,
     BuildRequest,
     BuildResult,
     InspectionRequest,
-    ProjectInput,
+    ProjectDiagnostic,
     ProjectInspection,
     ProviderAvailability,
     ProviderCancellation,
@@ -32,7 +36,7 @@ from marimo_studio.view_providers import (
     StarterPlan,
     ViewProject,
 )
-from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
     ProviderRegistry,
@@ -72,10 +76,13 @@ def provider_build_request(
     *,
     profile: BuildProfile = "development",
     cache_root: Path | None = None,
+    work_root: Path | None = None,
     revision: str = "sha256:test",
     command_timeout: float = 120.0,
 ) -> BuildRequest:
     cancellation = ProviderCancellation()
+    work = work_root or staging_root.parent / "work"
+    work.mkdir(parents=True, exist_ok=True)
     return BuildRequest(
         project=project,
         inspection=inspection,
@@ -83,9 +90,10 @@ def provider_build_request(
         project_revision=revision,
         profile=profile,
         staging_root=staging_root,
+        work_root=work,
         cache_root=cache_root or artifact_root(project) / ".cache",
         cancellation=cancellation,
-        runner=create_provider_runner(project, cancellation, command_timeout),
+        runner=create_provider_runner(project.root, cancellation, command_timeout),
         command_timeout=command_timeout,
     )
 
@@ -106,11 +114,13 @@ class ProviderStub:
         starter_key: str,
         *,
         available: bool = True,
-        profiles: tuple[BuildProfile, ...] = ("development", "production"),
     ) -> None:
-        del profiles
         self.provider_key = provider_id.replace(":", "/", 1)
-        self.info: ProviderInfo = vanilla_provider.info
+        self.info = ProviderInfo(
+            title="Test provider",
+            summary="Builds one HTML page for tests.",
+            options=frozenset({"command", "delay", "entrypoint", "marker"}),
+        )
         self.starter = ProviderStarter(
             key=starter_key.rsplit(":", 1)[-1].rsplit("/", 1)[-1],
             title="Test starter",
@@ -130,11 +140,7 @@ class ProviderStub:
         self.plan_calls = 0
         self.starter_calls = 0
 
-    def availability(
-        self,
-        project: ViewProject | None = None,
-    ) -> ProviderAvailability:
-        del project
+    def availability(self) -> ProviderAvailability:
         if self.availability_error is not None:
             raise self.availability_error
         if self.available:
@@ -201,14 +207,8 @@ def candidate(
 
 def inspection() -> ProjectInspection:
     return ProjectInspection(
-        editor_documents=(SourceDocument(PurePosixPath("index.html"), "html", "edit"),),
-        input_scope=(
-            ProjectInput(PurePosixPath("index.html"), "file"),
-            ProjectInput(PurePosixPath("view.toml"), "file"),
-        ),
-        mounts=(),
-        diagnostics=(),
-        build_fingerprint="test-provider-v1",
+        documents=(SourceDocument(PurePosixPath("index.html"), "html", "edit"),),
+        inputs=(BuildInput(PurePosixPath("index.html"), "file"),),
     )
 
 
@@ -238,3 +238,26 @@ def install_registry(
 ) -> None:
     monkeypatch.setattr(providers_module, "_REGISTRY", registry)
     monkeypatch.setattr(creation_plan_module, "provider_registry", lambda: registry)
+
+
+@dataclass(frozen=True)
+class PublishedView:
+    files: Mapping[PurePosixPath, bytes]
+    sites: tuple[ArtifactSite, ...]
+    diagnostics: tuple[ProjectDiagnostic, ...]
+
+
+def publish(
+    project: ViewProject,
+    *,
+    profile: BuildProfile = "development",
+) -> PublishedView:
+    """Build through Studio and return the published files and diagnostics."""
+    with build_view_project_sync(project, profile=profile) as lease:
+        files = {
+            item.path: lease.read_bytes(item.path) for item in lease.artifact.files
+        }
+        sites = lease.artifact.sites
+    state = read_profile_state(project, profile)
+    assert state is not None and state.published is not None
+    return PublishedView(files, sites, state.published.diagnostics)

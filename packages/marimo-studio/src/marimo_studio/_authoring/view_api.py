@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -35,6 +36,7 @@ from marimo_studio._delivery.export import (
 )
 from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._delivery.progress import StaticExportProgress
+from marimo_studio._hosts.marimohub import published_url
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.publication_hold import (
@@ -161,6 +163,10 @@ class View:
         ``exact=True`` requires a current build and returns a URL constrained to
         its presentation revision. Open the URL with your browser after this
         call finishes, then inspect the rendered application.
+
+        In a marimohub session, a code-mode URL uses the hub's public address.
+        A browser without the user's hub sign-in may reach a login page, so
+        verify with ``show()`` there.
         """
         if (access_token or browser_client) and server is None:
             raise ValueError("access_token and browser_client require server")
@@ -175,7 +181,7 @@ class View:
         )
         if connection is None:
             raise ProtocolError("Provide server= for a saved view's preview URL.")
-        return await resolve_preview_url(
+        url = await resolve_preview_url(
             self.workspace.notebook,
             self.name,
             connection,
@@ -183,6 +189,9 @@ class View:
             exact=exact,
             owner=self._owner,
         )
+        if server is not None:
+            return url
+        return await asyncio.to_thread(published_url, url, connection.server_url)
 
     async def hold_publication(
         self,

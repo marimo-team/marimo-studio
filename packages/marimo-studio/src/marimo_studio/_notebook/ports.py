@@ -10,7 +10,7 @@ from typing import Protocol
 
 from marimo_studio._notebook.records import CellKind, NotebookSpec, SourceSpan
 from marimo_studio._notebook.source_generation import NotebookSourceGeneration
-from marimo_studio._projections.runtime_records import RuntimeProbe
+from marimo_studio._projections.runtime_records import OutputGroup, RuntimeProbe
 
 
 class LiveNotebookRunner(Protocol):
@@ -19,11 +19,11 @@ class LiveNotebookRunner(Protocol):
         path: Path,
         *,
         cell_ids: tuple[str, ...],
-        variables: tuple[str, ...],
-        output_selector_groups: tuple[tuple[str, ...], ...],
+        value_selector_groups: tuple[tuple[str, ...], ...],
+        output_groups: tuple[OutputGroup, ...],
         show_tracebacks: bool,
         timeout: float,
-        value_max_bytes: int | None = None,
+        max_json_bytes: int | None = None,
         source_generation: NotebookSourceGeneration | None = None,
     ) -> RuntimeProbe: ...
 
@@ -39,13 +39,18 @@ class NotebookWriteLock(Protocol):
 
 
 class NotebookInspector(Protocol):
-    """Read the static graph for one saved Marimo notebook."""
+    """Read the static graph for one Marimo notebook.
+
+    When ``source`` is given, the inspector compiles it as the content of
+    ``path``. Otherwise it reads the saved notebook once.
+    """
 
     def __call__(
         self,
         path: str | Path,
         *,
         include_code: bool = False,
+        source: str | None = None,
     ) -> NotebookSpec: ...
 
 
@@ -76,7 +81,7 @@ class StaticNotebook:
 
 
 class StaticNotebookLoader(Protocol):
-    def __call__(self, path: Path) -> StaticNotebook: ...
+    def __call__(self, path: Path, source: str) -> StaticNotebook: ...
 
 
 class EnvironmentFlagBuilder(Protocol):

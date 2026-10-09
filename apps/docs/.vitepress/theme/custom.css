@@ -141,71 +141,6 @@
   }
 }
 
-.studio-runtime-flow {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin: 28px 0 36px !important;
-  padding: 0 !important;
-  counter-reset: studio-flow;
-  list-style: none !important;
-}
-
-.studio-runtime-flow li {
-  min-width: 0;
-  margin: 0 !important;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 7px;
-  padding: 16px;
-  background: var(--vp-c-bg-elv);
-  counter-increment: studio-flow;
-}
-
-.studio-runtime-flow li::before {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--vp-c-brand-1);
-  content: "0" counter(studio-flow);
-  font-family: var(--vp-font-family-mono);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.studio-runtime-flow strong,
-.studio-runtime-flow span {
-  display: block;
-}
-
-.studio-runtime-flow strong {
-  font-size: 14px;
-}
-
-.studio-runtime-flow span {
-  margin-top: 7px;
-  color: var(--vp-c-text-2);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.studio-request-branch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 24px 0 32px;
-}
-
-.studio-request-branch section {
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 7px;
-  padding: 16px 18px;
-  background: var(--vp-c-bg-elv);
-}
-
-.studio-request-branch strong,
-.studio-request-branch span {
-  display: block;
-}
-
 .studio-example-gallery {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -213,6 +148,8 @@
   margin: 2.5rem 0 4rem;
 }
 
+/* Example pages drop the sidebar. Prose keeps its reading width while the
+   live example and the gallery widen into the freed space. */
 @media (min-width: 60rem) {
   .studio-example-page .VPDoc {
     padding-right: clamp(2rem, 4vw, 5rem);
@@ -224,8 +161,8 @@
   }
 
   .studio-example-page .VPDoc:not(.has-sidebar) .content {
-    width: 100%;
-    max-width: none;
+    max-width: 50rem;
+    margin-inline: auto;
     padding-right: 0;
     padding-left: 0;
   }
@@ -233,33 +170,36 @@
   .studio-example-page .VPDoc .content-container {
     max-width: none;
   }
+
+  .studio-example-page .vp-doc :is(.studio-example, .studio-example-gallery) {
+    --example-width: min(92rem, 100vw - 6rem);
+    width: var(--example-width);
+    margin-inline: calc((100% - var(--example-width)) / 2);
+  }
 }
 
-.studio-request-branch strong {
-  font-size: 14px;
-}
+/* The overview page drops the sidebar. Prose keeps its reading width while
+   the notebook-and-view stack widens into the freed space. */
+@media (min-width: 60rem) {
+  .studio-overview-page .VPDoc:not(.has-sidebar) .container {
+    max-width: 80rem;
+  }
 
-.studio-request-branch span {
-  margin-top: 6px;
-  color: var(--vp-c-text-2);
-  font-size: 13px;
-  line-height: 1.55;
+  .studio-overview-page .VPDoc:not(.has-sidebar) .content {
+    max-width: 50rem;
+    margin-inline: auto;
+  }
+
+  .studio-overview-page .studio-view-stack {
+    --stack-width: min(76rem, 100vw - 6rem);
+    width: var(--stack-width);
+    margin-inline: calc((100% - var(--stack-width)) / 2);
+  }
 }
 
 @media (max-width: 959px) {
   .VPNavBarSearchButton .keys {
     display: none;
-  }
-
-  .studio-runtime-flow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 639px) {
-  .studio-runtime-flow,
-  .studio-request-branch {
-    grid-template-columns: 1fr;
   }
 }
 

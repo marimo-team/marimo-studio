@@ -28,6 +28,20 @@ it("delegates fullscreen to an opaque preview document", () => {
   expect(sandbox).not.toContain("allow-same-origin");
 });
 
+it("leaves a trusted server preview on the host origin", () => {
+  render(
+    <PreviewFrame
+      frameRef={vi.fn()}
+      runtime="server"
+      sameOrigin
+      title="Trusted presentation"
+      view="dashboard"
+    />,
+  );
+
+  expect(screen.getByTitle("Trusted presentation")).not.toHaveAttribute("sandbox");
+});
+
 it("keeps a visible preview inert until its runtime is ready", () => {
   const frameRef = vi.fn();
   const view = render(

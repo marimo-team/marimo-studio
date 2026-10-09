@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Callable, MutableMapping
@@ -7,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import marimo
+import pytest
 
 
 def link_directory(target: Path, link: Path) -> None:
@@ -137,3 +139,24 @@ def update_notebook_config(
         updated_notebook_config_source(path, source, update), encoding="utf-8"
     )
     os.replace(temporary, path)
+
+
+def write_marimohub_context(
+    directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    **fields: object,
+) -> Path:
+    """Publish a marimohub session context and point the process at it."""
+    path = directory / "marimohub-context.json"
+    context = {
+        "schema_version": 1,
+        "public_url": "https://hub.example/proxy/token/",
+        "notebook_url": "https://hub.example/projects/p/notebooks/n",
+        "exposure_mode": "proxy",
+        "persistence_mode": "workspace",
+        "session_mode": "edit",
+        **fields,
+    }
+    path.write_text(json.dumps(context), encoding="utf-8")
+    monkeypatch.setenv("MARIMOHUB_CONTEXT_FILE", str(path))
+    return path

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol
@@ -107,6 +107,8 @@ class DocumentTransactionEvidence(Protocol):
 class SessionState(Protocol):
     async def close(self) -> None: ...
 
+    def prepare_manager(self, manager: object) -> None: ...
+
     def is_session_id(self, value: object) -> bool: ...
 
     def exists(self, context: ServerContext, session_id: str) -> bool: ...
@@ -162,6 +164,12 @@ class SessionState(Protocol):
     async def control_bindings(
         self, context: ServerContext, session_id: str
     ) -> dict[str, object]: ...
+
+    def cell_outputs(
+        self, context: ServerContext, session_id: str, cell_ids: Iterable[str]
+    ) -> dict[str, tuple[str, object]]:
+        """Return each runtime cell's current output as its mimetype and data."""
+        ...
 
 
 class ExistingSessionAttachment(Protocol):

@@ -1,0 +1,156 @@
+"""Derive artifact sites from provider projection sites and document reads."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers._records import (
+    ProjectInspection,
+    ProjectionKind,
+    ProjectionSite,
+    RenderCell,
+    RenderOutput,
+    RenderValue,
+    SourceLocation,
+)
+
+SITE_ATTRIBUTE = "data-marimo-studio-site"
+
+
+@dataclass(frozen=True)
+class ArtifactSite:
+    """One artifact-local projection site with its Studio-assigned identity.
+
+    An output site with ``accept`` reads its target in the first of those media
+    types the value supports. Without it, the site reads marimo's native output.
+    """
+
+    id: str
+    kind: ProjectionKind
+    source: SourceLocation
+    targets: tuple[str, ...] | None
+    accept: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "source": self.source.to_dict(),
+            "targets": (list(self.targets) if self.targets is not None else None),
+            "accept": list(self.accept),
+        }
+
+
+def _site_id(*identity: object) -> str:
+    encoded = json.dumps(identity, ensure_ascii=False, separators=(",", ":"))
+    return f"site-{hashlib.sha256(encoded.encode()).hexdigest()}"
+
+
+def artifact_sites(
+    sites: tuple[ProjectionSite, ...],
+) -> tuple[ArtifactSite, ...]:
+    """Assign stable IDs to sites in the order the provider reported them.
+
+    The identity omits the source position, so a host keeps its ID when it
+    moves inside its file. Hosts sharing a path, kind, and single target are
+    numbered by their position in that file.
+    """
+    ordered = sorted(
+        range(len(sites)),
+        key=lambda index: (
+            sites[index].source.path.as_posix(),
+            sites[index].offset,
+        ),
+    )
+    occurrences: dict[tuple[PurePosixPath, ProjectionKind, str | None], int] = {}
+    identities: dict[int, str] = {}
+    for index in ordered:
+        site = sites[index]
+        target = (
+            site.targets[0] if site.targets != "*" and len(site.targets) == 1 else None
+        )
+        key = (site.source.path, site.kind, target)
+        occurrence = occurrences.get(key, 0)
+        occurrences[key] = occurrence + 1
+        identities[index] = _site_id(
+            site.source.path.as_posix(), site.kind, target, occurrence
+        )
+    return tuple(
+        ArtifactSite(
+            id=identities[index],
+            kind=site.kind,
+            source=site.source,
+            targets=None if site.targets == "*" else site.targets,
+            accept=site.accept,
+        )
+        for index, site in enumerate(sites)
+    )
+
+
+def render_sites(
+    values: tuple[RenderValue, ...],
+    outputs: tuple[RenderOutput, ...],
+    cells: tuple[RenderCell, ...],
+) -> tuple[ArtifactSite, ...]:
+    """Return one site per document value, output, and cell, at its first read.
+
+    Read IDs use their own namespace, so they never match a projection site's.
+    """
+    sites: dict[tuple[ProjectionKind, str], ArtifactSite] = {}
+
+    def add(
+        kind: ProjectionKind,
+        target: str,
+        source: SourceLocation,
+        accept: tuple[str, ...] = (),
+    ) -> None:
+        if (kind, target) not in sites:
+            sites[kind, target] = ArtifactSite(
+                id=_site_id("read", kind, target),
+                kind=kind,
+                source=source,
+                targets=(target,),
+                accept=accept,
+            )
+
+    for value in values:
+        add("value", value.target, value.source)
+    for output in outputs:
+        add("output", output.target, output.source, output.accept)
+    for cell in cells:
+        add("cell", cell.target, cell.source, cell.accept)
+    return tuple(sites.values())
+
+
+def media_accept(
+    sites: Iterable[ArtifactSite],
+    kind: ProjectionKind,
+) -> dict[str, tuple[str, ...]]:
+    """Return the media types a view reads each literal output or cell target in.
+
+    Inspection gives every literal read of a target the same list, and a host
+    that selects its target at runtime declares none. An empty output list
+    reads marimo's native output.
+    """
+    accept: dict[str, tuple[str, ...]] = {}
+    for site in sites:
+        if site.kind == kind:
+            for target in site.targets or ():
+                accept.setdefault(target, site.accept)
+    return accept
+
+
+def inspection_sites(inspection: ProjectInspection) -> tuple[ArtifactSite, ...]:
+    """Return the sites a view built from this inspection publishes."""
+    return (
+        *artifact_sites(inspection.sites),
+        *render_sites(
+            inspection.render_values,
+            inspection.render_outputs,
+            inspection.render_cells,
+        ),
+    )

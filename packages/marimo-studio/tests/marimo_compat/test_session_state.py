@@ -5,24 +5,46 @@ import threading
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 from marimo._messaging.notification import (
+    CellNotification,
+    CompletedRunNotification,
     QueryParamsSetNotification,
     ReloadNotification,
 )
-from marimo._messaging.serde import deserialize_kernel_message
+from marimo._messaging.serde import deserialize_kernel_message, serialize_kernel_message
+from marimo._runtime.commands import (
+    CreateNotebookCommand,
+    ExecuteCellsCommand,
+    ExecuteStaleCellsCommand,
+    InstallPackagesCommand,
+    ModelCommand,
+    ModelCustomMessage,
+    ModelUpdateMessage,
+    UpdateCellConfigCommand,
+    UpdateUIElementCommand,
+)
 from starlette.datastructures import QueryParams
 
 import marimo_studio._compat.server.session_state as session_state_module
+from marimo_studio._compat.execution_markers import (
+    is_execution_command,
+    make_marker,
+    parse_marker,
+)
 from marimo_studio._compat.server.session_state import (
     PrivateSessionState,
     session_creation_query_matches,
     session_matches_notebook,
 )
 from marimo_studio._server.ports import EditorSessionIdentity
-from marimo_studio.errors._internal import RuntimeSyncError
+from marimo_studio.errors._internal import (
+    RuntimeExecutionPendingError,
+    RuntimeKernelExitError,
+    RuntimeSyncError,
+)
 
 
 def _live_capture() -> session_state_module._LiveCellCapture:
@@ -35,20 +57,32 @@ def _live_capture() -> session_state_module._LiveCellCapture:
     )
 
 
+def _marker(
+    name: str,
+    phase: Literal["start", "done", "failed"],
+    token: str,
+) -> bytes:
+    return serialize_kernel_message(
+        CompletedRunNotification(
+            run_id=make_marker(phase, name, token),
+        )
+    )
+
+
 def test_session_owner_uses_the_initialization_identity_until_saved() -> None:
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         initialization_id="notebook.py",
         app_file_manager=SimpleNamespace(path=None),
     )
 
     assert session_matches_notebook(
-        cast(Any, session),
+        session,
         file_key="notebook.py",
         notebook=Path("/workspace/notebook.py"),
     )
     session.app_file_manager.path = "/workspace/renamed.py"
     assert not session_matches_notebook(
-        cast(Any, session),
+        session,
         file_key="notebook.py",
         notebook=Path("/workspace/notebook.py"),
     )
@@ -56,13 +90,13 @@ def test_session_owner_uses_the_initialization_identity_until_saved() -> None:
 
 def test_session_owner_accepts_the_current_notebook_path(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         initialization_id=str(tmp_path / "nested" / "notebook.py"),
         app_file_manager=SimpleNamespace(path=str(notebook)),
     )
 
     assert session_matches_notebook(
-        cast(Any, session),
+        session,
         file_key="notebook.py",
         notebook=notebook,
     )
@@ -70,20 +104,20 @@ def test_session_owner_accepts_the_current_notebook_path(tmp_path: Path) -> None
 
 def test_session_owner_rejects_another_notebook_path(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         initialization_id="other.py",
         app_file_manager=SimpleNamespace(path=str(tmp_path / "other.py")),
     )
 
     assert not session_matches_notebook(
-        cast(Any, session),
+        session,
         file_key="notebook.py",
         notebook=notebook,
     )
 
 
 def test_app_host_session_exposes_its_creation_query() -> None:
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         _kernel_manager=SimpleNamespace(
             _app_metadata=SimpleNamespace(
                 query_params={"region": "emea", "session_id": "s_private"}
@@ -122,7 +156,7 @@ def test_first_save_handoff_follows_the_saving_consumer_connection(
         "s_peer01": SimpleNamespace(notify=peer_notifications.append),
     }
 
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         initialization_id="__new__" if file_key is None else "__new__s_123456",
         notify=notify,
         room=SimpleNamespace(get_consumer=consumers.get),
@@ -174,7 +208,7 @@ def test_editor_identity_follows_the_native_consumer(
             ("s_second", "second-client", "second-capability"),
         )
     }
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         room=SimpleNamespace(get_consumer=consumers.get),
     )
     monkeypatch.setattr(
@@ -239,6 +273,979 @@ def test_live_cell_capture_materializes_off_its_event_loop_owner(
         "first": ("first",),
         "second": ("first", "second"),
     }
+
+
+def test_live_cell_materialization_preserves_duplicate_cell_occurrences() -> None:
+    capture = session_state_module._LiveCellCapture(
+        session_owner=7,
+        document_generation=1,
+        cells=(
+            ("first", "value = 1", "first"),
+            ("second", "value = 1", "second"),
+        ),
+        executed_cells=(("second", "value = 1"),),
+        graph_parents=None,
+    )
+
+    snapshot = session_state_module._materialize_live_cells(capture)
+    refs = tuple(snapshot.ids)
+
+    assert snapshot.current_refs == {"second": refs[1]}
+    assert refs[1].occurrence == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [("queued", True), ("running", True), ("idle", False)],
+)
+def test_live_cell_capture_records_active_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+    expected: bool,
+) -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(
+            cells=(SimpleNamespace(id="first", code="value = 1", name="value"),),
+            version=1,
+        ),
+        session_view=SimpleNamespace(
+            last_executed_code={"first": "value = 1"},
+            cell_notifications={"first": SimpleNamespace(status=status)},
+        ),
+    )
+    monkeypatch.setattr(session_state_module, "current_session", lambda *_args: session)
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    monkeypatch.setattr(
+        session_state_module,
+        "_ensure_execution_tracker",
+        lambda _session: tracker,
+    )
+    if status != "idle":
+        tracker.on_notification_sent(
+            session,
+            serialize_kernel_message(
+                CellNotification(cast(Any, "first"), status=cast(Any, status))
+            ),
+        )
+
+    capture = session_state_module._capture_live_cells(
+        cast(Any, SimpleNamespace(mode="edit")),
+        "s_123456",
+        include_dependency_closures=False,
+        session_owner=lambda _session: 7,
+    )
+
+    assert capture is not None
+    assert capture.execution_pending is expected
+
+
+def test_live_cell_capture_reports_a_stopped_kernel_before_pending_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Session:
+        def kernel_exit_info(self) -> object:
+            return SimpleNamespace(message="The kernel stopped unexpectedly.")
+
+    session: Any = Session()
+    tracker = session_state_module._ExecutionTracker(session, attached=True)
+    tracker._marker_runs.add("active")
+    tracker._marker_runs.add("stuck")
+    monkeypatch.setattr(session_state_module, "current_session", lambda *_args: session)
+    monkeypatch.setattr(
+        session_state_module,
+        "_ensure_execution_tracker",
+        lambda _session: tracker,
+    )
+
+    with pytest.raises(RuntimeKernelExitError, match="stopped unexpectedly"):
+        asyncio.run(
+            PrivateSessionState().live_cells(
+                cast(Any, object()),
+                "s_123456",
+                include_dependency_closures=False,
+            )
+        )
+
+
+def test_execution_tracker_covers_command_admission_before_cell_notification() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        ExecuteCellsCommand(cell_ids=cast(Any, ["first"]), codes=["value = 2"]),
+        None,
+    )
+
+    assert tracker.pending(session)
+    generation = tracker.generation
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteCellsCommand", "start", "execute-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CellNotification(cast(Any, "first"), status="idle")),
+    )
+
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteCellsCommand", "done", "execute-1"),
+    )
+    assert not tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateCellConfigCommand", "start", "config-1"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateCellConfigCommand", "done", "config-1"),
+    )
+    assert not tracker.pending(session)
+    assert tracker.generation > generation
+
+
+def test_execution_tracker_attaches_before_native_event_bus_delivery() -> None:
+    from marimo._session.events import SessionEventBus
+
+    class Session:
+        def __init__(self) -> None:
+            self._event_bus = SessionEventBus()
+
+    session: Any = Session()
+    tracker = session_state_module._ensure_execution_tracker(session)
+
+    assert session._event_bus._listeners[0] is tracker
+    session._event_bus.emit_received_command(
+        session,
+        ExecuteStaleCellsCommand(),
+        None,
+    )
+    assert tracker.pending(session)
+    session._event_bus.emit_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "start", "bus-1"),
+    )
+    session._event_bus.emit_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "done", "bus-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_kernel_markers_are_consumed_before_browser_broadcast() -> None:
+    from marimo._session.events import SessionEventBus
+
+    class Session:
+        def __init__(self) -> None:
+            self._event_bus = SessionEventBus()
+            self.broadcasted: list[object] = []
+
+        def notify(self, operation: object, from_consumer_id: object | None) -> None:
+            del from_consumer_id
+            self.broadcasted.append(operation)
+
+    session: Any = Session()
+    tracker = session_state_module._ensure_execution_tracker(session)
+    session._event_bus.emit_received_command(
+        session,
+        UpdateUIElementCommand(object_ids=cast(Any, ["slider"]), values=[2]),
+        None,
+    )
+    session.notify(_marker("UpdateUIElementCommand", "start", "hidden-1"), None)
+    assert tracker.pending(session)
+    assert session.broadcasted == []
+    session.notify(_marker("UpdateUIElementCommand", "done", "hidden-1"), None)
+    assert not tracker.pending(session)
+    assert session.broadcasted == []
+
+
+def test_execution_tracker_retires_a_collapsed_reactive_batch() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    for value in (1, 2):
+        tracker.on_received_command(
+            session,
+            UpdateUIElementCommand(
+                object_ids=cast(Any, ["slider"]),
+                values=[value],
+            ),
+            None,
+        )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateUIElementCommand", "start", "merged-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateUIElementCommand", "done", "merged-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_coalesces_unmarked_batchable_ui_commands() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        UpdateUIElementCommand(object_ids=cast(Any, ["slider"]), values=[2]),
+        None,
+    )
+
+    tracker.on_received_command(
+        session,
+        UpdateUIElementCommand(object_ids=cast(Any, ["slider"]), values=[3]),
+        None,
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CompletedRunNotification()),
+    )
+    assert not tracker.pending(session)
+
+
+@pytest.mark.parametrize("connected", (True, False))
+@pytest.mark.parametrize("executing", (True, False))
+def test_live_cell_capture_uses_the_native_barrier_for_connected_consumers(
+    monkeypatch: pytest.MonkeyPatch,
+    connected: bool,
+    executing: bool,
+) -> None:
+    class Session:
+        room = SimpleNamespace(
+            get_consumer=lambda _consumer_id: object() if connected else None
+        )
+
+        def put_control_request(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+    session: Any = Session()
+    tracker = session_state_module._ExecutionTracker(session, attached=True)
+    if executing:
+        tracker.on_notification_sent(
+            session,
+            _marker("ExecuteCellsCommand", "start", "running"),
+        )
+    order: list[str] = []
+    capture = _live_capture()
+    monkeypatch.setattr(session_state_module, "current_session", lambda *_args: session)
+    monkeypatch.setattr(
+        session_state_module,
+        "_ensure_execution_tracker",
+        lambda _session: tracker,
+    )
+
+    async def barrier(*_args: object, **_kwargs: object) -> object:
+        order.append("barrier")
+        tracker._marker_runs.clear()
+        return object()
+
+    monkeypatch.setattr(session_state_module, "wait_for_session_barrier", barrier)
+    monkeypatch.setattr(
+        session_state_module,
+        "_capture_live_cells",
+        lambda *_args, **_kwargs: order.append("capture") or capture,
+    )
+
+    if executing and not connected:
+        with pytest.raises(RuntimeExecutionPendingError):
+            asyncio.run(
+                PrivateSessionState().live_cells(
+                    cast(Any, object()),
+                    "s_123456",
+                    include_dependency_closures=False,
+                )
+            )
+        assert order == []
+        return
+
+    result = asyncio.run(
+        PrivateSessionState().live_cells(
+            cast(Any, object()),
+            "s_123456",
+            include_dependency_closures=False,
+        )
+    )
+
+    assert isinstance(result, session_state_module.LiveCellSnapshot)
+    assert order == (["barrier"] if connected else []) + ["capture", "capture"]
+
+
+def test_live_cell_capture_resolves_a_file_session_before_the_kernel_barrier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Session:
+        room = SimpleNamespace(get_consumer=lambda _consumer_id: object())
+
+        def put_control_request(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+    session: Any = Session()
+    manager = SimpleNamespace(
+        sessions={"s_123456": session},
+        get_session_by_file_key=lambda _file_key: session,
+    )
+    context = SimpleNamespace(mode="edit", file_key="notebook.py")
+    tracker = session_state_module._ExecutionTracker(session, attached=True)
+    order: list[object] = []
+    monkeypatch.setattr(
+        session_state_module,
+        "context_handle",
+        lambda _context: SimpleNamespace(session_manager=manager),
+    )
+    monkeypatch.setattr(
+        session_state_module,
+        "_ensure_execution_tracker",
+        lambda _session: tracker,
+    )
+
+    async def barrier(*_args: object, **kwargs: object) -> None:
+        order.append(kwargs["consumer_id"])
+
+    monkeypatch.setattr(session_state_module, "wait_for_session_barrier", barrier)
+    monkeypatch.setattr(
+        session_state_module,
+        "_capture_live_cells",
+        lambda *_args, **_kwargs: order.append("capture") or _live_capture(),
+    )
+
+    result = asyncio.run(
+        PrivateSessionState().live_cells(
+            cast(Any, context),
+            None,
+            include_dependency_closures=False,
+        )
+    )
+
+    assert isinstance(result, session_state_module.LiveCellSnapshot)
+    assert order == ["s_123456", "capture", "capture"]
+
+
+def test_execution_tracker_finishes_noop_commands_on_completion_notification() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+
+    tracker.on_received_command(session, ExecuteStaleCellsCommand(), None)
+    assert tracker.pending(session)
+
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "start", "stale-1"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "done", "stale-1"),
+    )
+
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_keeps_overlapping_cell_runs_pending() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        ExecuteCellsCommand(cell_ids=cast(Any, ["first"]), codes=["value = 1"]),
+        None,
+    )
+    tracker.on_received_command(
+        session,
+        ExecuteCellsCommand(cell_ids=cast(Any, ["first"]), codes=["value = 2"]),
+        None,
+    )
+
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteCellsCommand", "start", "execute-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteCellsCommand", "start", "execute-2"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteCellsCommand", "done", "execute-1"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteCellsCommand", "done", "execute-2"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_uses_cell_notifications_for_ui_updates() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        UpdateUIElementCommand(object_ids=cast(Any, ["slider"]), values=[2]),
+        None,
+    )
+    assert tracker.pending(session)
+    generation = tracker.generation
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateUIElementCommand", "start", "ui-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CellNotification(cast(Any, "first"), status="queued")),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CellNotification(cast(Any, "first"), status="idle")),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateUIElementCommand", "done", "ui-1"),
+    )
+    assert not tracker.pending(session)
+    assert tracker.generation > generation
+
+
+def test_execution_tracker_keeps_non_auto_create_pending_until_completion() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        CreateNotebookCommand(
+            execution_requests=(),
+            cell_ids=(),
+            set_ui_element_value_request=UpdateUIElementCommand(
+                object_ids=[], values=[]
+            ),
+            auto_run=False,
+        ),
+        None,
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "start", "create-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "done", "create-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_ignores_a_late_create_terminal_after_retry_reset() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        CreateNotebookCommand(
+            execution_requests=(),
+            cell_ids=(),
+            set_ui_element_value_request=UpdateUIElementCommand(
+                object_ids=[], values=[]
+            ),
+            auto_run=False,
+        ),
+        None,
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "start", "old-create"),
+    )
+
+    tracker.reset_startup()
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "done", "old-create"),
+    )
+
+    assert not tracker.create_accepted
+    assert not tracker.create_failed
+    assert not tracker.pending(session)
+
+
+def test_startup_retry_preserves_other_active_kernel_commands() -> None:
+    session: Any = SimpleNamespace(session_view=SimpleNamespace(cell_notifications={}))
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_notification_sent(
+        session, _marker("CreateNotebookCommand", "start", "create")
+    )
+    tracker.on_notification_sent(
+        session, _marker("ExecuteCellsCommand", "start", "execute")
+    )
+    tracker.reset_startup()
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session, _marker("ExecuteCellsCommand", "done", "execute")
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_ignores_a_late_unmarked_create_completion_after_retry() -> (
+    None
+):
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    create = CreateNotebookCommand(
+        execution_requests=(),
+        cell_ids=(),
+        set_ui_element_value_request=UpdateUIElementCommand(object_ids=[], values=[]),
+        auto_run=False,
+    )
+    tracker.on_received_command(session, create, None)
+    tracker.reset_startup()
+    tracker.on_received_command(session, create, None)
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CompletedRunNotification()),
+    )
+
+    assert tracker.pending(session)
+
+
+def test_execution_tracker_ignores_a_delayed_create_start_after_retry_reset() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        CreateNotebookCommand(
+            execution_requests=(),
+            cell_ids=(),
+            set_ui_element_value_request=UpdateUIElementCommand(
+                object_ids=[], values=[]
+            ),
+            auto_run=False,
+        ),
+        None,
+    )
+    tracker._marker_supported = True
+    tracker.reset_startup()
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "start", "delayed-create"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "done", "delayed-create"),
+    )
+
+    assert not tracker.create_accepted
+    assert not tracker.create_failed
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_admits_a_retry_after_an_unmarked_create_failure() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    create = CreateNotebookCommand(
+        execution_requests=(),
+        cell_ids=(),
+        set_ui_element_value_request=UpdateUIElementCommand(object_ids=[], values=[]),
+        auto_run=False,
+    )
+
+    tracker.on_received_command(session, create, None)
+    tracker.reset_startup()
+    tracker.on_received_command(session, create, None)
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "start", "retry-create"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "failed", "retry-create"),
+    )
+
+    assert tracker.create_failed
+    assert not tracker.create_accepted
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_admits_an_unmarked_create_when_later_markers_arrive() -> (
+    None
+):
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        CreateNotebookCommand(
+            execution_requests=(),
+            cell_ids=(),
+            set_ui_element_value_request=UpdateUIElementCommand(
+                object_ids=[], values=[]
+            ),
+            auto_run=False,
+        ),
+        None,
+    )
+    tracker.on_received_command(session, ExecuteStaleCellsCommand(), None)
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "start", "after-create"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "done", "after-create"),
+    )
+
+    assert tracker.create_accepted
+    assert not tracker.create_failed
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_accepts_a_retry_after_an_unmarked_create_failure() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    create = CreateNotebookCommand(
+        execution_requests=(),
+        cell_ids=(),
+        set_ui_element_value_request=UpdateUIElementCommand(object_ids=[], values=[]),
+        auto_run=False,
+    )
+
+    tracker.on_received_command(session, create, None)
+    tracker.reset_startup()
+    tracker.on_received_command(session, create, None)
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "start", "retry-create"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "done", "retry-create"),
+    )
+
+    assert tracker.create_accepted
+    assert not tracker.create_failed
+    assert not tracker.pending(session)
+
+
+def test_execution_markers_exclude_scratchpad_completion_ids() -> None:
+    assert not is_execution_command("ExecuteScratchpadCommand")
+    assert (
+        parse_marker(make_marker("done", "ExecuteScratchpadCommand", "scratchpad-1"))
+        is None
+    )
+
+
+def test_execution_tracker_surfaces_a_failed_create_marker() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        CreateNotebookCommand(
+            execution_requests=(),
+            cell_ids=(),
+            set_ui_element_value_request=UpdateUIElementCommand(
+                object_ids=[], values=[]
+            ),
+            auto_run=False,
+        ),
+        None,
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "start", "failed-create"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "failed", "failed-create"),
+    )
+
+    assert tracker.create_failed
+    assert not tracker.create_accepted
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_waits_for_cell_config_completion() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        UpdateCellConfigCommand(configs=cast(Any, {"first": {"hide_code": True}})),
+        None,
+    )
+    assert not tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateCellConfigCommand", "start", "config-1"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateCellConfigCommand", "done", "config-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_waits_for_package_install_completion() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        InstallPackagesCommand(manager="pip", versions={"polars": "1.0.0"}),
+        None,
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("InstallPackagesCommand", "start", "install-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("InstallPackagesCommand", "done", "install-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_waits_for_model_update_completion() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(
+            cell_notifications={},
+            model_states={"model": object()},
+        ),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        ModelCommand(
+            model_id=cast(Any, "model"),
+            message=ModelUpdateMessage(state={"value": 2}, buffer_paths=[]),
+            buffers=[],
+        ),
+        None,
+    )
+    assert not tracker.pending(session)
+
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "start", "model-1"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "done", "model-1"),
+    )
+    assert not tracker.pending(session)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [ModelCustomMessage(content={}), ModelUpdateMessage(state={}, buffer_paths=[])],
+)
+def test_execution_tracker_does_not_wait_for_unmarked_model_messages(
+    message: object,
+) -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        ModelCommand(
+            model_id=cast(Any, "model"),
+            message=cast(Any, message),
+            buffers=[],
+        ),
+        None,
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_correlates_multiple_model_updates() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(
+            cell_notifications={},
+            model_states={"first-model": object(), "second-model": object()},
+        ),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    for model_id in ("first-model", "second-model"):
+        tracker.on_received_command(
+            session,
+            ModelCommand(
+                model_id=cast(Any, model_id),
+                message=ModelUpdateMessage(state={"value": 2}, buffer_paths=[]),
+                buffers=[],
+            ),
+            None,
+        )
+
+    assert not tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "start", "model-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "start", "model-2"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "done", "model-2"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "done", "model-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_uses_cell_notifications_for_config_execution() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        UpdateCellConfigCommand(configs=cast(Any, {"first": {"disabled": False}})),
+        None,
+    )
+    assert not tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateCellConfigCommand", "start", "config-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(
+            CellNotification(cast(Any, "first"), status="running")
+        ),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CellNotification(cast(Any, "first"), status="idle")),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("UpdateCellConfigCommand", "done", "config-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_correlates_create_and_stale_completions() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        CreateNotebookCommand(
+            execution_requests=(),
+            cell_ids=(),
+            set_ui_element_value_request=UpdateUIElementCommand(
+                object_ids=[], values=[]
+            ),
+            auto_run=False,
+        ),
+        None,
+    )
+    tracker.on_received_command(session, ExecuteStaleCellsCommand(), None)
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "start", "create-1"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("CreateNotebookCommand", "done", "create-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "start", "stale-1"),
+    )
+    tracker.on_notification_sent(
+        session,
+        _marker("ExecuteStaleCellsCommand", "done", "stale-1"),
+    )
+    assert not tracker.pending(session)
+
+
+def test_execution_tracker_waits_for_a_marked_unknown_model_update_completion() -> None:
+    session: Any = SimpleNamespace(
+        document=SimpleNamespace(cells=()),
+        session_view=SimpleNamespace(cell_notifications={}, model_states={}),
+    )
+    tracker = session_state_module._ExecutionTracker(session, attached=False)
+    tracker.on_received_command(
+        session,
+        ModelCommand(
+            model_id=cast(Any, "missing"),
+            message=ModelUpdateMessage(state={}, buffer_paths=[]),
+            buffers=[],
+        ),
+        None,
+    )
+    assert not tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "start", "model-1"),
+    )
+    assert tracker.pending(session)
+    tracker.on_notification_sent(
+        session,
+        _marker("ModelCommand", "done", "model-1"),
+    )
+    assert not tracker.pending(session)
 
 
 @pytest.mark.parametrize(

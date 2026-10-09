@@ -17,9 +17,9 @@ from marimo_studio._artifacts.limits import (
 from marimo_studio._artifacts.records import ArtifactFile
 from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._filesystem.paths import validate_relative_path
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import ViewProject
-from marimo_studio.view_providers._validation import validate_relative_path
 
 
 def _unsafe(label: str, error: UnsafePathError) -> ConfigurationError:

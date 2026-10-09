@@ -1,6 +1,6 @@
 ---
 title: Quadratic programs
-description: Compare a lecture deck, a reading explainer, and an interactive geometry lab backed by one quadratic program notebook.
+description: Compare a lecture deck, a reading explainer, an interactive geometry lab, and a typeset report backed by one quadratic program notebook.
 sidebar: false
 aside: false
 outline: false
@@ -14,8 +14,8 @@ states a small quadratic program with [CVXPY](https://www.cvxpy.org/), a Python
 library for convex optimization. It solves the program for four shapes of the
 objective and every direction of its linear term. Cell by cell, the notebook
 holds the argument of a short lesson: the standard form, why the problem
-matters, its geometry, duality, and the key ideas. One notebook backs all three
-views.
+matters, its geometry, duality, and the key ideas. One notebook backs every
+view.
 
 ## Compare the views
 
@@ -39,7 +39,15 @@ curve beneath it, to turn _q_. The notebook's `sweep` records the solution for
 walls update in the browser. **Shape of P** selects one of four prepared
 states.
 
-Open **Notebook** to read the analysis the three views share.
+**Report** is a two-page worked example typeset with
+[Typst](https://typst.app/) in the style of a short paper. It sets the standard
+form and the example's data in math, embeds the notebook's own matplotlib
+figures of the region and the direction sweep as vector graphics, and
+tabulates each wall's slack and dual value. Run the notebook locally and change
+**Shape of P** or **Direction of q** in Notebook, and Studio renders the PDF
+again with the new solution.
+
+Open **Notebook** to read the analysis the views share.
 
 ## Run locally
 
@@ -50,8 +58,9 @@ uv run marimo edit examples/quadratic_program.py --sandbox
 ```
 
 Studio opens the Explainer, the notebook's default view. The Lecture and Lab
-views build with the Deno toolchain supplied by `marimo-studio[deno]`. All three
-views load their fonts from jsDelivr.
+views build with the Deno toolchain supplied by `marimo-studio[deno]`, and they
+and the Explainer load their fonts from jsDelivr. The Report compiles with the
+Typst compiler from `marimo-studio[typst]` and its embedded fonts.
 
 ## Read the source
 
@@ -59,6 +68,7 @@ views load their fonts from jsDelivr.
 - [Lecture view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/lecture)
 - [Explainer view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/explainer)
 - [Lab view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/lab)
+- [Report view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/report)
 
 The notebook adapts the
 [quadratic program notebook](https://github.com/marimo-team/learn/blob/main/optimization/04_quadratic_program.py)

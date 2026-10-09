@@ -1,4 +1,4 @@
-"""Compile finite provider mounts into one marimo-export specification."""
+"""Compile finite provider sites into one marimo-export specification."""
 
 from __future__ import annotations
 
@@ -8,15 +8,21 @@ from hashlib import sha256
 from types import MappingProxyType
 
 from marimo_export import ExportSpec, OutputSpec, StateSpace
+from marimo_export.exporters import media
+from marimo_export.limits import MAX_NAME_BYTES
 
-from marimo_studio._notebook.records import CellRef
-from marimo_studio._projections.resolution import ProjectionRequest, resolve_projection
+from marimo_studio._projections.resolution import (
+    ProjectionRequest,
+    ResolvedProjection,
+    resolve_projection,
+)
 from marimo_studio._projections.resolved import ResolvedStudio
+from marimo_studio._projections.runtime_records import MEDIA_SCALE
 from marimo_studio.errors import PublicationError
-from marimo_studio.view_providers import MountDeclaration, ProjectionKind
+from marimo_studio.view_providers import ProjectionKind
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 _ProjectionIdentity = tuple[ProjectionKind, str]
-_MAX_OUTPUT_NAME_BYTES = 255
 
 
 def _immutable_bindings(bindings: Mapping[str, str]) -> Mapping[str, str]:
@@ -46,7 +52,7 @@ class CompiledExportView:
 def _output_name(identity: _ProjectionIdentity) -> str:
     kind, target = identity
     readable = f"{kind}:{target}"
-    if len(readable.encode("utf-8")) <= _MAX_OUTPUT_NAME_BYTES and not any(
+    if len(readable.encode("utf-8")) <= MAX_NAME_BYTES and not any(
         ord(character) < 32 or ord(character) == 127 for character in readable
     ):
         return readable
@@ -55,16 +61,16 @@ def _output_name(identity: _ProjectionIdentity) -> str:
 
 
 def _output_spec(
-    resolved: ResolvedStudio,
-    kind: ProjectionKind,
-    target: str,
-    producer: CellRef,
+    resolved: ResolvedStudio, projection: ResolvedProjection
 ) -> OutputSpec:
-    if kind == "value":
+    target = projection.request.target
+    if projection.kind == "value":
         return OutputSpec.native(target)
-    if kind == "output":
+    if projection.kind == "output" and projection.accept:
+        return OutputSpec.export(target, media(projection.accept, scale=MEDIA_SCALE))
+    if projection.kind == "output":
         return OutputSpec.output(target)
-    cell = resolved.notebook.by_ref().get(producer)
+    cell = resolved.notebook.by_ref().get(projection.producer)
     if cell is None:
         raise PublicationError(
             f"Prepared cell target {target!r} has no notebook producer."
@@ -79,32 +85,32 @@ def _output_spec(
 def compile_export_view(
     resolved: ResolvedStudio,
     view_name: str,
-    mounts: tuple[MountDeclaration, ...],
+    sites: tuple[ArtifactSite, ...],
     *,
     state_space: StateSpace | None = None,
 ) -> CompiledExportView:
-    """Compile one immutable mount catalog into finite prepared outputs."""
-    if not mounts:
+    """Compile one immutable site catalog into finite prepared outputs."""
+    if not sites:
         raise PublicationError(
-            "The Prepared runtime requires at least one projection mount."
+            "The Prepared runtime requires at least one projection site."
         )
     identities: dict[_ProjectionIdentity, OutputSpec] = {}
-    for site in sorted(mounts, key=lambda item: item.id):
-        if site.allowed_targets is None:
+    for site in sorted(sites, key=lambda item: item.id):
+        if site.targets is None:
             source = site.source
             raise PublicationError(
                 f"The {site.kind} projection at {source.path}:{source.line}:"
                 f"{source.column} selects its target at runtime. Declare a finite "
                 "target set before using the Prepared runtime."
             )
-        for index, target in enumerate(site.allowed_targets):
+        for index, target in enumerate(site.targets):
             projection = resolve_projection(
                 resolved.symbols,
-                mounts,
+                sites,
                 ProjectionRequest(site.id, f"prepared:{site.id}:{index}", target),
             )
             identity = (site.kind, target)
-            output = _output_spec(resolved, site.kind, target, projection.producer)
+            output = _output_spec(resolved, projection)
             previous = identities.setdefault(identity, output)
             if previous != output:
                 raise PublicationError(

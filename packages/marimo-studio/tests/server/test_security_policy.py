@@ -21,9 +21,12 @@ from marimo_studio._server.headers import (
 from marimo_studio._server.pages import error_response
 from marimo_studio._server.security import (
     ALLOWED_EMBED_ORIGINS_ENV,
+    TRUSTED_SERVER_RUNTIME_ENV,
+    Origin,
     SecurityPolicy,
     extend_security_policy_from_host_head,
     parse_allowed_embed_origins,
+    parse_trusted_server_runtime,
 )
 from marimo_studio.errors import ConfigurationError
 
@@ -49,6 +52,7 @@ def test_empty_configuration_preserves_same_origin_framing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(ALLOWED_EMBED_ORIGINS_ENV, raising=False)
+    monkeypatch.delenv(TRUSTED_SERVER_RUNTIME_ENV, raising=False)
 
     policy = create_security_policy()
 
@@ -59,9 +63,51 @@ def test_empty_configuration_preserves_same_origin_framing(
     )
 
 
+@pytest.mark.parametrize("value", ["", "  "])
+def test_trusted_server_runtime_is_unset_when_empty(value: str) -> None:
+    assert parse_trusted_server_runtime(value) is None
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", " FALSE "])
+def test_trusted_server_runtime_accepts_explicit_opt_out(value: str) -> None:
+    assert parse_trusted_server_runtime(value) is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes", "on", " TRUE "])
+def test_trusted_server_runtime_accepts_explicit_opt_in(value: str) -> None:
+    assert parse_trusted_server_runtime(value) is True
+
+
+def test_trusted_server_runtime_rejects_ambiguous_configuration() -> None:
+    with pytest.raises(ConfigurationError, match=TRUSTED_SERVER_RUNTIME_ENV):
+        parse_trusted_server_runtime("maybe")
+
+
+def test_create_security_policy_rejects_invalid_trusted_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(ALLOWED_EMBED_ORIGINS_ENV, raising=False)
+    monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "maybe")
+
+    with pytest.raises(ConfigurationError, match=TRUSTED_SERVER_RUNTIME_ENV):
+        create_security_policy()
+
+
+def test_create_security_policy_combines_embedding_and_runtime_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(ALLOWED_EMBED_ORIGINS_ENV, "https://host.example")
+    monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "1")
+
+    policy = create_security_policy()
+
+    assert _origin_values(policy) == ("https://host.example",)
+    assert policy.trusted_server_runtime is True
+
+
 def test_trusted_host_head_extends_the_embedding_policy() -> None:
     policy = extend_security_policy_from_host_head(
-        parse_allowed_embed_origins("https://notebooks.example.com"),
+        SecurityPolicy((Origin("https://notebooks.example.com"),), True),
         '<script data-parent-origin="HTTP://LOCALHOST:5175/"></script>'
         '<script data-parent-origin="invalid"></script>'
         '<div data-parent-origin="https://ignored.example.com"></div>',
@@ -71,6 +117,7 @@ def test_trusted_host_head_extends_the_embedding_policy() -> None:
         "https://notebooks.example.com",
         "http://localhost:5175",
     )
+    assert policy.trusted_server_runtime is True
 
 
 @pytest.mark.parametrize(

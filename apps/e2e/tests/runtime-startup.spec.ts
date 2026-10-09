@@ -1,14 +1,19 @@
 import type { Page } from "@playwright/test";
 
+import { randomUUID } from "node:crypto";
+import { rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+
+import { runCellShortcut, selectAllShortcut, studioClientId } from "./authoring-test-support.ts";
 import {
   selectWorkspaceMode,
   dashboardHtmlPath,
   expect,
   expectPreviewInteractive,
+  editorFrame,
   previewFrame,
   PREVIEW_TIMEOUT,
   readWorkspaceFile,
-  recoverRequestAbort,
   studioEntryUrl,
   studioOrigin,
   test,
@@ -19,7 +24,28 @@ import {
 
 test.describe.configure({ timeout: 150_000 });
 
-test("keeps the startup document while runtime configuration is pending", async ({ page }) => {
+const allowRuntimePendingProjectionReads = (browserDiagnostics: {
+  expectResponse: (expectation: {
+    status: number;
+    path: RegExp;
+    error: string;
+    count: number;
+    required: boolean;
+  }) => { recovered: () => void };
+}) =>
+  browserDiagnostics.expectResponse({
+    status: 409,
+    path: /\/(?:values|outputs)$/,
+    error: "runtime-sync-pending",
+    count: 128,
+    required: false,
+  });
+
+test("keeps the startup document while runtime configuration is pending", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
   let release!: () => void;
   const released = new Promise<void>((resolve) => {
     release = resolve;
@@ -30,7 +56,7 @@ test("keeps the startup document while runtime configuration is pending", async 
   });
   let held = false;
   await page.clock.install();
-  await page.route(/\/_marimo-studio\/views\/dashboard\/config\?/, async (route) => {
+  await page.route(/\/_marimo-studio\/views\/dashboard\/config(?:\?|$)/, async (route) => {
     if (held || route.request().method() !== "GET") {
       await route.continue();
       return;
@@ -59,12 +85,14 @@ test("keeps the startup document while runtime configuration is pending", async 
   } finally {
     release();
   }
+  pendingProjectionReads.recovered();
 });
 
 test("shows a startup failure and retries configuration on request", async ({
   browserDiagnostics,
   page,
 }) => {
+  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
   const failedConfig = browserDiagnostics.expectResponse({
     status: 409,
     path: /\/_marimo-studio\/views\/dashboard\/config$/,
@@ -103,8 +131,69 @@ test("shows a startup failure and retries configuration on request", async ({
   await waitForPreview(page);
   await expectPreviewInteractive(page, "server");
   await expect(failure).toHaveCount(0);
+  pendingProjectionReads.recovered();
   failedConfig.recovered();
   failedStartup.recovered();
+});
+
+test("keeps the runtime request pending while a notebook cell runs", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
+  const abortedEvents = browserDiagnostics.expectRequestFailure({
+    origin: studioOrigin(),
+    method: "GET",
+    path: /\/_marimo-studio\/dev\/events(?:\?|$)/,
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  const gate = `${tmpdir()}/marimo-studio-runtime-pending-${randomUUID()}`;
+  await writeFile(gate, "pending");
+  const cell = editorFrame(page).locator('[data-cell-name="metric"]');
+  const code = cell.getByRole("textbox");
+  try {
+    await code.click();
+    await code.press(selectAllShortcut);
+    await page.keyboard.insertText(`from pathlib import Path as _Path
+import time as _time
+while _Path(${JSON.stringify(gate)}).exists():
+    _time.sleep(0.01)
+metric = scale.value * 23
+metric`);
+    await code.press(runCellShortcut);
+    await expect(cell.locator("..")).toHaveAttribute("data-status", /queued|running/);
+
+    const clientId = await studioClientId(page);
+    const previewSessionId = await page
+      .locator('iframe[data-preview-runtime-frame="server"]')
+      .getAttribute("data-session-id");
+    expect(previewSessionId).toMatch(/^s_[\da-z]{6}$/);
+    const response = await page.request.get("/_marimo-studio/views/dashboard/config", {
+      params: {
+        file: "notebook.py",
+        runtime: "server",
+        marimo_studio_client: clientId,
+      },
+      headers: {
+        "Marimo-Studio-Preview-Session-Id": previewSessionId!,
+      },
+    });
+    expect(response.status()).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "runtime-sync-pending",
+      transient: true,
+    });
+  } finally {
+    await rm(gate, { force: true });
+  }
+  await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
+  await waitForPreview(page);
+  await expectPreviewInteractive(page, "server");
+  pendingProjectionReads.recovered();
+  abortedEvents.recovered();
 });
 
 const installRuntimeProgress = (page: Page, initiallyArmed = true) =>
@@ -182,6 +271,20 @@ test("keeps streamed progress with its runtime while switching previews", async 
   browserDiagnostics,
   page,
 }) => {
+  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
+  const pendingControls = browserDiagnostics.expectResponse({
+    status: 409,
+    path: /^\/_marimo-studio\/views\/dashboard\/controls(?:\?|$)/,
+    count: 2,
+    required: false,
+  });
+  const abortedControls = browserDiagnostics.expectRequestFailure({
+    origin: studioOrigin(),
+    method: "GET",
+    path: /^\/_marimo-studio\/views\/dashboard\/controls(?:\?|$)/,
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
   await installRuntimeProgress(page);
   await page.goto(studioEntryUrl);
   const server = previewFrame(page);
@@ -203,13 +306,6 @@ test("keeps streamed progress with its runtime while switching previews", async 
   await expect(progress).toHaveCount(0);
   await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await page.getByLabel(/preview runtime$/).click();
-  const controls = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin(),
-    method: "GET",
-    path: /^\/_marimo-studio\/views\/dashboard\/controls$/,
-    count: 1,
-    required: false,
-  });
   await page.getByRole("button", { name: /Python Use this editor/ }).click();
   await expect(progress).toHaveAttribute("aria-valuenow", "3");
   await expect(page.getByText("3 of 4", { exact: true })).toBeVisible();
@@ -219,11 +315,17 @@ test("keeps streamed progress with its runtime while switching previews", async 
   await waitForPreview(page);
   await expect(progress).toHaveCount(0);
   await expectPreviewInteractive(page, "server");
-  await recoverRequestAbort(controls);
+  pendingProjectionReads.recovered();
+  pendingControls.recovered();
+  abortedControls.recovered();
 });
 
 for (const width of [1280, 390]) {
-  test(`keeps preparation layout stable between stages at ${width}px`, async ({ page }) => {
+  test(`keeps preparation layout stable between stages at ${width}px`, async ({
+    browserDiagnostics,
+    page,
+  }) => {
+    const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
     await page.setViewportSize({ width, height: 844 });
     await installRuntimeProgress(page);
     await page.goto(studioEntryUrl);
@@ -252,12 +354,15 @@ for (const width of [1280, 390]) {
       .evaluate(() => document.dispatchEvent(new Event("test:runtime-complete")));
     await waitForPreview(page);
     await expect(panel).toHaveCount(0);
+    pendingProjectionReads.recovered();
   });
 }
 
 test("keeps rendered content visible while replacement preparation reports progress", async ({
+  browserDiagnostics,
   page,
 }) => {
+  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
   await installRuntimeProgress(page, false);
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
@@ -285,4 +390,5 @@ test("keeps rendered content visible while replacement preparation reports progr
     await writeDashboardSource(page, original);
     await waitForPreview(page);
   }
+  pendingProjectionReads.recovered();
 });

@@ -42,7 +42,7 @@ export const runtimeConfig = (): RuntimeContext["presentation"] => ({
   supportUrl: "/dashboard/support/",
   showCellLogs: true,
   projectionTargets: { cells: {}, variables: {} },
-  mounts: [],
+  sites: [],
   projectionPolicy: {
     maxActiveInstances: 512,
     maxUniqueCellTargets: 256,
@@ -219,6 +219,13 @@ export const runtimeDependencies = (
           throw new Error("Empty fixture does not load Arrow projections.");
         },
       },
+      media: () => ({
+        codec: "marimo.blob-asset.msgpack.v1",
+        accepts: () => true,
+        load: () => {
+          throw new Error("Empty fixture does not load media projections.");
+        },
+      }),
       output: {
         codec: "marimo.output.v1",
         accepts: () => true,

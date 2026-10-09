@@ -35,6 +35,7 @@ from marimo_studio._cli.output import (
     render_static_preflight,
     render_view_show,
 )
+from marimo_studio._cli.print import yellow
 from marimo_studio._cli.targets import (
     load_studio_target,
     resolve_environment_target,
@@ -129,6 +130,9 @@ def build(
         echo_json(result.to_dict())
         return
     click.echo(f"Built {result.view} for {result.profile} use ({result.revision})")
+    for issue in result.issues:
+        if issue.severity == "warning":
+            click.echo(f"  {yellow('warning')} {issue.code}: {issue.message}")
 
 
 @click.command("show", cls=ColoredCommand)

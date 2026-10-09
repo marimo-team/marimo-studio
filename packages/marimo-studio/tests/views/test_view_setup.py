@@ -41,7 +41,7 @@ from marimo_studio.errors import (
 )
 from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import StarterPlan
-from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
+from marimo_studio.view_providers._builtin.vanilla import provider as vanilla_provider
 
 from ..helpers import empty_notebook_source
 from ._workspace_lifecycle_support import (
@@ -261,14 +261,12 @@ def test_different_starters_racing_for_one_name_publish_one_complete_project(
     assert project.manifest.is_file()
     assert all(
         project.root.joinpath(*item.path.parts).is_file()
-        for item in inspection.editor_documents
+        for item in inspection.documents
     )
     expected_entry = (
         "src/App.tsx" if winner == "marimo-studio/react" else "src/App.svelte"
     )
-    assert expected_entry in {
-        item.path.as_posix() for item in inspection.editor_documents
-    }
+    assert expected_entry in {item.path.as_posix() for item in inspection.documents}
 
 
 def test_concurrent_first_view_threads_create_one_coherent_catalog(
@@ -695,12 +693,12 @@ def test_new_view_exposes_page_instructions_and_notebook_cells(
 
     assert [
         (item.path.as_posix(), item.language, item.access)
-        for item in inspection.editor_documents
+        for item in inspection.documents
     ] == [
         ("index.html", "html", "edit"),
         ("AGENTS.md", "markdown", "edit"),
     ]
-    assert [(mount.kind, mount.allowed_targets) for mount in inspection.mounts] == [
+    assert [(site.kind, site.targets) for site in inspection.sites] == [
         ("cell", ("cell-2",)),
     ]
 

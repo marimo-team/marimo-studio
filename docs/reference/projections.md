@@ -49,8 +49,46 @@ target enters `data-state="error"` with diagnostic code
 <marimo-output value="chart"></marimo-output>
 ```
 
-`value` selects a Python value. marimo renders the selected object through its
-native output renderer and keeps the result current when its producer reruns.
+`value` selects a Python value, so assign the figure or object to a notebook
+variable, such as `chart = plot_revenue(rows)`. marimo renders the selected
+object through its native output renderer and keeps the result current when its
+producer reruns.
+
+`accept` shows the value as an image instead. List image types in order of
+preference, separated by spaces or commas:
+
+```html
+<marimo-output value="chart" accept="image/svg+xml image/png"></marimo-output>
+```
+
+Studio renders the value in the first listed type it supports through
+marimo-export's
+[`represent()`](https://marimo-team.github.io/marimo-export/reference/python/values).
+The notebook's own output settings stay unchanged, so the notebook can show a
+PNG while the page shows a sharp SVG.
+
+- A page host accepts `image/svg+xml`, `image/png`, `image/jpeg`, and
+  `image/gif`, the images marimo's output renderer shows.
+- A matplotlib figure or axes renders as SVG or PNG. A PNG displays at the size
+  marimo shows the figure, with twice the pixels, so it stays sharp on
+  high-density screens.
+- An Altair chart renders as SVG or PNG with `vl-convert-python`. The Browser
+  runtime has no `vl-convert-python`, so leave `accept` off to show the
+  interactive chart there. Read the chart itself, not a `mo.ui.altair_chart`
+  wrapper.
+- Other values use their display methods.
+- A figure keeps the style it was drawn with, including the dark style marimo
+  applies when the editor uses its dark theme.
+
+A value without an accepted type puts the host in `data-state="error"` with
+code `output-media-unavailable`. Studio reads `accept` when it builds the view,
+so a script that changes the attribute later has no effect.
+
+A view reads each output target in one form. Every literal host that names a
+target in `value`, and every document that reads it, lists the same media types. A different list reports `output-accept-conflict` at its source
+location. A host with `data-marimo-allow="*"` shows each target in the form
+its literal hosts declare, and an `accept` on that host reports
+`projection-accept-invalid`.
 
 One presentation can mount an output target once. A second host for the same
 target enters `data-state="error"` with diagnostic code
@@ -99,8 +137,11 @@ lookup["north-region"]
 
 The root uses Python identifier syntax. Dot selection rejects names that start
 with `_`. Bracket indexes must be JavaScript safe integers. A selector may
-contain at most 64 path steps and 4,096 UTF-8 bytes. See [Limits](limits.md) for
-the complete projection budget.
+contain at most 64 path steps and 4,096 UTF-8 bytes. Studio parses selectors
+with marimo-export's
+[`ValueSelector`](https://marimo-team.github.io/marimo-export/reference/python/values#valueselector),
+so a view and a Prepared export accept the same selectors. See
+[Limits](limits.md) for the complete projection budget.
 
 ### Value codecs
 
@@ -108,6 +149,10 @@ the complete projection budget.
 | -------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `json-v1`      | `null`, boolean, number, string, array, or object        | `marimoValue` returns the decoded JSON-compatible value                        |
 | `arrow-ipc-v1` | [Flechette](https://github.com/uwdata/flechette) `Table` | `marimoValue` returns the table with its source bytes and fingerprint attached |
+
+A `json-v1` value encodes within 1,000,000 bytes and an `arrow-ipc-v1` value
+within 64 MiB. See [Runtime payloads](limits.md#runtime-payloads) for the
+per-read budgets.
 
 Studio decodes Arrow tables with Flechette's default extraction options.
 Integer columns, including 64-bit integers, read as numbers, and reading a
@@ -172,13 +217,14 @@ for the presentation.
 
 ## Authored sites and dynamic targets
 
-A view provider records each authored projection as a mount declaration. A
-build adds `data-marimo-studio-site` to the corresponding artifact host. View
-source should leave that attribute to the provider build.
+A view provider reports each authored projection host as a projection site.
+Studio adds `data-marimo-studio-site` to the host in the build snapshot, and
+the attribute carries the site into the built page. Leave that attribute to
+Studio.
 
-A mount with a finite `allowed_targets` set can request those targets. A mount
-with `allowed_targets=None` permits a dynamic target of the declared kind.
-Bundled React and Svelte providers infer finite targets from literals and
+A site with a finite target set can request those targets. A site with targets
+`"*"` permits a dynamic target of the declared kind.
+Built-in React and Svelte providers infer finite targets from literals and
 bounded constant expressions. Add `data-marimo-allow="*"` when a framework
 expression intentionally selects its target at runtime:
 
@@ -201,6 +247,57 @@ assertions verify the rendered results of a dynamic site.
 Changing `name`, `value`, or `mo-value` releases the prior target and resolves
 the same DOM instance against the new target. Removing the host releases its
 projection ownership.
+
+## Rendered documents
+
+A rendered document, such as the PDF that the Typst provider compiles, reads
+notebook values and outputs when Studio renders it. The view page shows the
+document in a `<marimo-document>` viewer. Studio renders it again when a value
+or output it reads changes.
+The viewer keeps the last document on screen while a new one renders and shows
+render errors beside it.
+
+```typst
+#import "marimo.typ": marimo_output, marimo_value
+
+= Occupancy
+Rooms in use: #marimo_value("summary.rooms", default: 0)
+
+#marimo_output("occupancy_chart", width: 100%)
+```
+
+Values reach the renderer as portable JSON. A table value, such as a
+dataframe, fails with `render-value-not-json`. Convert it in the notebook, for
+example with `df.to_dicts()`. Outputs reach the renderer in the first media
+type the document accepts that the value supports, such as PDF for a
+matplotlib figure in a Typst report. An output without an accepted type
+renders with the template's default, and the viewer names it. A `zero-python`
+export renders every output in every prepared state, so the export stops when
+one state's value has no accepted type. A cell read receives the cell's output
+as marimo shows it, in the first accepted type the output carries, such as PNG
+for a matplotlib figure. A cell whose output has no accepted type, such as
+text or a table, renders with the template's default.
+
+Each runtime supplies values from a different place:
+
+| Runtime                      | Values come from                            | Document                                   |
+| ---------------------------- | ------------------------------------------- | ------------------------------------------ |
+| Python, edit and run mode    | The reader's kernel session, read by Studio | Rendered by Studio for each value change   |
+| Browser, edit mode           | The notebook state in the editor tab        | Rendered by Studio for each value change   |
+| Prepared, edit mode          | The prepared state the preview shows        | Rendered by Studio for each state change   |
+| Browser, run mode            | Unavailable                                 | The document rendered at build time        |
+| Static export, `zero-python` | Each prepared notebook state                | One document per state, rendered at export |
+| Static export, `wasm`        | Unavailable                                 | The document rendered at build time        |
+
+Outputs and cells follow the same rows. They come from the reader's kernel
+session, from the preview's `marimo-output` and `marimo-cell` hosts, or from
+each prepared state.
+
+Studio renders documents from session values for published views and refuses
+values posted in run mode with `render-values-unverified`. Where no current
+values reach the document, the viewer shows the build-time document with the
+note `Showing the document without current notebook values.` A `wasm` export,
+and a `zero-python` export state without a rendition, show the same note.
 
 ## Presentation readiness
 
@@ -371,7 +468,7 @@ the view to place the Lens dock there:
 <marimo-output value="studio_lens"></marimo-output>
 ```
 
-Studio skips marimo's automatic Lens in a notebook that imports Lens, so
+marimo skips its automatic Lens in a notebook that constructs its own Lens, so
 `studio_lens` is the notebook's only Lens.
 
 The [Lens agent guide](https://marimo-team.github.io/marimo-lens/agents) defines

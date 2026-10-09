@@ -13,7 +13,7 @@ from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers._host.package_policy import (
-    BUNDLED_PROVIDER_REQUIREMENTS,
+    BUILTIN_PROVIDER_REQUIREMENTS,
 )
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
@@ -66,7 +66,7 @@ def test_view_deletion_keeps_dependencies_and_updates_the_default(
         monkeypatch,
         ProviderRegistry(
             (candidate("react", react, distribution="marimo-studio"),),
-            BUNDLED_PROVIDER_REQUIREMENTS,
+            BUILTIN_PROVIDER_REQUIREMENTS,
         ),
     )
     prepare_view(

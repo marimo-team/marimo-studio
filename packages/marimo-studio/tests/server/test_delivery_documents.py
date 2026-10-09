@@ -15,6 +15,7 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_LIFECYCLE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
 )
+from marimo_studio._server.security import TRUSTED_SERVER_RUNTIME_ENV
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio.view_providers._host import provider_registry
@@ -55,6 +56,43 @@ def test_run_mode_serves_default_and_named_view_documents(
         "/_marimo-studio/views/executive?marimo_studio_server=" in named_document.text
     )
     assert native_editor.status_code == 404
+
+
+def test_trusted_server_runtime_keeps_server_view_on_the_host_origin(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "1")
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        response = client.get("/dashboard/")
+
+    assert response.status_code == 200
+    assert response.headers.get("content-security-policy") is None
+    assert 'id="marimo-studio-presentation"' not in response.text
+    assert "<marimo-cell" in response.text
+
+
+def test_trusted_server_runtime_keeps_browser_view_sandboxed(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(TRUSTED_SERVER_RUNTIME_ENV, "1")
+    studio = _configured(notebook_path)
+
+    def enable_wasm(config: MutableMapping[str, object]) -> None:
+        config["runtimes"] = ["server", "wasm"]
+
+    update_notebook_config(studio.notebook, enable_wasm)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        response = client.get("/dashboard/", params={"runtime": "wasm"})
+
+    assert response.status_code == 200
+    assert response.headers["content-security-policy"].startswith("default-src")
+    assert 'id="marimo-studio-presentation"' in response.text
+    assert "allow-same-origin" not in _presentation_frame_sandbox(response.text)
 
 
 def test_run_wasm_uses_the_trusted_wrapper_without_session_preservation(
@@ -416,7 +454,7 @@ def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
     assert page.status_code == 200
     assert config.status_code == 200
     assert config.json()["projectionTargets"] == {"cells": {}, "variables": {}}
-    assert config.json()["mounts"] == []
+    assert config.json()["sites"] == []
     assert config.json()["runtimeBindings"]["cellRefs"] == {}
     assert config.json()["diagnostics"] == []
     assert config.json()["showCellLogs"] is True

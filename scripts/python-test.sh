@@ -9,10 +9,14 @@ Run a repository-owned Python test profile.
 
 Profiles:
   all               Run every test in the current development environment.
-  standard          Run tests that do not require native processes or Deno.
+  standard          Run tests that do not require native processes, Deno, or Quarto.
   supported-python  Run contracts promised across supported Python versions.
   native            Run native process ownership contracts.
   deno              Run Deno provider contracts with the test-deno group.
+  quarto            Run Quarto provider contracts with Quarto from pixi.
+
+The all and quarto profiles run pytest through `pixi run`, which activates the
+repository's pixi environment that provides Quarto.
 
 Options:
   --profile PROFILE  Select a profile. Default: all
@@ -85,7 +89,7 @@ case "$profile" in
     all)
         ;;
     standard)
-        pytest_args+=(-m "not native_process and not deno")
+        pytest_args+=(-m "not native_process and not deno and not quarto")
         ;;
     supported-python)
         pytest_args+=(-m supported_python)
@@ -97,9 +101,12 @@ case "$profile" in
         group="test-deno"
         pytest_args+=(-m deno)
         ;;
+    quarto)
+        pytest_args+=(-m quarto)
+        ;;
     *)
         echo "python-test: unknown profile '$profile'" >&2
-        echo "Choose all, standard, supported-python, native, or deno." >&2
+        echo "Choose all, standard, supported-python, native, deno, or quarto." >&2
         exit 2
         ;;
 esac
@@ -117,9 +124,23 @@ elif [[ "$group" != "test" ]]; then
     uv_args+=(--group "$group")
 fi
 
-if [[ "$profile" == "deno" ]]; then
-    uv "${uv_args[@]}" python -c \
-        "from marimo_studio.view_providers._bundled import _deno; assert _deno.deno_availability().available"
+runner=()
+if [[ "$profile" == "all" || "$profile" == "quarto" ]]; then
+    if ! command -v pixi >/dev/null; then
+        echo "python-test: the $profile profile needs pixi for Quarto." >&2
+        echo "Install it from https://pixi.prefix.dev/latest/installation/." >&2
+        exit 2
+    fi
+    runner=(pixi run --locked)
 fi
 
-exec uv "${uv_args[@]}" "${pytest_args[@]}" "$@"
+if [[ "$profile" == "deno" ]]; then
+    uv "${uv_args[@]}" python -c \
+        "from marimo_studio.view_providers._builtin import _deno; assert _deno.deno_availability().available"
+fi
+if [[ "$profile" == "quarto" ]]; then
+    ${runner[@]+"${runner[@]}"} uv "${uv_args[@]}" python -c \
+        "from marimo_studio.view_providers._builtin.quarto import provider; availability = provider.availability(); assert availability.available, availability"
+fi
+
+exec ${runner[@]+"${runner[@]}"} uv "${uv_args[@]}" "${pytest_args[@]}" "$@"

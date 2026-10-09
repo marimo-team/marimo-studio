@@ -1,3 +1,5 @@
+import type { RenderedMedia } from "@marimo-studio/protocol/document-render";
+
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
 import { hostsInDocumentOrder } from "../projections/host-order.ts";
@@ -164,6 +166,8 @@ const sizeObserver =
 
 export class MarimoCellElement extends HTMLElement {
   static observedAttributes = ["name", PROJECTION_SITE_ATTRIBUTE];
+  /** The cell's output, as marimo rendered it. */
+  marimoOutput: RenderedMedia | undefined;
   private hasRendered = false;
 
   get cellName(): string {

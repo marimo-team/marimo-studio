@@ -6,8 +6,12 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from marimo_studio._views.inspection import inspection_request
-from marimo_studio.view_providers._bundled.vanilla import provider
+from marimo_studio._views.inspection import (
+    inspect_view_project_sync,
+    inspection_request,
+)
+from marimo_studio.view_providers import ProviderCommandError
+from marimo_studio.view_providers._builtin.vanilla import provider
 
 from ..provider_test_support import provider_build_request
 from ._vanilla_test_support import _project
@@ -35,13 +39,13 @@ def test_vanilla_publishes_direct_local_css_and_javascript(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    inspection = provider.inspect(inspection_request(project))
+    inspection = inspect_view_project_sync(project)
     files = project.root / ".artifacts" / ".staging" / "multi-file" / "files"
     files.mkdir(parents=True)
     report = provider.build(provider_build_request(project, inspection, files))
 
     assert inspection.diagnostics == ()
-    assert [item.to_dict() for item in inspection.editor_documents] == [
+    assert [item.to_dict() for item in inspection.documents] == [
         {
             "path": "index.html",
             "language": "html",
@@ -67,11 +71,11 @@ def test_vanilla_publishes_direct_local_css_and_javascript(tmp_path: Path) -> No
             "label": None,
         },
     ]
-    assert [item.to_dict() for item in inspection.input_scope] == [
-        {"path": "view.toml", "kind": "file"},
+    assert [item.to_dict() for item in inspection.inputs] == [
         {"path": "index.html", "kind": "file"},
         {"path": "styles/app.css", "kind": "file"},
         {"path": "scripts/app.js", "kind": "file"},
+        {"path": "view.toml", "kind": "file"},
     ]
     assert report.document == PurePosixPath("index.html")
     assert (files / "styles" / "app.css").read_bytes() == styles.read_bytes()
@@ -109,10 +113,10 @@ def test_vanilla_reuses_one_source_for_multiple_script_references(
     report = provider.build(provider_build_request(project, inspection, files))
 
     assert inspection.diagnostics == ()
-    assert [item.path for item in inspection.editor_documents].count(
+    assert [item.path for item in inspection.documents].count(
         PurePosixPath("scripts/app.js")
     ) == 1
-    assert [item.path for item in inspection.input_scope].count(
+    assert [item.path for item in inspection.inputs].count(
         PurePosixPath("scripts/app.js")
     ) == 1
     assert report.document == PurePosixPath("index.html")
@@ -153,13 +157,13 @@ def test_vanilla_resolves_sources_relative_to_a_nested_entrypoint(
     )
     project = replace(project, options={"entrypoint": "pages/index.html"})
 
-    inspection = provider.inspect(inspection_request(project))
+    inspection = inspect_view_project_sync(project)
     files = project.root / ".artifacts" / ".staging" / "nested" / "files"
     files.mkdir(parents=True)
     report = provider.build(provider_build_request(project, inspection, files))
 
     assert inspection.diagnostics == ()
-    assert [item.path.as_posix() for item in inspection.editor_documents] == [
+    assert [item.path.as_posix() for item in inspection.documents] == [
         "pages/index.html",
         "styles/app.css",
         "pages/scripts/app.mjs",
@@ -242,19 +246,19 @@ def test_vanilla_exposes_instructions_outside_the_build_inputs(tmp_path: Path) -
     (project.root / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
     (project.root / "DESIGN.md").write_text("# Page design\n", encoding="utf-8")
 
-    inspection = provider.inspect(inspection_request(project))
+    inspection = inspect_view_project_sync(project)
     files = project.root / ".artifacts" / ".staging" / "single" / "files"
     files.mkdir(parents=True)
     report = provider.build(provider_build_request(project, inspection, files))
 
-    assert [item.path.as_posix() for item in inspection.editor_documents] == [
+    assert [item.path.as_posix() for item in inspection.documents] == [
         "index.html",
         "AGENTS.md",
         "DESIGN.md",
     ]
-    assert [item.to_dict() for item in inspection.input_scope] == [
-        {"path": "view.toml", "kind": "file"},
+    assert [item.to_dict() for item in inspection.inputs] == [
         {"path": "index.html", "kind": "file"},
+        {"path": "view.toml", "kind": "file"},
     ]
     assert report.document == PurePosixPath("index.html")
     assert [
@@ -272,10 +276,9 @@ def test_vanilla_build_observes_cancellation_before_copying(tmp_path: Path) -> N
     request = provider_build_request(project, inspection, files)
     request.cancellation.cancel()
 
-    result = provider.build(request)
+    with pytest.raises(ProviderCommandError, match="cancelled"):
+        provider.build(request)
 
-    assert result.document is None
-    assert [diagnostic.code for diagnostic in result.diagnostics] == ["build-cancelled"]
     assert tuple(files.iterdir()) == ()
 
 
@@ -287,8 +290,8 @@ def test_vanilla_build_requires_every_declared_input(tmp_path: Path) -> None:
     request = provider_build_request(project, inspection, files)
     request = replace(
         request,
-        inputs=tuple(path for path in request.inputs if path.name != "view.toml"),
+        inputs=tuple(path for path in request.inputs if path.name != "index.html"),
     )
 
-    with pytest.raises(ValueError, match=r"build input is unavailable: view\.toml"):
+    with pytest.raises(ValueError, match=r"build input is unavailable: index\.html"):
         provider.build(request)

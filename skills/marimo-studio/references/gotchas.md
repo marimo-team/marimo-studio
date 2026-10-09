@@ -16,6 +16,37 @@ The server environment lacks the `deno` extra. Restart the server with
 `marimo-studio[deno]`. Starting every session with the `deno` extra avoids
 this restart.
 
+**`starters()` reports Typst or Quarto as unavailable.**
+Typst needs the `typst` extra in the server environment. Restart the server
+with `marimo-studio[typst]`. Quarto needs Quarto 1.9.38 or newer on `PATH` before
+the server starts. Install it from https://quarto.org/docs/get-started/ or with
+`pixi global install quarto`, then restart the server. When the reason says the
+environment is not activated, Quarto comes from a pixi or conda environment
+that the server started without activating. Activate that environment, for
+example with `pixi shell`, then restart the server.
+
+**A Studio command reports that the notebook uses a pixi workspace.**
+Studio runs inside the workspace environment and never re-enters it. Run the
+command the error prints, which starts `marimo-studio` through `pixi run`.
+
+**A Typst view shows `render-value-not-json`.**
+The document reads a dataframe or another table. Project it in the notebook as
+a list of dictionaries, for example `rows = df.to_dicts()`, and read `rows`.
+
+**A Typst view names an output that has no image form.**
+A `marimo_output()` call reads a value without a PDF, SVG, PNG, JPEG, WebP, or
+GIF form, such as a table, and the view shows it beside the document with
+`output-media-unavailable`. Read a figure, such as a matplotlib figure or an
+Altair chart, and install `vl-convert-python` for Altair. Studio renders
+matplotlib figures as PDF and Altair charts as SVG for the document, so the
+notebook needs no output settings.
+
+**A Typst `marimo_cell()` call shows its default.**
+The cell has not run, or its output is text, a table, or another output
+without an image form. `marimo_cell()` places the output as marimo shows it,
+such as a PNG for a cell that ends with a matplotlib figure. Read the figure's
+variable with `marimo_output()` for a vector PDF.
+
 **The editor reports that `index.html` is missing after hours of work.**
 A `uvx` server runs from uv's cache. Cleaning or pruning that cache deletes the
 running server's static files. Restart the server.
@@ -104,10 +135,16 @@ checking projected output.
 ## Data in views
 
 **A value host fails with `value-too-large`.**
-Each projected value must encode within 1,000,000 bytes. Split the data into
-per-item values and select one at runtime, as in
-[projections](projections.md#select-targets). Runtime selection needs the
-Python or Browser runtime.
+A projected JSON value must encode within 1,000,000 bytes and a projected
+dataframe within 64 MiB of Arrow IPC. Project tables as dataframes, filter or
+aggregate them in the notebook, or split the data into per-item values and
+select one at runtime, as in [projections](projections.md#select-targets).
+Runtime selection needs the Python or Browser runtime.
+
+**A value host fails with `response-too-large`.**
+The values a view projects from one cell share 1,000,000 bytes of JSON and
+128 MiB of Arrow, or 64 MiB of Arrow in the Browser runtime. Project fewer
+values from that cell, or move large tables into separate cells.
 
 **A click in custom view code needs to change a notebook computation.**
 Route the change through a native marimo control, as in

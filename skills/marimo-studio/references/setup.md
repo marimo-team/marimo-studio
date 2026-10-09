@@ -62,7 +62,8 @@ marimo-studio view preview dashboard --target notebook.py \
 ```
 
 The URL keeps the origin and path of `--server`. Behind a proxy path prefix,
-the user's browser opens the same path beneath its public root.
+the user's browser opens the same path beneath its public root. In a marimohub
+session, request the URL in code mode to get the hub's public address.
 
 Inside code mode, use `marimo_studio.agent.current_workspace()` to bind the
 current notebook and Studio browser client. A missing host connection requires
@@ -81,7 +82,8 @@ marimo-studio doctor --dependencies --target notebook.py --json
 Read its interpreter path, declaration drift, provider requirements, and import
 availability. This inspects dependencies without executing notebook cells.
 Preserve project-managed execution with `uv run --project <root>` and
-`--no-sandbox`. Use `--sandbox` when the notebook's PEP 723 dependencies own
+`--no-sandbox`, or with `pixi run` and `--no-sandbox` in a pixi workspace. Use
+`--sandbox` when the notebook's PEP 723 dependencies own
 execution. Pass the exact `status.launch_requirements` through the environment
 tool when launching a notebook.
 

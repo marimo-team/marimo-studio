@@ -15,6 +15,7 @@ from marimo_studio._cli import cli
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 
+from ..helpers import write_marimohub_context
 from .commands_test_support import _passthrough_uv, _run_cli
 
 
@@ -77,6 +78,19 @@ def test_status_human_output_includes_configuration_runtime_and_aliases(
     assert "runtimes server" in output
     assert "aliases" in output
     assert "summary cell:" in output
+
+
+def test_status_text_reports_what_a_hub_session_saves(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_marimohub_context(tmp_path, monkeypatch, persistence_mode="source")
+
+    result = CliRunner().invoke(cli, ["status", "--target", str(notebook_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "persistence source" in unstyle(result.output)
 
 
 def test_command_help_exposes_target_and_required_options() -> None:

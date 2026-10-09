@@ -1,8 +1,9 @@
-"""Validate portable filesystem path components."""
+"""Validate portable filesystem path components and project-relative paths."""
 
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath, PureWindowsPath
 from unicodedata import category, normalize
 
 PORTABLE_PATH_COMPONENT_MAX_BYTES = 255
@@ -42,3 +43,26 @@ def validate_portable_path_component(
     if len(value.encode("utf-8")) > max_bytes:
         raise ValueError(f"{field} exceeds the {max_bytes}-byte limit")
     return value
+
+
+def validate_relative_path(
+    value: object,
+    *,
+    field: str,
+) -> PurePosixPath:
+    if not isinstance(value, (str, PurePosixPath)):
+        raise ValueError(f"{field} must be a project-relative POSIX path")
+    raw = str(value)
+    if not raw or raw.startswith("/") or "\\" in raw:
+        raise ValueError(f"{field} must be a normalized project-relative POSIX path")
+    if PureWindowsPath(raw).drive:
+        raise ValueError(f"{field} must not use a Windows drive prefix")
+    parts = raw.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(f"{field} must be a normalized project-relative POSIX path")
+    for part in parts:
+        validate_portable_path_component(part, field=f"{field} path segment")
+    path = PurePosixPath(raw)
+    if path.is_absolute() or path.as_posix() != raw:
+        raise ValueError(f"{field} must be a normalized project-relative POSIX path")
+    return path

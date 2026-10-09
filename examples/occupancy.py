@@ -99,9 +99,7 @@ def scope_context(mo):
     mo.md("""
     ## Observation scope
 
-    Choose the slice of room activity used by every analysis below. The sensor
-    history, room profiles, model evidence, and published views recompute from
-    the same selected observations.
+    Choose the slice of room activity that every section below analyzes.
     """)
     return
 

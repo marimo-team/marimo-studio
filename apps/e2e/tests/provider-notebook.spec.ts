@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 
 import { e2eNetwork } from "../scripts/network.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
-import { labeledSlider, presentationFrame, recoverRequestAbort } from "./fixture.ts";
+import { labeledSlider, presentationFrame } from "./fixture.ts";
 import { test } from "./provider-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 
@@ -96,18 +96,21 @@ for (const runtime of ["Server", "static WebAssembly", "Prepared"] as const) {
       const retirement = retiringFrame
         ? diagnostics.expectFrameRetirement(retiringFrame)
         : undefined;
-      const retiringValues =
+      // The retiring frame and the reloaded document may each abort a value
+      // read that a newer cell update supersedes.
+      const supersededValues =
         runtime === "Server"
-          ? diagnostics.expectActiveRequestAbort({
+          ? diagnostics.expectRequestFailure({
               origin: e2eNetwork.provider.live.origin,
-              method: "GET",
+              method: "POST",
               path: /\/_marimo-studio\/views\/notebook\/values$/,
+              errorText: "net::ERR_ABORTED",
+              count: 2,
               required: false,
             })
           : undefined;
       await page.reload();
       await expect(root.locator("#observable-metric")).toHaveText("Observable metric: 42");
-      if (retiringValues) await recoverRequestAbort(retiringValues);
       retirement?.recovered();
       projectionFailure.recovered();
       if (runtime === "Prepared") expect(pythonRequests).toEqual([]);
@@ -115,6 +118,7 @@ for (const runtime of ["Server", "static WebAssembly", "Prepared"] as const) {
       const pageRetirement = diagnostics.expectPageRetirement(page);
       await page.close();
       pageRetirement.recovered();
+      supersededValues?.recovered();
     } finally {
       await diagnostics.close();
       expect(diagnostics.messages).toEqual([]);

@@ -131,6 +131,13 @@ test("cancels one client's held old-view request without changing the peer view"
       }
       held = true;
       const response = await route.fetch();
+      if (!response.ok()) {
+        // A transient 409 such as runtime-sync-pending reaches the preview
+        // unchanged, and its retry becomes the held read.
+        held = false;
+        await route.fulfill({ response });
+        return;
+      }
       const value = valueReadResponseSchema.parse(await response.json()).values.metric;
       if (value?.codec !== "json-v1") {
         throw new Error("Expected the metric value to use JSON encoding.");
@@ -282,7 +289,11 @@ test("cancels a held old-view request without changing current or cached view st
       return;
     }
     const response = await route.fetch();
-    const value = valueReadResponseSchema.parse(await response.json()).values.slow_metric;
+    // A transient 409 such as runtime-sync-pending reaches the preview
+    // unchanged, and the preview retries the read.
+    const value = response.ok()
+      ? valueReadResponseSchema.parse(await response.json()).values.slow_metric
+      : undefined;
     if (held || value?.codec !== "json-v1" || value.value !== 21) {
       await route.fulfill({ response });
       return;

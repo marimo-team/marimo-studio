@@ -18,6 +18,27 @@ from marimo_studio.view_providers._document import (
 )
 
 _MARIMO_FILENAME = Element("marimo-filename")
+# Presentation frames have an opaque origin, where Web Storage access throws.
+# Generated sites such as Quarto read localStorage while loading, so give each
+# document an in-memory localStorage before authored scripts run. It answers
+# the Storage methods and named properties, such as `localStorage.theme = "x"`.
+# Session storage keeps throwing: session preservation detects that and replays
+# the runtime session through the trusted wrapper.
+_STORAGE_FALLBACK = (
+    "(()=>{try{void window.localStorage}catch{const s=new Map(),k=String;"
+    "const api={get length(){return s.size},key:i=>Array.from(s.keys())[i]??null,"
+    "getItem:n=>s.has(k(n))?s.get(k(n)):null,setItem:(n,v)=>{s.set(k(n),k(v))},"
+    "removeItem:n=>{s.delete(k(n))},clear:()=>{s.clear()}};"
+    "const storage=new Proxy(api,{"
+    "get:(t,n)=>n in t?t[n]:typeof n==='string'&&s.has(n)?s.get(n):undefined,"
+    "set:(t,n,v)=>{if(n in t)return false;s.set(k(n),k(v));return true},"
+    "deleteProperty:(t,n)=>{s.delete(k(n));return true},"
+    "has:(t,n)=>n in t||s.has(k(n)),ownKeys:()=>[...s.keys()],"
+    "getOwnPropertyDescriptor:(t,n)=>s.has(k(n))?"
+    "{value:s.get(k(n)),writable:true,enumerable:true,configurable:true}:undefined});"
+    "Object.defineProperty(window,'localStorage',{configurable:true,"
+    "enumerable:true,get:()=>storage})}})();"
+)
 
 
 def node_list(*nodes: object) -> list[Node]:
@@ -71,6 +92,7 @@ def runtime_head(
     ).replace("<", "\\u003c")
     return fragment[
         node_list(
+            script({"data-marimo-studio-runtime": True})[Markup(_STORAGE_FALLBACK)],
             *(
                 link(
                     {
@@ -183,11 +205,13 @@ def runtime_document(
     runtime_entry: str = "runtime.js",
     runtime_styles: tuple[str, ...] = ("runtime.css",),
     icon_url: str | None = None,
+    host_head: str | None = None,
 ) -> str:
     """Inject one presentation runtime into an authored view document.
 
     `icon_url` declares the server's favicon ahead of authored head content,
-    so an authored icon still takes precedence.
+    so an authored icon still takes precedence. `host_head` carries the trusted
+    head markup that a notebook host adds to marimo's own pages.
     """
     parser = HTMLDocumentParser()
     parser.feed(document)
@@ -227,6 +251,7 @@ def runtime_document(
             )
         )
         + "\n"
+        + (f"{host_head}\n" if host_head else "")
     )
     body_content = (
         "\n" + render(runtime_root()) + "\n" + render(runtime_metadata(filename)) + "\n"
