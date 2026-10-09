@@ -250,10 +250,10 @@ projection ownership.
 
 ## Rendered documents
 
-A rendered document, such as the PDF that the Typst provider compiles, reads
-notebook values and outputs when Studio renders it. The view page shows the
-document in a `<marimo-document>` viewer. Studio renders it again when a value
-or output it reads changes.
+A rendered document, such as the PDF that the Typst or LaTeX provider
+compiles, reads notebook values and outputs when Studio renders it. The view
+page shows the document in a `<marimo-document>` viewer. Studio renders it
+again when a value or output it reads changes.
 The viewer keeps the last document on screen while a new one renders and shows
 render errors beside it.
 
@@ -266,11 +266,13 @@ Rooms in use: #marimo_value("summary.rooms", default: 0)
 #marimo_output("occupancy_chart", width: 100%)
 ```
 
-Values reach the renderer as portable JSON. A table value, such as a
-dataframe, fails with `render-value-not-json`. Convert it in the notebook, for
-example with `df.to_dicts()`. Outputs reach the renderer in the first media
-type the document accepts that the value supports, such as PDF for a
-matplotlib figure in a Typst report. An output without an accepted type
+Values reach the renderer in their
+[JSON form](../guide/notebook-results.md#documents-read-json), so a dataframe
+arrives as a list of row objects and a date as ISO 8601 text. A value without
+a JSON form fails with `render-value-not-json`. Outputs reach the renderer in
+the first media type the document accepts that the value supports, such as
+PDF for a matplotlib figure in a Typst report, drawn at the size the build
+measured where the document places it. An output without an accepted type
 renders with the template's default, and the viewer names it. A `zero-python`
 export renders every output in every prepared state, so the export stops when
 one state's value has no accepted type. A cell read receives the cell's output

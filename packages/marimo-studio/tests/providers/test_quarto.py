@@ -310,7 +310,7 @@ def test_a_nested_entry_keeps_its_generated_figures_out_of_the_build(
     assert "pages/report.qmd" in {item.path.as_posix() for item in inspection.inputs}
 
 
-@pytest.mark.quarto
+@pytest.mark.pixi
 @pytest.mark.skipif(
     not provider.availability().available,
     reason="Quarto is unavailable",
@@ -354,7 +354,7 @@ def test_quarto_starter_renders_live_hosts_inside_the_app_shell(
     ]
 
 
-@pytest.mark.quarto
+@pytest.mark.pixi
 @pytest.mark.skipif(
     not provider.availability().available,
     reason="Quarto is unavailable",
@@ -393,7 +393,7 @@ def test_markdown_shortcodes_and_includes_render_bound_hosts(tmp_path: Path) -> 
     assert published.diagnostics == ()
 
 
-@pytest.mark.quarto
+@pytest.mark.pixi
 @pytest.mark.skipif(
     not provider.availability().available,
     reason="Quarto is unavailable",
@@ -416,7 +416,7 @@ def test_authored_reader_extensions_apply_beside_raw_hosts(tmp_path: Path) -> No
     )
 
 
-@pytest.mark.quarto
+@pytest.mark.pixi
 @pytest.mark.skipif(
     not provider.availability().available,
     reason="Quarto is unavailable",

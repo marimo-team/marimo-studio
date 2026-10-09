@@ -11,7 +11,8 @@ structure, imported assets, or a larger module graph makes the view project
 easier to maintain. Choose [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit)
 for reactive JavaScript, Markdown, and HTML cells. Choose
 [Quarto](https://quarto.org/) for a Markdown document with publishing
-typography, and [Typst](https://typst.app/) for a typeset PDF.
+typography, and [Typst](https://typst.app/) or
+[LaTeX](https://www.latex-project.org/) for a typeset PDF.
 
 Each starter places notebook results by name, as
 [Place notebook results in a view](notebook-results.md) describes. To use
@@ -27,6 +28,7 @@ another framework, see
 | `marimo-studio/notebook-kit:default` | Observable notebook HTML with reactive presentation cells |
 | `marimo-studio/quarto:default`       | Quarto Markdown documents with live notebook results      |
 | `marimo-studio/typst:default`        | Typeset PDF reports that render with notebook values      |
+| `marimo-studio/latex:default`        | LaTeX papers and journal templates with notebook values   |
 
 For React, Svelte, and Notebook Kit, install the Deno toolchain in the
 notebook's Python project before running dependency commands:
@@ -217,16 +219,59 @@ The view shows the PDF. A Python runtime view renders it again for each
 change of a value or output it reads, and a Prepared export renders one PDF for
 each prepared state. A Browser runtime app and a `wasm` export show the PDF
 rendered at build time. `marimo_output()` places a notebook figure as a vector
-image, a PDF for a matplotlib figure and an SVG for an Altair chart, so the
-document and the notebook share one chart and the notebook keeps its own output
-settings. `marimo_cell("name")` places a named cell's output as marimo shows
-it, typically a PNG for a matplotlib figure.
-Return tables to the document as lists of dictionaries, for example with
-`df.to_dicts()`. See the
+PDF drawn at the width the document places it at, so the document and the
+notebook share one chart and its labels keep their point size.
+`marimo_cell("name")` places a named cell's output as marimo shows it,
+typically a PNG for a matplotlib figure. A table arrives as a list of row
+dictionaries and a date as ISO 8601 text, so the document reads the notebook's
+own results. See the
 [Typst provider reference](../reference/built-in-providers.md#marimo-studio-typst)
 for figures, fonts, and export behavior. The **Report** view of
 [Quadratic programs](../examples/quadratic-programs.md) is a complete Typst
 document that embeds the notebook's matplotlib figures.
+
+## LaTeX PDF
+
+[LaTeX](https://www.latex-project.org/) typesets papers with any class and
+package, such as a journal's submission template. Studio compiles it with
+[Tectonic](https://tectonic-typesetting.github.io/), a self-contained TeX
+engine. Install Tectonic with [pixi](https://pixi.prefix.dev/) and create a
+view:
+
+```console
+pixi global install tectonic
+marimo-studio view create paper --target analysis.py \
+  --starter marimo-studio/latex:default
+```
+
+`main.tex` loads the starter's `marimo.sty`. `\marimonum` formats a notebook
+number with [siunitx](https://ctan.org/pkg/siunitx), `\marimodate` a date with
+[datetime2](https://ctan.org/pkg/datetime2), `\marimorows` repeats a table row
+for each row of a dataframe, and `\marimographics` places a notebook figure
+with the options of `\includegraphics`:
+
+```latex
+\usepackage{siunitx}
+\usepackage[en-GB, calc]{datetime2}
+\usepackage{marimo}
+
+Rooms in use on \marimodate{summary.day}: \marimonum{summary.rooms}.
+
+\marimographics[width=\linewidth]{occupancy_chart}
+```
+
+Studio measures where the document places each figure and draws it at that
+width, so its labels print at the point size the notebook set. A null value
+typesets an em dash, a value Studio has not supplied yet `??`, and a pending
+figure a frame of its placed size. The view renders like a Typst document:
+again for each value change in a Python runtime view, and once per prepared
+state in a Prepared export. See the
+[LaTeX provider reference](../reference/built-in-providers.md#marimo-studio-latex)
+for conditionals, figures, diagnostics, and Tectonic. The **Journal paper**
+view of [Building occupancy](../examples/occupancy.md) is a complete paper in
+the template of [IEEE TVCG](https://www.computer.org/csdl/journal/tg), the IEEE
+Transactions on Visualization and Computer Graphics, with the notebook's
+figures and tables.
 
 A page can also draw a PDF in the browser from `mo-value` data with a
 JavaScript PDF library, which works in every runtime. The **Field report** view

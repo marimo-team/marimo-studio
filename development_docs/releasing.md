@@ -12,7 +12,8 @@ A release contains one coordinated compatibility unit:
 - `marimo-studio` Python package and CLI
 - Marimo server middleware, kernel lifespan, and agent capability entry points
 - `marimo_studio.view_provider` entry points
-- Vanilla, React, Svelte, Notebook Kit, Quarto, and Typst provider implementations
+- Vanilla, React, Svelte, Notebook Kit, Quarto, Typst, and LaTeX provider
+  implementations
 - Provider analyzers and project starters
 - Provider guides and the Marimo Studio
   [Agent Plugin](https://github.com/peter-gy/agent-plugins)
@@ -34,6 +35,8 @@ Define release-affecting version policy in its owning manifest or lockfile:
 - Deno Python distribution and executable
 - Quarto minimum version, `QUARTO_MIN_VERSION` in the Quarto provider and the
   `quarto` requirement in `pixi.toml`
+- Tectonic minimum version, `TECTONIC_MIN_VERSION` in the LaTeX provider and
+  the `tectonic` requirement in `pixi.toml`
 - React and React DOM starter imports
 - `@revealjs/react` and Reveal.js starter imports
 - Svelte compiler

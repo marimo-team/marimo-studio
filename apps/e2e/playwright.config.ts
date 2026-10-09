@@ -15,6 +15,7 @@ export default defineConfig({
     "provider-preview.spec.ts",
     "external-provider.spec.ts",
     "provider-quarto.spec.ts",
+    "provider-latex.spec.ts",
   ],
   timeout: process.platform === "win32" ? 180_000 : 90_000,
   fullyParallel: true,

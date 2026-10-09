@@ -42,11 +42,11 @@ that computes it, so every result a view shows traces back to the notebook.
 
 ::: v-pre
 
-| Result | Web page                         | Quarto                                | Typst                           |
-| ------ | -------------------------------- | ------------------------------------- | ------------------------------- |
-| Cell   | `<marimo-cell name="filters">`   | `{{< marimo cell="filters" >}}`       | `#marimo_cell("filters")`       |
-| Output | `<marimo-output value="chart">`  | `{{< marimo output="chart" >}}`       | `#marimo_output("chart")`       |
-| Value  | `<span mo-value="totals.rooms">` | `{{< marimo value="totals.rooms" >}}` | `#marimo_value("totals.rooms")` |
+| Result | Web page                         | Quarto                                | Typst                           | LaTeX                        |
+| ------ | -------------------------------- | ------------------------------------- | ------------------------------- | ---------------------------- |
+| Cell   | `<marimo-cell name="filters">`   | `{{< marimo cell="filters" >}}`       | `#marimo_cell("filters")`       | `\marimocell{filters}`       |
+| Output | `<marimo-output value="chart">`  | `{{< marimo output="chart" >}}`       | `#marimo_output("chart")`       | `\marimographics{chart}`     |
+| Value  | `<span mo-value="totals.rooms">` | `{{< marimo value="totals.rooms" >}}` | `#marimo_value("totals.rooms")` | `\marimovalue{totals.rooms}` |
 
 :::
 
@@ -55,11 +55,12 @@ keeps live. HTML, React, Svelte, Notebook Kit, and
 [Quarto](https://quarto.org/) views are pages, so moving a control reruns the
 affected cells and updates every result on the page. A _rendered document_ is a
 file that Studio renders from the notebook's values and outputs. A
-[Typst](https://typst.app/) view compiles a PDF. In the editor and in
+[Typst](https://typst.app/) or [LaTeX](https://www.latex-project.org/) view
+compiles a PDF. In the editor and in
 Python-runtime apps, Studio compiles it again when a result it reads changes.
 [Rendered documents](reference/projections.md#rendered-documents) lists what
-each runtime and export shows. A PDF holds no controls, so a Typst document
-places values, outputs, and the images that cells show.
+each runtime and export shows. A PDF holds no controls, so a Typst or LaTeX
+document places values, outputs, and the images that cells show.
 
 In the [Quadratic programs](examples/quadratic-programs.md) views at the top
 of this page, **Lecture**, **Explainer**, and **Lab** are pages, and **Report**

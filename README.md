@@ -31,8 +31,8 @@ Studio keeps data, computation, and controls in the notebook and gives each
 audience its own view, such as a dashboard, a slide deck, an article, or a PDF
 report. A view places the notebook's cells, outputs, and values by name. Web
 pages keep them live, so changing an input updates every result that depends
-on it, and Typst documents render again with the new values. Every result a
-view shows traces back to the notebook cell that computed it.
+on it, and Typst and LaTeX documents render again with the new values. Every
+result a view shows traces back to the notebook cell that computed it.
 
 > [!NOTE]
 > Studio is experimental and changing rapidly. Pin `marimo-studio` in saved
@@ -84,8 +84,8 @@ technology.
   Three.js presentation, and a Quarto paper typeset with KaTeX.
 - [Earthquake watch](https://marimo-team.github.io/marimo-studio/examples/earthquakes): an Observable Plot story, a MapLibre
   operations map, a Reveal.js briefing, and a Quarto bulletin.
-- [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy): a Notebook Kit monitor, a Recharts
-  model review, and a pdfcn PDF report.
+- [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy): a Notebook Kit monitor, a pdfcn PDF
+  report, a LaTeX journal paper, and a Recharts model review.
 
 ## Run or export a view
 

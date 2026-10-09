@@ -1,6 +1,14 @@
 name: Set up pixi
 description: Install pixi and the repository's locked environment of system tools.
 
+inputs:
+  tex-cache:
+    description: >-
+      Name of the Tectonic package cache that a job restores and saves, such as
+      the job's name. Jobs that compile no LaTeX leave it empty.
+    required: false
+    default: ""
+
 runs:
   using: composite
   steps:
@@ -14,3 +22,24 @@ runs:
         # Make and scripts/python-test.sh activate the environment through
         # `pixi run` for the commands that need its tools.
         activate-environment: false
+
+    # Tectonic downloads the TeX packages a document uses on its first compile,
+    # one file at a time, and keeps them in this directory for later runs.
+    - name: Locate the Tectonic package cache
+      if: inputs.tex-cache != ''
+      shell: bash
+      run: echo "TECTONIC_CACHE_DIR=$RUNNER_TEMP/tectonic" >> "$GITHUB_ENV"
+
+    - name: Restore Tectonic packages
+      if: inputs.tex-cache != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/tectonic
+        key: >-
+          tectonic-v1-${{ runner.os }}-${{ inputs.tex-cache }}-${{ hashFiles('pixi.lock',
+          'scripts/fetch-tex-packages.sh', 'examples/**/*.tex', 'examples/**/*.cls',
+          'examples/**/*.sty', 'apps/e2e/fixtures-provider/*.tex',
+          'packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/**',
+          'packages/marimo-studio/tests/providers/test_latex.py') }}
+        restore-keys: |
+          tectonic-v1-${{ runner.os }}-${{ inputs.tex-cache }}-

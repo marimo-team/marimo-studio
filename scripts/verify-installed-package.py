@@ -34,6 +34,7 @@ _ENTRY_POINTS = {
     ("marimo.agent.capability", "studio"),
     ("marimo.kernel.lifespan", "marimo-studio"),
     ("marimo.server.asgi.middleware", "marimo-studio"),
+    ("marimo_studio.view_provider", "latex"),
     ("marimo_studio.view_provider", "notebook-kit"),
     ("marimo_studio.view_provider", "quarto"),
     ("marimo_studio.view_provider", "react"),
@@ -336,6 +337,7 @@ def _verify_views(*, deno: bool) -> None:
             workspace = studio_authoring.open_workspace(notebook)
             catalog = {item.id: item for item in await workspace.starters()}
             expected = {
+                "marimo-studio/latex:default",
                 "marimo-studio/notebook-kit:default",
                 "marimo-studio/quarto:default",
                 "marimo-studio/react:default",

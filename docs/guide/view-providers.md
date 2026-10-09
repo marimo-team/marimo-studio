@@ -7,8 +7,8 @@ description: Bring your own frontend framework or build tool to the New view pic
 
 A view provider is a small Python package that adds starters to Studio's **New
 view** picker. Install one in the notebook's environment, and its starters
-appear beside the built-in HTML, React, Svelte, Notebook Kit, Quarto, and Typst
-starters:
+appear beside the built-in HTML, React, Svelte, Notebook Kit, Quarto, Typst, and
+LaTeX starters:
 
 ![The New view picker lists Acme report and Acme dashboard under From acme-views, above the built-in starters from marimo-studio](/screenshots/provider-new-view.png){width=448}
 
@@ -36,9 +36,10 @@ that uses it:
 | [Command-line tool](../reference/provider-api.md#check-external-tools) | runs an installed tool that writes HTML         | `probe_tool`, `copy_inputs`, `ProviderError`                | [`quarto`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/quarto)         |
 | [Rendered document](#publish-a-document)                               | renders a PDF, SVG, or PNG with notebook values | `RenderValue`, `RenderOutput`, `RenderCell`, `render()`     | [`typst`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/typst)           |
 
-The Quarto and Typst providers import only the public module, so their source
-shows those patterns at full size. The React, Svelte, and Notebook Kit providers
-also share a Deno library inside Studio. When no pattern fits, start from the
+The Quarto provider imports only the public module, so its source shows that
+pattern at full size. The Typst and LaTeX providers share a library for typeset
+documents inside Studio, and the React, Svelte, and Notebook Kit providers share
+a Deno library. When no pattern fits, start from the
 HTML page provider and replace `build()` with your tool's steps.
 
 ## Ask a coding agent
@@ -736,12 +737,16 @@ provider = CardProvider()
 ```
 
 `render_values` names the notebook values the document reads, at the place it
-reads them. A template that places figures reports `render_outputs`, and one
-that places a named cell's output reports `render_cells`. Studio keeps the
-built template private and calls `render()` with a writable copy in
-`request.template_root`, an empty `request.output_root`, and the results the
-reader's notebook currently has. A result without a current value is absent,
-so the template shows its default.
+reads them. Each arrives in its JSON form, so a dataframe arrives as a list of
+row objects and a date as ISO 8601 text. A template that places figures
+reports `render_outputs`, and one that places a named cell's output reports
+`render_cells`. A build that knows where the template places each figure
+returns those sizes in `BuildResult.output_sizes`, and Studio then draws each
+figure at its size. Studio keeps the built template private and calls
+`render()` with a writable copy in `request.template_root`, an empty
+`request.output_root`, and the results the reader's notebook currently has. A
+result without a current value is absent, and a null result is `None`, so the
+template shows its default for both.
 [Render documents with notebook values](../reference/provider-api.md#render-documents-with-notebook-values)
 defines the contract.
 

@@ -18,8 +18,11 @@ Write hosts in HTML, JSX, or Svelte inside `#app-shell`. A Quarto document
 writes them as `marimo` shortcodes or raw HTML hosts, and Studio supplies
 `#app-shell`. A Typst document reads values with `marimo_value()`, places
 outputs with `marimo_output()`, and places the image a cell shows with
-`marimo_cell()`. See [Quarto document](frontend-options.md#quarto-document) and
-[Typst PDF](frontend-options.md#typst-pdf).
+`marimo_cell()`. A LaTeX document does the same with `\marimovalue`,
+`\marimographics`, and `\marimocell`. See
+[Quarto document](frontend-options.md#quarto-document),
+[Typst PDF](frontend-options.md#typst-pdf), and
+[LaTeX PDF](frontend-options.md#latex-pdf).
 
 ## Place a complete cell
 
@@ -119,6 +122,27 @@ The Browser runtime requires browser-compatible dataframe and Arrow writer
 packages. Prepared export writes eager dataframes through marimo's cache as
 Arrow IPC before the static directory is published. Materialize lazy or remote
 queries in the notebook before projecting them.
+
+## Documents read JSON
+
+A Typst, LaTeX, or other rendered document reads each value in its JSON form,
+so it reads the notebook's results as the analysis leaves them:
+
+| Notebook value                              | Document reads                               |
+| ------------------------------------------- | -------------------------------------------- |
+| pandas, Polars, or PyArrow table            | A list of row objects keyed by column name   |
+| `date`, `datetime`, `time`                  | ISO 8601 text, such as `2015-02-04T09:41:00` |
+| NumPy number, `Decimal`, or `Enum` member   | Its number or value                          |
+| NaN, or a missing table cell                | `null`                                       |
+| A step through `None`, such as `peak.label` | `null`, while `peak` is `None`               |
+| Dictionary, list, text, number, boolean     | The same value                               |
+
+The document then formats them: LaTeX with `\marimonum` and `\marimodate`, and
+Typst with its own functions. A null read takes the document's default. A
+table whose JSON form holds more than 100,000 values fails with
+`value-too-large`, so filter or aggregate it in the notebook first. Browser
+code reads a table as Arrow instead, as
+[Pass a dataframe to JavaScript](#pass-a-dataframe-to-javascript) describes.
 
 ## Use dynamic projection targets
 

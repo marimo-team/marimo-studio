@@ -46,6 +46,7 @@ python_inputs: &python_inputs
   - "packages/marimo-studio/src/**"
   - "packages/marimo-studio/tests/**"
   - "scripts/python-test.sh"
+  - "scripts/fetch-tex-packages.sh"
 
 frontend_inputs: &frontend_inputs
   - *ci_control
@@ -180,6 +181,10 @@ documentation:
 
 pages:
   - *pages_control
+  - ".github/actions/setup-pixi/**"
+  - "pixi.toml"
+  - "pixi.lock"
+  - "scripts/fetch-tex-packages.sh"
   - "README.md"
   - "docs/**"
   - "apps/docs/**"
@@ -282,6 +287,7 @@ main_browser:
   - "!apps/e2e/tests/provider-reveal.spec.ts"
   - "!apps/e2e/tests/external-provider.spec.ts"
   - "!apps/e2e/tests/provider-quarto.spec.ts"
+  - "!apps/e2e/tests/provider-latex.spec.ts"
   - "apps/e2e/scripts/collaborative-workspace.ts"
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
@@ -300,6 +306,7 @@ provider_browser:
   - "apps/e2e/tests/provider-reveal.spec.ts"
   - "apps/e2e/tests/external-provider.spec.ts"
   - "apps/e2e/tests/provider-quarto.spec.ts"
+  - "apps/e2e/tests/provider-latex.spec.ts"
   - "apps/e2e/tests/!(*.spec).ts"
   - *notebook_services
   - apps/e2e/scripts/fixture-provider-package.ts
@@ -307,6 +314,7 @@ provider_browser:
   - ".github/actions/setup-pixi/**"
   - "pixi.toml"
   - "pixi.lock"
+  - "scripts/fetch-tex-packages.sh"
   - apps/e2e/scripts/export-repository.ts
   - apps/e2e/tests/provider-fixture.ts
 

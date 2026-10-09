@@ -12,3 +12,6 @@ exclude-newer = "7d"
 [dependencies]
 # The Quarto view provider renders documents with the Quarto CLI.
 quarto = ">=1.9.38"
+# The LaTeX view provider compiles documents with Tectonic, which fetches the
+# TeX packages a document uses from its pinned bundle.
+tectonic = ">=0.15"

@@ -132,7 +132,9 @@ view_providers/
     deno_svelte/      provider, source check, analyzer, and vertical starter packages
     deno_obsnotebook/ provider, notebook HTML analyzer, and vertical starter packages
     quarto/           provider, Markdown site scanner, marimo shortcode extension, Lua filter, and starter
+    _typeset.py       shared inspection and media placement for typeset documents
     typst/            provider, value scanner, compile script, and starter
+    latex/            provider, command scanner, render inputs, Tectonic compile, and starter
 ```
 
 The SDK re-exports the operation types from `_processes/operation.py`, so a
@@ -150,7 +152,7 @@ Each built-in provider is written as if it were already its own distribution:
 - It imports Studio only through names in `marimo_studio.view_providers`.
 - It imports other built-in code only from its own subpackage and from a
   declared shared library. `_deno` is the shared library for the `deno_*`
-  providers.
+  providers, and `_typeset` for the Typst and LaTeX providers.
 - Vanilla is the core built-in. It may also import `_filesystem`, `errors`,
   and the HTML, JavaScript, and CSS analyzers in `view_providers`.
 
@@ -240,6 +242,17 @@ cell target. The manifest records the template files
 and the renderer fingerprint, and both belong to the artifact revision
 identity. Asset routes and static exports read the public file catalog, so
 template files stay private.
+
+`render_sites()` gives each document value site the accept list
+`("application/json",)`, so every runtime reads that value through
+marimo-export's `represent()` as JSON: a table becomes row objects and a date
+ISO 8601 text, where a browser view's value site reads a table as Arrow. A
+build that compiles its template returns `BuildResult.output_sizes`, the size
+the template places each output at, and `_views/build.py` passes it to
+`render_sites()`, which records it on the output site. The size travels with the accept list through the signed
+projection records to the kernel, the Pyodide bridge, and the prepared export's
+`media` exporter, which all draw the figure at that size. Both belong to the
+artifact revision identity, because a site's `to_dict()` holds them.
 
 `_server/presentation/document_renders.py::DocumentRenders` owns live render
 workers and cached renditions on `NotebookScope`, and

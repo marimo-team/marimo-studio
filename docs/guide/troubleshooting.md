@@ -62,6 +62,25 @@ The Quarto starter needs the `quarto` command. Install it with
 `Studio found Quarto in a pixi or conda environment that is not activated.`,
 start marimo through `pixi run` or inside `pixi shell`.
 
+The LaTeX starter needs the `tectonic` command, from
+[Tectonic](https://tectonic-typesetting.github.io/), a self-contained TeX
+engine. Install it with `pixi global install tectonic`, then restart marimo.
+
+## A LaTeX build reports `latex-compile-unfinished`
+
+Tectonic downloads the TeX packages a document uses on its first compile, and
+that compile outlasted the build's 120 second budget. Build the view again,
+which continues from the packages Tectonic kept, or download them once without
+a time limit from the view folder:
+
+```console
+tectonic -X compile main.tex
+```
+
+A document that never finishes compiling, such as one with a recursive macro,
+reports the same code. Fix the document when the build stops again with a warm
+cache.
+
 After creation, Studio derives the provider requirement from the saved
 manifest. Keep a third-party provider distribution in the notebook or Python
 project dependencies.

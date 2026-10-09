@@ -1,0 +1,526 @@
+% Read the notebook values, outputs, and cells that marimo Studio passes to
+% this document. Load it with \usepackage{marimo}, after datetime2 when the
+% document formats dates.
+%
+% A selector names a notebook variable, optionally followed by .field,
+% [index], and ["key"] steps, such as summary.total or rows[0].name. Studio
+% finds the selectors a document reads from the commands below and supplies
+% only those, so write each one as literal text. Outside Studio, every read
+% typesets its fallback.
+%
+% \marimovalue[<fallback>]{<selector>}
+%   Typesets text, a number as written, or true or false. Expandable, so it
+%   works in section titles, PDF bookmarks, \MakeUppercase, and S columns.
+% \marimonum[<keys>]{<selector>}
+%   Formats a number with \num from siunitx, or with \qty when unit= is set.
+%   Takes siunitx keys, scale=, unit=, missing=, null=, and the names that
+%   \DeclareMarimoFormat{<name>}{<keys>} defines.
+% \marimodate[<datetime2 style>]{<selector>}, \marimotime[...]{<selector>}
+%   Typeset the date or the wall time of an ISO 8601 value with datetime2.
+% \IfMarimoTF{<selector>}{<true>}{<false>}, \IfMarimoT, \IfMarimoF
+%   Branch on a value. Null, missing, false, zero, empty text, and empty lists
+%   and dictionaries are false.
+% \marimorows[<count>]{<selector>}{<row>}
+%   Repeats a table row for each item of a list or table, between two rows of
+%   a tabular, tabularx, longtable, or array. #1 is the item's selector, such
+%   as rows[0], and #2 its position from 1.
+% \marimoforeach[<count>]{<selector>}{<body>}
+%   Repeats body for each item anywhere else, with the same #1 and #2.
+% \marimographics[<graphicx options>]{<selector>}
+%   Places a notebook output, such as a matplotlib figure, with
+%   \includegraphics. Studio draws it at the width and height it is placed
+%   at, so its text keeps its point size.
+% \marimocell[<graphicx options>]{<cell name>}
+%   Places a named cell's image output as marimo shows it.
+% \marimosetup{missing=<text>, null=<text>}
+%   Sets what a read typesets while Studio has no value for it (\textbf{??})
+%   and for a null value (an em dash in the surrounding face).
+\NeedsTeXFormat{LaTeX2e}[2020/10/01]
+\ProvidesExplPackage{marimo}{2026/10/09}{0.4.0}
+  {Notebook values, outputs, and cells from marimo Studio}
+\RequirePackage{amstext}
+\RequirePackage{graphicx}
+\RequirePackage{siunitx}
+
+\tl_new:N \l__marimo_missing_tl
+\tl_new:N \l__marimo_null_tl
+\keys_define:nn { marimo }
+  {
+    missing .tl_set:N = \l__marimo_missing_tl ,
+    missing .initial:n = \textbf{??} ,
+    null .tl_set:N = \l__marimo_null_tl ,
+    null .initial:n = \text{\textemdash} ,
+  }
+\NewDocumentCommand \marimosetup { m } { \keys_set:nn { marimo } {#1} }
+
+% Studio shows the first paragraph of an error, so each message carries its fix.
+\msg_new:nnn { marimo } { inputs-version }
+  {
+    Studio~wrote~inputs~version~#1,~and~this~marimo.sty~reads~version~2.~
+    Replace~marimo.sty~with~the~copy~from~the~current~LaTeX~starter.
+  }
+\msg_new:nnn { marimo } { not-supplied }
+  {
+    #1~is~not~among~the~values~Studio~supplied.~Check~it~for~a~typo,~such~as~
+    a~field~the~value~lacks.~Studio~supplies~only~selectors~written~
+    literally~in~marimo~commands,~so~a~selector~that~a~macro~builds~needs~
+    writing~in~full~where~it~is~read.
+  }
+\msg_new:nnn { marimo } { uppercased }
+  {
+    #1~is~not~among~the~values~Studio~supplied,~and~#2~is.~A~running~head~or~
+    \iow_char:N\\MakeUppercase~changed~its~case,~so~give~the~heading~a~short~
+    title~without~marimo~reads,~such~as~\iow_char:N\\section[Results]{...}.
+  }
+\msg_new:nnn { marimo } { wrong-type } { #1~is~#2,~and~#3~reads~#4. }
+\msg_new:nnn { marimo } { not-a-date }
+  { #1~is~#2,~and~#3~reads~an~ISO~8601~#4. }
+\msg_new:nnn { marimo } { no-part }
+  { #1~holds~no~#3,~so~#2~has~nothing~to~typeset. }
+\msg_new:nnn { marimo } { no-datetime2 }
+  {
+    #1~formats~dates~with~datetime2,~so~load~it,~such~as~
+    \iow_char:N\\usepackage[en-GB,~calc]{datetime2}.
+  }
+\msg_new:nnn { marimo } { scaled }
+  {
+    scale~resizes~the~output~that~Studio~draws~at~its~measured~size,~so~its~
+    text~loses~its~point~size.~Give~width,~or~width~and~height,~instead.
+  }
+\msg_new:nnn { marimo } { height-only }
+  {
+    height~alone~resizes~the~output~that~Studio~draws~at~the~line~width,~so~
+    its~text~loses~its~point~size.~Give~width,~or~width~and~height,~instead.
+  }
+\msg_new:nnn { marimo } { turned }
+  {
+    angle~turns~the~output~before~width~or~height~resizes~it,~so~its~text~
+    loses~its~point~size.~Write~angle~after~width~and~height.
+  }
+\msg_new:nnn { marimo } { format-value }
+  { The~marimo~number~format~#1~takes~no~value. }
+
+% Studio's .marimo-studio/inputs.tex defines each read as a global control
+% sequence holding {<type>}{<data>}, read once like an .aux file. Types: s
+% text, n number, b boolean 0 or 1, z null, l list and d dictionary with their
+% sizes, g image path, and u for a read Studio has no value for. A text that
+% holds an ISO 8601 date or time also keeps its parts for \marimodate.
+\bool_new:N \g__marimo_inputs_bool
+\cs_new:Npn \__marimo_cs:n #1
+  { __marimo~ \tl_trim_spaces_apply:nN {#1} \tl_to_str:n }
+\cs_generate_variant:Nn \__marimo_cs:n { e }
+\cs_new_protected:Npn \__marimo_put:nnn #1#2#3
+  { \cs_gset_nopar:cpx { \__marimo_cs:n {#1} } { {#2} { \exp_not:n {#3} } } }
+\cs_new_protected:Npn \marimo@inputs #1
+  {
+    \bool_gset_true:N \g__marimo_inputs_bool
+    \int_compare:nNnF {#1} = { 2 }
+      { \msg_error:nnn { marimo } { inputs-version } {#1} }
+  }
+\cs_new_protected:Npn \marimo@s #1#2 { \__marimo_put:nnn {#1} { s } {#2} }
+\cs_new_protected:Npn \marimo@n #1#2 { \__marimo_put:nnn {#1} { n } {#2} }
+\cs_new_protected:Npn \marimo@b #1#2 { \__marimo_put:nnn {#1} { b } {#2} }
+\cs_new_protected:Npn \marimo@z #1 { \__marimo_put:nnn {#1} { z } { } }
+\cs_new_protected:Npn \marimo@l #1#2 { \__marimo_put:nnn {#1} { l } {#2} }
+\cs_new_protected:Npn \marimo@d #1#2 { \__marimo_put:nnn {#1} { d } {#2} }
+\cs_new_protected:Npn \marimo@g #1#2 { \__marimo_put:nnn {#1} { g } {#2} }
+\cs_new_protected:Npn \marimo@u #1 { \__marimo_put:nnn {#1} { u } { } }
+\cs_new_protected:Npn \marimo@t #1#2#3
+  { \__marimo_put:nnn { date~ #1 } {#2} {#3} }
+% A cell without an image output arrives with an empty path.
+\cs_new_protected:Npn \marimo@c #1#2
+  { \tl_if_blank:nTF {#2} { \marimo@u { cell~ #1 } } { \marimo@g { cell~ #1 } {#2} } }
+
+% \__marimo_get:nN {<selector>} <function> passes {<type>}{<data>} to the
+% function, with type m when the selector is not among the reads.
+\cs_new:Npn \__marimo_get:nN #1#2
+  {
+    \cs_if_exist:cTF { \__marimo_cs:n {#1} }
+      { \exp_last_unbraced:Nv #2 { \__marimo_cs:n {#1} } }
+      { #2 { m } { } }
+  }
+\cs_new:Npn \__marimo_type:n #1
+  {
+    \str_case:nn {#1}
+      {
+        { s } { text } { n } { a~number } { b } { a~boolean } { z } { null }
+        { l } { a~list } { d } { a~dictionary } { g } { an~image }
+      }
+  }
+
+% Errors take only the selector and the type as arguments, which stay text
+% when an \edef or a PDF string expands an expandable read. Without inputs,
+% such as outside Studio and in the compile that measures figures, a read
+% expands to its fallback alone, so a .toc entry or the start of a table row
+% holds no protected error command.
+\cs_new:Npn \__marimo_not_supplied:n #1
+  { \bool_if:NT \g__marimo_inputs_bool { \__marimo_report_unsupplied:n {#1} } }
+\cs_new_protected:Npn \__marimo_report_unsupplied:n #1
+  {
+    \cs_if_exist:cTF { \__marimo_cs:e { \str_lowercase:n {#1} } }
+      {
+        \msg_error:nnxx { marimo } { uppercased }
+          { \tl_to_str:n {#1} } { \str_lowercase:n {#1} }
+      }
+      { \msg_error:nnx { marimo } { not-supplied } { \tl_to_str:n {#1} } }
+  }
+\cs_new_protected:Npn \__marimo_wrong:nnNn #1#2#3#4
+  {
+    \msg_error:nnxxxx { marimo } { wrong-type }
+      { \tl_to_str:n {#1} } { \__marimo_type:n {#2} } { \token_to_str:N #3 } {#4}
+  }
+\cs_new_protected:Npn \__marimo_not_text:nn #1#2
+  { \__marimo_wrong:nnNn {#1} {#2} \marimovalue { text,~numbers,~and~booleans } }
+\cs_new:Npn \__marimo_fallback:n #1
+  { \tl_if_novalue:nTF {#1} { \l__marimo_missing_tl } {#1} }
+
+% \marimovalue expands in PDF strings and number contexts, so a type error or
+% a selector Studio did not supply leaves a protected command that reports it
+% where the text is typeset.
+\NewExpandableDocumentCommand \marimovalue { o m }
+  { \__marimo_get:nN {#2} \__marimo_text:nnnn {#2} {#1} }
+\cs_new:Npn \__marimo_text:nnnn #1#2#3#4
+  {
+    \str_case:nnF {#1}
+      {
+        { s } {#2}
+        { n } {#2}
+        { b } { \int_compare:nNnTF {#2} = { 1 } { true } { false } }
+        { z } { \tl_if_novalue:nTF {#4} { \l__marimo_null_tl } {#4} }
+        { u } { \__marimo_fallback:n {#4} }
+        { m } { \__marimo_not_supplied:n {#3} \__marimo_fallback:n {#4} }
+      }
+      { \__marimo_not_text:nn {#3} {#1} \__marimo_fallback:n {#4} }
+  }
+
+% \IfMarimoTF follows Python truthiness, and reports a selector Studio did not
+% supply before it takes the false branch.
+\cs_new:Npn \__marimo_truthy:nnnnn #1#2#3#4#5
+  {
+    \str_case:nnF {#1}
+      {
+        { s } { \tl_if_empty:nTF {#2} {#5} {#4} }
+        { n } { \fp_compare:nNnTF {#2} = { 0 } {#5} {#4} }
+        { b } { \int_compare:nNnTF {#2} = { 0 } {#5} {#4} }
+        { l } { \int_compare:nNnTF {#2} = { 0 } {#5} {#4} }
+        { d } { \int_compare:nNnTF {#2} = { 0 } {#5} {#4} }
+        { g } {#4}
+        { m } { \__marimo_not_supplied:n {#3} #5 }
+      }
+      {#5}
+  }
+\NewExpandableDocumentCommand \IfMarimoTF { m +m +m }
+  { \__marimo_get:nN {#1} \__marimo_truthy:nnnnn {#1} {#2} {#3} }
+\NewExpandableDocumentCommand \IfMarimoT { m +m }
+  { \__marimo_get:nN {#1} \__marimo_truthy:nnnnn {#1} {#2} { } }
+\NewExpandableDocumentCommand \IfMarimoF { m +m }
+  { \__marimo_get:nN {#1} \__marimo_truthy:nnnnn {#1} { } {#2} }
+
+% \marimonum formats a number with the document's siunitx settings.
+\fp_new:N \l__marimo_scale_fp
+\tl_new:N \l__marimo_unit_tl
+\tl_new:N \l__marimo_si_tl
+\tl_new:N \l__marimo_format_tl
+\tl_new:N \l__marimo_known_tl
+\keys_define:nn { marimo / num }
+  {
+    scale .fp_set:N = \l__marimo_scale_fp ,
+    unit .tl_set:N = \l__marimo_unit_tl ,
+    missing .tl_set:N = \l__marimo_missing_tl ,
+    null .tl_set:N = \l__marimo_null_tl ,
+  }
+% A format sets marimo keys and passes the rest to siunitx.
+\NewDocumentCommand \DeclareMarimoFormat { m m }
+  {
+    \keys_define:nn { marimo / num }
+      {
+        #1 .code:n =
+          {
+            \tl_if_blank:nF {##1}
+              { \msg_error:nnn { marimo } { format-value } {#1} }
+            \keys_set_known:nnN { marimo / num } {#2} \l__marimo_known_tl
+            \tl_put_right:Nx \l__marimo_format_tl
+              { \exp_not:V \l__marimo_known_tl , }
+          }
+      }
+  }
+\NewDocumentCommand \marimonum { O{} m }
+  {
+    \group_begin:
+      \fp_set:Nn \l__marimo_scale_fp { 1 }
+      \tl_clear:N \l__marimo_unit_tl
+      \tl_clear:N \l__marimo_format_tl
+      \keys_set_known:nnN { marimo / num } {#1} \l__marimo_si_tl
+      \tl_put_left:NV \l__marimo_si_tl \l__marimo_format_tl
+      \__marimo_get:nN {#2} \__marimo_num:nnn {#2}
+    \group_end:
+  }
+\cs_new_protected:Npn \__marimo_num:nnn #1#2#3
+  {
+    \str_case:nnF {#1}
+      {
+        { n } { \__marimo_si:e { \fp_eval:n { \l__marimo_scale_fp * (#2) } } }
+        { z } { \l__marimo_null_tl }
+        { u } { \l__marimo_missing_tl }
+        { m } { \__marimo_not_supplied:n {#3} \l__marimo_missing_tl }
+      }
+      {
+        \__marimo_wrong:nnNn {#3} {#1} \marimonum { numbers }
+        \l__marimo_missing_tl
+      }
+  }
+\cs_new_protected:Npn \__marimo_si:n #1
+  {
+    \tl_if_empty:NTF \l__marimo_unit_tl
+      { \use:x { \exp_not:N \num [ \exp_not:V \l__marimo_si_tl ] {#1} } }
+      {
+        \use:x
+          {
+            \exp_not:N \qty [ \exp_not:V \l__marimo_si_tl ]
+              {#1} { \exp_not:V \l__marimo_unit_tl }
+          }
+      }
+  }
+\cs_generate_variant:Nn \__marimo_si:n { e }
+
+% \marimodate and \marimotime read the parts Studio found in ISO 8601 text,
+% the date with \DTMdate and the wall time with \DTMtime.
+\NewDocumentCommand \marimodate { o m }
+  { \__marimo_moment:nnNnN {#1} {#2} \marimodate { date } \__marimo_date:nnnN }
+\NewDocumentCommand \marimotime { o m }
+  { \__marimo_moment:nnNnN {#1} {#2} \marimotime { time } \__marimo_time:nnnN }
+\cs_new_protected:Npn \__marimo_moment:nnNnN #1#2#3#4#5
+  {
+    \cs_if_exist:NTF \DTMdate
+      {
+        \group_begin:
+          \tl_if_novalue:nF {#1} { \use:c { DTMset #4 style } {#1} }
+          \cs_if_exist:cTF { \__marimo_cs:n { date~ #2 } }
+            { \exp_last_unbraced:Nv #5 { \__marimo_cs:n { date~ #2 } } {#2} #3 }
+            { \__marimo_get:nN {#2} \__marimo_not_moment:nnnNn {#2} #3 {#4} }
+        \group_end:
+      }
+      {
+        \msg_error:nnx { marimo } { no-datetime2 } { \token_to_str:N #3 }
+        \l__marimo_missing_tl
+      }
+  }
+\cs_new_protected:Npn \__marimo_date:nnnN #1#2#3#4
+  { \tl_if_blank:nTF {#1} { \__marimo_no_part:nNn {#3} #4 { date } } { \DTMdate {#1} } }
+\cs_new_protected:Npn \__marimo_time:nnnN #1#2#3#4
+  { \tl_if_blank:nTF {#2} { \__marimo_no_part:nNn {#3} #4 { time } } { \DTMtime {#2} } }
+\cs_new_protected:Npn \__marimo_no_part:nNn #1#2#3
+  {
+    \msg_error:nnxxx { marimo } { no-part } { \tl_to_str:n {#1} } { \token_to_str:N #2 } {#3}
+    \l__marimo_missing_tl
+  }
+\cs_new_protected:Npn \__marimo_not_moment:nnnNn #1#2#3#4#5
+  {
+    \str_case:nnF {#1}
+      {
+        { z } { \l__marimo_null_tl }
+        { u } { \l__marimo_missing_tl }
+        { m } { \__marimo_not_supplied:n {#3} \l__marimo_missing_tl }
+      }
+      {
+        \msg_error:nnxxxx { marimo } { not-a-date }
+          { \tl_to_str:n {#3} } { \__marimo_type:n {#1} } { \token_to_str:N #4 } {#5}
+        \l__marimo_missing_tl
+      }
+  }
+
+% \marimorows builds its rows inside \noalign, between two rows of the table,
+% and they expand where the next row starts, so an empty list adds no row.
+% \marimoforeach builds its items the same way before it typesets them, so a
+% loop inside its body defines its own items.
+\tl_new:N \g__marimo_rows_tl
+\tl_new:N \l__marimo_items_tl
+\int_new:N \l__marimo_count_int
+\cs_new:Npn \__marimo_row:nn #1#2 { }
+\NewExpandableDocumentCommand \marimorows { o m +m }
+  { \noalign { \__marimo_rows:nnn {#1} {#2} {#3} } \g__marimo_rows_tl }
+\cs_new_protected:Npn \__marimo_rows:nnn #1#2#3
+  {
+    \cs_set:Npn \__marimo_row:nn ##1##2 {#3}
+    \tl_clear:N \l__marimo_items_tl
+    \__marimo_items:nnN {#1} {#2} \marimorows
+    \tl_gset_eq:NN \g__marimo_rows_tl \l__marimo_items_tl
+  }
+\NewDocumentCommand \marimoforeach { o m +m }
+  {
+    \cs_set:Npn \__marimo_row:nn ##1##2 {#3}
+    \tl_clear:N \l__marimo_items_tl
+    \__marimo_items:nnN {#1} {#2} \marimoforeach
+    \tl_use:N \l__marimo_items_tl
+  }
+\cs_new_protected:Npn \__marimo_items:nnN #1#2#3
+  {
+    \int_set:Nn \l__marimo_count_int
+      { \tl_if_novalue:nTF {#1} { \c_max_int } {#1} }
+    \__marimo_get:nN {#2} \__marimo_list:nnnN {#2} #3
+  }
+\cs_new_protected:Npn \__marimo_list:nnnN #1#2#3#4
+  {
+    \str_case:nnF {#1}
+      {
+        { l }
+          {
+            \int_step_inline:nn { \int_min:nn {#2} { \l__marimo_count_int } }
+              {
+                \__marimo_item_add:ee
+                  { \tl_trim_spaces:n {#3} [ \int_eval:n { ##1 - 1 } ] } {##1}
+              }
+          }
+        { z } { }
+        { u } { }
+        { m } { \__marimo_not_supplied:n {#3} }
+      }
+      { \__marimo_wrong:nnNn {#3} {#1} #4 { lists~and~tables } }
+  }
+\cs_new_protected:Npn \__marimo_item_add:nn #1#2
+  { \tl_put_right:No \l__marimo_items_tl { \__marimo_row:nn {#1} {#2} } }
+\cs_generate_variant:Nn \__marimo_item_add:nn { ee }
+
+% \marimographics logs the size it places each output at, which Studio reads
+% from the compile its build runs, so the figure arrives drawn at that size.
+% The line holds the width, and the height when width and height fix the
+% shape. Otherwise the notebook's aspect ratio sets the height, as it does for
+% \includegraphics with height alone or with keepaspectratio.
+\dim_new:N \l__marimo_width_dim
+\dim_new:N \l__marimo_height_dim
+\bool_new:N \l__marimo_drawn_bool
+\bool_new:N \l__marimo_width_bool
+\bool_new:N \l__marimo_keep_bool
+\bool_new:N \l__marimo_scale_bool
+\bool_new:N \l__marimo_turned_bool
+\bool_new:N \l__marimo_shaped_bool
+\keys_define:nn { marimo / graphics }
+  {
+    width .code:n =
+      {
+        \dim_set:Nn \l__marimo_width_dim {#1}
+        \bool_set_true:N \l__marimo_width_bool
+        \__marimo_sized:
+      } ,
+    height .code:n =
+      { \dim_set:Nn \l__marimo_height_dim {#1} \__marimo_sized: } ,
+    totalheight .meta:n = { height = {#1} } ,
+    keepaspectratio .bool_set:N = \l__marimo_keep_bool ,
+    keepaspectratio .default:n = true ,
+    scale .code:n =
+      { \bool_set_true:N \l__marimo_scale_bool \__marimo_resized:n { scaled } } ,
+    angle .code:n = { \bool_set_true:N \l__marimo_turned_bool } ,
+    unknown .code:n = { } ,
+  }
+% Studio redraws only \marimographics outputs, so only they warn about keys
+% that resize the drawing.
+\cs_new_protected:Npn \__marimo_resized:n #1
+  { \bool_if:NT \l__marimo_drawn_bool { \msg_warning:nn { marimo } {#1} } }
+\cs_new_protected:Npn \__marimo_sized:
+  { \bool_if:NT \l__marimo_turned_bool { \__marimo_resized:n { turned } } }
+\cs_new_protected:Npn \__marimo_graphics_keys:n #1
+  {
+    \dim_set:Nn \l__marimo_width_dim { \linewidth }
+    \dim_zero:N \l__marimo_height_dim
+    \bool_set_false:N \l__marimo_width_bool
+    \bool_set_false:N \l__marimo_keep_bool
+    \bool_set_false:N \l__marimo_scale_bool
+    \bool_set_false:N \l__marimo_turned_bool
+    \keys_set:nn { marimo / graphics } {#1}
+    \bool_lazy_and:nnT
+      { ! \l__marimo_width_bool }
+      { \dim_compare_p:nNn { \l__marimo_height_dim } > { \c_zero_dim } }
+      { \__marimo_resized:n { height-only } }
+    \bool_set:Nn \l__marimo_shaped_bool
+      {
+        \l__marimo_width_bool && ! \l__marimo_keep_bool
+        && \dim_compare_p:nNn { \l__marimo_height_dim } > { \c_zero_dim }
+      }
+  }
+\NewDocumentCommand \marimographics { O{} m }
+  {
+    \group_begin:
+      \bool_set_true:N \l__marimo_drawn_bool
+      \__marimo_graphics_keys:n {#1}
+      \iow_log:x
+        {
+          marimo-size: \dim_to_decimal_in_bp:n { \l__marimo_width_dim } :
+          \bool_if:NT \l__marimo_shaped_bool
+            { \dim_to_decimal_in_bp:n { \l__marimo_height_dim } } :
+          \tl_trim_spaces_apply:nN {#2} \tl_to_str:n :
+        }
+      \__marimo_get:nN {#2} \__marimo_graphics:nnnn {#1} {#2}
+    \group_end:
+  }
+\NewDocumentCommand \marimocell { O{} m }
+  {
+    \group_begin:
+      \__marimo_graphics_keys:n {#1}
+      \__marimo_get:nN { cell~ #2 } \__marimo_graphics:nnnn {#1} {#2}
+    \group_end:
+  }
+% An output placed without width, height, or scale takes the line width, the
+% width its placeholder and its measured size have.
+\cs_new_protected:Npn \__marimo_graphics:nnnn #1#2#3#4
+  {
+    \str_case:nnF {#1}
+      {
+        { g }
+          {
+            \bool_lazy_any:nTF
+              {
+                { \l__marimo_width_bool }
+                { \l__marimo_scale_bool }
+                { \dim_compare_p:nNn { \l__marimo_height_dim } > { \c_zero_dim } }
+              }
+              { \includegraphics [#3] {#2} }
+              { \includegraphics [ width = \l__marimo_width_dim , #3 ] {#2} }
+          }
+        { m } { \__marimo_not_supplied:n {#4} \__marimo_placeholder:n {#4} }
+      }
+      { \__marimo_placeholder:n {#4} }
+  }
+% A frame of the placed size stands in until the output arrives, with a 16:9
+% shape when no height is given. Its label may break after any character, so
+% a long selector stays inside a narrow frame.
+\cs_new_protected:Npn \__marimo_placeholder:n #1
+  {
+    \leavevmode
+    \dim_compare:nNnT { \l__marimo_height_dim } = { \c_zero_dim }
+      { \dim_set:Nn \l__marimo_height_dim { 0.5625 \l__marimo_width_dim } }
+    \cs_if_exist:NT \color { \color [ gray ] { 0.55 } }
+    \dim_set:Nn \fboxsep { \c_zero_dim }
+    \dim_set:Nn \fboxrule { 0.4pt }
+    \fbox
+      {
+        \parbox [ c ] [ \dim_eval:n { \l__marimo_height_dim - 2 \fboxrule } ] [ c ]
+          { \dim_eval:n { \l__marimo_width_dim - 2 \fboxrule } }
+          {
+            \centering \footnotesize \ttfamily
+            \str_map_inline:nn {#1} { ##1 \allowbreak }
+          }
+      }
+  }
+
+% PDF strings, such as hyperref bookmarks, hold a read's raw value, and text
+% from the notebook spells math symbols with \texorpdfstring, so bookmarks keep
+% the character. Without hyperref, \texorpdfstring typesets its first form.
+\NewExpandableDocumentCommand \__marimo_raw:w { o m } { \marimovalue {#2} }
+\cs_new:Npn \__marimo_texorpdfstring:nn #1#2 {#1}
+\hook_gput_code:nnn { begindocument } { marimo }
+  {
+    \cs_if_exist:NF \texorpdfstring
+      { \cs_set_eq:NN \texorpdfstring \__marimo_texorpdfstring:nn }
+    \cs_if_exist:NT \pdfstringdefDisableCommands
+      {
+        \pdfstringdefDisableCommands
+          {
+            \cs_set_eq:NN \marimonum \__marimo_raw:w
+            \cs_set_eq:NN \marimodate \__marimo_raw:w
+            \cs_set_eq:NN \marimotime \__marimo_raw:w
+          }
+      }
+  }
+
+\ExplSyntaxOff
+\InputIfFileExists{.marimo-studio/inputs.tex}{}{}
