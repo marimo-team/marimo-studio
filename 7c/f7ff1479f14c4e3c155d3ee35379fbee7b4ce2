@@ -1,0 +1,47 @@
+scripts/fetch-tex-packages.sh
+  s_520a75a21485d2::t_6b58c35d1c73d9 1-66
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/_tectonic.py
+  s_520a75a21485d2::t_c32f51bf580f1c 1-447
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/starters/default/__init__.py
+  s_520a75a21485d2::t_a1ced7f5b66661 1-44
+packages/marimo-studio/tests/providers/test_latex.py
+  s_520a75a21485d2::t_6d2557ff748e4a 1-1260
+.github/actions/setup-pixi/action.yml
+  s_520a75a21485d2::t_c3aadb48a0bbc6 4-11,25-45
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/_inputs.py
+  s_520a75a21485d2::t_dd319ca5031d7a 1-400
+pixi.toml
+  s_520a75a21485d2::t_7821848793eb3a 15-17
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/starters/default/files/marimo.sty
+  s_520a75a21485d2::t_4a27569bfcd31b 1,4,10,33,38,40-42,44,48,53,68,102,114-115,118,171,176,183,185,192,194-195,218,226,236,238,244,266,276,282-283,285,383,389-390,398,413,439,441-442,446,451,460,503,524-526
+  s_520a75a21485d2::t_983c19ac36df09 2-3,5-9,19,37,52,64-67,69-74,77,82-83,86,99-101,150-151,167,170,172-175,178-179,190-191,193,196-198,202-208,210,213,215,217,219,239-240,243,264-265,268,275,279,286-287,289,291-306,308-318,322-323,326-327,334-335,337,345-348,351-354,356,358-360,362,370,376,378-382,414,421-424,429,444,458,479,505-508,510,514-522
+  s_520a75a21485d2::t_c67ac70ce8d533 11-18,20-32,34-36,39,43,45-47,49-51,54-63,75-76,80-81,84,103-113,116-117,119-149,159,161,164,166,168-169,177,180-182,184,186-189,199-201,209,211-212,214,216,220-225,227-235,237,241-242,245-263,267,269-274,277-278,280-281,284,288,290,307,319-321,324-325,328-333,336,338-344,349-350,355,357,361,363-369,371-375,377,384-385,397,440,445,447,449-450,452-457,459,461,464-467,480-483,486-497,502,504,509,511-513,523
+  s_520a75a21485d2::t_18629a587bf6e4 85,87-98
+  s_520a75a21485d2::t_ea87cb351f113c 152-158,160,162-163,165
+  s_520a75a21485d2::t_8fd7d1f69331a8 386-388,391-396,399-412,415-420,425-428,430-438,443,448,462-463,468-478
+  s_520a75a21485d2::t_2cb2eee27b18b6 484-485,498-501
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/_sources.py
+  s_520a75a21485d2::t_6c2eb832953272 1-218
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/starters/default/files/AGENTS.md
+  s_520a75a21485d2::t_308766e78c81f6 1-23,26,35-36,84-86,91-92,94,96,100-104,130-132,135-138,140-143,160,162-167,171-175,182-187,191,195-196
+  s_520a75a21485d2::t_cb909cc1329bf1 25,28-34,37-83,87-90,93,95,97-99,105-114,133-134,139,144-159,161,168-170,178-181,188-190,192-194,197
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/latex/starters/default/files/main.tex
+  s_520a75a21485d2::t_ab7fef7fa6b2aa 1-28,32-34
+  s_520a75a21485d2::t_6dd2fbbd976891 29-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7cf7ff1479f14c4e3c155d3ee35379fbee7b4ce2",
+  "prompts": {},
+  "sessions": {
+    "s_520a75a21485d2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0986b554-5819-4465-aa64-066b139e5360",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
