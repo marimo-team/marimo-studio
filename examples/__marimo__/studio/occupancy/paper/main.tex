@@ -1,0 +1,424 @@
+% A TVCG journal paper typeset from the Building Occupancy notebook. Every
+% number, table row, and figure reads the notebook's own results, so the paper
+% follows its scope and threshold controls. DESIGN.md records the typographic
+% decisions.
+\documentclass[journal]{vgtc}
+
+\onlineid{0}
+\vgtccategory{Research}
+\nocopyrightspace
+\renewcommand{\manuscriptnotetxt}{}
+
+\usepackage{booktabs}
+\usepackage{newtxmath}
+\usepackage{siunitx}
+\usepackage[en-GB, calc]{datetime2}
+\usepackage{marimo}
+
+% vgtc looks for EPS figures when the engine is not pdfTeX, and Tectonic runs
+% XeTeX, so name the formats that the notebook's figures arrive in.
+\DeclareGraphicsExtensions{.pdf,.png,.jpg,.jpeg}
+
+% The text reflows with every scope and threshold, so keep paragraphs whole at
+% column and page breaks.
+\widowpenalty=10000
+\clubpenalty=10000
+\brokenpenalty=10000
+\hyphenation{Feldheim vacant}
+
+% Numbers take the face around them, so the Helvetica abstract and captions
+% print Helvetica digits, and a percent sign closes up to its number.
+\sisetup{mode=match, reset-text-family=false, reset-text-series=false,
+  reset-text-shape=false, group-separator={,}, group-minimum-digits=4,
+  quantity-product={}}
+\DeclareMarimoFormat{count}{round-mode=places, round-precision=0}
+\DeclareMarimoFormat{reading}{round-mode=places, round-precision=1}
+\DeclareMarimoFormat{pct}{scale=100, round-mode=places, round-precision=1}
+\DeclareMarimoFormat{share}{scale=100, round-mode=places, round-precision=1,
+  unit=\percent}
+\DeclareMarimoFormat{weight}{round-mode=places, round-precision=2}
+
+\DTMsettimestyle{default}
+\DTMsetup{showseconds=false}
+\DTMnewdatestyle{day}{\renewcommand*\DTMdisplaydate[4]{%
+  \DTMweekdayname{##4} \number##3\ \DTMmonthname{##2}}%
+  \renewcommand*\DTMDisplaydate{\DTMdisplaydate}}
+\DTMnewdatestyle{longday}{\renewcommand*\DTMdisplaydate[4]{%
+  \DTMweekdayname{##4} \number##3\ \DTMmonthname{##2} \number##1}%
+  \renewcommand*\DTMDisplaydate{\DTMdisplaydate}}
+\DTMnewdatestyle{shortday}{\renewcommand*\DTMdisplaydate[4]{%
+  \DTMshortweekdayname{##4} \number##3\ \DTMshortmonthname{##2}}%
+  \renewcommand*\DTMDisplaydate{\DTMdisplaydate}}
+
+\newcommand{\cotwo}{\texorpdfstring{CO\textsubscript{2}}{CO₂}}
+\newcommand{\period}{\marimodate[day]{scope_summary.period_start} to
+  \marimodate[longday]{scope_summary.period_end}}
+\newcommand{\threshold}{\marimonum[weight]{model_summary.threshold}}
+\newcommand{\ifoccupied}[2]{\IfMarimoTF{scope_summary.occupied}{#1}{#2}}
+
+% The paper names the notebook's scopes and sensors by their keys, so the
+% notebook's control labels and column labels stay in the notebook. A key
+% without a name prints as it is, and each read here carries a plain-text
+% fallback, because \csname expands it.
+\newcommand{\paperterm}[2]{%
+  \ifcsname #1:#2\endcsname \csname #1:#2\endcsname \else #2\fi}
+\expandafter\def\csname scope:all\endcsname{across the whole record}
+\expandafter\def\csname scope:operating-hours\endcsname{on weekdays from 07:00
+  to 19:00}
+\expandafter\def\csname scope:off-hours\endcsname{outside weekday working hours}
+\expandafter\def\csname sensor:CO2\endcsname{\cotwo{}}
+\expandafter\def\csname sensor:Light\endcsname{light}
+\expandafter\def\csname sensor:Temperature\endcsname{temperature}
+\expandafter\def\csname sensor:Humidity\endcsname{humidity}
+\expandafter\def\csname unit:CO2\endcsname{\cotwo{} (ppm)}
+\expandafter\def\csname unit:Light\endcsname{Light (lux)}
+\expandafter\def\csname unit:Temperature\endcsname{Temperature (\si{\degreeCelsius})}
+\expandafter\def\csname unit:Humidity\endcsname{Humidity (\%)}
+\newcommand{\scope}{\paperterm{scope}{\marimovalue[all]{analysis_scope.value}}}
+
+% vgtc sets a caption outside a float with the caption package, which drops
+% its text under XeTeX. The teaser numbers and sets its own caption instead.
+\newcommand{\teasercaption}[2]{%
+  \par\vspace{4pt}\refstepcounter{figure}\label{#1}%
+  {\scriptsize\sffamily\leftskip=0pt\rightskip=0pt\parfillskip=0pt plus 1fil
+   Figure~\thefigure: #2\par}}
+
+\title{A Transparent Light and \cotwo{} Score for Room Occupancy}
+
+\author{Building Occupancy Notebook}
+\authorfooter{
+  \item The Building Occupancy notebook computes every number, table, and
+  figure in this paper, and marimo Studio typesets it with \LaTeX. The source
+  is at \url{https://github.com/marimo-team/marimo-studio}.
+}
+
+\abstract{%
+  Ambient sensors already sit in most offices, yet occupancy models built on
+  them are rarely read by the people who run the building. We study
+  \marimonum{scope_summary.observations} readings of temperature, humidity,
+  light, and \cotwo{} recorded in Room~01 \scope{}, from \period.
+  \ifoccupied{%
+    The room is occupied in \marimonum[share]{scope_summary.occupancy_rate}
+    of them. A score that adds normalized light and \cotwo{} with hand-set
+    weights of \marimonum[weight]{occupancy_parameters.model.light_weight} and
+    \marimonum[weight]{occupancy_parameters.model.co2_weight} labels
+    \marimonum[share]{model_summary.accuracy} of the readings correctly in
+    sample, with \marimonum[share]{model_summary.precision} precision and
+    \marimonum[share]{model_summary.recall} recall at a threshold of
+    \threshold.%
+  }{%
+    The room is never occupied in these readings, so the same light and
+    \cotwo{} score is measured by its false alarms: it labels
+    \marimonum[share]{model_summary.accuracy} of the readings correctly at a
+    threshold of \threshold.%
+  }
+  The notebook that computes each number, table row, and figure also controls
+  the scope and the threshold, so the paper changes with them.
+}
+
+\keywords{Occupancy detection, ambient sensing, interpretable models, building
+analytics, reproducible documents.}
+
+\teaser{
+  \centering
+  \marimographics[width=\linewidth, alt={Carbon dioxide and light in Room 01
+  over the observation period, with occupied intervals shaded.}]{room_timeline}
+  \teasercaption{fig:teaser}{%
+    \cotwo{} (top) and light (bottom) in Room~01, averaged over ten-minute
+    intervals.
+    \ifoccupied{Shaded intervals are mostly occupied. Both signals rise within
+    minutes of arrival and fall after departure.}{No interval is occupied, so
+    the signals show the building's schedule and daylight without anyone in
+    the room.}%
+  }
+}
+
+\begin{document}
+
+\firstsection{Introduction}
+
+\maketitle
+
+Lighting, heating, and ventilation run on schedules, while rooms empty and
+fill on their own. Occupancy estimates close that gap, and the sensors they
+need are often installed already. Candanedo and
+Feldheim~\cite{Candanedo2016AccurateOccupancyDetection} showed that
+statistical learning models detect the occupancy of an office from light,
+temperature, humidity, and carbon dioxide (\cotwo{}) with high accuracy. A
+facilities team, however, has to trust a rule before it switches equipment
+off, and a rule reads best when every term in it can be pointed at on a chart.
+
+This paper reads readings from that study through a deliberately simple
+score. Its contributions are:
+\begin{itemize}
+  \item \ifoccupied{a profile of when Room~01 is used}{a profile of the hours
+    the readings cover} (\cref{fig:teaser,fig:heatmap});
+  \item \ifoccupied{a comparison of each sensor while the room is occupied and
+    vacant}{each sensor's baseline while the room is vacant}
+    (\cref{tab:sensors,fig:distributions});
+  \item a two-signal score and the tradeoff its threshold controls
+    (\cref{fig:threshold,tab:confusion}).
+\end{itemize}
+
+A marimo notebook~\cite{marimo} computes the values and draws the figures with
+Matplotlib~\cite{Hunter2007Matplotlib}, and marimo Studio typesets this
+\LaTeX{} source with Tectonic~\cite{Tectonic} whenever they change.
+
+\begin{figure}[tb]
+  \centering
+  \marimographics[width=\columnwidth, alt={A grid of hours by weekdays shaded
+  by the share of occupied readings.}]{occupancy_heatmap}
+  \caption{Share of occupied readings by hour and weekday. White cells hold no
+  readings.}
+  \label{fig:heatmap}
+\end{figure}
+
+\begin{figure*}[tb]
+  \centering
+  \marimographics[width=\textwidth, alt={Four histograms comparing carbon
+  dioxide, light, temperature, and humidity while the room is vacant and
+  occupied.}]{sensor_distributions}
+  \caption{Distribution of each sensor while Room~01 is
+  \ifoccupied{vacant (gray) and occupied (orange), each scaled to its own
+  peak, so the shapes compare across states of different size}{vacant, scaled
+  to its peak}.}
+  \label{fig:distributions}
+\end{figure*}
+
+\section{Room Observations}
+\label{sec:data}
+
+The readings come from the training split of the UCI Occupancy Detection
+dataset~\cite{Candanedo2016OccupancyDetectionDataset}. Sensors in Room~01
+logged temperature, relative humidity, light, and \cotwo{} once a minute, and
+time-stamped pictures of the room record whether it was occupied. This paper
+reads the \marimonum{scope_summary.observations} readings taken \scope{}.
+\ifoccupied{%
+  The room is occupied in \marimonum{scope_summary.occupied} of them,
+  \marimonum[share]{scope_summary.occupancy_rate}, or about
+  \marimonum[reading]{scope_summary.estimated_occupied_hours}~hours.
+  Occupancy peaks on \marimodate[day]{daily_occupancy_peak.day}, when the room
+  is in use for \marimonum[share]{daily_occupancy_peak.occupancy_rate} of the
+  day's readings. \Cref{fig:heatmap} shows that use follows the working day:
+  it starts in the morning, pauses at midday, and ends in the early evening.%
+}{%
+  None of these readings is occupied, and \cref{fig:heatmap} shows the hours
+  they cover.%
+}
+\Cref{tab:days} lists each day with its share of occupied readings and its
+\cotwo{} levels.
+
+\begin{table}[tb]
+  \caption{Readings per day, with the share that is occupied and the mean and
+  peak \cotwo{} concentration.}
+  \label{tab:days}
+  \scriptsize%
+  \centering%
+  \begin{tabular}{@{}l r r r r@{}}
+    \toprule
+    & & & \multicolumn{2}{c@{}}{\cotwo{} (ppm)} \\
+    \cmidrule(l){4-5}
+    Day & Readings & Occupied (\%) & Mean & Peak \\
+    \midrule
+    \marimorows{daily_room_profile}{%
+      \marimodate[shortday]{#1.day}
+      & \marimonum{#1.observations}
+      & \marimonum[pct]{#1.occupancy_rate}
+      & \marimonum[count]{#1.mean_co2}
+      & \marimonum[count]{#1.peak_co2} \\}
+    \bottomrule
+  \end{tabular}%
+\end{table}
+
+\section{Sensor Conditions}
+\label{sec:sensors}
+
+\Cref{tab:sensors} compares the mean of each sensor while the room is
+\ifoccupied{vacant and occupied}{vacant}, and \cref{fig:distributions} compares
+their distributions.
+\IfMarimoTF{sensor_separation_peak}{%
+  The means of
+  \paperterm{sensor}{\marimovalue[?]{sensor_separation_peak.key}} lie furthest
+  apart, \marimonum[share]{sensor_separation_peak.relative_separation} of its
+  range. Light and \cotwo{} respond to people directly: the lights switch on
+  with them, and their breathing raises \cotwo{} while they stay. Temperature
+  also rises with occupancy, but it follows the heating and the weather as
+  well, so the score in \cref{sec:score} reads light and \cotwo{}.%
+}{%
+  Without occupied readings, the readings cannot separate the states, and the
+  table shows each sensor's vacant baseline.%
+}
+
+\begin{table}[tb]
+  \caption{Mean sensor readings while Room~01 is vacant and occupied.
+  \ifoccupied{Separation is the gap between the means as a share of the
+  sensor's range.}{No reading in this scope is occupied, so the occupied means
+  and their separation are empty.}}
+  \label{tab:sensors}
+  \scriptsize%
+  \centering%
+  \begin{tabular}{@{}l r r r@{}}
+    \toprule
+    Sensor & Vacant & Occupied & Separation (\%) \\
+    \midrule
+    \marimorows{sensor_profiles}{%
+      \paperterm{unit}{\marimovalue[?]{#1.key}}
+      & \marimonum[reading]{#1.vacant}
+      & \marimonum[reading]{#1.occupied}
+      & \marimonum[pct]{#1.relative_separation} \\}
+    \bottomrule
+  \end{tabular}%
+\end{table}
+
+\section{A Transparent Score}
+\label{sec:score}
+
+The score combines the two sensors that respond to people most directly.
+Light $\ell$ is divided by its
+\marimonum[count, scale=100]{occupancy_parameters.model.normalization_quantile}th
+percentile $\ell_q$ and clipped to $[0, 1]$, and \cotwo{} $c$ is scaled from
+its minimum $c_0$ to the same percentile $c_q$. \Cref{eq:score} adds the two
+with weights set by hand:
+\begin{equation}
+  \label{eq:score}
+  s = \marimonum[weight]{occupancy_parameters.model.light_weight}\,
+      \frac{\min(\ell, \ell_q)}{\ell_q}
+    + \marimonum[weight]{occupancy_parameters.model.co2_weight}\,
+      \frac{\min(\max(c, c_0), c_q) - c_0}{c_q - c_0}.
+\end{equation}
+A reading counts as occupied when $s$ reaches the threshold $\tau$. Each term
+is a sensor a facilities team already reads, and each weight states how much
+that sensor counts.
+
+\section{Results}
+\label{sec:results}
+
+\begin{figure}[tb]
+  \centering
+  \marimographics[width=\columnwidth, alt={Accuracy, precision, and recall
+  across thresholds above the distribution of scores while vacant and
+  occupied.}]{threshold_figure}
+  \caption{Top: \ifoccupied{accuracy (solid), precision (dashed), and recall
+  (dash-dotted)}{accuracy} of the score across thresholds. Bottom: scores
+  while \ifoccupied{vacant (gray) and occupied (orange), each scaled to its
+  own peak}{vacant, scaled to their peak}. The dotted line marks
+  $\tau = \text{\threshold}$.}
+  \label{fig:threshold}
+\end{figure}
+
+\begin{table}[tb]
+  \caption{Readings by observed and predicted state at
+  $\tau = \text{\threshold}$.}
+  \label{tab:confusion}
+  \scriptsize%
+  \centering%
+  \begin{tabular}{@{}l r r@{}}
+    \toprule
+    & \multicolumn{2}{c@{}}{Predicted} \\
+    \cmidrule(l){2-3}
+    Observed & Occupied & Vacant \\
+    \midrule
+    Occupied & \marimonum{model_summary.true_positive}
+      & \marimonum{model_summary.false_negative} \\
+    Vacant & \marimonum{model_summary.false_positive}
+      & \marimonum{model_summary.true_negative} \\
+    \bottomrule
+  \end{tabular}%
+\end{table}
+
+At $\tau = \text{\threshold}$, the score labels
+\marimonum[share]{model_summary.accuracy} of the readings correctly
+(\cref{tab:confusion}).
+\ifoccupied{%
+  Of the readings it calls occupied, \marimonum[share]{model_summary.precision}
+  are, and it finds \marimonum[share]{model_summary.recall} of the occupied
+  readings. \Cref{fig:threshold} shows the tradeoff behind that choice: a
+  lower threshold finds every occupied reading at the cost of false alarms,
+  and a higher one loses recall quickly once it passes the scores that
+  occupied readings reach. Over the same thresholds, light alone labels at
+  most \marimonum[share]{score_baselines.light} of the readings correctly and
+  \cotwo{} alone \marimonum[share]{score_baselines.co2}, while the score
+  reaches \marimonum[share]{score_baselines.score}.%
+}{%
+  Every reading it calls occupied is a false alarm, and there are
+  \marimonum{model_summary.false_positive} of them. Without occupied readings,
+  recall is undefined, and so is precision wherever the score calls a reading
+  occupied, so \cref{fig:threshold} plots accuracy alone.%
+}
+
+\begin{table}[tb]
+  \caption{The five longest episodes of consecutive misjudged readings at
+  $\tau = \text{\threshold}$, with their mean light and \cotwo{}.}
+  \label{tab:errors}
+  \scriptsize%
+  \centering%
+  \begin{tabular}{@{}l l r r r@{}}
+    \toprule
+    & & & Light & \cotwo{} \\
+    Episode & Outcome & Readings & (lux) & (ppm) \\
+    \IfMarimoT{error_episodes}{\midrule}
+    \marimorows[5]{error_episodes}{%
+      \marimodate[shortday]{#1.start}, \marimotime{#1.start}%
+      \ifnum\marimovalue[1]{#1.readings}>1 --\marimotime{#1.end}\fi
+      & \marimovalue{#1.outcome}
+      & \marimonum{#1.readings}
+      & \marimonum[count]{#1.light}
+      & \marimonum[count]{#1.co2} \\}
+    \bottomrule
+  \end{tabular}%
+\end{table}
+
+\Cref{tab:errors} groups the misjudged readings into episodes of consecutive
+minutes, longest first. Each row carries the light and \cotwo{} that produced
+the error, so its cause can be read against \cref{eq:score}: a false alarm with
+bright light and low \cotwo{} was called by light, and a missed reading with
+dim light and rising \cotwo{} was not yet reached by \cotwo{}.
+
+\section{Discussion}
+\label{sec:discussion}
+
+The score is evaluated on the readings that set its normalization, so its
+numbers describe how well it separates these readings in sample, not how it
+would do on the next week. The data cover one room for about a week, which is
+enough to show the method and too little to choose a threshold for a
+building. \ifoccupied{In these readings light alone already separates the
+states almost as well as the score, so the weight on \cotwo{} buys little
+accuracy here. }{}The two sensors fail in different places, though: daylight
+raises light without anyone present, and \cotwo{} lags behind arrivals and
+departures. A longer record would show whether keeping both terms pays off.
+
+\section{Conclusion}
+
+\ifoccupied{%
+  A score with two named weights reads Room~01's occupancy from light and
+  \cotwo{} with the accuracy this paper reports, and every term in it can be
+  checked against a chart.%
+}{%
+  Without occupied readings, the score can only be judged by its false
+  alarms, and every one of them can be checked against a chart.%
+}
+
+\section*{Supplemental Materials}
+\label{sec:supplemental_materials}
+
+The notebook \texttt{examples/occupancy.py}, this paper's \LaTeX{} source in
+\texttt{examples/\_\_marimo\_\_/studio/occupancy/paper}, and the notebook's
+other views are in the marimo Studio repository at
+\url{https://github.com/marimo-team/marimo-studio}.
+
+\section*{Figure Credits}
+\label{sec:figure_credits}
+
+The notebook draws every figure with Matplotlib~\cite{Hunter2007Matplotlib}
+from the UCI Occupancy Detection data, which is licensed under
+\href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}.
+
+\acknowledgments{%
+  The occupancy readings were recorded by Luis M. Candanedo and V\'{e}ronique
+  Feldheim.%
+}
+
+\bibliographystyle{abbrv-doi-hyperref}
+\bibliography{references}
+
+\end{document}

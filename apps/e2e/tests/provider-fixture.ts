@@ -17,6 +17,7 @@ export const test = base.extend<
       | "web"
       | "dashboard"
       | "article"
+      | "paper"
     )[];
     /** Serve the provider notebook with `marimo edit` beneath a stripped prefix. */
     providerEditor: boolean;

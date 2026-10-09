@@ -1,0 +1,34 @@
+% Studio typesets this document to PDF and renders it again whenever a
+% notebook value or figure it reads changes. AGENTS.md lists the commands
+% that read them.
+\documentclass[11pt]{article}
+\usepackage[a4paper, margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{siunitx}
+\usepackage[en-GB, calc]{datetime2}
+\usepackage{marimo}
+
+\title{__VIEW_HEADING_TEX__}
+\author{__NOTEBOOK_LABEL_TEX__}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Results}
+
+% Typeset a notebook value with \marimovalue{summary.label}, format a number
+% with \marimonum{summary.total}, and place a notebook figure with
+% \marimographics[width=\linewidth]{revenue_chart}. Each read typesets its
+% fallback until the notebook supplies it.
+\noindent\colorbox{black!4}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
+  \textbf{Connect a notebook value.} Define a value in the notebook, such as
+  \texttt{summary = \{"total": 42\}}, and read it here with
+  \texttt{\textbackslash marimonum\{summary.total\}}. Draw a chart in the
+  notebook and place it with
+  \texttt{\textbackslash marimographics[width=\textbackslash linewidth]\{chart\}}.
+}}
+
+\end{document}

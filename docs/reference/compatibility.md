@@ -70,16 +70,17 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 
 ## Supported environment
 
-| Component                        | 0.3.0 contract                                                                           |
-| -------------------------------- | ---------------------------------------------------------------------------------------- |
-| Python                           | 3.10 through 3.14                                                                        |
-| marimo                           | 0.25.1                                                                                   |
-| [Deno](https://docs.deno.com/)   | 2.9.5 from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring     |
-| [uv](https://docs.astral.sh/uv/) | Required when the CLI must prepare or re-enter a notebook or provider environment        |
-| [pixi](https://pixi.prefix.dev/) | Optional. Runs Studio in a pixi workspace and installs Quarto from conda-forge           |
-| [Quarto](https://quarto.org/)    | 1.9.38 or newer for the Quarto provider                                                  |
-| [Typst](https://typst.app/)      | The `typst` Python package 0.15 or newer, from the `typst` extra, for the Typst provider |
-| Browser acceptance               | Current Chromium on Linux and Windows                                                    |
+| Component                                           | 0.3.0 contract                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Python                                              | 3.10 through 3.14                                                                           |
+| marimo                                              | 0.25.1                                                                                      |
+| [Deno](https://docs.deno.com/)                      | 2.9.5 from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring        |
+| [uv](https://docs.astral.sh/uv/)                    | Required when the CLI must prepare or re-enter a notebook or provider environment           |
+| [pixi](https://pixi.prefix.dev/)                    | Optional. Runs Studio in a pixi workspace and installs Quarto and Tectonic from conda-forge |
+| [Quarto](https://quarto.org/)                       | 1.9.38 or newer for the Quarto provider                                                     |
+| [Typst](https://typst.app/)                         | The `typst` Python package 0.15 or newer, from the `typst` extra, for the Typst provider    |
+| [Tectonic](https://tectonic-typesetting.github.io/) | 0.15 or newer for the LaTeX provider                                                        |
+| Browser acceptance                                  | Current Chromium on Linux and Windows                                                       |
 
 Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),
 which lets Python create staging files beyond the default 260-character path

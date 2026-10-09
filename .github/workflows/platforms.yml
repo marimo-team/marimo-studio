@@ -86,7 +86,7 @@ jobs:
             os: macos-latest
           - profile: deno
             os: windows-latest
-          - profile: quarto
+          - profile: pixi
             os: windows-latest
     steps:
       - name: Check out repository
@@ -95,20 +95,22 @@ jobs:
           persist-credentials: false
 
       - name: Set up pixi
-        if: matrix.profile == 'quarto'
+        if: matrix.profile == 'pixi'
         uses: ./.github/actions/setup-pixi
+        with:
+          tex-cache: platforms-pixi
 
       - name: Test ${{ matrix.profile }} contracts
-        if: matrix.profile != 'quarto'
+        if: matrix.profile != 'pixi'
         uses: ./.github/actions/test-python
         with:
           profile: ${{ matrix.profile }}
           python-version: "3.12"
 
       # Quarto keeps a render cache in a SQLite file that Windows opens only
-      # below 260 characters, so the Quarto contracts use short temporary paths.
-      - name: Test quarto contracts
-        if: matrix.profile == 'quarto'
+      # below 260 characters, so the pixi contracts use short temporary paths.
+      - name: Test pixi contracts
+        if: matrix.profile == 'pixi'
         uses: ./.github/actions/test-python
         env:
           TEMP: ${{ runner.temp }}
@@ -116,7 +118,7 @@ jobs:
           # pytest splits this like a shell, so quote the Windows path.
           PYTEST_ADDOPTS: --basetemp='${{ runner.temp }}\p'
         with:
-          profile: quarto
+          profile: pixi
           python-version: "3.12"
 
   installed-package:

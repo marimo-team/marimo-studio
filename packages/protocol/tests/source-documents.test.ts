@@ -149,6 +149,7 @@ test("view projects require unique sites tied to declared source documents", () 
     source: { path: "src/App.tsx", line: 1, column: 1 },
     targets: ["chart"],
     accept: [],
+    size: null,
   };
   assert.equal(parseViewProject({ ...projectPayload(), sites: [site] }).sites.length, 1);
   assert.throws(() => parseViewProject({ ...projectPayload(), sites: [site, site] }));

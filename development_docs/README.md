@@ -85,11 +85,17 @@ documentation tooling runs through the pnpm workspace, where
 checks, tests, builds, and task execution.
 
 pixi installs the system tools from conda-forge that neither uv nor pnpm
-provide, locked in `pixi.lock`. It provides Quarto for the Quarto provider.
-Commands that need it run through `pixi run`, which activates the environment.
-`make e2e` does this for the provider browser suite, and
-`./scripts/python-test.sh` does it for the `all` and `quarto` profiles. Run
-`pixi shell` to use the tools in an interactive shell.
+provide, locked in `pixi.lock`. It provides Quarto for the Quarto provider and
+Tectonic for the LaTeX provider. Commands that need them run through
+`pixi run`, which activates the environment. `make e2e` does this for the
+provider browser suite, and `./scripts/python-test.sh` does it for the `all`
+and `pixi` profiles. Run `pixi shell` to use the tools in an interactive shell.
+
+Tectonic downloads the TeX packages a document uses on its first compile and
+keeps them in its cache. `./scripts/fetch-tex-packages.sh` compiles the LaTeX
+starter and example views once without a time limit. The `all` and `pixi`
+test profiles, `make docs-examples`, and the CI jobs that compile LaTeX run it
+first.
 
 Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
@@ -271,13 +277,13 @@ Pull requests run the Linux contracts that cover most regressions. The macOS and
 Windows contracts and the complete documentation site run after merge, on
 `main`:
 
-| Stage        | Workflow            | Contracts                                                                                                                    |
-| ------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Pull request | CI                  | Quality, Python on Linux, supported Python on Linux and Windows, Linux native, Deno, and Quarto contracts, frontend, package |
-| Pull request | Browser acceptance  | Linux browser shards, provider and installed-package browser contracts, Windows process unit contracts                       |
-| Pull request | GitHub Pages        | Documentation contracts, and an export of three example views when product code changes                                      |
-| After merge  | Platform acceptance | macOS and Windows native and Deno contracts, Windows Quarto contracts, installed package, and Windows browser suites         |
-| After merge  | GitHub Pages        | Every example family in parallel, then the assembled site and its deployment                                                 |
+| Stage        | Workflow            | Contracts                                                                                                                           |
+| ------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Pull request | CI                  | Quality, Python on Linux, supported Python on Linux and Windows, Linux native, Deno, Quarto, and LaTeX contracts, frontend, package |
+| Pull request | Browser acceptance  | Linux browser shards, provider and installed-package browser contracts, Windows process unit contracts                              |
+| Pull request | GitHub Pages        | Documentation contracts, and an export of three example views when product code changes                                             |
+| After merge  | Platform acceptance | macOS and Windows native and Deno contracts, Windows Quarto and LaTeX contracts, installed package, and Windows browser suites      |
+| After merge  | GitHub Pages        | Every example family in parallel, then the assembled site and its deployment                                                        |
 
 A pull request runs the after-merge stage itself in three cases:
 

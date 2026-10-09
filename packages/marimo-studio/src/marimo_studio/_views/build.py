@@ -668,6 +668,7 @@ def _publish_locked(
                         snapshot_inspection.render_values,
                         snapshot_inspection.render_outputs,
                         snapshot_inspection.render_cells,
+                        report.output_sizes,
                     ),
                     title=project.name,
                     renderer=provider,

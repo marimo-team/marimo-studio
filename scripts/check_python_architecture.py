@@ -27,6 +27,7 @@ BUILTIN_PROVIDERS = "marimo_studio.view_providers._builtin"
 # the shared libraries listed here, so each can move into its own distribution.
 BUILTIN_SHARED_LIBRARIES = {
     "_deno": frozenset({"deno_obsnotebook", "deno_react", "deno_svelte"}),
+    "_typeset": frozenset({"latex", "typst"}),
 }
 # Core built-in providers ship with Studio and may also use these core modules.
 CORE_BUILTIN_PROVIDERS = {

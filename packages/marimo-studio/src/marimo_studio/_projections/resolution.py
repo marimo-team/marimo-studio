@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from marimo_export.values import MAX_SELECTOR_STEPS, ValueSelector
+from marimo_export.values import MAX_SELECTOR_STEPS, Size, ValueSelector
 
 from marimo_studio._notebook.records import CellRef
 from marimo_studio._projections.symbol_graph import NotebookSymbolGraph
@@ -23,7 +23,11 @@ from marimo_studio.view_providers import (
     ProjectionKind,
     SourceLocation,
 )
-from marimo_studio.view_providers._artifact_sites import ArtifactSite, media_accept
+from marimo_studio.view_providers._artifact_sites import (
+    ArtifactSite,
+    media_accept,
+    media_sizes,
+)
 from marimo_studio.view_providers._targets import (
     MAX_CELL_TARGETS,
     MAX_TARGET_BYTES,
@@ -140,6 +144,7 @@ class ResolvedProjection:
     selector: ValueSelector | None
     dependency_closure: tuple[CellRef, ...]
     accept: tuple[str, ...] = ()
+    size: Size | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -272,9 +277,14 @@ def resolve_projection(
         producer=producer,
         selector=selector,
         dependency_closure=graph.dependency_closure(producer),
-        accept=media_accept(sites, "output").get(request.target, ())
-        if site.kind == "output"
-        else (),
+        accept=(
+            media_accept(sites, "output").get(request.target, ())
+            if site.kind == "output"
+            else site.accept
+            if site.kind == "value"
+            else ()
+        ),
+        size=media_sizes(sites).get(request.target) if site.kind == "output" else None,
     )
 
 

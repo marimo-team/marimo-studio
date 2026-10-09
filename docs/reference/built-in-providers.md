@@ -8,7 +8,8 @@ description: Provider keys, starter IDs, Source documents, requirements, and pro
 Studio includes view providers for plain HTML, [React](https://react.dev/),
 [Svelte](https://svelte.dev/),
 [Observable Notebook Kit](https://observablehq.com/notebook-kit/kit),
-[Quarto](https://quarto.org/), and [Typst](https://typst.app/). A provider key selects the view
+[Quarto](https://quarto.org/), [Typst](https://typst.app/), and
+[LaTeX](https://www.latex-project.org/). A provider key selects the view
 project's inspection and build contract. A starter ID selects the files created
 for a new view project.
 
@@ -31,6 +32,7 @@ input and is not stored in `view.toml`.
 | `marimo-studio/notebook-kit` | `marimo-studio/notebook-kit:default`                        | `marimo-studio[deno]`    |
 | `marimo-studio/quarto`       | `marimo-studio/quarto:default`                              | Quarto 1.9.38 or newer   |
 | `marimo-studio/typst`        | `marimo-studio/typst:default`                               | `marimo-studio[typst]`   |
+| `marimo-studio/latex`        | `marimo-studio/latex:default`                               | Tectonic 0.15 or newer   |
 
 Run `marimo-studio starters --json` for the installed catalog and current
 availability. The `documents` field lists the Source documents a new view
@@ -399,10 +401,11 @@ marimo.typ
 
 `marimo.typ` defines `marimo_value(selector, default: none)`. It returns the
 current notebook value for `selector`, or `default` before the notebook has a
-value.
-Write each selector as a string literal so Studio can find the values the
-document reads. Values arrive as JSON, so convert a dataframe in the notebook
-before the document reads it, for example with `rows = df.to_dicts()`.
+value and while the value is `none`. Write each selector as a string literal
+so Studio can find the values the document reads. Values arrive in their
+[JSON form](../guide/notebook-results.md#documents-read-json): a pandas, Polars, or
+PyArrow table arrives as an array of row dictionaries, and a date or datetime
+as ISO 8601 text, so the document reads the notebook's own results.
 
 `marimo.typ` also defines `marimo_output(selector, default: none, ..args)`. It
 places a notebook value as an image with
@@ -413,15 +416,20 @@ and `alt` pass through to `image()`.
 The selector names a notebook variable, so assign the figure to one, such as
 `revenue_chart = plot_revenue(rows)`. Studio renders the value in the first of
 PDF, SVG, PNG, JPEG, WebP, and GIF that it supports, whatever output settings
-the notebook uses. A matplotlib figure or axes arrives as a PDF, so lines stay
-sharp and text stays selectable. An Altair chart arrives as an SVG and needs
-`vl-convert-python` in the notebook's environment, which the Browser runtime
-lacks. Other values use their display methods, such as a PIL image's PNG.
+the notebook uses. A matplotlib figure or axes arrives as a PDF with embedded
+TrueType fonts, so lines stay sharp and text stays selectable. An Altair chart
+arrives as a PDF and needs `vl-convert-python` in the notebook's environment,
+which the Browser runtime lacks. Other values use their display methods, such
+as a PIL image's PNG.
 
-A vector figure scales to the width `marimo_output()` gives it, and its text
-scales with it. A figure drawn at 7 inches and placed 15 cm wide prints its
-labels at about 85% of their drawn size. Choose the width in the template
-first, and draw the figure near that size when labels need to stay larger.
+The build compiles the document once and measures the width each
+`marimo_output()` is placed at, resolving `100%` against its container with
+[`layout()`](https://typst.app/docs/reference/layout/layout/), and its
+`height` when that is an absolute length. Studio then draws a matplotlib
+figure or Altair chart again at that size, so a figure that the notebook styles
+with 7-point labels prints them at 7 points. The notebook's `figsize` sets the
+aspect ratio. Because it measures its container, `marimo_output()` places a
+block.
 
 An output that is unavailable, fails in the notebook, has no image form, or
 exceeds the 5,000,000-byte output limit leaves `marimo_output()` at its default,
@@ -460,6 +468,163 @@ lists how each runtime supplies values to the document.
 | Option       | Type                        | Default    | Contract                                          |
 | ------------ | --------------------------- | ---------- | ------------------------------------------------- |
 | `entrypoint` | Project-relative POSIX path | `main.typ` | Selects the Typst document. It must end in `.typ` |
+
+## `marimo-studio/latex`
+
+The LaTeX provider typesets a [LaTeX](https://www.latex-project.org/) document
+to PDF with [Tectonic](https://tectonic-typesetting.github.io/), a
+self-contained TeX engine that downloads the packages a document uses. Studio
+renders `main.tex` when it builds the view, then again whenever a notebook
+value or output the document reads changes. The view page shows the PDF with
+selectable text and a download link.
+
+```latex
+\documentclass{article}
+\usepackage{siunitx}
+\usepackage[en-GB, calc]{datetime2}
+\usepackage{marimo}
+
+\begin{document}
+Rooms in use on \marimodate{summary.day}: \marimonum{summary.rooms}.
+
+\begin{figure}
+  \centering
+  \marimographics[width=\linewidth]{occupancy_chart}
+  \caption{Rooms in use by hour.}
+\end{figure}
+\end{document}
+```
+
+The default starter creates these provider-owned files:
+
+```text
+AGENTS.md
+main.tex
+marimo.sty
+```
+
+`marimo.sty` defines the commands that read the notebook. It loads
+[siunitx](https://ctan.org/pkg/siunitx), a package that formats numbers and
+units, and uses [datetime2](https://ctan.org/pkg/datetime2), a package that
+formats dates, when the document loads it. Each command takes a selector, a
+notebook variable optionally followed by `.field`, `[index]`, and `["key"]`
+steps, written as literal text so Studio can find it:
+
+| Command                                 | Reads                    | Typesets                                                                               |
+| --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `\marimovalue[fallback]{selector}`      | Text, number, or boolean | The value as written. Expandable, for titles, bookmarks, and `S` columns               |
+| `\marimonum[keys]{selector}`            | A number                 | `\num`, or `\qty` with `unit=`, with the document's siunitx settings                   |
+| `\marimodate[style]{selector}`          | A date or datetime       | The date with datetime2's `\DTMdate`, in an optional datetime2 style                   |
+| `\marimotime[style]{selector}`          | A datetime or time       | The time with `\DTMtime`                                                               |
+| `\IfMarimoTF{selector}{true}{false}`    | Any value                | `false` for null, a missing value, false, zero, and empty text, lists, or dictionaries |
+| `\marimorows[count]{selector}{row}`     | A list or table          | `row` for each item, between the rows of a table                                       |
+| `\marimoforeach[count]{selector}{body}` | A list or table          | `body` for each item, anywhere else                                                    |
+| `\marimographics[keys]{selector}`       | A figure or chart        | The output with `\includegraphics`, drawn at the size it is placed at                  |
+| `\marimocell[keys]{name}`               | A named cell's output    | The output as marimo shows it, when it is an image                                     |
+
+`\IfMarimoT` and `\IfMarimoF` take one branch. Inside `\marimorows` and
+`\marimoforeach`, `#1` is the item's selector and `#2` its position from 1, so
+`\marimovalue{#1.name}` reads a column of the current row, and `count` limits
+the items. Values arrive in their
+[JSON form](../guide/notebook-results.md#documents-read-json), so a pandas, Polars, or
+PyArrow table repeats one row per table row and a date arrives as ISO 8601
+text that `\marimodate` formats.
+
+`\marimonum` takes siunitx keys and four of its own: `scale=` multiplies the
+number, `unit=` sets it with `\qty`, and `null=` and `missing=` replace the
+text for a null value and for a value Studio has not supplied.
+`\DeclareMarimoFormat{name}{keys}` names a set of keys, such as
+`\DeclareMarimoFormat{share}{scale=100, round-precision=1, round-mode=places,
+unit=\percent}`, read with `\marimonum[share]{model.accuracy}` or combined with
+other keys, such as `\marimonum[share, round-precision=2]{model.accuracy}`. A
+null value typesets an em dash, also in math, and a value Studio has not
+supplied, such as one whose notebook cell failed, typesets `\textbf{??}`.
+`\marimosetup{null=..., missing=...}` changes both. In a heading, a read
+becomes the PDF bookmark's raw value, such as `0.988`. `\marimovalue` also
+expands inside `\ifnum`, `\csname`, and `\label`, where it needs a plain-text
+fallback, such as `\ifnum\marimovalue[0]{summary.days}>1`, because
+`\textbf{??}` cannot expand.
+
+Studio escapes text values, so `50%`, `°C`, and `–` print as written in T1 and
+Unicode fonts, link targets in `\href` stay intact, and math symbols such as
+`α` keep their character in PDF bookmarks. A read of the wrong kind fails at
+its line, such as `report is a dictionary, and \marimovalue reads text,
+numbers, and booleans.` Studio supplies exactly the selectors the project's
+`.tex` files read, so a selector that a macro builds, such as
+`\newcommand\pct[1]{\marimonum{#1}}`, fails with `is not among the values
+Studio supplied`, in `\IfMarimoTF` too. The same error names a selector that a
+running head uppercased. The scan skips comments, `\verb`, `\lstinline`,
+verbatim environments, and `\url`, which prints its argument as written, and
+reads commands inside the URL of `\href`. An argument with a macro parameter, such as `#1`, is computed, so
+Studio never supplies it.
+
+The build compiles the document once without values, and `\marimographics`
+logs the width it is placed at, such as `\columnwidth`, and the height when
+`width=` and `height=` both give one. Studio then draws each matplotlib figure
+or Altair chart again at that size, so a figure that the notebook styles with
+7-point labels prints them at 7 points and its ink reaches the edges of that
+width. Otherwise the notebook's `figsize` sets the aspect ratio. With
+`keepaspectratio`, `height=` caps the height, and a figure taller than the cap
+shrinks with its text. `height=` alone, `scale=`, `angle=` written before
+`width=`, and a cap that shrinks the figure resize its text, so
+`\marimographics` warns about them. An output placed without `width=`, `height=`, or `scale=` takes
+the line width. A figure inside a
+branch that needs a value, such as the true branch of `\IfMarimoTF`, is
+measured only when the build reaches it, so place figures outside such
+branches. Studio renders an output in the first of PDF, PNG, and JPEG that the
+value supports. A matplotlib figure arrives as a PDF with embedded TrueType
+fonts, and an Altair chart as a PDF that needs `vl-convert-python` in the
+notebook's environment. Until an output is available, a frame of the placed
+`width` and `height` stands in for it.
+
+Tectonic runs the [XeTeX](https://tug.org/xetex/) engine, a Unicode TeX
+engine, and [BibTeX](https://www.bibtex.org/), which builds the bibliography,
+and reruns them until references settle. It compiles in untrusted mode, so
+shell escape is off and packages that run programs, such as
+[minted](https://ctan.org/pkg/minted), are unavailable. The document itself
+is trusted view source, and TeX reads and writes files with the user's
+authority, so review a view before building it. A class that checks for
+pdfTeX with `\ifpdf` takes its other branch, so declare graphics extensions in
+the preamble when a figure goes missing, for example
+`\DeclareGraphicsExtensions{.pdf,.png,.jpg}`. The compile clock is fixed at
+1970-01-01, and the Tectonic version pins its package bundle, so the same
+template and values produce the same PDF on every machine with that version.
+Read dates from the notebook with `\marimodate` in place of `\today`.
+
+The build compiles the document within the build's 120 second budget, so
+Tectonic downloads the packages it uses there, and each later render runs with
+a 60 second deadline. The first compile on a machine needs network access and
+can take a few minutes. When it outlasts the build, the build reports
+`latex-compile-unfinished`, and building again continues from the packages
+Tectonic kept. To download them without a time limit, run
+`tectonic -X compile main.tex` once in the view folder. A document that never
+finishes compiling, such as one with a recursive macro, reports the same code.
+A compile error fails the build at its source line and names the text where TeX
+stopped. Undefined references and citations, duplicate labels, missing
+characters, overfull boxes wider than a point, and BibTeX errors appear as
+warnings beside the document.
+
+The project also compiles outside Studio with `tectonic -X compile main.tex`
+or [latexmk](https://ctan.org/pkg/latexmk), a LaTeX build driver, where every
+read typesets its fallback.
+
+The provider runs the `tectonic` command on `PATH`. Install Tectonic 0.15 or
+newer with [pixi](https://pixi.prefix.dev/):
+
+```console
+pixi global install tectonic
+```
+
+In a pixi workspace, `pixi add tectonic` keeps Tectonic beside Python and
+Studio. The [Tectonic installers](https://tectonic-typesetting.github.io/)
+work as well. [Rendered documents](projections.md#rendered-documents) lists
+how each runtime supplies values to the document.
+
+### Options
+
+| Option       | Type                        | Default    | Contract                                          |
+| ------------ | --------------------------- | ---------- | ------------------------------------------------- |
+| `entrypoint` | Project-relative POSIX path | `main.tex` | Selects the LaTeX document. It must end in `.tex` |
 
 ## Deno availability
 

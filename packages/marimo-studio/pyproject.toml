@@ -12,7 +12,7 @@ dependencies = [
   "click>=8.2",
   "htpy>=26.5.1",
   "marimo==0.25.1",
-  "marimo-export>=0.1.4",
+  "marimo-export>=0.1.5",
   "markupsafe>=3",
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",
@@ -48,6 +48,7 @@ marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 studio = "marimo_studio.agent"
 
 [project.entry-points."marimo_studio.view_provider"]
+latex = "marimo_studio.view_providers._builtin.latex:provider"
 notebook-kit = "marimo_studio.view_providers._builtin.deno_obsnotebook:provider"
 quarto = "marimo_studio.view_providers._builtin.quarto:provider"
 react = "marimo_studio.view_providers._builtin.deno_react:provider"

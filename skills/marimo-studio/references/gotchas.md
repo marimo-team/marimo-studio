@@ -16,36 +16,64 @@ The server environment lacks the `deno` extra. Restart the server with
 `marimo-studio[deno]`. Starting every session with the `deno` extra avoids
 this restart.
 
-**`starters()` reports Typst or Quarto as unavailable.**
+**`starters()` reports Typst, Quarto, or LaTeX as unavailable.**
 Typst needs the `typst` extra in the server environment. Restart the server
 with `marimo-studio[typst]`. Quarto needs Quarto 1.9.38 or newer on `PATH` before
 the server starts. Install it from https://quarto.org/docs/get-started/ or with
 `pixi global install quarto`, then restart the server. When the reason says the
 environment is not activated, Quarto comes from a pixi or conda environment
 that the server started without activating. Activate that environment, for
-example with `pixi shell`, then restart the server.
+example with `pixi shell`, then restart the server. LaTeX needs Tectonic 0.15
+or newer on `PATH`. Install it with `pixi global install tectonic`, then restart
+the server.
 
 **A Studio command reports that the notebook uses a pixi workspace.**
 Studio runs inside the workspace environment and never re-enters it. Run the
 command the error prints, which starts `marimo-studio` through `pixi run`.
 
-**A Typst view shows `render-value-not-json`.**
-The document reads a dataframe or another table. Project it in the notebook as
-a list of dictionaries, for example `rows = df.to_dicts()`, and read `rows`.
+**A Typst or LaTeX view shows `render-value-not-json`.**
+The document reads a value without a JSON form, such as a model object or a
+figure. Read one of its fields, or a table, dictionary, list, text, number, or
+date that the notebook computes. Documents read dataframes as lists of rows and
+dates as ISO 8601 text, so project nothing for the document.
 
-**A Typst view names an output that has no image form.**
-A `marimo_output()` call reads a value without a PDF, SVG, PNG, JPEG, WebP, or
-GIF form, such as a table, and the view shows it beside the document with
-`output-media-unavailable`. Read a figure, such as a matplotlib figure or an
-Altair chart, and install `vl-convert-python` for Altair. Studio renders
-matplotlib figures as PDF and Altair charts as SVG for the document, so the
-notebook needs no output settings.
+**A Typst or LaTeX view names an output that has no image form.**
+A `marimo_output()` or `\marimographics` read targets a value without an
+image form the document places, such as a table, and the view shows it beside
+the document with `output-media-unavailable`. Typst places PDF, SVG, PNG, JPEG,
+WebP, and GIF, and LaTeX places PDF, PNG, and JPEG. Read a figure, such as a
+matplotlib figure or an Altair chart, and install `vl-convert-python` for
+Altair. Studio renders matplotlib figures and Altair charts as PDF with
+embedded fonts, at the width the document places them at, so the notebook
+needs no output settings or page widths.
 
-**A Typst `marimo_cell()` call shows its default.**
+**A LaTeX build reports `latex-compile-unfinished`.**
+Tectonic downloads the TeX packages a document uses on its first compile, and
+that compile outlasted the build. Build the view again. Tectonic keeps what it
+downloaded, so the next build continues. Run `tectonic -X compile main.tex` in
+the view folder to download them without a time limit. When that command
+runs past 120 seconds with the packages downloaded, the document is too slow
+for a build or never finishes, for example because of a recursive macro, so
+fix the document.
+
+**A LaTeX compile fails with `is not among the values Studio supplied`.**
+A marimo command reads a selector that a macro builds, such as
+`\newcommand\pct[1]{\marimonum{#1}}`, so Studio never saw it. Write the
+selector in full where it is read, and name repeated number settings with
+`\DeclareMarimoFormat{name}{keys}`.
+
+**A LaTeX number prints `??` or an em dash.**
+`??` means Studio has no value for the read yet, for example because its
+notebook cell failed, and an em dash means the value is null, including a step
+through `None` such as `peak.label` while `peak` is `None`. Change them with
+`\marimosetup{missing=..., null=...}` or the read's own `missing=` and `null=`
+keys.
+
+**A Typst `marimo_cell()` or LaTeX `\marimocell` read shows its default.**
 The cell has not run, or its output is text, a table, or another output
-without an image form. `marimo_cell()` places the output as marimo shows it,
-such as a PNG for a cell that ends with a matplotlib figure. Read the figure's
-variable with `marimo_output()` for a vector PDF.
+without an image form. These reads place the output as marimo shows it, such
+as a PNG for a cell that ends with a matplotlib figure. Read the figure's
+variable with `marimo_output()` or `\marimographics` for a vector PDF.
 
 **The editor reports that `index.html` is missing after hours of work.**
 A `uvx` server runs from uv's cache. Cleaning or pruning that cache deletes the

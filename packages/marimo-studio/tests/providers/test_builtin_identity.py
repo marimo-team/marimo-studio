@@ -16,6 +16,7 @@ def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
     )
 
     assert {item.registration: item.provider_key for item in diagnostics} == {
+        "latex": "marimo-studio/latex",
         "notebook-kit": "marimo-studio/notebook-kit",
         "quarto": "marimo-studio/quarto",
         "react": "marimo-studio/react",
@@ -28,6 +29,7 @@ def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
         for provider, _starter in registry.starter_records()
         if provider.distribution == "marimo-studio"
     } == {
+        "marimo-studio/latex": "marimo-studio",
         "marimo-studio/notebook-kit": "marimo-studio[deno]",
         "marimo-studio/quarto": "marimo-studio",
         "marimo-studio/react": "marimo-studio[deno]",

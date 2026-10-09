@@ -68,6 +68,7 @@ const mountedConfig = (kind: Extract<ProjectionKind, "cell" | "output">): Runtim
         source: { path: "src/App.tsx", line: 1, column: 1 },
         targets: null,
         accept: [],
+        size: null,
       },
     ],
     runtimeBindings: {

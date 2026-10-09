@@ -283,7 +283,15 @@ def validate_artifact_site(value: object) -> ArtifactSite:
         value.kind,
         "*" if value.targets is None else value.targets,
     )
-    _validate_accept(value.kind, value.accept, optional=True, kinds=("output", "cell"))
+    if value.kind == "value":
+        if value.accept not in {(), ("application/json",)}:
+            raise ValueError("A value site reads its target as JSON or as Arrow")
+    else:
+        _validate_accept(
+            value.kind, value.accept, optional=True, kinds=("output", "cell")
+        )
+    if value.size is not None and (value.kind != "output" or not value.accept):
+        raise ValueError("Only output sites with an accept list read at a size")
     return value
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -15,10 +15,13 @@ from marimo_studio.view_providers._records import (
     RenderCell,
     RenderOutput,
     RenderValue,
+    Size,
     SourceLocation,
 )
 
 SITE_ATTRIBUTE = "data-marimo-studio-site"
+# A document reads each value as JSON, with tables as rows and dates as text.
+JSON_ACCEPT = ("application/json",)
 
 
 @dataclass(frozen=True)
@@ -26,7 +29,9 @@ class ArtifactSite:
     """One artifact-local projection site with its Studio-assigned identity.
 
     An output site with ``accept`` reads its target in the first of those media
-    types the value supports. Without it, the site reads marimo's native output.
+    types the value supports, drawn at ``size`` when the build measured one.
+    Without ``accept``, the site reads marimo's native output. A value site
+    that accepts ``JSON_ACCEPT`` reads tables as rows, and otherwise as Arrow.
     """
 
     id: str
@@ -34,6 +39,7 @@ class ArtifactSite:
     source: SourceLocation
     targets: tuple[str, ...] | None
     accept: tuple[str, ...] = ()
+    size: Size | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -42,6 +48,11 @@ class ArtifactSite:
             "source": self.source.to_dict(),
             "targets": (list(self.targets) if self.targets is not None else None),
             "accept": list(self.accept),
+            "size": (
+                {"width": self.size.width, "height": self.size.height}
+                if self.size is not None
+                else None
+            ),
         }
 
 
@@ -95,18 +106,22 @@ def render_sites(
     values: tuple[RenderValue, ...],
     outputs: tuple[RenderOutput, ...],
     cells: tuple[RenderCell, ...],
+    output_sizes: Mapping[str, Size] | None = None,
 ) -> tuple[ArtifactSite, ...]:
     """Return one site per document value, output, and cell, at its first read.
 
+    Values read as JSON, and each output reads at the size in ``output_sizes``.
     Read IDs use their own namespace, so they never match a projection site's.
     """
+    sizes = output_sizes or {}
     sites: dict[tuple[ProjectionKind, str], ArtifactSite] = {}
 
     def add(
         kind: ProjectionKind,
         target: str,
         source: SourceLocation,
-        accept: tuple[str, ...] = (),
+        accept: tuple[str, ...],
+        size: Size | None = None,
     ) -> None:
         if (kind, target) not in sites:
             sites[kind, target] = ArtifactSite(
@@ -115,12 +130,19 @@ def render_sites(
                 source=source,
                 targets=(target,),
                 accept=accept,
+                size=size,
             )
 
     for value in values:
-        add("value", value.target, value.source)
+        add("value", value.target, value.source, JSON_ACCEPT)
     for output in outputs:
-        add("output", output.target, output.source, output.accept)
+        add(
+            "output",
+            output.target,
+            output.source,
+            output.accept,
+            sizes.get(output.target),
+        )
     for cell in cells:
         add("cell", cell.target, cell.source, cell.accept)
     return tuple(sites.values())
@@ -142,6 +164,16 @@ def media_accept(
             for target in site.targets or ():
                 accept.setdefault(target, site.accept)
     return accept
+
+
+def media_sizes(sites: Iterable[ArtifactSite]) -> dict[str, Size]:
+    """Return the size a view draws each output target at, when it has one."""
+    return {
+        target: site.size
+        for site in sites
+        if site.kind == "output" and site.size is not None
+        for target in site.targets or ()
+    }
 
 
 def inspection_sites(inspection: ProjectInspection) -> tuple[ArtifactSite, ...]:

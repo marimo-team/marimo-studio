@@ -84,7 +84,9 @@ slides, and Notebook Kit starters need `marimo-studio[deno]>=0.3.0` in
 `dependencies` and network access to the npm registry. The **Typst report**
 starter needs `marimo-studio[typst]`. The **Quarto document** starter runs the
 `quarto` command, so the sandbox image must provide Quarto 1.9.38 or newer on
-`PATH`.
+`PATH`. The **LaTeX article** starter runs the `tectonic` command, so the image
+must provide Tectonic 0.15 or newer on `PATH`, and its first compile downloads
+TeX packages over the network.
 
 **Browse files** is read-only while an editor session runs, so stop the session
 first. The saved header creates a new notebook version. Dependency changes apply

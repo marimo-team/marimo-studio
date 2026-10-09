@@ -45,6 +45,7 @@ const dynamicConfig = () =>
         source: { path: "src/App.tsx", line: 10, column: 7 },
         targets: null,
         accept: [],
+        size: null,
       },
       {
         id: "site:dynamic-value",
@@ -52,6 +53,7 @@ const dynamicConfig = () =>
         source: { path: "src/App.tsx", line: 20, column: 7 },
         targets: ["metric"],
         accept: [],
+        size: null,
       },
     ],
     runtimeBindings: {

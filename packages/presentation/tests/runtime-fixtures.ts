@@ -127,6 +127,7 @@ export const projectionRuntimeConfig = (
       source: { path: "src/App.tsx", line: index + 1, column: 1 },
       targets: [request.target],
       accept: [],
+      size: null,
     })),
     runtimeBindings: {
       cellRefs: Object.fromEntries(

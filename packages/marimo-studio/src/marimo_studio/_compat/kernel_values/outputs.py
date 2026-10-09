@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from marimo_export.values import RepresentationError, ValueSelector, represent
+from marimo_export.values import RepresentationError, Size, ValueSelector, represent
 
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._projections.media_output import media_output
@@ -84,8 +84,9 @@ class KernelOutputRenderer:
         *,
         consumer_id: str,
         max_output_bytes: int,
+        sizes: Mapping[str, Size] | None = None,
     ) -> OutputRenderResult:
-        """Render requested selectors that are active, each in its accept list."""
+        """Render active selectors, each in its accept list and at its size."""
         if self._closed:
             raise RuntimeError("The output renderer has already closed.")
         active = set(active)
@@ -116,6 +117,7 @@ class KernelOutputRenderer:
             errors,
             active,
             accept,
+            sizes or {},
             consumer_id=consumer_id,
             max_output_bytes=max_output_bytes,
             overlays=self._render_overlays(
@@ -129,6 +131,7 @@ class KernelOutputRenderer:
         errors: dict[str, ValueReadError],
         active: set[str],
         accept: Mapping[str, tuple[str, ...]],
+        sizes: Mapping[str, Size],
         *,
         consumer_id: str,
         max_output_bytes: int,
@@ -147,7 +150,11 @@ class KernelOutputRenderer:
         failed: set[tuple[str, str]] = set()
         for selector, value in values.items():
             output, error = self._format(
-                consumer_id, selector, value, accept.get(selector, ())
+                consumer_id,
+                selector,
+                value,
+                accept.get(selector, ()),
+                sizes.get(selector),
             )
             if error is not None:
                 failed.add((consumer_id, selector))
@@ -217,6 +224,7 @@ class KernelOutputRenderer:
                 {},
                 set(values),
                 {},
+                {},
                 consumer_id=_OVERLAY_CONSUMER,
                 max_output_bytes=max_output_bytes,
             )
@@ -266,6 +274,7 @@ class KernelOutputRenderer:
         selector: str,
         value: object,
         accept: tuple[str, ...],
+        size: Size | None,
     ) -> tuple[RenderedOutput | None, ValueReadError | None]:
         from marimo._output.formatting import try_format
         from marimo._types.ids import CellId_t
@@ -273,7 +282,7 @@ class KernelOutputRenderer:
         owner = CellId_t(_owner_id(consumer_id, selector))
         if accept:
             try:
-                representation = represent(value, accept, scale=MEDIA_SCALE)
+                representation = represent(value, accept, scale=MEDIA_SCALE, size=size)
             except RepresentationError as error:
                 return None, ValueReadError(
                     "output-media-unavailable",

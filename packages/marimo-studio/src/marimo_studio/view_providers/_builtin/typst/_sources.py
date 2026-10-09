@@ -19,6 +19,7 @@ from marimo_studio.view_providers import (
     RenderValue,
     SourceLocation,
 )
+from marimo_studio.view_providers._builtin._typeset import DocumentReads
 
 # Image formats Typst places with image(), in order of preference, with the
 # file extension Typst reads each one from. PDF keeps a figure's text
@@ -129,9 +130,7 @@ def _string(source: str, start: int) -> str | None:
     return None
 
 
-def typst_reads(
-    path: PurePosixPath, source: str
-) -> tuple[tuple[RenderValue, ...], tuple[RenderOutput, ...], tuple[RenderCell, ...]]:
+def typst_reads(path: PurePosixPath, source: str) -> DocumentReads:
     """Return the literal value, output, and cell targets one Typst file reads."""
     values: list[RenderValue] = []
     outputs: list[RenderOutput] = []
@@ -149,4 +148,4 @@ def typst_reads(
             cells.append(RenderCell(target, location, tuple(IMAGE_TYPES)))
         else:
             values.append(RenderValue(target, location))
-    return tuple(values), tuple(outputs), tuple(cells)
+    return DocumentReads(tuple(values), tuple(outputs), tuple(cells))

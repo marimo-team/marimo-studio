@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import pytest
@@ -15,7 +15,9 @@ from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
+    BuildResult,
     ProviderAvailability,
+    Size,
     ViewProject,
 )
 from marimo_studio.view_providers._host.registry import (
@@ -426,6 +428,43 @@ def test_public_build_surfaces_provider_process_cleanup_failure(
 
     with pytest.raises(ProcessCleanupError, match="build process survived"):
         build_view_project_sync(project)
+
+
+@pytest.mark.parametrize(
+    ("output_sizes", "error"),
+    (
+        ({"chart": Size(250.38)}, "measured 'chart'"),
+        (None, "output_sizes as a mapping"),
+    ),
+)
+def test_a_build_measures_only_the_outputs_its_document_reads(
+    tmp_path: Path, output_sizes: object, error: str
+) -> None:
+    provider = ProviderStub("example/project", "default")
+    registry = ProviderRegistry((candidate("project", provider),))
+    installed = registry.get(registry.ids[0])
+    root = tmp_path / "view"
+    root.mkdir()
+    project = ViewProject("dashboard", root, root / "view.toml", installed.key, {})
+    project.manifest.write_text("schema = 1\n", encoding="utf-8")
+    project.root.joinpath("index.html").write_text(
+        "<!doctype html><html></html>", encoding="utf-8"
+    )
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    staging.joinpath("index.html").write_text("<!doctype html><html></html>")
+    cast(Any, provider).build = lambda _request: BuildResult(
+        PurePosixPath("index.html"), output_sizes=cast(Any, output_sizes)
+    )
+    request = provider_build_request(
+        project,
+        inspection(),
+        staging,
+        cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+    )
+
+    with pytest.raises(ConfigurationError, match=error):
+        installed.build(request)
 
 
 @pytest.mark.parametrize(

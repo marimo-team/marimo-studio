@@ -34,6 +34,7 @@ _ENTRY_POINTS = {
     ("marimo.agent.capability", "studio"),
     ("marimo.kernel.lifespan", "marimo-studio"),
     ("marimo.server.asgi.middleware", "marimo-studio"),
+    ("marimo_studio.view_provider", "latex"),
     ("marimo_studio.view_provider", "notebook-kit"),
     ("marimo_studio.view_provider", "quarto"),
     ("marimo_studio.view_provider", "react"),
@@ -159,7 +160,7 @@ assert set(marimo_studio.view_providers.__all__) == {
     "ProjectionSite", "ProviderAvailability", "ProviderCancellation",
     "ProviderCommandError", "ProviderCommandResult", "ProviderError",
     "ProviderInfo", "ProviderRunner", "ProviderStarter", "RenderCell",
-    "RenderOutput", "RenderRequest", "RenderValue", "Representation",
+    "RenderOutput", "RenderRequest", "RenderValue", "Representation", "Size",
     "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
     "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
@@ -218,7 +219,7 @@ assert tuple(field.name for field in fields(providers.RenderRequest)) == (
     "cancellation", "runner", "command_timeout",
 )
 assert tuple(field.name for field in fields(providers.BuildResult)) == (
-    "document", "diagnostics",
+    "document", "diagnostics", "output_sizes",
 )
 assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",
@@ -336,6 +337,7 @@ def _verify_views(*, deno: bool) -> None:
             workspace = studio_authoring.open_workspace(notebook)
             catalog = {item.id: item for item in await workspace.starters()}
             expected = {
+                "marimo-studio/latex:default",
                 "marimo-studio/notebook-kit:default",
                 "marimo-studio/quarto:default",
                 "marimo-studio/react:default",
@@ -406,9 +408,9 @@ def main() -> None:
     installed_version = version(_DISTRIBUTION)
     marimo_export = distribution("marimo-export")
     marimo_export_version = marimo_export.version
-    if marimo_export_version not in SpecifierSet(">=0.1.4"):
+    if marimo_export_version not in SpecifierSet(">=0.1.5"):
         raise AssertionError(
-            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.4"
+            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.5"
         )
     if marimo_export.read_text("direct_url.json") is not None:
         raise AssertionError("Installed marimo-export came from a direct source")

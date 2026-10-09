@@ -20,6 +20,11 @@ export const documentationTechnologies = {
     name: "MapLibre",
     projectUrl: "https://github.com/maplibre/maplibre-gl-js",
   },
+  latex: {
+    description: "A document preparation system for typeset papers and journal articles.",
+    name: "LaTeX",
+    projectUrl: "https://github.com/latex3/latex2e",
+  },
   katex: {
     description: "A fast typesetting library for TeX math in web pages.",
     name: "KaTeX",
@@ -80,6 +85,11 @@ export const documentationTechnologies = {
     description: "A markup-based typesetting system for papers, reports, and PDF documents.",
     name: "Typst",
     projectUrl: "https://github.com/typst/typst",
+  },
+  tectonic: {
+    description: "A self-contained TeX engine that fetches the packages a document uses.",
+    name: "Tectonic",
+    projectUrl: "https://github.com/tectonic-typesetting/tectonic",
   },
   threeJs: {
     description: "A JavaScript 3D rendering library for the web.",
@@ -245,16 +255,22 @@ export const documentationExampleFamilies = [
         ],
       },
       {
-        key: "model-review",
-        label: "Model review",
-        poster: "wide",
-        technologies: [documentationTechnologies.react, documentationTechnologies.recharts],
-      },
-      {
         key: "pdf-report",
         label: "Field report",
         poster: "tall",
         technologies: [documentationTechnologies.react, documentationTechnologies.pdfcn],
+      },
+      {
+        key: "paper",
+        label: "Journal paper",
+        poster: "tall",
+        technologies: [documentationTechnologies.latex, documentationTechnologies.tectonic],
+      },
+      {
+        key: "model-review",
+        label: "Model review",
+        poster: "wide",
+        technologies: [documentationTechnologies.react, documentationTechnologies.recharts],
       },
     ],
   },

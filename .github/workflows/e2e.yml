@@ -241,6 +241,13 @@ jobs:
       - name: Set up pixi
         if: needs.changes.outputs.provider_browser == 'true'
         uses: ./.github/actions/setup-pixi
+        with:
+          tex-cache: e2e-providers
+
+      # The LaTeX browser contract builds a view under the build's time limit.
+      - name: Fetch TeX packages
+        if: needs.changes.outputs.provider_browser == 'true'
+        run: pixi run --locked ./scripts/fetch-tex-packages.sh
 
       - name: Test provider browser contracts
         if: needs.changes.outputs.provider_browser == 'true'

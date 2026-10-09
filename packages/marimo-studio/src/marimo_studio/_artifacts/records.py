@@ -79,7 +79,7 @@ class ViewArtifact:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema": 2,
+            "schema": 3,
             "root": str(self.root),
             "profile": self.profile,
             "document": self.document.as_posix(),

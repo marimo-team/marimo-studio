@@ -96,16 +96,19 @@ _prepare-browser-tests: _frontend-ready
 
 e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
 	$(PNPM) --filter @marimo-studio/e2e e2e
+	$(PIXI) run --locked bash ./scripts/fetch-tex-packages.sh
 	$(PIXI) run --locked $(PNPM) --filter @marimo-studio/e2e e2e:providers
 	$(PNPM) --filter @marimo-studio/e2e e2e:installed
 
 e2e-ui: _browser-ready build _prepare-browser-tests ## Open the browser test runner.
 	$(PNPM) --filter @marimo-studio/e2e e2e:ui
 
-# Example exports run in the pixi environment, which provides the Quarto CLI
-# that the Quarto example views render with. EXAMPLES takes examples:build
-# selectors, for example EXAMPLES='--family athletes'.
+# Example exports run in the pixi environment, which provides Quarto and
+# Tectonic for the Quarto and LaTeX example views. The TeX packages download
+# first, without a build's time limit. EXAMPLES takes examples:build selectors,
+# for example EXAMPLES='--family athletes'.
 docs-examples: _frontend-ready build ## Export examples for the documentation site.
+	$(PIXI) run --locked bash ./scripts/fetch-tex-packages.sh
 	$(PIXI) run --locked $(VP) run --filter @marimo-studio/docs examples:build $(EXAMPLES)
 
 docs-thumbnails: _browser-ready ## Capture example thumbnails and landing posters from exported views.

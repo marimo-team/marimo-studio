@@ -11,6 +11,11 @@ from typing import Any
 
 from marimo._runtime.virtual_file import VirtualFile, random_filename
 from marimo._runtime.virtual_file.storage import SharedMemoryStorage
+from marimo_export.values import (
+    RepresentationError,
+    RepresentationTooLarge,
+    represent,
+)
 
 from marimo_studio._compat.kernel_values.arrow import (
     _ArrowMaterializationRequired,
@@ -18,6 +23,7 @@ from marimo_studio._compat.kernel_values.arrow import (
     _dataframe_ipc,
 )
 from marimo_studio._projections.runtime_records import ValueLimits, ValueReadError
+from marimo_studio.view_providers._artifact_sites import JSON_ACCEPT
 
 JSON_CODEC = "json-v1"
 ARROW_IPC_CODEC = "arrow-ipc-v1"
@@ -85,13 +91,17 @@ class ValueEncoder:
         limits: ValueLimits,
         json_read: int = 0,
         arrow_read: int = 0,
+        rows: bool = False,
     ) -> tuple[EncodedValue | None, ValueReadError | None]:
-        """Encode one value after ``json_read`` and ``arrow_read`` bytes."""
+        """Encode one value after ``json_read`` and ``arrow_read`` bytes.
+
+        A table encodes as Arrow, or as JSON rows when ``rows`` is set.
+        """
         arrow_limit = min(
             limits.arrow_value_bytes, limits.arrow_read_bytes - arrow_read
         )
         try:
-            ipc = _dataframe_ipc(value, arrow_limit)
+            ipc = None if rows else _dataframe_ipc(value, arrow_limit)
         except _ArrowMaterializationRequired:
             return None, ValueReadError(
                 "arrow-materialization-required",
@@ -139,27 +149,25 @@ class ValueEncoder:
         json_read: int,
     ) -> tuple[EncodedValue | None, ValueReadError | None]:
         try:
-            text = json.dumps(
-                value,
-                allow_nan=False,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-        except (TypeError, ValueError, OverflowError, RecursionError) as error:
+            encoded = represent(value, JSON_ACCEPT).data
+        except RepresentationTooLarge as error:
             return None, ValueReadError(
-                "not-json-serializable",
-                (
-                    f"Selector {selector!r} resolved to {type(value).__name__}, "
-                    f"which cannot be serialized as JSON: {error}"
+                "value-too-large",
+                " ".join(
+                    (f"Selector {selector!r} is too large to read.", *error.reasons)
                 ),
             )
-        encoded = text.encode("utf-8")
+        except RepresentationError as error:
+            return None, ValueReadError(
+                "not-json-serializable",
+                " ".join((f"Selector {selector!r} has no JSON form.", *error.reasons)),
+            )
         if len(encoded) > limits.json_value_bytes:
             return None, ValueReadError(
                 "value-too-large",
                 f"Selector {selector!r} encodes {len(encoded):,} bytes of JSON, "
-                f"above the {limits.json_value_bytes:,}-byte limit. Return the "
-                "data as a pandas, Polars, or PyArrow table to send it as Arrow.",
+                f"above the {limits.json_value_bytes:,}-byte limit. Filter or "
+                "aggregate it in the notebook, or select a smaller part of it.",
             )
         if json_read + len(encoded) > limits.json_read_bytes:
             return None, _read_too_large("JSON", limits.json_read_bytes)
@@ -168,7 +176,7 @@ class ValueEncoder:
                 payload={
                     "codec": JSON_CODEC,
                     "fingerprint": _fingerprint(encoded),
-                    "value": json.loads(text),
+                    "value": json.loads(encoded),
                 },
                 byte_length=len(encoded),
             ),

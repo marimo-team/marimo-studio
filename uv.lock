@@ -1673,7 +1673,7 @@ recommended = [
 
 [[package]]
 name = "marimo-export"
-version = "0.1.4"
+version = "0.1.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-plugins" },
@@ -1689,9 +1689,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/06/bbbbf5d6582a707a63c92a3c911cff0bf34df9da6eccfdbbab3aa8e49594/marimo_export-0.1.4.tar.gz", hash = "sha256:7fb9bda616b0c0093ae4e97bcc04730fe0bf758e2d499ec2220157a633aa29de", size = 272616, upload-time = "2026-10-07T13:39:13.801Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3a/65/6e373509bfdc5acc44e945e45c086f86dd20c74f0510fc160055e5a2346e/marimo_export-0.1.5.tar.gz", hash = "sha256:e2ac87a498e5c46c4412e728893492a733bb85075ad99099acd84daa7258b7cb", size = 276770, upload-time = "2026-10-09T18:30:42.915Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/4d/12f13686c45af687145c61ae8852c69a50d88d17c3156a8455983330503e/marimo_export-0.1.4-py3-none-any.whl", hash = "sha256:a9e7c8568db439de182ec6a3923763caeddf6f8716a6cea5956f20ced47c3e51", size = 366933, upload-time = "2026-10-07T13:39:12.264Z" },
+    { url = "https://files.pythonhosted.org/packages/86/3a/340606149d577266ed25d20e9be7e0c08679841d0c875f922f54cb1cb7b0/marimo_export-0.1.5-py3-none-any.whl", hash = "sha256:0d2db3c9c1bae3ebe56a40f75b9785b6f1692689b640c057b1bb1c26e526ed69", size = 371209, upload-time = "2026-10-09T18:30:41.488Z" },
 ]
 
 [[package]]
@@ -1752,7 +1752,7 @@ requires-dist = [
     { name = "deno", marker = "extra == 'deno'", specifier = ">=2.9.5" },
     { name = "htpy", specifier = ">=26.5.1" },
     { name = "marimo", specifier = "==0.25.1" },
-    { name = "marimo-export", specifier = ">=0.1.4" },
+    { name = "marimo-export", specifier = ">=0.1.5" },
     { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.2.3" },
     { name = "marimo-studio", extras = ["deno", "lens"], marker = "extra == 'recommended'", editable = "packages/marimo-studio" },
     { name = "markupsafe", specifier = ">=3" },

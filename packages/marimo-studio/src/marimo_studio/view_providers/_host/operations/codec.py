@@ -31,6 +31,7 @@ from marimo_studio.view_providers import (
     RenderOutput,
     RenderValue,
     Representation,
+    Size,
     SourceDocument,
     SourceLocation,
     SourceSpan,
@@ -395,6 +396,10 @@ def build_result_payload(result: BuildResult) -> dict[str, object]:
     return {
         "document": result.document.as_posix() if result.document is not None else None,
         "diagnostics": [item.to_dict() for item in result.diagnostics],
+        "output_sizes": {
+            target: {"width": size.width, "height": size.height}
+            for target, size in result.output_sizes.items()
+        },
     }
 
 
@@ -447,17 +452,34 @@ def inspection_from_payload(value: object) -> ProjectInspection:
 
 
 def build_result_from_payload(value: object) -> BuildResult:
-    data = _record(value, {"document", "diagnostics"}, "provider build result")
+    data = _record(
+        value, {"document", "diagnostics", "output_sizes"}, "provider build result"
+    )
     raw_document = data["document"]
     document = (
         None
         if raw_document is None
         else PurePosixPath(_text(raw_document, "provider build document"))
     )
+    sizes = data["output_sizes"]
+    if not isinstance(sizes, dict):
+        raise ValueError("Provider output sizes must be a JSON object")
     return BuildResult(
         document,
         tuple(_diagnostic(item) for item in _items(data["diagnostics"])),
+        {
+            _text(target, "provider output size target"): _size(item)
+            for target, item in sizes.items()
+        },
     )
+
+
+def _size(value: object) -> Size:
+    data = _record(value, {"width", "height"}, "provider output size")
+    try:
+        return Size(cast(float, data["width"]), cast("float | None", data["height"]))
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"Provider output size is invalid: {error}") from error
 
 
 def _source_document(value: object) -> SourceDocument:

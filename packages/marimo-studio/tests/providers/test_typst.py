@@ -30,6 +30,7 @@ from marimo_studio.view_providers import (
     ProviderCommandResult,
     RenderRequest,
     Representation,
+    Size,
     SourceLocation,
     ViewProject,
 )
@@ -249,16 +250,44 @@ def test_render_places_a_matplotlib_figure_as_pdf(tmp_path: Path) -> None:
     assert output.joinpath("document.pdf").read_bytes().startswith(b"%PDF-")
 
 
-def test_outputs_are_absent_until_studio_supplies_them(tmp_path: Path) -> None:
+def test_outputs_and_none_values_place_their_default(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        '#import "marimo.typ": marimo_output, marimo_value\n'
+        '#marimo_output("chart", default: [#metadata("fallback") <shown>])\n'
+        "#context assert(query(<shown>).len() == 1)\n"
+        '#assert(marimo_value("peak.label", default: "n/a") == "n/a")\n',
+    )
+
+    _output, result = _render(project, {"peak.label": None})
+
+    assert result.diagnostics == ()
+    assert result.document is not None
+
+
+def test_a_build_publishes_where_the_document_places_each_figure(
+    tmp_path: Path,
+) -> None:
     project = _project(
         tmp_path,
         '#import "marimo.typ": marimo_output\n'
-        '#assert(marimo_output("chart", default: "fallback") == "fallback")\n',
+        "#set page(width: 300pt, height: auto, margin: 50pt)\n"
+        '#marimo_output("chart", width: 40pt)\n'
+        '#marimo_output("chart", width: 50% + 10pt, height: 1in)\n'
+        '#block(width: 120pt, marimo_output("wide"))\n',
     )
 
-    _output, result = _render(project, {})
+    with build_view_project_sync(project) as published:
+        sizes = {
+            site.targets: site.size
+            for site in published.artifact.sites
+            if site.kind == "output"
+        }
 
-    assert result.document is not None
+    assert sizes == {
+        ("chart",): Size(110, 72),
+        ("wide",): Size(120),
+    }
 
 
 def test_invalid_value_selectors_are_reported_at_their_call(tmp_path: Path) -> None:

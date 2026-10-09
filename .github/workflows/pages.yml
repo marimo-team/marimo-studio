@@ -180,12 +180,20 @@ jobs:
         with:
           prepare-marimo-frontend: "true"
 
-      # Quarto renders the Quarto example views.
+      # Quarto and Tectonic render the Quarto and LaTeX example views.
       - name: Set up pixi
         uses: ./.github/actions/setup-pixi
+        with:
+          tex-cache: ${{ matrix.family == 'occupancy' && 'examples-occupancy' || '' }}
 
       - name: Build browser assets
         run: make build
+
+      # A first compile downloads every TeX package the paper uses, which can
+      # outlast the build's command budget, so fetch them before the export.
+      - name: Fetch TeX packages
+        if: matrix.family == 'occupancy'
+        run: pixi run --locked ./scripts/fetch-tex-packages.sh
 
       - name: Export the example family
         run: >-

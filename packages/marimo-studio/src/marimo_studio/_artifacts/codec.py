@@ -7,7 +7,7 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Literal, NoReturn, cast
 
-from marimo_export.values import MAX_ACCEPTED_MEDIA_TYPES
+from marimo_export.values import MAX_ACCEPTED_MEDIA_TYPES, Size
 
 from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._artifacts.paths import normalized_artifact_path, read_secure_bytes
@@ -142,8 +142,19 @@ def _projection_source_location(value: object, label: str) -> SourceLocation:
     )
 
 
+def _size(value: object, label: str) -> Size | None:
+    if value is None:
+        return None
+    data = _object(value, {"width", "height"}, label)
+    width, height = data["width"], data["height"]
+    try:
+        return Size(cast(float, width), cast("float | None", height))
+    except (TypeError, ValueError) as error:
+        _invalid(f"{label} is invalid: {error}")
+
+
 def _artifact_site(value: object, label: str) -> ArtifactSite:
-    data = _object(value, {"id", "kind", "source", "targets", "accept"}, label)
+    data = _object(value, {"id", "kind", "source", "targets", "accept", "size"}, label)
     kind = _string(data["kind"], f"{label} kind")
     raw_targets = data["targets"]
     targets = (
@@ -163,6 +174,7 @@ def _artifact_site(value: object, label: str) -> ArtifactSite:
         accept=_string_array(
             data["accept"], f"{label} accept", maximum=MAX_ACCEPTED_MEDIA_TYPES
         ),
+        size=_size(data["size"], f"{label} size"),
     )
     try:
         return validate_artifact_site(site)
@@ -230,7 +242,7 @@ def _artifact_identity(
     template: ArtifactTemplate | None = None,
 ) -> dict[str, object]:
     identity: dict[str, object] = {
-        "schema": 2,
+        "schema": 3,
         "document": document,
         "files": _file_records(files),
         "sites": [item.to_dict() for item in sites],
@@ -315,7 +327,7 @@ def _artifact_files(value: object, label: str) -> tuple[ArtifactFile, ...]:
 
 
 def decode_artifact_manifest(value: object) -> ArtifactManifest:
-    _require_schema(value, 2, "Artifact manifest")
+    _require_schema(value, 3, "Artifact manifest")
     fields = {"schema", "artifact_revision", "document", "files", "sites"}
     if isinstance(value, dict) and "template" in value:
         fields.add("template")

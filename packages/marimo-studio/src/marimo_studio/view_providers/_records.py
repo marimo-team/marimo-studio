@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Literal, Protocol
 
-from marimo_export.values import Representation
+from marimo_export.values import Representation, Size
 
 from marimo_studio._filesystem.paths import validate_relative_path
 from marimo_studio._notebook.records import CellRef, NotebookSpec
@@ -399,18 +399,28 @@ class BuildRequest:
 
 @dataclass(frozen=True)
 class BuildResult:
+    """The document a build publishes and what the build measured in it.
+
+    ``output_sizes`` gives the size in points at which the document places
+    each output target, such as a column width. Studio then draws each figure
+    or chart at that size, so its text keeps its point size on the page.
+    """
+
     document: PurePosixPath | None
     diagnostics: tuple[ProjectDiagnostic, ...] = ()
+    output_sizes: Mapping[str, Size] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class RenderRequest:
     """Render one published document template with current notebook values.
 
-    ``values`` holds canonical JSON for each available value target.
-    ``outputs`` holds each available output target in the first media type of
-    its ``RenderOutput.accept`` that the value supports. ``cells`` holds the
-    rendered output of each available cell in the first media type of its
+    ``values`` holds the JSON form of each available value target, so a table
+    arrives as a list of row objects and a date as ISO 8601 text. ``outputs``
+    holds each available output target in the first media type of its
+    ``RenderOutput.accept`` that the value supports, drawn at the size
+    ``BuildResult.output_sizes`` gave it. ``cells`` holds the rendered output
+    of each available cell in the first media type of its
     ``RenderCell.accept`` that the output carries. A target that is absent has
     no current value, and the template applies its default. All three come
     from the notebook a reader is viewing and are untrusted data.

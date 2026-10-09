@@ -41,6 +41,9 @@ const acceptedMediaTypeSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/);
 
+// A length in points, 1/72 inch, from 1 to 50 inches.
+const pointsSchema = z.number().min(1).max(3_600);
+
 export const artifactSiteSchema = z
   .object({
     id: projectionSiteIdSchema,
@@ -48,8 +51,12 @@ export const artifactSiteSchema = z
     source: sourceLocationSchema,
     targets: z.array(projectionTargetNameSchema).nonempty().nullable(),
     // Media types an output or document cell site accepts, in preference
-    // order. An empty output list shows marimo's native output.
+    // order. An empty output list shows marimo's native output. A document's
+    // value site accepts application/json, which reads tables as rows.
     accept: z.array(acceptedMediaTypeSchema).max(32),
+    // The size a document places an output at, which the runtime draws a
+    // figure at.
+    size: z.object({ width: pointsSchema, height: pointsSchema.nullable() }).strict().nullable(),
   })
   .strict()
   .superRefine((site, context) => {
@@ -60,11 +67,24 @@ export const artifactSiteSchema = z
         message: "Artifact sites require unique targets",
       });
     }
-    if (site.accept.length > 0 && site.kind === "value") {
+    if (
+      site.kind === "value" &&
+      !(
+        site.accept.length === 0 ||
+        (site.accept.length === 1 && site.accept[0] === "application/json")
+      )
+    ) {
       context.addIssue({
         code: "custom",
         path: ["accept"],
-        message: "Only output and cell sites accept media types",
+        message: "Value sites read JSON or Arrow",
+      });
+    }
+    if (site.size !== null && (site.kind !== "output" || site.accept.length === 0)) {
+      context.addIssue({
+        code: "custom",
+        path: ["size"],
+        message: "Only output sites with an accept list read at a size",
       });
     }
     if (new Set(site.accept).size !== site.accept.length) {

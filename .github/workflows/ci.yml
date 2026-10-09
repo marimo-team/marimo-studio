@@ -253,8 +253,8 @@ jobs:
           profile: deno
           python-version: "3.12"
 
-  quarto:
-    name: Quarto provider (Linux)
+  pixi:
+    name: Quarto and LaTeX providers (Linux)
     needs: changes
     if: >-
       needs.changes.outputs.python_contracts == 'true'
@@ -268,11 +268,13 @@ jobs:
 
       - name: Set up pixi
         uses: ./.github/actions/setup-pixi
+        with:
+          tex-cache: ci-pixi
 
-      - name: Test Quarto provider contracts
+      - name: Test Quarto and LaTeX provider contracts
         uses: ./.github/actions/test-python
         with:
-          profile: quarto
+          profile: pixi
           python-version: "3.12"
 
   installed-package:
@@ -324,7 +326,7 @@ jobs:
       - python-compat
       - native-process
       - deno
-      - quarto
+      - pixi
       - installed-package
     runs-on: ubuntu-latest
     timeout-minutes: 1
@@ -353,8 +355,8 @@ jobs:
           PYTHON_STANDARD: ${{ needs.python-standard.result }}
           QUALITY_REQUIRED: ${{ needs.changes.outputs.quality == 'true' }}
           QUALITY: ${{ needs.quality.result }}
-          QUARTO_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
-          QUARTO: ${{ needs.quarto.result }}
+          PIXI_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
+          PIXI: ${{ needs.pixi.result }}
         run: |
           scripts/check-workflow-results.sh \
             Changes true "$CHANGES" \
@@ -364,6 +366,6 @@ jobs:
             Native-process "$NATIVE_PROCESS_REQUIRED" "$NATIVE_PROCESS" \
             Package "$PACKAGE_REQUIRED" "$PACKAGE" \
             Python-compat "$PYTHON_COMPAT_REQUIRED" "$PYTHON_COMPAT" \
+            Pixi "$PIXI_REQUIRED" "$PIXI" \
             Python-standard "$PYTHON_STANDARD_REQUIRED" "$PYTHON_STANDARD" \
-            Quality "$QUALITY_REQUIRED" "$QUALITY" \
-            Quarto "$QUARTO_REQUIRED" "$QUARTO"
+            Quality "$QUALITY_REQUIRED" "$QUALITY"

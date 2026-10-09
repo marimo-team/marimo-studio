@@ -41,6 +41,7 @@ from marimo_studio.view_providers import (
     RenderRequest,
     RenderValue,
     Representation,
+    Size,
     SourceDocument,
     SourceLocation,
     ViewProject,
@@ -608,6 +609,16 @@ class ProviderConformance:
             "build diagnostics",
             documents,
         )
+        outputs = {item.target for item in request.inspection.render_outputs}
+        if not isinstance(value.output_sizes, Mapping):
+            raise conformance_error(self.key, "requires output_sizes as a mapping")
+        for target, size in value.output_sizes.items():
+            if target not in outputs or not isinstance(size, Size):
+                raise conformance_error(
+                    self.key,
+                    f"measured {target!r}, which is not an output the document "
+                    "reads, or gave it no Size",
+                )
         if value.document is None:
             if not any(item.severity == "error" for item in normalized_diagnostics):
                 raise conformance_error(

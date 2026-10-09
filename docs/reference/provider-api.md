@@ -434,8 +434,8 @@ sites, and the complete output before publication.
 
 A provider whose object has a `render()` method is a `DocumentProvider`. It
 publishes a document template, and Studio renders the template with notebook
-results. The built-in Typst provider compiles `main.typ` into a PDF each time a
-result it reads changes.
+results. The built-in Typst and LaTeX providers compile `main.typ` and
+`main.tex` into a PDF each time a result they read changes.
 [Publish a document](../guide/view-providers.md#publish-a-document) builds one
 step by step.
 
@@ -447,7 +447,8 @@ step by step.
 2. `build()` writes the template files beneath `request.staging_root` and
    returns the template's entry file, such as `main.typ`. Studio stores the
    template with the artifact and keeps it private. Readers receive rendered
-   documents.
+   documents. A build that compiles the template can measure where it places
+   each output and return those sizes in `BuildResult.output_sizes`.
 3. Studio calls `render()` once with no values to check the template and
    publish the first document. A render error fails the build, and the last
    published view stays available.
@@ -467,11 +468,12 @@ in `.pdf`, `.svg`, or `.png`. When the template cannot render with the supplied
 results, raise `ProviderError` or return error diagnostics, and Studio shows
 them beside the last rendered document.
 
-Render values hold JSON data. A notebook value that is a table, such as a
-dataframe, fails with `render-value-not-json`. Convert it in the notebook, for
-example with `df.to_dicts()` in Polars or `df.to_dict("records")` in pandas.
-[Rendered documents](projections.md#rendered-documents) describes how each
-runtime supplies results.
+Render values hold the
+[JSON form](../guide/notebook-results.md#documents-read-json) of each notebook
+value, so a dataframe arrives as a list of row objects, a date as ISO 8601
+text, and a step through `None` as `null`. Give `null` the same default as an
+absent target. [Rendered documents](projections.md#rendered-documents)
+describes how each runtime supplies results.
 
 ## Report problems
 
@@ -774,7 +776,10 @@ RenderRequest(
 BuildResult(
     document: PurePosixPath | None,
     diagnostics: tuple[ProjectDiagnostic, ...] = (),
+    output_sizes: Mapping[str, Size] = {},
 )
+
+Size(width: float, height: float | None = None)
 ```
 
 `BuildRequest.inputs` lists every build input file, with directories expanded.
@@ -782,9 +787,20 @@ BuildResult(
 intermediate files, and `cache_root` persists between builds. Return
 `document=None` when diagnostics prevent publication.
 
+`BuildResult.output_sizes` maps a `RenderOutput` target to the
+[`Size`](https://marimo-team.github.io/marimo-export/reference/python/values#size)
+the template places it at, in points: its width, and its height when the
+template sets one. Studio then draws a matplotlib figure or a Vega-Lite chart
+at that size for every render, so its text keeps the point size the notebook
+set. A target without a size arrives at the size the notebook drew it. A size
+for a target that `inspect()` did not report fails provider conformance. The
+LaTeX provider reads the sizes `marimo.sty` logs during the build compile, and
+the Typst provider queries the records `marimo_output()` places.
+
 `RenderRequest.template_root` is a private, writable copy of the document
 template, and `document` is the template entry that `build()` returned.
-`values` holds JSON for each available `RenderValue` target. `outputs` holds a
+`values` holds the JSON form of each available `RenderValue` target. `outputs`
+holds a
 marimo-export
 [`Representation`](https://marimo-team.github.io/marimo-export/reference/python/values#representation)
 for each available `RenderOutput` target, in one of the media types its

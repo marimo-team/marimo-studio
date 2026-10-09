@@ -9,7 +9,7 @@ describe("documentation example selection", () => {
 
     expect(selection.complete).toBe(true);
     expect(selection.notebooks).toBe(4);
-    expect(selection.views).toBe(15);
+    expect(selection.views).toBe(16);
   });
 
   it("unions family, notebook, and view selectors", () => {

@@ -106,6 +106,11 @@ const candidates: Candidate[] = [
   },
   { view: "dashboard", starter: "marimo-studio-e2e-provider/report:default" },
   { view: "article", starter: "marimo-studio/quarto:default" },
+  {
+    view: "paper",
+    starter: "marimo-studio/latex:default",
+    files: { "main.tex": resolve(repositoryDirectory, "apps/e2e/fixtures-provider/paper.tex") },
+  },
 ];
 
 export class ProviderWorkspace {

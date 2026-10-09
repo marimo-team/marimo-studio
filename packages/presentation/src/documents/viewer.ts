@@ -25,7 +25,7 @@ import {
   hasRuntimeConfig,
   subscribeRuntimeConfig,
 } from "../runtime-config/index.ts";
-import { getValueHostProjections, isMarimoValueHost, valueHostCodec } from "../values/hosts.ts";
+import { getValueHostProjections, isMarimoValueHost } from "../values/hosts.ts";
 import { openPdf, type DocumentPages } from "./pdf.ts";
 
 const RENDER_DELAY_MS = 150;
@@ -382,16 +382,10 @@ export class MarimoDocumentElement extends HTMLElement {
         continue;
       }
       const selector = host.getAttribute("mo-value")?.trim() ?? "";
-      if (valueHostCodec(host) === "arrow-ipc-v1") {
-        return problem(
-          "render-value-not-json",
-          `${selector} is a table, and documents read JSON values.`,
-          "Project tables as a list of dictionaries in the notebook, for example with df.to_dicts().",
-        );
-      }
       const value = host.marimoValue;
       if (value !== undefined) {
-        // SAFETY: Only Arrow-coded hosts hold tables, and those returned above.
+        // SAFETY: A document's value sites accept JSON, so the runtime reads
+        // tables as rows and every host holds JSON.
         values[selector] = value as JsonValue;
       }
     }

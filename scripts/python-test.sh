@@ -9,14 +9,15 @@ Run a repository-owned Python test profile.
 
 Profiles:
   all               Run every test in the current development environment.
-  standard          Run tests that do not require native processes, Deno, or Quarto.
+  standard          Run tests that do not require native processes, Deno, or pixi tools.
   supported-python  Run contracts promised across supported Python versions.
   native            Run native process ownership contracts.
   deno              Run Deno provider contracts with the test-deno group.
-  quarto            Run Quarto provider contracts with Quarto from pixi.
+  pixi              Run Quarto and LaTeX provider contracts with tools from pixi.
 
-The all and quarto profiles run pytest through `pixi run`, which activates the
-repository's pixi environment that provides Quarto.
+The all and pixi profiles run pytest through `pixi run`, which activates the
+repository's pixi environment that provides Quarto and Tectonic. They first run
+scripts/fetch-tex-packages.sh, so LaTeX compiles find their TeX packages cached.
 
 Options:
   --profile PROFILE  Select a profile. Default: all
@@ -89,7 +90,7 @@ case "$profile" in
     all)
         ;;
     standard)
-        pytest_args+=(-m "not native_process and not deno and not quarto")
+        pytest_args+=(-m "not native_process and not deno and not pixi")
         ;;
     supported-python)
         pytest_args+=(-m supported_python)
@@ -101,12 +102,12 @@ case "$profile" in
         group="test-deno"
         pytest_args+=(-m deno)
         ;;
-    quarto)
-        pytest_args+=(-m quarto)
+    pixi)
+        pytest_args+=(-m pixi)
         ;;
     *)
         echo "python-test: unknown profile '$profile'" >&2
-        echo "Choose all, standard, supported-python, native, deno, or quarto." >&2
+        echo "Choose all, standard, supported-python, native, deno, or pixi." >&2
         exit 2
         ;;
 esac
@@ -125,9 +126,9 @@ elif [[ "$group" != "test" ]]; then
 fi
 
 runner=()
-if [[ "$profile" == "all" || "$profile" == "quarto" ]]; then
+if [[ "$profile" == "all" || "$profile" == "pixi" ]]; then
     if ! command -v pixi >/dev/null; then
-        echo "python-test: the $profile profile needs pixi for Quarto." >&2
+        echo "python-test: the $profile profile needs pixi for Quarto and Tectonic." >&2
         echo "Install it from https://pixi.prefix.dev/latest/installation/." >&2
         exit 2
     fi
@@ -138,9 +139,13 @@ if [[ "$profile" == "deno" ]]; then
     uv "${uv_args[@]}" python -c \
         "from marimo_studio.view_providers._builtin import _deno; assert _deno.deno_availability().available"
 fi
-if [[ "$profile" == "quarto" ]]; then
+if [[ "$profile" == "pixi" ]]; then
     ${runner[@]+"${runner[@]}"} uv "${uv_args[@]}" python -c \
-        "from marimo_studio.view_providers._builtin.quarto import provider; availability = provider.availability(); assert availability.available, availability"
+        "from marimo_studio.view_providers._builtin import latex, quarto; tools = [module.provider.availability() for module in (latex, quarto)]; assert all(item.available for item in tools), tools"
+fi
+if [[ "$profile" == "all" || "$profile" == "pixi" ]]; then
+    # pixi's task shell cannot start a shell script by path on Windows.
+    "${runner[@]}" bash "$(dirname "${BASH_SOURCE[0]}")/fetch-tex-packages.sh"
 fi
 
 exec ${runner[@]+"${runner[@]}"} uv "${uv_args[@]}" "${pytest_args[@]}" "$@"

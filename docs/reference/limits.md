@@ -98,6 +98,7 @@ target.
 | ------------------------------------------------- | --------------: | ------------------------------------------ |
 | Encoded browser runtime configuration             |          16 MiB | `runtime-config-too-large`                 |
 | One projected JSON value                          | 1,000,000 bytes | `value-too-large`                          |
+| Values and keys in one projected JSON value       |  100,000 values | `value-too-large`                          |
 | JSON values in one value read                     | 1,000,000 bytes | `response-too-large`                       |
 | One projected Arrow value                         |          64 MiB | `value-too-large`                          |
 | Arrow values in one value read                    |         128 MiB | `response-too-large`                       |

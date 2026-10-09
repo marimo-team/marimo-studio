@@ -35,6 +35,7 @@ export const preparedRuntimeConfig = {
       source: { path: "index.html", line: 1, column: 1 },
       targets: ["report"],
       accept: [],
+      size: null,
     },
   ],
   projectionPolicy: {
