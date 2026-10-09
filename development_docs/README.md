@@ -113,6 +113,29 @@ The lockfiles resolve the packages from PyPI and npm. `uv sync --locked` and
 coordinated release before updating the requirements so both runtimes consume the same
 published contracts.
 
+### Dependency automation
+
+`renovate.json` extends the shared `marimo-team/.github` policy. Routine
+non-major updates remain grouped and run on Mondays from 00:00 to 05:00 UTC.
+Digest pins and lockfile maintenance retain the shared monthly schedule.
+Renovate may open at most two ordinary dependency PRs at once, create one per
+hour, and update existing branches only within their schedules. Updates need
+maintainer review; automerge is disabled. Security vulnerability PRs can bypass
+Renovate's normal schedules and PR limits.
+
+The release-age gates match the installers: 14 days for npm and seven days for
+other dependencies, including Python and pixi. The existing `@marimo-team/*`
+npm and named uv exemptions remain exempt. pnpm's exemption for the specific
+`nanoid@3.3.18` version does not exempt future nanoid releases. Releases still
+inside the age gate wait in the Dependency Dashboard instead of opening PRs.
+
+Major upgrades, minor upgrades of pre-1.0 dependencies, and Marimo compatibility
+updates require approval in the Dependency Dashboard before Renovate creates
+a branch. Review Marimo updates against the pinned frontend source and private
+adapters. Keep the Python and browser marimo-export versions coordinated as
+described above. The development `.python-version` stays manually maintained
+within the supported Python range.
+
 ## Work in one owning slice
 
 Use the smallest loop that proves the changed contract:
