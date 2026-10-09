@@ -32,7 +32,7 @@ const interleaved = Array.from({ length: depth }, (_, index) =>
 
 // CSS columns fill top to bottom and break where the heights balance. Deal
 // each tile to the shortest of three columns, then list the columns in turn,
-// so every column ends at the same height. A tile and its caption are
+// so the columns end at nearly the same height. A tile and its caption are
 // measured in poster widths.
 const columnCount = 3;
 const captionHeight = 0.2;
@@ -182,7 +182,7 @@ a:hover .studio-view-masonry__caption strong {
   border-radius: 6px;
 }
 
-/* Two narrow columns keep all fifteen posters within a few screens on a phone. */
+/* Two narrow columns keep every poster within a few screens on a phone. */
 @media (max-width: 640px) {
   .studio-view-masonry {
     columns: 2;

@@ -18,7 +18,7 @@ notebook states, without a Python kernel.
   <StudioExampleCard family="quadratic-programs">A lecture deck, a reading explainer, an interactive geometry lab, and a typeset Typst report.</StudioExampleCard>
   <StudioExampleCard family="athletes">An overview report, a linked Mosaic explorer, a Three.js field presentation, and a Quarto paper.</StudioExampleCard>
   <StudioExampleCard family="earthquakes">A scroll-driven story, an operations map, a Reveal.js briefing, and a Quarto bulletin.</StudioExampleCard>
-  <StudioExampleCard family="occupancy">A room monitor, an interactive model review, and a pdfcn PDF report.</StudioExampleCard>
+  <StudioExampleCard family="occupancy">A room monitor, a pdfcn PDF report, a LaTeX journal paper, and an interactive model review.</StudioExampleCard>
 </div>
 
 ## Run an example locally
