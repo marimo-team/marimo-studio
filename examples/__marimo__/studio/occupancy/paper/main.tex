@@ -356,7 +356,7 @@ At $\tau = \text{\threshold}$, the score labels
     \toprule
     & & & Light & \cotwo{} \\
     Episode & Outcome & Readings & (lux) & (ppm) \\
-    \midrule
+    \IfMarimoT{error_episodes}{\midrule}
     \marimorows[5]{error_episodes}{%
       \marimodate[shortday]{#1.start}, \marimotime{#1.start}%
       \ifnum\marimovalue[1]{#1.readings}>1 --\marimotime{#1.end}\fi

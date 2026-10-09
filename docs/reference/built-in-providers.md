@@ -510,17 +510,17 @@ formats dates, when the document loads it. Each command takes a selector, a
 notebook variable optionally followed by `.field`, `[index]`, and `["key"]`
 steps, written as literal text so Studio can find it:
 
-| Command                                 | Reads                    | Typesets                                                                 |
-| --------------------------------------- | ------------------------ | ------------------------------------------------------------------------ |
-| `\marimovalue[fallback]{selector}`      | Text, number, or boolean | The value as written. Expandable, for titles, bookmarks, and `S` columns |
-| `\marimonum[keys]{selector}`            | A number                 | `\num`, or `\qty` with `unit=`, with the document's siunitx settings     |
-| `\marimodate[style]{selector}`          | A date or datetime       | The date with datetime2's `\DTMdate`, in an optional datetime2 style     |
-| `\marimotime[style]{selector}`          | A datetime or time       | The time with `\DTMtime`                                                 |
-| `\IfMarimoTF{selector}{true}{false}`    | Any value                | `false` for null, a missing value, false, zero, and empty text or lists  |
-| `\marimorows[count]{selector}{row}`     | A list or table          | `row` for each item, between the rows of a table                         |
-| `\marimoforeach[count]{selector}{body}` | A list or table          | `body` for each item, anywhere else                                      |
-| `\marimographics[keys]{selector}`       | A figure or chart        | The output with `\includegraphics`, drawn at the size it is placed at    |
-| `\marimocell[keys]{name}`               | A named cell's output    | The output as marimo shows it, when it is an image                       |
+| Command                                 | Reads                    | Typesets                                                                               |
+| --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `\marimovalue[fallback]{selector}`      | Text, number, or boolean | The value as written. Expandable, for titles, bookmarks, and `S` columns               |
+| `\marimonum[keys]{selector}`            | A number                 | `\num`, or `\qty` with `unit=`, with the document's siunitx settings                   |
+| `\marimodate[style]{selector}`          | A date or datetime       | The date with datetime2's `\DTMdate`, in an optional datetime2 style                   |
+| `\marimotime[style]{selector}`          | A datetime or time       | The time with `\DTMtime`                                                               |
+| `\IfMarimoTF{selector}{true}{false}`    | Any value                | `false` for null, a missing value, false, zero, and empty text, lists, or dictionaries |
+| `\marimorows[count]{selector}{row}`     | A list or table          | `row` for each item, between the rows of a table                                       |
+| `\marimoforeach[count]{selector}{body}` | A list or table          | `body` for each item, anywhere else                                                    |
+| `\marimographics[keys]{selector}`       | A figure or chart        | The output with `\includegraphics`, drawn at the size it is placed at                  |
+| `\marimocell[keys]{name}`               | A named cell's output    | The output as marimo shows it, when it is an image                                     |
 
 `\IfMarimoT` and `\IfMarimoF` take one branch. Inside `\marimorows` and
 `\marimoforeach`, `#1` is the item's selector and `#2` its position from 1, so
@@ -553,9 +553,9 @@ numbers, and booleans.` Studio supplies exactly the selectors the project's
 `.tex` files read, so a selector that a macro builds, such as
 `\newcommand\pct[1]{\marimonum{#1}}`, fails with `is not among the values
 Studio supplied`, in `\IfMarimoTF` too. The same error names a selector that a
-running head uppercased. The scan skips comments, `\verb`,
-and verbatim environments, and reads commands inside the arguments of `\url`
-and `\href`. An argument with a macro parameter, such as `#1`, is computed, so
+running head uppercased. The scan skips comments, `\verb`, `\lstinline`,
+verbatim environments, and `\url`, which prints its argument as written, and
+reads commands inside the URL of `\href`. An argument with a macro parameter, such as `#1`, is computed, so
 Studio never supplies it.
 
 The build compiles the document once without values, and `\marimographics`
@@ -563,10 +563,11 @@ logs the width it is placed at, such as `\columnwidth`, and the height when
 `width=` and `height=` both give one. Studio then draws each matplotlib figure
 or Altair chart again at that size, so a figure that the notebook styles with
 7-point labels prints them at 7 points and its ink reaches the edges of that
-width. Otherwise the notebook's `figsize` sets the aspect ratio, also with
-`keepaspectratio`. `height=` alone, `scale=`, and `angle=` written before
-`width=` resize the drawn figure and its text, so `\marimographics` warns
-about them. An output placed without `width=`, `height=`, or `scale=` takes
+width. Otherwise the notebook's `figsize` sets the aspect ratio. With
+`keepaspectratio`, `height=` caps the height, and a figure taller than the cap
+shrinks with its text. `height=` alone, `scale=`, `angle=` written before
+`width=`, and a cap that shrinks the figure resize its text, so
+`\marimographics` warns about them. An output placed without `width=`, `height=`, or `scale=` takes
 the line width. A figure inside a
 branch that needs a value, such as the true branch of `\IfMarimoTF`, is
 measured only when the build reaches it, so place figures outside such

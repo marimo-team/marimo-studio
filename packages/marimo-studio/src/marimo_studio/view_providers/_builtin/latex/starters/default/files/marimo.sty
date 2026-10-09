@@ -92,6 +92,11 @@
     height~alone~resizes~the~output~that~Studio~draws~at~the~line~width,~so~
     its~text~loses~its~point~size.~Give~width,~or~width~and~height,~instead.
   }
+\msg_new:nnn { marimo } { fitted }
+  {
+    keepaspectratio~shrank~the~output~to~fit~its~height,~so~its~text~lost~
+    its~point~size.~Give~a~taller~height,~or~a~shorter~figure~in~the~notebook.
+  }
 \msg_new:nnn { marimo } { turned }
   {
     angle~turns~the~output~before~width~or~height~resizes~it,~so~its~text~
@@ -385,7 +390,8 @@
 % from the compile its build runs, so the figure arrives drawn at that size.
 % The line holds the width, and the height when width and height fix the
 % shape. Otherwise the notebook's aspect ratio sets the height, as it does for
-% \includegraphics with height alone or with keepaspectratio.
+% \includegraphics with height alone or with keepaspectratio. keepaspectratio
+% caps the height, so a drawn output that the cap shrinks warns.
 \dim_new:N \l__marimo_width_dim
 \dim_new:N \l__marimo_height_dim
 \bool_new:N \l__marimo_drawn_bool
@@ -394,6 +400,7 @@
 \bool_new:N \l__marimo_scale_bool
 \bool_new:N \l__marimo_turned_bool
 \bool_new:N \l__marimo_shaped_bool
+\box_new:N \l__marimo_graphic_box
 \keys_define:nn { marimo / graphics }
   {
     width .code:n =
@@ -473,8 +480,19 @@
                 { \l__marimo_scale_bool }
                 { \dim_compare_p:nNn { \l__marimo_height_dim } > { \c_zero_dim } }
               }
-              { \includegraphics [#3] {#2} }
-              { \includegraphics [ width = \l__marimo_width_dim , #3 ] {#2} }
+              { \hbox_set:Nn \l__marimo_graphic_box { \includegraphics [#3] {#2} } }
+              {
+                \hbox_set:Nn \l__marimo_graphic_box
+                  { \includegraphics [ width = \l__marimo_width_dim , #3 ] {#2} }
+              }
+            \bool_lazy_and:nnT
+              { \l__marimo_keep_bool }
+              {
+                \dim_compare_p:nNn
+                  { \box_wd:N \l__marimo_graphic_box } < { \l__marimo_width_dim - 0.5pt }
+              }
+              { \__marimo_resized:n { fitted } }
+            \leavevmode \box_use_drop:N \l__marimo_graphic_box
           }
         { m } { \__marimo_not_supplied:n {#4} \__marimo_placeholder:n {#4} }
       }

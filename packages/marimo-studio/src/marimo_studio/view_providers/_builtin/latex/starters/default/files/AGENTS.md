@@ -40,7 +40,7 @@ We study \marimonum{summary.readings} readings from
 | `\marimonum[keys]{selector}`           | A number                 | `\num`, or `\qty` with `unit=`, with the document's siunitx settings   |
 | `\marimodate[style]{selector}`         | A date or datetime       | The date with `\DTMdate`, in a datetime2 style                          |
 | `\marimotime[style]{selector}`         | A datetime or time       | The wall time with `\DTMtime`                                           |
-| `\IfMarimoTF{selector}{true}{false}`   | Any value                | `false` for null, a missing value, false, zero, and empty text or lists |
+| `\IfMarimoTF{selector}{true}{false}`   | Any value                | `false` for null, a missing value, false, zero, and empty text, lists, or dictionaries |
 | `\marimorows[count]{selector}{row}`    | A list or table          | `row` for each item, between the rows of a table                       |
 | `\marimoforeach[count]{selector}{body}` | A list or table         | `body` for each item, anywhere else                                     |
 | `\marimographics[keys]{selector}`      | A figure or chart        | The output with `\includegraphics`                                      |
@@ -145,10 +145,11 @@ Draw charts in the notebook, assign each to a variable, and place it with
   is placed. It then draws the matplotlib figure or Altair chart again at that
   width, and at that height when `width=` and `height=` both give one, so its
   text keeps the point size the notebook set, and its ink reaches the edges of
-  that width. Otherwise the figure keeps the aspect ratio its `figsize` sets,
-  also with `keepaspectratio`. `height=` alone, `scale=`, and `angle=` written
-  before `width=` resize the drawn figure and its text, and Studio warns about
-  them.
+  that width. Otherwise the figure keeps the aspect ratio its `figsize` sets.
+  With `keepaspectratio`, `height=` caps the height, and a figure taller than
+  the cap shrinks with its text. `height=` alone, `scale=`, `angle=` written
+  before `width=`, and a cap that shrinks the figure resize its text, and
+  Studio warns about them.
 - A matplotlib figure arrives as a PDF with embedded TrueType fonts, and an
   Altair chart as a PDF that needs `vl-convert-python` in the notebook's
   environment. Other values arrive as PDF, PNG, or JPEG when they display as

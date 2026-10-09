@@ -139,8 +139,9 @@ so it reads the notebook's results as the analysis leaves them:
 
 The document then formats them: LaTeX with `\marimonum` and `\marimodate`, and
 Typst with its own functions. A null read takes the document's default. A
-table whose JSON form holds more than 100,000 values fails with
-`value-too-large`, so filter or aggregate it in the notebook first. Browser
+value whose JSON form holds more than 100,000 values or 1,000,000 bytes fails
+with `value-too-large`, as [Limits](../reference/limits.md#runtime-payloads)
+lists, so filter or aggregate a table in the notebook first. Browser
 code reads a table as Arrow instead, as
 [Pass a dataframe to JavaScript](#pass-a-dataframe-to-javascript) describes.
 

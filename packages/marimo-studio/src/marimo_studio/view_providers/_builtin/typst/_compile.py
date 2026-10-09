@@ -65,8 +65,8 @@ def main() -> int:
     if output == "--sizes":
         # The compile above reports errors at their source, which a query
         # does not, so the query runs on a document that compiles.
-        report["sizes"] = json.loads(
-            typst.query(
+        try:
+            sizes = typst.query(
                 str(Path(root) / entry),
                 "<marimo-size>",
                 field="value",
@@ -75,7 +75,10 @@ def main() -> int:
                 ignore_system_fonts=True,
                 sys_inputs=inputs,
             )
-        )
+        except typst.TypstError as error:
+            print(json.dumps({"error": _diagnostic(error)}))
+            return 1
+        report["sizes"] = json.loads(sizes)
     else:
         Path(output).write_bytes(document)
     print(json.dumps(report))

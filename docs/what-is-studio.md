@@ -60,7 +60,8 @@ compiles a PDF. In the editor and in
 Python-runtime apps, Studio compiles it again when a result it reads changes.
 [Rendered documents](reference/projections.md#rendered-documents) lists what
 each runtime and export shows. A PDF holds no controls, so a Typst or LaTeX
-document places values, outputs, and the images that cells show.
+document places values, outputs with an image form, such as figures and
+charts, and the images that cells show.
 
 In the [Quadratic programs](examples/quadratic-programs.md) views at the top
 of this page, **Lecture**, **Explainer**, and **Lab** are pages, and **Report**

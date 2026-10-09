@@ -35,8 +35,10 @@ abstract block for the teaser, `\columnwidth` for a column, and `\textwidth`
 across both columns. Its labels therefore print at 7 points. The figures
 share the occupancy family's palette: ink and slate lines, fog axes, mist for
 heatmap cells without occupancy, white for hours without readings, and the
-ember signal for occupied readings only. Only the left and bottom spines
-remain, and value axes carry a faint grid.
+ember signal for occupied readings only. Axes keep their left and bottom
+spines, except that the heatmap drops every spine and the sensor
+distributions and score histogram drop the left one. The timeline and the
+threshold curves carry a faint grid on their value axes.
 
 ## Tables
 

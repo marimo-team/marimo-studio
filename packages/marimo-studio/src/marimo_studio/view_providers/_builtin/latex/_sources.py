@@ -70,9 +70,15 @@ _VERBATIM = re.compile(
     r"|minted|comment)\}"
 )
 _VERB = re.compile(r"\\(?:verb|lstinline)\*?(?![A-Za-z@])")
-# \url and \href read their first argument as written, so % in it is text and
-# a read in it is still a read.
-_URL = re.compile(r"\\(?:url|href)(?![A-Za-z@])[ \t]*\{")
+# \url prints its argument as written, so a command in it is text. \href reads
+# its first argument as written too, but expands commands in it, so % there
+# is text and a read there is still a read.
+_URL = re.compile(r"\\url(?![A-Za-z@])[ \t]*\{")
+_HREF = re.compile(r"\\href(?![A-Za-z@])[ \t]*\{")
+# _masked() writes this over a comment, so a selector that a comment splits
+# across lines joins up again, as TeX joins it.
+_COMMENT = "\0"
+_JOINED = re.compile(r"\0+(?:\r?\n[ \t]*)?")
 
 
 def _verbatim_end(source: str, start: int) -> int:
@@ -88,10 +94,10 @@ def _verbatim_end(source: str, start: int) -> int:
     return len(source)
 
 
-def _blank(characters: list[str], start: int, end: int) -> None:
+def _blank(characters: list[str], start: int, end: int, fill: str = " ") -> None:
     for index in range(start, end):
         if characters[index] != "\n":
-            characters[index] = " "
+            characters[index] = fill
 
 
 def _masked(source: str) -> str:
@@ -109,28 +115,43 @@ def _masked(source: str) -> str:
                 index = end + 1
                 continue
             verb = _VERB.match(source, index)
-            if verb is not None and verb.end() < len(source):
-                delimiter = source[verb.end()]
+            start = len(source) if verb is None else verb.end()
+            # \lstinline takes its options before the delimiter.
+            if (
+                verb is not None
+                and "lstinline" in verb.group()
+                and source.startswith("[", start)
+            ):
+                options = source.find("]", start)
+                start = len(source) if options < 0 else options + 1
+            if verb is not None and start < len(source):
+                delimiter = source[start]
                 if delimiter == "{":
-                    close = _verbatim_end(source, verb.end())
+                    close = _verbatim_end(source, start)
                 else:
-                    close = source.find(delimiter, verb.end() + 1)
-                    line_end = source.find("\n", verb.end())
+                    close = source.find(delimiter, start + 1)
+                    line_end = source.find("\n", start)
                     if close < 0 or 0 <= line_end < close:
-                        close = verb.end()
+                        close = start
                 _blank(characters, index, close + 1)
                 index = close + 1
                 continue
             url = _URL.match(source, index)
             if url is not None:
-                index = _verbatim_end(source, url.end() - 1) + 1
+                close = _verbatim_end(source, url.end() - 1)
+                _blank(characters, index, close + 1)
+                index = close + 1
+                continue
+            href = _HREF.match(source, index)
+            if href is not None:
+                index = _verbatim_end(source, href.end() - 1) + 1
                 continue
             # A control symbol such as \% or \\ is one token.
             index += 2
         elif character == "%":
             end = source.find("\n", index)
             end = len(source) if end < 0 else end
-            _blank(characters, index, end)
+            _blank(characters, index, end, _COMMENT)
             index = end
         else:
             index += 1
@@ -140,7 +161,7 @@ def _masked(source: str) -> str:
 def _skip_space(source: str, index: int) -> int:
     """Skip the spaces and single line break TeX ignores before an argument."""
     breaks = 0
-    while index < len(source) and source[index] in " \t\r\n":
+    while index < len(source) and source[index] in " \t\r\n" + _COMMENT:
         if source[index] == "\n":
             breaks += 1
             if breaks > 1:
@@ -204,7 +225,7 @@ def latex_reads(path: PurePosixPath, source: str) -> DocumentReads:
         argument = _argument(masked, match.end())
         if argument is None or "#" in argument:
             continue
-        target = argument.strip()
+        target = _JOINED.sub("", argument).strip()
         line = source.count("\n", 0, match.start()) + 1
         column = match.start() - (source.rfind("\n", 0, match.start()) + 1) + 1
         location = SourceLocation(path, line, column)

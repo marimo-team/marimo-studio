@@ -476,7 +476,10 @@ def build_result_from_payload(value: object) -> BuildResult:
 
 def _size(value: object) -> Size:
     data = _record(value, {"width", "height"}, "provider output size")
-    return Size(cast(float, data["width"]), cast("float | None", data["height"]))
+    try:
+        return Size(cast(float, data["width"]), cast("float | None", data["height"]))
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"Provider output size is invalid: {error}") from error
 
 
 def _source_document(value: object) -> SourceDocument:

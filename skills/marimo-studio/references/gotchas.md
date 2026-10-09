@@ -51,9 +51,10 @@ needs no output settings or page widths.
 Tectonic downloads the TeX packages a document uses on its first compile, and
 that compile outlasted the build. Build the view again. Tectonic keeps what it
 downloaded, so the next build continues. Run `tectonic -X compile main.tex` in
-the view folder to download them without a time limit. When the build stops
-again with the packages downloaded, the document never finishes compiling,
-for example because of a recursive macro, so fix the document.
+the view folder to download them without a time limit. When that command
+runs past 120 seconds with the packages downloaded, the document is too slow
+for a build or never finishes, for example because of a recursive macro, so
+fix the document.
 
 **A LaTeX compile fails with `is not among the values Studio supplied`.**
 A marimo command reads a selector that a macro builds, such as

@@ -871,12 +871,13 @@ def threshold_figure(
 
 @app.cell
 def error_episodes(pl, ranked_model_errors):
-    # Consecutive misjudged minutes with one outcome form an episode.
+    # Consecutive misjudged minutes with one outcome form an episode. Readings
+    # arrive about 60 seconds apart, so a longer gap holds a judged reading.
     error_episodes = (
         ranked_model_errors.sort("date")
         .with_columns(
             (
-                (pl.col("date").diff().dt.total_minutes() > 2)
+                (pl.col("date").diff().dt.total_seconds() > 90)
                 | (pl.col("outcome") != pl.col("outcome").shift())
             )
             .fill_null(True)

@@ -727,8 +727,9 @@ class CardProvider:
 
     def render(self, request: RenderRequest) -> BuildResult:
         template = (request.template_root / request.document).read_text("utf-8")
-        total = str(request.values.get("report.total", "pending"))
-        card = template.replace("{{ total }}", escape(total))
+        total = request.values.get("report.total")
+        text = "pending" if total is None else str(total)
+        card = template.replace("{{ total }}", escape(text))
         (request.output_root / CARD).write_text(card, encoding="utf-8")
         return BuildResult(CARD)
 

@@ -77,9 +77,9 @@ a time limit from the view folder:
 tectonic -X compile main.tex
 ```
 
-A document that never finishes compiling, such as one with a recursive macro,
-reports the same code. Fix the document when the build stops again with a warm
-cache.
+A document that compiles too slowly for the budget, or never finishes, such as
+one with a recursive macro, reports the same code. Fix the document when that
+command still runs past 120 seconds after the packages have downloaded.
 
 After creation, Studio derives the provider requirement from the saved
 manifest. Keep a third-party provider distribution in the notebook or Python

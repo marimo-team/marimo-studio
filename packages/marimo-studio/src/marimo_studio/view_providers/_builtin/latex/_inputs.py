@@ -317,7 +317,7 @@ def _member(selector: str, key: str) -> str | None:
 _MOMENT = re.compile(
     r"(?P<date>\d{4}-\d{2}-\d{2})?"
     r"(?:(?(date)[T ])(?P<time>\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)"
-    r"(?:Z|[+-]\d{2}:\d{2})?)?"
+    r"(?:Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:\.\d+)?)?)?)?)?"
 )
 
 

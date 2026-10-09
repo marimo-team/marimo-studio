@@ -156,6 +156,10 @@ platform_control:
 # complete site. Other pull requests that reach the site export a smoke subset.
 docs_site:
   - *pages_control
+  - ".github/actions/setup-pixi/**"
+  - "pixi.toml"
+  - "pixi.lock"
+  - "scripts/fetch-tex-packages.sh"
   - "README.md"
   - "docs/**"
   - "apps/docs/**"

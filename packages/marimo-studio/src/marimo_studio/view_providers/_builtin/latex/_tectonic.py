@@ -139,10 +139,12 @@ class _Sources:
     def locate(self, text: str, line: int) -> SourceLocation | None:
         """Return where one LaTeX source has ``text`` on ``line``, if only one does."""
         found: list[SourceLocation] = []
-        for path in sorted(self.root.rglob("*.tex")):
+        for path in sorted(self.root.rglob("*")):
             relative = PurePosixPath(path.relative_to(self.root).as_posix())
             # Hidden directories hold Studio's render inputs, not the document.
-            if any(part.startswith(".") for part in relative.parts):
+            if path.suffix.lower() not in {".tex", ".sty", ".cls"} or any(
+                part.startswith(".") for part in relative.parts
+            ):
                 continue
             try:
                 lines = path.read_text(encoding="utf-8").splitlines()

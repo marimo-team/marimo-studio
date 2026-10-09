@@ -430,7 +430,16 @@ def test_public_build_surfaces_provider_process_cleanup_failure(
         build_view_project_sync(project)
 
 
-def test_a_build_measures_only_the_outputs_its_document_reads(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("output_sizes", "error"),
+    (
+        ({"chart": Size(250.38)}, "measured 'chart'"),
+        (None, "output_sizes as a mapping"),
+    ),
+)
+def test_a_build_measures_only_the_outputs_its_document_reads(
+    tmp_path: Path, output_sizes: object, error: str
+) -> None:
     provider = ProviderStub("example/project", "default")
     registry = ProviderRegistry((candidate("project", provider),))
     installed = registry.get(registry.ids[0])
@@ -445,7 +454,7 @@ def test_a_build_measures_only_the_outputs_its_document_reads(tmp_path: Path) ->
     staging.mkdir()
     staging.joinpath("index.html").write_text("<!doctype html><html></html>")
     cast(Any, provider).build = lambda _request: BuildResult(
-        PurePosixPath("index.html"), output_sizes={"chart": Size(250.38)}
+        PurePosixPath("index.html"), output_sizes=cast(Any, output_sizes)
     )
     request = provider_build_request(
         project,
@@ -454,7 +463,7 @@ def test_a_build_measures_only_the_outputs_its_document_reads(tmp_path: Path) ->
         cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
     )
 
-    with pytest.raises(ConfigurationError, match="measured 'chart'"):
+    with pytest.raises(ConfigurationError, match=error):
         installed.build(request)
 
 

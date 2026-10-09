@@ -272,8 +272,8 @@ def test_a_build_publishes_where_the_document_places_each_figure(
         tmp_path,
         '#import "marimo.typ": marimo_output\n'
         "#set page(width: 300pt, height: auto, margin: 50pt)\n"
-        '#marimo_output("chart", width: 50% + 10pt, height: 1in)\n'
         '#marimo_output("chart", width: 40pt)\n'
+        '#marimo_output("chart", width: 50% + 10pt, height: 1in)\n'
         '#block(width: 120pt, marimo_output("wide"))\n',
     )
 

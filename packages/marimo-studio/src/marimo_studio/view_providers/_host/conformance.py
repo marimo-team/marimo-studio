@@ -610,6 +610,8 @@ class ProviderConformance:
             documents,
         )
         outputs = {item.target for item in request.inspection.render_outputs}
+        if not isinstance(value.output_sizes, Mapping):
+            raise conformance_error(self.key, "requires output_sizes as a mapping")
         for target, size in value.output_sizes.items():
             if target not in outputs or not isinstance(size, Size):
                 raise conformance_error(

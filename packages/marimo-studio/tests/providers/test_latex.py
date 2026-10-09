@@ -178,7 +178,10 @@ def test_verbatim_arguments_neither_hide_nor_add_reads(tmp_path: Path) -> None:
         tmp_path,
         _document(
             "\\lstinline{x = \\marimovalue{code}} gives \\marimovalue{after.code}\n"
+            "\\lstinline[language=TeX]|\\marimovalue{listed}| "
+            "\\marimovalue{after.listing}\n"
             "\\url{https://example.org/a%20b} for \\marimovalue{after.url}\n"
+            "\\url{\\marimovalue{printed}}\n"
             "\\href{https://example.org/50%}{\\marimovalue{link.text}}\n"
             "\\href{\\marimovalue{link.url}}{data}"
         ),
@@ -188,9 +191,26 @@ def test_verbatim_arguments_neither_hide_nor_add_reads(tmp_path: Path) -> None:
 
     assert [item.target for item in inspection.render_values] == [
         "after.code",
+        "after.listing",
         "after.url",
         "link.text",
         "link.url",
+    ]
+
+
+def test_a_comment_inside_a_selector_joins_its_lines_as_tex_does(
+    tmp_path: Path,
+) -> None:
+    project = _project(
+        tmp_path, _document("\\marimovalue{summary.%\n    rooms} \\marimonum%\n{share}")
+    )
+
+    inspection = inspect_view_project_sync(project)
+
+    assert inspection.diagnostics == ()
+    assert [item.target for item in inspection.render_values] == [
+        "summary.rooms",
+        "share",
     ]
 
 
@@ -275,7 +295,13 @@ def test_render_inputs_define_every_value_by_its_selector_and_type() -> None:
                 "share": 0.25,
                 "late": False,
                 "missing": None,
-                "rows": [{"day": "2015-02-04", "at": "2015-02-04T09:41:00+01:00"}],
+                "rows": [
+                    {
+                        "day": "2015-02-04",
+                        "at": "2015-02-04T09:41:00+01:00",
+                        "east": "2015-02-04T09:41+05",
+                    }
+                ],
                 "odd key": 1,
                 "_private": 2,
                 "bad%key": 3,
@@ -304,11 +330,13 @@ def test_render_inputs_define_every_value_by_its_selector_and_type() -> None:
             "\\marimo@b{report.late}{0}",
             "\\marimo@z{report.missing}",
             "\\marimo@l{report.rows}{1}",
-            "\\marimo@d{report.rows[0]}{2}",
+            "\\marimo@d{report.rows[0]}{3}",
             "\\marimo@s{report.rows[0].day}{2015-02-04}",
             "\\marimo@t{report.rows[0].day}{2015-02-04}{}",
             "\\marimo@s{report.rows[0].at}{2015-02-04T09:41:00+01:00}",
             "\\marimo@t{report.rows[0].at}{2015-02-04}{09:41:00}",
+            "\\marimo@s{report.rows[0].east}{2015-02-04T09:41+05}",
+            "\\marimo@t{report.rows[0].east}{2015-02-04}{09:41:00}",
             '\\marimo@n{report["odd key"]}{1}',
             '\\marimo@n{report["_private"]}{2}',
             "\\marimo@g{chart}{.marimo-studio/outputs/a.pdf}",
@@ -461,6 +489,26 @@ def test_errors_that_outrun_the_kept_output_come_from_the_log(
     assert diagnostic.source == SourceLocation(
         PurePosixPath("sections/intro.tex"), 12, 1
     )
+
+
+def test_errors_in_a_project_package_that_outrun_the_kept_output_are_located(
+    tmp_path: Path, stand_in: None
+) -> None:
+    project = _project(tmp_path)
+    project.root.joinpath("notes.sty").write_text(
+        "\\ProvidesPackage{notes}\n" * 2 + "\\badmacro\n"
+    )
+    stderr = "Overfull \\hbox in paragraph at lines 3--3\n" * 3
+    log = _tex_log(
+        "(./notes.sty",
+        "! Undefined control sequence.",
+        "l.3 \\badmacro",
+    )
+
+    _output, result = _render(project, {}, runner=_Tectonic(1, stderr, log))
+
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.source == SourceLocation(PurePosixPath("notes.sty"), 3, 1)
 
 
 def test_errors_in_files_that_source_does_not_show_name_them_in_the_message(
@@ -1050,6 +1098,41 @@ def test_options_that_keep_a_drawn_figure_s_size_place_it_quietly(
 
 @pytest.mark.pixi
 @tectonic
+@pytest.mark.parametrize(
+    ("pixels", "warnings"),
+    (
+        ((600, 300), ()),
+        ((300, 600), ("keepaspectratio shrank the output to fit its height",)),
+    ),
+)
+def test_a_height_cap_that_shrinks_a_drawn_figure_warns(
+    tmp_path: Path, pixels: tuple[int, int], warnings: tuple[str, ...]
+) -> None:
+    image = pytest.importorskip("matplotlib.image")
+    numpy = pytest.importorskip("numpy")
+    width, height = pixels
+    png = io.BytesIO()
+    image.imsave(png, numpy.zeros((height, width, 3)), format="png")
+    project = _project(
+        tmp_path,
+        _document(
+            "\\noindent"
+            "\\marimographics[width=2in, height=1.5in, keepaspectratio]{chart}"
+        ),
+    )
+
+    _output, result = _render(
+        project, {}, outputs={"chart": Representation("image/png", png.getvalue())}
+    )
+
+    assert (
+        tuple(diagnostic.message.split(",")[0] for diagnostic in result.diagnostics)
+        == warnings
+    )
+
+
+@pytest.mark.pixi
+@tectonic
 def test_a_matplotlib_figure_is_placed_as_pdf(tmp_path: Path) -> None:
     figure_module = pytest.importorskip("matplotlib.figure")
     figure = figure_module.Figure(figsize=(4, 2))
@@ -1180,6 +1263,22 @@ def test_an_entry_in_a_folder_reads_values_beside_it(tmp_path: Path) -> None:
 
     assert result.diagnostics == ()
     assert result.document == PurePosixPath("main.pdf")
+
+
+@pytest.mark.pixi
+@tectonic
+def test_an_unsupplied_read_in_a_nested_hidden_file_prints_its_fallback(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path, _document("\\input{sections/.notes}"))
+    project.root.joinpath("sections").mkdir()
+    project.root.joinpath("sections", ".notes.tex").write_text(
+        "\\marimovalue[pending]{peak}", encoding="utf-8"
+    )
+
+    _output, result = _render(project, {})
+
+    assert result.diagnostics == ()
 
 
 @pytest.mark.pixi

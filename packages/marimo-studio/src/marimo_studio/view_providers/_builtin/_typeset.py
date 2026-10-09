@@ -139,7 +139,7 @@ def template_reads(root: Path, language: TypesetLanguage) -> DocumentReads:
         relative = PurePosixPath(path.relative_to(root).as_posix())
         if (
             path.suffix.lower() not in language.sources
-            or any(part.startswith(".") for part in relative.parts)
+            or relative.parts[0].startswith(".")
             or not path.is_file()
         ):
             continue
