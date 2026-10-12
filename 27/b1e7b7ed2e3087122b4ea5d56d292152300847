@@ -1,0 +1,25 @@
+packages/marimo-studio/tests/server/test_presentation_capability_admission.py
+  s_d07dc71b3bb072::t_a3361ba3216c23 620,624,628-629,649,656-660,663,665-667
+  s_d07dc71b3bb072::t_c080a438d07492 638-646,661-662
+  s_d07dc71b3bb072::t_0cb4b8223e322d 621-623,625-627,630-637,647-648,650-655,664,671-673,675
+  s_d07dc71b3bb072::t_1e885b4b77ecc7 668-670,674
+development_docs/architecture/server-routing-and-security.md
+  s_d07dc71b3bb072::t_a2aec5dff75e7a 87-93
+  s_d07dc71b3bb072::t_08650353831cdd 85-86,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "27b1e7b7ed2e3087122b4ea5d56d292152300847",
+  "prompts": {},
+  "sessions": {
+    "s_d07dc71b3bb072": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c20ef626-3451-4535-8ee4-0da6f8927133",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
