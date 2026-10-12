@@ -1,0 +1,25 @@
+pnpm-workspace.yaml
+  s_d07dc71b3bb072::t_f32f4730b3c277 14
+packages/marimo-studio/pyproject.toml
+  s_d07dc71b3bb072::t_f32f4730b3c277 15
+uv.lock
+  ai_agent 1676,1692,1694,1755
+pnpm-lock.yaml
+  ai_agent 28-29,170,304,766-767,3307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "23f96d901ba11a3d1c207ff03a38e873eaf0c89c",
+  "prompts": {},
+  "sessions": {
+    "s_d07dc71b3bb072": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c20ef626-3451-4535-8ee4-0da6f8927133",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
