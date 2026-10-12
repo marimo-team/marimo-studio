@@ -663,7 +663,8 @@ def test_presentation_documents_load_marimo_resources_beneath_their_artifact_bas
         retained = client.get(base + "@file/12-rows.csv")
 
     assert [response.status_code for response in resources] == [204, 204]
-    assert not support.is_success
+    assert support.status_code == 403
+    assert support.json()["error"] == "presentation-capability-forbidden"
     assert cross_view.status_code == 403
     # A document keeps reading from the artifact revision it was served with
     # while Studio retains that revision.

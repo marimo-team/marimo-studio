@@ -117,9 +117,13 @@ def view_route_alias(relative: str, studio: StudioWorkspace) -> str | None:
     if nested == SUPPORT_PATH.strip("/") and parts[2:3] == ["artifacts"]:
         # Presentation documents use their artifact revision as the base URL,
         # so Marimo's relative resource URLs, such as ./@file/<name>, arrive
-        # beneath it. Capability admission treats these paths as artifact
-        # reads bound to the signed revision.
-        if len(parts) > 5 and (root := parts[4].casefold()) in _ARTIFACT_RESOURCE_ROOTS:
+        # beneath it. A presentation capability admits these paths as
+        # artifact reads bound to its signed view and revision.
+        if (
+            len(parts) > 5
+            and re.fullmatch(r"[0-9a-f]{64}", parts[3]) is not None
+            and (root := parts[4].casefold()) in _ARTIFACT_RESOURCE_ROOTS
+        ):
             return "/" + "/".join((root, *parts[5:]))
         return None
     if nested in RESERVED_VIEW_ASSET_NAMES:

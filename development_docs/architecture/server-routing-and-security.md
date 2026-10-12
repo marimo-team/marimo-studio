@@ -67,16 +67,17 @@ scope.
 
 ## Route ownership
 
-| Route family                                      | Owner                           | Authority                                                                 |
-| ------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| `/studio/` and `/studio/<view>/`                  | Studio authoring document       | Edit mode and Marimo read access. Run mode redirects to `/` or `/<view>/` |
-| Edit-mode `/`                                     | Studio or native Marimo         | Composition-time `StudioRoutePolicy` and Marimo authentication            |
-| `/<view>/` and run-mode `/`                       | Presentation delivery           | Marimo read access plus presentation session assignment                   |
-| `/<view>/_marimo-studio/artifacts/<revision>/...` | Artifact server                 | Read access or matching revision capability plus artifact lease           |
-| `/_marimo-studio/views/<view>/...`                | Support router                  | Route-specific read, edit, server-token, client, and revision checks      |
-| `/_marimo-studio/editor/...`                      | Native editor bridge            | Edit access plus client and session binding capability                    |
-| `/_marimo-studio/presentation/<capability>/...`   | Presentation capability handler | Signed target, method, view, revision, artifact, and session audience     |
-| Marimo native routes                              | Original ASGI application       | Marimo policy, optionally narrowed by an accepted presentation capability |
+| Route family                                                     | Owner                           | Authority                                                                 |
+| ---------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| `/studio/` and `/studio/<view>/`                                 | Studio authoring document       | Edit mode and Marimo read access. Run mode redirects to `/` or `/<view>/` |
+| Edit-mode `/`                                                    | Studio or native Marimo         | Composition-time `StudioRoutePolicy` and Marimo authentication            |
+| `/<view>/` and run-mode `/`                                      | Presentation delivery           | Marimo read access plus presentation session assignment                   |
+| `/<view>/_marimo-studio/artifacts/<revision>/...`                | Artifact server                 | Read access or matching revision capability plus artifact lease           |
+| `/<view>/_marimo-studio/artifacts/<revision>/{@file,public}/...` | Marimo native routes            | Marimo read access or matching revision capability                        |
+| `/_marimo-studio/views/<view>/...`                               | Support router                  | Route-specific read, edit, server-token, client, and revision checks      |
+| `/_marimo-studio/editor/...`                                     | Native editor bridge            | Edit access plus client and session binding capability                    |
+| `/_marimo-studio/presentation/<capability>/...`                  | Presentation capability handler | Signed target, method, view, revision, artifact, and session audience     |
+| Marimo native routes                                             | Original ASGI application       | Marimo policy, optionally narrowed by an accepted presentation capability |
 
 View names exclude Studio and Marimo route roots. Artifact public paths exclude
 `_marimo-studio`, `@file`, `public`, and `public-files-sw.js` as their first
