@@ -617,6 +617,65 @@ def test_native_widget_resources_retain_edit_session_authority_across_revisions(
     assert forwarded == (["/@file/tool.js", model] if edit else [])
 
 
+@pytest.mark.parametrize("edit", [True, False])
+def test_presentation_documents_load_marimo_resources_beneath_their_artifact_base(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    edit: bool,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    if edit:
+        _edit_mode(app)
+    forwarded: list[str] = []
+
+    async def native(_app: Any, scope: Any, receive: Any, send: Any) -> None:
+        forwarded.append(scope["path"])
+        await Response(status_code=204)(scope, receive, send)
+
+    monkeypatch.setattr(presentation_access, "_send_capability_app", native)
+    with TestClient(app) as client:
+        config = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        capability = parse_presentation_capability(
+            config["runtime"]["data"]["capabilityToken"]
+        )
+        assert capability is not None
+        base = (
+            f"{config['runtime']['urls']['transport']}dashboard/_marimo-studio/"
+            f"artifacts/{capability.artifact_revision}/"
+        )
+        resources = [
+            client.get(base + resource)
+            for resource in ("@file/12-rows.csv", "public/logo.png")
+        ]
+        support = client.get(base + "_marimo-studio/views/dashboard/config")
+        cross_view = client.get(
+            base.replace("/dashboard/_marimo-studio/", "/executive/_marimo-studio/")
+            + "@file/12-rows.csv"
+        )
+        document = studio.views["dashboard"].root / "index.html"
+        document.write_text(
+            document.read_text(encoding="utf-8") + "\n<p>New revision</p>",
+            encoding="utf-8",
+        )
+        current = _runtime_config(client.get("/_marimo-studio/views/dashboard/config"))
+        assert config["revision"] != current["revision"]
+        retained = client.get(base + "@file/12-rows.csv")
+
+    assert [response.status_code for response in resources] == [204, 204]
+    assert support.status_code == 403
+    assert support.json()["error"] == "presentation-capability-forbidden"
+    assert cross_view.status_code == 403
+    # A document keeps reading from the artifact revision it was served with
+    # while Studio retains that revision.
+    assert retained.status_code == 204
+    assert forwarded == [
+        "/@file/12-rows.csv",
+        "/public/logo.png",
+        "/@file/12-rows.csv",
+    ]
+
+
 @pytest.mark.parametrize(
     ("file_key", "routing_query", "carried_key"),
     [
