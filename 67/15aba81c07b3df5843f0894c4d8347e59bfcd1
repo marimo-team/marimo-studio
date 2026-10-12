@@ -1,0 +1,23 @@
+development_docs/architecture/server-routing-and-security.md
+  s_d07dc71b3bb072::t_87a43661388745 70-80
+packages/marimo-studio/src/marimo_studio/_server/routing.py
+  s_d07dc71b3bb072::t_26dc4698b5756d 120-126
+packages/marimo-studio/tests/server/test_presentation_capability_admission.py
+  s_d07dc71b3bb072::t_26dc4698b5756d 666-667
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6715aba81c07b3df5843f0894c4d8347e59bfcd1",
+  "prompts": {},
+  "sessions": {
+    "s_d07dc71b3bb072": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c20ef626-3451-4535-8ee4-0da6f8927133",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
