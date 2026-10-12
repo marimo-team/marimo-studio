@@ -82,6 +82,16 @@ View names exclude Studio and Marimo route roots. Artifact public paths exclude
 `_marimo-studio`, `@file`, `public`, and `public-files-sw.js` as their first
 component.
 
+Presentation documents use their artifact revision directory as the base URL,
+so Marimo's relative resource URLs, such as `./@file/<name>` from
+`mo.ui.data_editor` or `mo.image`, resolve beneath it. Studio forwards
+`@file/...` and `public/...` beneath
+`/<view>/_marimo-studio/artifacts/<revision>/` to the Marimo native route, so
+view files can also reference the notebook's `public/` directory. A presentation
+capability admits these requests as artifact reads: they stay bound to the
+signed view and artifact revision and keep working while Studio retains that
+revision.
+
 ## Public URLs
 
 A proxy can publish the server beneath a path prefix that the server never

@@ -19,6 +19,8 @@ from marimo_studio._workspace.models import (
     StudioWorkspace,
 )
 
+_ARTIFACT_RESOURCE_ROOTS = frozenset({"@file", "public"})
+
 
 @dataclass(frozen=True)
 class AuthoredViewRoute:
@@ -113,6 +115,12 @@ def view_route_alias(relative: str, studio: StudioWorkspace) -> str | None:
         return None
     nested = parts[1].casefold()
     if nested == SUPPORT_PATH.strip("/") and parts[2:3] == ["artifacts"]:
+        # Presentation documents use their artifact revision as the base URL,
+        # so Marimo's relative resource URLs, such as ./@file/<name>, arrive
+        # beneath it. Capability admission treats these paths as artifact
+        # reads bound to the signed revision.
+        if len(parts) > 5 and (root := parts[4].casefold()) in _ARTIFACT_RESOURCE_ROOTS:
+            return "/" + "/".join((root, *parts[5:]))
         return None
     if nested in RESERVED_VIEW_ASSET_NAMES:
         return "/" + "/".join((nested, *parts[2:]))
