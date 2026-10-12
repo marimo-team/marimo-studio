@@ -1,3 +1,5 @@
+import type { FrameLocator } from "@playwright/test";
+
 import { readFile } from "node:fs/promises";
 
 import {
@@ -10,7 +12,8 @@ import {
 } from "./fixture.ts";
 
 // Marimo serves both outputs as virtual files at ./@file/<name>, which the
-// view resolves against its artifact revision.
+// view resolves against its artifact revision. The Prepared runtime captures
+// them as data URLs.
 const resourcesCell = [
   "@app.cell",
   "def resources(mo):",
@@ -47,7 +50,9 @@ test("loads notebook virtual files in a view", async ({ page: browser, studioCli
   const notebook = await readFile(workspaceNotebookPath, "utf8");
   await writeWorkspaceFile(
     workspaceNotebookPath,
-    notebook.replace('if __name__ == "__main__":', resourcesCell),
+    notebook
+      .replace('# runtimes = ["server", "wasm"]', '# runtimes = ["server", "zero-python"]')
+      .replace('if __name__ == "__main__":', resourcesCell),
   );
   await studioCli.addWorkspaceView(
     workspaceNotebookPath,
@@ -58,9 +63,17 @@ test("loads notebook virtual files in a view", async ({ page: browser, studioCli
   await studioCli.buildWorkspaceView("resources");
 
   await browser.goto("/studio/resources/?file=notebook.py");
-  const resources = (await waitForPreview(browser)).locator('marimo-cell[name="resources"]');
+  await expectResources(await waitForPreview(browser));
+
+  await browser.getByLabel(/preview runtime$/).click();
+  await browser.getByRole("button", { name: /^Prepared/ }).click();
+  await expectResources(await waitForPreview(browser, "zero-python"));
+});
+
+const expectResources = async (preview: FrameLocator) => {
+  const resources = preview.locator('marimo-cell[name="resources"]');
   // Glide draws editor rows on a canvas and mirrors them in an accessible grid.
   await expect(resources.locator('[role="gridcell"]', { hasText: "Grace" })).toHaveCount(1);
   const chip = resources.getByRole("img", { name: "Chip" });
   await expect.poll(() => chip.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(40);
-});
+};
