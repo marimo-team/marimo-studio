@@ -71,5 +71,4 @@ blockExoticSubdeps: true
 trustPolicy: no-downgrade
 onlyBuiltDependencies: []
 minimumReleaseAgeExclude:
-  - nanoid@3.3.18
   - "@marimo-team/*"
