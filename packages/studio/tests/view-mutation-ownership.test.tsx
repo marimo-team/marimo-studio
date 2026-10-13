@@ -91,11 +91,11 @@ it("closes immediately while a selected view loads and can reopen on its pending
 });
 
 it.each([
-  ["returns false", async (): Promise<boolean> => false, /Could not open report/],
+  ["returns false", async (): Promise<boolean> => false, "Could not open report"],
   [
     "rejects",
     async (): Promise<boolean> => Promise.reject(new Error("Preview failed")),
-    /Preview failed/,
+    "Preview failed",
   ],
 ] as const)(
   "surfaces a persistent selection error when choosing a view %s",

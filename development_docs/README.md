@@ -63,7 +63,7 @@ for each integration.
 ## Install the workspace
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/),
-[Node.js](https://nodejs.org/) 24.11 or newer, and
+[Node.js](https://nodejs.org/) 24.15 or newer, and
 [pixi](https://pixi.prefix.dev/latest/installation/), then the locked
 environments:
 

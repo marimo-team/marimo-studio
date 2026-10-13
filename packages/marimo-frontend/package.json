@@ -35,7 +35,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "corepack": "0.34.7",
+    "corepack": "0.36.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   }

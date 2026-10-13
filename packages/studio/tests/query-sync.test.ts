@@ -53,9 +53,17 @@ class QueryWindow extends EventTarget {
   }
 }
 
+// Created documents report readyState "complete". Each test dispatches the
+// frame's first load itself, so the initial document is still loading.
+const loadingDocument = (): Document => {
+  const loading = document.implementation.createHTMLDocument();
+  Object.defineProperty(loading, "readyState", { value: "loading" });
+  return loading;
+};
+
 const queryFrame = () => {
   const child = new QueryWindow();
-  let childDocument = document.implementation.createHTMLDocument();
+  let childDocument = loadingDocument();
   const frame = document.createElement("iframe");
   Object.defineProperties(frame, {
     contentDocument: { get: () => childDocument },

@@ -76,6 +76,13 @@ export default defineConfig({
       "import/no-cycle": "error",
       "import/no-duplicates": "error",
       "import/no-self-import": "error",
+      // oxlint 1.79 added React Compiler rules to correctness. Studio does not
+      // compile with the React Compiler, and these rules report its existing
+      // ref, portal host, and effect patterns.
+      "react/immutability": "off",
+      "react/preserve-manual-memoization": "off",
+      "react/refs": "off",
+      "react/set-state-in-effect": "off",
       "typescript/consistent-type-imports": "error",
       "typescript/no-import-type-side-effects": "error",
       "vite-plus/prefer-vite-plus-imports": "error",
