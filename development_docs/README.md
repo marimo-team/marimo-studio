@@ -351,8 +351,8 @@ the prepared checkout without changing it. Run `make setup` when readiness
 validation reports stale metadata, missing dependencies, or a mismatched
 checkout.
 
-A user view keeps its build and publication state in marimo's output
-directory, apart from its authored project:
+By default, a user view keeps its build and publication state in marimo's
+output directory, apart from its authored project:
 
 ```text
 examples/studio/<notebook>/<view>/                    authored

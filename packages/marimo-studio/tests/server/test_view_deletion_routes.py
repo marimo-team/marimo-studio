@@ -322,7 +322,9 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
     with TestClient(app) as client:
         _serve(client, scopes, "operations")
         owner = _view_owner(client, "operations")
-        retained_pins = tuple(studio.artifacts("operations").glob(".pins/*/*"))
+        retained_pins = tuple(
+            studio.locations.artifacts("operations").glob(".pins/*/*")
+        )
         monkeypatch.setattr(FileTree, "remove", reject_retained_handles)
         removed = _delete_owned_view(client, "operations", headers, owner)
 
@@ -330,7 +332,7 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
     assert removed.status_code == 200
     assert "cleanup" not in removed.json()
     assert not (studio.view_root / "operations").exists()
-    assert not studio.artifacts("operations").exists()
+    assert not studio.locations.artifacts("operations").exists()
 
 
 def test_code_mode_removal_releases_artifacts_its_server_retains(

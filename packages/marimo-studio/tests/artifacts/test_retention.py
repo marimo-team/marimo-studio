@@ -25,6 +25,7 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.remove import delete_view
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.mutation_lock import (
     view_build_lock,
     view_mutation_lock,
@@ -158,8 +159,10 @@ def test_public_prune_rejects_existing_non_directory_roots(
         prune_artifacts(project)
 
 
-def _publish_stale_project_in_process(root: str, artifacts: str, started: str) -> str:
-    project = load_view_project(Path(root), artifacts=Path(artifacts))
+def _publish_stale_project_in_process(
+    root: str, locations: CatalogLocations, started: str
+) -> str:
+    project = load_view_project(Path(root), locations=locations)
     Path(started).write_text("started\n", encoding="utf-8")
     try:
         with publish_artifact_lease(project, "development") as lease:
@@ -192,9 +195,9 @@ def _delete_view_in_process(
 
 
 def _hold_artifact_lease_in_process(
-    root: str, artifacts: str, ready: str, release: str
+    root: str, locations: CatalogLocations, ready: str, release: str
 ) -> str:
-    project = load_view_project(Path(root), artifacts=Path(artifacts))
+    project = load_view_project(Path(root), locations=locations)
     lease = lease_published_artifact(project, "development")
     if lease is None:
         return "missing"
@@ -267,7 +270,7 @@ def test_external_publication_cannot_recreate_a_deleted_view(
         publication = executor.submit(
             _publish_stale_project_in_process,
             str(project.root),
-            str(project.artifacts),
+            project.locations,
             str(publication_started),
         )
         _wait_for_file(publication_started)
@@ -300,7 +303,7 @@ def test_deletion_rejects_artifact_lease_owned_by_another_process(
         holder = executor.submit(
             _hold_artifact_lease_in_process,
             str(project.root),
-            str(project.artifacts),
+            project.locations,
             str(ready),
             str(release),
         )
@@ -353,7 +356,9 @@ def test_stale_artifact_lease_does_not_recreate_removed_project(
     project = _project(tmp_path)
     lease = publish_artifact_lease(project, "development")
     missing = tmp_path / "removed" / "view"
-    stale_project = replace(project, root=missing, artifacts=missing / ".artifacts")
+    stale_project = replace(
+        project, root=missing, locations=CatalogLocations.inside_views(missing.parent)
+    )
     lease.project = stale_project
     lease.artifact = replace(
         lease.artifact,

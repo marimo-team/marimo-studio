@@ -39,8 +39,8 @@ describe. See the hub's
 [configuration reference](https://marimohub.docs.marimo.io/configuration) for
 the setting.
 
-Studio keeps view build state in `__marimo__/studio/`, and the hub leaves
-`__marimo__/` out of the saved workspace. The saved workspace holds the view
+By default, Studio keeps view build state in `__marimo__/studio/`, and the hub
+leaves `__marimo__/` out of the saved workspace. The saved workspace holds the view
 sources, so the first build in a new session rebuilds each view and downloads
 its packages again.
 

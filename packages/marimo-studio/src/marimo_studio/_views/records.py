@@ -127,7 +127,7 @@ class StudioOverview:
     view_root: Path
     """Authored view projects, one directory per view."""
     state_root: Path
-    """Replaceable view build state under marimo's output directory."""
+    """Replaceable view build state, one directory per view."""
     default_view: str | None
     default_runtime: str | None
     runtimes: tuple[str, ...]

@@ -13,6 +13,7 @@ import pytest
 from marimo_studio._artifacts.paths import artifact_root
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._views.build import publish_view as publish_artifact_lease
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.project_manifest import (
     CatalogProject,
     encode_view_manifest,
@@ -52,8 +53,9 @@ def project(tmp_path: Path, *, state_outside: bool = False) -> CatalogProject:
     )
     (root / "app.css").write_text("body { color: black; }\n", encoding="utf-8")
     if state_outside:
-        artifacts = tmp_path / "__marimo__" / "studio" / "analysis" / "view"
-        return load_view_project(root, artifacts=artifacts / ".artifacts")
+        output = tmp_path / "__marimo__"
+        locations = CatalogLocations(tmp_path, output / "studio" / "analysis", output)
+        return load_view_project(root, locations=locations)
     return load_standalone_project(root)
 
 

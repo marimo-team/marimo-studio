@@ -185,6 +185,8 @@ def test_config_snapshot_rejects_a_reloaded_owner_change(
             studio,
             reload_studio=lambda _path: replace(
                 studio,
-                view_root=studio.view_root.with_name("other"),
+                locations=replace(
+                    studio.locations, view_root=studio.view_root.with_name("other")
+                ),
             ),
         )

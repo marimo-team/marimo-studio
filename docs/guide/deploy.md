@@ -34,6 +34,13 @@ not isolate untrusted notebook code. Build the environment ahead of time when
 startup cannot depend on package indexes or when production policy requires a
 reviewed lock and image.
 
+Studio writes view build state beside the notebook in marimo's `__marimo__/`
+folder. Set `MARIMO_STUDIO_STATE_DIR` to another writable directory to keep
+build state out of the notebook's folder. Keep the view folder writable.
+Studio records view owners in `.owners/` and takes lock files in `.locks/`
+there. See
+[Build state location](../reference/configuration.md#build-state-location).
+
 ## Put a reverse proxy in front
 
 A reverse proxy accepts public requests, applies access and transport policy,

@@ -1,42 +1,40 @@
 """Own the directory that holds one view's generated state.
 
 Each catalog view keeps receipts, revisions, pins, and provider caches in
-``artifact_root(project)``, under marimo's output directory and outside the
-authored project. The directory ignores itself in Git and can be deleted to
-force a clean rebuild.
+``artifact_root(project)``. The directory ignores itself in Git and can be
+deleted to force a clean rebuild.
 
-State outside the project is named after its view, so it records the view
-incarnation it belongs to: the generation in the catalog's ``.owners/``
-record. A view that was deleted and recreated outside Studio, or by a process
-with another cache prefix, therefore reads the old state as unbuilt, and its
-next build discards that state's receipts.
-
-A Studio 0.3.0 default catalog keeps state inside each view, where the
-project directory owns its lifetime. A view in a configured catalog can still
-contain ``.artifacts/`` from Studio 0.3.0. The first build after an upgrade
-moves it to the current location when no process is using it, so the retained
-revisions stay usable without another provider build.
+A catalog that keeps state inside its views lets each project directory own
+its state's lifetime. State outside the project is named after its view, so it
+records the view incarnation it belongs to: the generation in the catalog's
+``.owners/`` record. State with no record of the current incarnation, such as
+state left by a view that was deleted and recreated, reads as unbuilt, and the
+next build discards its receipts. The record travels with copies and survives
+remounts, so a copied project reuses its builds. Freshness checks rebuild a
+view whose sources changed.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import stat
-from contextlib import ExitStack
+from contextlib import suppress
 from pathlib import Path
 
 from marimo_studio._artifacts.paths import (
     artifact_base,
     artifact_root,
     ensure_secure_directory,
-    project_artifacts,
 )
+from marimo_studio._filesystem.errors import FileTooLargeError, UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.ignore import ignore_generated_directory
 from marimo_studio._filesystem.names import temporary_name
-from marimo_studio._filesystem.paths import is_within
-from marimo_studio._workspace.locations import VIEW_MANIFEST, is_legacy_view_root
+from marimo_studio._workspace.locations import (
+    STATE_DIR_ENV,
+    VIEW_MANIFEST,
+    CatalogLocations,
+)
 from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio._workspace.view_owners import view_owner_snapshot
 from marimo_studio.errors import ConfigurationError
@@ -48,12 +46,7 @@ _RECEIPTS = ("development.json", "production.json")
 
 
 def _outside_project(project: CatalogProject) -> bool:
-    return artifact_base(project) != project.root
-
-
-def _shares_project(project: CatalogProject) -> bool:
-    directory = artifact_root(project).parent
-    return is_within(directory, project.root) or is_within(project.root, directory)
+    return not project.locations.keeps_state_in_views
 
 
 def _holds_project(tree: FileTree, directory: Path) -> bool:
@@ -62,68 +55,71 @@ def _holds_project(tree: FileTree, directory: Path) -> bool:
     return tree.exists(directory / VIEW_MANIFEST)
 
 
-def _owner_generation(project: CatalogProject) -> str | None:
-    try:
-        owner, _identity = view_owner_snapshot(project.root.parent, project.name)
-    except (OSError, ConfigurationError):
-        return None
+def _incarnation(locations: CatalogLocations, view: str) -> str | None:
+    owner, _identity = view_owner_snapshot(locations.view_root, view)
     return owner.generation if owner is not None else None
 
 
-def _stamp(project: CatalogProject) -> str | None:
-    tree = FileTree(artifact_base(project))
+def _stamp(locations: CatalogLocations, view: str) -> str | None:
+    tree = FileTree(locations.state_base)
     try:
         content = tree.read(
-            artifact_root(project) / _OWNER_FILE, max_bytes=_OWNER_MAX_BYTES
+            locations.artifacts(view) / _OWNER_FILE, max_bytes=_OWNER_MAX_BYTES
         ).content
     except FileNotFoundError:
         return None
-    except (OSError, ConfigurationError):
+    except (UnsafePathError, FileTooLargeError):
+        # A stamp that is not a small regular file names no incarnation, so
+        # the state reads as foreign and the next build replaces the stamp.
         return ""
     return content.decode("ascii", errors="replace").strip()
 
 
-def _write_stamp(project: CatalogProject, owner: str) -> None:
-    FileTree(artifact_base(project)).write(
-        artifact_root(project) / _OWNER_FILE, owner.encode("ascii")
+def _write_stamp(locations: CatalogLocations, view: str, incarnation: str) -> None:
+    FileTree(locations.state_base).write(
+        locations.artifacts(view) / _OWNER_FILE, incarnation.encode("ascii")
     )
 
 
-def owns_artifact_state(project: CatalogProject) -> bool:
-    """Return whether the view's state belongs to its current incarnation.
+def owns_view_state(locations: CatalogLocations, view: str) -> bool:
+    """Return whether a view's state belongs to its current incarnation.
 
-    State without a stamp, such as state a build adopted, belongs to the view
-    that claims it next.
+    A project without an owner record, outside any catalog, owns its state.
+    """
+    if locations.keeps_state_in_views:
+        return True
+    incarnation = _incarnation(locations, view)
+    return incarnation is None or _stamp(locations, view) == incarnation
+
+
+def owns_artifact_state(project: CatalogProject) -> bool:
+    """Return whether the project's state belongs to its current incarnation."""
+    return owns_view_state(project.locations, project.name)
+
+
+def claim_artifact_state(project: CatalogProject) -> None:
+    """Bind the view's state to its current incarnation.
+
+    Call this while holding the view's publication lock. State that another
+    incarnation left under the view's name loses its receipts, so revisions
+    without a receipt or pin get pruned.
     """
     if not _outside_project(project):
-        return True
-    stamp = _stamp(project)
-    if stamp is None:
-        return True
-    owner = _owner_generation(project)
-    return owner is None or stamp == owner
-
-
-def _claim_artifact_state(project: CatalogProject) -> None:
-    owner = _owner_generation(project)
-    if owner is None:
         return
-    stamp = _stamp(project)
-    if stamp == owner:
+    locations = project.locations
+    incarnation = _incarnation(locations, project.name)
+    if incarnation is None or _stamp(locations, project.name) == incarnation:
         return
-    if stamp is not None:
-        tree = FileTree(artifact_base(project))
-        root = artifact_root(project)
-        for receipt in _RECEIPTS:
-            tree.remove(root / receipt)
-    _write_stamp(project, owner)
+    tree = FileTree(artifact_base(project))
+    root = artifact_root(project)
+    for name in (*_RECEIPTS, _OWNER_FILE):
+        tree.remove(root / name)
+    _write_stamp(locations, project.name, incarnation)
 
 
 def ensure_artifact_root(project: CatalogProject) -> None:
     """Create the view's generated-state directory and keep it out of Git.
 
-    State that an earlier incarnation of the view left under its name loses
-    its receipts here, so revisions without a receipt or pin get pruned.
     Raises ``FileNotFoundError`` when the view project no longer exists, so a
     late writer cannot recreate state for a removed view.
     """
@@ -136,81 +132,25 @@ def ensure_artifact_root(project: CatalogProject) -> None:
         except OSError as error:
             raise ConfigurationError(
                 f"Could not create the view state directory {base}: {error}. "
-                "Make that folder writable, or set PYTHONPYCACHEPREFIX to a "
-                "writable folder."
+                "Make that folder writable, or choose another location with "
+                f"state_dir or {STATE_DIR_ENV}."
             ) from error
+        _ensure_private_state_root(project)
     ensure_secure_directory(base, root, "Artifact control root")
     if not os.path.lexists(project.root):
         remove_artifact_state(project)
         raise FileNotFoundError(f"View project was removed: {project.root}")
     ignore_generated_directory(FileTree(base), root)
-    if _outside_project(project):
-        _claim_artifact_state(project)
 
 
-def _unused(tree: FileTree, legacy: Path, held: ExitStack) -> bool:
-    # The held locks keep an older process from starting a build or lease
-    # until the caller has moved the state.
-    for name in (".publication.lock", ".build.lock"):
-        acquired = held.enter_context(
-            tree.lock(legacy / name, blocking=False, create=False)
-        )
-        if not acquired and tree.exists(legacy / name):
-            return False
-    pins = legacy / ".pins"
-    if not tree.is_directory(pins):
-        return True
-    for revision in tree.children(pins):
-        for pin in tree.children(revision):
-            # A pin whose holder exited unlocks, so a held lock is a live reader.
-            with tree.lock(pin, blocking=False, create=False) as stale:
-                if not stale:
-                    return False
-    return True
-
-
-def _move_directory(source: Path, destination: Path) -> None:
-    os.rename(source, destination)
-
-
-def adopt_project_artifacts(project: CatalogProject) -> None:
-    """Move state that Studio 0.3.0 left inside a configured catalog's view.
-
-    Call this from the build owner before it creates generated state. A view
-    in a Studio 0.3.0 default catalog keeps its state in place, because
-    processes that run without a cache prefix still use it there. A held lock
-    or live pin, a move across file systems, or existing current state leave
-    the older directory in place, where source and input scans skip it.
-    Windows refuses to move a directory while its lock files are open, so
-    there the next build starts in a new state directory.
-    """
-    legacy = project_artifacts(project)
-    root = artifact_root(project)
-    if legacy == root or is_legacy_view_root(project.root.parent):
-        return
-    try:
-        legacy_state = legacy.lstat()
-    except FileNotFoundError:
-        return
-    if not stat.S_ISDIR(legacy_state.st_mode) or os.path.lexists(root):
-        return
-    try:
-        with ExitStack() as held:
-            if not _unused(FileTree(project.root), legacy, held):
-                return
-            base = artifact_base(project)
-            base.mkdir(parents=True, exist_ok=True)
-            ensure_secure_directory(base, root.parent, "View state directory")
-            _move_directory(legacy, root)
-    except (OSError, ConfigurationError) as error:
-        _LOGGER.info(
-            "Studio left the earlier generated state of view %r in %s and "
-            "will rebuild it in %s: %s",
-            project.name,
-            legacy,
-            root,
-            error,
-        )
+def _ensure_private_state_root(project: CatalogProject) -> None:
+    # Build state can hold data derived from the notebook, so other accounts
+    # on a shared host cannot list or read a notebook's state folder.
+    base = artifact_base(project)
+    state_root = project.locations.state_root
+    ensure_secure_directory(base, state_root.parent, "View state directory")
+    with suppress(FileExistsError):
+        FileTree(base).create_directory(state_root)
 
 
 def _discard(tree: FileTree, directory: Path) -> None:
@@ -226,7 +166,7 @@ def remove_artifact_state(project: CatalogProject) -> None:
     Only ``.artifacts`` is removed. Generated state can be rebuilt, so a
     failure leaves the directory for the next view with this name to discard.
     """
-    if _shares_project(project):
+    if not _outside_project(project):
         return
     root = artifact_root(project)
     tree = FileTree(artifact_base(project))
@@ -247,10 +187,13 @@ def remove_artifact_state(project: CatalogProject) -> None:
 def move_artifact_state(project: CatalogProject, target: CatalogProject) -> None:
     """Carry a renamed view's generated state to its new name.
 
-    State inside the project moves with the project directory. Otherwise a
-    failed move removes both copies, and the next build starts clean.
+    Pass the state only after ``owns_artifact_state(project)`` held before the
+    rename changed the owner records, because the move claims it for the new
+    name. State inside the project moves with the project directory.
+    Otherwise a failed move removes both copies, and the next build starts
+    clean.
     """
-    if _shares_project(project) or _shares_project(target):
+    if not _outside_project(project) or not _outside_project(target):
         return
     source = artifact_root(project)
     destination = artifact_root(target)
@@ -266,9 +209,9 @@ def move_artifact_state(project: CatalogProject, target: CatalogProject) -> None
             tree.ensure_directory(destination.parent)
             tree.publish(source, destination)
             tree.remove_empty_directory(source.parent)
-            owner = _owner_generation(target)
-            if owner is not None:
-                _write_stamp(target, owner)
+            incarnation = _incarnation(target.locations, target.name)
+            if incarnation is not None:
+                _write_stamp(target.locations, target.name, incarnation)
     except (OSError, ConfigurationError) as error:
         _LOGGER.warning(
             "Studio could not move the generated state of view %r to %r and "

@@ -183,7 +183,7 @@ async def inspect_view(
             try:
                 project = load_view_project(
                     definition.view_root / view,
-                    artifacts=definition.artifacts(view),
+                    locations=definition.locations,
                 )
                 provider_registry().validate_project(project)
             except MarimoStudioError as error:

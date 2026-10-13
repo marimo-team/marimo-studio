@@ -425,7 +425,7 @@ def test_artifact_input_read_keeps_an_open_parent_when_project_root_is_swapped(
     os.name == "nt", reason="symlink creation needs elevated Windows access"
 )
 @pytest.mark.parametrize("control", ("receipt", "manifest"))
-def test_artifact_control_read_keeps_its_parent_when_project_root_is_swapped(
+def test_artifact_control_read_keeps_its_parent_when_its_base_is_swapped(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     control: str,

@@ -50,17 +50,17 @@ def inspect_view_manifest(
     )
     from marimo_studio._artifacts.paths import assert_secure_path
     from marimo_studio._artifacts.records import ViewBuildState
+    from marimo_studio._artifacts.store import owns_view_state
     from marimo_studio._views.sources import read_view_manifest_with_owner
-    from marimo_studio._workspace.locations import state_anchor
 
     observed = read_view_manifest_with_owner(studio, name)
+    locations = studio.locations
     root = studio.view_root / name
-    artifacts = studio.artifacts(name)
-    pointer = artifacts / "development.json"
-    anchor = state_anchor(artifacts)
+    pointer = locations.artifacts(name) / "development.json"
+    anchor = locations.artifact_base(root)
     assert_secure_path(anchor, pointer, "Artifact profile receipt")
     receipt = None
-    if pointer.exists() or pointer.is_symlink():
+    if owns_view_state(locations, name) and (pointer.exists() or pointer.is_symlink()):
         # A receipt from another Studio version describes nothing this version
         # can publish, so the repair reads the view as unbuilt.
         with suppress(ArtifactFormatError):
@@ -128,7 +128,7 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
     files_complete = False
     try:
         project = await asyncio.to_thread(
-            partial(load_view_project, project.root, artifacts=project.artifacts)
+            partial(load_view_project, project.root, locations=project.locations)
         )
         project = provider_registry().validate_project(project)
         inspection = await inspect_view_project(project)
@@ -201,7 +201,7 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
             "View source changed during inspection. Inspect again."
         )
     if files_complete and project != await asyncio.to_thread(
-        partial(load_view_project, project.root, artifacts=project.artifacts)
+        partial(load_view_project, project.root, locations=project.locations)
     ):
         raise ConfigurationError(
             "View configuration changed during inspection. Inspect again."

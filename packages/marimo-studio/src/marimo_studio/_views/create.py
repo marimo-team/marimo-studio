@@ -17,6 +17,7 @@ from __future__ import annotations
 from contextlib import ExitStack, nullcontext
 from pathlib import Path
 
+from marimo_studio._artifacts.retention import artifact_exclusion_guard
 from marimo_studio._artifacts.store import remove_artifact_state
 from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._notebook.locking import notebook_write_lock
@@ -60,10 +61,12 @@ from marimo_studio._workspace.mutation_lock import (
     view_mutation_lock,
     workspace_catalog_lock,
 )
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio._workspace.transactions import workspace_transaction
 from marimo_studio.errors import (
     ConfigurationError,
     ViewExistsError,
+    ViewInUseError,
     WorkspaceGenerationConflictError,
 )
 from marimo_studio.errors._internal import WorkspaceInitializationError
@@ -212,6 +215,14 @@ def _commit_view_creation_plan(plan: ViewCreationPlan) -> StudioWorkspace:
     )
     with notebook_write_lock(plan.notebook, plan.writes), transaction:
         return load_studio(plan.notebook)
+
+
+def _discard_leftover_state(project: CatalogProject) -> None:
+    try:
+        with artifact_exclusion_guard(project):
+            remove_artifact_state(project)
+    except ViewInUseError:
+        return
 
 
 def _view_setup_result(
@@ -366,10 +377,10 @@ def prepare_view(
             workspace = _commit_view_creation_plan(plan)
             # A new view starts unbuilt even where an earlier view with its
             # name was deleted outside Studio and left generated state behind.
-            # A build of that earlier view can still own the state, and the
-            # owner stamp already marks it stale for the new view.
+            # A build or reader of that earlier view can still use the state,
+            # and the owner stamp already marks it stale for the new view.
             for view_name in locked.new_views:
                 with view_build_lock(view_root, view_name, blocking=False) as idle:
                     if idle:
-                        remove_artifact_state(workspace.view(view_name))
+                        _discard_leftover_state(workspace.view(view_name))
             return _view_setup_result(plan, workspace=workspace, dry_run=False)

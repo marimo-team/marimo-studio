@@ -11,7 +11,7 @@ from marimo_studio._artifacts.paths import (
     assert_secure_path,
 )
 from marimo_studio._artifacts.store import (
-    adopt_project_artifacts,
+    claim_artifact_state,
     ensure_artifact_root,
 )
 from marimo_studio._filesystem.files import FileTree
@@ -52,7 +52,11 @@ def artifact_lock(
     blocking: bool = True,
     create: bool = True,
 ) -> Iterator[bool]:
-    """Acquire the short view-local publication and lease lock."""
+    """Acquire the short view-local publication and lease lock.
+
+    Creating the lock also claims the view's state for its current
+    incarnation, so receipts change only under this lock.
+    """
     with _view_lock(
         project,
         ".publication.lock",
@@ -60,6 +64,8 @@ def artifact_lock(
         blocking=blocking,
         create=create,
     ) as acquired:
+        if acquired and create:
+            claim_artifact_state(project)
         yield acquired
 
 
@@ -70,13 +76,7 @@ def build_lock(
     blocking: bool = True,
     create: bool = True,
 ) -> Iterator[bool]:
-    """Serialize provider work independently from publication and lease reads.
-
-    The build owner creates generated state, so it first adopts state that an
-    older Studio release left inside the view project.
-    """
-    if create:
-        adopt_project_artifacts(project)
+    """Serialize provider work independently from publication and lease reads."""
     with _view_lock(
         project,
         ".build.lock",

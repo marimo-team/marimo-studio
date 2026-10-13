@@ -22,6 +22,7 @@ from marimo_studio._artifacts.repository import (
     read_published_artifact,
 )
 from marimo_studio._artifacts.retention import ArtifactLease
+from marimo_studio._artifacts.store import ensure_artifact_root
 from marimo_studio._processes.cancellation import (
     ProviderOperationControl,
     provider_cancellation,
@@ -70,6 +71,31 @@ def test_snapshot_copies_the_inputs_accepted_by_its_source_capture(
         "body { color: blue; }"
     )
     assert PurePosixPath("extra.css") in snapshot.input_digests
+
+
+def test_a_directory_input_skips_state_left_inside_the_view(
+    tmp_path: Path,
+) -> None:
+    project = make_project(tmp_path, state_outside=True)
+    # Studio 0.3 kept build state inside each view project.
+    earlier = project.root / ".artifacts" / "development.json"
+    earlier.parent.mkdir()
+    earlier.write_text("{}", encoding="utf-8")
+    provider = provider_registry().get(project.provider)
+    inspection = replace(
+        provider.inspect(inspection_request(project)),
+        inputs=(BuildInput(PurePosixPath("."), "directory"),),
+    )
+    ensure_artifact_root(project)
+
+    snapshot = inputs_module.snapshot_project(
+        project,
+        inspection,
+        artifact_root(project) / "snapshot",
+    )
+
+    assert not any(path.parts[0] == ".artifacts" for path in snapshot.input_digests)
+    assert not (snapshot.project.root / ".artifacts").exists()
 
 
 def test_provider_build_reads_one_immutable_input_snapshot(

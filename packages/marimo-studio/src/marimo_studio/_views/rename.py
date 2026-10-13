@@ -12,7 +12,11 @@ import errno
 from pathlib import Path
 
 from marimo_studio._artifacts.retention import artifact_exclusion_guard
-from marimo_studio._artifacts.store import move_artifact_state
+from marimo_studio._artifacts.store import (
+    move_artifact_state,
+    owns_artifact_state,
+    remove_artifact_state,
+)
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._views.publication_hold import require_unheld
@@ -72,6 +76,9 @@ def rename_view(
             new_name if current.default_view == name else current.default_view,
         )
         with artifact_exclusion_guard(project):
+            # The rename gives the new name a fresh owner, so state from an
+            # earlier incarnation must be recognized before the commit.
+            owned = owns_artifact_state(project)
             moved = False
             try:
                 with (
@@ -113,7 +120,11 @@ def rename_view(
                         write_committed=False,
                     ) from error
                 raise
-            move_artifact_state(project, renamed.view(new_name))
+            if owned:
+                move_artifact_state(project, renamed.view(new_name))
+            else:
+                remove_artifact_state(project)
+                remove_artifact_state(renamed.view(new_name))
             return renamed
 
 

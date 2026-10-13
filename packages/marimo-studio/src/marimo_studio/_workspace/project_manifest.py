@@ -10,7 +10,11 @@ from typing import cast
 import tomlkit
 
 from marimo_studio._filesystem.files import FileTree
-from marimo_studio._workspace.locations import VIEW_MANIFEST
+from marimo_studio._workspace.locations import (
+    ARTIFACT_DIRECTORY,
+    VIEW_MANIFEST,
+    CatalogLocations,
+)
 from marimo_studio._workspace.toml import read_toml
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
@@ -104,17 +108,29 @@ def encode_view_manifest(
 
 @dataclass(frozen=True)
 class CatalogProject(ViewProject):
-    """A view project in a Studio catalog, with its generated-state directory.
+    """A view project in a Studio catalog, with its generated-state location.
 
-    Providers receive the ``ViewProject`` fields. ``artifacts`` stays with
+    Providers receive the ``ViewProject`` fields. ``locations`` stays with
     Studio, which keeps build receipts, revisions, pins, and provider caches
-    there.
+    in ``artifacts``.
     """
 
-    artifacts: Path
+    locations: CatalogLocations
+
+    @property
+    def artifacts(self) -> Path:
+        """Return the directory that holds this view's generated state."""
+        if self.locations.keeps_state_in_views:
+            return self.root / ARTIFACT_DIRECTORY
+        return self.locations.artifacts(self.name)
+
+    @property
+    def artifact_base(self) -> Path:
+        """Return the directory that bounds this view's generated-state paths."""
+        return self.locations.artifact_base(self.root)
 
 
-def load_view_project(root: Path, *, artifacts: Path) -> CatalogProject:
+def load_view_project(root: Path, *, locations: CatalogLocations) -> CatalogProject:
     """Load one required ``view.toml`` from a named view directory."""
     manifest = root / VIEW_MANIFEST
     try:
@@ -134,5 +150,5 @@ def load_view_project(root: Path, *, artifacts: Path) -> CatalogProject:
         manifest=manifest.absolute(),
         provider=provider,
         options=options,
-        artifacts=artifacts.absolute(),
+        locations=locations,
     )

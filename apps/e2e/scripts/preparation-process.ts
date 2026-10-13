@@ -14,6 +14,14 @@ const DEFAULT_STOP_TIMEOUT = 5_000;
 const STOP_POLL_INTERVAL = 50;
 const DEFAULT_CAPTURE_LIMIT = 1024 * 1024;
 const PREPARATION_PROCESS_OWNER_ENV = "MARIMO_STUDIO_E2E_PREPARATION_PROCESS_OWNER";
+
+// Specs read view build state at its default place beside each notebook.
+export const withDefaultViewState = (environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const result = { ...environment };
+  delete result.MARIMO_STUDIO_STATE_DIR;
+  delete result.PYTHONPYCACHEPREFIX;
+  return result;
+};
 type Spawn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
 interface OwnerOptions {
   spawn?: Spawn;
@@ -70,10 +78,10 @@ class OwnedProcess {
     this.#child = spawn(command, args, {
       ...options,
       detached: options.detached ?? process.platform !== "win32",
-      env: {
+      env: withDefaultViewState({
         ...(options.env ?? process.env),
         [PREPARATION_PROCESS_OWNER_ENV]: this.#ownerNonce,
-      },
+      }),
     });
     this.#processGroupId = this.#child.pid;
     this.#captureStream(this.#child.stdout, "stdout");

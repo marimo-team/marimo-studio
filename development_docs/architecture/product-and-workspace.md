@@ -13,10 +13,11 @@ Studio reads either PEP 723 notebook metadata or `[tool.marimo-studio]` in
 `pyproject.toml`. Configuration selects the notebook, default view, permitted
 runtimes, log behavior, session preservation, and optional cell aliases.
 
-A `CatalogLocations` record pairs two locations, which `_workspace/locations.py` resolves:
+A `CatalogLocations` record, which `_workspace/locations.py` resolves, names
+the authored catalog, the generated state root, and the state base:
 
 ```text
-studio/<notebook-stem>/<view-name>/                  view_root: authored
+studio/<notebook-stem>/<view-name>/                         view_root: authored
 __marimo__/studio/<notebook-stem>/<view-name>/.artifacts/   state_root: generated
 ```
 
@@ -24,41 +25,54 @@ __marimo__/studio/<notebook-stem>/<view-name>/.artifacts/   state_root: generate
 configuration can select another portable relative path. Every catalog,
 mutation, build, and publication operation uses that resolved root.
 
-`state_root` lies in marimo's notebook output directory and follows
-`sys.pycache_prefix`, mirroring the resolved notebook folder under the resolved
-prefix. A `CatalogProject` is the provider-facing `ViewProject` plus its
-`artifacts` directory, so artifact code reads state without deriving it from
-the project root. Inspection hands providers a plain `ViewProject`, and provider
-hosts serialize only its fields.
+A state directory from `MARIMO_STUDIO_STATE_DIR` or the configured `state_dir`
+holds one `state_root` per notebook, named by a hash of the resolved notebook
+path, so notebooks at different paths never share state. `state_dir` is a
+portable relative path inside the project. Absolute locations belong to the
+host setting. Without either setting, `state_root` is `studio/<stem>/` in
+marimo's notebook output directory, which follows `sys.pycache_prefix`.
+`_workspace/locations.py` mirrors marimo's output rule because `_workspace`
+cannot import `_compat`. It mirrors the resolved notebook folder and resolves
+links in the result, and a parity test pins it to marimo for resolved paths.
+The `state_base` is the resolved directory the setting names. Studio refuses
+links below it, so links inside the generated tree cannot redirect writes or
+removals, and creates each notebook's `state_root` private to its account.
+Environment and configuration are read where definitions load, so the CLI,
+server, Python API, and Studio's worker processes resolve the same locations.
+The catalog generation hashes the configured `state_dir`, not the resolved
+location, so processes with different environments agree on it.
 
 A catalog created by Studio 0.3.0 sits at `__marimo__/studio/<stem>/`, which
-equals its state root without a cache prefix. Its views keep state in their own
-`.artifacts/` directories, which the project directory owns: removing or
-renaming a view removes or moves that state with the project, and builds never
-adopt it, because a process without a cache prefix still uses it in place.
-Studio resolves the old location when it holds views and the default location
-does not. A configured catalog is rejected when one of its views has the same
-name as a view left in the state root, since that view's state would land
-inside the older project.
+equals the default state root without a cache prefix. Each of its views keeps
+state in its own `.artifacts/` directory, which the project directory owns:
+removing or renaming a view removes or moves that state with the project.
+Studio resolves the old catalog location when it holds views and the default
+location does not. Discovery rejects a view whose state folder holds another
+view project and a view project that contains the state root.
+
+A `CatalogProject` is the provider-facing `ViewProject` plus its catalog's
+locations, so artifact code reads `artifacts` and `artifact_base` without
+deriving them from the project root. Inspection hands providers a plain
+`ViewProject`, and provider hosts serialize only its fields.
 
 State outside the project is named after its view, so `_artifacts/store.py`
-stamps it with the view's `.owners` generation. A view deleted and recreated
-outside Studio, or by a process with another cache prefix, reads the older
-state as unbuilt, and its next build discards that state's receipts. Removal
-moves `.artifacts/` aside before deleting it, so readers see the state whole or
-not at all.
-
-Generated-state paths open from the resolved marimo output directory with
-`FileTree`, which refuses links. The definition rejects a link or file at
-`studio/` and below, and state cleanup also refuses any directory that holds a
-`view.toml`. A build adopts `.artifacts/` that Studio 0.3.0 left inside a
-configured catalog's view when no lock or live pin holds it, and it holds those
-locks until the move completes.
+stamps it with the view's `.owners` generation under the publication lock.
+Studio reuses external state only when its stamp matches, and manifest repair
+applies the same check. A view deleted and recreated through Studio, or state
+copied in by another tool, reads as unbuilt, and its next build discards that
+state's receipts. The stamp leaves out directory identity, because the owner
+record travels with copies and survives remounts, so a copied project reuses
+its builds. Freshness checks rebuild a view whose folder was replaced with
+other sources. Rename checks ownership before its transaction gives the new
+name a fresh owner, then carries owned state and discards foreign state.
+Removal moves `.artifacts/` aside before deleting it, so readers see the state
+whole or not at all, and state cleanup refuses any directory that holds a
+`view.toml`.
 
 Catalog locks stay in the authored catalog's `.locks/`, so processes with
-different cache prefixes still serialize catalog changes. Artifact leases and
-pins live with the state, so each prefix sees its own readers. `.locks/` and
-each `.artifacts/` contain an ignore-everything `.gitignore`.
+different state locations still serialize catalog changes. Artifact leases and
+pins live with the state, so each state location sees its own readers.
+`.locks/` and each `.artifacts/` contain an ignore-everything `.gitignore`.
 
 ## Workspace lifecycle
 
@@ -244,7 +258,8 @@ Removal requires at least one remaining view. It stages the view directory,
 updates the default when needed, validates the remaining workspace, then removes
 the staged directory. Python dependencies remain unchanged.
 
-Artifact pins block removal while another process owns a published revision.
+Artifact pins block removal while another process that resolves the same
+state location owns a published revision.
 
 Server removal validates the observed catalog and view before draining local
 development work. The catalog stays available during that drain and while a

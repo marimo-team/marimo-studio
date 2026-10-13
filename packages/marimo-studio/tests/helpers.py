@@ -10,6 +10,7 @@ from typing import Any
 import marimo
 import pytest
 
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.project_manifest import CatalogProject, load_view_project
 from marimo_studio.view_providers import ViewProject
 
@@ -171,7 +172,7 @@ def load_standalone_project(root: Path) -> CatalogProject:
     Studio 0.3 default catalogs keep each view's state in its ``.artifacts/``
     directory, so these projects exercise that supported layout.
     """
-    return load_view_project(root, artifacts=_standalone_artifacts(root))
+    return load_view_project(root, locations=CatalogLocations.inside_views(root.parent))
 
 
 def catalog_project(project: ViewProject) -> CatalogProject:
@@ -182,9 +183,5 @@ def catalog_project(project: ViewProject) -> CatalogProject:
         project.manifest,
         project.provider,
         project.options,
-        artifacts=_standalone_artifacts(project.root),
+        locations=CatalogLocations.inside_views(project.root.parent),
     )
-
-
-def _standalone_artifacts(root: Path) -> Path:
-    return root / ".artifacts"

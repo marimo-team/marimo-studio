@@ -45,15 +45,15 @@ def test_view_inventory_ignores_a_project_removed_during_load(
         )
     native_load = workspace_config.load_view_project
 
-    def load(directory: Path, *, artifacts: Path):
+    def load(directory: Path, *, locations: CatalogLocations):
         if directory.name == "gone":
             shutil.rmtree(directory)
             raise ConfigurationError(f"View project manifest is missing: {directory}")
-        return native_load(directory, artifacts=artifacts)
+        return native_load(directory, locations=locations)
 
     monkeypatch.setattr(workspace_config, "load_view_project", load)
 
-    catalog = CatalogLocations(root, tmp_path / "__marimo__" / "studio" / "analysis")
+    catalog = CatalogLocations.resolve(tmp_path / "analysis.py", root)
     assert set(workspace_config.discover_views(catalog)) == {"stable"}
 
 

@@ -89,6 +89,47 @@ def test_isolated_probe_uses_the_runtime_process_budget(
     }
 
 
+def test_isolated_workers_resolve_the_parent_output_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[list[str]] = []
+
+    class Supervisor:
+        def run(self, command: list[str], timeout: float):
+            captured.append(command)
+            Path(command[-1]).write_bytes(_empty_response())
+            return SimpleNamespace(
+                timed_out=False,
+                output_too_large=False,
+                returncode=0,
+                stdout=b"",
+                stderr=b"",
+            )
+
+        def cancel(self) -> None:
+            return
+
+    monkeypatch.setattr(async_command, "ProcessSupervisor", Supervisor)
+    # `-X pycache_prefix` reaches this process only, so the worker must receive
+    # it to place view state where the parent does.
+    monkeypatch.setattr("sys.pycache_prefix", str(tmp_path / "prefix"))
+    asyncio.run(
+        runtime_process.probe_runtime_isolated(
+            tmp_path / "analysis.py",
+            cell_ids=("cell",),
+            value_selector_groups=(("value",),),
+            output_groups=({"output": ()},),
+            show_tracebacks=True,
+            timeout=42,
+            max_json_bytes=1024,
+        )
+    )
+
+    (command,) = captured
+    assert f"pycache_prefix={tmp_path / 'prefix'}" in command
+
+
 @pytest.mark.parametrize(
     "timeout",
     (-1, float("nan"), 301, 10**400),

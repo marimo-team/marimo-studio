@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-import errno
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
-from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock
 
 import pytest
 from click.testing import CliRunner
 from starlette.testclient import TestClient
 
-import marimo_studio._artifacts.store as store_module
 import marimo_studio._views.create as create_module
 from marimo_studio._artifacts.lock import build_lock
 from marimo_studio._artifacts.repository import read_artifact_state
@@ -33,7 +30,11 @@ from marimo_studio._views.remove import delete_view
 from marimo_studio._views.rename import rename_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.project_manifest import CatalogProject
-from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
+from marimo_studio.errors import (
+    ConfigurationError,
+    ViewDeletionError,
+    WorkspaceGenerationConflictError,
+)
 from marimo_studio.view_providers import BuildRequest, BuildResult
 from marimo_studio.view_providers._host import provider_registry
 
@@ -223,11 +224,11 @@ def test_a_studio_03_catalog_keeps_its_views_and_builds(
     assert not notebook_path.parent.joinpath("studio", "analysis").exists()
 
 
-def test_moving_a_studio_03_catalog_into_studio_keeps_its_builds(
+def test_moving_a_studio_03_catalog_into_studio_rebuilds_its_views(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    revision = _build(created_one_view(notebook_path).view("dashboard"))
+    _build(created_one_view(notebook_path).view("dashboard"))
     legacy = _move_to_legacy_catalog(notebook_path)
     current = notebook_path.parent / "studio" / "analysis"
     shutil.move(legacy, current)
@@ -236,9 +237,9 @@ def test_moving_a_studio_03_catalog_into_studio_keeps_its_builds(
     builds = _count_provider_builds(monkeypatch, project)
 
     assert project.root == current / "dashboard"
-    assert _build(project) == revision
-    assert builds == []
-    assert not project.root.joinpath(".artifacts").exists()
+    _build(project)
+    assert builds == ["dashboard"]
+    assert (project.artifacts / "development.json").is_file()
 
 
 def test_status_reports_a_studio_03_catalog_before_configuration(
@@ -279,25 +280,6 @@ def test_status_reports_the_view_root_and_build_state_root(
     assert {key: configured[key] for key in expected} == expected
 
 
-def test_first_build_moves_state_left_inside_a_configured_view(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _configure(notebook_path, "views")
-    prepare_view(notebook_path)
-    project = load_studio(notebook_path).view("dashboard")
-    revision = _build(project)
-    # Studio 0.3 kept this state inside each view of a configured catalog.
-    shutil.move(project.artifacts, project.root / ".artifacts")
-    builds = _count_provider_builds(monkeypatch, project)
-
-    assert read_artifact_state(project, "development").artifact is None
-    assert _build(project) == revision
-    assert builds == []
-    assert (project.artifacts / "development.json").is_file()
-    assert not project.root.joinpath(".artifacts").exists()
-
-
 def test_removing_a_view_removes_its_build_state(notebook_path: Path) -> None:
     created_one_view(notebook_path)
     prepare_view(notebook_path, "report")
@@ -329,7 +311,7 @@ def test_renaming_a_view_carries_its_build_state(notebook_path: Path) -> None:
 
 def test_a_new_view_discards_state_left_under_its_name(notebook_path: Path) -> None:
     studio = created_one_view(notebook_path)
-    leftover = studio.artifacts("report") / "development.json"
+    leftover = studio.locations.artifacts("report") / "development.json"
     leftover.parent.mkdir(parents=True)
     leftover.write_text("{}", encoding="utf-8")
 
@@ -355,7 +337,7 @@ def test_a_lease_reports_a_view_removed_outside_studio(notebook_path: Path) -> N
 def test_a_view_root_inside_the_build_state_is_rejected(notebook_path: Path) -> None:
     _configure(notebook_path, "__marimo__/studio/analysis/views")
 
-    with pytest.raises(ConfigurationError, match="inside Studio's generated"):
+    with pytest.raises(ConfigurationError, match="inside Studio's view build state"):
         prepare_view(notebook_path)
 
 
@@ -369,7 +351,7 @@ def test_a_view_that_would_contain_build_state_is_rejected(
         'schema = 1\nprovider = "marimo-studio/vanilla"\n', encoding="utf-8"
     )
 
-    with pytest.raises(ConfigurationError, match="contains Studio's generated"):
+    with pytest.raises(ConfigurationError, match="contains Studio's view build state"):
         load_studio(notebook_path)
 
 
@@ -384,7 +366,7 @@ def test_a_configured_view_root_rejects_a_studio_03_view_with_the_same_name(
         notebook_path, lambda config: config.update(view_root="views")
     )
 
-    with pytest.raises(ConfigurationError, match="also exists in"):
+    with pytest.raises(ConfigurationError, match="holds another view project"):
         load_studio(notebook_path)
 
     assert legacy.joinpath("dashboard", "view.toml").is_file()
@@ -435,16 +417,19 @@ def test_state_cleanup_keeps_a_directory_that_holds_a_view(
     studio = created_one_view(notebook_path)
     # A state path that spells an authored view, as a case-insensitive file
     # system can make two different spellings name one directory.
-    authored = studio.artifacts("report").parent
-    authored.mkdir(parents=True)
+    authored = studio.locations.artifacts("report").parent
+    authored.joinpath(".artifacts").mkdir(parents=True)
     authored.joinpath("view.toml").write_text("schema = 1\n", encoding="utf-8")
+    receipt = authored / ".artifacts" / "development.json"
+    receipt.write_text("{}", encoding="utf-8")
     elsewhere = studio.view("dashboard")
-    misplaced = replace(elsewhere, artifacts=authored / ".artifacts")
+    misplaced = replace(elsewhere, name="report")
 
     remove_artifact_state(misplaced)
-    move_artifact_state(misplaced, replace(elsewhere, artifacts=studio.artifacts("x")))
+    move_artifact_state(misplaced, replace(elsewhere, name="x"))
 
     assert authored.joinpath("view.toml").is_file()
+    assert receipt.read_text(encoding="utf-8") == "{}"
 
 
 def test_a_cache_prefix_leaves_state_inside_a_studio_03_view_in_place(
@@ -487,45 +472,6 @@ def test_a_late_writer_cannot_recreate_state_for_a_removed_view(
         pass
 
     assert not project.artifacts.parent.exists()
-
-
-@pytest.mark.parametrize(
-    "holder", ("publication-lock", "build-lock", "pin", "other-file-system")
-)
-def test_a_build_keeps_earlier_state_that_is_still_in_use(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    holder: str,
-) -> None:
-    _configure(notebook_path, "views")
-    prepare_view(notebook_path)
-    project = load_studio(notebook_path).view("dashboard")
-    _build(project)
-    legacy = project.root / ".artifacts"
-    shutil.move(project.artifacts, legacy)
-    builds = _count_provider_builds(monkeypatch, project)
-
-    with ExitStack() as held:
-        if holder in {"publication-lock", "build-lock"}:
-            name = (
-                ".publication.lock" if holder == "publication-lock" else ".build.lock"
-            )
-            held.enter_context(FileTree(project.root).lock(legacy / name))
-        elif holder == "pin":
-            pin = legacy / ".pins" / ("0" * 64) / f"{os.getpid()}-{'0' * 32}"
-            pin.parent.mkdir(parents=True)
-            held.enter_context(FileTree(project.root).lock(pin))
-        else:
-            monkeypatch.setattr(
-                store_module,
-                "_move_directory",
-                Mock(side_effect=OSError(errno.EXDEV, "Cross-device link")),
-            )
-        _build(project)
-
-    assert builds == ["dashboard"]
-    assert (legacy / "development.json").is_file()
-    assert (project.artifacts / "development.json").is_file()
 
 
 def test_studio_03_views_keep_their_state_through_rename_and_removal(
@@ -592,27 +538,6 @@ def test_view_creation_rejects_a_catalog_that_moved_before_its_lock(
 
     assert notebook_path.read_bytes() == original
     assert not tuple(notebook_path.parent.joinpath("studio").glob("*/*/view.toml"))
-
-
-def test_a_build_adopts_earlier_state_with_only_stale_pins(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _configure(notebook_path, "views")
-    prepare_view(notebook_path)
-    project = load_studio(notebook_path).view("dashboard")
-    revision = _build(project)
-    legacy = project.root / ".artifacts"
-    shutil.move(project.artifacts, legacy)
-    # A pin whose process exited holds no lock.
-    pin = legacy / ".pins" / revision.removeprefix("sha256:") / f"1-{'0' * 32}"
-    pin.parent.mkdir(parents=True)
-    pin.write_text("", encoding="utf-8")
-    builds = _count_provider_builds(monkeypatch, project)
-
-    assert _build(project) == revision
-    assert builds == []
-    assert not legacy.exists()
 
 
 def test_a_view_recreated_outside_studio_starts_unbuilt(notebook_path: Path) -> None:
@@ -724,38 +649,11 @@ def test_build_state_follows_a_linked_output_directory_under_the_cache_prefix(
     assert (receipt / "development.json").is_file()
 
 
-def test_a_build_holds_the_earlier_state_locks_while_it_moves_the_state(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _configure(notebook_path, "views")
-    prepare_view(notebook_path)
-    project = load_studio(notebook_path).view("dashboard")
-    revision = _build(project)
-    shutil.move(project.artifacts, project.root / ".artifacts")
-    available: dict[str, bool] = {}
-
-    def move(source: Path, destination: Path) -> None:
-        # Another Studio 0.3 process would lock these files to build or lease.
-        for name in (".publication.lock", ".build.lock"):
-            assert (source / name).is_file()
-            with FileTree(project.root).lock(
-                source / name, blocking=False, create=False
-            ) as acquired:
-                available[name] = acquired
-        os.rename(source, destination)
-
-    monkeypatch.setattr(store_module, "_move_directory", move)
-
-    assert _build(project) == revision
-    assert available == {".publication.lock": False, ".build.lock": False}
-
-
 def test_a_new_view_leaves_state_that_a_running_build_still_owns(
     notebook_path: Path,
 ) -> None:
     studio = created_one_view(notebook_path)
-    leftover = studio.artifacts("report") / "development.json"
+    leftover = studio.locations.artifacts("report") / "development.json"
     leftover.parent.mkdir(parents=True)
     leftover.write_text("{}", encoding="utf-8")
     build_lock_file = studio.view_root / ".locks" / "report.build.lock"
@@ -765,3 +663,411 @@ def test_a_new_view_leaves_state_that_a_running_build_still_owns(
         prepare_view(notebook_path, "report")
 
     assert leftover.read_text(encoding="utf-8") == "{}"
+    report = load_studio(notebook_path).view("report")
+    assert read_artifact_state(report, "development").state is None
+
+
+def _second_notebook(notebook: Path, name: str) -> Path:
+    second = notebook.with_name(name)
+    shutil.copy(notebook, second)
+    return second
+
+
+def test_the_host_state_directory_holds_build_state_outside_the_project(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = tmp_path / "host-state"
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", str(host))
+    project = created_one_view(notebook_path).view("dashboard")
+
+    _build(project)
+
+    assert project.artifacts.is_relative_to(host.resolve())
+    assert (project.artifacts / "development.json").is_file()
+    assert not notebook_path.parent.joinpath("__marimo__", "studio").exists()
+
+
+def test_each_notebook_gets_its_own_folder_in_the_host_state_directory(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = tmp_path / "host-state"
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", str(host))
+    notebooks = (tmp_path / "a" / "analysis.py", tmp_path / "b" / "analysis.py")
+    for notebook in notebooks:
+        notebook.parent.mkdir()
+        shutil.copy(notebook_path, notebook)
+
+    first, second = (Path(str(_status(path)["state_root"])) for path in notebooks)
+
+    assert first.parent == second.parent == host.resolve()
+    assert first != second
+
+
+def test_the_host_state_directory_overrides_the_configured_state_directory(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_one_view(notebook_path)
+    update_notebook_config(
+        notebook_path, lambda config: config.update(state_dir="state")
+    )
+    host = tmp_path / "host-state"
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", str(host))
+
+    assert Path(str(_status(notebook_path)["state_root"])).parent == host.resolve()
+
+
+def test_an_empty_host_state_directory_keeps_the_default(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_one_view(notebook_path)
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", "")
+
+    default = notebook_path.parent / "__marimo__" / "studio" / "analysis"
+    assert _status(notebook_path)["state_root"] == str(default)
+
+
+def test_the_host_state_directory_must_be_an_absolute_path(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_one_view(notebook_path)
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", "relative/state")
+
+    with pytest.raises(ConfigurationError, match="must be an absolute path"):
+        load_studio(notebook_path)
+
+
+def test_a_configured_state_directory_holds_build_state(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    created_one_view(notebook_path)
+    update_notebook_config(
+        notebook_path, lambda config: config.update(state_dir=".cache/studio")
+    )
+    project = load_studio(notebook_path).view("dashboard")
+
+    _build(project)
+
+    directory = (tmp_path / ".cache" / "studio").resolve()
+    assert project.artifacts.parent.parent.parent == directory
+    assert (project.artifacts / "development.json").is_file()
+
+
+def test_a_project_state_directory_resolves_from_its_configuration_file(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebooks" / "analysis.py"
+    notebook.parent.mkdir()
+    shutil.copy(notebook_path, notebook)
+    tmp_path.joinpath("pyproject.toml").write_text(
+        "[tool.marimo-studio]\n"
+        'notebook = "notebooks/analysis.py"\n'
+        'state_dir = "state"\n'
+        'default = "dashboard"\n',
+        encoding="utf-8",
+    )
+    prepare_view(notebook)
+
+    state_root = Path(str(_status(notebook)["state_root"]))
+
+    assert state_root.parent == (tmp_path / "state").resolve()
+
+
+def test_notebooks_that_share_a_state_directory_keep_separate_state(
+    notebook_path: Path,
+) -> None:
+    created_one_view(notebook_path)
+    update_notebook_config(
+        notebook_path, lambda config: config.update(state_dir="shared")
+    )
+    second = _second_notebook(notebook_path, "second.py")
+    prepare_view(second)
+    first_project = load_studio(notebook_path).view("dashboard")
+    second_project = load_studio(second).view("dashboard")
+
+    _build(first_project)
+    _build(second_project)
+
+    assert first_project.artifacts.parent.parent.parent == (
+        second_project.artifacts.parent.parent.parent
+    )
+    assert first_project.artifacts != second_project.artifacts
+    assert read_artifact_state(first_project, "development").state is not None
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    (
+        ("", "must be a non-empty relative path"),
+        (3, "must be a non-empty relative path"),
+        (".", "must be a non-empty relative path"),
+        ("/var/cache/studio", "must be a non-empty relative path"),
+        ("~/studio-state", "names a home directory"),
+        ("../state", "one portable path component"),
+        ("state\0dir", "control characters"),
+    ),
+)
+def test_an_invalid_state_directory_is_a_configuration_error(
+    notebook_path: Path,
+    value: object,
+    message: str,
+) -> None:
+    created_one_view(notebook_path)
+    update_notebook_config(notebook_path, lambda config: config.update(state_dir=value))
+
+    with pytest.raises(ConfigurationError, match=message):
+        load_studio(notebook_path)
+
+
+def test_a_file_at_the_configured_state_directory_is_reported(
+    notebook_path: Path,
+) -> None:
+    created_one_view(notebook_path)
+    notebook_path.with_name("state").write_text("", encoding="utf-8")
+    update_notebook_config(
+        notebook_path, lambda config: config.update(state_dir="state")
+    )
+
+    with pytest.raises(ConfigurationError, match="cannot keep view build state"):
+        load_studio(notebook_path)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="symlink creation needs elevated Windows access"
+)
+def test_a_linked_notebook_folder_in_the_host_state_directory_is_rejected(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_one_view(notebook_path)
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", str(tmp_path / "host-state"))
+    folder = Path(str(_status(notebook_path)["state_root"]))
+    folder.parent.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    folder.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ConfigurationError, match="cannot keep view build state"):
+        load_studio(notebook_path)
+
+    assert list(outside.iterdir()) == []
+
+
+def test_the_host_state_directory_rebuilds_a_studio_03_catalog_elsewhere(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _build(created_one_view(notebook_path).view("dashboard"))
+    legacy = _move_to_legacy_catalog(notebook_path)
+    in_view = legacy / "dashboard" / ".artifacts" / "development.json"
+    receipt = in_view.read_bytes()
+    host = tmp_path / "host-state"
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", str(host))
+    project = load_studio(notebook_path).view("dashboard")
+    builds = _count_provider_builds(monkeypatch, project)
+
+    _build(project)
+
+    assert builds == ["dashboard"]
+    assert project.artifacts.is_relative_to(host.resolve())
+    assert in_view.read_bytes() == receipt
+
+
+def test_a_configured_catalog_rebuilds_state_left_inside_its_views(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure(notebook_path, "views")
+    prepare_view(notebook_path)
+    project = load_studio(notebook_path).view("dashboard")
+    _build(project)
+    # Studio 0.3 kept this state inside each view of a configured catalog.
+    earlier = project.root / ".artifacts"
+    shutil.move(project.artifacts, earlier)
+    builds = _count_provider_builds(monkeypatch, project)
+
+    _build(project)
+
+    assert builds == ["dashboard"]
+    assert (project.artifacts / "development.json").is_file()
+    assert (earlier / "development.json").is_file()
+
+
+def test_build_state_without_its_owner_stamp_is_rebuilt(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = created_one_view(notebook_path).view("dashboard")
+    _build(project)
+    # State that another tool copied in carries no record of this view.
+    project.artifacts.joinpath("owner").unlink()
+    builds = _count_provider_builds(monkeypatch, project)
+
+    assert read_artifact_state(project, "development").state is None
+    _build(project)
+    assert builds == ["dashboard"]
+
+
+def test_renaming_a_recreated_view_leaves_the_earlier_build_behind(
+    notebook_path: Path,
+) -> None:
+    created_one_view(notebook_path)
+    prepare_view(notebook_path, "report")
+    old = load_studio(notebook_path).view("report")
+    _build(old)
+    shutil.rmtree(old.root)
+    load_studio(notebook_path)
+    shutil.copytree(old.root.with_name("dashboard"), old.root)
+
+    renamed = rename_view(load_studio(notebook_path), "report", "summary")
+
+    summary = renamed.view("summary")
+    assert read_artifact_state(summary, "development").state is None
+    assert lease_published_artifact(summary, "development") is None
+
+
+def test_a_deletion_with_incomplete_cleanup_still_removes_build_state(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_one_view(notebook_path)
+    prepare_view(notebook_path, "report")
+    project = load_studio(notebook_path).view("report")
+    _build(project)
+    remove = FileTree.remove
+
+    def fail_staged_cleanup(tree: FileTree, path: Path, **options: Any) -> None:
+        if path.name == "report" and path.joinpath("view.toml").exists():
+            raise PermissionError("simulated Windows handle")
+        remove(tree, path, **options)
+
+    monkeypatch.setattr(FileTree, "remove", fail_staged_cleanup)
+
+    with pytest.raises(ViewDeletionError):
+        delete_view(load_studio(notebook_path), "report")
+
+    assert not project.artifacts.exists()
+
+
+def test_the_catalog_generation_follows_configuration_not_environment(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_one_view(notebook_path)
+    default = _status(notebook_path)["generation"]
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", str(tmp_path / "host-state"))
+    hosted = _status(notebook_path)["generation"]
+    update_notebook_config(
+        notebook_path, lambda config: config.update(state_dir="state")
+    )
+
+    assert hosted == default
+    assert _status(notebook_path)["generation"] != default
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="symlink creation needs elevated Windows access"
+)
+def test_the_next_build_replaces_a_linked_owner_stamp(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    project = created_one_view(notebook_path).view("dashboard")
+    _build(project)
+    target = tmp_path / "elsewhere"
+    target.write_text("kept", encoding="utf-8")
+    stamp = project.artifacts / "owner"
+    stamp.unlink()
+    stamp.symlink_to(target)
+
+    assert read_artifact_state(project, "development").state is None
+    _build(project)
+    assert read_artifact_state(project, "development").state is not None
+    assert target.read_text(encoding="utf-8") == "kept"
+
+
+def test_a_copied_project_reuses_its_builds(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revision = _build(created_one_view(notebook_path).view("dashboard"))
+    copy = tmp_path / "copy"
+    copy.mkdir()
+    shutil.copy(notebook_path, copy / notebook_path.name)
+    for folder in ("studio", "__marimo__"):
+        shutil.copytree(tmp_path / folder, copy / folder)
+    project = load_studio(copy / notebook_path.name).view("dashboard")
+    builds = _count_provider_builds(monkeypatch, project)
+
+    assert _build(project) == revision
+    assert builds == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_other_accounts_cannot_read_a_notebook_state_folder(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MARIMO_STUDIO_STATE_DIR", str(tmp_path / "host-state"))
+    project = created_one_view(notebook_path).view("dashboard")
+
+    _build(project)
+
+    folder = project.locations.state_root
+    assert stat.S_IMODE(folder.stat().st_mode) & 0o077 == 0
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="symlink creation needs elevated Windows access"
+)
+def test_a_linked_manifest_in_the_studio_03_folder_names_no_view(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    created_one_view(notebook_path)
+    elsewhere = tmp_path / "elsewhere.toml"
+    elsewhere.write_text('schema = 1\nprovider = "marimo-studio/vanilla"\n')
+    stray = _legacy_catalog(notebook_path) / "report"
+    stray.mkdir(parents=True)
+    stray.joinpath("view.toml").symlink_to(elsewhere)
+
+    studio = load_studio(notebook_path)
+
+    assert studio.view_root == notebook_path.parent / "studio" / "analysis"
+
+
+def test_a_new_view_keeps_state_that_a_reader_still_holds(
+    notebook_path: Path,
+) -> None:
+    created_one_view(notebook_path)
+    prepare_view(notebook_path, "report")
+    old = load_studio(notebook_path).view("report")
+    _build(old)
+    receipt = old.artifacts / "development.json"
+    lease = lease_published_artifact(old, "development")
+    assert lease is not None
+    try:
+        shutil.rmtree(old.root)
+        load_studio(notebook_path)
+
+        prepare_view(notebook_path, "report")
+
+        assert receipt.is_file()
+        report = load_studio(notebook_path).view("report")
+        assert read_artifact_state(report, "development").state is None
+    finally:
+        lease.close()

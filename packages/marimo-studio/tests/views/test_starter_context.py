@@ -12,6 +12,7 @@ from marimo_studio._views.starter_context import (
     starter_bindings,
     starter_context,
 )
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.models import StudioDefinition
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import CellRef, StarterPlan
@@ -53,8 +54,7 @@ def _studio(path: Path, cells: dict[str, CellRef]) -> StudioDefinition:
         config_path=path,
         config_source="notebook",
         notebook=path,
-        view_root=path.parent / "studio" / path.stem,
-        state_root=path.parent / "__marimo__" / "studio" / path.stem,
+        locations=CatalogLocations.resolve(path, path.parent / "studio" / path.stem),
         default_view="dashboard",
         default_runtime="server",
         runtimes=("server",),

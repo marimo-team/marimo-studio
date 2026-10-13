@@ -373,12 +373,12 @@ def _load_build_owner(
     registry = provider_registry()
     with view_mutation_lock(project.root.parent, project.name):
         selected = registry.validate_project(
-            load_view_project(project.root, artifacts=project.artifacts)
+            load_view_project(project.root, locations=project.locations)
         )
         selected_profile = registry.validate_profile(selected.provider, profile)
         provider = registry.get(selected.provider)
         current = registry.validate_project(
-            load_view_project(selected.root, artifacts=selected.artifacts)
+            load_view_project(selected.root, locations=selected.locations)
         )
         if current != selected:
             raise ConfigurationError(

@@ -59,8 +59,7 @@ class StudioDefinition:
     config_path: Path
     config_source: Literal["notebook", "pyproject"]
     notebook: Path
-    view_root: Path
-    state_root: Path
+    locations: CatalogLocations
     default_view: str
     default_runtime: str
     runtimes: tuple[str, ...]
@@ -74,12 +73,12 @@ class StudioDefinition:
         return self.config_source == "notebook"
 
     @property
-    def locations(self) -> CatalogLocations:
-        return CatalogLocations(self.view_root, self.state_root)
+    def view_root(self) -> Path:
+        return self.locations.view_root
 
-    def artifacts(self, view: str) -> Path:
-        """Return the generated-state directory for one named view."""
-        return self.locations.artifacts(view)
+    @property
+    def state_root(self) -> Path:
+        return self.locations.state_root
 
 
 @dataclass(frozen=True)

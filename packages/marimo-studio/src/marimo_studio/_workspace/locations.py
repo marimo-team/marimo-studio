@@ -1,25 +1,32 @@
 """Place a notebook's authored view catalog and its generated view state.
 
 Authored view projects live in the catalog, ``studio/<notebook-stem>/`` beside
-the notebook unless ``view_root`` selects another folder. Studio keeps each
-view's replaceable build state in marimo's output directory for the notebook::
+the notebook unless ``view_root`` selects another folder. Each view keeps its
+replaceable build state in ``<state_root>/<view>/.artifacts/``::
 
     analysis.py
     studio/analysis/dashboard/view.toml
     __marimo__/studio/analysis/dashboard/.artifacts/
 
-The output directory moves under ``PYTHONPYCACHEPREFIX`` as marimo's session
-snapshots and caches do, so a host can keep generated notebook output outside
-its users' working trees.
+The notebook's state root is one folder in a state directory. Studio takes
+the state directory from the first setting that is present:
+
+1. ``MARIMO_STUDIO_STATE_DIR``, which a host sets for every notebook.
+2. ``state_dir`` in the notebook's Studio configuration.
+
+Either directory holds one folder per notebook, named by a hash of the
+resolved notebook path, so notebooks and checkouts never share state. Without
+either setting, the state root is ``studio/<notebook-stem>/`` in marimo's
+output directory for the notebook.
 
 Catalogs created by Studio 0.3.0 and earlier live at
-``__marimo__/studio/<notebook-stem>/``. Studio keeps opening them there, and
-their state paths are unchanged because each view's ``.artifacts/`` directory
-already sits at the state location.
+``__marimo__/studio/<notebook-stem>/``. That is also their default state root,
+so each view keeps its state inside its project.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from dataclasses import dataclass
@@ -36,6 +43,7 @@ MARIMO_DIRECTORY = "__marimo__"
 STUDIO_DIRECTORY = "studio"
 ARTIFACT_DIRECTORY = ".artifacts"
 VIEW_MANIFEST = "view.toml"
+STATE_DIR_ENV = "MARIMO_STUDIO_STATE_DIR"
 _NOTEBOOK_STEM_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".py")
 
 
@@ -51,13 +59,21 @@ def _stem(notebook: Path) -> str:
     return notebook.stem
 
 
+def _is_view_project(directory: Path) -> bool:
+    # Discovery refuses links, so a linked folder or manifest names no view.
+    manifest = directory / VIEW_MANIFEST
+    return (
+        not is_temporary_name(directory.name)
+        and not directory.is_symlink()
+        and not manifest.is_symlink()
+        and manifest.is_file()
+    )
+
+
 def holds_views(directory: Path) -> bool:
     """Return whether ``directory`` contains at least one view project."""
     try:
-        return any(
-            not is_temporary_name(child.name) and (child / VIEW_MANIFEST).is_file()
-            for child in directory.iterdir()
-        )
+        return any(_is_view_project(child) for child in directory.iterdir())
     except (FileNotFoundError, NotADirectoryError):
         return False
     except OSError as error:
@@ -85,18 +101,6 @@ def default_view_root(notebook: Path) -> Path:
     return legacy
 
 
-def is_legacy_view_root(view_root: Path) -> bool:
-    """Return whether ``view_root`` uses the Studio 0.3.0 default location.
-
-    Processes that run without a cache prefix keep using the state inside
-    each view of such a catalog.
-    """
-    return (
-        view_root.parent.name == STUDIO_DIRECTORY
-        and view_root.parent.parent.name == MARIMO_DIRECTORY
-    )
-
-
 def notebook_output_directory(notebook: Path) -> Path:
     """Return the ``__marimo__`` directory where marimo writes notebook output.
 
@@ -105,9 +109,9 @@ def notebook_output_directory(notebook: Path) -> Path:
     notebook's directory under that prefix, as Python does for
     ``__pycache__``. Studio follows that rule with resolved paths: it mirrors
     the resolved notebook folder under the prefix and resolves links in the
-    result, including one at ``__marimo__``. Build tools that require
-    resolved cache paths then accept the state, and the working directory
-    never changes it.
+    result, including one at ``__marimo__``, so build tools that require
+    resolved cache paths accept the state. A relative prefix resolves against
+    the working directory, as it does for marimo.
     """
     directory = notebook.expanduser().resolve().parent
     prefix = sys.pycache_prefix
@@ -117,25 +121,15 @@ def notebook_output_directory(notebook: Path) -> Path:
     return Path(os.path.realpath(mirrored))
 
 
-def view_state_root(notebook: Path) -> Path:
-    """Return the directory holding generated state for a notebook's views."""
-    return notebook_output_directory(notebook) / STUDIO_DIRECTORY / _stem(notebook)
-
-
-def notebook_output_directory_of(state_root: Path) -> Path:
-    """Return the marimo output directory that holds a catalog's state root."""
-    return state_root.parent.parent
-
-
-def state_anchor(artifacts: Path) -> Path:
-    """Return the directory below which view state paths must not cross links.
-
-    ``CatalogLocations`` places state at
-    ``<output>/studio/<stem>/<view>/.artifacts``, where ``<output>`` is the
-    resolved marimo output directory. Studio opens ``<output>`` and refuses
-    links at ``studio`` and below.
-    """
-    return artifacts.parents[3]
+def _host_state_directory() -> Path | None:
+    value = os.environ.get(STATE_DIR_ENV, "")
+    if not value:
+        return None
+    if not Path(value).is_absolute():
+        raise ConfigurationError(
+            f"{STATE_DIR_ENV} must be an absolute path, received {value!r}"
+        )
+    return Path(value)
 
 
 @dataclass(frozen=True)
@@ -145,13 +139,57 @@ class CatalogLocations:
     view_root: Path
     """Authored view projects, one directory per view."""
     state_root: Path
-    """Replaceable view build state under marimo's output directory."""
+    """Replaceable view build state, one directory per view."""
+    state_base: Path
+    """The directory below which generated-state paths must not cross links."""
 
     @classmethod
     def default(cls, notebook: Path) -> CatalogLocations:
         """Return the locations for a notebook whose configuration sets no root."""
-        return cls(default_view_root(notebook), view_state_root(notebook))
+        return cls.resolve(notebook, default_view_root(notebook))
+
+    @classmethod
+    def resolve(
+        cls,
+        notebook: Path,
+        view_root: Path,
+        state_dir: Path | None = None,
+    ) -> CatalogLocations:
+        """Return the locations for a catalog, choosing its state root.
+
+        ``state_dir`` is the configured state directory, if any. The host
+        setting replaces it, and marimo's output directory supplies the
+        default.
+        """
+        notebook = notebook.expanduser().resolve()
+        directory = _host_state_directory() or state_dir
+        if directory is not None:
+            base = Path(os.path.realpath(directory))
+            digest = hashlib.sha256(os.fsencode(notebook)).hexdigest()[:32]
+            return cls(view_root, base / digest, base)
+        base = notebook_output_directory(notebook)
+        root = base / STUDIO_DIRECTORY / _stem(notebook)
+        if os.path.realpath(root) == os.path.realpath(view_root):
+            return cls.inside_views(view_root)
+        return cls(view_root, root, base)
+
+    @classmethod
+    def inside_views(cls, view_root: Path) -> CatalogLocations:
+        """Return locations that keep each view's state inside its project."""
+        return cls(view_root, view_root, view_root)
+
+    @property
+    def keeps_state_in_views(self) -> bool:
+        return self.state_root == self.view_root
 
     def artifacts(self, view: str) -> Path:
         """Return the generated-state directory for one named view."""
         return self.state_root / view / ARTIFACT_DIRECTORY
+
+    def artifact_base(self, project: Path) -> Path:
+        """Return the directory that bounds a view project's generated state.
+
+        State inside the project stays bounded by the project directory, so a
+        removed project cannot be recreated through its state.
+        """
+        return project if self.keeps_state_in_views else self.state_base

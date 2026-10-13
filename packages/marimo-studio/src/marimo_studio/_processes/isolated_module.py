@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,7 +64,7 @@ async def run_isolated_module_request(
                     sys.executable,
                     # The child derives view state paths from the same prefix.
                     *(
-                        ("-X", f"pycache_prefix={sys.pycache_prefix}")
+                        ("-X", f"pycache_prefix={os.path.abspath(sys.pycache_prefix)}")
                         if sys.pycache_prefix is not None
                         else ()
                     ),
