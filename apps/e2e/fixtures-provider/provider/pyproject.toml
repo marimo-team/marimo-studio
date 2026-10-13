@@ -9,7 +9,7 @@ report = "fixture_provider:provider"
 web = "fixture_provider:multi_provider"
 
 [build-system]
-requires = ["uv_build==0.12.2"]
+requires = ["uv_build==0.12.23"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

@@ -27,7 +27,7 @@
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitepress": "catalog:",
-    "vitepress-plugin-llms": "1.13.2",
+    "vitepress-plugin-llms": "1.14.0",
     "vue": "catalog:"
   },
   "portless": {

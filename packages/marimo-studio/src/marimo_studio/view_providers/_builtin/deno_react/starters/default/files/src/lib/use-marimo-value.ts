@@ -1,4 +1,4 @@
-// @deno-types="npm:@types/react@19.2.10"
+// @deno-types="npm:@types/react@19.3.0"
 import { useEffect, useRef, useState } from "react";
 
 export type MarimoJsonValue =

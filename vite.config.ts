@@ -245,6 +245,39 @@ export default defineConfig({
           "typescript/unbound-method": "off",
         },
       },
+      {
+        // oxlint 1.79 added React Compiler rules to correctness. These files
+        // predate them and use ref, portal host, and effect patterns the rules
+        // report. New files keep the rules.
+        files: [
+          "packages/marimo-frontend/src/radix-compose-refs.ts",
+          "packages/presentation/src/prepared/portals.tsx",
+          "packages/presentation/src/runtime/cells/CellOutput.tsx",
+          "packages/presentation/src/runtime/cells/DuplicateCellPortal.tsx",
+          "packages/presentation/src/runtime/cells/use-cell-host.ts",
+          "packages/presentation/src/runtime/outputs/DuplicateOutputPortal.tsx",
+          "packages/presentation/src/runtime/outputs/use-output-host.ts",
+          "packages/studio/src/app/StudioHost.tsx",
+          "packages/studio/src/features/navigation/RuntimeMenu.tsx",
+          "packages/studio/src/features/navigation/WorkspaceMenu.tsx",
+          "packages/studio/src/features/source-editor/SourceEditor.tsx",
+          "packages/studio/src/features/source-editor/SourcePane.tsx",
+          "packages/studio/src/features/source-editor/SourceProjectDetails.tsx",
+          "packages/studio/src/features/views/FirstViewToolbar.tsx",
+          "packages/studio/src/features/views/ViewMenu.tsx",
+          "packages/studio/src/features/views/useViewMenu.ts",
+          "packages/studio/src/features/workspace/PaneMenu.tsx",
+          "packages/studio/src/features/workspace/TrustedFrame.tsx",
+          "packages/studio/src/shared/editor-workspace.ts",
+          "packages/studio/src/shared/useDisclosureMenu.ts",
+        ],
+        rules: {
+          "react/immutability": "off",
+          "react/preserve-manual-memoization": "off",
+          "react/refs": "off",
+          "react/set-state-in-effect": "off",
+        },
+      },
     ],
   },
 });

@@ -63,7 +63,7 @@ for each integration.
 ## Install the workspace
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/),
-[Node.js](https://nodejs.org/) 24.11 or newer, and
+[Node.js](https://nodejs.org/) 24.15 or newer, and
 [pixi](https://pixi.prefix.dev/latest/installation/), then the locked
 environments:
 
@@ -131,9 +131,8 @@ Renovate's normal schedules and PR limits.
 
 The release-age gates match the installers: 14 days for npm and seven days for
 other dependencies, including Python and pixi. The existing `@marimo-team/*`
-npm and named uv exemptions remain exempt. pnpm's exemption for the specific
-`nanoid@3.3.18` version does not exempt future nanoid releases. Releases still
-inside the age gate wait in the Dependency Dashboard instead of opening PRs.
+npm and named uv exemptions remain exempt. Releases still inside the age gate
+wait in the Dependency Dashboard instead of opening PRs.
 
 Major upgrades, minor upgrades of pre-1.0 dependencies, and Marimo compatibility
 updates require approval in the Dependency Dashboard before Renovate creates

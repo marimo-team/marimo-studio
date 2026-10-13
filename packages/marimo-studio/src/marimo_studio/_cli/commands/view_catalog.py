@@ -30,7 +30,11 @@ from marimo_studio._cli.targets import resolve_environment_target, resolve_noteb
 
 
 def _stdin_is_interactive() -> bool:
-    return click.get_text_stream("stdin").isatty()
+    # Embedded interpreters may run without stdin, and a closed stdin raises.
+    try:
+        return sys.stdin.isatty()
+    except (AttributeError, ValueError):
+        return False
 
 
 def _starter_provider_id(starter: str | None) -> str | None:
