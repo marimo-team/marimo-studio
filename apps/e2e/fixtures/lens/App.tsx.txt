@@ -1,6 +1,6 @@
 /// <reference path="./marimo-studio.d.ts" />
 
-// @deno-types="npm:@types/react@19.2.10"
+// @deno-types="npm:@types/react@19.3.0"
 import { useState } from "react";
 
 import { useMarimoValue } from "./lib/use-marimo-value.ts";

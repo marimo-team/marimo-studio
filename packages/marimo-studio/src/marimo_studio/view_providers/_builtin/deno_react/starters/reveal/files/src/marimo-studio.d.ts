@@ -1,4 +1,4 @@
-// @deno-types="npm:@types/react@19.2.10"
+// @deno-types="npm:@types/react@19.3.0"
 import type {
   DetailedHTMLProps as _DetailedHTMLProps,
   HTMLAttributes as _HTMLAttributes,
