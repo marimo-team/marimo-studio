@@ -14,6 +14,7 @@ server, agent, build, validation, and export entry points.
 from __future__ import annotations
 
 import hashlib
+import stat
 from collections.abc import Callable, Iterator, Mapping, MutableMapping
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -347,7 +348,9 @@ def _require_separate_state(locations: CatalogLocations) -> None:
         )
     output = notebook_output_directory_of(state_root)
     try:
-        FileTree(output).stat(state_root)
+        state = FileTree(output).stat(state_root)
+        if state is not None and not stat.S_ISDIR(state.st_mode):
+            raise UnsafePathError(f"Path is not a directory: {state_root}")
     except UnsafePathError as error:
         # A link would let generated-state writes and removals reach another
         # folder. marimo's output directory itself is resolved, so only a

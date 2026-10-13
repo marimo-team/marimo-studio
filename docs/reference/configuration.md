@@ -293,8 +293,10 @@ mkdir -p studio
 mv __marimo__/studio/analysis studio/analysis
 ```
 
-The next build moves each view's earlier build state out of the view folder and
-reuses it. Studio reports a configuration error when both folders contain
+The next build of each view moves its earlier build state out of the view
+folder and reuses it. A view that a running Studio process still builds or
+serves keeps that state in place, and its next build starts in `state_root`.
+Studio reports a configuration error when both folders contain
 views, or when a view in a configured `view_root` has the same name as a view
 left in `__marimo__/studio/analysis/`. Move the views you keep into the folder
 Studio uses, then remove the older folder.
@@ -414,7 +416,7 @@ authoring status values.
 Commit `.owners/`, `view.toml`, Source documents, build inputs, frontend
 configuration, and dependency lockfiles. Studio writes replaceable build state
 to each view's `.artifacts/` directory under `state_root`, and cross-process
-locks to the `.locks/` directory of the view folder. Each of those directories
+locks to `.locks/` in the view folder, such as `studio/analysis/.locks/`. Each of those directories
 contains a `.gitignore` that excludes its whole content, so Git skips them
 whatever the repository's own ignore rules say.
 
@@ -423,8 +425,11 @@ moves it. Delete one view's `.artifacts/` directory when its generated state
 needs a clean rebuild. The next build recreates it from saved source.
 
 A view folder created by an earlier Studio release can contain `.artifacts/`
-inside each view. The first build after an upgrade moves that state to
-`state_root`, and Studio reuses its revisions.
+inside each view. In a view folder that stays at `__marimo__/studio/`, that
+state stays where it is. Elsewhere, the first build after an upgrade moves it to
+`state_root` and reuses its revisions, unless a running Studio process still
+uses it. Then the build starts in `state_root` and leaves the older directory,
+which you can delete.
 
 ## Cell aliases
 
@@ -456,6 +461,10 @@ under `__marimo__/studio/revenue/`. Delete the state under the old stem:
 ```console
 rm -r __marimo__/studio/analysis
 ```
+
+With `PYTHONPYCACHEPREFIX` set, the old state lives under that prefix. Before
+the rename, `marimo-studio status` prints it as `state_root`. Delete that
+folder.
 
 When `view_root` is configured, rename the notebook and keep the configured
 view directory unchanged. Delete the state under the old stem in that case too.

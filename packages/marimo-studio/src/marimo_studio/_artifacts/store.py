@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import os
 import stat
+from contextlib import ExitStack
 from pathlib import Path
 
 from marimo_studio._artifacts.paths import (
@@ -147,11 +148,15 @@ def ensure_artifact_root(project: CatalogProject) -> None:
         _claim_artifact_state(project)
 
 
-def _unused(tree: FileTree, legacy: Path) -> bool:
+def _unused(tree: FileTree, legacy: Path, held: ExitStack) -> bool:
+    # The held locks keep an older process from starting a build or lease
+    # until the caller has moved the state.
     for name in (".publication.lock", ".build.lock"):
-        with tree.lock(legacy / name, blocking=False, create=False) as acquired:
-            if not acquired and tree.exists(legacy / name):
-                return False
+        acquired = held.enter_context(
+            tree.lock(legacy / name, blocking=False, create=False)
+        )
+        if not acquired and tree.exists(legacy / name):
+            return False
     pins = legacy / ".pins"
     if not tree.is_directory(pins):
         return True
@@ -176,6 +181,8 @@ def adopt_project_artifacts(project: CatalogProject) -> None:
     processes that run without a cache prefix still use it there. A held lock
     or live pin, a move across file systems, or existing current state leave
     the older directory in place, where source and input scans skip it.
+    Windows refuses to move a directory while its lock files are open, so
+    there the next build starts in a new state directory.
     """
     legacy = project_artifacts(project)
     root = artifact_root(project)
@@ -188,12 +195,13 @@ def adopt_project_artifacts(project: CatalogProject) -> None:
     if not stat.S_ISDIR(legacy_state.st_mode) or os.path.lexists(root):
         return
     try:
-        if not _unused(FileTree(project.root), legacy):
-            return
-        base = artifact_base(project)
-        base.mkdir(parents=True, exist_ok=True)
-        ensure_secure_directory(base, root.parent, "View state directory")
-        _move_directory(legacy, root)
+        with ExitStack() as held:
+            if not _unused(FileTree(project.root), legacy, held):
+                return
+            base = artifact_base(project)
+            base.mkdir(parents=True, exist_ok=True)
+            ensure_secure_directory(base, root.parent, "View state directory")
+            _move_directory(legacy, root)
     except (OSError, ConfigurationError) as error:
         _LOGGER.info(
             "Studio left the earlier generated state of view %r in %s and "

@@ -56,6 +56,7 @@ from marimo_studio._workspace.models import (
     StudioWorkspace,
 )
 from marimo_studio._workspace.mutation_lock import (
+    view_build_lock,
     view_mutation_lock,
     workspace_catalog_lock,
 )
@@ -365,6 +366,10 @@ def prepare_view(
             workspace = _commit_view_creation_plan(plan)
             # A new view starts unbuilt even where an earlier view with its
             # name was deleted outside Studio and left generated state behind.
+            # A build of that earlier view can still own the state, and the
+            # owner stamp already marks it stale for the new view.
             for view_name in locked.new_views:
-                remove_artifact_state(workspace.view(view_name))
+                with view_build_lock(view_root, view_name, blocking=False) as idle:
+                    if idle:
+                        remove_artifact_state(workspace.view(view_name))
             return _view_setup_result(plan, workspace=workspace, dry_run=False)

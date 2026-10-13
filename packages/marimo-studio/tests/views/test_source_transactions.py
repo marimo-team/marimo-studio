@@ -116,11 +116,13 @@ def test_source_commit_holds_the_catalog_owner_through_replacement(
     mutation_lock = mutation_lock_module._mutation_lock
 
     @contextmanager
-    def observed_mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
+    def observed_mutation_lock(
+        view_root: Path, filename: str, *, blocking: bool = True
+    ) -> Iterator[bool]:
         if filename == ".catalog.lock" and get_ident() != owner_thread:
             catalog_waiting.set()
-        with mutation_lock(view_root, filename):
-            yield
+        with mutation_lock(view_root, filename, blocking=blocking) as acquired:
+            yield acquired
 
     monkeypatch.setattr(mutation_lock_module, "_mutation_lock", observed_mutation_lock)
 

@@ -66,7 +66,7 @@ changes. The rest of the page builds the same package by hand.
 ## What a provider decides
 
 Pick **Acme report**, name the view `briefing`, and Studio creates a view
-project beside the notebook:
+project in the notebook's view folder, `studio/analysis/` by default:
 
 ```text
 studio/analysis/briefing/
@@ -342,8 +342,8 @@ uv run marimo-studio view create briefing \
 ```
 
 Open Source to see the provider's choices. The page holds one host per output
-cell. Now give the view a design direction by saving
-`studio/analysis/briefing/DESIGN.md`:
+cell. Now give the view a design direction by saving `DESIGN.md` in the view
+project, `studio/analysis/briefing/DESIGN.md` with the default view folder:
 
 ```md
 # Design

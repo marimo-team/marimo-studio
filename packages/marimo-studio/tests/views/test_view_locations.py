@@ -687,11 +687,81 @@ def test_a_relative_linked_cache_prefix_gives_a_resolved_state_root(
     assert (project.artifacts / "development.json").is_file()
 
 
-def test_a_file_on_the_build_state_path_is_reported(notebook_path: Path) -> None:
+@pytest.mark.parametrize("occupied", ("studio", "studio/analysis"))
+def test_a_file_on_the_build_state_path_is_reported(
+    notebook_path: Path, occupied: str
+) -> None:
     created_one_view(notebook_path)
-    output = notebook_path.parent / "__marimo__"
-    output.mkdir()
-    output.joinpath("studio").write_text("", encoding="utf-8")
+    file = notebook_path.parent / "__marimo__" / occupied
+    file.parent.mkdir(parents=True)
+    file.write_text("", encoding="utf-8")
 
     with pytest.raises(ConfigurationError, match="cannot keep view build state"):
         load_studio(notebook_path)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="symlink creation needs elevated Windows access"
+)
+def test_build_state_follows_a_linked_output_directory_under_the_cache_prefix(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prefix = (tmp_path / "prefix").resolve()
+    folder = notebook_path.parent.resolve()
+    mirrored = Path(prefix, *folder.parts[1:], "__marimo__")
+    mirrored.parent.mkdir(parents=True)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    mirrored.symlink_to(elsewhere, target_is_directory=True)
+    monkeypatch.setattr(sys, "pycache_prefix", str(prefix))
+    project = created_one_view(notebook_path).view("dashboard")
+
+    _build(project)
+
+    receipt = elsewhere / "studio" / "analysis" / "dashboard" / ".artifacts"
+    assert (receipt / "development.json").is_file()
+
+
+def test_a_build_holds_the_earlier_state_locks_while_it_moves_the_state(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure(notebook_path, "views")
+    prepare_view(notebook_path)
+    project = load_studio(notebook_path).view("dashboard")
+    revision = _build(project)
+    shutil.move(project.artifacts, project.root / ".artifacts")
+    available: dict[str, bool] = {}
+
+    def move(source: Path, destination: Path) -> None:
+        # Another Studio 0.3 process would lock these files to build or lease.
+        for name in (".publication.lock", ".build.lock"):
+            assert (source / name).is_file()
+            with FileTree(project.root).lock(
+                source / name, blocking=False, create=False
+            ) as acquired:
+                available[name] = acquired
+        os.rename(source, destination)
+
+    monkeypatch.setattr(store_module, "_move_directory", move)
+
+    assert _build(project) == revision
+    assert available == {".publication.lock": False, ".build.lock": False}
+
+
+def test_a_new_view_leaves_state_that_a_running_build_still_owns(
+    notebook_path: Path,
+) -> None:
+    studio = created_one_view(notebook_path)
+    leftover = studio.artifacts("report") / "development.json"
+    leftover.parent.mkdir(parents=True)
+    leftover.write_text("{}", encoding="utf-8")
+    build_lock_file = studio.view_root / ".locks" / "report.build.lock"
+
+    # Another process is still building the earlier view named report.
+    with FileTree(studio.view_root).lock(build_lock_file):
+        prepare_view(notebook_path, "report")
+
+    assert leftover.read_text(encoding="utf-8") == "{}"

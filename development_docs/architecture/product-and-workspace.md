@@ -52,7 +52,8 @@ Generated-state paths open from the resolved marimo output directory with
 `FileTree`, which refuses links. The definition rejects a link or file at
 `studio/` and below, and state cleanup also refuses any directory that holds a
 `view.toml`. A build adopts `.artifacts/` that Studio 0.3.0 left inside a
-configured catalog's view when no lock or live pin holds it.
+configured catalog's view when no lock or live pin holds it, and it holds those
+locks until the move completes.
 
 Catalog locks stay in the authored catalog's `.locks/`, so processes with
 different cache prefixes still serialize catalog changes. Artifact leases and

@@ -104,15 +104,17 @@ def notebook_output_directory(notebook: Path) -> Path:
     set, for example through ``PYTHONPYCACHEPREFIX``, marimo mirrors the
     notebook's directory under that prefix, as Python does for
     ``__pycache__``. Studio follows that rule with resolved paths: it mirrors
-    the resolved notebook folder under the resolved prefix and resolves a
-    link at ``__marimo__``. Build tools that require resolved cache paths
-    then accept the state, and the working directory never changes it.
+    the resolved notebook folder under the prefix and resolves links in the
+    result, including one at ``__marimo__``. Build tools that require
+    resolved cache paths then accept the state, and the working directory
+    never changes it.
     """
     directory = notebook.expanduser().resolve().parent
     prefix = sys.pycache_prefix
     if prefix is None:
         return Path(os.path.realpath(directory / MARIMO_DIRECTORY))
-    return Path(os.path.realpath(prefix), *directory.parts[1:], MARIMO_DIRECTORY)
+    mirrored = Path(prefix, *directory.parts[1:], MARIMO_DIRECTORY)
+    return Path(os.path.realpath(mirrored))
 
 
 def view_state_root(notebook: Path) -> Path:
