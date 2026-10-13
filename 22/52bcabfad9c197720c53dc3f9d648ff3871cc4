@@ -1,0 +1,46 @@
+packages/marimo-studio/tests/views/test_source_transactions.py
+  s_d170e682deca90::t_8e03163e820a9c 119-121,124-125
+packages/marimo-studio/tests/filesystem/test_containment.py
+  s_d170e682deca90::t_59f1a39be131bf 1-45
+packages/marimo-studio/src/marimo_studio/_views/create.py
+  s_d170e682deca90::t_ad288d9a69a236 59,369-370,372-374
+packages/marimo-studio/src/marimo_studio/_workspace/locations.py
+  s_d170e682deca90::t_81988b056f83fc 108-110
+  s_d170e682deca90::t_77958209cfbd16 107,116
+  s_d170e682deca90::t_ec754c1eb01083 117
+docs/guide/view-providers.md
+  s_d170e682deca90::t_589b56443f1918 69,345-346
+development_docs/architecture/product-and-workspace.md
+  s_d170e682deca90::t_689bc907385253 55-56
+packages/marimo-studio/tests/views/test_view_locations.py
+  s_d170e682deca90::t_6b4e623f4fa621 690-693,695-697,701-767
+packages/marimo-studio/src/marimo_studio/_workspace/mutation_lock.py
+  s_d170e682deca90::t_ad288d9a69a236 130-136,139-142
+packages/marimo-studio/src/marimo_studio/_artifacts/store.py
+  s_d170e682deca90::t_f72e26691a3104 184-185
+  s_d170e682deca90::t_c6be63e1b75d74 26,151-153,155-159,198-204
+skills/marimo-studio/SKILL.md
+  s_d170e682deca90::t_589b56443f1918 271-273
+packages/marimo-studio/src/marimo_studio/_workspace/config.py
+  s_d170e682deca90::t_ec754c1eb01083 351-353
+  s_d170e682deca90::t_e7b44957ec6594 17
+docs/reference/configuration.md
+  s_d170e682deca90::t_1efa77420d100f 465-467
+  s_d170e682deca90::t_64e3c9c5ebee24 296-299,419,428-432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2252bcabfad9c197720c53dc3f9d648ff3871cc4",
+  "prompts": {},
+  "sessions": {
+    "s_d170e682deca90": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fec11ce7-16e9-4f18-92a7-0d7963dce78d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
