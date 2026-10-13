@@ -7,8 +7,8 @@ from pathlib import Path, PurePosixPath
 
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
     encode_view_manifest,
-    load_view_project,
 )
 from marimo_studio.view_providers import (
     BuildRequest,
@@ -18,6 +18,7 @@ from marimo_studio.view_providers import (
     ViewProvider,
 )
 
+from .helpers import load_standalone_project
 from .provider_test_support import provider_starter_context
 
 
@@ -42,7 +43,7 @@ def project(
     provider_id: str,
     *,
     starter_key: str = "default",
-) -> tuple[Path, ViewProject]:
+) -> tuple[Path, CatalogProject]:
     starter = next(item for item in provider.starters() if item.key == starter_key)
     provider_name = provider_id.rsplit("/", 1)[-1]
     suffix = "" if starter_key == "default" else f"-{starter_key}"
@@ -56,7 +57,7 @@ def project(
         ),
     )
     write_plan(root, plan.files, provider_id)
-    return root, load_view_project(root)
+    return root, load_standalone_project(root)
 
 
 def inspect_provider(

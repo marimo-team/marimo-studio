@@ -17,6 +17,7 @@ from __future__ import annotations
 from contextlib import ExitStack, nullcontext
 from pathlib import Path
 
+from marimo_studio._artifacts.store import remove_artifact_state
 from marimo_studio._filesystem.files import FileTree, Version
 from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._notebook.ports import NotebookInspector
@@ -37,7 +38,6 @@ from marimo_studio._views.records import Starter, ViewSetupResult
 from marimo_studio._views.starter_context import starter_bindings
 from marimo_studio._workspace.bindings import cell_bindings_source
 from marimo_studio._workspace.config import (
-    canonical_view_root,
     discover_studio_definition,
     discover_views,
     load_studio,
@@ -48,6 +48,7 @@ from marimo_studio._workspace.config_snapshot import (
     snapshot_workspace_config,
 )
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.metadata import configured_notebook_source
 from marimo_studio._workspace.models import (
     DEFAULT_VIEW_NAME,
@@ -141,14 +142,6 @@ def _reject_manifestless_view_directories(
             raise ViewExistsError(view_name, missing_manifest=True)
 
 
-def _reject_workspace_ignore_shape(view_root: Path) -> None:
-    path = view_root / ".gitignore"
-    if (path.exists() or path.is_symlink()) and (
-        path.is_symlink() or not path.is_file()
-    ):
-        raise ConfigurationError(f"Workspace ignore path is not a file: {path}")
-
-
 def _validate_view_creation(
     notebook: str | Path,
     name: str | None = None,
@@ -172,16 +165,18 @@ def _validate_view_creation(
         studio.default_view if studio is not None else DEFAULT_VIEW_NAME
     )
     validate_view_name(selected)
-    view_root = (
-        studio.view_root if studio is not None else canonical_view_root(notebook_path)
+    locations = (
+        studio.locations
+        if studio is not None
+        else CatalogLocations.default(notebook_path)
     )
+    view_root = locations.view_root
     if fail_if_exists and (view_root / selected / "view.toml").is_file():
         raise ViewExistsError(selected)
     default_view = studio.default_view if studio is not None else selected
     workspace_root = studio.root if studio is not None else notebook_path.parent
     # stat refuses a view root reached through a link before plain path checks.
     FileTree(workspace_root).stat(view_root)
-    _reject_workspace_ignore_shape(view_root)
     view_names = tuple(dict.fromkeys((default_view, selected)))
     _reject_manifestless_view_directories(view_root, view_names)
     new_views = tuple(
@@ -197,7 +192,7 @@ def _validate_view_creation(
         config_identity=config_identity,
         selected=selected,
         default_view=default_view,
-        view_root=view_root,
+        locations=locations,
         new_views=new_views,
     )
 
@@ -272,7 +267,8 @@ def prepare_view(
     config_identity = validated.config_identity
     selected = validated.selected
     default_view = validated.default_view
-    view_root = validated.view_root
+    locations = validated.locations
+    view_root = locations.view_root
     missing = validated.new_views
     preplanned: PreparedStarter | None = None
     prepared_existing: PreparedExistingView | None = None
@@ -285,7 +281,7 @@ def prepare_view(
             saved_notebook,
             studio,
             config_identity,
-            view_root,
+            locations,
             default_view,
             missing,
             pending_starter,
@@ -294,7 +290,7 @@ def prepare_view(
             inspect_notebook,
         )
         plans = preplanned.plans
-    current_views = discover_views(view_root)
+    current_views = discover_views(locations)
     if selected in current_views and selected not in missing:
         prepared_existing = prepare_existing_view(current_views[selected])
     if studio is None or studio.uses_notebook_config:
@@ -306,7 +302,7 @@ def prepare_view(
         configured_notebook_source(
             notebook_path,
             default_view,
-            workspace_provider_requirements(view_root, pending_starter),
+            workspace_provider_requirements(locations, pending_starter),
             bindings,
             source=saved_notebook.source,
         )
@@ -318,7 +314,7 @@ def prepare_view(
             source=config_source,
         )
     prevalidated_launch_requirements = resolve_launch_requirements(
-        workspace_provider_ids(view_root, pending_starter)
+        workspace_provider_ids(locations, pending_starter)
     )
     with workspace_catalog_lock(view_root):
         locked_studio = discover_studio_definition(notebook_path)
@@ -356,6 +352,8 @@ def prepare_view(
                 inspect_notebook=inspect_notebook,
                 fail_if_exists=fail_if_exists,
             )
+            if locked.locations != locations:
+                raise WorkspaceGenerationConflictError()
             plan = build_view_creation_plan(
                 locked,
                 starter=starter,
@@ -365,4 +363,8 @@ def prepare_view(
                 prevalidated_launch_requirements=prevalidated_launch_requirements,
             )
             workspace = _commit_view_creation_plan(plan)
+            # A new view starts unbuilt even where an earlier view with its
+            # name was deleted outside Studio and left generated state behind.
+            for view_name in locked.new_views:
+                remove_artifact_state(workspace.view(view_name))
             return _view_setup_result(plan, workspace=workspace, dry_run=False)

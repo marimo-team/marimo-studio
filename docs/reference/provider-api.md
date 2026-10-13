@@ -132,10 +132,10 @@ starter ID: starter key `default` from `acme-views/report` becomes
 
 `create()` returns a `StarterPlan`. `StarterPlan.files` holds every file the
 provider writes, and it must include each path in `ProviderStarter.documents`.
-Studio writes `view.toml` and workspace ignore rules itself. Starter files
-cannot claim Studio paths such as `view.toml`, `.artifacts/`, `.locks/`, or
-`.gitignore`. A starter may ship `AGENTS.md` and `DESIGN.md` for coding agents,
-and Studio shows them in Source when they exist.
+Studio writes `view.toml` itself. Starter files cannot claim Studio paths such
+as `view.toml`, `.artifacts/`, `.locks/`, or `.gitignore`. A starter may ship
+`AGENTS.md` and `DESIGN.md` for coding agents, and Studio shows them in Source
+when they exist.
 
 `StarterContext.notebook` is a detached `NotebookSpec` for the saved notebook.
 Its ordered cells include source, kind, name, literal Markdown, configuration,

@@ -8,7 +8,7 @@ from pathlib import Path
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.config import canonical_view_root
+from marimo_studio._workspace.locations import default_view_root
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.mutation_lock import (
     workspace_catalog_lock,
@@ -36,7 +36,7 @@ def _delete_view_in_process(
         time.sleep(0.01)
     try:
         notebook_path = Path(notebook)
-        with workspace_catalog_lock(canonical_view_root(notebook_path)):
+        with workspace_catalog_lock(default_view_root(notebook_path)):
             delete_view(load_studio(notebook_path), view_name)
     except LastViewError:
         return "last-view"

@@ -63,7 +63,7 @@ remote font or module origins declared by their view source.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/athletes.py)
-- [Overview](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/overview)
-- [Explorer](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/explorer)
-- [Field](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/field)
-- [Paper](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/paper)
+- [Overview](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/athletes/overview)
+- [Explorer](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/athletes/explorer)
+- [Field](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/athletes/field)
+- [Paper](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/athletes/paper)

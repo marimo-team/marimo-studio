@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -12,6 +13,7 @@ import marimo_studio._artifacts.publication as publication_module
 import marimo_studio._filesystem.files as files
 from marimo_studio._artifacts.codec import read_json
 from marimo_studio._artifacts.paths import (
+    artifact_base,
     artifact_root,
     ensure_secure_directory,
     read_secure_bytes,
@@ -23,6 +25,7 @@ from marimo_studio._artifacts.repository import (
 from marimo_studio._artifacts.retention import lease_published_artifact
 from marimo_studio._filesystem.paths import PORTABLE_PATH_COMPONENT_MAX_BYTES
 from marimo_studio._views.build import publish_view as publish_artifact_lease
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildRequest,
@@ -38,8 +41,24 @@ from ..artifact_test_support import (
     profile_path as _profile_path,
 )
 from ..artifact_test_support import (
-    project as _project,
+    project as _catalog_project,
 )
+
+_STATE_OUTSIDE = False
+
+
+@pytest.fixture(autouse=True, params=("inside-view", "outside-view"))
+def state_layout(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Check each boundary with state inside the view and under ``__marimo__``."""
+    global _STATE_OUTSIDE
+    _STATE_OUTSIDE = request.param == "outside-view"
+    yield
+    _STATE_OUTSIDE = False
+
+
+def _project(tmp_path: Path) -> CatalogProject:
+    return _catalog_project(tmp_path, state_outside=_STATE_OUTSIDE)
+
 
 _MAX_COMPONENT_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES
 
@@ -183,7 +202,7 @@ def test_ingestion_copies_the_files_root_it_opened(
     roots: list[Path] = []
 
     def swap_files_root_then_copy(source: Any, destination: Any, **options: Any) -> Any:
-        files_root = next(project.root.rglob("build/files"))
+        files_root = next(artifact_base(project).rglob("build/files"))
         files_root.rename(files_root.with_name("provider-files"))
         files_root.symlink_to(external, target_is_directory=True)
         roots.append(files_root)
@@ -212,6 +231,7 @@ def test_artifact_publication_rejects_symlinked_control_directories(
     project = _project(tmp_path)
     external = tmp_path / "external"
     external.mkdir()
+    artifact_root(project).parent.mkdir(parents=True, exist_ok=True)
     if control == ".artifacts":
         artifact_root(project).symlink_to(external, target_is_directory=True)
     else:
@@ -234,12 +254,14 @@ def test_cache_creation_stays_in_the_control_root_it_opened(
 ) -> None:
     project = _project(tmp_path)
     control = artifact_root(project)
-    control.mkdir()
+    control.mkdir(parents=True)
     external = tmp_path / "external"
     external.mkdir()
     retired = _swap_after_open(monkeypatch, control, external)
 
-    ensure_secure_directory(project.root, control / ".cache", "Artifact provider cache")
+    ensure_secure_directory(
+        artifact_base(project), control / ".cache", "Artifact provider cache"
+    )
 
     assert retired
     assert (retired[0] / ".cache").is_dir()
@@ -320,7 +342,7 @@ def test_artifact_publication_rejects_a_symlinked_lock_file(
     lock_name: str,
 ) -> None:
     project = _project(tmp_path)
-    artifact_root(project).mkdir()
+    artifact_root(project).mkdir(parents=True)
     external = tmp_path / "external.lock"
     external.write_text("", encoding="utf-8")
     (artifact_root(project) / lock_name).symlink_to(external)
@@ -410,14 +432,15 @@ def test_artifact_control_read_keeps_its_parent_when_project_root_is_swapped(
 ) -> None:
     project = _project(tmp_path)
     artifact = publish_artifact(project, "development")
+    base = artifact_base(project)
     path = (
         _profile_path(project)
         if control == "receipt"
         else artifact.root.parent / "artifact.json"
     )
-    expected = read_json(project.root, path, f"artifact {control}")
-    relative = path.relative_to(project.root)
-    retired = project.root.with_name("view-retired")
+    expected = read_json(base, path, f"artifact {control}")
+    relative = path.relative_to(base)
+    retired = base.with_name("state-retired")
     external = tmp_path / "external-view"
     replacement = external / relative
     replacement.parent.mkdir(parents=True)
@@ -435,12 +458,12 @@ def test_artifact_control_read_keeps_its_parent_when_project_root_is_swapped(
         nonlocal swapped
         if Path(selected).name == path.name and dir_fd is not None and not swapped:
             swapped = True
-            project.root.rename(retired)
-            project.root.symlink_to(external, target_is_directory=True)
+            base.rename(retired)
+            base.symlink_to(external, target_is_directory=True)
         return open_file(selected, flags, mode, dir_fd=dir_fd)
 
     monkeypatch.setattr(files.os, "open", replace_root_then_open)
 
-    value = read_json(project.root, path, f"artifact {control}")
+    value = read_json(base, path, f"artifact {control}")
 
     assert value == expected

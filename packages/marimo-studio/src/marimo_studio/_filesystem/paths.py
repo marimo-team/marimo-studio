@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from unicodedata import category, normalize
 
 PORTABLE_PATH_COMPONENT_MAX_BYTES = 255
@@ -66,3 +67,23 @@ def validate_relative_path(
     if path.is_absolute() or path.as_posix() != raw:
         raise ValueError(f"{field} must be a normalized project-relative POSIX path")
     return path
+
+
+def is_within(path: Path, directory: Path) -> bool:
+    """Return whether ``path`` is ``directory`` or lies below it.
+
+    Existing paths compare by file identity, so case-insensitive file systems
+    and links in the spelled path give the same answer as the directory entry
+    itself. A missing ``directory`` compares by absolute path text.
+    """
+    try:
+        target = directory.stat()
+    except OSError:
+        return Path(os.path.abspath(path)).is_relative_to(os.path.abspath(directory))
+    for candidate in (path, *path.parents):
+        try:
+            if os.path.samestat(candidate.stat(), target):
+                return True
+        except OSError:
+            continue
+    return False

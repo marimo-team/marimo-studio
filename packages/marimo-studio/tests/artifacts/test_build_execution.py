@@ -29,11 +29,11 @@ from marimo_studio._processes.cancellation import (
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.view_providers import (
     BuildInput,
     BuildRequest,
     BuildResult,
-    ViewProject,
 )
 from marimo_studio.view_providers._host import provider_registry
 
@@ -296,7 +296,7 @@ def test_cancellation_before_receipt_commit_preserves_last_good(
     release = Event()
 
     def pause_receipt_commit(
-        selected: ViewProject,
+        selected: CatalogProject,
         state: Any,
         control: ProviderOperationControl,
     ) -> bool:

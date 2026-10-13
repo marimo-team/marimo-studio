@@ -19,6 +19,7 @@ import pytest
 
 import marimo_studio.agent as studio_agent
 import marimo_studio.authoring as studio_authoring
+from marimo_studio._artifacts.repository import read_artifact_state
 from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._validation.results import CheckResult
@@ -258,12 +259,7 @@ def test_agent_repairs_a_malformed_view_manifest(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
     manifest = (
-        notebook_path.parent
-        / "__marimo__"
-        / "studio"
-        / notebook_path.stem
-        / "dashboard"
-        / "view.toml"
+        notebook_path.parent / "studio" / notebook_path.stem / "dashboard" / "view.toml"
     )
     valid = manifest.read_text(encoding="utf-8")
     del workspace
@@ -421,7 +417,7 @@ def test_view_handle_rejects_every_operation_on_a_copied_replacement(
     asyncio.run(workspace.create_view("report"))
     view = workspace.view("dashboard")
     document = asyncio.run(view.read("index.html"))
-    root = notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
+    root = notebook_path.parent / "studio" / "analysis" / "dashboard"
     retired = root.with_name("retired-dashboard")
     root.rename(retired)
     shutil.copytree(retired, root)
@@ -480,7 +476,7 @@ def test_view_validate_rejects_a_replacement_before_artifact_publication(
 ) -> None:
     workspace = _workspace(notebook_path)
     view = asyncio.run(workspace.create_view("dashboard"))
-    root = notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
+    root = notebook_path.parent / "studio" / "analysis" / "dashboard"
     retired = root.with_name("retired-dashboard")
     publish_view = revisions_module.publish_view
     replaced = False
@@ -499,7 +495,12 @@ def test_view_validate_rejects_a_replacement_before_artifact_publication(
         asyncio.run(view.validate())
 
     assert replaced
-    assert not root.joinpath(".artifacts").exists()
+    assert (
+        read_artifact_state(
+            load_studio(notebook_path).view("dashboard"), "development"
+        ).state
+        is None
+    )
 
 
 def test_view_validate_rechecks_ownership_after_runtime_execution(
@@ -653,11 +654,7 @@ def test_view_write_cancellation_drains_atomic_commit_before_return(
         assert mutation.done()
         assert mutation.cancelled()
         path = notebook_path.parent.joinpath(
-            "__marimo__",
-            "studio",
-            notebook_path.stem,
-            "dashboard",
-            "index.html",
+            "studio", notebook_path.stem, "dashboard", "index.html"
         )
         assert path.read_text(encoding="utf-8") == updated
 

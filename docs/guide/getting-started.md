@@ -65,16 +65,20 @@ build error keeps the last successful page visible while you repair the source.
 
 ## View project files
 
-The default starter saves the view beside the notebook:
+The default starter saves the view in `studio/analysis/` beside the notebook:
 
 ```text
 analysis.py
-__marimo__/studio/analysis/
+studio/analysis/
   dashboard/
     view.toml
     index.html
     AGENTS.md
 ```
+
+Commit the `studio/` folder with the notebook. Studio keeps build state in
+`__marimo__/studio/analysis/`, and Git ignores it through `.gitignore` files
+that Studio writes there.
 
 `view.toml` records the provider. `index.html` is the page source. `AGENTS.md`
 gives coding agents the project's conventions. Add `DESIGN.md` to keep the

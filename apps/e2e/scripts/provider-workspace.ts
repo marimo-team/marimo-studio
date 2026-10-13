@@ -147,12 +147,7 @@ export class ProviderWorkspace {
       for (const [relative, source] of Object.entries(candidate.files ?? {})) {
         await cp(
           source,
-          resolve(
-            providerWorkspaceDirectory,
-            "__marimo__/studio/projections",
-            candidate.view,
-            relative,
-          ),
+          resolve(providerWorkspaceDirectory, "studio/projections", candidate.view, relative),
         );
       }
       for (const publication of candidate.exports ?? []) {
@@ -170,11 +165,8 @@ export class ProviderWorkspace {
         ]);
       }
     }
-    const projections = resolve(providerWorkspaceDirectory, "__marimo__/studio/projections");
-    for (const candidate of selected) {
-      await removeTree(resolve(projections, candidate.view, ".artifacts"));
-    }
-    await removeTree(resolve(projections, ".locks"));
+    await removeTree(resolve(providerWorkspaceDirectory, "__marimo__/studio/projections"));
+    await removeTree(resolve(providerWorkspaceDirectory, "studio/projections/.locks"));
     for (const candidate of selected) {
       for (const publication of candidate.exports ?? []) {
         await this.#services.start(

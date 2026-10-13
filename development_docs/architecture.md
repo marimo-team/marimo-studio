@@ -94,7 +94,8 @@ creation, inspection, and build. Provider methods are synchronous. Studio runs
 them outside the server event loop. External commands use process supervision
 and cooperative cancellation.
 
-Artifacts are generated beneath each view's `.artifacts/`. A candidate is
+Artifacts are generated beneath each view's `.artifacts/` under the catalog's
+state root. A candidate is
 published after complete validation and a final source-identity check. The
 current publication stays available when a later build fails.
 

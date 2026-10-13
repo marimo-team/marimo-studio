@@ -36,7 +36,7 @@ def set_default_view(
         )
         current = snapshot.studio
         if owner is None:
-            views = tuple(discover_views(current.view_root))
+            views = tuple(discover_views(current.locations))
             if name not in views:
                 raise ViewNotFoundError(name, available=views)
         else:

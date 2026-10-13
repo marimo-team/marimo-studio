@@ -12,6 +12,7 @@ import errno
 from pathlib import Path
 
 from marimo_studio._artifacts.retention import artifact_exclusion_guard
+from marimo_studio._artifacts.store import move_artifact_state
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._notebook.locking import notebook_write_lock
 from marimo_studio._views.publication_hold import require_unheld
@@ -100,7 +101,7 @@ def rename_view(
                             f"View {name!r} changed before its rename committed. "
                             "Run the operation again."
                         )
-                    return load_studio(current.config_path)
+                    renamed = load_studio(current.config_path)
             except BaseException as error:
                 # The transaction restored every file, including when its
                 # post-commit checks fail. Return the project to the name those
@@ -112,6 +113,8 @@ def rename_view(
                         write_committed=False,
                     ) from error
                 raise
+            move_artifact_state(project, renamed.view(new_name))
+            return renamed
 
 
 def _rename_error(name: str, new_name: str, error: OSError) -> ViewRenameError:

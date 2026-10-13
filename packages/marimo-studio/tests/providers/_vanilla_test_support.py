@@ -5,11 +5,11 @@ from pathlib import Path, PurePosixPath
 
 from marimo_studio._workspace.project_manifest import (
     encode_view_manifest,
-    load_view_project,
 )
 from marimo_studio.view_providers import ViewProject
 from marimo_studio.view_providers._builtin.vanilla import provider
 
+from ..helpers import load_standalone_project
 from ..provider_test_support import provider_starter_context
 
 
@@ -22,7 +22,7 @@ def _write_files(root: Path, files: dict[PurePosixPath, bytes]) -> ViewProject:
         encode_view_manifest("marimo-studio/vanilla"),
         encoding="utf-8",
     )
-    return replace(load_view_project(root), options={"entrypoint": "index.html"})
+    return replace(load_standalone_project(root), options={"entrypoint": "index.html"})
 
 
 def _project(tmp_path: Path) -> ViewProject:

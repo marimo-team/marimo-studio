@@ -6,9 +6,9 @@ and view in the current call. Reacquire both in each code-mode execution.
 Edit source with Studio's guarded writes or the environment's filesystem
 tools. Use `inspection.root` as the project root. Studio writes require a
 catalog document with `access="edit"`. Provider inspection owns source discovery
-and build inputs for either editing path. Keep generated `.artifacts/` files
-under Studio's ownership. Use view files for structure, wording, styles, and
-browser interaction.
+and build inputs for either editing path. Studio owns the build state under
+`state_root`, which `workspace.status()` reports. Use view files for structure,
+wording, styles, and browser interaction.
 
 The view project owns page layout, styles, icons, and browser dependencies.
 Mount the authored page or component beneath `#app-shell`.

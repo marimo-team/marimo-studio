@@ -75,7 +75,7 @@ browser, and its Python packages on an uncached run.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/occupancy.py)
-- [Monitor](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/monitor)
-- [Field report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
-- [Journal paper](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/paper)
-- [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
+- [Monitor](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/occupancy/monitor)
+- [Field report](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/occupancy/pdf-report)
+- [Journal paper](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/occupancy/paper)
+- [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/occupancy/model-review)

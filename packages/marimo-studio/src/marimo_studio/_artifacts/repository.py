@@ -21,6 +21,7 @@ from marimo_studio._artifacts.codec import (
 from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._artifacts.lock import artifact_lock, build_lock
 from marimo_studio._artifacts.paths import (
+    artifact_base,
     artifact_files,
     artifact_root,
     assert_secure_path,
@@ -39,13 +40,14 @@ from marimo_studio._artifacts.records import (
     ViewArtifact,
     ViewBuildState,
 )
+from marimo_studio._artifacts.store import ensure_artifact_root, owns_artifact_state
 from marimo_studio._filesystem.files import FileTree, TreeVersion
 from marimo_studio._processes.cancellation import ProviderOperationControl
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildProfile,
     ProjectDiagnostic,
-    ViewProject,
 )
 from marimo_studio.view_providers._document import (
     HTMLDocumentParser,
@@ -53,11 +55,11 @@ from marimo_studio.view_providers._document import (
 )
 
 
-def profile_pointer(project: ViewProject, profile: BuildProfile) -> Path:
+def profile_pointer(project: CatalogProject, profile: BuildProfile) -> Path:
     return artifact_root(project) / f"{profile}.json"
 
 
-def revision_root(project: ViewProject, artifact_revision: str) -> Path:
+def revision_root(project: CatalogProject, artifact_revision: str) -> Path:
     return (
         artifact_root(project) / "revisions" / artifact_revision.removeprefix("sha256:")
     )
@@ -87,27 +89,27 @@ def validate_document(root: Path, document: PurePosixPath) -> None:
 
 
 def read_profile_state(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ArtifactProfileState | None:
     pointer = profile_pointer(project, profile)
-    assert_secure_path(project.root, pointer, "Artifact profile receipt")
-    if not pointer.exists():
+    assert_secure_path(artifact_base(project), pointer, "Artifact profile receipt")
+    if not pointer.exists() or not owns_artifact_state(project):
         return None
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         pointer,
         "Artifact profile receipt",
         final_kind="file",
     )
     return decode_profile_state(
-        read_json(project.root, pointer, "artifact profile receipt"),
+        read_json(artifact_base(project), pointer, "artifact profile receipt"),
         profile,
     )
 
 
 def _current_profile_state(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ArtifactProfileState | None:
     # Readers treat state from another Studio format as unbuilt. The next
@@ -118,32 +120,34 @@ def _current_profile_state(
         return None
 
 
-def write_profile_state(project: ViewProject, state: ArtifactProfileState) -> None:
-    ensure_secure_directory(
-        project.root, artifact_root(project), "Artifact control root"
-    )
+def write_profile_state(project: CatalogProject, state: ArtifactProfileState) -> None:
+    ensure_artifact_root(project)
     pointer = profile_pointer(project, state.profile)
-    assert_secure_path(project.root, pointer, "Artifact profile receipt")
-    FileTree(project.root).write(
+    assert_secure_path(artifact_base(project), pointer, "Artifact profile receipt")
+    FileTree(artifact_base(project)).write(
         pointer, encode_json(profile_state_dict(state)).encode("utf-8")
     )
 
 
 def write_profile_state_if_active(
-    project: ViewProject,
+    project: CatalogProject,
     state: ArtifactProfileState,
     control: ProviderOperationControl,
 ) -> bool:
     """Stage a receipt, then replace its pointer if cancellation has not won."""
+    ensure_artifact_root(project)
     control_root = artifact_root(project)
-    ensure_secure_directory(project.root, control_root, "Artifact control root")
     staging = control_root / ".staging"
-    ensure_secure_directory(project.root, staging, "Artifact staging directory")
+    ensure_secure_directory(
+        artifact_base(project), staging, "Artifact staging directory"
+    )
     pointer = profile_pointer(project, state.profile)
     pending = staging / f"receipt-{state.profile}-{secrets.token_hex(16)}.json"
-    assert_secure_path(project.root, pointer, "Artifact profile receipt")
-    assert_secure_path(project.root, pending, "Artifact pending profile receipt")
-    tree = FileTree(project.root)
+    assert_secure_path(artifact_base(project), pointer, "Artifact profile receipt")
+    assert_secure_path(
+        artifact_base(project), pending, "Artifact pending profile receipt"
+    )
+    tree = FileTree(artifact_base(project))
     tree.write(pending, encode_json(profile_state_dict(state)).encode("utf-8"))
 
     def commit() -> None:
@@ -163,27 +167,29 @@ def write_profile_state_if_active(
     return committed
 
 
-def recover_staging(project: ViewProject) -> None:
+def recover_staging(project: CatalogProject) -> None:
     staging = artifact_root(project) / ".staging"
-    ensure_secure_directory(project.root, staging, "Artifact staging directory")
-    tree = FileTree(project.root)
+    ensure_secure_directory(
+        artifact_base(project), staging, "Artifact staging directory"
+    )
+    tree = FileTree(artifact_base(project))
     for path in tree.children(staging):
         tree.remove(path)
 
 
-def prepare_control_directories(project: ViewProject) -> None:
+def prepare_control_directories(project: CatalogProject) -> None:
+    ensure_artifact_root(project)
     control_root = artifact_root(project)
-    ensure_secure_directory(project.root, control_root, "Artifact control root")
     ensure_secure_directory(
-        project.root,
+        artifact_base(project),
         control_root / "revisions",
         "Artifact revisions directory",
     )
     cache = control_root / ".cache"
-    assert_secure_path(project.root, cache, "Artifact provider cache")
+    assert_secure_path(artifact_base(project), cache, "Artifact provider cache")
     if cache.exists():
         assert_secure_path(
-            project.root,
+            artifact_base(project),
             cache,
             "Artifact provider cache",
             final_kind="directory",
@@ -192,7 +198,7 @@ def prepare_control_directories(project: ViewProject) -> None:
 
 
 def ingest_publication_files(
-    project: ViewProject,
+    project: CatalogProject,
     files_root: Path,
     destination: Path,
 ) -> tuple[ArtifactFile, ...]:
@@ -203,7 +209,7 @@ def ingest_publication_files(
     """
     ingested = {
         item.path.as_posix(): item
-        for item in FileTree(project.root).ingest(
+        for item in FileTree(artifact_base(project)).ingest(
             files_root,
             destination,
             budget=ARTIFACT_OUTPUT_BUDGET,
@@ -238,7 +244,7 @@ def artifact_from_publication(
 
 
 def read_artifact_revision(
-    project: ViewProject,
+    project: CatalogProject,
     artifact_revision: str,
 ) -> ArtifactRevision | None:
     """Read and fully verify one immutable artifact revision."""
@@ -251,11 +257,11 @@ def read_artifact_revision(
         raise ConfigurationError(f"Invalid artifact revision for view {project.name!r}")
 
     root = revision_root(project, artifact_revision)
-    assert_secure_path(project.root, root, "Artifact revision")
+    assert_secure_path(artifact_base(project), root, "Artifact revision")
     if not root.exists():
         return None
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         root,
         "Artifact revision",
         final_kind="directory",
@@ -263,19 +269,19 @@ def read_artifact_revision(
     manifest_path = root / "artifact.json"
     files_root = root / "files"
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         manifest_path,
         "Artifact manifest",
         final_kind="file",
     )
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         files_root,
         "Artifact files",
         final_kind="directory",
     )
     manifest = decode_artifact_manifest(
-        read_json(project.root, manifest_path, "artifact manifest")
+        read_json(artifact_base(project), manifest_path, "artifact manifest")
     )
     if manifest.artifact_revision != artifact_revision:
         raise ConfigurationError(
@@ -296,7 +302,7 @@ def read_artifact_revision(
     if manifest.template is not None:
         template_root = root / "template"
         assert_secure_path(
-            project.root,
+            artifact_base(project),
             template_root,
             "Artifact template",
             final_kind="directory",
@@ -309,20 +315,20 @@ def read_artifact_revision(
     return ArtifactRevision(files_root, manifest)
 
 
-def artifact_tree_identity(project: ViewProject, root: Path) -> TreeVersion | None:
+def artifact_tree_identity(project: CatalogProject, root: Path) -> TreeVersion | None:
     """Capture bounded artifact metadata without reading file contents.
 
     A document revision holds its public files and its private template, each
     within the artifact file budget, beside ``artifact.json``.
     """
-    return FileTree(project.root).tree_version(
+    return FileTree(artifact_base(project)).tree_version(
         root,
         max_entries=2 * ARTIFACT_OUTPUT_BUDGET.max_files + 3,
     )
 
 
 def read_artifact_revision_snapshot(
-    project: ViewProject,
+    project: CatalogProject,
     artifact_revision: str,
 ) -> ArtifactRevisionSnapshot | None:
     """Verify one revision outside mutation locks and capture its identity."""
@@ -342,7 +348,7 @@ def read_artifact_revision_snapshot(
 
 
 def read_published_artifact(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ViewArtifact | None:
     """Read a profile publication from its captured provider descriptor."""
@@ -362,7 +368,7 @@ def read_published_artifact(
 
 
 def _interrupted_state(
-    project: ViewProject,
+    project: CatalogProject,
     state: ArtifactProfileState,
 ) -> ArtifactProfileState:
     published = state.published
@@ -412,7 +418,7 @@ def _path_identity(path: Path, *, directory: bool, label: str) -> tuple[int, ...
     )
 
 
-def _project_incarnation(project: ViewProject) -> str | None:
+def _project_incarnation(project: CatalogProject) -> str | None:
     try:
         root_before = _path_identity(
             project.root,
@@ -465,7 +471,7 @@ def _project_incarnation(project: ViewProject) -> str | None:
 
 
 def _read_build_state(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     incarnation: str,
 ) -> ViewBuildState:
@@ -499,7 +505,7 @@ def _read_build_state(
 
 
 def read_build_state(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ViewBuildState:
     """Return the latest build receipt and recover abandoned build state."""
@@ -510,7 +516,7 @@ def read_build_state(
 
 
 def read_artifact_state(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ArtifactStateSnapshot:
     """Atomically read one profile receipt and its verified publication."""

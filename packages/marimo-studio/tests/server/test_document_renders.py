@@ -382,7 +382,7 @@ def test_a_template_damaged_while_serving_marks_the_publication_for_rebuild(
 
     with TestClient(app) as client:
         revision = client.get("/_marimo-studio/views/report/config").json()["revision"]
-        (template,) = project.root.glob(".artifacts/**/template/main.typ")
+        (template,) = project.artifacts.glob("**/template/main.typ")
         template.write_text("#panic()\n", encoding="utf-8")
         response = client.post(
             "/_marimo-studio/views/report/render",

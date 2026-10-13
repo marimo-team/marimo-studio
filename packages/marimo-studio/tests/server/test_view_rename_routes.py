@@ -54,7 +54,7 @@ def test_view_rename_releases_served_artifacts_and_serves_the_new_url(
 
     with TestClient(app) as client:
         _serve(client, scopes, "executive")
-        served = tuple((studio.view_root / "executive").glob(".artifacts/.pins/*/*"))
+        served = tuple(studio.artifacts("executive").glob(".pins/*/*"))
         renamed = _rename(client, "executive", "operations", headers)
         new_page = client.get("/operations/")
         old_page = client.get("/executive/")
@@ -138,7 +138,7 @@ def test_a_rejected_rename_keeps_the_served_view(
         _serve(client, scopes, "executive")
         before = _view_owner(client, "executive")
         response = _rename(client, "executive", new_name, headers)
-        served = tuple((studio.view_root / "executive").glob(".artifacts/.pins/*/*"))
+        served = tuple(studio.artifacts("executive").glob(".pins/*/*"))
         after = _view_owner(client, "executive")
 
     assert response.status_code == 409, response.text

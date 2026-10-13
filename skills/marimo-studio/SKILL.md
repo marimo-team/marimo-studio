@@ -268,7 +268,8 @@ await view.write("index.html", updated, expected_revision=document.revision)
 Confirm the intended text exists before replacing it. A `SourceConflictError`
 requires a fresh read and reconciliation with the concurrent edit. Filesystem
 tools can also edit `inspection.root`. Inspect again after external changes.
-Keep generated `.artifacts/` files under Studio's ownership.
+Studio keeps build state under `state_root`, outside `inspection.root`. Leave
+those files to Studio.
 
 For new files, manifest changes, multi-file edits, or recovery, read
 [authoring](references/authoring.md). Publication holds delay artifact

@@ -13,11 +13,12 @@ import pytest
 import marimo_studio._views.creation_plan as creation_plan_module
 import marimo_studio.view_providers._host as providers_module
 from marimo_studio._artifacts.inputs import project_input_paths
-from marimo_studio._artifacts.paths import artifact_root
+from marimo_studio._artifacts.paths import project_artifacts
 from marimo_studio._artifacts.repository import read_profile_state
 from marimo_studio._processes.provider_runner import create_provider_runner
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.view_providers import (
     BuildInput,
     BuildProfile,
@@ -91,7 +92,7 @@ def provider_build_request(
         profile=profile,
         staging_root=staging_root,
         work_root=work,
-        cache_root=cache_root or artifact_root(project) / ".cache",
+        cache_root=cache_root or project_artifacts(project) / ".cache",
         cancellation=cancellation,
         runner=create_provider_runner(project.root, cancellation, command_timeout),
         command_timeout=command_timeout,
@@ -248,7 +249,7 @@ class PublishedView:
 
 
 def publish(
-    project: ViewProject,
+    project: CatalogProject,
     *,
     profile: BuildProfile = "development",
 ) -> PublishedView:

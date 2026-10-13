@@ -69,7 +69,7 @@ Pick **Acme report**, name the view `briefing`, and Studio creates a view
 project beside the notebook:
 
 ```text
-__marimo__/studio/analysis/briefing/
+studio/analysis/briefing/
   view.toml    names the provider that owns this view
   index.html   the page, with one <marimo-cell> host per output cell
   AGENTS.md    instructions for coding agents that edit this view
@@ -343,7 +343,7 @@ uv run marimo-studio view create briefing \
 
 Open Source to see the provider's choices. The page holds one host per output
 cell. Now give the view a design direction by saving
-`__marimo__/studio/analysis/briefing/DESIGN.md`:
+`studio/analysis/briefing/DESIGN.md`:
 
 ```md
 # Design

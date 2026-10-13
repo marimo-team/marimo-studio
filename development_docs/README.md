@@ -351,16 +351,20 @@ the prepared checkout without changing it. Run `make setup` when readiness
 validation reports stale metadata, missing dependencies, or a mismatched
 checkout.
 
-A user view owns its build and publication surface beneath the project:
+A user view keeps its build and publication state in marimo's output
+directory, apart from its authored project:
 
 ```text
-__marimo__/studio/<notebook>/<view>/.artifacts/
+examples/studio/<notebook>/<view>/                    authored
+examples/__marimo__/studio/<notebook>/<view>/.artifacts/   generated
 ```
 
 Studio writes staging candidates, immutable revisions, provider caches, and
-profile receipts there. The repository ignores the complete `.artifacts/`
-workspace. Source-controlled examples keep the manifest, authored files,
-provider configuration, and dependency locks.
+profile receipts there, and each `.artifacts/` ignores itself in Git.
+Source-controlled examples keep the manifest, authored files, provider
+configuration, and dependency locks. The E2E `lazy` fixture keeps the Studio 0.3.0
+layout under `__marimo__/studio/` so the browser suite also opens an existing
+catalog.
 
 Browser acceptance fixtures begin with `view.toml` and provider source. The E2E
 fixture setup builds their artifacts in an isolated workspace so the browser

@@ -18,6 +18,7 @@ from marimo_studio._processes.provider_operation import (
 from marimo_studio._processes.provider_runner import create_provider_runner
 from marimo_studio._views.inspection_cache import inspection_cache_root
 from marimo_studio._views.records import ViewProjectState
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import MarimoStudioError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildProfile,
@@ -45,7 +46,15 @@ def inspection_request(
     control = cancellation or current_provider_cancellation() or ProviderCancellation()
     selected_cache = cache_root or inspection_cache_root(project.provider)
     return InspectionRequest(
-        project=project,
+        # Providers receive the provider-facing record, never Studio's state
+        # location.
+        project=ViewProject(
+            project.name,
+            project.root,
+            project.manifest,
+            project.provider,
+            project.options,
+        ),
         runner=runner or create_provider_runner(project.root, control, command_timeout),
         cancellation=control,
         cache_root=selected_cache,
@@ -96,7 +105,7 @@ def inspect_view_sites(project: ViewProject) -> tuple[ArtifactSite, ...]:
 
 
 def view_project_state(
-    project: ViewProject,
+    project: CatalogProject,
     inspection: ProjectInspection,
     *,
     profile: BuildProfile = "development",

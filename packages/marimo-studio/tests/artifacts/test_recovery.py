@@ -22,11 +22,8 @@ from marimo_studio._artifacts.repository import (
 )
 from marimo_studio._artifacts.retention import lease_published_artifact
 from marimo_studio._views.build import publish_view as publish_artifact_lease
-from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ViewProjectError
-from marimo_studio.view_providers import (
-    ViewProject,
-)
 from marimo_studio.view_providers._host import provider_registry
 
 from ..artifact_test_support import (
@@ -44,9 +41,10 @@ from ..artifact_test_support import (
 from ..artifact_test_support import (
     write_json as _write_json,
 )
+from ..helpers import load_standalone_project
 
 
-def _project_with_interrupted_build(tmp_path: Path) -> ViewProject:
+def _project_with_interrupted_build(tmp_path: Path) -> CatalogProject:
     project = _project(tmp_path)
     publish_artifact_lease(project, "development").close()
     pointer = _profile_path(project)
@@ -57,13 +55,13 @@ def _project_with_interrupted_build(tmp_path: Path) -> ViewProject:
 
 
 def _replace_with_active_build(
-    project: ViewProject,
+    project: CatalogProject,
     tmp_path: Path,
-) -> tuple[ViewProject, Path, str]:
+) -> tuple[CatalogProject, Path, str]:
     retired = tmp_path / f"{project.name}-retired"
     os.replace(project.root, retired)
     shutil.copytree(retired, project.root)
-    current = load_view_project(project.root)
+    current = load_standalone_project(project.root)
     pointer = _profile_path(current)
     state = _read_json(pointer)
     revision = f"sha256:{'f' * 64}"
@@ -134,7 +132,7 @@ def test_build_repairs_each_replaceable_generated_state(
         assert str(artifact_root(project)) in warnings[0], damage
 
 
-def _project_built_by_studio_0_3(tmp_path: Path) -> ViewProject:
+def _project_built_by_studio_0_3(tmp_path: Path) -> CatalogProject:
     project = _project(tmp_path)
     publish_artifact_lease(project, "development").close()
     published = read_artifact_state(project, "development").artifact

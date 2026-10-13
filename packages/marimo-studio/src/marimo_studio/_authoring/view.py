@@ -181,7 +181,10 @@ async def inspect_view(
         ) -> ViewInspection:
             definition = load_studio_definition(notebook)
             try:
-                project = load_view_project(definition.view_root / view)
+                project = load_view_project(
+                    definition.view_root / view,
+                    artifacts=definition.artifacts(view),
+                )
                 provider_registry().validate_project(project)
             except MarimoStudioError as error:
                 admit_source_owner(

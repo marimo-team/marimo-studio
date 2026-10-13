@@ -14,22 +14,30 @@ from marimo_studio._artifacts.paths import artifact_root
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
     encode_view_manifest,
     load_view_project,
 )
-from marimo_studio.view_providers import BuildProfile, BuildRequest, ViewProject
+from marimo_studio.view_providers import BuildProfile, BuildRequest
 from marimo_studio.view_providers._host import provider_registry
+
+from .helpers import load_standalone_project
 
 
 def publish_artifact(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ViewArtifact:
     with publish_artifact_lease(project, profile) as lease:
         return lease.artifact
 
 
-def project(tmp_path: Path) -> ViewProject:
+def project(tmp_path: Path, *, state_outside: bool = False) -> CatalogProject:
+    """Create a Vanilla view project with its state inside it or in the catalog layout.
+
+    ``state_outside`` places state where catalog views keep it, under
+    ``__marimo__/studio/<stem>/<view>/.artifacts`` beside the project.
+    """
     root = tmp_path / "view"
     root.mkdir(parents=True)
     (root / "view.toml").write_text(
@@ -43,14 +51,17 @@ def project(tmp_path: Path) -> ViewProject:
         encoding="utf-8",
     )
     (root / "app.css").write_text("body { color: black; }\n", encoding="utf-8")
-    return load_view_project(root)
+    if state_outside:
+        artifacts = tmp_path / "__marimo__" / "studio" / "analysis" / "view"
+        return load_view_project(root, artifacts=artifacts / ".artifacts")
+    return load_standalone_project(root)
 
 
 def manifest_path(artifact: ViewArtifact) -> Path:
     return artifact.root.parent / "artifact.json"
 
 
-def profile_path(project: ViewProject, profile: str = "development") -> Path:
+def profile_path(project: CatalogProject, profile: str = "development") -> Path:
     return artifact_root(project) / f"{profile}.json"
 
 
@@ -64,7 +75,7 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def change_document(project: ViewProject, label: str) -> None:
+def change_document(project: CatalogProject, label: str) -> None:
     document = project.root / "index.html"
     document.write_text(
         document.read_text(encoding="utf-8").replace(
@@ -76,7 +87,7 @@ def change_document(project: ViewProject, label: str) -> None:
 
 def add_provider_outputs(
     monkeypatch: pytest.MonkeyPatch,
-    project: ViewProject,
+    project: CatalogProject,
     outputs: Mapping[PurePosixPath, bytes],
 ) -> None:
     """Extend one test build with explicit synthetic browser files."""

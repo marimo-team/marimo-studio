@@ -25,10 +25,10 @@ from marimo_studio._views.remove import delete_view
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import (
-    canonical_view_root,
     load_studio_definition,
     validate_view_name,
 )
+from marimo_studio._workspace.locations import default_view_root
 from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
 )
@@ -67,7 +67,8 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     assert result.workspace == studio
     assert studio.uses_notebook_config
     assert studio.config_path == notebook_path
-    assert studio.view_root == (
+    assert studio.view_root == notebook_path.parent / "studio" / notebook_path.stem
+    assert studio.state_root == (
         notebook_path.parent / "__marimo__" / "studio" / notebook_path.stem
     )
     assert document is not None
@@ -86,9 +87,6 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
 
     assert sentinel.read_bytes() == b"preserve existing view"
     report = load_studio(notebook_path).views["report"].root
-    assert set(
-        studio.view_root.joinpath(".gitignore").read_text(encoding="utf-8").splitlines()
-    ) == {"/.locks/", "*/.artifacts/"}
     assert report.joinpath("index.html").is_file()
 
 
@@ -114,7 +112,7 @@ def test_notebook_stems_are_portable_filesystem_components(
     name: str,
 ) -> None:
     with pytest.raises(ConfigurationError):
-        canonical_view_root(tmp_path / name)
+        default_view_root(tmp_path / name)
 
 
 def test_workspace_names_accept_their_maximum_portable_size(tmp_path: Path) -> None:
@@ -122,7 +120,7 @@ def test_workspace_names_accept_their_maximum_portable_size(tmp_path: Path) -> N
     notebook_stem = "n" * 252
 
     assert validate_view_name(view_name) == view_name
-    assert canonical_view_root(tmp_path / f"{notebook_stem}.py").name == notebook_stem
+    assert default_view_root(tmp_path / f"{notebook_stem}.py").name == notebook_stem
 
 
 def test_invalid_notebook_stem_cannot_create_a_workspace(
@@ -133,6 +131,8 @@ def test_invalid_notebook_stem_cannot_create_a_workspace(
 
     with pytest.raises(ConfigurationError, match="portable path component"):
         prepare_view(invalid)
+
+    assert not (notebook_path.parent / "studio").exists()
 
     assert not (notebook_path.parent / "__marimo__").exists()
 
@@ -333,7 +333,7 @@ default = "dashboard"
     with pytest.raises(ConfigurationError, match="configuration changed"):
         prepare_view(notebook_path, "report")
 
-    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+    assert not tuple(default_view_root(notebook_path).glob("*/view.toml"))
 
 
 def test_notebook_change_after_starter_planning_rejects_the_transaction(
@@ -363,7 +363,7 @@ def test_notebook_change_after_starter_planning_rejects_the_transaction(
         prepare_view(notebook_path)
 
     assert "doubled = x * 3" in notebook_path.read_text(encoding="utf-8")
-    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+    assert not tuple(default_view_root(notebook_path).glob("*/view.toml"))
 
 
 def test_starter_uses_committed_notebook_source_locations(
@@ -412,7 +412,7 @@ def test_notebook_edit_before_transaction_is_preserved(
         prepare_view(notebook_path)
 
     assert "doubled = x * 3" in notebook_path.read_text(encoding="utf-8")
-    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+    assert not tuple(default_view_root(notebook_path).glob("*/view.toml"))
 
 
 def test_project_config_edit_before_transaction_is_preserved(
@@ -433,7 +433,7 @@ def test_project_config_edit_before_transaction_is_preserved(
         prepare_view(notebook_path)
 
     assert pyproject.read_text(encoding="utf-8").endswith("# concurrent edit\n")
-    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+    assert not tuple(default_view_root(notebook_path).glob("*/view.toml"))
 
 
 def test_project_notebook_edit_before_transaction_is_preserved(
@@ -457,7 +457,7 @@ def test_project_notebook_edit_before_transaction_is_preserved(
         prepare_view(notebook_path)
 
     assert "doubled = x * 3" in notebook_path.read_text(encoding="utf-8")
-    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+    assert not tuple(default_view_root(notebook_path).glob("*/view.toml"))
 
 
 def test_project_alias_removed_during_starter_planning_stays_removed(
@@ -493,7 +493,7 @@ default = "dashboard"
         prepare_view(notebook_path)
 
     assert load_studio_definition(pyproject).cells == {}
-    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+    assert not tuple(default_view_root(notebook_path).glob("*/view.toml"))
 
 
 def test_view_directory_created_before_transaction_is_preserved(
@@ -501,7 +501,7 @@ def test_view_directory_created_before_transaction_is_preserved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     transaction = workspace_transactions.write_file_transaction
-    project_root = canonical_view_root(notebook_path) / "dashboard"
+    project_root = default_view_root(notebook_path) / "dashboard"
     sentinel = project_root / "public" / "sentinel.js"
 
     @contextmanager
@@ -583,7 +583,7 @@ def test_spawned_setup_rejects_a_manifestless_view_without_mutation(
     notebook_path: Path,
 ) -> None:
     original = notebook_path.read_bytes()
-    view_root = canonical_view_root(notebook_path)
+    view_root = default_view_root(notebook_path)
     occupied = view_root / "dashboard"
     occupied.mkdir(parents=True)
     sentinel = occupied / "sentinel.bin"
@@ -781,9 +781,9 @@ def test_setup_rolls_back_notebook_and_view_when_workspace_load_fails(
         prepare_view(notebook_path)
 
     assert notebook_path.read_bytes() == original
-    assert not (canonical_view_root(notebook_path) / "dashboard").exists()
+    assert not (default_view_root(notebook_path) / "dashboard").exists()
     assert not view_owner_path(
-        canonical_view_root(notebook_path),
+        default_view_root(notebook_path),
         "dashboard",
     ).exists()
 
@@ -795,7 +795,7 @@ def test_failed_recreation_restores_the_absent_name_owner(
     prepare_view(notebook_path)
     prepare_view(notebook_path, "report")
     delete_view(load_studio(notebook_path), "report")
-    owner = view_owner_path(canonical_view_root(notebook_path), "report")
+    owner = view_owner_path(default_view_root(notebook_path), "report")
     tombstone = owner.read_bytes()
 
     def fail_workspace_load(_target: Path) -> StudioWorkspace:
@@ -807,10 +807,8 @@ def test_failed_recreation_restores_the_absent_name_owner(
         prepare_view(notebook_path, "report")
 
     assert owner.read_bytes() == tombstone
-    assert (
-        load_view_owner(canonical_view_root(notebook_path), "report").present is False
-    )
-    assert not canonical_view_root(notebook_path).joinpath("report").exists()
+    assert load_view_owner(default_view_root(notebook_path), "report").present is False
+    assert not default_view_root(notebook_path).joinpath("report").exists()
 
 
 def test_setup_rejects_non_notebooks_without_mutation(
@@ -824,6 +822,7 @@ def test_setup_rejects_non_notebooks_without_mutation(
         prepare_view(target)
 
     assert target.read_bytes() == original
+    assert not (tmp_path / "studio").exists()
     assert not (tmp_path / "__marimo__").exists()
 
 
@@ -862,7 +861,7 @@ default = "executive"
     assert set(studio.views) == {"executive"}
     assert set(studio.cells) == {"cell-2"}
     assert set(resolve_studio(studio).aliases) == {"cell-2"}
-    assert studio.view_root == notebook_dir / "__marimo__" / "studio" / notebook.stem
+    assert studio.view_root == notebook_dir / "studio" / notebook.stem
     assert notebook.read_bytes() == original
 
 
@@ -890,7 +889,7 @@ default = "dashboard"
 
     assert studio.view_root == notebook_path.parent / "studio" / "views"
     assert studio.views["dashboard"].root == studio.view_root / "dashboard"
-    assert not canonical_view_root(notebook_path).exists()
+    assert not default_view_root(notebook_path).exists()
 
 
 @pytest.mark.parametrize("view_root", ("linked", "linked/views"))

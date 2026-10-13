@@ -488,7 +488,7 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
             assert not cache_activations
             assert current._kernel.lock_count == 0
 
-            view = tmp_path / "__marimo__" / "studio" / "notebook" / "dashboard"
+            view = tmp_path / "studio" / "notebook" / "dashboard"
             view.mkdir(parents=True)
             view.joinpath("index.html").write_text(
                 '<span mo-value="summary.papers"></span>',
@@ -700,7 +700,7 @@ def test_kernel_query_sync_labels_its_echo_and_preserves_private_state(
 
     notebook = tmp_path / "notebook.py"
     notebook.write_text("import marimo\n", encoding="utf-8")
-    view = tmp_path / "__marimo__" / "studio" / "notebook" / "dashboard"
+    view = tmp_path / "studio" / "notebook" / "dashboard"
     view.mkdir(parents=True)
     view.joinpath("index.html").write_text("<main></main>", encoding="utf-8")
     tmp_path.joinpath("pyproject.toml").write_text(

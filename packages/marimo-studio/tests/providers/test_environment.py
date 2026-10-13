@@ -133,4 +133,5 @@ def test_setup_rejects_disjoint_python_requirements_before_mutation(
         prepare_view(notebook_path)
 
     assert notebook_path.read_bytes() == original
+    assert not (notebook_path.parent / "studio").exists()
     assert not (notebook_path.parent / "__marimo__").exists()

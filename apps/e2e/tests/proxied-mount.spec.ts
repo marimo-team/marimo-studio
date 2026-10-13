@@ -43,8 +43,7 @@ const createDashboard = async (page: Page, diagnostics: BrowserDiagnostics) => {
   return preview;
 };
 
-const dashboardSourcePath = () =>
-  proxiedWorkspacePath("__marimo__/studio/notebook/dashboard/index.html");
+const dashboardSourcePath = () => proxiedWorkspacePath("studio/notebook/dashboard/index.html");
 
 const proxiedPath = (suffix: string) =>
   new RegExp(`^${new URL(proxiedUrl()).pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${suffix}$`);
@@ -160,7 +159,7 @@ test("renders a Typst document beneath a stripped proxy prefix", async ({ page, 
   test.setTimeout(180_000);
   await studioCli.addWorkspaceView(proxiedNotebookPath, "report", "marimo-studio/typst:default");
   await writeFile(
-    proxiedWorkspacePath("__marimo__/studio/notebook/report/main.typ"),
+    proxiedWorkspacePath("studio/notebook/report/main.typ"),
     [
       '#import "marimo.typ": marimo_value',
       "#set page(width: 12cm, height: auto)",

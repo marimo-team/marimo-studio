@@ -12,7 +12,7 @@ from typing import Literal
 
 from marimo_studio._artifacts.inputs import project_revision
 from marimo_studio._artifacts.limits import BUILD_INPUT_BUDGET
-from marimo_studio._artifacts.paths import artifact_root, digest_secure_file
+from marimo_studio._artifacts.paths import digest_secure_file, project_artifacts
 from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.tree import bounded_tree_entries
 from marimo_studio._prepared.state_space import state_space_path
@@ -25,8 +25,10 @@ from marimo_studio._views.publication_hold import (
     read_publication_hold,
 )
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.locations import ARTIFACT_DIRECTORY
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError, MarimoStudioError
 from marimo_studio.view_providers import ProjectInspection, ViewProject
 from marimo_studio.view_providers._host import provider_registry
@@ -54,7 +56,7 @@ class SourceChangeProducer:
         self._config_stamp = _config_stamp(studio)
         self._notebook_stamp = _path_stamp(studio.notebook)
         self._view_catalog = _view_catalog(studio)
-        self._project: ViewProject | None = None
+        self._project: CatalogProject | None = None
         self._inspection: ProjectInspection | None = None
         self._input_id: str | None = None
         self._inspection_error: Exception | None = None
@@ -120,7 +122,7 @@ class SourceChangeProducer:
             )
         )
 
-    def catalog(self) -> tuple[ViewProject, ProjectInspection, str]:
+    def catalog(self) -> tuple[CatalogProject, ProjectInspection, str]:
         """Return the project and inspection captured by the latest scan."""
         if self._project is None:
             raise ConfigurationError("The selected Studio view is unavailable")
@@ -246,7 +248,7 @@ class SourceChangeProducer:
         )
         self._bind_project(project)
 
-    def _bind_project(self, project: ViewProject | None) -> None:
+    def _bind_project(self, project: CatalogProject | None) -> None:
         self._project = project
         self._inspection = None
         self._input_id = None
@@ -284,7 +286,7 @@ class SourceChangeProducer:
             input_files, roots = _validated_inputs(project, inspection)
             document_files = _validated_document_files(project, inspection)
             scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
-            excluded_roots = (artifact_root(project),)
+            excluded_roots = (project_artifacts(project),)
             if (
                 observed_tree is not None
                 and scope_files == self._scope_files
@@ -310,7 +312,7 @@ class SourceChangeProducer:
             if not self._roots:
                 self._scope_files = ()
                 self._roots = (project.root,)
-                self._excluded_roots = (artifact_root(project),)
+                self._excluded_roots = (project_artifacts(project),)
                 repair_tree = None
             scope = (*self._scope_files, *self._roots)
             self._tree = (
@@ -489,7 +491,7 @@ def _validated_inputs(
     roots: list[Path] = []
     for item in inspection.inputs:
         normalized = _scope_path(item.path, item.kind)
-        if normalized.parts and normalized.parts[0].casefold() == ".artifacts":
+        if normalized.parts and normalized.parts[0].casefold() == ARTIFACT_DIRECTORY:
             raise ConfigurationError("Provider build inputs cannot include .artifacts")
         candidate = _validated_project_path(root, normalized, "Provider build input")
         selected = roots if item.kind == "directory" else files

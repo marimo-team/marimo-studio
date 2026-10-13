@@ -6,7 +6,7 @@ import asyncio
 import os
 from collections.abc import Awaitable, Callable
 from functools import partial
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
@@ -62,10 +62,9 @@ from marimo_studio._workspace.config import (
     materialize_studio_workspace_after_conflict,
 )
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
+from marimo_studio._workspace.locations import default_view_root
 from marimo_studio._workspace.models import (
     DEFAULT_VIEW_NAME,
-    MARIMO_DIRECTORY,
-    STUDIO_DIRECTORY,
     StudioDefinition,
     StudioWorkspace,
 )
@@ -358,9 +357,7 @@ def unconfigured_view_inventory_payload(
         "generation": unconfigured_catalog_generation(notebook),
         "default_view": DEFAULT_VIEW_NAME,
         "default_starter": DEFAULT_STARTER_ID,
-        "view_root": PurePosixPath(
-            MARIMO_DIRECTORY, STUDIO_DIRECTORY, Path(notebook).stem
-        ).as_posix(),
+        "view_root": _view_root_label(notebook.resolve(), default_view_root(notebook)),
         "persistence": host_persistence(),
         "views": [],
         "starters": (

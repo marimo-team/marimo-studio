@@ -18,6 +18,8 @@ from marimo_studio._artifacts.records import ArtifactFile
 from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.paths import validate_relative_path
+from marimo_studio._workspace.locations import ARTIFACT_DIRECTORY, state_anchor
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import ViewProject
 
@@ -26,9 +28,32 @@ def _unsafe(label: str, error: UnsafePathError) -> ConfigurationError:
     return ConfigurationError(f"{label} is unsafe. {error}")
 
 
-def artifact_root(project: ViewProject) -> Path:
+def artifact_root(project: CatalogProject) -> Path:
     """Return Studio's private generated-state root for one view."""
-    return project.root / ".artifacts"
+    return project.artifacts
+
+
+def artifact_base(project: CatalogProject) -> Path:
+    """Return the directory that bounds every generated-state path of a view.
+
+    Studio refuses links and escapes below this directory when it creates,
+    reads, replaces, or removes generated state. State kept inside the view
+    project stays bounded by the project directory, so a removed project
+    cannot be recreated through its state.
+    """
+    if project.artifacts == project_artifacts(project):
+        return project.root
+    return state_anchor(project.artifacts)
+
+
+def project_artifacts(project: ViewProject) -> Path:
+    """Return the reserved ``.artifacts`` directory inside a view project.
+
+    Studio 0.3.0 default catalogs keep generated state there, and those
+    releases left it in configured catalogs too. Source and build-input scans
+    skip it in every view.
+    """
+    return project.root / ARTIFACT_DIRECTORY
 
 
 def normalized_artifact_path(value: object, label: str) -> PurePosixPath:

@@ -34,10 +34,12 @@ from marimo_studio._artifacts.codec import (
 from marimo_studio._artifacts.inputs import ProjectSnapshot, snapshot_project
 from marimo_studio._artifacts.lock import artifact_lock
 from marimo_studio._artifacts.paths import (
+    artifact_base,
     artifact_root,
     assert_secure_path,
     ensure_secure_directory,
     normalized_artifact_path,
+    project_artifacts,
 )
 from marimo_studio._artifacts.records import (
     ArtifactManifest,
@@ -75,6 +77,7 @@ from marimo_studio._filesystem.files import (
     TreeVersion,
 )
 from marimo_studio._processes.cancellation import ProviderOperationControl
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildProfile,
@@ -128,8 +131,8 @@ class ArtifactCommitRejected(Exception):
         self.diagnostic = diagnostic
 
 
-def _remove_profile_pointer(project: ViewProject, profile: BuildProfile) -> None:
-    FileTree(project.root).remove(profile_pointer(project, profile))
+def _remove_profile_pointer(project: CatalogProject, profile: BuildProfile) -> None:
+    FileTree(artifact_base(project)).remove(profile_pointer(project, profile))
 
 
 def _cancelled_commit() -> ArtifactCommitRejected:
@@ -144,7 +147,7 @@ def _cancelled_commit() -> ArtifactCommitRejected:
 
 
 def record_build_failure(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     diagnostics: tuple[ProjectDiagnostic, ...],
     started: float,
@@ -195,7 +198,7 @@ def project_build_error(
 
 
 def prepare_artifact_build(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ArtifactBuildPreparation:
     """Recover generated state and return the verified current publication."""
@@ -254,8 +257,7 @@ def prepare_artifact_build(
 
 # https://bford.info/cachedir/ marks a directory that tools can rebuild.
 # Workspace hosts and backup tools skip it, which keeps a provider's dependency
-# cache and unfinished build candidates out of saved workspaces while view
-# sources and revisions stay.
+# cache and unfinished build candidates out of saved workspaces and backups.
 _CACHE_DIRECTORY_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
 _CACHE_DIRECTORY_TAG = (
     _CACHE_DIRECTORY_SIGNATURE
@@ -292,26 +294,28 @@ def _tag_cache_directory(tree: FileTree, directory: Path) -> None:
 
 @contextmanager
 def capture_artifact_candidate(
-    project: ViewProject,
+    project: CatalogProject,
     inspection: ProjectInspection,
 ) -> Iterator[ArtifactCandidate]:
     """Capture immutable build inputs and own their temporary generation."""
     generation_root = (
         artifact_root(project) / ".staging" / f"candidate-{secrets.token_hex(16)}"
     )
-    tree = FileTree(project.root)
+    tree = FileTree(artifact_base(project))
     tree.create_directory(generation_root)
     _tag_cache_directory(tree, generation_root.parent)
     try:
         captured = snapshot_project(project, inspection, generation_root / "project")
-        files_root = artifact_root(captured.project) / "build" / "files"
+        files_root = project_artifacts(captured.project) / "build" / "files"
         work_root = files_root.parent / "work"
         tree.ensure_directory(files_root)
         tree.ensure_directory(work_root)
         cache_root = artifact_root(project) / ".cache"
-        ensure_secure_directory(project.root, cache_root, "Artifact provider cache")
+        ensure_secure_directory(
+            artifact_base(project), cache_root, "Artifact provider cache"
+        )
         assert_secure_path(
-            project.root,
+            artifact_base(project),
             cache_root,
             "Artifact provider cache",
             final_kind="directory",
@@ -330,7 +334,7 @@ def capture_artifact_candidate(
 
 
 def restore_cached_artifact(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     project_revision: str,
     cached: ViewArtifact,
@@ -389,7 +393,7 @@ def restore_cached_artifact(
 
 
 def record_build_started(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     project_revision: str,
 ) -> None:
@@ -411,7 +415,7 @@ def record_build_started(
 
 
 def prepare_artifact_publication(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     candidate: ArtifactCandidate,
     sites: tuple[ArtifactSite, ...],
@@ -422,17 +426,17 @@ def prepare_artifact_publication(
     template: TemplateCandidate | None,
 ) -> PreparedArtifactPublication:
     """Validate and copy one candidate before its receipt transaction."""
-    tree = FileTree(project.root)
+    tree = FileTree(artifact_base(project))
     publication_root = candidate.generation_root / "publication"
     try:
         assert_secure_path(
-            project.root,
+            artifact_base(project),
             candidate.generation_root,
             "Artifact staging generation",
             final_kind="directory",
         )
         assert_secure_path(
-            project.root,
+            artifact_base(project),
             candidate.files_root,
             "Artifact candidate files",
             final_kind="directory",
@@ -508,7 +512,7 @@ def prepare_artifact_publication(
 
 
 def publish_artifact_candidate(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     prepared: PreparedArtifactPublication,
     provenance: ProviderProvenance,
@@ -529,9 +533,9 @@ def publish_artifact_candidate(
         with artifact_lock(project) as acquired:
             if not acquired:
                 raise RuntimeError("Blocking artifact lock was not acquired")
-            tree = FileTree(project.root)
+            tree = FileTree(artifact_base(project))
             destination = revision_root(project, manifest.artifact_revision)
-            assert_secure_path(project.root, destination, "Artifact revision")
+            assert_secure_path(artifact_base(project), destination, "Artifact revision")
             existing: ArtifactRevision | None = None
             if destination.exists():
                 current_identity = artifact_tree_identity(project, destination)

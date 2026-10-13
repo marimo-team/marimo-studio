@@ -6,30 +6,37 @@ from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 
 from marimo_studio._artifacts.paths import (
+    artifact_base,
     artifact_root,
     assert_secure_path,
 )
+from marimo_studio._artifacts.store import (
+    adopt_project_artifacts,
+    ensure_artifact_root,
+)
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.view_providers import ViewProject
 
 
 @contextmanager
 def _view_lock(
-    project: ViewProject,
+    project: CatalogProject,
     filename: str,
     label: str,
     *,
     blocking: bool = True,
     create: bool = True,
 ) -> Iterator[bool]:
-    control_root = artifact_root(project)
-    lock_path = control_root / filename
-    assert_secure_path(project.root, lock_path, label)
+    if create:
+        ensure_artifact_root(project)
+    base = artifact_base(project)
+    lock_path = artifact_root(project) / filename
+    assert_secure_path(base, lock_path, label)
     with ExitStack() as owner:
         try:
             acquired = owner.enter_context(
-                FileTree(project.root).lock(lock_path, blocking=blocking, create=create)
+                FileTree(base).lock(lock_path, blocking=blocking, create=create)
             )
         except ConfigurationError:
             raise
@@ -40,7 +47,7 @@ def _view_lock(
 
 @contextmanager
 def artifact_lock(
-    project: ViewProject,
+    project: CatalogProject,
     *,
     blocking: bool = True,
     create: bool = True,
@@ -58,12 +65,18 @@ def artifact_lock(
 
 @contextmanager
 def build_lock(
-    project: ViewProject,
+    project: CatalogProject,
     *,
     blocking: bool = True,
     create: bool = True,
 ) -> Iterator[bool]:
-    """Serialize provider work independently from publication and lease reads."""
+    """Serialize provider work independently from publication and lease reads.
+
+    The build owner creates generated state, so it first adopts state that an
+    older Studio release left inside the view project.
+    """
+    if create:
+        adopt_project_artifacts(project)
     with _view_lock(
         project,
         ".build.lock",

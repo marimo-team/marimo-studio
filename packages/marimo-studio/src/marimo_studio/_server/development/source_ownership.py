@@ -21,10 +21,10 @@ from marimo_studio._server.development.source_changes import (
     SourceChange,
     SourceChangeProducer,
 )
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.view_providers import (
     ProjectInspection,
     ProviderCancellation,
-    ViewProject,
 )
 
 ActiveMonitor = Callable[[], Awaitable[bool]]
@@ -70,7 +70,7 @@ class SourcePoll:
 
 @dataclass(frozen=True)
 class ProjectCatalog:
-    project: ViewProject
+    project: CatalogProject
     inspection: ProjectInspection
     input_id: str
     generation: int

@@ -257,7 +257,7 @@ def test_manifest_repair_reads_a_receipt_from_an_earlier_studio_as_unbuilt(
 ) -> None:
     studio = published_dashboard(notebook_path)
     root = studio.view("dashboard").root
-    receipt_path = root / ".artifacts" / "development.json"
+    receipt_path = studio.artifacts("dashboard") / "development.json"
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     receipt["schema"] = 1
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")

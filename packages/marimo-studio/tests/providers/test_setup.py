@@ -51,6 +51,7 @@ def test_unavailable_starter_rejects_setup_before_any_write(
         prepare_view(notebook_path, starter=starter, dry_run=dry_run)
 
     assert notebook_path.read_bytes() == original
+    assert not (notebook_path.parent / "studio").exists()
     assert not (notebook_path.parent / "__marimo__").exists()
 
 
@@ -67,6 +68,7 @@ def test_starter_failure_rejects_setup_before_any_write(
         prepare_view(notebook_path, starter=starter)
 
     assert notebook_path.read_bytes() == original
+    assert not (notebook_path.parent / "studio").exists()
     assert not (notebook_path.parent / "__marimo__").exists()
 
 
@@ -89,6 +91,7 @@ def test_invalid_provider_launch_requirement_rejects_setup_before_any_write(
         )
 
     assert notebook_path.read_bytes() == original
+    assert not (notebook_path.parent / "studio").exists()
     assert not (notebook_path.parent / "__marimo__").exists()
 
 
@@ -105,6 +108,7 @@ def test_invalid_starter_paths_reject_setup_before_any_write(
         prepare_view(notebook_path, starter=starter)
 
     assert notebook_path.read_bytes() == original
+    assert not (notebook_path.parent / "studio").exists()
     assert not (notebook_path.parent / "__marimo__").exists()
 
 

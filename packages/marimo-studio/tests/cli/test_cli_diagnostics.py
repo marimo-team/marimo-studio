@@ -422,6 +422,7 @@ def test_view_create_rejects_the_starter_target_limit_without_mutation(
     assert isinstance(result.exception, ConfigurationError)
     assert "limits starter plan cell targets to 256 records" in str(result.exception)
     assert notebook.read_text(encoding="utf-8") == source
+    assert not tmp_path.joinpath("studio").exists()
     assert not tmp_path.joinpath("__marimo__").exists()
 
 

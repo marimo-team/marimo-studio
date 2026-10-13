@@ -24,7 +24,7 @@ apps/e2e/playwright-report/
 apps/e2e/test-results/
 tools/example-showcase/shots/
 
-# Generated state within authored Studio workspaces
+# Generated state that Studio 0.3.0 kept inside example and fixture catalogs
 **/__marimo__/studio/*/*/.artifacts/
 **/__marimo__/studio/*/.locks/
 

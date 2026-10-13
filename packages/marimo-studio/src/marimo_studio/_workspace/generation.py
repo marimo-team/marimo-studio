@@ -11,13 +11,13 @@ from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.paths import validate_portable_path_component
+from marimo_studio._workspace.locations import VIEW_MANIFEST
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_NAMES,
     VIEW_NAME_MAX_BYTES,
     VIEW_PATTERN,
     StudioDefinition,
 )
-from marimo_studio._workspace.project_manifest import VIEW_MANIFEST
 from marimo_studio._workspace.view_owners import (
     VIEW_OWNER_DIRECTORY,
     ensure_present_view_owner,

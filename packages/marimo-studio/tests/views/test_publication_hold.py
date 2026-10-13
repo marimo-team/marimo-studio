@@ -204,10 +204,13 @@ def test_hold_created_by_an_exited_process_still_coordinates_publication(
             "from marimo_studio._workspace.project_manifest import load_view_project\n"
             "from marimo_studio._views.publication_hold import "
             "acquire_publication_hold\n"
-            "project = load_view_project(Path(sys.argv[1]))\n"
+            "project = load_view_project(\n"
+            "    Path(sys.argv[1]), artifacts=Path(sys.argv[2])\n"
+            ")\n"
             "hold = acquire_publication_hold(project.root, owner='shell agent')\n"
             "print(json.dumps(hold.to_dict()))\n",
             str(project.root),
+            str(project.artifacts),
         ],
         check=True,
         capture_output=True,

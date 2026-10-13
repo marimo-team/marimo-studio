@@ -103,7 +103,7 @@ test("keeps the active preview usable after a manifestless creation conflict", a
     1,
   );
   const identity = await preview.locator("html").evaluate(() => globalThis.marimoStudio.identity());
-  const conflict = resolve(workspaceNotebookPath, "../__marimo__/studio/notebook/blocked");
+  const conflict = resolve(workspaceNotebookPath, "../studio/notebook/blocked");
   const sentinel = resolve(conflict, "public/sentinel.js");
   await mkdir(resolve(sentinel, ".."), { recursive: true });
   await writeFile(sentinel, "foreign-content", "utf8");

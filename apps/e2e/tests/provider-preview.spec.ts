@@ -13,10 +13,7 @@ import { StudioCli } from "./studio-cli.ts";
 // prefix that the proxy strips before forwarding.
 test.use({ providerViews: ["gallery"], providerEditor: true });
 
-const appSource = resolve(
-  providerWorkspaceDirectory,
-  "__marimo__/studio/projections/gallery/src/App.tsx",
-);
+const appSource = resolve(providerWorkspaceDirectory, "studio/projections/gallery/src/App.tsx");
 
 test("keeps a React view's preview URL live beneath a stripped proxy prefix", async ({ page }) => {
   test.setTimeout(240_000);

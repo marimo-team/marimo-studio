@@ -13,18 +13,51 @@ Studio reads either PEP 723 notebook metadata or `[tool.marimo-studio]` in
 `pyproject.toml`. Configuration selects the notebook, default view, permitted
 runtimes, log behavior, session preservation, and optional cell aliases.
 
-Notebook-local views live at:
+A `CatalogLocations` record pairs two locations, which `_workspace/locations.py` resolves:
 
 ```text
-__marimo__/studio/<notebook-stem>/<view-name>/
+studio/<notebook-stem>/<view-name>/                  view_root: authored
+__marimo__/studio/<notebook-stem>/<view-name>/.artifacts/   state_root: generated
 ```
 
-Configuration can select a portable relative `view_root` when the embedding
-host reserves `__marimo__/` for generated runtime state. Every catalog,
-mutation, build, and publication operation then uses that resolved root.
+`view_root` defaults to `studio/<notebook-stem>/` beside the notebook, and
+configuration can select another portable relative path. Every catalog,
+mutation, build, and publication operation uses that resolved root.
 
-The workspace writes one `.gitignore` for `.locks/` and every view's
-`.artifacts/`.
+`state_root` lies in marimo's notebook output directory and follows
+`sys.pycache_prefix`, mirroring the resolved notebook folder under the resolved
+prefix. A `CatalogProject` is the provider-facing `ViewProject` plus its
+`artifacts` directory, so artifact code reads state without deriving it from
+the project root. Inspection hands providers a plain `ViewProject`, and provider
+hosts serialize only its fields.
+
+A catalog created by Studio 0.3.0 sits at `__marimo__/studio/<stem>/`, which
+equals its state root without a cache prefix. Its views keep state in their own
+`.artifacts/` directories, which the project directory owns: removing or
+renaming a view removes or moves that state with the project, and builds never
+adopt it, because a process without a cache prefix still uses it in place.
+Studio resolves the old location when it holds views and the default location
+does not. A configured catalog is rejected when one of its views has the same
+name as a view left in the state root, since that view's state would land
+inside the older project.
+
+State outside the project is named after its view, so `_artifacts/store.py`
+stamps it with the view's `.owners` generation. A view deleted and recreated
+outside Studio, or by a process with another cache prefix, reads the older
+state as unbuilt, and its next build discards that state's receipts. Removal
+moves `.artifacts/` aside before deleting it, so readers see the state whole or
+not at all.
+
+Generated-state paths open from the resolved marimo output directory with
+`FileTree`, which refuses links. The definition rejects a link or file at
+`studio/` and below, and state cleanup also refuses any directory that holds a
+`view.toml`. A build adopts `.artifacts/` that Studio 0.3.0 left inside a
+configured catalog's view when no lock or live pin holds it.
+
+Catalog locks stay in the authored catalog's `.locks/`, so processes with
+different cache prefixes still serialize catalog changes. Artifact leases and
+pins live with the state, so each prefix sees its own readers. `.locks/` and
+each `.artifacts/` contain an ignore-everything `.gitignore`.
 
 ## Workspace lifecycle
 
@@ -78,8 +111,8 @@ entrypoint = "web/report.html"
 overrides. The selected provider validates that mapping and applies its defaults
 inside its inspection and build operations.
 
-Studio stores per-name incarnation records in
-`__marimo__/studio/<notebook-stem>/.owners/`. Each record contains a 64-character
+Studio stores per-name incarnation records in the catalog's `.owners/`
+directory. Each record contains a 64-character
 generation and whether the name is present. View generation combines that
 durable owner with the current project-directory owner. Create and delete update
 the owner record in the same file transaction as configuration. Catalog loading
@@ -106,8 +139,8 @@ Creation validates the notebook and starter before writing. Under the workspace
 catalog lock, one file transaction writes each new view project into a temporary
 sibling directory, then publishes it under its name in one step that never
 replaces an existing name. Discovery skips temporary siblings, so readers never
-observe a partial project. The same transaction writes the fresh per-name owner
-and any missing generated-state rules in the workspace `.gitignore`.
+observe a partial project. The same transaction writes the fresh per-name owner.
+After the commit, creation discards build state left under the new name.
 
 The first view is complete before notebook-local PEP 723 metadata declares the
 workspace. Existing workspaces receive required configuration before the new

@@ -17,8 +17,8 @@ from marimo_studio._processes.provider_runner import (
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
     encode_view_manifest,
-    load_view_project,
 )
 from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers import (
@@ -45,6 +45,7 @@ from marimo_studio.view_providers._builtin.latex._inputs import (
     render_inputs,
 )
 
+from ..helpers import load_standalone_project
 from ..provider_test_support import (
     provider_build_request,
     provider_starter_context,
@@ -60,7 +61,7 @@ tectonic = pytest.mark.skipif(
 )
 
 
-def _project(tmp_path: Path, main: str | None = None) -> ViewProject:
+def _project(tmp_path: Path, main: str | None = None) -> CatalogProject:
     plan = provider.create(
         provider.starters()[0],
         provider_starter_context(tmp_path, view_name="paper"),
@@ -76,7 +77,7 @@ def _project(tmp_path: Path, main: str | None = None) -> ViewProject:
     )
     if main is not None:
         (root / MAIN).write_text(main, encoding="utf-8")
-    return load_view_project(root)
+    return load_standalone_project(root)
 
 
 def _document(body: str, preamble: str = "") -> str:

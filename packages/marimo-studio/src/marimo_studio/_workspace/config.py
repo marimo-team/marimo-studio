@@ -20,10 +20,11 @@ from typing import Any
 
 import tomlkit
 
+from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import ConditionalWriteError, FileTree
 from marimo_studio._filesystem.names import is_temporary_name
 from marimo_studio._filesystem.paths import (
-    PORTABLE_PATH_COMPONENT_MAX_BYTES,
+    is_within,
     validate_portable_path_component,
 )
 from marimo_studio._filesystem.settle import while_unchanged
@@ -33,6 +34,12 @@ from marimo_studio._workspace.generation import (
     view_generation,
     workspace_catalog_generation,
 )
+from marimo_studio._workspace.locations import (
+    CatalogLocations,
+    default_view_root,
+    notebook_output_directory_of,
+    view_state_root,
+)
 from marimo_studio._workspace.metadata import (
     _provider_dependency_requirements,
     notebook_config,
@@ -41,17 +48,18 @@ from marimo_studio._workspace.metadata import (
 )
 from marimo_studio._workspace.models import (
     ALIAS_PATTERN,
-    MARIMO_DIRECTORY,
     PYPROJECT_NAME,
     RESERVED_VIEW_NAMES,
-    STUDIO_DIRECTORY,
     VIEW_NAME_MAX_BYTES,
     VIEW_PATTERN,
     StudioDefinition,
     StudioWorkspace,
 )
 from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
-from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
+    load_view_project,
+)
 from marimo_studio._workspace.toml import parse_toml, read_toml
 from marimo_studio._workspace.view_owners import reconcile_view_owners
 from marimo_studio.errors import (
@@ -60,7 +68,6 @@ from marimo_studio.errors import (
     WorkspaceGenerationConflictError,
 )
 from marimo_studio.errors._internal import WorkspaceInitializationError
-from marimo_studio.view_providers import ViewProject
 
 _COMMON_CONFIG_FIELDS = frozenset(
     {
@@ -74,7 +81,6 @@ _COMMON_CONFIG_FIELDS = frozenset(
     }
 )
 _SUPPORTED_RUNTIMES = frozenset({"server", "wasm", "zero-python"})
-_NOTEBOOK_STEM_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".py")
 _WORKSPACE_MATERIALIZATION_LIMIT = 8
 
 
@@ -303,20 +309,6 @@ def _path(base: Path, value: object, field: str) -> Path:
     return (base / value).expanduser().resolve()
 
 
-def canonical_view_root(notebook: str | Path) -> Path:
-    """Return the authored view directory for a notebook."""
-    path = Path(notebook).expanduser().resolve()
-    try:
-        validate_portable_path_component(
-            path.stem,
-            field="Notebook filename stem",
-            max_bytes=_NOTEBOOK_STEM_MAX_BYTES,
-        )
-    except ValueError as error:
-        raise ConfigurationError(str(error)) from error
-    return path.parent / MARIMO_DIRECTORY / STUDIO_DIRECTORY / path.stem
-
-
 def _configured_view_root(
     config_path: Path,
     notebook: Path,
@@ -324,7 +316,7 @@ def _configured_view_root(
 ) -> Path:
     value = data.get("view_root")
     if value is None:
-        return canonical_view_root(notebook)
+        return default_view_root(notebook)
     if not isinstance(value, str) or not value:
         raise ConfigurationError("view_root must be a non-empty relative path")
     relative = PurePosixPath(value)
@@ -341,13 +333,40 @@ def _configured_view_root(
     return config_path.parent.joinpath(*relative.parts)
 
 
-def discover_views(
-    view_root: Path,
-) -> dict[str, ViewProject]:
+def _require_separate_state(locations: CatalogLocations) -> None:
+    view_root = locations.view_root
+    state_root = locations.state_root
+    # A Studio 0.3.0 default catalog is its own state root. Each of its views
+    # keeps generated state in the view's .artifacts/ directory.
+    if is_within(view_root, state_root) and is_within(state_root, view_root):
+        return
+    if is_within(view_root, state_root):
+        raise ConfigurationError(
+            f"view_root {view_root} is inside Studio's generated view state "
+            f"{state_root}. Choose a view_root outside that directory."
+        )
+    output = notebook_output_directory_of(state_root)
+    try:
+        FileTree(output).stat(state_root)
+    except UnsafePathError as error:
+        # A link would let generated-state writes and removals reach another
+        # folder. marimo's output directory itself is resolved, so only a
+        # link or file at studio/ or below reaches here.
+        raise ConfigurationError(
+            f"Studio cannot keep view build state in {state_root}: {error}. "
+            "Replace that link or file with a folder, or set "
+            "PYTHONPYCACHEPREFIX to move marimo's output directory."
+        ) from error
+
+
+def discover_views(locations: CatalogLocations) -> dict[str, CatalogProject]:
+    """Load every view project in a catalog with its generated-state directory."""
+    view_root = locations.view_root
+    state_root = locations.state_root
     if not view_root.is_dir():
         return {}
     tree = FileTree(view_root)
-    views: dict[str, ViewProject] = {}
+    views: dict[str, CatalogProject] = {}
     for directory in sorted(view_root.iterdir(), key=lambda path: path.name):
         # Staged view projects publish under their name with one rename.
         if is_temporary_name(directory.name):
@@ -363,7 +382,10 @@ def discover_views(
                 f"View folder {directory} has an invalid name. {error}"
             ) from error
         try:
-            project = load_view_project(directory)
+            project = load_view_project(
+                directory,
+                artifacts=locations.artifacts(directory.name),
+            )
         except FileNotFoundError:
             # A concurrent view removal can finish between inventory and load.
             continue
@@ -371,6 +393,20 @@ def discover_views(
             if not directory.is_dir() or not (directory / "view.toml").is_file():
                 continue
             raise
+        if is_within(state_root, project.root):
+            raise ConfigurationError(
+                f"View {directory.name!r} contains Studio's generated view state "
+                f"{state_root}. Rename the view or set a view_root that keeps "
+                "views apart from the notebook's __marimo__ directory."
+            )
+        older = project.artifacts.parent
+        if not is_within(older, project.root) and (older / "view.toml").is_file():
+            raise ConfigurationError(
+                f"View {directory.name!r} also exists in {older}, a view folder "
+                "from Studio 0.3.0 or earlier where Studio now keeps that view's "
+                f"build state. Move what you keep into {project.root}, then "
+                f"remove {older}."
+            )
         views[directory.name] = project
     return views
 
@@ -392,6 +428,8 @@ def _studio_definition(
     )
     view_root = _configured_view_root(config_path, notebook, data)
     FileTree(config_path.parent).stat(view_root)
+    state_root = view_state_root(notebook)
+    _require_separate_state(CatalogLocations(view_root, state_root))
     default_view = data.get("default")
     if not isinstance(default_view, str):
         raise ConfigurationError("default must name a view")
@@ -437,6 +475,7 @@ def _studio_definition(
                 config_source,
                 notebook,
                 view_root,
+                state_root,
                 default_view,
                 default_runtime,
                 runtimes,
@@ -453,6 +492,7 @@ def _studio_definition(
         config_source=config_source,
         notebook=notebook,
         view_root=view_root,
+        state_root=state_root,
         default_view=default_view,
         default_runtime=default_runtime,
         runtimes=runtimes,
@@ -513,17 +553,17 @@ def materialize_studio_workspace(
     definition: StudioDefinition,
 ) -> StudioWorkspace:
     """Resolve a Studio definition into its initialized workspace."""
-    views = discover_views(definition.view_root)
+    views = discover_views(definition.locations)
     try:
         owner_names = reconcile_view_owners(
             definition.view_root,
             set(views),
-            refresh_names=lambda: set(discover_views(definition.view_root)),
+            refresh_names=lambda: set(discover_views(definition.locations)),
         )
     except (ConditionalWriteError, FileNotFoundError) as error:
         raise WorkspaceGenerationConflictError() from error
     if owner_names != set(views):
-        views = discover_views(definition.view_root)
+        views = discover_views(definition.locations)
         if set(views) != owner_names:
             raise WorkspaceGenerationConflictError()
     if not views:
@@ -541,7 +581,7 @@ def materialize_studio_workspace(
         view_generations,
         root_generation,
     )
-    if discover_views(definition.view_root) != views:
+    if discover_views(definition.locations) != views:
         raise WorkspaceGenerationConflictError()
     try:
         generation_changed = any(
@@ -558,6 +598,7 @@ def materialize_studio_workspace(
         config_source=definition.config_source,
         notebook=definition.notebook,
         view_root=definition.view_root,
+        state_root=definition.state_root,
         default_view=definition.default_view,
         default_runtime=definition.default_runtime,
         runtimes=definition.runtimes,

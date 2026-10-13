@@ -125,6 +125,9 @@ class StudioOverview:
     config_path: Path | None
     config_source: Literal["notebook", "pyproject"] | None
     view_root: Path
+    """Authored view projects, one directory per view."""
+    state_root: Path
+    """Replaceable view build state under marimo's output directory."""
     default_view: str | None
     default_runtime: str | None
     runtimes: tuple[str, ...]
@@ -143,6 +146,7 @@ class StudioOverview:
             "config": str(self.config_path) if self.config_path is not None else None,
             "config_source": self.config_source,
             "view_root": str(self.view_root),
+            "state_root": str(self.state_root),
             "default_view": self.default_view,
             "default_runtime": self.default_runtime,
             "runtimes": list(self.runtimes),

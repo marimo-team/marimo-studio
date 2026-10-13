@@ -13,13 +13,14 @@ from marimo_studio._views.inspection import (
     inspection_request,
 )
 from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
     encode_view_manifest,
-    load_view_project,
 )
 from marimo_studio.errors import ViewProjectError
-from marimo_studio.view_providers import JsonValue, ProviderError, ViewProject
+from marimo_studio.view_providers import JsonValue, ProviderError
 from marimo_studio.view_providers._builtin.quarto import provider
 
+from ..helpers import load_standalone_project
 from ..provider_test_support import provider_starter_context, publish
 
 INDEX = PurePosixPath("index.qmd")
@@ -89,7 +90,7 @@ def _project(
     *,
     files: dict[str, str] | None = None,
     options: dict[str, JsonValue] | None = None,
-) -> ViewProject:
+) -> CatalogProject:
     plan = provider.create(
         provider.starters()[0],
         provider_starter_context(tmp_path, view_name="report"),
@@ -109,7 +110,7 @@ def _project(
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    return load_view_project(root)
+    return load_standalone_project(root)
 
 
 def test_hosts_are_found_where_pandoc_keeps_raw_html(tmp_path: Path) -> None:

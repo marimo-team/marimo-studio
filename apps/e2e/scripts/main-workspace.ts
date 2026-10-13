@@ -215,7 +215,7 @@ export class MainWorkspace {
           stdio: ["ignore", "ignore", "inherit"],
         },
       );
-      const viewDirectory = resolve(dirname(notebook), "__marimo__/studio/notebook", view);
+      const viewDirectory = resolve(dirname(notebook), "studio/notebook", view);
       await writeFile(
         resolve(viewDirectory, "index.html"),
         await readFile(resolve(proxiedFixtureDirectory, `${view}.html`)),

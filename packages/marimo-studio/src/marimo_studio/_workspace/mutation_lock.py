@@ -10,6 +10,7 @@ from pathlib import Path
 from weakref import WeakValueDictionary
 
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._filesystem.ignore import ignore_generated_directory
 from marimo_studio._workspace.models import VIEW_PATTERN
 from marimo_studio.errors import ConfigurationError
 
@@ -77,6 +78,9 @@ def _mutation_lock(
             if not acquired:
                 yield False
                 return
+            # Lock files stay in the authored catalog, where every process
+            # that changes it finds them, so the directory ignores itself.
+            ignore_generated_directory(tree, lock_path.parent)
             held.add(lock_path)
             try:
                 yield True

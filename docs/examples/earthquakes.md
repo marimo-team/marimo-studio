@@ -64,7 +64,7 @@ add browser network requests.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/earthquakes.py)
-- [Story](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/story)
-- [Operations](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/operations)
-- [Briefing](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/briefing)
-- [Bulletin](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/bulletin)
+- [Story](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/earthquakes/story)
+- [Operations](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/earthquakes/operations)
+- [Briefing](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/earthquakes/briefing)
+- [Bulletin](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/earthquakes/bulletin)

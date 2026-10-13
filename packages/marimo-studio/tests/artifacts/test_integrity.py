@@ -31,7 +31,7 @@ from marimo_studio._artifacts.retention import lease_published_artifact
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.inspection import inspection_request
-from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildInput,
@@ -44,7 +44,6 @@ from marimo_studio.view_providers import (
     ProviderStarter,
     StarterContext,
     StarterPlan,
-    ViewProject,
 )
 from marimo_studio.view_providers._builtin.vanilla import provider as vanilla_provider
 from marimo_studio.view_providers._host import provider_registry
@@ -77,6 +76,7 @@ from ..artifact_test_support import (
 from ..artifact_test_support import (
     write_json as _write_json,
 )
+from ..helpers import load_standalone_project
 
 
 class _EntryPoint:
@@ -126,7 +126,7 @@ def _external_registry() -> ProviderRegistry:
     )
 
 
-def _external_project(tmp_path: Path) -> ViewProject:
+def _external_project(tmp_path: Path) -> CatalogProject:
     project = _project(tmp_path)
     project.manifest.write_text(
         project.manifest.read_text(encoding="utf-8").replace(
@@ -134,7 +134,7 @@ def _external_project(tmp_path: Path) -> ViewProject:
         ),
         encoding="utf-8",
     )
-    return load_view_project(project.root)
+    return load_standalone_project(project.root)
 
 
 @pytest.mark.parametrize(

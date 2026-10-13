@@ -20,8 +20,8 @@ from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
     encode_view_manifest,
-    load_view_project,
 )
 from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers import (
@@ -36,6 +36,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._builtin.typst import provider
 
+from ..helpers import load_standalone_project
 from ..provider_test_support import provider_starter_context, publish
 
 pytestmark = pytest.mark.skipif(
@@ -62,7 +63,7 @@ def _project(
     tmp_path: Path,
     main: str | None = None,
     notebook: str | None = None,
-) -> ViewProject:
+) -> CatalogProject:
     if notebook is not None:
         (tmp_path / "analysis.py").write_text(notebook, encoding="utf-8")
     plan = provider.create(
@@ -80,7 +81,7 @@ def _project(
     )
     if main is not None:
         (root / MAIN).write_text(main, encoding="utf-8")
-    return load_view_project(root)
+    return load_standalone_project(root)
 
 
 def _render(

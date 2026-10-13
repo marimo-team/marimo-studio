@@ -61,6 +61,12 @@ async def run_isolated_module_request(
             result = await run_supervised_command(
                 [
                     sys.executable,
+                    # The child derives view state paths from the same prefix.
+                    *(
+                        ("-X", f"pycache_prefix={sys.pycache_prefix}")
+                        if sys.pycache_prefix is not None
+                        else ()
+                    ),
                     "-m",
                     module,
                     str(workspace.request_path),

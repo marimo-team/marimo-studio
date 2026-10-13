@@ -140,9 +140,9 @@ project's dependency workflow.
 
 `view_root` is optional. It is a portable relative path resolved from the file
 that contains `[tool.marimo-studio]`. When omitted, Studio stores views at
-`__marimo__/studio/<notebook-stem>/` beside the notebook. Set it when the host
-or deployment treats `__marimo__/` as generated runtime state and persists
-authored project files from another workspace directory.
+`studio/<notebook-stem>/` beside the notebook. See
+[View projects](#view-projects) for the default location, the build state
+location, and catalogs created by earlier Studio releases.
 
 ## Process settings
 
@@ -250,11 +250,12 @@ provider or align those ranges before retrying.
 
 ## View projects
 
-By default, views for `analysis.py` live beside the notebook:
+By default, views for `analysis.py` live in `studio/analysis/` beside the
+notebook, and their build state lives in marimo's output directory:
 
 ```text
-__marimo__/studio/analysis/
-  .gitignore
+analysis.py
+studio/analysis/
   .owners/
     dashboard.toml
   dashboard/
@@ -262,7 +263,41 @@ __marimo__/studio/analysis/
     index.html
     style.css
     main.js
+__marimo__/studio/analysis/
+  dashboard/
+    .artifacts/
 ```
+
+Commit `studio/analysis/`. Studio writes only replaceable build state under
+`__marimo__/`, the directory where marimo also keeps session snapshots and
+caches. Each `.artifacts/` folder contains a `.gitignore` that ignores it, so
+Git skips the build state without a repository rule.
+
+A host that sets
+[`PYTHONPYCACHEPREFIX`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPYCACHEPREFIX),
+Python's setting for writing bytecode caches to a separate tree, moves
+`__marimo__/` under that prefix, mirroring the notebook's folder. Then no build
+state lands in the working tree. Studio mirrors the resolved folder path under
+the resolved prefix, so a folder reached through a symlink can mirror to a
+different path than marimo's own output.
+
+`marimo-studio status` prints both locations. Its JSON output names them
+`view_root` and `state_root`.
+
+Studio 0.3.0 and earlier created views in `__marimo__/studio/<notebook-stem>/`.
+Studio keeps opening a view folder there until you move the views. To adopt the
+current layout, stop Studio and move the folder:
+
+```console
+mkdir -p studio
+mv __marimo__/studio/analysis studio/analysis
+```
+
+The next build moves each view's earlier build state out of the view folder and
+reuses it. Studio reports a configuration error when both folders contain
+views, or when a view in a configured `view_root` has the same name as a view
+left in `__marimo__/studio/analysis/`. Move the views you keep into the folder
+Studio uses, then remove the older folder.
 
 A new Vanilla view creates `index.html` and `AGENTS.md` as editable Source
 documents. Directly referenced local `style.css` and `main.js` files also enter
@@ -378,12 +413,18 @@ authoring status values.
 
 Commit `.owners/`, `view.toml`, Source documents, build inputs, frontend
 configuration, and dependency lockfiles. Studio writes replaceable build state
-beneath each view's `.artifacts/` directory and cross-process locks beneath the
-workspace `.locks/` directory. The workspace `.gitignore` excludes both
-generated paths.
+to each view's `.artifacts/` directory under `state_root`, and cross-process
+locks to the `.locks/` directory of the view folder. Each of those directories
+contains a `.gitignore` that excludes its whole content, so Git skips them
+whatever the repository's own ignore rules say.
 
-Delete one view's `.artifacts/` directory when its generated state needs a
-clean rebuild. The next build recreates it from saved source.
+Removing a view through Studio removes its build state, and renaming a view
+moves it. Delete one view's `.artifacts/` directory when its generated state
+needs a clean rebuild. The next build recreates it from saved source.
+
+A view folder created by an earlier Studio release can contain `.artifacts/`
+inside each view. The first build after an upgrade moves that state to
+`state_root`, and Studio reuses its revisions.
 
 ## Cell aliases
 
@@ -406,11 +447,18 @@ the same change:
 
 ```console
 mv analysis.py revenue.py
-mv __marimo__/studio/analysis __marimo__/studio/revenue
+mv studio/analysis studio/revenue
+```
+
+The stem also names the build state folder, so the next build creates state
+under `__marimo__/studio/revenue/`. Delete the state under the old stem:
+
+```console
+rm -r __marimo__/studio/analysis
 ```
 
 When `view_root` is configured, rename the notebook and keep the configured
-view directory unchanged.
+view directory unchanged. Delete the state under the old stem in that case too.
 
 For project settings, update `tool.marimo-studio.notebook` as part of that
 change.

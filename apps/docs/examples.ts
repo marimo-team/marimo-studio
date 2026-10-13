@@ -106,7 +106,7 @@ export const documentationTechnologies = {
 export const documentationExampleSource = {
   repository: "https://github.com/marimo-team/marimo-studio",
   revision: "main",
-  viewProjectsRoot: "examples/__marimo__/studio",
+  viewProjectsRoot: "examples/studio",
 } as const;
 
 /**

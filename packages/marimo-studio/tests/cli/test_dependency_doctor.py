@@ -116,7 +116,7 @@ def test_dependency_doctor_reports_dependencies_when_studio_discovery_fails(
                 return super().read(path, **options)
 
         monkeypatch.setattr(config_module, "FileTree", RemovedConfiguration)
-    view = tmp_path / "__marimo__" / "studio" / "analysis" / "dashboard"
+    view = tmp_path / "studio" / "analysis" / "dashboard"
     view.mkdir(parents=True)
     (view / "view.toml").write_text('schema = 1\nprovider = "marimo-studio/vanilla"\n')
 
@@ -267,7 +267,7 @@ def test_dependency_doctor_resolves_provider_umbrella_extras(
             else ""
         )
     )
-    view = tmp_path / (view_root or "__marimo__/studio/analysis") / "dashboard"
+    view = tmp_path / (view_root or "studio/analysis") / "dashboard"
     view.mkdir(parents=True)
     (view / "view.toml").write_text('schema = 1\nprovider = "example-suite/report"\n')
     result = CliRunner().invoke(
@@ -293,7 +293,7 @@ def test_dependency_doctor_checks_the_combined_execution_environment(
         '[project]\nname = "analysis"\nversion = "0.1"\n'
         'dependencies = ["marimo-studio[deno]"]\n'
     )
-    view = tmp_path / "__marimo__" / "studio" / "analysis" / "dashboard"
+    view = tmp_path / "studio" / "analysis" / "dashboard"
     view.mkdir(parents=True)
     (view / "view.toml").write_text('schema = 1\nprovider = "marimo-studio/react"\n')
     result = CliRunner().invoke(

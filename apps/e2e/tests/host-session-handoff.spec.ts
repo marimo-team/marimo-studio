@@ -193,7 +193,7 @@ shown.to_dict()
       const replacedModelNotification = await expectRetiringModelNotification();
       const refreshedProjections = await captureProjectionRefresh(page, diagnostics);
       await writeFile(
-        resolve(workspace, "__marimo__/studio/host-save/dashboard/index.html"),
+        resolve(workspace, "studio/host-save/dashboard/index.html"),
         `<!doctype html><html><head><title>Projections</title></head><body>
         <main id="app-shell"><h1 mo-value="a"></h1>
         <marimo-cell name="cell-1"></marimo-cell>
