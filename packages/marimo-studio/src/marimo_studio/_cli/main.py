@@ -81,8 +81,9 @@ def _hint(error: MarimoStudioError, command: str | None) -> str:
         error.code in _GENERATION_CONFLICTS or error.code == "source-conflict"
     ):
         return (
-            "Run `marimo-studio view read VIEW PATH --json` for the current "
-            "revision and generations, then retry the write."
+            "Run `marimo-studio view read VIEW PATH --target TARGET --json` with "
+            "the same --target as the write for the current revision and "
+            "generations, then retry the write."
         )
     if error.code in _GENERATION_CONFLICTS:
         return "Run the command again."

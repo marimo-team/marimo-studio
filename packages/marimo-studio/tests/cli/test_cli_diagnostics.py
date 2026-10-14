@@ -684,8 +684,9 @@ def test_main_reports_a_source_precondition_conflict_without_mutation(
     assert event["code"] == "source-conflict"
     assert event["exit_code"] == 3
     assert event["details"]["hint"] == (
-        "Run `marimo-studio view read VIEW PATH --json` for the current "
-        "revision and generations, then retry the write."
+        "Run `marimo-studio view read VIEW PATH --target TARGET --json` with "
+        "the same --target as the write for the current revision and "
+        "generations, then retry the write."
     )
     assert setup.root.joinpath("index.html").read_text(encoding="utf-8") == current
 
@@ -729,8 +730,9 @@ def test_main_tells_a_stale_view_write_to_read_again(
 
     assert raised.value.code == 3
     assert capsys.readouterr().err.splitlines()[-1] == (
-        "Hint: Run `marimo-studio view read VIEW PATH --json` for the current "
-        "revision and generations, then retry the write."
+        "Hint: Run `marimo-studio view read VIEW PATH --target TARGET --json` with "
+        "the same --target as the write for the current revision and "
+        "generations, then retry the write."
     )
 
 
