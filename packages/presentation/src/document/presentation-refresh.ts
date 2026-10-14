@@ -1,3 +1,11 @@
+import { ProjectedOutputFunctionDrainTimeoutError } from "@marimo-studio/marimo-frontend/projected-output-function-gate";
+
+import type { PresentationDiagnostic } from "../diagnostics.ts";
+
+import { errorMessage } from "../errors.ts";
+import { RuntimeConfigRequestError } from "../runtime-config/index.ts";
+import { StylesheetRefreshError } from "./styles.ts";
+
 export interface PresentationTarget {
   documentUrl: string;
   supportUrl: string;
@@ -108,3 +116,44 @@ export class PresentationRefreshState {
     }
   }
 }
+
+const refreshFailureCode = (cause: unknown): string => {
+  if (cause instanceof RuntimeConfigRequestError || cause instanceof StylesheetRefreshError) {
+    return cause.code;
+  }
+  if (cause instanceof ProjectedOutputFunctionDrainTimeoutError) {
+    return "presentation-refresh-waiting-for-function";
+  }
+  return "presentation-refresh-failed";
+};
+
+const refreshFailureHint = (cause: unknown, transient: boolean): string => {
+  if (cause instanceof RuntimeConfigRequestError && cause.hint) {
+    return cause.hint;
+  }
+  if (cause instanceof ProjectedOutputFunctionDrainTimeoutError) {
+    return "Wait for the running widget request to finish. The preview refreshes after it does.";
+  }
+  return transient
+    ? "Wait for Marimo to accept the notebook change."
+    : "Fix the view source, then save it again.";
+};
+
+/**
+ * Describe a failed presentation refresh. A warning means the refresh retries
+ * on its own, and an error waits for the author to change the view.
+ */
+export const refreshDiagnostic = (cause: unknown, view: string): PresentationDiagnostic => {
+  const transient =
+    (cause instanceof RuntimeConfigRequestError && cause.transient) ||
+    cause instanceof ProjectedOutputFunctionDrainTimeoutError;
+  return {
+    scope: "presentation",
+    code: refreshFailureCode(cause),
+    severity: transient ? "warning" : "error",
+    message: errorMessage(cause),
+    hint: refreshFailureHint(cause, transient),
+    view,
+    details: cause instanceof RuntimeConfigRequestError ? cause.details : undefined,
+  };
+};

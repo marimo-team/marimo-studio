@@ -1,3 +1,4 @@
+import { ProjectedOutputFunctionDrainTimeoutError } from "@marimo-studio/marimo-frontend/projected-output-function-gate";
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
@@ -6,6 +7,7 @@ import {
   RefreshRetrySchedule,
   samePresentationRevision,
   PresentationRefreshState,
+  refreshDiagnostic,
   StaleBindingRefresh,
 } from "../src/document/presentation-refresh.ts";
 
@@ -85,4 +87,22 @@ test("stale bindings retry until the presentation revision changes", () => {
   assert.equal(refresh.request("revision-b"), true);
   refresh.clear();
   assert.equal(refresh.needsRetry("revision-b"), false);
+});
+
+test("a refresh waiting on a running widget request retries without blaming the view source", () => {
+  const diagnostic = refreshDiagnostic(new ProjectedOutputFunctionDrainTimeoutError(), "dashboard");
+
+  assert.equal(diagnostic.severity, "warning");
+  assert.equal(
+    diagnostic.hint,
+    "Wait for the running widget request to finish. The preview refreshes after it does.",
+  );
+});
+
+test("a refresh that fails in the view source asks the author to fix it", () => {
+  const diagnostic = refreshDiagnostic(new Error("The view shell is malformed."), "dashboard");
+
+  assert.equal(diagnostic.severity, "error");
+  assert.equal(diagnostic.code, "presentation-refresh-failed");
+  assert.equal(diagnostic.hint, "Fix the view source, then save it again.");
 });
