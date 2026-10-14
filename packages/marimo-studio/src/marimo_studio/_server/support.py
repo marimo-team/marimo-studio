@@ -94,7 +94,7 @@ from marimo_studio._server.workspace_lifecycle import (
 from marimo_studio._server.zero_python_api import zero_python_response
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import MarimoStudioError
+from marimo_studio.errors import MarimoStudioError, ViewNotFoundError
 
 
 def _manifest_source_view(support_path: str) -> str | None:
@@ -392,6 +392,15 @@ async def _bootstrap_response(
     )
 
 
+_VIEW_ROUTE_METHODS = {
+    "runtimes": "GET",
+    "config": "GET",
+    "values": "POST",
+    "render": "POST",
+    "outputs": "POST",
+}
+
+
 async def _view_response(
     request: Request,
     context: ServerContext,
@@ -436,7 +445,14 @@ async def _view_response(
             session_state,
         )
     if view_name not in studio.views:
-        return Response(status_code=404)
+        return auth_error_response(
+            ViewNotFoundError(
+                view_name,
+                available=(
+                    () if presentation_capability is not None else tuple(studio.views)
+                ),
+            )
+        )
     if route == "preview":
         return await preview_url_response(
             request,
@@ -561,6 +577,9 @@ async def _view_response(
                 else None
             ),
         )
+    allowed = _VIEW_ROUTE_METHODS.get(route)
+    if allowed is not None:
+        return Response(status_code=405, headers={"Allow": allowed})
     return Response(status_code=404)
 
 
