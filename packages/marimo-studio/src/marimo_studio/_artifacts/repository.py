@@ -419,12 +419,14 @@ def _path_identity(path: Path, *, directory: bool, label: str) -> tuple[int, ...
 
 
 def _project_incarnation(project: CatalogProject) -> str | None:
+    # Saves in the view folder change the root's timestamps, so the root
+    # contributes only the device and inode that change when it is replaced.
     try:
         root_before = _path_identity(
             project.root,
             directory=True,
             label="View project root",
-        )
+        )[:2]
         manifest_before = _path_identity(
             project.manifest,
             directory=False,
@@ -439,7 +441,7 @@ def _project_incarnation(project: CatalogProject) -> str | None:
             project.root,
             directory=True,
             label="View project root",
-        )
+        )[:2]
         manifest_after = _path_identity(
             project.manifest,
             directory=False,

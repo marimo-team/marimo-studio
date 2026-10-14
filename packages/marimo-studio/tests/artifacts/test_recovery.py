@@ -232,6 +232,29 @@ def test_provider_upgrade_preserves_last_good_until_the_next_build(
     assert rebuilt.build.diagnostics == ()
 
 
+def test_a_save_in_the_view_folder_during_a_read_keeps_the_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    published = publish_artifact(project, "development")
+    native_lock = repository_module.artifact_lock
+
+    @contextmanager
+    def save_then_lock(*args: Any, **kwargs: Any) -> Any:
+        (project.root / "notes.txt").write_text("saved", encoding="utf-8")
+        with native_lock(*args, **kwargs) as acquired:
+            yield acquired
+
+    monkeypatch.setattr(repository_module, "artifact_lock", save_then_lock)
+
+    state = read_artifact_state(project, "development")
+
+    assert state.build.phase == "published"
+    assert state.artifact is not None
+    assert state.artifact.artifact_revision == published.artifact_revision
+
+
 def test_artifact_state_settles_when_its_view_is_removed_during_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
