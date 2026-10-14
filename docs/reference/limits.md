@@ -19,10 +19,9 @@ publication or mutation commit unless the table names a browser boundary.
 | Source documents returned by one provider inspection  |             256 | Provider conformance error                        |
 | Provider path, title, summary, message, or hint field |    64 KiB UTF-8 | Provider conformance error                        |
 
-View names must also fit the syntax and reserved-name rules in
-[Configuration](configuration.md#view-projects). Source paths use forward
-slashes relative to the view project root, reject `.` and `..` segments, and
-resolve to regular files contained by the view project.
+View names also follow the syntax and reserved-name rules in
+[View projects](configuration.md#view-projects). Source paths follow
+[Source documents and build inputs](configuration.md#source-documents-and-build-inputs).
 
 ## Build inputs and artifacts
 
@@ -37,10 +36,10 @@ missing entry document, and a document without one `head`, one `body`, and one
 `#app-shell`.
 
 Static export combines the artifact with Studio runtime assets and notebook
-public files. Prepared export adds verified output assets, each within
+public files. Prepared export adds verified output assets within
 marimo-export's 64 MiB asset and 512 MiB export limits. Browser export adds
-notebook source. Each copied tree is checked against the artifact file budget
-before the staged directory can replace the destination.
+notebook source. Studio checks each copied tree against the artifact file
+budget before the staged directory replaces the destination.
 
 ## Projection declarations
 
@@ -57,24 +56,20 @@ before the staged directory can replace the destination.
 
 Value selectors and accept lists follow marimo-export's
 [`values`](https://marimo-team.github.io/marimo-export/reference/python/values)
-module, which a Prepared export also uses. Targets `"*"` represent a dynamic
-site and avoid enumerating its target set during inspection. Runtime policy
-still applies to active instances and unique targets. Prepared export requires finite targets on every site.
+module, which a Prepared export also uses. A `"*"` target marks a dynamic
+site, so inspection skips enumerating its targets. Runtime policy still applies
+to active instances and unique targets. Prepared export requires finite targets
+on every site.
 
 ## Rendered documents
 
-| Boundary                                      |  Limit |
-| --------------------------------------------- | -----: |
-| Encoded render values for one render          |  8 MiB |
-| Rendered outputs for one render               | 16 MiB |
-| Rendered document                             | 64 MiB |
-| Provider commands during one render           |   60 s |
-| Prepared states rendered by one static export |    256 |
-
-Render values or outputs over their budget fail with `document-values-too-large`
-or `document-outputs-too-large`. A larger rendered document fails with
-`document-render-too-large`, and an export with more prepared states fails with
-`document-render-states-exceeded`.
+| Boundary                                      |  Limit | Failure                           |
+| --------------------------------------------- | -----: | --------------------------------- |
+| Encoded render values for one render          |  8 MiB | `document-values-too-large`       |
+| Rendered outputs for one render               | 16 MiB | `document-outputs-too-large`      |
+| Rendered document                             | 64 MiB | `document-render-too-large`       |
+| Provider commands during one render           |   60 s | `document-render-failed`          |
+| Prepared states rendered by one static export |    256 | `document-render-states-exceeded` |
 
 ## Active presentation projections
 
@@ -88,7 +83,7 @@ or `document-outputs-too-large`. A larger rendered document fails with
 | Projection target           | 4,096 UTF-8 bytes | Projection resolution error      |
 | Value selector path         |          64 steps | Projection resolution error      |
 
-One complete cell or rendered output can have one host per target. Duplicate
+A complete cell or rendered output target accepts one host, and duplicate
 hosts enter an error state. Several `mo-value` hosts may share one value
 target.
 
@@ -119,12 +114,12 @@ than 1,000,000 bytes.
 The Python runtime publishes Arrow values through marimo's shared memory. A
 container's default 64 MiB `/dev/shm` holds about one large value, so start
 containers with a larger `--shm-size`. A value that does not fit travels
-inline, which takes longer to load.
+inline and takes longer to load.
 
-The Browser runtime passes Arrow values from its worker as base64 text, so a
-value read there carries at most 64 MiB of Arrow. A 60 MB value took about 8
-seconds to appear in Chromium on a Linux workstation. `marimo-studio check`
-applies the Python runtime budgets.
+The Browser runtime passes Arrow values from its worker as base64 text, which
+caps a value read there at 64 MiB of Arrow. A 60 MB value took about 8 seconds
+to appear in Chromium on a Linux workstation. `marimo-studio check` applies the
+Python runtime budgets.
 
 The Prepared runtime stores each value as a
 [marimo-export](https://github.com/marimo-team/marimo-export) asset. One asset
@@ -133,9 +128,9 @@ across its prepared states.
 
 Browser runtime configuration contains saved notebook source, projection
 declarations, runtime bindings, and presentation settings. Prepared runtime
-configuration contains the publication identity and manifest URL. Prefer
-finite projection targets and reduce notebook source when a Browser record
-reaches 16 MiB.
+configuration contains the publication identity and manifest URL. When a
+Browser record reaches 16 MiB, use finite projection targets and reduce
+notebook source.
 
 ## Provider records
 
@@ -163,7 +158,7 @@ provider API](provider-api.md) defines the record responsibilities.
 | Provider runner command                                            | 120 seconds | Finite positive duration within the request's shared 120-second command budget |
 | Third-party provider metadata, availability, and starter discovery |  10 seconds |                                             Fixed extension-operation deadline |
 
-Runtime workers receive an additional 10-second shutdown allowance after the
+Runtime workers get an additional 10-second shutdown allowance after the
 requested runtime timeout. A timeout bounds waiting and cleanup ownership. It
 does not restrict the operating-system authority of notebook or provider code.
 

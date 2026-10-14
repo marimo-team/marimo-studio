@@ -9,10 +9,10 @@ pageClass: studio-example-page
 
 # Examples
 
-Each example notebook backs several views, from lecture decks and linked
-explorers to typeset articles and PDF reports. Open an example to compare how
-each view presents one analysis. The published views run from prepared
-notebook states, without a Python kernel.
+Each example notebook backs four views, from lecture decks and linked
+explorers to Quarto articles and Typst and LaTeX PDFs. Open an example to
+compare how each view presents one analysis. The published views are Prepared
+exports, so they run without a Python kernel.
 
 <div class="studio-example-gallery">
   <StudioExampleCard family="quadratic-programs">A lecture deck, a reading explainer, an interactive geometry lab, and a typeset Typst report.</StudioExampleCard>

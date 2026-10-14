@@ -129,9 +129,11 @@ captured. Inspect the images before committing them.
 ## Example showcase images
 
 The README opens with `apps/docs/public/showcase/marimo-studio-wall-THEME.webp`,
-which places every example notebook above its views on a receding plane. Each
-family also has a fan, `marimo-studio-fan-FAMILY-THEME.webp`, with the notebook
-raised behind its views. Every image has `light` and `dark` variants for
+which places every example notebook above its views on a receding plane, one
+column per family and one row per view. Each family also has a fan,
+`marimo-studio-fan-FAMILY-THEME.webp`, with the notebook raised behind its views
+in an arc. A fan's `order` in `showcases.json` lists every view of the family
+from left to right, and the inner cards sit in front. Every image has `light` and `dark` variants for
 GitHub's color schemes and keeps a transparent background. The plain file is a
 2400px WebP at quality 0.9 for READMEs and pages, and the `@2x` file is the
 4800px lossless master. Render them again after a visible view change or when

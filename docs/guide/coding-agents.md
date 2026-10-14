@@ -1,136 +1,83 @@
 ---
 title: Author with a coding agent
-description: Give an agent Studio's installed instructions, ask for a view, and review its rendered result.
+description: Ask a coding agent for a view, review the result in Preview, and point at results with Lens.
 ---
 
 # Author with a coding agent
 
-A coding agent can inspect a notebook, create a view, edit its source, and
-verify the result in a browser. Studio ships the instructions and Python API
-with the package, so the agent works from your installed version.
+Studio ships instructions for coding agents inside the `marimo-studio`
+package. An agent that reads them can write a notebook, create views in any
+format, build them, and check the result in Preview.
 
 ## Ask for a view
 
-Paste one request into a terminal agent such as Claude Code or Codex:
+Paste a request into a terminal agent such as Claude Code or Codex:
 
 ```text
 Run `uvx --with marimo-studio agent-plugins read marimo-studio` and create
 a scrollytelling report and a slide deck explaining calculus basics.
 ```
 
+The first sentence makes the agent read the instructions.
 [Agent Plugins](https://github.com/peter-gy/agent-plugins) prints the
-instructions a Python package ships for coding agents, and
-[uv](https://docs.astral.sh/uv/) supplies `uvx`. Studio's briefing tells the
-agent to start a notebook with Studio, write its cells, then create, build, and
-show each view in Preview beside the notebook.
+instructions a Python package ships for agents, and
+[uv](https://docs.astral.sh/uv/) supplies `uvx`. The agent then starts a
+notebook with Studio, writes the analysis in Python cells, creates and builds
+each view, and shows it in Preview beside the notebook.
 
-Name an existing notebook to build on its analysis:
+Name a notebook you already have to build on its analysis:
 
 ```text
 Run `uvx --with marimo-studio agent-plugins read marimo-studio` and build
-a briefing view of analysis.py that leads with the headline results.
+a Typst report of analysis.py that leads with the headline results.
 ```
 
-The agent runs Python in the notebook kernel through
-[`marimo pair`](https://marimo.io/pair), a marimo command for working in a
-live notebook session. It finds local notebooks started with `--no-token` and
-starts a stopped notebook that way. For a notebook you started with a token,
-give the agent its URL and a file that holds the token. The agent then inspects
-the notebook and available starters, reads each view's `AGENTS.md`, and edits
-the view source.
+The agent runs code in the live notebook through
+[`marimo pair`](https://marimo.io/pair). It finds local notebooks started with
+`--no-token`, and starts a stopped notebook that way. For a notebook started
+with a token, give the agent its URL and a file that holds the token.
 
-In marimo's AI sidebar, the agent already runs in the kernel. Switch to
+In marimo's AI sidebar the agent already runs inside the notebook. Switch to
 **Code Mode (beta)** and ask for the view directly.
 
 ## Write a good request
 
-Give the agent an audience, a task, and a result to check:
+Name the audience, the task, and something to check:
 
 > Create a view named `briefing` for a quarterly review. Use the notebook's
 > existing measures and controls. Lead with the headline results, then show
-> the evidence behind them. Verify the view at desktop and phone widths and
-> check that changing a control updates its dependent results.
+> the evidence behind them. Check the view at desktop and phone widths, and
+> check that changing a control updates its results.
 
-Review the result in Preview. Keep shared calculations in the notebook and
-audience-specific layout and wording in the view. Record lasting visual
-decisions in the project's `DESIGN.md`.
+Review the result in Preview. Shared calculations belong in the notebook, and
+layout and wording belong in the view. Ask the agent to record lasting
+decisions, such as audience and visual direction, in the view's `DESIGN.md`.
 
-## Inspect and verify
-
-For agent authors and integrations, the live API begins with the current
-workspace. From the notebook's Python environment, `help(marimo_studio.agent)`
-prints the briefing with the Python API. Run this in one code-mode execution:
-
-```python
-import marimo_studio
-
-workspace = marimo_studio.agent.current_workspace()
-notebook = await workspace.inspect_notebook()
-for cell in notebook.cells:
-    print(cell.name, cell.definitions, cell.has_output_expression)
-for starter in await workspace.starters():
-    print(starter.id, starter.title)
-```
-
-`inspect_notebook()` reads saved source. Its optional runtime inspection runs a
-separate process. Live kernel values, the published build, and the displayed
-browser result are separate evidence.
-
-After authoring and building `briefing`, show it in a new code-mode execution:
-
-```python
-import marimo_studio
-
-view = marimo_studio.agent.current_workspace().view("briefing")
-await view.show()
-print(await view.preview_url(runtime="server"))
-```
-
-Reacquire workspace and view handles in each execution. Finish the execution
-before an external browser tool waits for notebook results. After changing
-Python, run the changed cells in the live notebook.
-
-Check source and build freshness with `view.inspect()`. A failed build retains
-the last working artifact, so a visible page alone does not prove the edit was
-published. In the browser, wait for
-`html[data-marimo-studio-state="ready"]`, inspect wide and narrow layouts, and
-exercise controls through to their dependent results. Verify exports in the
-[runtime](run-and-share.md) visitors will use.
-
-The [Python API](../reference/python-api.md#marimo-studio-agent) defines methods
-and records. The installed skill supplies the complete authoring workflow and
-references for source edits, projections, verification, and delivery:
-
-```python
-import marimo_studio
-
-print(marimo_studio.agent.skill().file("references/verification.md").read_text())
-```
+The agent reads each view's `AGENTS.md` before it edits the view. The
+[Python API](../reference/python-api.md#marimo-studio-agent) lists the
+methods it uses to inspect the notebook, build views, and show them.
 
 ## Select results with Lens
 
-[Lens](https://marimo-team.github.io/marimo-lens/) lets you select a
-rendered result and attach a note. The agent receives the image and the
-notebook context behind that selection. Install Lens in the notebook's Python
-environment:
+[Lens](https://marimo-team.github.io/marimo-lens/) lets you select part of a
+rendered view and attach a note. The agent receives an image of the
+selection, your note, and the notebook cells behind it, so it can tell
+whether a change belongs in the view or in the notebook.
+
+Install Lens in the notebook's Python environment, and restart a running
+notebook afterwards:
 
 ```console
 uv pip install "marimo-studio[lens]"
 ```
 
-The `lens` extra installs a Lens release compatible with the installed Studio. For
-sandboxed notebooks, also declare `marimo-studio[lens]` in the script's
-dependencies. Restart a running notebook after installing or upgrading Lens.
-
-When the notebook imports no Lens of its own, marimo mounts one in the notebook.
-The development preview reuses that same Lens, so the Notebook pane and the
-preview each show a dock, and selections from either one reach the agent
-together. Select a result, add a note, and ask:
+For a sandboxed notebook, also add `marimo-studio[lens]` to the script's
+dependencies. When the notebook creates no Lens of its own, marimo mounts one,
+and Notebook and Preview each show a Lens dock whose selections reach the
+agent. Select a result, add a note, and ask:
 
 > Use Lens to address my current selection in this Studio view.
 
-Native projections carry their producing context automatically. For custom
-charts or authored page regions, [connect the rendered result to its
-inputs](../reference/projections.md#trace-custom-javascript-rendering). Lens's
-[agent guide](https://marimo-team.github.io/marimo-lens/agents) owns the selection
-and feedback workflow.
+Cells, outputs, and values carry their notebook context automatically. For a
+chart that page code draws itself,
+[connect it to its inputs](../reference/projections.md#trace-custom-javascript-rendering).

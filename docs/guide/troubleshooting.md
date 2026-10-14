@@ -5,14 +5,13 @@ description: Diagnose view discovery, provider, source, build, projection, runti
 
 # Troubleshoot Studio
 
-Start with the saved notebook and inspect its configured views and providers:
+Inspect the saved notebook's views and providers. Add `--json` for a script or
+coding agent:
 
 ```console
 uvx marimo-studio status --target analysis.py
 uvx marimo-studio doctor
 ```
-
-Use `--json` when a script or coding agent will read the result.
 
 ::: warning Review configured providers
 Studio commands can resolve, install, import, and invoke provider packages
@@ -28,37 +27,41 @@ Open the notebook in an environment that contains both marimo and Studio:
 uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
-Save an untitled notebook with **Save As**, then create the first view against
-the saved path. Run `marimo-studio status --target analysis.py` when Studio
-reports an unconfigured notebook or a configured notebook with no view.
+Save an untitled notebook with **Save As** before you create the first view.
+When Studio reports an unconfigured notebook or no view, run
+`marimo-studio status --target analysis.py`.
 
 ## `marimo run` shows the notebook instead of a view
 
-Run mode serves the notebook as a marimo app while its view root contains no
-view, and the server logs a warning naming the notebook. `marimo-studio status`
-then reports `needs-view` and the views folder it searched. Restore the view
-folder there, `studio/<notebook-stem>/` beside the notebook by default, or set
-[`view_root`](../reference/configuration.md#project-settings) to the folder
-that holds the views.
+Run mode serves the notebook itself while its view root holds no view, and the
+server logs a warning. `marimo-studio status` reports `needs-view` and the
+folder it searched. Restore the views there, `studio/<notebook-stem>/` by
+default, or point [`view_root`](../reference/configuration.md#project-settings)
+at their folder. Studio 0.3 looks only in `__marimo__/studio/`, so after you
+move views out of it, update the notebook's `marimo-studio` requirement as
+[Upgrade from 0.3](../reference/compatibility.md#upgrade-from-0-3) describes.
 
 ## Studio reports a view folder conflict
 
-`marimo-studio status` prints the folder of authored views and the folder of
-their build state. Studio stops with a configuration error in these cases:
+Views live in `studio/<notebook-stem>/`. Their build state lives in
+`__marimo__/studio/<notebook-stem>/<view>/.artifacts/`, or under `state_dir` or
+`MARIMO_STUDIO_STATE_DIR`. `marimo-studio status` prints both folders. When
+they collide, Studio stops with one of these errors:
 
-| Error                                                                | Fix                                                                                                     |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Views exist in both `studio/<stem>/` and `__marimo__/studio/<stem>/` | Move the views you keep into `studio/<stem>/`, then remove the older folder                             |
-| The build state folder of a view holds another view project          | Move that view out of the folder named in the error, or choose another build state location             |
-| `view_root` is inside Studio's view build state                      | Keep the views outside the build state folder, or choose another build state location                   |
-| A view contains Studio's view build state                            | Rename the view, or choose a build state location outside the view folder                               |
-| Studio cannot keep view build state in a folder                      | Replace the link or file named in the error with a folder, or choose another build state location       |
-| Could not create the view state directory                            | Make the directory writable for the account that runs Studio, or choose another build state location    |
-| `MARIMO_STUDIO_STATE_DIR` must be an absolute path                   | Set it to an absolute folder path, or leave it empty                                                    |
-| `state_dir` must be a non-empty relative path                        | Set `state_dir` to a folder inside the project, or set `MARIMO_STUDIO_STATE_DIR` for a folder elsewhere |
+| Error                                                                | Fix                                                                                                                                               |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Views exist in both `studio/<stem>/` and `__marimo__/studio/<stem>/` | Move the views you keep into `studio/<stem>/` and remove the older folder. See [Upgrade from 0.3](../reference/compatibility.md#upgrade-from-0-3) |
+| The build state folder of a view holds another view project          | Move that view out of the folder named in the error                                                                                               |
+| `view_root` is inside Studio's view build state                      | Move the views out of the build state folder                                                                                                      |
+| A view contains Studio's view build state                            | Rename the view                                                                                                                                   |
+| Studio cannot keep view build state in a folder                      | Replace the link or file named in the error with a folder                                                                                         |
+| Could not create the view state directory                            | Make it writable for the account that runs Studio                                                                                                 |
+| `MARIMO_STUDIO_STATE_DIR` must be an absolute path                   | Set an absolute path, or leave it empty                                                                                                           |
+| `state_dir` must be a non-empty relative path                        | Set a folder inside the project, or use `MARIMO_STUDIO_STATE_DIR`                                                                                 |
 
-[Build state location](../reference/configuration.md#build-state-location)
-lists the settings that choose the build state location.
+For a conflict between view folders and build state, choosing another
+[build state location](../reference/configuration.md#build-state-location)
+also resolves it.
 
 ## A starter is unavailable
 
@@ -69,7 +72,7 @@ uvx marimo-studio doctor marimo-studio/react
 uvx marimo-studio starters
 ```
 
-React, Reveal.js, Svelte, and Notebook Kit creation require the Deno extra:
+React, Reveal.js, Svelte, and Notebook Kit starters need the Deno extra:
 
 ```console
 uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
@@ -77,33 +80,31 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
   --starter marimo-studio/react:default
 ```
 
-The Quarto starter needs the `quarto` command. Install it with
-`pixi global install quarto`. When `starters` reports
+The Quarto starter needs `quarto`, from `pixi global install quarto`. When
+`starters` reports
 `Studio found Quarto in a pixi or conda environment that is not activated.`,
-start marimo through `pixi run` or inside `pixi shell`.
+start marimo through `pixi run` or inside `pixi shell`. The LaTeX starter needs
+`tectonic`, from `pixi global install tectonic`. Restart marimo after either
+install. [Tectonic](https://tectonic-typesetting.github.io/) is a
+self-contained TeX engine.
 
-The LaTeX starter needs the `tectonic` command, from
-[Tectonic](https://tectonic-typesetting.github.io/), a self-contained TeX
-engine. Install it with `pixi global install tectonic`, then restart marimo.
+Keep a third-party provider distribution in the notebook or Python project
+dependencies, because Studio derives the provider requirement from each saved
+`view.toml`.
 
 ## A LaTeX build reports `latex-compile-unfinished`
 
-Tectonic downloads the TeX packages a document uses on its first compile, and
-that compile outlasted the build's 120 second budget. Build the view again,
-which continues from the packages Tectonic kept, or download them once without
-a time limit from the view folder:
+The first compile downloads the document's TeX packages and outlasted the
+build's 120 second budget. Build again to continue from the downloaded
+packages, or run this once from the view folder with no time limit:
 
 ```console
 tectonic -X compile main.tex
 ```
 
-A document that compiles too slowly for the budget, or never finishes, such as
-one with a recursive macro, reports the same code. Fix the document when that
-command still runs past 120 seconds after the packages have downloaded.
-
-After creation, Studio derives the provider requirement from the saved
-manifest. Keep a third-party provider distribution in the notebook or Python
-project dependencies.
+A document that never finishes, such as one with a recursive macro, reports
+the same code. If that command still runs past 120 seconds after the download,
+fix the document.
 
 ## A Source save does not update Preview
 
@@ -114,21 +115,18 @@ marimo-studio view inspect dashboard --target analysis.py
 marimo-studio view build dashboard --target analysis.py
 ```
 
-**Build failed** means Preview still shows the last successful artifact.
-Repair the source-located diagnostic and build again.
-
-If another author saved first, compare **Your edits** with **Saved version**.
-Use the reported recovery file before overwriting an uncertain replacement.
+**Build failed** means Preview still shows the last successful artifact. Fix
+the source-located diagnostic and build again. If another author saved first,
+compare **Your edits** with **Saved version**, and use the reported recovery
+file before overwriting an uncertain replacement.
 
 ## A Source document is missing
 
 The view provider controls the Source catalog. Check `view.toml`, then inspect
-the project. For the Vanilla provider, local CSS and JavaScript appear after
-`index.html` references them directly. React and Svelte providers discover
-files under their configured source roots.
-
-Use the provider's project tools for files outside the editable catalog, then
-inspect again.
+the project. The Vanilla provider lists local CSS and JavaScript that
+`index.html` references directly. React and Svelte providers list files under
+their configured source roots. Edit other files with the provider's project
+tools, then inspect again.
 
 ## A notebook result is missing
 
@@ -138,7 +136,7 @@ Validate saved source and target names:
 marimo-studio validate dashboard --target analysis.py
 ```
 
-Execute the complete notebook, then check the selected projections:
+Then execute the complete notebook and check the selected projections:
 
 ```console
 marimo-studio validate dashboard \
@@ -146,81 +144,70 @@ marimo-studio validate dashboard \
   --level runtime
 ```
 
-Runtime validation can perform file, network, database, and other work from any
-notebook cell. Use it with trusted notebooks. Check the named cell or variable,
-selector syntax, and runtime diagnostic.
+Runtime validation runs every notebook cell, including file, network, and
+database work, so use it with trusted notebooks. Check the named cell or
+variable, the selector syntax, and the runtime diagnostic.
 
-For a computed React or Svelte projection target, either use a finite literal
-set or add `data-marimo-allow="*"` at the dynamic host.
+For a computed React or Svelte projection target, use a finite literal set or
+add `data-marimo-allow="*"` at the dynamic host.
 
 ## Preview needs repair after an outside edit
 
-A coding agent or another editor changed the notebook file, and the Studio
-server was started without `--watch`. Restart it with the flag:
+The notebook file changed while the Studio server ran without `--watch`.
+Restart it with the flag:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
 On macOS, `--watch` misses changes when the notebook path passes through a
-symlinked folder such as `/tmp`. Open the notebook by its resolved path, for
-example `/private/tmp/analysis.py`.
+symlinked folder such as `/tmp`. Open the resolved path, such as
+`/private/tmp/analysis.py`.
 
 ## Preview cannot reach the Studio server
 
-Preview runs view code in a sandboxed frame whose requests carry no cookies.
-When those requests fail for 10 seconds, Preview reports **The preview cannot
-reach the Studio server.** Check that the server is running. A login proxy that
-requires a cookie on every request rejects these requests. For trusted
-notebooks and views, set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` in the Studio
-process and restart it, as
+Preview shows **The preview cannot reach the Studio server.** after requests
+from its sandboxed frame fail for 10 seconds. Check that the server runs. The
+frame's requests carry no cookies, so a login proxy that requires a cookie
+rejects them. For trusted notebooks and views, set
+`MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` and restart, as
 [Run as an ASGI application](deploy.md#run-as-an-asgi-application) describes.
-In marimohub, add the setting to the project's **Environment variables**
-integration, as [Serve Preview behind a
-sign-in](marimohub.md#serve-preview-behind-a-sign-in) describes.
+In marimohub, follow
+[Serve Preview behind a sign-in](marimohub.md#serve-preview-behind-a-sign-in).
 
 ## The Browser runtime does not start
 
-The notebook's dependencies must run in Pyodide. The visitor's browser must
+The notebook's dependencies must run in Pyodide, and the visitor's browser must
 reach notebook data, package indexes, runtime assets, and remote view
-dependencies allowed by the hosting content security policy.
-
-Switch to the Python runtime when the notebook requires native packages, local
-files, databases, or server credentials.
+dependencies that the host's content security policy allows. Use the Python
+runtime when the notebook needs native packages, local files, databases, or
+server credentials.
 
 ### `runtime-config-too-large`
 
-Studio caps the complete Browser runtime configuration at 16 MiB of UTF-8 JSON.
-Notebook source and broad projection declarations are common contributors. Use
-finite projection targets or reduce saved notebook source before retrying.
+The Browser runtime configuration exceeds 16 MiB of UTF-8 JSON. Use finite
+projection targets or reduce saved notebook source, then retry.
 
 ## A coding agent cannot inspect a view
 
-`marimo_studio.agent.current_workspace()` requires a code-mode execution bound
-to the current notebook and Studio tab. Run `view.show()` in its own execution
-to activate the view. For direct browser inspection, get
-`await view.preview_url(runtime="server")`, finish the execution, and open the
-returned URL with a browser tool. Keep the edit-mode notebook session open.
+`marimo_studio.agent.current_workspace()` needs a code-mode execution bound to
+the current notebook and Studio tab, with the edit-mode session open. Run
+`view.show()` in its own execution to activate the view. To check the page,
+get `await view.preview_url(runtime="server")`, finish the execution, then
+open the URL with a browser tool and wait for
+`html[data-marimo-studio-state="ready"]`. Waiting inside code mode can block
+the computations the page needs. If readiness stalls, read the visible status,
+console errors, and failed requests.
 
-For terminal automation, use `marimo-studio view preview dashboard --runtime
-server --server http://127.0.0.1:8000 --target analysis.py`. Wait for
-`html[data-marimo-studio-state="ready"]` in the browser, then check the expected
-content. If readiness stalls, read the visible status or error and inspect
-console errors and failed requests before repeating the wait or restarting.
-Controls that recompute notebook output
-need browser automation controlled outside that notebook kernel. Waiting
-synchronously inside code mode can block those computations.
+If the preview asks you to run changed cells, run them in the live notebook or
+use **Run all**, then retry. Building and validating the view leave the live
+notebook's execution state unchanged.
 
-If the preview asks you to run changed notebook cells, execute those cells in
-the live notebook or use marimo's **Run all** action, then retry the preview.
-Building the view, checking notebook syntax, and isolated runtime validation
-leave the live notebook's execution state unchanged.
-
-If the page works but shows an earlier edit, inspect source and build freshness
-with `view inspect`. A failed build retains the previous successful artifact.
-An exact preview URL returns HTTP 409 when its presentation revision changes
-or view source is unbuilt or failed. Repair and build current source, then
-request a fresh URL.
+If the page shows an earlier edit, check freshness with `view inspect`. An
+exact preview URL returns HTTP 409 once the view's revision changes or its
+source is unbuilt or fails to build, so build the source and request a fresh URL. See
+[`preview_url()`](../reference/python-api.md#preview-url) and
+[`marimo-studio view preview`](../reference/cli.md#marimo-studio-view-preview).
 
 ## A static export fails
 
@@ -233,10 +220,9 @@ marimo-studio view build dashboard \
 marimo-studio validate dashboard --target analysis.py
 ```
 
-For a Prepared export, check that every projection site has finite targets and
-that `states.yaml` uses accepted frontend values. Increase
-`--prepare-timeout` when the configured state set needs more than 30 seconds
-to execute:
+For a Prepared export, give every projection site finite targets and use
+accepted frontend values in `states.yaml`. Raise `--prepare-timeout` past its
+30 second default when the states take longer to execute:
 
 ```console
 marimo-studio view export dashboard \
@@ -246,7 +232,7 @@ marimo-studio view export dashboard \
 ```
 
 Review an existing output directory before using `--force`. Serve the complete
-export over HTTP and keep its relative paths intact.
+export over HTTP with its relative paths intact.
 
 ## Collect a diagnostic report
 
@@ -257,11 +243,11 @@ marimo-studio view inspect dashboard --target analysis.py --json
 marimo-studio validate dashboard --target analysis.py --json
 ```
 
-These reports omit notebook and view source content. They can contain absolute
-paths and provider or runtime diagnostic text. Redact credentials, private
-paths, hostnames, and sensitive diagnostics before sharing them.
+These reports omit notebook and view source but can contain absolute paths and
+diagnostic text. Redact credentials, private paths, hostnames, and sensitive
+diagnostics before you share them.
 
 Open a [GitHub issue](https://github.com/marimo-team/marimo-studio/issues) with
 the Studio and marimo versions, the smallest reproduction, and redacted output.
-Report suspected vulnerabilities through the [security
-policy](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md).
+Report suspected vulnerabilities through the
+[security policy](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md).

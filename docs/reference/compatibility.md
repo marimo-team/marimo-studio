@@ -1,14 +1,13 @@
 ---
 title: Compatibility and support
-description: Supported Python, marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts for marimo-studio 0.3.
+description: Supported Python, marimo, Deno, uv, browser, runtime, release, provider, deployment, and security contracts, and the upgrade from marimo-studio 0.3.
 ---
 
 # Compatibility and support
 
-`marimo-studio` 0.3 is the current compatibility line. The notebook-to-view
-workflow, projection elements, and last-successful build behavior are supported
-product contracts. Before 1.0, CLI, Python, provider, and saved configuration
-contracts may change between minor releases.
+The notebook-to-view workflow, projection elements, and last-successful build
+behavior are supported product contracts. Before 1.0, CLI, Python, provider,
+and saved configuration contracts may change between minor releases.
 
 Add Studio to the notebook or project dependencies:
 
@@ -16,61 +15,51 @@ Add Studio to the notebook or project dependencies:
 dependencies = ["marimo-studio"]
 ```
 
-The `deno` extra supplies the Deno toolchain that the React, Reveal.js, Svelte,
-and Notebook Kit starters build with. The `typst` extra supplies the Typst
-compiler for the Typst starter.
+The `deno` and `typst` extras supply the toolchains listed under
+[Supported environment](#supported-environment).
 
-## Upgrade from 0.0.6
+## Upgrade from 0.3
 
-Version 0.1.1 introduces explicit view manifests and a notebook-bound authoring
-API. Update saved view projects and automation before opening them with 0.1.1.
+Studio 0.3.0 and earlier created views in
+`__marimo__/studio/<notebook-stem>/`. The current release creates them in
+`studio/<notebook-stem>/` and keeps build state in
+`<state_root>/<view>/.artifacts/`, as
+[Build state location](configuration.md#build-state-location) describes.
 
-Add this `view.toml` to each existing 0.0.6 view directory:
+Studio keeps opening views in the 0.3 folder until you move them. That folder
+is also the default `state_root`, so each view keeps its build state inside its
+project. With `MARIMO_STUDIO_STATE_DIR`, `state_dir`, or `PYTHONPYCACHEPREFIX`
+set, each view rebuilds once in the new location and leaves its old
+`.artifacts/` folder unused.
 
-```toml
-schema = 1
-provider = "marimo-studio/vanilla"
-```
-
-Keep the existing `index.html` and any CSS or JavaScript files it references.
-Then run `marimo-studio status --target analysis.py`. Studio discovers the view,
-assigns its owner record, and reports its Source documents. Commit `view.toml`
-and the generated `.owners/` records with the view project.
-
-Update command and Python callers with these replacements:
-
-| 0.0.6 contract                                                                 | 0.1.1 replacement                                                                      |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `marimo-studio inspect TARGET --display`                                       | `marimo-studio notebook inspect --target TARGET --output-expressions`                  |
-| `marimo-studio bind TARGET --cell 12 --as summary`                             | `marimo-studio notebook bind summary --target TARGET --cell 12`                        |
-| `marimo-studio view add TARGET --name report`                                  | `marimo-studio view create report --target TARGET`                                     |
-| `marimo-studio view list TARGET`                                               | `marimo-studio status --target TARGET`                                                 |
-| `marimo-studio view remove TARGET --name report`                               | `marimo-studio view remove report --target TARGET`                                     |
-| `marimo-studio check TARGET --view report --runtime`                           | `marimo-studio validate report --target TARGET --level runtime`                        |
-| `marimo-studio analyze TARGET --view report --server URL`                      | `marimo-studio view preview report --target TARGET --runtime server --server URL`      |
-| `marimo-studio export TARGET --view report --output dist/report`               | `marimo-studio view export report --target TARGET --output dist/report --runtime wasm` |
-| `--format json --diagnostics jsonl`                                            | `--json`                                                                               |
-| Functions in `marimo_studio.agents`                                            | `marimo_studio.agent.current_workspace()` and its `Workspace` or `View` methods        |
-| Saved-workspace helpers in `marimo_studio.workspace`, `checks`, and `export`   | `marimo_studio.authoring.open_workspace()` and its `Workspace` or `View` methods       |
-| `CellConfigSpec`, `CellRef`, `CellSpec`, and `SourceSpan` from `marimo_studio` | Import these provider-facing records from `marimo_studio.view_providers`               |
-
-Notebook-local `[tool.marimo-studio]` configuration and project
-`pyproject.toml` configuration are mutually exclusive for one notebook. Keep
-one configuration source before running the upgraded commands.
-
-After updating the workspace, run:
+To move the views, update the notebook's `marimo-studio` requirement to the
+current release first, because Studio 0.3 looks for views only in the old
+folder. Then stop Studio, move the folder to `studio/analysis`, which must not exist
+yet, and delete the build state that moved with it:
 
 ```console
-marimo-studio status --target analysis.py
-marimo-studio validate --target analysis.py --level runtime
+mkdir -p studio
+mv __marimo__/studio/analysis studio/analysis
+rm -rf studio/analysis/*/.artifacts
 ```
 
-Runtime validation executes the complete notebook with the current user's
-filesystem, environment, and network authority. Run it for trusted notebooks.
+Each view rebuilds once in `state_root`. Other checkouts keep their own build
+state in `__marimo__/studio/analysis/` after they pull the move. Delete that
+folder there once the pull has removed the views from it.
+
+A `view_root` configured under 0.3 keeps its views in place. Delete the
+`.artifacts/` folder inside each view, and each view rebuilds once in
+`state_root`.
+
+Studio reports a configuration error when both folders contain views, or when
+the build state folder of a view holds another view project. With the default
+build state location, a configured `view_root` that leaves a view with the same
+name in `__marimo__/studio/analysis/` causes the second error. Move the views
+you keep into the folder Studio uses, then remove the old folder.
 
 ## Supported environment
 
-| Component                                           | 0.3.0 contract                                                                              |
+| Component                                           | Contract                                                                                    |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Python                                              | 3.10 through 3.14                                                                           |
 | marimo                                              | 0.25.1                                                                                      |
@@ -83,10 +72,9 @@ filesystem, environment, and network authority. Run it for trusted notebooks.
 | Browser acceptance                                  | Current Chromium on Linux and Windows                                                       |
 
 Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),
-which lets Python create staging files beyond the default 260-character path
-limit. Enable `LongPathsEnabled=1` with administrator privileges before starting
-Studio. Restart existing Studio and terminal processes after changing the
-setting.
+which let Python create staging files beyond the default 260-character path
+limit. Enable `LongPathsEnabled=1` with administrator privileges, then restart
+existing Studio and terminal processes.
 
 The Python runtime can use the packages, files, databases, and credentials
 available to its Python environment. The Browser runtime requires
@@ -110,8 +98,8 @@ provides both:
 | WSL 2           | The Linux disk and NTFS drives mounted under `/mnt`                                                             |
 
 Windows cloud-sync folders use data reparse points for online files. Studio
-opens those entries through the cloud filter, while symlinks and junctions
-remain outside the workspace contract.
+opens those entries through the cloud filter. Symlinks and junctions remain
+outside the workspace contract.
 
 Object-storage mounts such as [s3fs](https://github.com/s3fs-fuse/s3fs-fuse)
 and [rclone](https://rclone.org/commands/rclone_mount/) rewrite file timestamps
@@ -129,11 +117,11 @@ the session and save it back afterwards.
 | Live run-mode server | Supported       | Supported      | Not applicable         |
 | Static export        | Not applicable  | Supported      | Default                |
 
-Static exports are HTTP directories. A Prepared export contains the production
-artifact, runtime configuration, notebook public files, and prepared
-projection results. A Browser export also contains saved notebook source and
-runs it through Pyodide. Imported packages, remote data, fonts, maps, and other
-browser resources retain their own network and cross-origin requirements.
+Static exports are HTTP directories.
+[`view export`](cli.md#marimo-studio-view-export) lists their contents. A
+Browser export runs saved notebook source through Pyodide. Imported packages,
+remote data, fonts, maps, and other browser resources keep their own network
+and cross-origin requirements.
 
 ## Deployment boundary
 
@@ -161,8 +149,9 @@ query, replay, and readiness messages at the parent boundary.
 Set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` for a trusted single-tenant
 deployment that needs Server runtime documents to share the authenticated host
 origin. A marimohub session with proxy exposure enables it when the variable is
-unset, because the hub already serves notebook output on its own origin. The policy covers view documents, workspace previews, and the ASGI
-embedding path. Browser and Prepared runtimes keep opaque-origin isolation.
+unset, because the hub already serves notebook output on its own origin.
+[Process settings](configuration.md#process-settings) defines its scope.
+Browser and Prepared runtimes keep opaque-origin isolation.
 
 ## Third-party view providers
 

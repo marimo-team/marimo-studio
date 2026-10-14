@@ -12,7 +12,8 @@ interface Showcase {
   name: string;
   layout: "fan" | "wall";
   family?: string;
-  order?: [string, string, string];
+  // View keys from left to right. A fan defaults to the catalog order.
+  order?: string[];
   height: number;
   plane?: string;
 }
@@ -84,6 +85,17 @@ const familyPages = (slug: string): string[] => {
   }
   return ["notebook", ...family.views.map(({ key }) => key)].map((view) => `${slug}/${view}`);
 };
+// A fan order lists each of its family's views once.
+for (const { name, family, order } of showcases) {
+  if (!order) {
+    continue;
+  }
+  const views = familyPages(family ?? "").slice(1);
+  const listed = order.map((view) => `${family}/${view}`);
+  if (listed.length !== views.length || !views.every((view) => listed.includes(view))) {
+    throw new Error(`${name} must order each view of ${family} once: ${views.join(", ")}.`);
+  }
+}
 const pages = new Set(
   showcases.flatMap((showcase) =>
     showcase.layout === "wall"

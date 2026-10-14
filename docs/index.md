@@ -2,11 +2,11 @@
 layout: home
 title: marimo-studio
 titleTemplate: false
-description: Turn reactive Python into apps, presentations, articles, and PDF reports with a coding agent.
+description: Build web pages, slide decks, and Typst or LaTeX documents from the cells, outputs, and values of a marimo notebook.
 
 hero:
-  text: One reactive notebook, many views
-  tagline: Turn reactive Python into apps, presentations, articles, and PDF reports. Work with a coding agent, and keep every view connected to your analysis.
+  text: Custom views of marimo notebooks
+  tagline: Place a notebook's cells, outputs, and values in web pages, slide decks, and Typst or LaTeX documents. The notebook keeps the analysis, and each view keeps its own source.
   image:
     light: /brand/marimo-studio-lockup-stacked-light.svg
     dark: /brand/marimo-studio-lockup-stacked-dark.svg
@@ -25,27 +25,27 @@ hero:
 features:
   - icon:
       src: /icons/panels-top-left.svg
-      alt: Reactive notebook
+      alt: Notebook results
       width: "24"
       height: "24"
-    title: Reactive Python
-    details: Keep data, computation, and controls in one notebook.
-    link: ./what-is-studio
+    title: Results by name
+    details: A view places a cell, an output, or a value. Studio resolves each name to the cell that computes it.
+    link: ./guide/notebook-results
   - icon:
       src: /icons/gallery-vertical-end.svg
-      alt: Named views
+      alt: View formats
       width: "24"
       height: "24"
-    title: Named views
-    details: Give a report, an explorer, or a lesson its own layout and interactions.
-    link: ./guide/views
+    title: Pages and documents
+    details: Write a view in HTML, React, Svelte, Reveal.js, Notebook Kit, Quarto, Typst, or LaTeX, or add a provider for another tool.
+    link: ./guide/formats
   - icon:
       src: /icons/code-xml.svg
       alt: Coding agent
       width: "24"
       height: "24"
-    title: Author with a coding agent
-    details: Ask for a view. Your agent can inspect the notebook, edit the source, and verify the result.
+    title: Coding agents
+    details: Studio ships instructions for agents. An agent writes view source beside the notebook and checks the result in Preview.
     link: ./guide/coding-agents
   - icon:
       src: /icons/cpu.svg
@@ -53,33 +53,32 @@ features:
       width: "24"
       height: "24"
     title: Run or export
-    details: Serve a live Python app, run Python in the browser, or publish prepared results.
+    details: Serve a live Python app, run Python in the browser, or export prepared results as static files.
     link: ./guide/run-and-share
 ---
 
 ## Examples
 
-Each example notebook backs several views: slide decks, reading pages, linked
-explorers, maps, monitors, typeset articles, and PDF reports. Open a view to
-compare it with its siblings and the notebook behind them.
+Each example notebook backs four views, from slide decks and linked explorers
+to journal papers typeset with LaTeX. Open a view to compare it with its
+siblings and the notebook behind them.
 
 <StudioViewMasonry />
 
 [Browse the examples](./examples/) or
 [run one locally](./examples/#run-an-example-locally).
 
-## Ask a coding agent for a view
+## Ask a coding agent
 
-Paste one request into a terminal agent such as Claude Code or Codex:
+Paste this request into a terminal agent such as Claude Code or Codex:
 
 ```text
 Run `uvx --with marimo-studio agent-plugins read marimo-studio` and create
 a scrollytelling report and a slide deck explaining calculus basics.
 ```
 
-The instructions ship with the `marimo-studio` package. They tell the agent to
-start a notebook with Studio, write its cells, then create, build, and show
-each view beside the notebook.
-
-[Author with a coding agent](./guide/coding-agents) or
-follow [Getting started](./guide/getting-started) by hand.
+The agent reads the instructions that ship with the `marimo-studio` package.
+It starts a notebook with Studio, writes the calculus in Python cells, then
+builds both views and shows them beside the notebook.
+[Author with a coding agent](./guide/coding-agents) has more requests to try,
+and [Getting started](./guide/getting-started) builds a view by hand.
