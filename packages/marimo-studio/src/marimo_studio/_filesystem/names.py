@@ -17,14 +17,21 @@ def temporary_name(kind: TemporaryKind) -> str:
     return f"{_PREFIX}{kind}-{secrets.token_hex(_TOKEN_BYTES)}"
 
 
-def is_temporary_name(name: str) -> bool:
-    """Return whether ``name`` belongs to an in-progress or interrupted operation."""
+def temporary_kind(name: str) -> TemporaryKind | None:
+    """Return the operation kind a temporary sibling name records, or ``None``."""
     if not name.startswith(_PREFIX):
-        return False
+        return None
     kind, separator, token = name.removeprefix(_PREFIX).partition("-")
-    return (
+    if (
         kind in _KINDS
         and separator == "-"
         and len(token) == _TOKEN_BYTES * 2
         and all(character in "0123456789abcdef" for character in token)
-    )
+    ):
+        return kind
+    return None
+
+
+def is_temporary_name(name: str) -> bool:
+    """Return whether ``name`` belongs to an in-progress or interrupted operation."""
+    return temporary_kind(name) is not None
