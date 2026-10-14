@@ -217,6 +217,12 @@ test("editor document mutations require the exact bounded schema", () => {
       generation: 3,
     },
   );
+  const skipped = {
+    schema: 1,
+    type: "marimo-studio:editor-document-save-skipped",
+    generation: 3,
+  } as const;
+  assert.deepEqual(parseEditorDocumentMutation(skipped), skipped);
   const applied = {
     schema: 1,
     type: "marimo-studio:editor-document-transaction-applied",

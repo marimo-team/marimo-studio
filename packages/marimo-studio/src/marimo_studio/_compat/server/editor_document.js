@@ -1,3 +1,16 @@
+// Mirrors the pinned Marimo `isNamedPersistentFile`. Marimo never saves a
+// notebook in a temporary folder, so its edits never reach a view build.
+function editorSavesNotebook() {
+  const filename = globalThis.document?.querySelector?.("marimo-filename")?.textContent;
+  if (filename === undefined || filename === null) return true;
+  return (
+    filename.length > 0 &&
+    !filename.startsWith("/tmp/") &&
+    !filename.startsWith("/var/folders") &&
+    !filename.includes("AppData\\Local\\Temp")
+  );
+}
+
 export function createStudioDocumentTransactions({ takeChanges, sendTransaction }) {
   let generation = 0;
   let admittedGeneration = 0;
@@ -142,6 +155,9 @@ export function createStudioDocumentTransactions({ takeChanges, sendTransaction 
           generation: pendingGeneration,
           changed,
         });
+        if (changed && !editorSavesNotebook()) {
+          report("marimo-studio:editor-document-save-skipped", { generation: pendingGeneration });
+        }
       } catch (error) {
         report("marimo-studio:editor-document-transaction-failed", {
           generation: pendingGeneration,

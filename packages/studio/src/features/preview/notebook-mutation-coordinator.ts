@@ -34,6 +34,7 @@ export interface NotebookMutationEffects {
   markCachedViewsStale(): void;
   resetActive(): void;
   saveFailed(generation: number): void;
+  saveSkipped(): void;
   transactionFailed(generation: number): void;
 }
 
@@ -139,6 +140,23 @@ export class NotebookMutationCoordinator {
       return;
     }
     this.effects.saveFailed(generation);
+  }
+
+  // The editor never saves this notebook, so no build follows its changes.
+  // Settle them as unbuilt and keep the last published presentation.
+  saveSkipped(generation: number): void {
+    const covered = this.mutations.filter(
+      (mutation) => mutation.generation <= generation && mutation.applied,
+    );
+    if (covered.length === 0) {
+      return;
+    }
+    for (const mutation of covered) {
+      mutation.built = true;
+      mutation.reconciliationRequested = true;
+    }
+    this.effects.saveSkipped();
+    this.settle();
   }
 
   transactionFailed(generation: number): void {

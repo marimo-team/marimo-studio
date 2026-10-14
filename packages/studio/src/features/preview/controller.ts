@@ -78,6 +78,7 @@ export class PreviewController {
   private diagnostics: ViewDiagnostic[] = [];
   private controlDiagnostic: BrowserDiagnostic | undefined;
   private queryDiagnostic: BrowserDiagnostic | undefined;
+  private saveDiagnostic: BrowserDiagnostic | undefined;
   private queryPhase: QuerySyncStatus["phase"] = "ready";
   private activationsInProgress = 0;
   private activationGeneration = 0;
@@ -407,6 +408,23 @@ export class PreviewController {
       },
       this.admission.identity?.revision ?? null,
     );
+  }
+
+  notebookSaveSkipped(skipped: boolean): void {
+    if ((this.saveDiagnostic !== undefined) === skipped) {
+      return;
+    }
+    this.saveDiagnostic = skipped
+      ? this.lifecycleDiagnostic(
+          "notebook-save-skipped",
+          "warning",
+          "Marimo does not save notebooks in a temporary folder, so this view shows the last saved notebook.",
+          "Save the notebook under a permanent path to update the view.",
+        )
+      : undefined;
+    if (this.admission.viewIsReady) {
+      this.showReadyStatus();
+    }
   }
 
   notebookMutationTransactionFailed(active: boolean): void {
@@ -776,6 +794,7 @@ export class PreviewController {
     const synchronization = [
       ...(this.controlDiagnostic ? [this.controlDiagnostic] : []),
       ...(this.queryDiagnostic ? [this.queryDiagnostic] : []),
+      ...(this.saveDiagnostic ? [this.saveDiagnostic] : []),
     ];
     // A preview may report as many diagnostics as a status holds, so its own
     // list yields room to synchronization failures and a note of what it omits.

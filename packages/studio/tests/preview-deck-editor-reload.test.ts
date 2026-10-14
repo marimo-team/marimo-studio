@@ -330,3 +330,57 @@ it("recreates a cached view after a pending mutation reloads the editor document
   acknowledgement.channel.port2.close();
   deck.dispose();
 });
+
+it("keeps the published preview when the editor cannot save the notebook", async () => {
+  const preview = frame("complete");
+  // The presentation document accepts the mutation barrier it receives.
+  const previewWindow = {
+    dispatchEvent: vi.fn(),
+    postMessage: vi.fn((message: { type: string; generation?: number }, _origin, ports) => {
+      if (message.type === "marimo-studio:presentation-refresh-barrier") {
+        ports?.[0]?.postMessage({
+          schema: 1,
+          type: "marimo-studio:editor-document-mutation-ready",
+          generation: message.generation,
+        });
+      }
+    }),
+  };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const deck = previewDeck();
+  deck.attach(frame("complete"), new Map([["server", preview]]));
+  const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
+  for (const type of ["marimo-studio:receiver-ready", "marimo-studio:view-ready"] as const) {
+    dispatchPreviewMessage(previewWindow, {
+      type,
+      runtime: "server",
+      lifecycleId,
+      view: "dashboard",
+      revision: "revision-1",
+    });
+  }
+  const interactive = () => deck.getSnapshot().frames.find(({ active }) => active)?.interactive;
+  const mutation = acknowledgementPort();
+  deck.notebookMutationPending(1, mutation.port);
+  await vi.waitFor(() => expect(mutation.postMessage).toHaveBeenCalledOnce());
+  deck.notebookMutationTransactionApplied(1, true);
+  expect(interactive()).toBe(false);
+
+  deck.notebookMutationSaveSkipped(1);
+
+  expect(interactive()).toBe(true);
+  expect(deck.getSnapshot().states.server!.status).toMatchObject({
+    state: "warning",
+    diagnostics: [
+      {
+        code: "notebook-save-skipped",
+        hint: "Save the notebook under a permanent path to update the view.",
+      },
+    ],
+  });
+  mutation.channel.port2.close();
+  deck.dispose();
+});

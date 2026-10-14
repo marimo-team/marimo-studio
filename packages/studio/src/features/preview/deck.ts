@@ -123,6 +123,7 @@ export class PreviewDeck {
       gate: (generation) => this.gateNotebookMutation(generation),
       markCachedViewsStale: () => this.markCachedViewsStale(),
       resetActive: () => this.activeController()?.reload(),
+      saveSkipped: () => this.activeController()?.notebookSaveSkipped(true),
       saveFailed: () =>
         this.notebookMutationFailed({
           code: "notebook-save-failed",
@@ -416,7 +417,12 @@ export class PreviewDeck {
   }
 
   notebookMutationSaved(generation: number): boolean {
+    this.activeController()?.notebookSaveSkipped(false);
     return this.notebookMutations.saved(generation);
+  }
+
+  notebookMutationSaveSkipped(generation: number): void {
+    this.notebookMutations.saveSkipped(generation);
   }
 
   notebookMutationSaveFailed(generation: number): void {

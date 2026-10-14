@@ -249,6 +249,7 @@ export const createStudioServices = (
             workspaceEvents.reconcileNotebookMutation(generation);
           }
         },
+        saveSkipped: (generation) => preview.notebookMutationSaveSkipped(generation),
         transactionApplied: (generation, changed) =>
           preview.notebookMutationTransactionApplied(generation, changed),
         transactionFailed: (generation) => preview.notebookMutationTransactionFailed(generation),

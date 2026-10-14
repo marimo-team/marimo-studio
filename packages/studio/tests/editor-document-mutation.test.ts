@@ -39,6 +39,7 @@ it("admits document mutations from the exact editor bridge", () => {
     pending: vi.fn(),
     reloaded: vi.fn(),
     saved: vi.fn(),
+    saveSkipped: vi.fn(),
     transactionApplied: vi.fn(),
     transactionFailed: vi.fn(),
   };
@@ -78,6 +79,17 @@ it("admits document mutations from the exact editor bridge", () => {
     [],
   );
   expect(callbacks.transactionApplied).toHaveBeenCalledWith(4, false);
+  dispatch(
+    source,
+    {
+      schema: 1,
+      type: "marimo-studio:editor-document-save-skipped",
+      generation: 4,
+    },
+    [],
+  );
+  expect(callbacks.saveSkipped).toHaveBeenCalledWith(4);
+  expect(callbacks.saved).toHaveBeenCalledOnce();
   editor.dispatchEvent(new Event("load"));
   expect(callbacks.reloaded).toHaveBeenCalledOnce();
   stop();
@@ -105,6 +117,7 @@ it("rejects malformed exact-editor messages and ignores other senders", async ()
     pending: vi.fn(),
     reloaded: vi.fn(),
     saved: vi.fn(),
+    saveSkipped: vi.fn(),
     transactionApplied: vi.fn(),
     transactionFailed: vi.fn(),
   };
