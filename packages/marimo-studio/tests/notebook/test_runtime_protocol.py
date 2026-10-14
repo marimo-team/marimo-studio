@@ -51,7 +51,7 @@ def test_runtime_protocol_round_trips_complete_probe() -> None:
                     mimetype="text/html",
                     data="<div>chart</div>",
                     timestamp=10.5,
-                    reset_ui_object_ids=("widget",),
+                    reset_ui_object_ids=("cell-widget",),
                 )
             },
             errors={},

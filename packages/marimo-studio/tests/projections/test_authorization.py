@@ -21,7 +21,7 @@ from marimo_studio._compat.kernel_values.authorization import (
     authorized_output_arguments,
     authorized_value_arguments,
     verify_output_arguments,
-    verify_value_arguments,
+    verify_value_ownership_arguments,
 )
 from marimo_studio._compat.kernel_values.authorization_key import (
     initialize_projection_authorization_key,
@@ -29,7 +29,11 @@ from marimo_studio._compat.kernel_values.authorization_key import (
     sign_kernel_authorization,
     verify_kernel_authorization,
 )
-from marimo_studio._compat.kernel_values.host import _bind_live_projections
+from marimo_studio._compat.kernel_values.host import (
+    _bind_projections,
+    _build_live_projection_state,
+    _executed_signature,
+)
 from marimo_studio._compat.kernel_values.kernel import _current_selectors
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef
@@ -99,13 +103,14 @@ def _verify_bound_projection(
 ) -> Any:
     if kind == "value":
         arguments = authorized_value_arguments(revision, (bound,), "preview-a")
-        return verify_value_arguments(
+        authorized, _active = verify_value_ownership_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
             active_projections=arguments["active_projections"],
             consumer_id=arguments["consumer_id"],
             authorization=arguments["authorization"],
         )
+        return authorized
     arguments = authorized_output_arguments(
         revision,
         (bound,),
@@ -218,10 +223,12 @@ def test_parent_authorization_key_is_stable_and_inherited_by_spawned_kernels() -
             """
 import json
 import sys
-from marimo_studio._compat.kernel_values.authorization import verify_value_arguments
+from marimo_studio._compat.kernel_values.authorization import (
+    verify_value_ownership_arguments,
+)
 
 arguments = json.load(sys.stdin)
-authorized = verify_value_arguments(
+authorized, _active = verify_value_ownership_arguments(
     revision=arguments["revision"],
     projections=arguments["projections"],
     active_projections=arguments["active_projections"],
@@ -337,7 +344,9 @@ def test_records_read_values_as_json_and_size_only_accepting_outputs(
     for record in (*records, *active):
         record["accept"] = accept
         record["size"] = size
-    verify = verify_value_arguments if kind == "value" else verify_output_arguments
+    verify = (
+        verify_value_ownership_arguments if kind == "value" else verify_output_arguments
+    )
 
     with pytest.raises(ProjectionAuthorizationError, match=r"accept list|size"):
         verify(
@@ -357,7 +366,7 @@ def test_document_value_records_read_tables_as_json() -> None:
     )
     arguments = authorized_value_arguments("revision-1", (document,), "document")
 
-    authorized = verify_value_arguments(
+    authorized, _active = verify_value_ownership_arguments(
         revision=arguments["revision"],
         projections=arguments["projections"],
         active_projections=arguments["active_projections"],
@@ -380,7 +389,7 @@ def test_dependency_closure_is_covered_by_the_server_signature() -> None:
     )
 
     with pytest.raises(ProjectionAuthorizationError, match="authorization"):
-        verify_value_arguments(
+        verify_value_ownership_arguments(
             revision=tampered["revision"],
             projections=tampered["projections"],
             active_projections=tampered["active_projections"],
@@ -397,7 +406,7 @@ def test_value_consumer_is_covered_by_the_server_signature() -> None:
     )
 
     with pytest.raises(ProjectionAuthorizationError, match="authorization"):
-        verify_value_arguments(
+        verify_value_ownership_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
             active_projections=arguments["active_projections"],
@@ -415,7 +424,7 @@ def test_active_value_owners_are_covered_by_the_server_signature() -> None:
     arguments["active_projections"] = []
 
     with pytest.raises(ProjectionAuthorizationError, match="authorization"):
-        verify_value_arguments(
+        verify_value_ownership_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
             active_projections=arguments["active_projections"],
@@ -441,8 +450,8 @@ def test_live_binding_accepts_code_changes_with_the_same_runtime_topology(
     runtime_cell_refs = {ref: runtime_id for ref, runtime_id, _code in cells}
 
     executed_code["runtime-unrelated"] = "unrelated = 2"
-    (bound,) = _bind_live_projections(
-        session,
+    (bound,) = _bind_projections(
+        _build_live_projection_state(_executed_signature(session)),
         (projection,),
         runtime_cell_refs,
     )
@@ -452,8 +461,8 @@ def test_live_binding_accepts_code_changes_with_the_same_runtime_topology(
         for binding in bound.dependency_bindings
     ) == tuple((ref, runtime_id) for ref, runtime_id, _code in cells)
     executed_code["runtime-upstream"] = "source = 2"
-    (edited,) = _bind_live_projections(
-        session,
+    (edited,) = _bind_projections(
+        _build_live_projection_state(_executed_signature(session)),
         (projection,),
         runtime_cell_refs,
     )
@@ -479,8 +488,8 @@ def test_live_binding_ignores_an_unrelated_cell_with_a_syntax_error(
         ),
     )
 
-    (bound,) = _bind_live_projections(
-        session,
+    (bound,) = _bind_projections(
+        _build_live_projection_state(_executed_signature(session)),
         (projection,),
         {ref: runtime_id for ref, runtime_id, _code in cells},
     )
@@ -508,8 +517,8 @@ def test_live_binding_rejects_a_newly_resolved_upstream_producer(
     )
 
     with pytest.raises(ProjectionUnavailable, match="dependency closure"):
-        _bind_live_projections(
-            session,
+        _bind_projections(
+            _build_live_projection_state(_executed_signature(session)),
             (projection,),
             {projection.producer: "runtime-summary"},
         )
@@ -730,3 +739,27 @@ def test_projection_host_revalidates_changed_execution_before_invoking_the_kerne
         assert reads == ([] if changes_during_build else ["read", "read"])
 
     asyncio.run(exercise())
+
+
+def test_value_ownership_keeps_requested_and_mounted_selectors_separate() -> None:
+    requested = _bound_with_upstream()
+    mounted = replace(
+        requested,
+        projection=replace(
+            requested.projection,
+            request=replace(requested.projection.request, target="summary"),
+            selector=ValueSelector("summary"),
+        ),
+    )
+    arguments = authorized_value_arguments(
+        "revision-1", (requested,), "preview-a", (requested, mounted)
+    )
+    authorized, active = verify_value_ownership_arguments(
+        revision=arguments["revision"],
+        projections=arguments["projections"],
+        active_projections=arguments["active_projections"],
+        consumer_id=arguments["consumer_id"],
+        authorization=arguments["authorization"],
+    )
+    assert set(authorized.selectors) == {"summary.total"}
+    assert set(active.selectors) == {"summary.total", "summary"}

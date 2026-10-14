@@ -424,27 +424,6 @@ def _authorized_projections(records: _DecodedRecords) -> AuthorizedProjections:
     )
 
 
-def verify_value_arguments(
-    *,
-    revision: object,
-    projections: object,
-    active_projections: object,
-    consumer_id: object,
-    authorization: object,
-    probe_targets: tuple[str, ...] | None = None,
-) -> AuthorizedProjections:
-    """Verify one value capability and return its canonical selectors."""
-    requested, _active = verify_value_ownership_arguments(
-        revision=revision,
-        projections=projections,
-        active_projections=active_projections,
-        consumer_id=consumer_id,
-        authorization=authorization,
-        probe_targets=probe_targets,
-    )
-    return requested
-
-
 def verify_value_ownership_arguments(
     *,
     revision: object,

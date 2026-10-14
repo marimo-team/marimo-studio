@@ -134,18 +134,6 @@ def _bind_projections(
     return tuple(bound)
 
 
-def _bind_live_projections(
-    session: Any,
-    projections: tuple[ResolvedProjection, ...],
-    runtime_cell_refs: Mapping[CellRef, str],
-) -> tuple[BoundProjection, ...]:
-    return _bind_projections(
-        _build_live_projection_state(_executed_signature(session)),
-        projections,
-        runtime_cell_refs,
-    )
-
-
 class PrivateKernelProjectionHost:
     """Read, render, and update one live kernel through its session queue."""
 

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from threading import Lock
 from types import MethodType
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 from weakref import WeakKeyDictionary, WeakSet
 
@@ -37,10 +37,10 @@ from marimo_studio._projections.runtime_records import (
     VALUE_LIMITS,
     OutputGroup,
     OutputRenderResult,
-    RenderedOutput,
     ValueLimits,
     ValueReadError,
     ValueReadResult,
+    output_result_from_dict,
 )
 from marimo_studio._server.presentation.ports import ProjectionUnavailable
 
@@ -481,90 +481,16 @@ def _parse_result(
     )
 
 
-def _parse_rendered_outputs(
-    raw_outputs: dict[object, object],
-) -> dict[str, RenderedOutput]:
-    outputs: dict[str, RenderedOutput] = {}
-    for selector, output in raw_outputs.items():
-        owner_cell_id = output.get("ownerCellId") if isinstance(output, dict) else None
-        mimetype = output.get("mimetype") if isinstance(output, dict) else None
-        data = output.get("data") if isinstance(output, dict) else None
-        timestamp = output.get("timestamp") if isinstance(output, dict) else None
-        reset_ui_object_ids = (
-            output.get("resetUiObjectIds") if isinstance(output, dict) else None
-        )
-        if (
-            not isinstance(selector, str)
-            or not isinstance(owner_cell_id, str)
-            or not isinstance(mimetype, str)
-            or not isinstance(data, str)
-            or isinstance(timestamp, bool)
-            or not isinstance(timestamp, (int, float))
-            or not isinstance(reset_ui_object_ids, list)
-            or not all(isinstance(item, str) for item in reset_ui_object_ids)
-        ):
-            raise ProjectionUnavailable(
-                "invalid-output-response",
-                "The kernel returned an invalid rendered output.",
-                transient=False,
-            )
-        reset_ids = cast(list[str], reset_ui_object_ids)
-        if any(not item.startswith(f"{owner_cell_id}-") for item in reset_ids):
-            raise ProjectionUnavailable(
-                "invalid-output-response",
-                "The kernel returned a UI reset owned by another cell.",
-                transient=False,
-            )
-        outputs[selector] = RenderedOutput(
-            owner_cell_id=owner_cell_id,
-            mimetype=mimetype,
-            data=data,
-            timestamp=float(timestamp),
-            reset_ui_object_ids=tuple(reset_ids),
-        )
-    return outputs
-
-
 def _parse_output_result(value: object) -> OutputRenderResult:
-    if not isinstance(value, dict):
+    try:
+        return output_result_from_dict(value)
+    except ValueError as error:
         raise ProjectionUnavailable(
             "invalid-output-response",
-            "The kernel returned an invalid output response.",
+            "The kernel returned an invalid output response. "
+            "Rerun the notebook, then reload the view.",
             transient=False,
-        )
-    raw_outputs = value.get("outputs")
-    raw_errors = value.get("errors")
-    raw_overlays = value.get("overlays", {})
-    if (
-        not isinstance(raw_outputs, dict)
-        or not isinstance(raw_errors, dict)
-        or not isinstance(raw_overlays, dict)
-    ):
-        raise ProjectionUnavailable(
-            "invalid-output-response",
-            "The kernel returned an invalid output response.",
-            transient=False,
-        )
-    errors: dict[str, ValueReadError] = {}
-    for selector, error in raw_errors.items():
-        code = error.get("code") if isinstance(error, dict) else None
-        message = error.get("message") if isinstance(error, dict) else None
-        if (
-            not isinstance(selector, str)
-            or not isinstance(code, str)
-            or not isinstance(message, str)
-        ):
-            raise ProjectionUnavailable(
-                "invalid-output-response",
-                "The kernel returned an invalid output error.",
-                transient=False,
-            )
-        errors[selector] = ValueReadError(code, message)
-    return OutputRenderResult(
-        outputs=_parse_rendered_outputs(raw_outputs),
-        errors=errors,
-        overlays=_parse_rendered_outputs(raw_overlays),
-    )
+        ) from error
 
 
 async def _invoke_session_function(

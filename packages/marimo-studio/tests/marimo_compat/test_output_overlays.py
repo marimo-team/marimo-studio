@@ -136,3 +136,49 @@ def test_kernel_overlays_are_development_outputs(
             bridge._close()
     finally:
         context.virtual_file_registry.shutdown()
+
+
+@pytest.mark.parametrize("decoder", ["session", "probe"])
+@pytest.mark.parametrize(
+    "defect",
+    ["timestamp", "reset-owner", "output-fields", "response-fields", "error-fields"],
+)
+def test_output_decoders_enforce_one_kernel_record_contract(
+    decoder: str,
+    defect: str,
+) -> None:
+    from marimo_studio._server.presentation.ports import ProjectionUnavailable
+
+    output: dict[str, object] = {
+        "ownerCellId": "owner",
+        "mimetype": "text/html",
+        "data": "<p>ready</p>",
+        "timestamp": 1.0,
+        "resetUiObjectIds": ["owner-control"],
+    }
+    payload: dict[str, object] = {"outputs": {"summary": output}, "errors": {}}
+    if defect == "timestamp":
+        output["timestamp"] = float("nan")
+    elif defect == "reset-owner":
+        output["resetUiObjectIds"] = ["other-control"]
+    elif defect == "output-fields":
+        output["extra"] = True
+    elif defect == "response-fields":
+        payload["extra"] = True
+    else:
+        payload["errors"] = {
+            "summary": {"code": "error", "message": "Retry.", "extra": True}
+        }
+    if decoder == "session":
+        with pytest.raises(ProjectionUnavailable) as raised:
+            _parse_output_result(payload)
+        assert raised.value.code == "invalid-output-response"
+    else:
+        with pytest.raises(ValueError):
+            runtime_probe_from_dict(
+                {
+                    "cells": {},
+                    "values": {"values": {}, "errors": {}},
+                    "outputs": payload,
+                }
+            )
