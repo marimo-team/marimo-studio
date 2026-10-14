@@ -4,6 +4,7 @@ import type {
   RuntimeStatusReport,
 } from "@marimo-studio/protocol/runtime-status";
 
+export const MAX_RUNTIME_DIAGNOSTICS = 200;
 const MAX_TRANSITIONS = 32;
 const MAX_TRANSITION_DIAGNOSTICS = 20;
 
@@ -90,8 +91,10 @@ export class RuntimeDiagnostics {
 
   record(update: RuntimeDiagnosticsUpdate): RuntimeStatusReport {
     const diagnostics = cloneDiagnostics(update.diagnostics);
-    if (diagnostics.length > 200) {
-      throw new RangeError("Runtime diagnostics accepts up to 200 current diagnostics");
+    if (diagnostics.length > MAX_RUNTIME_DIAGNOSTICS) {
+      throw new RangeError(
+        `Runtime diagnostics accepts up to ${MAX_RUNTIME_DIAGNOSTICS} current diagnostics`,
+      );
     }
     if (
       (update.phase === "ready" && diagnostics.length > 0) ||
