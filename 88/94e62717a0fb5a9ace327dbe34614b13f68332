@@ -1,0 +1,21 @@
+packages/marimo-studio/tests/providers/test_deno_react.py
+  s_df50519b55c80f::t_f7eeca10fc5798 823-877
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/_deno/analyzers/typescript-modules.ts
+  s_df50519b55c80f::t_fff4de7bdd576a 69-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8894e62717a0fb5a9ace327dbe34614b13f68332",
+  "prompts": {},
+  "sessions": {
+    "s_df50519b55c80f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13a50-50d3-77c2-ac19-cbb56315b6dc",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
