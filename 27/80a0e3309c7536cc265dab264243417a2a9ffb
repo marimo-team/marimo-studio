@@ -1,0 +1,24 @@
+packages/presentation/tests/document-viewer.test.ts
+  s_eba20eabaa7693::t_8902304341f0c4 49-59
+  s_eba20eabaa7693::t_fbbd79ef616ee7 191-192
+  s_eba20eabaa7693::t_5e065308ec90df 193-198,200
+  s_eba20eabaa7693::t_590f1983795620 457-458
+  s_eba20eabaa7693::t_94a182d121d756 468
+  s_eba20eabaa7693::t_63b2bbf912bdd8 495-498,500
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2780a0e3309c7536cc265dab264243417a2a9ffb",
+  "prompts": {},
+  "sessions": {
+    "s_eba20eabaa7693": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "agent-12bba195-2f3c-4bec-8479-3761b8b631d0",
+        "model": "unknown"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

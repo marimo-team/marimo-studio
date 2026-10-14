@@ -1,0 +1,9 @@
+packages/marimo-frontend/tests/embedded-runtime.test.ts
+  ai_agent 32,34,318-353,567,575,587,671-677,819
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "09f688719600449e6aacc66ac352edbf90af24b2",
+  "prompts": {}
+}
