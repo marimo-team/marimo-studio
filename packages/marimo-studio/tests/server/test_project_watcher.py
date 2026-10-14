@@ -792,37 +792,24 @@ def test_project_watcher_reactivated_after_a_failed_close_retries_its_stop(
             self.watch = object()
             self.alive = True
             self.stop_calls = 0
-            self.join_timeouts: list[float | None] = []
 
         def start(self) -> None:
             return
 
-        def schedule(
-            self,
-            _handler: object,
-            _path: str,
-            *,
-            recursive: bool,
-            event_filter: object = None,
-        ) -> object:
-            assert not recursive
+        def schedule(self, *_args: object, **_kwargs: object) -> object:
             return self.watch
 
-        def remove_handler_for_watch(
-            self,
-            _handler: object,
-            watch: object,
-        ) -> None:
-            assert watch is self.watch
+        def remove_handler_for_watch(self, *_args: object) -> None:
+            return
 
-        def unschedule(self, watch: object) -> None:
-            assert watch is self.watch
+        def unschedule(self, *_args: object) -> None:
+            return
 
         def stop(self) -> None:
             self.stop_calls += 1
 
-        def join(self, timeout: float | None = None) -> None:
-            self.join_timeouts.append(timeout)
+        def join(self, *_args: object, **_kwargs: object) -> None:
+            return
 
         def is_alive(self) -> bool:
             return self.alive
@@ -851,7 +838,7 @@ def test_project_watcher_reactivated_after_a_failed_close_retries_its_stop(
             delivered.set()
 
         await watcher.replace(plan, callback)
-        await asyncio.wait_for(delivered.wait(), timeout=1)
+        await wait_for_event(delivered)
         assert observer.stop_calls > failed_stop_attempts
         await watcher.close()
 

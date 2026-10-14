@@ -27,6 +27,7 @@ from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
+from ..async_test_support import wait_for_event
 
 
 def test_cached_cell_notifications_do_not_skip_native_instantiation(
@@ -543,10 +544,12 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
                 cells=[SimpleNamespace(id="load", code="frame = slow_load()")]
             )
             self.session_view = SimpleNamespace(
-                last_executed_code={}, cell_notifications={}
+                last_executed_code={},
+                cell_notifications={},
             )
             self._event_bus = SimpleNamespace(
-                _listeners=[], subscribe=lambda _listener: None
+                _listeners=[],
+                subscribe=lambda _listener: None,
             )
 
         @staticmethod
@@ -557,14 +560,16 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
         def kernel_state() -> KernelState:
             return KernelState.RUNNING
 
-        def put_control_request(self, *_args: object, **_kwargs: object) -> None:
-            pass
+        @staticmethod
+        def put_control_request(*_args: object, **_kwargs: object) -> None:
+            return None
 
-    def marker(phase: Literal["start", "done", "failed"]) -> bytes:
-        return serialize_kernel_message(
-            CompletedRunNotification(
-                run_id=make_marker(phase, "CreateNotebookCommand", "create-1")
-            )
+    def notify(message: CellNotification | CompletedRunNotification) -> None:
+        tracker.on_notification_sent(session, serialize_kernel_message(message))
+
+    def marker(phase: Literal["start", "done", "failed"]) -> CompletedRunNotification:
+        return CompletedRunNotification(
+            run_id=make_marker(phase, "CreateNotebookCommand", "create-1")
         )
 
     session: Any = Session()
@@ -580,36 +585,25 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
             execution_requests=(),
             cell_ids=(),
             set_ui_element_value_request=UpdateUIElementCommand(
-                object_ids=[], values=[]
+                object_ids=[],
+                values=[],
             ),
             auto_run=True,
         ),
         None,
     )
-    tracker.on_notification_sent(session, marker("start"))
-    tracker.on_notification_sent(
-        session,
-        serialize_kernel_message(
-            CellNotification(cell_id=CellId_t("load"), status="running")
-        ),
-    )
+    notify(marker("start"))
+    notify(CellNotification(cell_id=CellId_t("load"), status="running"))
     session.session_view.last_executed_code["load"] = "frame = slow_load()"
 
     assert state.ensure_started(context, "s_123456") is False
     now += session_state_module._NATIVE_INSTANTIATION_TIMEOUT_SECONDS + 10
     assert state.ensure_started(context, "s_123456") is False
 
-    tracker.on_notification_sent(
-        session,
-        serialize_kernel_message(
-            CellNotification(cell_id=CellId_t("load"), status="idle")
-        ),
-    )
-    tracker.on_notification_sent(session, marker("done"))
-    completed = asyncio.Event()
+    notify(CellNotification(cell_id=CellId_t("load"), status="idle"))
+    notify(marker("done"))
 
     async def read_barrier(*_args: object, **_kwargs: object) -> object:
-        completed.set()
         return object()
 
     monkeypatch.setattr(session_state_module, "read_session_values", read_barrier)
@@ -617,9 +611,10 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
     async def finish() -> None:
         assert state.ensure_started(context, "s_123456") is False
         await asyncio.wait_for(state._starting[session], timeout=1)
-        callback_turn = asyncio.Event()
-        asyncio.get_running_loop().call_soon(callback_turn.set)
-        await asyncio.wait_for(callback_turn.wait(), timeout=1)
+        # The completion callback runs on the next loop turn.
+        turned = asyncio.Event()
+        asyncio.get_running_loop().call_soon(turned.set)
+        await wait_for_event(turned)
         assert state.ensure_started(context, "s_123456") is True
 
     asyncio.run(finish())
