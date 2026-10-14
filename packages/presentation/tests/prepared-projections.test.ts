@@ -410,6 +410,43 @@ test("a prepared host rejected by a new site policy drops the runtime identity o
   assert.equal(cell.dataset.runtimeCellId, undefined);
 });
 
+test("a prepared host rejected after a failed replacement drops the replacement hint", async () => {
+  document.body.innerHTML = `
+    <div id="runtime"></div>
+    <marimo-output id="output" value="report.output"></marimo-output>
+    <marimo-cell id="cell" name="summary"></marimo-cell>
+  `;
+  const permitted = withHostSites(config);
+  commitRuntimeConfig(permitted);
+  projectionHosts.connect();
+  const handle = mountPreparedProjections({
+    root: document.querySelector<HTMLElement>("#runtime")!,
+    presentation,
+    theme,
+  });
+  handles.push(handle);
+  await handle.replace(snapshot("one"));
+  await settle();
+  const invalid = structuredClone(snapshot("invalid"));
+  Object.assign(invalid.outputs[0]!.output!, { channel: "unsupported" });
+  await assert.rejects(handle.replace(invalid));
+  const output = document.querySelector<HTMLElement>("#output")!;
+  const cell = document.querySelector<HTMLElement>("#cell")!;
+  assert.equal(output.dataset.marimoDiagnosticCode, "prepared-projection-failed");
+
+  commitRuntimeConfig({
+    ...permitted,
+    projectionRevision: "f".repeat(64),
+    sites: permitted.sites.map((site) => ({ ...site, targets: ["elsewhere"] })),
+  });
+  await settle();
+
+  for (const host of [output, cell]) {
+    assert.equal(host.dataset.marimoDiagnosticCode, "projection-target-not-allowed");
+    assert.equal(host.dataset.marimoDiagnosticHint, undefined);
+  }
+});
+
 test("prepared generations replace hosts and retain the last good result", async () => {
   commitRuntimeConfig(config);
   document.body.innerHTML = `
