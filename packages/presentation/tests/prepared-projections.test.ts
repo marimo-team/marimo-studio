@@ -197,6 +197,42 @@ const injectedProjectionMount = ({
 
 const handles: PreparedProjectionHandle[] = [];
 
+const PERMITTED_HOSTS = `
+  <div id="runtime"></div>
+  <marimo-output id="output" value="report.output"></marimo-output>
+  <marimo-output value="report.bundle"></marimo-output>
+  <marimo-cell id="cell" name="summary"></marimo-cell>
+`;
+
+const mountPermittedHosts = async () => {
+  document.body.innerHTML = PERMITTED_HOSTS;
+  const permitted = withHostSites(config);
+  commitRuntimeConfig(permitted);
+  projectionHosts.connect();
+  const handle = mountPreparedProjections({
+    root: document.querySelector<HTMLElement>("#runtime")!,
+    presentation,
+    theme,
+  });
+  handles.push(handle);
+  await handle.replace(snapshot("one"));
+  await settle();
+  const output = document.querySelector<HTMLElement>("#output");
+  const cell = document.querySelector<HTMLElement>("#cell");
+  if (!output || !cell) {
+    throw new Error("The prepared host fixture did not mount");
+  }
+  return { permitted, handle, output, cell };
+};
+
+const denyHostSites = (permitted: ReturnType<typeof withHostSites>): void => {
+  commitRuntimeConfig({
+    ...permitted,
+    projectionRevision: "f".repeat(64),
+    sites: permitted.sites.map((site) => ({ ...site, targets: ["elsewhere"] })),
+  });
+};
+
 beforeAll(() => {
   projectionHosts.register();
   Object.defineProperty(globalThis, "matchMedia", {
@@ -341,24 +377,7 @@ test("prepared hosts keep media marimo cannot show for the document that reads i
 });
 
 test("prepared hosts show only targets their site permits", async () => {
-  document.body.innerHTML = `
-    <div id="runtime"></div>
-    <marimo-output id="output" value="report.output"></marimo-output>
-    <marimo-output value="report.bundle"></marimo-output>
-    <marimo-cell id="cell" name="summary"></marimo-cell>
-  `;
-  commitRuntimeConfig(withHostSites(config));
-  projectionHosts.connect();
-  const handle = mountPreparedProjections({
-    root: document.querySelector<HTMLElement>("#runtime")!,
-    presentation,
-    theme,
-  });
-  handles.push(handle);
-  await handle.replace(snapshot("one"));
-  await settle();
-  const output = document.querySelector<HTMLElement>("#output")!;
-  const cell = document.querySelector<HTMLElement>("#cell")!;
+  const { output, cell } = await mountPermittedHosts();
   assert.match(output.textContent ?? "", /output one/u);
 
   output.setAttribute("value", "report.bundle");
@@ -373,32 +392,11 @@ test("prepared hosts show only targets their site permits", async () => {
 });
 
 test("a prepared host rejected by a new site policy drops the runtime identity of its last target", async () => {
-  document.body.innerHTML = `
-    <div id="runtime"></div>
-    <marimo-output id="output" value="report.output"></marimo-output>
-    <marimo-cell id="cell" name="summary"></marimo-cell>
-  `;
-  const permitted = withHostSites(config);
-  commitRuntimeConfig(permitted);
-  projectionHosts.connect();
-  const handle = mountPreparedProjections({
-    root: document.querySelector<HTMLElement>("#runtime")!,
-    presentation,
-    theme,
-  });
-  handles.push(handle);
-  await handle.replace(snapshot("one"));
-  await settle();
-  const output = document.querySelector<HTMLElement>("#output")!;
-  const cell = document.querySelector<HTMLElement>("#cell")!;
+  const { permitted, output, cell } = await mountPermittedHosts();
   assert.equal(output.dataset.runtimeCellId, "prepared-report-output");
   assert.equal(cell.dataset.state, "ready");
 
-  commitRuntimeConfig({
-    ...permitted,
-    projectionRevision: "f".repeat(64),
-    sites: permitted.sites.map((site) => ({ ...site, targets: ["elsewhere"] })),
-  });
+  denyHostSites(permitted);
   await settle();
 
   assert.equal(output.dataset.state, "error");
@@ -411,34 +409,13 @@ test("a prepared host rejected by a new site policy drops the runtime identity o
 });
 
 test("a prepared host rejected after a failed replacement drops the replacement hint", async () => {
-  document.body.innerHTML = `
-    <div id="runtime"></div>
-    <marimo-output id="output" value="report.output"></marimo-output>
-    <marimo-cell id="cell" name="summary"></marimo-cell>
-  `;
-  const permitted = withHostSites(config);
-  commitRuntimeConfig(permitted);
-  projectionHosts.connect();
-  const handle = mountPreparedProjections({
-    root: document.querySelector<HTMLElement>("#runtime")!,
-    presentation,
-    theme,
-  });
-  handles.push(handle);
-  await handle.replace(snapshot("one"));
-  await settle();
+  const { permitted, handle, output, cell } = await mountPermittedHosts();
   const invalid = structuredClone(snapshot("invalid"));
   Object.assign(invalid.outputs[0]!.output!, { channel: "unsupported" });
   await assert.rejects(handle.replace(invalid));
-  const output = document.querySelector<HTMLElement>("#output")!;
-  const cell = document.querySelector<HTMLElement>("#cell")!;
   assert.equal(output.dataset.marimoDiagnosticCode, "prepared-projection-failed");
 
-  commitRuntimeConfig({
-    ...permitted,
-    projectionRevision: "f".repeat(64),
-    sites: permitted.sites.map((site) => ({ ...site, targets: ["elsewhere"] })),
-  });
+  denyHostSites(permitted);
   await settle();
 
   for (const host of [output, cell]) {

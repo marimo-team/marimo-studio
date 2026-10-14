@@ -1,5 +1,7 @@
 import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 
+import { createHash } from "node:crypto";
+
 import type { PreparedProjectionResources } from "../src/prepared/index.ts";
 
 export const preparedRuntimeConfig = {
@@ -84,10 +86,6 @@ export const settlePreparedRender = async (): Promise<void> => {
 
 const SITE_SOURCE = { path: "index.html", line: 1, column: 1 };
 
-/**
- * Give each output and cell host under `root` the provider site a build
- * records, so the hosts resolve the way an exported view's hosts do.
- */
 export const withHostSites = (
   config: RuntimeConfig,
   root: ParentNode = document,
@@ -115,15 +113,9 @@ export const withHostSites = (
       variables[variable] ??= target(`cell:v1:${variable}`);
     }
   });
-  // The runtime keys site policy on the projection revision, so new sites need a new one.
-  const hash = sites
-    .map(({ id }) => id)
-    .join("\0")
-    .split("")
-    .reduce(
-      (value, character) => Math.imul(value ^ character.charCodeAt(0), 16_777_619),
-      2_166_136_261,
-    );
-  const projectionRevision = (hash >>> 0).toString(16).padStart(8, "0").repeat(8);
+  // Site policy is keyed on the projection revision, so added sites need a new one.
+  const projectionRevision = createHash("sha256")
+    .update(sites.map(({ id }) => id).join("\0"))
+    .digest("hex");
   return { ...config, projectionRevision, sites, projectionTargets: { cells, variables } };
 };
