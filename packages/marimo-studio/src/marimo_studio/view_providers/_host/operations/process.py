@@ -314,13 +314,14 @@ def _run_provider_process(
                 raise ProviderOperationError(
                     "Provider operation produced too much output"
                 )
-            if completed.returncode != 0 and not response_path.exists():
-                detail = completed.stderr.decode(errors="replace").strip()
+            try:
+                response = json.loads(_read_response(response_path))
+            except (OSError, ValueError) as error:
                 raise ProviderOperationError(
-                    detail
-                    or f"Provider process exited with status {completed.returncode}"
-                )
-            response = json.loads(_read_response(response_path))
+                    f"Provider process exited with status {completed.returncode} "
+                    "before returning a complete result. "
+                    "Check the provider installation and retry."
+                ) from error
             if not isinstance(response, dict) or set(response) != {
                 "schema",
                 "ok",

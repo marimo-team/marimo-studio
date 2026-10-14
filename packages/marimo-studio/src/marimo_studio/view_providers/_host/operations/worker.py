@@ -300,7 +300,8 @@ def main() -> int:
         response = {
             "schema": 1,
             "ok": False,
-            "value": f"{type(error).__name__}: {error}",
+            "value": str(error)
+            or "Provider operation failed. Check its implementation and retry.",
         }
     response_path.write_text(
         json.dumps(response, ensure_ascii=True, separators=(",", ":")),

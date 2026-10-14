@@ -1058,3 +1058,52 @@ def test_isolated_provider_rejects_fifo_starter_blob_within_deadline(
         [sys.executable, "-c", command], capture_output=True, text=True, timeout=5
     )
     assert completed.returncode == 0, completed.stderr
+
+
+class _BrokenResponseProvider(ProviderStub):
+    def inspect(self, request: InspectionRequest) -> ProjectInspection:
+        del request
+        mode = os.environ["MARIMO_STUDIO_PROVIDER_RESPONSE_MODE"]
+        if mode == "truncated":
+            Path(sys.argv[2]).write_text('{"schema":1,"ok":tr', encoding="utf-8")
+            os._exit(9)
+        if mode == "missing":
+            os._exit(0)
+        raise ValueError("The custom analyzer failed.")
+
+
+broken_response_provider = _BrokenResponseProvider("test-process/broken", "default")
+
+
+@pytest.mark.parametrize(
+    "mode,status", [("missing", 0), ("truncated", 9), ("raises", None)]
+)
+def test_isolated_provider_reports_incomplete_results_and_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    status: int | None,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    monkeypatch.setenv("MARIMO_STUDIO_PROVIDER_RESPONSE_MODE", mode)
+    installed = _registry("broken", "broken_response_provider").get(
+        "test-process/broken"
+    )
+    project = ViewProject(
+        "dashboard", tmp_path, tmp_path / "view.toml", installed.key, {}
+    )
+    project.manifest.write_text("schema = 1\n", encoding="utf-8")
+    with pytest.raises(ViewProjectError) as error:
+        installed.inspect(inspection_request(project))
+
+    detail = (
+        f"Provider process exited with status {status} "
+        "before returning a complete result. "
+        "Check the provider installation and retry."
+        if status is not None
+        else "The custom analyzer failed."
+    )
+    assert str(error.value) == (
+        "View provider 'test-process/broken' could not inspect view 'dashboard': "
+        + detail
+    )
