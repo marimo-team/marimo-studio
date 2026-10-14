@@ -23,6 +23,7 @@ from functools import partial
 from pathlib import Path
 from typing import Protocol
 
+from marimo_studio._artifacts.codec import receipt_diagnostics
 from marimo_studio._artifacts.inputs import (
     BuildInputState,
     build_input_state,
@@ -734,12 +735,14 @@ def _publish_locked(
             )
             report = replace(
                 report,
-                diagnostics=(
-                    *report.diagnostics,
-                    *missing_site_diagnostics(
-                        prepared.publication_root / "files",
-                        prepared.manifest.sites,
-                    ),
+                diagnostics=receipt_diagnostics(
+                    (
+                        *report.diagnostics,
+                        *missing_site_diagnostics(
+                            prepared.publication_root / "files",
+                            prepared.manifest.sites,
+                        ),
+                    )
                 ),
             )
             commit_state = _capture_commit_state(

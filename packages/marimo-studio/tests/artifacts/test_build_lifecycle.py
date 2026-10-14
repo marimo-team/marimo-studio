@@ -750,6 +750,49 @@ def test_publication_acquires_its_lease_before_replacing_the_profile_pointer(
     }
 
 
+def test_a_publication_with_more_diagnostics_than_a_receipt_holds_stays_readable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import re
+
+    from marimo_studio.view_providers import ProjectDiagnostic
+    from marimo_studio.view_providers._host import provider_registry
+
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    _change_document(project, "warned generation")
+    provider = provider_registry().get(project.provider)
+    build = provider.build
+
+    def warn_and_drop_a_site(request: Any) -> Any:
+        result = build(request)
+        document = request.staging_root / result.document
+        document.write_text(
+            re.sub(r' data-marimo-studio-site="[^"]*"', "", document.read_text())
+        )
+        return replace(
+            result,
+            diagnostics=tuple(
+                ProjectDiagnostic("compiler-warning", "warning", f"Warning {index}")
+                for index in range(512)
+            ),
+        )
+
+    monkeypatch.setattr(provider, "build", warn_and_drop_a_site)
+    published = publish_artifact(project, "development")
+
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == published.artifact_revision
+    diagnostics = read_build_state(project, "development").diagnostics
+    assert len(diagnostics) == 512
+    assert diagnostics[-1].code == "build-diagnostics-truncated"
+    assert diagnostics[-1].message == (
+        "Studio kept the first 511 build diagnostics and omitted 2 more."
+    )
+
+
 def test_corrupt_sibling_profile_does_not_fail_a_completed_publication(
     tmp_path: Path,
 ) -> None:

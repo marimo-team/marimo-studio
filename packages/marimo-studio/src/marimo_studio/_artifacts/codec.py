@@ -41,6 +41,30 @@ _PHASES = frozenset({"unbuilt", "building", "failed", "published", "stale"})
 _CONTROL_FILE_MAX_BYTES = 16 * 1024 * 1024
 
 
+MAX_RECEIPT_DIAGNOSTICS = 512
+
+
+def receipt_diagnostics(
+    diagnostics: tuple[ProjectDiagnostic, ...],
+) -> tuple[ProjectDiagnostic, ...]:
+    """Fit build diagnostics into one receipt and report what was omitted."""
+    if len(diagnostics) <= MAX_RECEIPT_DIAGNOSTICS:
+        return diagnostics
+    kept = MAX_RECEIPT_DIAGNOSTICS - 1
+    return (
+        *diagnostics[:kept],
+        ProjectDiagnostic(
+            code="build-diagnostics-truncated",
+            severity="warning",
+            message=(
+                f"Studio kept the first {kept} build diagnostics and omitted "
+                f"{len(diagnostics) - kept} more."
+            ),
+            hint="Fix the reported diagnostics, then build the view again.",
+        ),
+    )
+
+
 class ArtifactFormatError(ConfigurationError):
     """Stored artifact state was written in another Studio format."""
 
@@ -389,7 +413,7 @@ def _publication(value: object) -> ArtifactPublication:
             for item in _array(
                 data["diagnostics"],
                 "Published build diagnostics",
-                maximum=512,
+                maximum=MAX_RECEIPT_DIAGNOSTICS,
             )
         ),
         _integer(data["duration_ms"], "Published build duration"),
@@ -489,7 +513,7 @@ def decode_profile_state(
             for item in _array(
                 raw_build["diagnostics"],
                 "Artifact build diagnostics",
-                maximum=512,
+                maximum=MAX_RECEIPT_DIAGNOSTICS,
             )
         ),
         duration_ms=(
