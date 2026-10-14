@@ -874,3 +874,5 @@ def test_project_configured_views_outside_the_notebook_folder_are_readable(
         ]
 
     assert asyncio.run(exercise()) == ["index.html", "view.toml"]
+    assert (tmp_path / "views" / "dashboard" / "view.toml").is_file()
+    assert not (notebook.parent / "dashboard").exists()
