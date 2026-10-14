@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -145,8 +146,17 @@ def test_a_refused_active_view_handoff_explains_the_conflict(
 
 @pytest.mark.parametrize(
     "body",
-    [b'{"writeGeneration":' + b"9" * 5000 + b"}", b"[" * 4096 + b"0" + b"]" * 4096],
-    ids=("oversized-integer", "deep-nesting"),
+    [
+        pytest.param(
+            b'{"writeGeneration":' + b"9" * 5000 + b"}",
+            id="oversized-integer",
+            marks=pytest.mark.skipif(
+                not 0 < getattr(sys, "get_int_max_str_digits", lambda: 0)() <= 5000,
+                reason="json.loads limits integer digits from Python 3.10.7",
+            ),
+        ),
+        pytest.param(b"[" * 4096 + b"0" + b"]" * 4096, id="deep-nesting"),
+    ],
 )
 def test_json_beyond_the_decoder_limits_is_invalid_json(
     notebook_path: Path,
