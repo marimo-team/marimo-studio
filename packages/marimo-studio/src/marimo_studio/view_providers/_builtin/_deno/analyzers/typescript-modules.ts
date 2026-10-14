@@ -68,6 +68,7 @@ const lexicalContainer = (node: BindingDeclaration): ts.Node => {
   while (current !== undefined) {
     if (
       ts.isSourceFile(current) || ts.isFunctionLike(current) ||
+      ts.isClassStaticBlockDeclaration(current) || ts.isModuleBlock(current) ||
       (blockScoped && (ts.isBlock(current) || ts.isCaseBlock(current) ||
         ts.isForStatement(current) || ts.isForOfStatement(current) ||
         ts.isForInStatement(current)))

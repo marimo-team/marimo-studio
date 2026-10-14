@@ -794,3 +794,29 @@ def test_react_object_prototype_keys_create_no_targets(
     assert inspection.diagnostics == ()
     (site,) = inspection.sites
     assert site.targets == targets
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        "class Holder { static { var target = load(); } }",
+        "namespace Store { let target = load(); }",
+        "namespace Store { var target = load(); }",
+    ],
+    ids=("class-static-block", "namespace-let", "namespace-var"),
+)
+def test_react_nested_scopes_keep_module_targets(tmp_path: Path, scope: str) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    root.joinpath("src/App.tsx").write_text(
+        f'const target = "first";\n{scope}\n'
+        "function Card() {\n"
+        '  return <output mo-value={target} data-marimo-allow="*" />;\n'
+        "}\n",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == ("first",)
