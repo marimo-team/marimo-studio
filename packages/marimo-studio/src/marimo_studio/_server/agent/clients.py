@@ -15,6 +15,7 @@ every remaining browser-to-session association.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Awaitable, Callable
 
@@ -39,6 +40,8 @@ from .workspace_presence import (
 # A Studio tab reconnects after saves and reloads. Callers that need the tab
 # wait this long before reporting it unavailable.
 SESSION_RECONNECT_TIMEOUT = 1.0
+
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 class StudioClientRegistry:
@@ -634,8 +637,9 @@ class StudioClientRegistry:
                 "superseded",
             }:
                 committed = await self.commit_query_operation(claim)
-        except BaseException:
-            pass
+        except Exception as error:
+            # The browser retries a query update that did not apply.
+            _LOGGER.info("A deferred query update did not apply: %s", error)
         finally:
             if not committed:
                 await self.release_query_operation(claim)
