@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import secrets
 import stat
 from contextlib import suppress
@@ -54,6 +55,8 @@ from marimo_studio.view_providers._document import (
     validate_html_document,
 )
 
+_LOGGER = logging.getLogger("marimo.studio")
+
 
 def profile_pointer(project: CatalogProject, profile: BuildProfile) -> Path:
     return artifact_root(project) / f"{profile}.json"
@@ -102,10 +105,18 @@ def read_profile_state(
         "Artifact profile receipt",
         final_kind="file",
     )
-    return decode_profile_state(
-        read_json(artifact_base(project), pointer, "artifact profile receipt"),
-        profile,
-    )
+    try:
+        return decode_profile_state(
+            read_json(artifact_base(project), pointer, "artifact profile receipt"),
+            profile,
+        )
+    except ArtifactFormatError:
+        raise
+    except ConfigurationError as error:
+        raise ConfigurationError(
+            f"{str(error).rstrip('.')}. Build view {project.name!r} again to "
+            f"replace its damaged {profile} build state."
+        ) from error
 
 
 def _current_profile_state(
@@ -347,6 +358,23 @@ def read_artifact_revision_snapshot(
     return ArtifactRevisionSnapshot(revision, after)
 
 
+def _missing_publication(
+    project: CatalogProject,
+    profile: BuildProfile,
+    artifact_revision: str,
+) -> ConfigurationError:
+    _LOGGER.warning(
+        "View %r points at missing %s revision %s.",
+        project.name,
+        profile,
+        artifact_revision,
+    )
+    return ConfigurationError(
+        f"The published {profile} build of view {project.name!r} is missing. "
+        "Build the view again."
+    )
+
+
 def read_published_artifact(
     project: CatalogProject,
     profile: BuildProfile,
@@ -360,10 +388,7 @@ def read_published_artifact(
     except ArtifactFormatError:
         return None
     if revision is None:
-        raise ConfigurationError(
-            f"Published artifact is missing for view {project.name!r}: "
-            f"{state.published.artifact_revision}"
-        )
+        raise _missing_publication(project, profile, state.published.artifact_revision)
     return artifact_from_publication(revision, profile, state.published)
 
 
@@ -546,9 +571,8 @@ def read_artifact_state(
                     return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
                 raise
             if revision is None:
-                raise ConfigurationError(
-                    f"Published artifact is missing for view {project.name!r}: "
-                    f"{state.published.artifact_revision}"
+                raise _missing_publication(
+                    project, profile, state.published.artifact_revision
                 )
             artifact = artifact_from_publication(
                 revision,

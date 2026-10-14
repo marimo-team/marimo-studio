@@ -391,3 +391,39 @@ def test_state_recovery_rejects_recreated_project_after_old_build_lock(
     assert state["build"]["phase"] == "building"
     assert state["build"]["project_revision"] == revision
     assert sentinel.read_text(encoding="utf-8") == "active\n"
+
+
+def test_damaged_build_state_errors_name_the_view_and_the_next_step(
+    tmp_path: Path,
+) -> None:
+    from marimo_studio.errors import ConfigurationError
+
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    _profile_path(project, "development").write_text("{", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError) as raised:
+        read_artifact_state(project, "development")
+
+    message = str(raised.value)
+    assert message.startswith("Could not read artifact profile receipt")
+    assert message.endswith(
+        f"Build view {project.name!r} again to replace its damaged development "
+        "build state."
+    )
+
+
+def test_a_missing_published_revision_asks_for_a_rebuild(tmp_path: Path) -> None:
+    from marimo_studio.errors import ConfigurationError
+
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    shutil.rmtree(artifact_root(project) / "revisions")
+
+    with pytest.raises(ConfigurationError) as raised:
+        read_artifact_state(project, "development")
+
+    assert str(raised.value) == (
+        f"The published development build of view {project.name!r} is missing. "
+        "Build the view again."
+    )
