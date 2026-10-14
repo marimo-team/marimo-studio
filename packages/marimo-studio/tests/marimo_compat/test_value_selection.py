@@ -554,3 +554,128 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
 
         encoder.close()
     context.virtual_file_registry.shutdown()
+
+
+@pytest.mark.parametrize("broken_kind", ["json", "property"])
+def test_kernel_projection_keeps_other_values_after_selector_encoding_failure(
+    broken_kind: str,
+) -> None:
+    import pyarrow as pa
+
+    class Broken:
+        def _mime_(self) -> tuple[str, str]:
+            return "application/json", "not json"
+
+        @property
+        def leaf(self) -> object:
+            raise ValueError("\ud800")
+
+    selector = "broken" if broken_kind == "json" else "broken.leaf"
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+    try:
+        with context.install():
+            result = _read_values(
+                {"frame": pa.table({"x": [1]}), "broken": Broken()},
+                _selectors("frame", selector),
+                consumer_id="preview",
+                revision="revision-1",
+                encoder=encoder,
+            )
+            assert (
+                cast(dict[str, object], result.values["frame"])["codec"]
+                == "arrow-ipc-v1"
+            )
+            assert result.errors[selector].code == (
+                "not-json-serializable"
+                if broken_kind == "json"
+                else "value-path-unavailable"
+            )
+            result.errors[selector].message.encode("utf-8")
+            encoder.close()
+            assert tuple(context.virtual_file_registry.filenames()) == ()
+    finally:
+        context.virtual_file_registry.shutdown()
+
+
+def test_kernel_projection_discards_staged_arrow_after_interrupted_read() -> None:
+    import pyarrow as pa
+
+    class Interrupted:
+        @property
+        def leaf(self) -> object:
+            raise KeyboardInterrupt
+
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+    try:
+        with context.install():
+            with pytest.raises(KeyboardInterrupt):
+                _read_values(
+                    {"frame": pa.table({"x": [1]}), "interrupted": Interrupted()},
+                    _selectors("frame", "interrupted.leaf"),
+                    consumer_id="preview",
+                    revision="revision-1",
+                    encoder=encoder,
+                )
+            assert tuple(context.virtual_file_registry.filenames()) == ()
+            encoder.close()
+    finally:
+        context.virtual_file_registry.shutdown()
+
+
+def test_kernel_projection_reports_arrow_allocation_failure_locally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pyarrow as pa
+
+    def fail(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError("storage full")
+
+    monkeypatch.setattr(representations.VirtualFile, "create_and_register", fail)
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+    try:
+        with context.install():
+            result = _read_values(
+                {"frame": pa.table({"x": [1]}), "count": 3},
+                _selectors("frame", "count"),
+                consumer_id="preview",
+                revision="revision-1",
+                encoder=encoder,
+            )
+            assert result.values == {"count": _encoded_json(3)}
+            assert result.errors["frame"].code == "arrow-serialization-error"
+            encoder.close()
+            assert tuple(context.virtual_file_registry.filenames()) == ()
+    finally:
+        context.virtual_file_registry.shutdown()
+
+
+def test_kernel_projection_discards_staged_arrow_after_response_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pyarrow as pa
+
+    from marimo_studio._compat.kernel_values import selectors
+
+    def fail(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("response encoding failed")
+
+    monkeypatch.setattr(selectors.json, "dumps", fail)
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+    try:
+        with context.install():
+            with pytest.raises(RuntimeError, match="response encoding failed"):
+                _read_values(
+                    {"frame": pa.table({"x": [1]})},
+                    _selectors("frame"),
+                    consumer_id="preview",
+                    revision="revision-1",
+                    encoder=encoder,
+                )
+            assert tuple(context.virtual_file_registry.filenames()) == ()
+            encoder.close()
+    finally:
+        context.virtual_file_registry.shutdown()
