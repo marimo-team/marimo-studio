@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/projections/test_authorization.py
+  s_5845f9a401c285::t_986efcced72357 467-481,484-493,606-607,612,614,619-620,626,631,635,642,647,659,661-662,667,669,672,678,686,690,697,701,705,716,731
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9badadbf90da510b4f5e8c0e8f98aaf194df2104",
+  "prompts": {},
+  "sessions": {
+    "s_5845f9a401c285": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13940-d06b-7592-8105-4351e3befde5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+packages/marimo-studio/tests/notebook/test_inspection.py
+  s_80c04bef0fc32a::t_bf3939615228c7 1199-1205,1207-1216
+  s_80c04bef0fc32a::t_9bbbc0087798bd 1206
+packages/marimo-studio/src/marimo_studio/_notebook/inspection.py
+  s_80c04bef0fc32a::t_9bbbc0087798bd 98-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b6e057eb046ca2f3c72ce9f74e64f93391295bf9",
+  "prompts": {},
+  "sessions": {
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

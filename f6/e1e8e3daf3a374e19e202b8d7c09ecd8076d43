@@ -1,0 +1,21 @@
+packages/marimo-studio/tests/cli/test_validate_command.py
+  s_80c04bef0fc32a::t_8aeda3e92b586b 69-78
+packages/marimo-studio/src/marimo_studio/_cli/options.py
+  s_80c04bef0fc32a::t_d0bd5a944cb74e 56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f6e1e8e3daf3a374e19e202b8d7c09ecd8076d43",
+  "prompts": {},
+  "sessions": {
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
