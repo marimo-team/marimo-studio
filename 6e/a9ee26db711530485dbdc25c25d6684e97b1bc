@@ -1,0 +1,11 @@
+packages/marimo-studio/tests/marimo_compat/test_kernel_bridge.py
+  ai_agent 5,983-993,1008,1050,1054,1056,1087-1096,1125-1134,1137,1143
+packages/marimo-studio/tests/marimo_compat/test_process_group_cleanup.py
+  ai_agent 507,513,517,519-521
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6ea9ee26db711530485dbdc25c25d6684e97b1bc",
+  "prompts": {}
+}
