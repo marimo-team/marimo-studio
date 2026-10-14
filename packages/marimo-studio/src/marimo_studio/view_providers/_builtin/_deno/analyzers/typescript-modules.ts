@@ -15,7 +15,7 @@ export type TypeScriptDocument = {
 
 export type TypeScriptBinding = {
   readonly source: ts.SourceFile;
-  readonly expression: ts.Expression;
+  readonly expression: ts.Expression | null;
 };
 
 const scriptKind = (path: string): ts.ScriptKind =>
@@ -27,18 +27,21 @@ const scriptKind = (path: string): ts.ScriptKind =>
     ? ts.ScriptKind.TS
     : ts.ScriptKind.JS;
 
+type BindingDeclaration =
+  | ts.VariableDeclaration
+  | ts.ParameterDeclaration
+  | ts.BindingElement;
+
 const declarations = (
   source: ts.SourceFile,
   name: string,
-): ts.VariableDeclaration[] => {
-  const matches: ts.VariableDeclaration[] = [];
+): BindingDeclaration[] => {
+  const matches: BindingDeclaration[] = [];
   const visit = (node: ts.Node): void => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === name &&
-      node.initializer !== undefined &&
-      (ts.getCombinedNodeFlags(node.parent) & ts.NodeFlags.Const) !== 0
+      (ts.isVariableDeclaration(node) || ts.isParameter(node) ||
+        ts.isBindingElement(node)) &&
+      ts.isIdentifier(node.name) && node.name.text === name
     ) {
       matches.push(node);
     }
@@ -51,12 +54,20 @@ const declarations = (
 const contains = (container: ts.Node, node: ts.Node): boolean =>
   container.pos <= node.pos && node.end <= container.end;
 
-const lexicalContainer = (node: ts.Node): ts.Node => {
-  let current = node.parent;
+const lexicalContainer = (node: BindingDeclaration): ts.Node => {
+  let owner: ts.Node = node;
+  while (ts.isBindingElement(owner) || ts.isBindingPattern(owner)) {
+    owner = owner.parent;
+  }
+  const blockScoped = !ts.isVariableDeclaration(owner) ||
+    (ts.getCombinedNodeFlags(owner.parent) & ts.NodeFlags.BlockScoped) !== 0;
+  let current = owner.parent;
   while (current !== undefined) {
     if (
-      ts.isSourceFile(current) || ts.isBlock(current) ||
-      ts.isFunctionLike(current)
+      ts.isSourceFile(current) || ts.isFunctionLike(current) ||
+      (blockScoped && (ts.isBlock(current) || ts.isCaseBlock(current) ||
+        ts.isForStatement(current) || ts.isForOfStatement(current) ||
+        ts.isForInStatement(current)))
     ) {
       return current;
     }
@@ -148,15 +159,24 @@ export class TypeScriptModules {
   ): TypeScriptBinding | null {
     const available = declarations(source, identifier.text)
       .filter(
-        (declaration) =>
-          declaration.getStart(source) < identifier.getStart(source) &&
-          contains(lexicalContainer(declaration), identifier),
+        (declaration) => contains(lexicalContainer(declaration), identifier),
       )
-      .sort((left, right) => right.getStart(source) - left.getStart(source));
+      .sort((left, right) => {
+        const leftScope = lexicalContainer(left);
+        const rightScope = lexicalContainer(right);
+        return (leftScope.end - leftScope.pos) -
+            (rightScope.end - rightScope.pos) ||
+          right.getStart(source) - left.getStart(source);
+      });
     const declaration = available[0];
-    return declaration?.initializer === undefined
-      ? null
-      : { source, expression: declaration.initializer };
+    if (declaration === undefined) return null;
+    const expression = ts.isVariableDeclaration(declaration) &&
+        (ts.getCombinedNodeFlags(declaration.parent) & ts.NodeFlags.Const) !==
+          0 &&
+        declaration.getStart(source) < identifier.getStart(source)
+      ? declaration.initializer ?? null
+      : null;
+    return { source, expression };
   }
 
   exportedBinding(
@@ -164,6 +184,11 @@ export class TypeScriptModules {
     name: string,
   ): TypeScriptBinding | null {
     for (const declaration of declarations(source, name)) {
+      if (
+        !ts.isVariableDeclaration(declaration) ||
+        declaration.initializer === undefined ||
+        (ts.getCombinedNodeFlags(declaration.parent) & ts.NodeFlags.Const) === 0
+      ) continue;
       const statement = declaration.parent.parent;
       if (
         ts.isVariableStatement(statement) &&

@@ -227,7 +227,7 @@ const importedValue = (
       const module = modules.resolve(document.path, local);
       if (module === null) return dynamic();
       const binding = modules.exportedBinding(module.source, imported);
-      return binding === null
+      return binding === null || binding.expression === null
         ? dynamic()
         : evaluateTypeScript(binding.expression, binding.source, modules);
     }

@@ -703,3 +703,33 @@ def test_react_entry_normalization_rewrites_only_the_script_source(
     assert "index-RANDOM.js and other.js stay here." in rewritten
     assert 'data-copy="index-RANDOM.js"' in rewritten
     assert f"SRC='./{normalized.name}?mode=dev#entry'" in rewritten
+
+
+@pytest.mark.parametrize(
+    "binding",
+    [
+        "function Card(target: string)",
+        "function Card({ target }: { target: string })",
+        "function Card([target]: string[])",
+        "function Card() { let target = getTarget(); return (() =>",
+        "function Card() { const { target } = props; return (() =>",
+    ],
+)
+def test_react_shadowed_bindings_keep_dynamic_target_allowance(
+    tmp_path: Path, binding: str
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    body = 'return <output mo-value={target} data-marimo-allow="*" />;'
+    if binding.endswith("=>"):
+        declaration = binding + f" {{ {body} }})(); }}"
+    else:
+        declaration = binding + f" {{ {body} }}"
+    root.joinpath("src/App.tsx").write_text(
+        'const target = "first";\n' + declaration, encoding="utf-8"
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == "*"

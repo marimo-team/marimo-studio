@@ -140,13 +140,15 @@ export const evaluateTypeScript = (
     if (scoped !== undefined) return scoped;
     const binding = modules.localBinding(expression, source) ??
       modules.importedBinding(expression, source);
-    return binding === null ? dynamic() : evaluateTypeScript(
-      binding.expression,
-      binding.source,
-      modules,
-      new Map(),
-      nextSeen,
-    );
+    return binding === null || binding.expression === null
+      ? dynamic()
+      : evaluateTypeScript(
+        binding.expression,
+        binding.source,
+        modules,
+        new Map(),
+        nextSeen,
+      );
   }
   if (ts.isPropertyAccessExpression(expression)) {
     return propertyValues(
