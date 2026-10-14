@@ -517,7 +517,7 @@ def install_browser_bridge(
     ] = {}
 
     def _studio_owner(consumer_id, selector):
-        identity = consumer_id + "\\0" + selector
+        identity = consumer_id + "\0" + selector
         digest = _studio_hashlib.sha256(identity.encode("utf-8")).hexdigest()
         return _StudioCellId(_studio_config_output_owner_prefix + digest)
 

@@ -263,3 +263,105 @@ def test_browser_notebook_places_its_bridge_after_cells_with_line_separators(
 
     ast.parse(browser)
     assert browser.index("if __name__") > browser.index("def _(text):")
+
+
+def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import ast
+    import sys
+    from contextlib import nullcontext
+    from types import ModuleType, SimpleNamespace
+    from typing import Any
+
+    from marimo._types.ids import CellId_t
+
+    from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
+
+    from .values_test_support import _native_output_context, _selectors
+
+    for name in ("_marimo_studio_values", "_marimo_studio_media"):
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+    generated = browser_notebook_source(
+        tmp_path / "analysis.py", "import marimo\napp = marimo.App()\n"
+    )
+    tree = ast.parse(generated)
+    bridge = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "__marimo_studio_values"
+    )
+    bridge.decorator_list = []
+    namespace: dict[str, Any] = {}
+    exec(
+        compile(ast.Module(body=[bridge], type_ignores=[]), "browser-notebook", "exec"),
+        namespace,
+    )
+    context = _native_output_context()
+    values = {"summary": "ready"}
+    monkeypatch.setattr(type(context), "globals", property(lambda _self: values))
+    context._kernel = SimpleNamespace(lock_globals=nullcontext)
+    monkeypatch.setattr(
+        "marimo._messaging.notification_utils.broadcast_notification", lambda _: None
+    )
+    renderer = KernelOutputRenderer(context)
+    try:
+        with context.install():
+            with context.with_cell_id(CellId_t("bridge")):
+                namespace["__marimo_studio_values"]()
+            functions = context.function_registry.namespaces[
+                "_marimo_studio_wasm"
+            ].functions
+            functions["configure_projections"](
+                {
+                    "revision": "revision-1",
+                    "generation": 0,
+                    "sites": [
+                        {
+                            "id": "site-summary",
+                            "kind": "output",
+                            "source": {"path": "index.html", "line": 1, "column": 1},
+                            "targets": ["summary"],
+                            "accept": [],
+                            "size": None,
+                        }
+                    ],
+                    "variables": ["summary"],
+                }
+            )
+            requests = [
+                {
+                    "siteId": "site-summary",
+                    "instanceId": "summary-host",
+                    "target": "summary",
+                }
+            ]
+            browser = functions["render_values"](
+                {
+                    "revision": "revision-1",
+                    "projections": requests,
+                    "active_projections": requests,
+                    "consumer_id": "preview-a",
+                }
+            )
+            kernel = renderer.render(
+                values,
+                _selectors("summary"),
+                ("summary",),
+                {},
+                consumer_id="preview-a",
+                max_output_bytes=10_000,
+            )
+            expected = (
+                "__marimo_studio_output_"
+                "8ff7d1d7aac8def97b7cdf595bbc75ccccec6e8a63c3ae41aa5861dfd70a8967"
+            )
+            assert browser["errors"] == {}
+            assert browser["outputs"]["summary"]["ownerCellId"] == expected
+            assert kernel.outputs["summary"].owner_cell_id == expected
+    finally:
+        with context.install():
+            renderer.close()
+            context.cell_lifecycle_registry.dispose(CellId_t("bridge"), deletion=False)
+        context.virtual_file_registry.shutdown()
