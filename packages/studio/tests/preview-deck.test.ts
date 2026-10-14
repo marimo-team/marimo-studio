@@ -703,3 +703,35 @@ it("addresses activated documents before rendering and rejects a retired selecti
     deck.dispose();
   }
 });
+
+it("asks for a page reload after the Studio server restarts", () => {
+  const editor = frame("complete");
+  const serverFrame = frame("complete");
+  const serverWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
+  Object.defineProperty(serverFrame, "contentWindow", {
+    configurable: true,
+    value: serverWindow,
+  });
+  const deck = previewDeck();
+  deck.attach(editor, new Map([["server", serverFrame]]));
+  const source = serverFrame.src;
+
+  deck.serverRestarted();
+
+  expect(deck.getSnapshot().states.server?.status).toMatchObject({
+    state: "error",
+    diagnostics: [
+      {
+        code: "server-restarted",
+        message: "The Studio server restarted, so this page lost its connection.",
+        hint: "Retry the preview to reload this page.",
+      },
+    ],
+  });
+  const reload = vi.fn();
+  vi.stubGlobal("location", { reload });
+  deck.reload();
+  expect(reload).toHaveBeenCalledOnce();
+  expect(serverFrame.src).toBe(source);
+  deck.dispose();
+});

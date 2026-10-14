@@ -54,6 +54,7 @@ interface WorkspacePreviewPort {
   ): void;
   presentationStreamAbandoned(view: string): void;
   presentationChanged(view: string, revision: string): void;
+  serverRestarted(): void;
 }
 
 interface WorkspaceSourcePort {
@@ -81,6 +82,20 @@ export const workspaceEventsUrl = (eventsUrl: string, activeView?: string): stri
     url.searchParams.set("marimo_studio_view", activeView);
   }
   return url.href;
+};
+
+// The server answers a stream URL issued by an earlier server process with 204,
+// which closes the EventSource for good. A proxy error or an expired sign-in
+// closes it the same way. A probe without a stream generation tells them apart
+// and opens no stream on a live server.
+export const workspaceStreamRetired = async (streamUrl: string): Promise<boolean> => {
+  const probe = new URL(streamUrl);
+  probe.searchParams.delete(WORKSPACE_STREAM_QUERY_PARAM);
+  try {
+    return (await fetch(probe, { cache: "no-store" })).status === 204;
+  } catch {
+    return false;
+  }
 };
 
 export class WorkspaceEventCoordinator {
@@ -205,7 +220,8 @@ export class WorkspaceEventCoordinator {
     const previous = this.events;
     this.pendingEvents?.close();
     this.options.preview.presentationBuildStarted(view);
-    const events = new EventSource(workspaceEventsUrl(this.options.eventsUrl, view));
+    const streamUrl = workspaceEventsUrl(this.options.eventsUrl, view);
+    const events = new EventSource(streamUrl);
     this.pendingEvents = previous === undefined ? undefined : events;
     if (previous === undefined) {
       this.events = events;
@@ -251,10 +267,17 @@ export class WorkspaceEventCoordinator {
         if (events.readyState !== EventSource.CLOSED) {
           return;
         }
-        console.warn("Studio lost its workspace event stream and will reconnect");
-        this.reconnect = setTimeout(
-          () => this.connect(undefined, connectionReady, this.notebookMutationGeneration),
-          this.reconnects.next(),
+        void workspaceStreamRetired(streamUrl).then((retired) =>
+          pending(() => {
+            if (retired) {
+              this.options.preview.serverRestarted();
+              return;
+            }
+            this.reconnect = setTimeout(
+              () => this.connect(undefined, connectionReady, this.notebookMutationGeneration),
+              this.reconnects.next(),
+            );
+          }),
         );
       }),
     );

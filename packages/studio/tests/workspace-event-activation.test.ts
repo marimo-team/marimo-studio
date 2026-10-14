@@ -344,6 +344,7 @@ it("cancels an older selection before a newer unavailable activation settles", a
       presentationBuildCompleted: vi.fn(),
       presentationStreamAbandoned: vi.fn(),
       presentationChanged: vi.fn(),
+      serverRestarted: vi.fn(),
     },
     source: { reconcile: vi.fn(), externalChanges: vi.fn() },
     acknowledge,

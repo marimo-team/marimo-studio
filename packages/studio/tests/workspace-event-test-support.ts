@@ -117,6 +117,7 @@ export const setup = (
     presentationBuildCompleted: vi.fn(),
     presentationStreamAbandoned: vi.fn(),
     presentationChanged: vi.fn(),
+    serverRestarted: vi.fn(),
   };
   const source = { reconcile: vi.fn(), externalChanges: vi.fn() };
   const acknowledge = vi.fn(

@@ -9,6 +9,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 it("reconnects the workspace stream after a committed view selection", async () => {
@@ -387,7 +388,10 @@ it("ignores callbacks from a replaced stream", async () => {
 
 it("replaces a stream the browser closed and resumes its events", async () => {
   vi.useFakeTimers();
-  const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 502 })),
+  );
   const { coordinator, source } = setup();
   const closed = EventSourceStub.instances[0]!;
   closed.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
@@ -408,12 +412,14 @@ it("replaces a stream the browser closed and resumes its events", async () => {
     { path: "index.html", revision: "sha256:next" },
   ]);
   coordinator.dispose();
-  warning.mockRestore();
 });
 
 it("backs off while a replacement stream keeps closing", async () => {
   vi.useFakeTimers();
-  const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 502 })),
+  );
   const { coordinator } = setup();
 
   EventSourceStub.instances[0]!.fail();
@@ -428,7 +434,23 @@ it("backs off while a replacement stream keeps closing", async () => {
   EventSourceStub.instances[2]!.fail();
   await vi.advanceTimersByTimeAsync(60_000);
   expect(EventSourceStub.instances).toHaveLength(3);
-  warning.mockRestore();
+});
+
+it("reports a server restart and stops reconnecting to the earlier process", async () => {
+  vi.useFakeTimers();
+  // The server answers a stream URL from an earlier process with 204.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 204 })),
+  );
+  const { coordinator, preview } = setup();
+
+  EventSourceStub.instances[0]!.fail();
+  await vi.advanceTimersByTimeAsync(60_000);
+
+  expect(preview.serverRestarted).toHaveBeenCalledOnce();
+  expect(EventSourceStub.instances).toHaveLength(1);
+  coordinator.dispose();
 });
 
 it("forwards build source locations to the presentation diagnostic", () => {

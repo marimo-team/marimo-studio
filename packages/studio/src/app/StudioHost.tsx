@@ -28,7 +28,7 @@ import { StudioThemeProvider, useResolvedStudioTheme } from "../shared/theme.tsx
 import { useControllerSnapshot } from "../shared/useControllerSnapshot.ts";
 import { StudioRoutes } from "./routes.ts";
 import { StudioApp, type StudioOptions } from "./StudioApp.tsx";
-import { workspaceEventsUrl } from "./workspace-event-coordinator.ts";
+import { workspaceEventsUrl, workspaceStreamRetired } from "./workspace-event-coordinator.ts";
 
 interface StudioHostProps extends StudioOptions {
   editorFrame: HTMLIFrameElement;
@@ -272,14 +272,20 @@ export const StudioHost = ({
     let events: EventSource;
     let reconnect: ReturnType<typeof setTimeout> | undefined;
     const connect = () => {
-      const stream = new EventSource(workspaceEventsUrl(host.urls.events));
+      const streamUrl = workspaceEventsUrl(host.urls.events);
+      const stream = new EventSource(streamUrl);
       events = stream;
       stream.addEventListener("open", () => reconnects.reset());
       // A non-200 or non-stream response closes an EventSource for good.
       stream.addEventListener("error", () => {
-        if (stream.readyState === EventSource.CLOSED) {
-          reconnect = setTimeout(connect, reconnects.next());
+        if (stream.readyState !== EventSource.CLOSED) {
+          return;
         }
+        void workspaceStreamRetired(streamUrl).then((retired) => {
+          if (!retired && events === stream && !closed) {
+            reconnect = setTimeout(connect, reconnects.next());
+          }
+        });
       });
       stream.addEventListener("activate", (event) => {
         const payload = parseActiveViewRequest(
@@ -290,8 +296,10 @@ export const StudioHost = ({
         }
       });
     };
+    let closed = false;
     connect();
     return () => {
+      closed = true;
       clearTimeout(reconnect);
       events.close();
     };

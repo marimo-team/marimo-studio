@@ -67,6 +67,21 @@ export interface PreviewDeckSnapshot {
 type Listener = () => void;
 type ActivationMilestone = "document" | "rendered";
 
+const serverRestartedStatus = (view: string): PreviewFrameState["status"] => ({
+  state: "error",
+  message: "Needs repair",
+  diagnostics: [
+    {
+      code: "server-restarted",
+      severity: "error",
+      message: "The Studio server restarted, so this page lost its connection.",
+      hint: "Retry the preview to reload this page.",
+      view,
+      scope: "runtime",
+    },
+  ],
+});
+
 export class PreviewDeck {
   private readonly frames: PreviewFrames;
   private readonly listeners = new Set<Listener>();
@@ -80,6 +95,7 @@ export class PreviewDeck {
   private stopEditorQuerySync: (() => void) | undefined;
   private editorBindingGeneration = 0;
   private editorSessionId: string | undefined;
+  private restarted = false;
   private readonly notebookMutations: NotebookMutationCoordinator;
   private readonly presentations = new Map<
     string,
@@ -353,7 +369,16 @@ export class PreviewDeck {
     this.frames.slots.forEach(({ controller }) => controller?.requestResize());
   }
 
+  serverRestarted(): void {
+    this.restarted = true;
+    this.publish();
+  }
+
   reload(): void {
+    if (this.restarted) {
+      globalThis.location.reload();
+      return;
+    }
     const active = this.frames.find(this.runtime, this.view);
     const controller = this.ensure(this.runtime, this.view);
     if (active) {
@@ -771,7 +796,14 @@ export class PreviewDeck {
   private updateSnapshot(): void {
     this.snapshot = {
       runtime: this.runtime,
-      states: Object.fromEntries(this.states),
+      states: Object.fromEntries(
+        [...this.states].map(([runtime, state]) => [
+          runtime,
+          this.restarted
+            ? { ...state, progress: null, status: serverRestartedStatus(this.view) }
+            : state,
+        ]),
+      ),
       frames: this.frames.slots.map(({ controller, id, runtime, stale, view }) => {
         const active = runtime === this.runtime && view === this.view;
         return {
