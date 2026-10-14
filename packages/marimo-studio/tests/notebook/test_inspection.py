@@ -1214,3 +1214,53 @@ def test_inspecting_a_markdown_notebook_names_the_file_and_the_conversion(
         f"Expected a Python marimo notebook: {notebook.resolve()}. "
         "Convert other notebook formats with `marimo convert`."
     )
+
+
+@pytest.mark.parametrize(
+    ("tail", "expected"),
+    [
+        ("await _pending", True),
+        ("_alias = _pending\nawait _alias", True),
+        ("_done = True", False),
+        ("_pending = None\n_done = True", False),
+    ],
+    ids=["awaited", "awaited-alias", "unawaited", "rebound"],
+)
+def test_starter_output_cells_follow_awaited_local_coroutines(
+    tmp_path: Path,
+    tail: str,
+    expected: bool,
+) -> None:
+    from marimo_studio.view_providers import StarterCellTarget, StarterContext
+
+    body = (
+        "async def _emit(output):\n"
+        "    output.append('visible output')\n"
+        "_pending = _emit(mo.output)\n"
+        f"{tail}\n"
+        "_done = True\n"
+        "return"
+    )
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        _APP
+        + _cell("import marimo as mo\nreturn (mo,)")
+        + f"\n@app.cell\nasync def summary(mo):\n{indent(body, '    ')}\n"
+        + _RUN_GUARD,
+        encoding="utf-8",
+    )
+    spec = inspect_notebook(notebook)
+    summary = spec.cells[1]
+    context = StarterContext(
+        "dashboard",
+        notebook.name,
+        spec,
+        {
+            cell.ref: StarterCellTarget(cell.ref, cell.name or f"cell_{cell.index}")
+            for cell in spec.cells
+        },
+    )
+    assert summary.may_display_output is expected
+    assert [cell.target for cell in context.output_cells] == (
+        ["summary"] if expected else []
+    )

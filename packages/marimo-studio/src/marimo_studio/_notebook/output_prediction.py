@@ -380,7 +380,10 @@ class _PossibleOutputVisitor(ast.NodeVisitor):
             for function in self._functions(node.func.id):
                 if (
                     isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and self._is_generator(function)
+                    and (
+                        isinstance(function, ast.AsyncFunctionDef)
+                        or self._is_generator(function)
+                    )
                 ) or id(node) in self._deferred_call_results:
                     deferred_calls.append(
                         _DeferredCall(
@@ -790,6 +793,18 @@ class _PossibleOutputVisitor(ast.NodeVisitor):
             self._visit_call(node.value, await_async=True)
             return
         self.visit(node.value)
+        for value in self._binding_values(self._binding(node.value)):
+            if (
+                isinstance(value, _DeferredCall)
+                and isinstance(value.function, ast.AsyncFunctionDef)
+                and not self._is_generator(value.function)
+            ):
+                self._execute_function(
+                    value.function,
+                    value.call,
+                    consume_result=False,
+                    bindings=value.bindings,
+                )
 
     def _bind_target(
         self,
@@ -967,6 +982,10 @@ class _PossibleOutputVisitor(ast.NodeVisitor):
                 self._consume_adapter(node)
             else:
                 assert isinstance(node, _DeferredCall)
+                if isinstance(
+                    node.function, ast.AsyncFunctionDef
+                ) and not self._is_generator(node.function):
+                    return
                 self._execute_function(
                     node.function,
                     node.call,
