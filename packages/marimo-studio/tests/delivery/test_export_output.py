@@ -251,7 +251,7 @@ def test_export_rejects_source_changes_at_commit_and_preserves_destination(
     changed: str,
 ) -> None:
     output = _existing_export(notebook_path, tmp_path)
-    expected = output.joinpath("index.html").read_bytes()
+    expected = _files(output)
     source = _tracked_source(notebook_path, changed)
 
     def change_source(event: StaticExportProgress) -> None:
@@ -265,7 +265,15 @@ def test_export_rejects_source_changes_at_commit_and_preserves_destination(
             notebook_path, output, runtime="wasm", force=True, progress=change_source
         )
 
-    assert output.joinpath("index.html").read_bytes() == expected
+    assert _files(output) == expected
+
+
+def _files(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
 
 
 @pytest.mark.parametrize("changed", ("view", "public", "notebook", "generation"))

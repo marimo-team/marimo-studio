@@ -518,4 +518,10 @@ def _assert_stopped(pid: int) -> None:
     except psutil.NoSuchProcess:
         return
     _gone, alive = psutil.wait_procs([process], timeout=2)
-    assert alive == []
+    # An orphan stays a zombie until its new parent reaps it. It no longer runs.
+    running = []
+    for survivor in alive:
+        with suppress(psutil.NoSuchProcess):
+            if survivor.status() != psutil.STATUS_ZOMBIE:
+                running.append(survivor)
+    assert running == []

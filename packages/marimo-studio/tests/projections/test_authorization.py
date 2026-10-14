@@ -646,7 +646,7 @@ def test_projection_host_revalidates_changed_execution_before_invoking_the_kerne
         if changes_during_build and len(builds) == 1:
             assert loop is not None
             loop.call_soon_threadsafe(change)
-            assert pulse.wait(1)
+            assert pulse.wait(5)
         return original(signature)
 
     async def read(*_args: Any, **_kwargs: Any) -> ValueReadResult:

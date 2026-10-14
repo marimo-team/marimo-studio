@@ -406,9 +406,11 @@ def test_timed_out_connection_close_responses_release_their_workers(
 
     async def exercise() -> object:
         assert await asyncio.gather(slow(), slow()) == ["request-timeout"] * 2
-        if not await asyncio.to_thread(slots.acquire, timeout=1):
-            raise AssertionError("timed-out request kept its worker")
-        slots.release()
+        # Both workers must be free, so each timed-out request released its own.
+        acquired = [await asyncio.to_thread(slots.acquire, timeout=1) for _ in range(2)]
+        for _ in range(sum(acquired)):
+            slots.release()
+        assert all(acquired), "timed-out request kept its worker"
         return await browser_transport.request_json(connection, "/fast", timeout=1)
 
     try:

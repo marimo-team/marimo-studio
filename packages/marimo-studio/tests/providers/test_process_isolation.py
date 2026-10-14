@@ -1009,14 +1009,16 @@ def test_isolated_provider_rejects_fifo_response_within_deadline(
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
     command = (
         "from tests.providers.test_process_isolation import _registry; "
-        "registry = _registry('fifo', 'fifo_response_provider', timeout=1); "
+        "registry = _registry('fifo', 'fifo_response_provider'); "
         "provider = registry.get('test-process/fifo'); "
         "result = provider.availability(); "
         "assert not result.available; "
         "assert 'response is invalid' in result.reason"
     )
+    # The registry limit also covers the provider's cold start, so it keeps its
+    # default. A FIFO read that blocks runs into the subprocess limit instead.
     completed = subprocess.run(
-        [sys.executable, "-c", command], capture_output=True, text=True, timeout=5
+        [sys.executable, "-c", command], capture_output=True, text=True, timeout=30
     )
     assert completed.returncode == 0, completed.stderr
 

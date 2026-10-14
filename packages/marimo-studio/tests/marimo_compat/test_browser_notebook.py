@@ -263,7 +263,8 @@ def test_browser_notebook_places_its_bridge_after_cells_with_line_separators(
     browser = browser_notebook_source(tmp_path / "notebook.py", source)
 
     ast.parse(browser)
-    assert browser.index("if __name__") > browser.index("def _(text):")
+    bridge = browser.index("def __marimo_studio_values():")
+    assert browser.index("def _(text):") < bridge < browser.index("if __name__")
 
 
 def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
