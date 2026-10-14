@@ -305,15 +305,15 @@ class SourceChangeProducer:
             document_files = _validated_document_files(project, inspection)
             scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
             excluded_roots = (project_artifacts(project),)
-            if (
-                observed_tree is not None
+            after = _tree_stamps((*scope_files, *roots), excluded_roots)
+            tree = (
+                observed_tree
+                if observed_tree is not None
                 and scope_files == self._scope_files
                 and roots == self._roots
                 and excluded_roots == self._excluded_roots
-            ):
-                tree = observed_tree
-            else:
-                tree = _tree_stamps((*scope_files, *roots), excluded_roots)
+                else after
+            )
             inputs = _input_paths_from_tree(project, input_files, roots, tree)
             input_id = project_revision(
                 project,
@@ -352,7 +352,7 @@ class SourceChangeProducer:
         self._scope_files = scope_files
         self._roots = roots
         self._excluded_roots = excluded_roots
-        if _changed_during_inspection(before, tree):
+        if _changed_during_inspection(before, after):
             # The provider may have read the earlier content. An empty tree and
             # catalog make the next scan reinspect what is on disk now.
             self._tree = {}
@@ -671,9 +671,15 @@ def _changed_during_inspection(
     after: dict[_WatchKey, _TreeStamp],
 ) -> bool:
     observed = {path: (kind, stamp) for (kind, path), stamp in before.items()}
+    current = {path: (kind, stamp) for (kind, path), stamp in after.items()}
+    shared = observed.keys() & current.keys()
+    if any(observed[path] != current[path] for path in shared):
+        return True
+    # A path that appeared or vanished counts only below a folder both scans
+    # walked, so files outside the inspected scope stay out of the check.
+    walked = {path for path in shared if current[path][1] == "directory"}
     return any(
-        observed.get(path, (kind, stamp)) != (kind, stamp)
-        for (kind, path), stamp in after.items()
+        not walked.isdisjoint(path.parents) for path in observed.keys() ^ current.keys()
     )
 
 

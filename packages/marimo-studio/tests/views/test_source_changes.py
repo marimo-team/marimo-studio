@@ -123,6 +123,38 @@ def test_an_edit_during_inspection_triggers_reinspection(
     assert producer.poll() is None
 
 
+def test_a_file_created_in_a_watched_folder_during_inspection_triggers_reinspection(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = created_one_view(notebook_path)
+    project = studio.views["dashboard"]
+    (project.root / "src").mkdir()
+    (project.root / "src" / "app.js").write_text("export {};\n", encoding="utf-8")
+    provider = _watch_only_registry(monkeypatch, project.provider, PurePosixPath("src"))
+    inspect = provider.inspect
+
+    def inspect_then_create(request: InspectionRequest) -> object:
+        inspection = inspect(request)
+        if provider.inspections == 2:
+            (project.root / "src" / "chart.js").write_text(
+                "export {};\n", encoding="utf-8"
+            )
+        return inspection
+
+    monkeypatch.setattr(provider, "inspect", inspect_then_create)
+    producer = SourceChangeProducer(studio, project.name)
+    (project.root / "src" / "app.js").write_text(
+        "export const a = 1;\n", encoding="utf-8"
+    )
+
+    assert producer.poll() is not None
+    assert provider.inspections == 2
+    assert not producer.catalog_current()
+    assert producer.poll() is not None
+    assert provider.inspections == 3
+
+
 def test_publication_hold_release_and_expiry_trigger_reconciliation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
