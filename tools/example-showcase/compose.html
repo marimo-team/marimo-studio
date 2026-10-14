@@ -94,12 +94,14 @@
         letter-spacing: -0.005em;
       }
 
-      .card.is-right header {
-        flex-direction: row-reverse;
+      /* A fanned card keeps its label and detail together on its visible edge. */
+      .card[data-side="left"] header {
+        justify-content: flex-start;
       }
 
-      .card.is-quiet header span:last-child {
-        visibility: hidden;
+      .card[data-side="right"] header {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
       }
 
       .card header span:last-child {
@@ -137,11 +139,11 @@
       /* The wall bleeds past the frame, so its edges fade out. */
       body[data-layout="wall"] #canvas {
         -webkit-mask-image:
-          linear-gradient(to bottom, #000 74%, transparent 99%),
+          linear-gradient(to bottom, #000 84%, transparent 100%),
           linear-gradient(to right, transparent 0%, #000 7%, #000 93%, transparent 100%);
         -webkit-mask-composite: source-in;
         mask-image:
-          linear-gradient(to bottom, #000 74%, transparent 99%),
+          linear-gradient(to bottom, #000 84%, transparent 100%),
           linear-gradient(to right, transparent 0%, #000 7%, #000 93%, transparent 100%);
         mask-composite: intersect;
       }
@@ -183,9 +185,8 @@
           ? ["Notebook", entry.notebook]
           : [found.label, found.technologies.join(" · ")];
         const element = document.createElement("section");
-        element.className = ["card", side === "right" && "is-right", head && "is-notebook"]
-          .filter(Boolean)
-          .join(" ");
+        element.className = head ? "card is-notebook" : "card";
+        element.dataset.side = side;
         element.innerHTML = `<header><span>${label}</span><span>${detail}</span></header><img src="shots/${family}--${view}.png" alt="">`;
         Object.assign(element.style, style);
         document.getElementById("canvas").append(element);
@@ -207,66 +208,38 @@
       );
 
       const layouts = {
-        // One notebook raised behind the front view, its other views fanned out.
+        // One notebook raised behind its views, which fan out in an arc beneath
+        // it. The inner cards sit in front, so each card's header aligns to the
+        // outer edge that stays visible.
         fan: () => {
           const family = params.get("family") ?? "athletes";
-          const [left, front, right] =
-            (params.get("order") ?? "").split(",").filter(Boolean).length === 3
-              ? params.get("order").split(",")
-              : [families[family][0], families[family][1], families[family][2]];
-          const slots = [
-            {
-              id: `${family}/notebook`,
-              x: 0,
-              y: -222,
-              z: -700,
-              ry: 0,
-              rz: 0,
-              width: 1180,
-              depth: 0,
-              side: "left",
-            },
-            {
-              id: `${family}/${left}`,
-              x: -620,
-              y: 88,
-              z: -280,
-              ry: 24,
-              rz: -3,
-              width: 1000,
-              depth: 2,
-              side: "left",
-              quiet: true,
-            },
-            {
-              id: `${family}/${right}`,
-              x: 620,
-              y: 88,
-              z: -280,
-              ry: -24,
-              rz: 3,
-              width: 1000,
-              depth: 2,
-              side: "right",
-              quiet: true,
-            },
-            {
-              id: `${family}/${front}`,
-              x: 0,
-              y: 132,
-              z: 0,
-              ry: 0,
-              rz: 0,
-              width: 1060,
-              depth: 7,
-              side: "left",
-            },
-          ];
-          for (const slot of slots) {
-            card(slot.id, place(slot), slot.side);
-            if (slot.quiet)
-              document.getElementById("canvas").lastElementChild.classList.add("is-quiet");
-          }
+          const order = (params.get("order") ?? "").split(",").filter(Boolean);
+          const views = order.length > 0 ? order : families[family];
+          const middle = (views.length - 1) / 2;
+          card(
+            `${family}/notebook`,
+            place({ x: 0, y: -250, z: -760, ry: 0, rz: 0, width: 1180, depth: 0 }),
+            "spread",
+          );
+          views
+            .map((view, index) => ({ view, offset: index - middle }))
+            .sort((left, right) => Math.abs(right.offset) - Math.abs(left.offset))
+            .forEach(({ view, offset }, depth) => {
+              const reach = Math.abs(offset);
+              card(
+                `${family}/${view}`,
+                place({
+                  x: offset * 530,
+                  y: 60 + reach * 34,
+                  z: -reach * 190,
+                  ry: -offset * 13,
+                  rz: offset * 1.6,
+                  width: 880,
+                  depth: depth + 1,
+                }),
+                offset < 0 ? "left" : "right",
+              );
+            });
         },
         // Every notebook heads a column, with its views stacked beneath it.
         wall: () => {
@@ -276,17 +249,19 @@
           const width = 640,
             gap = 44,
             height = width * 0.625 + 34;
-          Object.entries(families).forEach(([family, views], c) =>
+          const columns = Object.entries(families);
+          const rows = Math.max(...columns.map(([, views]) => views.length + 1));
+          columns.forEach(([family, views], c) =>
             ["notebook", ...views].forEach((view, r) => {
               card(
                 `${family}/${view}`,
                 {
                   ...size(width),
-                  left: `${(c - 1.5) * (width + gap)}px`,
-                  top: `${(r - 1.5) * (height + gap)}px`,
+                  left: `${(c - (columns.length - 1) / 2) * (width + gap)}px`,
+                  top: `${(r - (rows - 1) / 2) * (height + gap)}px`,
                   transform: "translate(-50%, -50%)",
                 },
-                "left",
+                "spread",
               );
               plane.append(document.getElementById("canvas").lastElementChild);
             }),
