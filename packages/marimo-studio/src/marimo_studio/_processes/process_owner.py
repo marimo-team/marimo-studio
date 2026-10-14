@@ -128,7 +128,12 @@ class _PosixProcessOwner(_ProcessOwnerBase):
             raise group_error
 
     def owns_process_group(self, group: int) -> bool:
-        """Return whether one stable live group snapshot carries this nonce."""
+        """Return whether ``group`` has live members this owner launched.
+
+        An unreaped leader proves the group is this owner's, so descendants
+        that cleared their environment are covered. After the leader is
+        reaped, every live member must carry this owner's nonce.
+        """
         try:
             import psutil
         except ImportError as error:
@@ -140,6 +145,8 @@ class _PosixProcessOwner(_ProcessOwnerBase):
             processes = _live_process_group_members(psutil, group)
             if processes is None or not processes:
                 return False
+            if self._leader_holds_group(psutil, group):
+                return True
             matches = [
                 _process_matches_token(
                     psutil,
@@ -158,6 +165,17 @@ class _PosixProcessOwner(_ProcessOwnerBase):
             ):
                 return all(match is True for match in matches)
         return False
+
+    def _leader_holds_group(self, psutil: Any, group: int) -> bool:
+        # The kernel keeps an unreaped child's ID, so its group ID cannot name
+        # a foreign group until the supervisor reaps the leader.
+        process = self._process
+        if process is None or process.pid != group or process.returncode is not None:
+            return False
+        try:
+            return psutil.Process(process.pid).ppid() == os.getpid()
+        except psutil.Error:
+            return False
 
     def _terminate_process_group(self, process: subprocess.Popen[bytes]) -> None:
         if not self._signal_process_group(process, signal.SIGTERM):

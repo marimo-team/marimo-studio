@@ -79,6 +79,7 @@ def test_process_cleanup_does_not_signal_a_reused_foreign_group() -> None:
         subprocess.Popen[bytes],
         SimpleNamespace(
             pid=victim.pid,
+            returncode=0,
             poll=lambda: 0,
             kill=lambda: pytest.fail("foreign leader reached direct cleanup"),
         ),
@@ -474,3 +475,48 @@ def test_process_group_signal_accepts_an_exited_zombie_group(
         process,
         signal.SIGTERM,
     )
+
+
+@_POSIX_ONLY
+def test_process_supervisor_stops_a_group_member_with_a_cleared_environment(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "worker.pid"
+    worker = (
+        "import os, pathlib, time; "
+        f"pathlib.Path({str(marker)!r}).write_text(str(os.getpid())); "
+        "time.sleep(30)"
+    )
+    leader = (
+        "import pathlib, subprocess, sys, time; "
+        f"subprocess.Popen([sys.executable, '-c', {worker!r}], env={{}}, "
+        "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, "
+        "stderr=subprocess.DEVNULL); "
+        "deadline = time.monotonic() + 5\n"
+        f"while not pathlib.Path({str(marker)!r}).is_file() "
+        "and time.monotonic() < deadline: time.sleep(0.01)"
+    )
+
+    result = process_supervisor.ProcessSupervisor().run(
+        [sys.executable, "-c", leader], timeout=10
+    )
+
+    pid = int(marker.read_text())
+    try:
+        assert result.returncode == 0
+        deadline = time.monotonic() + 2
+        while _running(pid) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not _running(pid)
+    finally:
+        with suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+
+def _running(pid: int) -> bool:
+    import psutil
+
+    try:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
