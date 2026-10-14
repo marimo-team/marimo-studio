@@ -49,6 +49,7 @@ from marimo_studio._views.revisions import (
 )
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
+from marimo_studio.errors._internal import ViewRetirementInProgress
 
 _T = TypeVar("_T")
 _EVENT_POLL_INTERVAL = 0.05
@@ -295,11 +296,16 @@ async def change_events(
     try:
         if browser is not None and not await browser.reserve():
             return
-        source_subscription = (
-            await development.subscribe(studio, selected_view)
-            if studio is not None and development is not None
-            else None
-        )
+        try:
+            source_subscription = (
+                await development.subscribe(studio, selected_view)
+                if studio is not None and development is not None
+                else None
+            )
+        except ViewRetirementInProgress:
+            # The response has already started. End it so the browser
+            # reconnects after the removal or rename settles.
+            return
         sources = (
             await asyncio.to_thread(SourceChangeProducer, studio, selected_view)
             if studio is not None and source_subscription is None

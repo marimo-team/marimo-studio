@@ -563,3 +563,28 @@ def test_cancellation_while_a_producer_stops_still_disconnects_browser(
         await agents.close()
 
     asyncio.run(exercise())
+
+
+def test_a_stream_for_a_retiring_view_ends_without_an_error(
+    notebook_path: Path,
+) -> None:
+    from marimo_studio._server.development.coordinator import DevelopmentCoordinator
+
+    studio = configured(notebook_path)
+
+    async def exercise() -> list[bytes]:
+        development = DevelopmentCoordinator()
+        try:
+            async with development.retiring_view("dashboard"):
+                return [
+                    event
+                    async for event in dev.change_events(
+                        studio,
+                        view_name="dashboard",
+                        development=development,
+                    )
+                ]
+        finally:
+            await development.close()
+
+    assert asyncio.run(asyncio.wait_for(exercise(), timeout=5)) == []
