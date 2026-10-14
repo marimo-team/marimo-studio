@@ -1,0 +1,34 @@
+packages/studio/tests/preview-controller.test.ts
+  s_a83325528b47a1::t_37cc991893c520 581,583,590-591
+packages/studio/tests/preview-deck-diagnostics.test.ts
+  s_a83325528b47a1::t_7f4f18c3ee9028 6-12
+  s_a83325528b47a1::t_5439505c9e323e 67
+packages/studio/tests/preview-deck-editor-reload.test.ts
+  s_a83325528b47a1::t_13490da9edb3c1 7
+  s_a83325528b47a1::t_db3620d50da596 349
+packages/studio/tests/preview-deck.test.ts
+  s_a83325528b47a1::t_89727dab766545 7
+  s_a83325528b47a1::t_8e63c4dee04699 709
+  s_a83325528b47a1::t_00c5f84367a46d 710
+  s_a83325528b47a1::t_69f9ef5c08478b 728
+packages/studio/tests/preview-test-support.ts
+  s_a83325528b47a1::t_c750ee931a8114 71,81
+  s_a83325528b47a1::t_a9084d6102575a 168,179-199
+  s_a83325528b47a1::t_7ce319cda8b7d7 169-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ba60674c63c88797f2e16e4d1be8d5db0f578277",
+  "prompts": {},
+  "sessions": {
+    "s_a83325528b47a1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "agent-712fbb4d-facd-405b-9131-6d685fa8c9a1",
+        "model": "unknown"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
