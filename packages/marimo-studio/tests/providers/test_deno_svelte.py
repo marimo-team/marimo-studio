@@ -617,3 +617,34 @@ def test_svelte_object_prototype_keys_create_no_targets(
     assert inspection.diagnostics == ()
     (site,) = inspection.sites
     assert site.targets == expected
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+@pytest.mark.parametrize(
+    "key,expected",
+    [
+        ('const key = "selected";', ("first",)),
+        ("const key = getKey();", "*"),
+    ],
+    ids=("resolved-key", "dynamic-key"),
+)
+def test_svelte_computed_object_keys_use_their_values(
+    tmp_path: Path, key: str, expected: object
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    root.joinpath("src/App.svelte").write_text(
+        f'<script lang="ts">\n{key}\nconst choices = {{ [key]: "first" }};\n'
+        "</script>\n"
+        '<main id="app-shell"><output mo-value={choices.selected} '
+        'data-marimo-allow="*" /></main>',
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == expected

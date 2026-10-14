@@ -246,6 +246,21 @@ const combine = (results: readonly StaticResult[]): StaticResult => {
   );
 };
 
+/** Resolve a computed `[key]` to one string, or null when it is not static. */
+const computedPropertyName = (
+  key: AstNode | undefined,
+  document: SvelteDocument,
+  scope: Scope,
+  seen: ReadonlySet<object>,
+): string | null => {
+  if (key === undefined) return null;
+  const value = evaluate(key, document, scope, seen);
+  return value.status === "bounded" && value.values.length === 1 &&
+      value.values[0].kind === "string"
+    ? value.values[0].value
+    : null;
+};
+
 const propertyName = (node: AstNode | undefined): string | null => {
   if (node?.type === "Identifier" && typeof node.name === "string") {
     return node.name;
@@ -308,7 +323,9 @@ const evaluate = (
       if (property.type !== "Property" || property.value === undefined) {
         return dynamic();
       }
-      const name = propertyName(property.key);
+      const name = property.computed === true
+        ? computedPropertyName(property.key, document, scope, nextSeen)
+        : propertyName(property.key);
       if (name === null) return dynamic();
       // A literal `__proto__: value` entry sets the prototype and creates no
       // own property.
