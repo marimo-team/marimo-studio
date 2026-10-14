@@ -189,17 +189,6 @@ class Workspace:
         """Return a handle for one named view."""
         if not isinstance(name, str) or not name:
             raise ValueError("view name must be a non-empty string")
-        if self._catalog_generation is None:
-            # Pin the unconfigured catalog so a handle taken before the view
-            # exists stops matching once configuration or creation lands.
-            return View._create(
-                self,
-                name,
-                owner=observed_view_owner(
-                    unconfigured_catalog_generation(self.notebook),
-                    None,
-                ),
-            )
         try:
             studio = self._current_workspace()
         except ConfigurationError:
@@ -207,7 +196,9 @@ class Workspace:
                 self,
                 name,
                 owner=observed_view_owner(
-                    self._catalog_generation,
+                    self._catalog_generation
+                    if self._catalog_generation is not None
+                    else unconfigured_catalog_generation(self.notebook),
                     self._fallback_view_generation(name),
                 ),
             )

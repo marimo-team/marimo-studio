@@ -876,3 +876,17 @@ def test_project_configured_views_outside_the_notebook_folder_are_readable(
     assert asyncio.run(exercise()) == ["index.html", "view.toml"]
     assert (tmp_path / "views" / "dashboard" / "view.toml").is_file()
     assert not (notebook.parent / "dashboard").exists()
+
+
+def test_view_captures_configuration_created_after_opening_the_workspace(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(notebook_source(tmp_path / "marker"), encoding="utf-8")
+
+    async def exercise() -> str:
+        workspace = studio_authoring.open_workspace(notebook)
+        await studio_authoring.open_workspace(notebook).create_view("dashboard")
+        return (await workspace.view("dashboard").read("index.html")).content
+
+    assert "Dashboard" in asyncio.run(exercise())
