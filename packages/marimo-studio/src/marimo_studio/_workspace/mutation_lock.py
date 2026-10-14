@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import errno
 import os
+import stat
 import threading
 from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from weakref import WeakValueDictionary
 
-from marimo_studio._filesystem._entry import is_link
+from marimo_studio._filesystem._entry import is_link, open_directory
 from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.ignore import ignore_generated_directory
@@ -43,6 +45,78 @@ def _held_paths() -> set[Path]:
     return _HELD.paths
 
 
+# The lock tree starts at the nearest existing ancestor of the view root.
+# Opening it must refuse a symlink swapped in at any ancestor while needing
+# only search permission on the folders above it, which a notebook below a
+# folder it can traverse but not list has. macOS refuses links across the
+# whole path with O_NOFOLLOW_ANY. Linux walks the ancestors with O_PATH.
+_NOFOLLOW_ANY = getattr(os, "O_NOFOLLOW_ANY", 0)
+_ROOT_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+    | _NOFOLLOW_ANY
+)
+_ANCESTOR_FLAGS = (
+    (getattr(os, "O_PATH", 0) or os.O_RDONLY)
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+)
+
+
+class _MutationTree(FileTree):
+    def _open_root(self) -> int:
+        descriptor = (
+            self._open_without_links()
+            if _NOFOLLOW_ANY
+            else self._open_through_ancestors()
+        )
+        try:
+            state = os.fstat(descriptor)
+            if not stat.S_ISDIR(state.st_mode):
+                raise UnsafePathError(f"Path is not a directory: {self.root}")
+            self._bind(state)
+        except BaseException:
+            os.close(descriptor)
+            raise
+        return descriptor
+
+    def _open_without_links(self) -> int:
+        try:
+            return os.open(self.root, _ROOT_FLAGS)
+        except OSError as error:
+            if error.errno in {errno.ELOOP, errno.ENOTDIR}:
+                raise UnsafePathError(f"Path has a symlink: {self.root}") from error
+            raise
+
+    def _open_through_ancestors(self) -> int:
+        current = Path(self.root.anchor)
+        descriptor = os.open(current, _ANCESTOR_FLAGS)
+        try:
+            for component in self.root.parts[1:-1]:
+                current /= component
+                try:
+                    child = os.open(component, _ANCESTOR_FLAGS, dir_fd=descriptor)
+                except OSError as error:
+                    if error.errno in {errno.ELOOP, errno.ENOTDIR}:
+                        raise UnsafePathError(
+                            f"Path is a symlink: {current}"
+                        ) from error
+                    raise
+                os.close(descriptor)
+                descriptor = child
+                # Linux O_PATH with O_NOFOLLOW opens a symlink itself.
+                state = os.fstat(descriptor)
+                if is_link(state) or not stat.S_ISDIR(state.st_mode):
+                    raise UnsafePathError(f"Path is a symlink: {current}")
+            if len(self.root.parts) == 1:
+                return open_directory(self.root, path=self.root)
+            return open_directory(self.root.name, path=self.root, parent=descriptor)
+        finally:
+            os.close(descriptor)
+
+
 @contextmanager
 def _mutation_lock(
     view_root: Path,
@@ -52,17 +126,16 @@ def _mutation_lock(
 ) -> Generator[bool, None, None]:
     root = view_root.absolute()
     lock_path = root / ".locks" / filename
-    # The lock tree starts at the nearest existing ancestor of the view root,
-    # because opening the ancestors above it would need read permission on
-    # folders a notebook reaches with search permission alone. lstat needs
-    # only search permission, so it refuses a link swapped in above that root.
+    # Start at the nearest existing ancestor. Search handles preserve access
+    # below folders the notebook can traverse but cannot list. Windows path
+    # operations also need each ancestor's reparse metadata checked here.
     boundary = root.parent
     while not boundary.is_dir() and boundary != boundary.parent:
         boundary = boundary.parent
     for ancestor in (*reversed(boundary.parents), boundary):
         if is_link(ancestor.lstat()):
             raise UnsafePathError(f"Path is a symlink: {ancestor}")
-    tree = FileTree(boundary)
+    tree = _MutationTree(boundary)
     thread_lock = _thread_lock(lock_path)
     if not thread_lock.acquire(blocking=blocking):
         yield False

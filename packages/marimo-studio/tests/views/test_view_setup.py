@@ -1103,3 +1103,37 @@ def test_view_lock_refuses_an_ancestor_with_junction_metadata(
     with pytest.raises(UnsafePathError), view_mutation_lock(root, "dashboard"):
         pass
     assert not (root / ".locks").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_view_lock_refuses_an_ancestor_swapped_after_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_studio._filesystem.errors import UnsafePathError
+    from marimo_studio._workspace.mutation_lock import view_mutation_lock
+
+    real = tmp_path / "real"
+    root = real / "team" / "studio" / "analysis"
+    root.mkdir(parents=True)
+    victim = tmp_path / "victim"
+    redirected = victim / "team" / "studio" / "analysis"
+    redirected.mkdir(parents=True)
+    lstat = Path.lstat
+    swapped = False
+
+    def swap_after_validation(path: Path) -> os.stat_result:
+        nonlocal swapped
+        state = lstat(path)
+        if path == root.parent and not swapped:
+            swapped = True
+            real.rename(tmp_path / "aside")
+            real.symlink_to(victim, target_is_directory=True)
+        return state
+
+    monkeypatch.setattr(Path, "lstat", swap_after_validation)
+
+    with pytest.raises(UnsafePathError), view_mutation_lock(root, "dashboard"):
+        pass
+    assert swapped
+    assert not (redirected / ".locks").exists()
