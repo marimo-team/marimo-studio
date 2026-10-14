@@ -1,0 +1,21 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_host/operations/process.py
+  s_80c04bef0fc32a::t_7793085271b3f9 15-20,365-373
+packages/marimo-studio/src/marimo_studio/view_providers/_host/operations/codec.py
+  s_80c04bef0fc32a::t_7793085271b3f9 13-18,653-660
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0d233fed851918e48ee73dd46b5bb8d8d2827635",
+  "prompts": {},
+  "sessions": {
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
