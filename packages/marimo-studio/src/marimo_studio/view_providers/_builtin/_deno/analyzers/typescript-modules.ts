@@ -56,7 +56,10 @@ const contains = (container: ts.Node, node: ts.Node): boolean =>
 
 const lexicalContainer = (node: BindingDeclaration): ts.Node => {
   let owner: ts.Node = node;
-  while (ts.isBindingElement(owner) || ts.isBindingPattern(owner)) {
+  while (
+    ts.isBindingElement(owner) || ts.isObjectBindingPattern(owner) ||
+    ts.isArrayBindingPattern(owner)
+  ) {
     owner = owner.parent;
   }
   if (ts.isVariableDeclaration(owner) && ts.isCatchClause(owner.parent)) {
