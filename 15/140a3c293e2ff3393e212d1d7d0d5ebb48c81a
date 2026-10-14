@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/delivery/test_preflight.py
+  s_5fa6dedb301678::t_15d5aedeaf708f 214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "15140a3c293e2ff3393e212d1d7d0d5ebb48c81a",
+  "prompts": {},
+  "sessions": {
+    "s_5fa6dedb301678": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7556dde-cef5-4390-8a1f-e114c6419917",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
