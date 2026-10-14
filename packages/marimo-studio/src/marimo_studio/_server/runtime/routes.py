@@ -251,7 +251,6 @@ async def runtime_config_response(
                     expected_live_cells = await sessions.live_cells(
                         context,
                         lookup_session_id,
-                        include_dependency_closures=False,
                     )
                 except RuntimeSyncError:
                     # The provider performs the authoritative live-cell read

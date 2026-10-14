@@ -85,7 +85,6 @@ class _LiveCellCapture:
     document_generation: int
     cells: tuple[tuple[str, str, str], ...]
     executed_cells: tuple[tuple[str, str], ...]
-    graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None
     execution_pending: bool = False
     execution_generation: int = 0
 
@@ -611,7 +610,6 @@ def _capture_live_cells(
     context: ServerContext,
     session_id: str | None,
     *,
-    include_dependency_closures: bool,
     session_owner: Callable[[Session], int],
 ) -> _LiveCellCapture | None:
     if session_id is not None:
@@ -644,61 +642,14 @@ def _capture_live_cells(
     )
     tracker = _ensure_execution_tracker(session)
     execution_pending = tracker.pending(session)
-    graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None = None
-    if include_dependency_closures:
-        graph = session.app_file_manager.app.graph
-        with graph.lock:
-            graph_ids = {str(cell_id): cell_id for cell_id in graph.cells}
-            graph_parents = tuple(
-                (
-                    runtime_id,
-                    tuple(
-                        candidate
-                        for candidate in ordered_ids
-                        if candidate in graph_ids
-                        and graph_ids[candidate]
-                        in graph.topology.parents.get(graph_ids[runtime_id], ())
-                    ),
-                )
-                for runtime_id in ordered_ids
-                if runtime_id in graph_ids
-            )
     return _LiveCellCapture(
         session_owner=session_owner(session),
         document_generation=document.version,
         cells=rows,
         executed_cells=ordered_executed_cells,
-        graph_parents=graph_parents,
         execution_pending=execution_pending,
         execution_generation=tracker.generation,
     )
-
-
-def _dependency_closures(
-    ordered_ids: tuple[str, ...],
-    graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None,
-) -> dict[str, tuple[str, ...]]:
-    if graph_parents is None:
-        return {}
-    parents = dict(graph_parents)
-    closures: dict[str, tuple[str, ...]] = {}
-    for runtime_id in ordered_ids:
-        if runtime_id not in parents:
-            continue
-        ancestors: set[str] = set()
-        pending = list(parents[runtime_id])
-        while pending:
-            parent = pending.pop()
-            if parent in ancestors:
-                continue
-            ancestors.add(parent)
-            pending.extend(parents.get(parent, ()))
-        closures[runtime_id] = tuple(
-            candidate
-            for candidate in ordered_ids
-            if candidate == runtime_id or candidate in ancestors
-        )
-    return closures
 
 
 def _materialize_live_cells(capture: _LiveCellCapture) -> LiveCellSnapshot:
@@ -736,10 +687,6 @@ def _materialize_live_cells(capture: _LiveCellCapture) -> LiveCellSnapshot:
             )
         },
         names={name: tuple(identities) for name, identities in names.items()},
-        dependency_closures=_dependency_closures(
-            ordered_ids,
-            capture.graph_parents,
-        ),
         current_refs={
             runtime_id: executed_refs[runtime_id]
             for runtime_id, _cell in capture.executed_cells
@@ -1100,8 +1047,6 @@ class PrivateSessionState:
         self,
         context: ServerContext,
         session_id: str | None,
-        *,
-        include_dependency_closures: bool,
     ) -> LiveCellSnapshot | None:
         from marimo._types.ids import ConsumerId
 
@@ -1160,14 +1105,13 @@ class PrivateSessionState:
         capture = _capture_live_cells(
             context,
             capture_session_id,
-            include_dependency_closures=include_dependency_closures,
             session_owner=self._runtime_owner,
         )
         if capture is None:
             return None
         snapshot = await self._live_materializer.run(
             capture,
-            (capture.session_owner, include_dependency_closures),
+            capture.session_owner,
             partial(_materialize_live_cells, capture),
         )
         if self._closed:
@@ -1175,7 +1119,6 @@ class PrivateSessionState:
         current = _capture_live_cells(
             context,
             capture_session_id,
-            include_dependency_closures=include_dependency_closures,
             session_owner=self._runtime_owner,
         )
         if current != capture:

@@ -390,7 +390,6 @@ def test_editor_controls_report_required_execution(
                 reference: f"live-{index}" for index, reference in enumerate(references)
             },
             names={},
-            dependency_closures={},
             current_refs={},
         )
         monkeypatch.setattr(

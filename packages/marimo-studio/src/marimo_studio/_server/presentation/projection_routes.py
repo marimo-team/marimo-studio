@@ -429,7 +429,6 @@ async def _runtime_cell_refs(
     live_cells = await sessions.live_cells(
         context,
         session_id,
-        include_dependency_closures=False,
     )
     bindings = runtime_cell_bindings(snapshot, live_cells)
     return {

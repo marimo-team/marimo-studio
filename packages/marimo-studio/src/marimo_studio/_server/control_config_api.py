@@ -51,9 +51,7 @@ async def control_config_response(
     ):
         return _session_pending()
     try:
-        cells = await sessions.live_cells(
-            context, session_id, include_dependency_closures=False
-        )
+        cells = await sessions.live_cells(context, session_id)
         runtime_bindings = runtime_cell_bindings(snapshot, cells)
         # live_cells has already crossed the native queue barrier. Reading a
         # second barrier here makes concurrent tabs enqueue competing
