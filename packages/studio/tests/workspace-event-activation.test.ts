@@ -139,6 +139,42 @@ it("retries a failed host-promotion acknowledgement after replay", async () => {
   coordinator.dispose();
 });
 
+it("backs off replaying an activation the browser keeps declining", async () => {
+  vi.useFakeTimers();
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const { acknowledge, coordinator, model } = setup();
+  model.choose
+    .mockResolvedValueOnce(false)
+    .mockResolvedValueOnce(false)
+    .mockResolvedValueOnce(false);
+  const activation = JSON.stringify({ schema: 1, generation: 5, view: "report" });
+  const replay = (stream: number) => {
+    const events = EventSourceStub.instances[stream]!;
+    events.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
+    events.emit("activate", activation);
+  };
+
+  replay(0);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(EventSourceStub.instances).toHaveLength(2);
+  replay(1);
+  await vi.advanceTimersByTimeAsync(999);
+  expect(EventSourceStub.instances).toHaveLength(2);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(EventSourceStub.instances).toHaveLength(3);
+  replay(2);
+  await vi.advanceTimersByTimeAsync(1_999);
+  expect(EventSourceStub.instances).toHaveLength(3);
+
+  await vi.advanceTimersByTimeAsync(1);
+  expect(EventSourceStub.instances).toHaveLength(4);
+  replay(3);
+  await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledOnce());
+  expect(model.views.getSnapshot().current).toBe("report");
+  warning.mockRestore();
+  coordinator.dispose();
+});
+
 it("restores the previous view after terminal acknowledgement failure", async () => {
   const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   const { acknowledge, coordinator, model } = setup();

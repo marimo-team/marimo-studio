@@ -95,6 +95,9 @@ export class WorkspaceEventCoordinator {
   private readonly activationInFlight = new Set<number>();
   private notebookMutationGeneration: number | undefined;
   private readonly reconnects = new RetrySchedule();
+  // The server replays a pending activation on each new stream. A decline such
+  // as an unresolved Source conflict repeats, so replays back off.
+  private readonly activationReplays = new RetrySchedule([0, 1_000, 2_000, 5_000, 10_000, 30_000]);
   private reconnect: ReturnType<typeof setTimeout> | undefined;
   private started = false;
   private disposed = false;
@@ -374,6 +377,7 @@ export class WorkspaceEventCoordinator {
     }
     if (request.generation > this.latestActivation) {
       this.latestActivation = request.generation;
+      this.activationReplays.reset();
       this.activationAbort?.abort();
       this.options.views.cancelPendingSelection();
     }
@@ -409,8 +413,14 @@ export class WorkspaceEventCoordinator {
     }
     if (acknowledged) {
       this.acknowledgedActivation = Math.max(this.acknowledgedActivation, request.generation);
+      this.activationReplays.reset();
     } else if (this.connectionGeneration === connectionGeneration) {
-      this.connect(this.currentView);
+      clearTimeout(this.reconnect);
+      this.reconnect = setTimeout(() => {
+        if (!this.disposed && this.connectionGeneration === connectionGeneration) {
+          this.connect(this.currentView);
+        }
+      }, this.activationReplays.next());
     }
   }
 
