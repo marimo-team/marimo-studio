@@ -74,7 +74,8 @@ class _SupervisedProviderRunner:
         if self._remaining <= 0:
             raise ProviderCommandError(
                 "Provider commands exceeded their "
-                f"{self._limit:g} second aggregate budget"
+                f"{self._limit:g} second aggregate budget",
+                timed_out=True,
             )
         selected_timeout = min(requested_timeout, self._remaining)
         aggregate_limited = selected_timeout == self._remaining
@@ -107,7 +108,7 @@ class _SupervisedProviderRunner:
                 if aggregate_limited
                 else f"Provider command exceeded its {requested_timeout:g} second limit"
             )
-            raise ProviderCommandError(message)
+            raise ProviderCommandError(message, timed_out=True)
         if completed.output_too_large:
             raise ProviderCommandError(
                 "Provider command produced more output than Studio accepts"

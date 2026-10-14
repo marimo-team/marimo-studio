@@ -109,8 +109,7 @@ class LatexProvider:
             )
         except ProviderCommandError as error:
             request.cancellation.raise_if_cancelled("The LaTeX build")
-            # The runner reports a command that outlasted its time as exceeded.
-            if "exceeded" not in str(error):
+            if not error.timed_out:
                 raise
             return BuildResult(
                 None,

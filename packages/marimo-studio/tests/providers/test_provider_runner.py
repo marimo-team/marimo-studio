@@ -373,3 +373,20 @@ def test_view_deletion_reports_provider_cleanup_failure() -> None:
             await coordinator.close()
 
     asyncio.run(exercise())
+
+
+@pytest.mark.native_process
+@pytest.mark.parametrize("aggregate", [False, True])
+def test_provider_runner_exposes_timeout_reason(
+    tmp_path: Path, aggregate: bool
+) -> None:
+    runner = create_provider_runner(
+        tmp_path, ProviderCancellation(), 0.05 if aggregate else 1
+    )
+    with pytest.raises(ProviderCommandError) as error:
+        runner.run(
+            [sys.executable, "-c", "import time; time.sleep(1)"],
+            cwd=tmp_path,
+            timeout=0.05,
+        )
+    assert error.value.timed_out is True
