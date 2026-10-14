@@ -1,0 +1,23 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_svelte/analyzer.ts
+  s_80c04bef0fc32a::t_ee2fd832abfe0f 250,255,262
+  s_80c04bef0fc32a::t_47c8237c7bfa81 249,251-253,256-261,263,326-328
+  s_80c04bef0fc32a::t_e6e938b393c759 254
+packages/marimo-studio/tests/providers/test_deno_svelte.py
+  s_80c04bef0fc32a::t_85395d63684cf4 620-650
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "32830f945859564ef929ebc2d5aee94cdee86f13",
+  "prompts": {},
+  "sessions": {
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
