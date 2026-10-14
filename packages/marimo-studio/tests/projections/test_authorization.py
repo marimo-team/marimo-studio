@@ -463,6 +463,34 @@ def test_live_binding_accepts_code_changes_with_the_same_runtime_topology(
 
 
 @pytest.mark.parametrize("kind", ["cell", "value", "output"])
+def test_live_binding_ignores_an_unrelated_cell_with_a_syntax_error(
+    kind: Literal["cell", "value", "output"],
+) -> None:
+    projection, cells = _projection_with_upstream(kind)
+    rows = [
+        SimpleNamespace(id=runtime_id, code=code) for _ref, runtime_id, code in cells
+    ]
+    rows.append(SimpleNamespace(id="runtime-draft", code="draft = ("))
+    session = SimpleNamespace(
+        document=SimpleNamespace(cells=rows),
+        session_view=SimpleNamespace(
+            last_executed_code={row.id: row.code for row in rows}
+        ),
+    )
+
+    (bound,) = _bind_live_projections(
+        session,
+        (projection,),
+        {ref: runtime_id for ref, runtime_id, _code in cells},
+    )
+
+    assert tuple(binding.runtime_cell_id for binding in bound.dependency_bindings) == (
+        "runtime-upstream",
+        "runtime-summary",
+    )
+
+
+@pytest.mark.parametrize("kind", ["cell", "value", "output"])
 def test_live_binding_rejects_a_newly_resolved_upstream_producer(
     kind: Literal["cell", "value", "output"],
 ) -> None:

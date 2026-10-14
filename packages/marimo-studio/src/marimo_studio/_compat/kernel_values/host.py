@@ -68,21 +68,15 @@ def _build_live_projection_state(
         )
     )
     graph = DirectedGraph()
-    try:
-        for runtime_id, code in signature:
-            cell_id = CellId_t(runtime_id)
-            graph.register_cell(
-                cell_id,
-                compile_cell(code, cell_id=cell_id),
-            )
-    except Exception as error:
-        raise ProjectionUnavailable(
-            "stale-projection-binding",
-            "The projection dependency closure changed after this "
-            "presentation was published.",
-            transient=False,
-            status_code=409,
-        ) from error
+    for runtime_id, code in signature:
+        cell_id = CellId_t(runtime_id)
+        try:
+            cell = compile_cell(code, cell_id=cell_id)
+        except Exception:
+            # The kernel leaves a cell that fails to compile out of its graph,
+            # so only projections whose closure needs that cell go stale.
+            continue
+        graph.register_cell(cell_id, cell)
     return _LiveProjectionState(signature, graph, current_cells)
 
 
