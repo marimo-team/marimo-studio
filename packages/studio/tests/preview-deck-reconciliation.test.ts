@@ -503,3 +503,82 @@ it("reloads the active preview when a new binding reuses the editor consumer ID"
   expect(deck.runtimeDiagnostics("server")).toEqual(initialServerDiagnostics);
   deck.dispose();
 });
+
+it("admits a replacement document that boots while a presentation change is pending", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const postMessage = vi.fn();
+  const previewWindow = { postMessage };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const server = controller(
+    "server",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+  );
+  const identity = { runtime: "server", lifecycleId: 1, view: "dashboard" } as const;
+  const receiverReady = (revision: string) =>
+    dispatchPreviewMessage(previewWindow, {
+      type: "marimo-studio:receiver-ready",
+      ...identity,
+      revision,
+    });
+  const presentationChange = {
+    type: "marimo-studio:presentation-change",
+    ...identity,
+  };
+  receiverReady("revision-1");
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    ...identity,
+    revision: "revision-1",
+    sessionId: "s_123456",
+  });
+  server.presentationBuildStarted();
+  server.presentationBuildCompleted("revision-2");
+  expect(postMessage).toHaveBeenCalledWith(presentationChange, "*");
+  dispatchPreviewMessage(previewWindow, { type: "marimo-studio:receiver-unready", ...identity });
+  // The refreshing document loses its kernel and fails before it reloads.
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-error",
+    ...identity,
+    revision: "revision-1",
+    diagnostic: {
+      code: "kernel-disconnected",
+      severity: "error",
+      message: "Marimo connection closed: kernel not found",
+      hint: "Reload the view after the Marimo server is available.",
+      view: "dashboard",
+      scope: "runtime",
+    },
+  });
+  postMessage.mockClear();
+  server.presentationBuildStarted();
+  server.presentationBuildCompleted("revision-3");
+  expect(postMessage).toHaveBeenCalledWith(presentationChange, "*");
+  // Chromium delivers the receiver-unready posted during pagehide without a
+  // source, so the next signal from the slot is the replacement booting.
+  dispatchPreviewMessage(previewWindow, { type: "marimo-studio:receiver-waiting", ...identity });
+  postMessage.mockClear();
+  receiverReady("revision-3");
+
+  expect(postMessage).toHaveBeenCalledWith(
+    { type: "marimo-studio:receiver-admitted", ...identity, revision: "revision-3" },
+    "*",
+  );
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    ...identity,
+    revision: "revision-3",
+    sessionId: "s_654321",
+  });
+  expect(server.runtimeStatus()).toMatchObject({
+    current: { phase: "ready" },
+    revision: "revision-3",
+    sessionId: "s_654321",
+  });
+  server.dispose();
+});

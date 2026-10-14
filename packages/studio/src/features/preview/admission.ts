@@ -69,6 +69,9 @@ export class PreviewAdmission {
   private candidate: PreviewIdentity | null = null;
   private readyIdentity: PreviewIdentity | null = null;
   private receiver: Receiver = { phase: "unready" };
+  // A booting document binds its presentation listeners only after it loads
+  // its runtime config, so its first receiver-ready answers any change request.
+  private documentBooting = false;
   private requirement: PreviewAdmissionSnapshot["requirement"] = "ordinary";
   private view: PreviewAdmissionSnapshot["view"] = "waiting";
   private baseline: Baseline = { phase: "unknown" };
@@ -152,6 +155,7 @@ export class PreviewAdmission {
     this.candidate = null;
     this.readyIdentity = null;
     this.receiver = { phase: "unready" };
+    this.documentBooting = false;
     this.view = "waiting";
     this.effects.clearSession();
   }
@@ -249,7 +253,15 @@ export class PreviewAdmission {
     }
   }
 
+  receiverWaiting(): void {
+    this.documentBooting = true;
+    if (this.refresh === "requested") {
+      this.refresh = "acknowledged";
+    }
+  }
+
   receiverUnready(): void {
+    this.documentBooting = false;
     this.invalidateGatedMutationCandidate();
     this.failure = "none";
     this.localizedCommitPending = false;
@@ -266,6 +278,7 @@ export class PreviewAdmission {
   }
 
   receiverReady(revision: string, target: "current" | "other", owner: Owner): void {
+    this.documentBooting = false;
     this.invalidateGatedMutationCandidate();
     this.failure = "none";
     this.localizedCommitPending = false;
@@ -481,7 +494,7 @@ export class PreviewAdmission {
     this.admittedRevision = null;
     this.candidate = null;
     this.settleGate();
-    this.refresh = "requested";
+    this.refresh = this.documentBooting ? "acknowledged" : "requested";
     this.requirement = "required";
     this.view = "waiting";
   }

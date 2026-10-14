@@ -591,6 +591,7 @@ export class PreviewController {
       case "marimo-studio:receiver-waiting":
         this.waitingLifecycleId = message.lifecycleId;
         this.cancelRetry();
+        this.admission.receiverWaiting();
         return;
       case "marimo-studio:receiver-ready":
         this.waitingLifecycleId = undefined;
