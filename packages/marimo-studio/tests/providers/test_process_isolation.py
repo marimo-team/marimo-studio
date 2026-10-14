@@ -1084,7 +1084,7 @@ def test_isolated_provider_rejects_fifo_starter_blob_within_deadline(
         "from tests.providers.test_process_isolation import _registry; "
         "from tests.provider_test_support import provider_starter_context; "
         "from marimo_studio.errors import ViewProjectError; "
-        "registry = _registry('fifo-starter', 'fifo_starter_provider', timeout=1); "
+        "registry = _registry('fifo-starter', 'fifo_starter_provider'); "
         "provider = registry.get('test-process/fifo-starter'); "
         f"context = provider_starter_context(Path({str(tmp_path)!r})); "
         "\ntry:\n provider.create(provider.starters()[0], context)"
@@ -1092,8 +1092,11 @@ def test_isolated_provider_rejects_fifo_starter_blob_within_deadline(
         "\n assert 'blob size does not match' in str(error)"
         "\nelse:\n raise AssertionError('Accepted a FIFO starter blob')"
     )
+    # The registry limit also covers the provider's cold start, so it keeps its
+    # default. Studio decodes the blob in this process, and a FIFO read that
+    # blocks there runs into the subprocess limit and fails the test.
     completed = subprocess.run(
-        [sys.executable, "-c", command], capture_output=True, text=True, timeout=5
+        [sys.executable, "-c", command], capture_output=True, text=True, timeout=30
     )
     assert completed.returncode == 0, completed.stderr
 
