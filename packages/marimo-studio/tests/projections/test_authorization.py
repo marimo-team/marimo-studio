@@ -170,6 +170,14 @@ class _Graph:
         return found
 
 
+@pytest.fixture(autouse=True)
+def _projection_authorization_key() -> None:
+    # Studio creates the key at server composition. Tests here sign and verify
+    # without a server, so each one creates it instead of relying on whichever
+    # test ran first in its worker.
+    initialize_projection_authorization_key()
+
+
 def test_kernel_authorization_uses_canonical_json() -> None:
     initialize_projection_authorization_key()
     first = {"operation": "value", "arguments": {"target": "café", "index": 1}}
