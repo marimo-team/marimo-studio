@@ -338,6 +338,10 @@ def _zero_python_runtime_config(
 ) -> tuple[str, bytes, bytes | None, _assets.BrowserEntryClosure]:
     cell_refs = resolved.runtime_cell_refs(None)
     paths = _StaticViewPaths.of(view_name, artifact)
+    # A template view without projection sites has no prepared publication.
+    instance = (
+        artifact.artifact_revision if publication is None else publication.instance
+    )
     sites = tuple(site.to_dict() for site in artifact.sites)
     targets = projection_targets(resolved.symbols, artifact.sites)
     policy = projection_policy()
@@ -345,13 +349,11 @@ def _zero_python_runtime_config(
         source_revision=_digest(
             notebook_source,
             studio.config_path.read_text(encoding="utf-8"),
-            publication.state_space_source.digest if publication is not None else "",
+            "" if publication is None else publication.state_space_source.digest,
         ),
         view=view_name,
         runtime_id="zero-python",
-        runtime_instance=publication.instance
-        if publication is not None
-        else artifact.artifact_revision,
+        runtime_instance=instance,
         sites=sites,
         projection_targets=targets,
         projection_policy=policy,
@@ -363,15 +365,13 @@ def _zero_python_runtime_config(
         view=view_name,
         views=(view_name,),
         runtime_id="zero-python",
-        runtime_instance=publication.instance
-        if publication is not None
-        else artifact.artifact_revision,
-        runtime_data={"planDigest": publication.plan_digest}
-        if publication is not None
-        else {},
-        runtime_paths={"manifest": f"{paths.support}/zero-python/current"}
-        if publication is not None
-        else {},
+        runtime_instance=instance,
+        runtime_data={}
+        if publication is None
+        else {"planDigest": publication.plan_digest},
+        runtime_paths={}
+        if publication is None
+        else {"manifest": f"{paths.support}/zero-python/current"},
         public_root_path="/",
         document_root_path="/",
         support_path=paths.support,
@@ -394,7 +394,7 @@ def _zero_python_runtime_config(
         view_name,
         document,
         artifact.artifact_revision,
-        publication.instance if publication is not None else "",
+        instance,
         json.dumps(
             runtime_fields,
             ensure_ascii=False,
@@ -424,16 +424,11 @@ def _zero_python_runtime_config(
         runtime_styles=styles,
     )
     manifest = (
-        prepared_manifest_bytes(publication.manifest(f"./{publication.instance}/"))
-        if publication is not None
-        else None
+        None
+        if publication is None
+        else prepared_manifest_bytes(publication.manifest(f"./{instance}/"))
     )
-    return (
-        rendered,
-        encode_runtime_config(config),
-        manifest,
-        closure,
-    )
+    return rendered, encode_runtime_config(config), manifest, closure
 
 
 def _asset_files(
