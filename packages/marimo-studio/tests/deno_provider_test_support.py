@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.project_manifest import (
@@ -65,6 +66,26 @@ def inspect_provider(
     project: ViewProject,
 ) -> ProjectInspection:
     return provider.inspect(inspection_request(project))
+
+
+def projection_targets(
+    tmp_path: Path,
+    provider: ViewProvider,
+    provider_id: str,
+    document: str,
+    source: str,
+    extra: Mapping[str, str] | None = None,
+) -> tuple[str, ...] | Literal["*"]:
+    root, loaded = project(tmp_path, provider, provider_id)
+    for relative, text in (extra or {}).items():
+        path = root.joinpath(relative)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    root.joinpath(document).write_text(source, encoding="utf-8")
+    inspection = inspect_provider(provider, loaded)
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    return site.targets
 
 
 def build_provider(

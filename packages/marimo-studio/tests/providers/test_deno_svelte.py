@@ -20,6 +20,7 @@ from marimo_studio.view_providers._host import provider_registry
 from ..deno_provider_test_support import build_provider as _build
 from ..deno_provider_test_support import inspect_provider as _inspect
 from ..deno_provider_test_support import project as _project
+from ..deno_provider_test_support import projection_targets as _projection_targets
 from ..helpers import no_display_notebook_source
 from ..provider_test_support import provider_build_request, publish
 
@@ -560,91 +561,78 @@ def test_svelte_revalidates_tsconfig_before_installation(
     assert raised.value.diagnostic.code == "provider-options-invalid"
 
 
-@pytest.mark.skipif(
+def _svelte_targets(tmp_path: Path, script: str, expression: str) -> object:
+    source = (
+        f'<script lang="ts">\n{script}\n</script>\n'
+        f'<main id="app-shell"><output mo-value={{{expression}}} '
+        'data-marimo-allow="*" /></main>'
+    )
+    return _projection_targets(
+        tmp_path,
+        svelte_provider,
+        "marimo-studio/svelte",
+        "src/App.svelte",
+        source,
+    )
+
+
+_needs_deno = pytest.mark.skipif(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+
+_CHOICES = 'const choices = { selected: "first", other: "second" };'
+
+
+@_needs_deno
 @pytest.mark.parametrize(
-    "key,expected",
+    ("script", "expression", "expected"),
     [
-        ('const selected = "other";', ("second",)),
-        ('const selected = unknown ? "selected" : "other";', ("first", "second")),
-        ("const selected = getKey();", "*"),
+        (f'{_CHOICES}\nconst selected = "other";', "choices[selected]", ("second",)),
+        (
+            f'{_CHOICES}\nconst selected = unknown ? "selected" : "other";',
+            "choices[selected]",
+            ("first", "second"),
+        ),
+        (f"{_CHOICES}\nconst selected = getKey();", "choices[selected]", "*"),
+        (
+            'const choices = { __proto__: "first", other: "second" };',
+            'choices["__proto__"]',
+            "*",
+        ),
+        (
+            'const choices = { "__proto__": "first", other: "second" };',
+            'choices["__proto__"]',
+            "*",
+        ),
+        (
+            'const choices = { ["__proto__"]: "first", other: "second" };',
+            'choices["__proto__"]',
+            ("first",),
+        ),
+        (
+            'const key = "selected";\nconst choices = { [key]: "first" };',
+            "choices.selected",
+            ("first",),
+        ),
+        (
+            'const key = getKey();\nconst choices = { [key]: "first" };',
+            "choices.selected",
+            "*",
+        ),
     ],
+    ids=(
+        "literal-member",
+        "conditional-member",
+        "dynamic-member",
+        "identifier-prototype",
+        "string-prototype",
+        "computed-own-property",
+        "resolved-key",
+        "dynamic-key",
+    ),
 )
-def test_svelte_computed_member_keys_resolve_their_values(
-    tmp_path: Path, key: str, expected: object
+def test_svelte_object_keys_resolve_projection_targets(
+    tmp_path: Path, script: str, expression: str, expected: object
 ) -> None:
-    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
-    root.joinpath("src/App.svelte").write_text(
-        '<script lang="ts">\nconst choices = { selected: "first", other: "second" };\n'
-        + key
-        + "\n</script>\n"
-        '<main id="app-shell"><output mo-value={choices[selected]} '
-        'data-marimo-allow="*" /></main>',
-        encoding="utf-8",
-    )
-
-    inspection = _inspect(svelte_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == expected
-
-
-@pytest.mark.parametrize(
-    "choices,expected",
-    [
-        ('{ __proto__: "first", other: "second" }', "*"),
-        ('{ "__proto__": "first", other: "second" }', "*"),
-        ('{ ["__proto__"]: "first", other: "second" }', ("first",)),
-    ],
-    ids=("identifier-prototype", "string-prototype", "computed-own-property"),
-)
-def test_svelte_object_prototype_keys_create_no_targets(
-    tmp_path: Path, choices: str, expected: object
-) -> None:
-    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
-    root.joinpath("src/App.svelte").write_text(
-        f'<script lang="ts">\nconst choices = {choices};\n</script>\n'
-        '<main id="app-shell"><output mo-value={choices["__proto__"]} '
-        'data-marimo-allow="*" /></main>',
-        encoding="utf-8",
-    )
-
-    inspection = _inspect(svelte_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == expected
-
-
-@pytest.mark.skipif(
-    not _deno.deno_availability().available,
-    reason="marimo-studio[deno] is unavailable",
-)
-@pytest.mark.parametrize(
-    "key,expected",
-    [
-        ('const key = "selected";', ("first",)),
-        ("const key = getKey();", "*"),
-    ],
-    ids=("resolved-key", "dynamic-key"),
-)
-def test_svelte_computed_object_keys_use_their_values(
-    tmp_path: Path, key: str, expected: object
-) -> None:
-    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
-    root.joinpath("src/App.svelte").write_text(
-        f'<script lang="ts">\n{key}\nconst choices = {{ [key]: "first" }};\n'
-        "</script>\n"
-        '<main id="app-shell"><output mo-value={choices.selected} '
-        'data-marimo-allow="*" /></main>',
-        encoding="utf-8",
-    )
-
-    inspection = _inspect(svelte_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == expected
+    assert _svelte_targets(tmp_path, script, expression) == expected

@@ -21,6 +21,7 @@ from marimo_studio.view_providers._host import provider_registry
 from ..deno_provider_test_support import build_provider as _build
 from ..deno_provider_test_support import inspect_provider as _inspect
 from ..deno_provider_test_support import project as _project
+from ..deno_provider_test_support import projection_targets as _projection_targets
 from ..helpers import no_display_notebook_source
 from ..provider_test_support import provider_build_request
 
@@ -705,10 +706,34 @@ def test_react_entry_normalization_rewrites_only_the_script_source(
     assert f"SRC='./{normalized.name}?mode=dev#entry'" in rewritten
 
 
-@pytest.mark.skipif(
+def _react_targets(
+    tmp_path: Path, source: str, extra: dict[str, str] | None = None
+) -> object:
+    return _projection_targets(
+        tmp_path,
+        react_provider,
+        "marimo-studio/react",
+        "src/App.tsx",
+        source,
+        extra,
+    )
+
+
+def _react_output(head: str, expression: str) -> str:
+    return (
+        f"{head}function Card() {{\n"
+        f'  return <output mo-value={{{expression}}} data-marimo-allow="*" />;\n'
+        "}\n"
+    )
+
+
+_needs_deno = pytest.mark.skipif(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+
+
+@_needs_deno
 @pytest.mark.parametrize(
     "binding",
     [
@@ -718,31 +743,24 @@ def test_react_entry_normalization_rewrites_only_the_script_source(
         "function Card() { let target = getTarget(); return (() =>",
         "function Card() { const { target } = props; return (() =>",
     ],
+    ids=(
+        "parameter",
+        "destructured-parameter",
+        "array-parameter",
+        "nested-let",
+        "nested-const",
+    ),
 )
 def test_react_shadowed_bindings_keep_dynamic_target_allowance(
     tmp_path: Path, binding: str
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     body = 'return <output mo-value={target} data-marimo-allow="*" />;'
-    if binding.endswith("=>"):
-        declaration = binding + f" {{ {body} }})(); }}"
-    else:
-        declaration = binding + f" {{ {body} }}"
-    root.joinpath("src/App.tsx").write_text(
-        'const target = "first";\n' + declaration, encoding="utf-8"
-    )
-
-    inspection = _inspect(react_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == "*"
+    closing = " }})(); }}" if binding.endswith("=>") else " }"
+    source = f'const target = "first";\n{binding} {{ {body}{closing}'
+    assert _react_targets(tmp_path, source) == "*"
 
 
-@pytest.mark.skipif(
-    not _deno.deno_availability().available,
-    reason="marimo-studio[deno] is unavailable",
-)
+@_needs_deno
 @pytest.mark.parametrize(
     ("catch", "targets"),
     [
@@ -754,20 +772,14 @@ def test_react_shadowed_bindings_keep_dynamic_target_allowance(
 def test_react_catch_bindings_end_with_their_catch_block(
     tmp_path: Path, catch: str, targets: tuple[str, ...]
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
-    root.joinpath("src/App.tsx").write_text(
+    source = (
         'const target = "first";\n'
-        f"function Card() {{ {catch} return <output mo-value={{target}} />; }}\n",
-        encoding="utf-8",
+        f"function Card() {{ {catch} return <output mo-value={{target}} />; }}\n"
     )
-
-    inspection = _inspect(react_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == targets
+    assert _react_targets(tmp_path, source) == targets
 
 
+@_needs_deno
 @pytest.mark.parametrize(
     ("choices", "targets"),
     [
@@ -780,22 +792,14 @@ def test_react_catch_bindings_end_with_their_catch_block(
 def test_react_object_prototype_keys_create_no_targets(
     tmp_path: Path, choices: str, targets: object
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
-    root.joinpath("src/App.tsx").write_text(
-        f"const choices = {choices};\n"
-        "function Card() {\n"
-        '  return <output mo-value={choices["__proto__"]} data-marimo-allow="*" />;\n'
-        "}\n",
-        encoding="utf-8",
+    source = _react_output(
+        f"const choices = {choices};\n",
+        'choices["__proto__"]',
     )
-
-    inspection = _inspect(react_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == targets
+    assert _react_targets(tmp_path, source) == targets
 
 
+@_needs_deno
 @pytest.mark.parametrize(
     "scope",
     [
@@ -806,22 +810,11 @@ def test_react_object_prototype_keys_create_no_targets(
     ids=("class-static-block", "namespace-let", "namespace-var"),
 )
 def test_react_nested_scopes_keep_module_targets(tmp_path: Path, scope: str) -> None:
-    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
-    root.joinpath("src/App.tsx").write_text(
-        f'const target = "first";\n{scope}\n'
-        "function Card() {\n"
-        '  return <output mo-value={target} data-marimo-allow="*" />;\n'
-        "}\n",
-        encoding="utf-8",
-    )
-
-    inspection = _inspect(react_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == ("first",)
+    source = _react_output(f'const target = "first";\n{scope}\n', "target")
+    assert _react_targets(tmp_path, source) == ("first",)
 
 
+@_needs_deno
 @pytest.mark.parametrize("imported", [False, True], ids=("outer", "imported"))
 @pytest.mark.parametrize(
     ("parameter", "body"),
@@ -835,43 +828,29 @@ def test_react_nested_scopes_keep_module_targets(tmp_path: Path, scope: str) -> 
 def test_react_parameter_initializers_resolve_targets_outside_the_function_body(
     tmp_path: Path, imported: bool, parameter: str, body: str
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
-    root.joinpath("src/targets.ts").write_text(
-        'export const target = "first";\n', encoding="utf-8"
-    )
     binding = (
         'import { target } from "./targets.ts";\n'
         if imported
         else 'const target = "first";\n'
     )
-    root.joinpath("src/App.tsx").write_text(
-        binding + f"function Card({parameter}) {{ {body} return card; }}\n",
-        encoding="utf-8",
-    )
-
-    inspection = _inspect(react_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == ("first",)
+    source = binding + f"function Card({parameter}) {{ {body} return card; }}\n"
+    assert _react_targets(
+        tmp_path,
+        source,
+        {"src/targets.ts": 'export const target = "first";\n'},
+    ) == ("first",)
 
 
+@_needs_deno
 def test_react_function_body_var_shadows_outer_targets_before_its_declaration(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
-    root.joinpath("src/App.tsx").write_text(
+    source = (
         'const target = "first";\n'
         "function Card() {\n"
         '  const card = <output mo-value={target} data-marimo-allow="*" />;\n'
         "  var target = load();\n"
         "  return card;\n"
-        "}\n",
-        encoding="utf-8",
+        "}\n"
     )
-
-    inspection = _inspect(react_provider, project)
-
-    assert inspection.diagnostics == ()
-    (site,) = inspection.sites
-    assert site.targets == "*"
+    assert _react_targets(tmp_path, source) == "*"
