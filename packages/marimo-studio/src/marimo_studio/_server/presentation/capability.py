@@ -376,20 +376,9 @@ def presentation_target_session_header(target: str, method: str) -> str | None:
     return None
 
 
-def capability_view(target: str) -> str | None:
-    """Return the view named by a presentation document target."""
-    match = _DOCUMENT_PATTERN.fullmatch(target)
-    return match.group("view") if match is not None else None
-
-
 def capability_artifact_target(target: str) -> str | None:
     """Return a normal artifact route for one authorized capability target."""
     return target if _ARTIFACT_PATTERN.fullmatch(target) is not None else None
-
-
-def capability_support_target(target: str) -> str | None:
-    """Return a normal support route for one authorized capability target."""
-    return target if target.startswith(SUPPORT_PATH) else None
 
 
 def _parsed_capability(

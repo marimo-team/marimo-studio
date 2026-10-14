@@ -23,6 +23,8 @@ class SessionBindingLease:
     session_id: str
     binding_generation: int
     native_claim: object | None = None
+    # Native session lifetimes hold close callbacks weakly. This field keeps the
+    # callback alive until retire() drops it, which also cancels the close.
     native_close_callback: Callable[[], object] | None = None
     phase: BindingPhase = "active"
     rejection_task: asyncio.Task[None] | None = None

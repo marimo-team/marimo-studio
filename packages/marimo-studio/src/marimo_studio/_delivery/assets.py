@@ -28,8 +28,6 @@ class BrowserEntryClosure:
     styles: tuple[Path, ...]
     assets: tuple[Path, ...]
     manifest: Path
-    file_count: int
-    total_bytes: int
 
 
 def runtime_assets_path() -> Path:
@@ -98,19 +96,11 @@ def browser_entry_closure(name: str) -> BrowserEntryClosure:
             raise ProtocolError(
                 f"Prepared runtime entry includes forbidden runtime asset {forbidden!r}"
             )
-    try:
-        total_bytes = sum(path.stat().st_size for path in paths)
-    except OSError as error:
-        raise ProtocolError(
-            f"Browser entry closure {name!r} changed while it was inspected"
-        ) from error
     return BrowserEntryClosure(
         script=script,
         styles=styles,
         assets=assets,
         manifest=manifest,
-        file_count=len(paths),
-        total_bytes=total_bytes,
     )
 
 
