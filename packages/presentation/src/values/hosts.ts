@@ -281,14 +281,17 @@ const resetValueHost = (host: HTMLElement): void => {
   setState(host, "connecting");
 };
 
-const selectorHasOwner = (selector: string): boolean =>
-  Array.from(hosts).some((host) => {
+/** Return the hosts whose current projection binding authorizes `selector`. */
+const ownedHosts = (selector: string): HTMLElement[] =>
+  Array.from(hosts).filter((host) => {
     const current = hostProjections.get(host);
     return (
       current?.projectionRevision === cacheProjectionRevision &&
       current?.projection.request.target === selector
     );
   });
+
+const selectorHasOwner = (selector: string): boolean => ownedHosts(selector).length > 0;
 
 const evictUnownedSelector = (selector: string | undefined): void => {
   if (selector === undefined || selectorHasOwner(selector)) {
@@ -646,10 +649,9 @@ export const setValueRuntimeCell = (
       runtimeCellIds.delete(selector);
     }
   });
-  hosts.forEach((host) => {
-    if (!selectors.includes(selectorFor(host))) return;
-    setProjectionRuntimeCell(host, cellId);
-  });
+  selectors.forEach((selector) =>
+    ownedHosts(selector).forEach((host) => setProjectionRuntimeCell(host, cellId)),
+  );
 };
 
 export const markValuePending = (selector: string, projectionRevision: string) => {
@@ -657,11 +659,7 @@ export const markValuePending = (selector: string, projectionRevision: string) =
     return;
   }
   const state = states.pending(selector, cachedValues.has(selector));
-  hosts.forEach((host) => {
-    if (selectorFor(host) === selector) {
-      setState(host, state.phase);
-    }
-  });
+  ownedHosts(selector).forEach((host) => setState(host, state.phase));
 };
 
 export const markValueError = (
@@ -675,14 +673,12 @@ export const markValueError = (
   cachedValues.delete(selector);
   states.clear(selector);
   states.failed(selector, error);
-  hosts.forEach((host) => {
-    if (selectorFor(host) === selector) {
-      renderedValues.delete(host);
-      const config = getRuntimeConfig();
-      host.textContent = config.dev || config.mode === "edit" ? "Unavailable" : "";
-      host.dataset.marimoStudioValueFallback = "";
-      failHost(host, error);
-    }
+  ownedHosts(selector).forEach((host) => {
+    renderedValues.delete(host);
+    const config = getRuntimeConfig();
+    host.textContent = config.dev || config.mode === "edit" ? "Unavailable" : "";
+    host.dataset.marimoStudioValueFallback = "";
+    failHost(host, error);
   });
 };
 
@@ -694,11 +690,7 @@ export const markValueRetainedError = (
   if (projectionRevision !== cacheProjectionRevision || !selectorHasOwner(selector)) {
     return;
   }
-  hosts.forEach((host) => {
-    if (selectorFor(host) === selector) {
-      failHost(host, error, undefined, true);
-    }
-  });
+  ownedHosts(selector).forEach((host) => failHost(host, error, undefined, true));
 };
 
 export const applyValues = (values: Record<string, DecodedValue>, projectionRevision: string) => {
@@ -726,10 +718,6 @@ export const applyValues = (values: Record<string, DecodedValue>, projectionRevi
     const projection = projectValue(value);
     cachedValues.set(selector, projection);
     states.resolved(selector);
-    hosts.forEach((host) => {
-      if (selectorFor(host) === selector) {
-        renderHost(host, selector, projection);
-      }
-    });
+    ownedHosts(selector).forEach((host) => renderHost(host, selector, projection));
   }
 };
