@@ -382,7 +382,7 @@ def test_provider_commands_admit_the_target_before_bootstrap(
 ) -> None:
     monkeypatch.setattr(
         environment_module,
-        "_target_provider_ids",
+        "_target_providers",
         lambda _target: pytest.fail("provider discovery reached an invalid target"),
     )
     result = CliRunner().invoke(
@@ -416,7 +416,7 @@ def test_bootstrap_rejects_invalid_targets_before_provider_discovery(
         )
     monkeypatch.setattr(
         environment_module,
-        "_target_provider_ids",
+        "_target_providers",
         lambda _target: pytest.fail("provider discovery reached an invalid target"),
     )
     result = CliRunner().invoke(
@@ -425,6 +425,32 @@ def test_bootstrap_rejects_invalid_targets_before_provider_discovery(
     )
 
     assert isinstance(result.exception, ConfigurationError)
+
+
+def test_unknown_built_in_provider_names_the_view_manifest(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest = prepare_view(notebook_path).root / "view.toml"
+    manifest.write_text(
+        'schema = 1\nprovider = "marimo-studio/nope"\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["marimo-studio", "status", "--target", str(notebook_path), "--json"],
+    )
+
+    with pytest.raises(SystemExit):
+        main()
+
+    event = json.loads(capsys.readouterr().err)
+    assert event["code"] == "configuration-error"
+    assert event["message"] == (
+        f"Unknown built-in view provider 'marimo-studio/nope' selected in "
+        f"{manifest}. Set provider to an installed view provider, then retry."
+    )
 
 
 def test_view_create_rejects_the_starter_target_limit_without_mutation(

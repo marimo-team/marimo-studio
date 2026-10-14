@@ -346,15 +346,15 @@ def _bootstrap_requirements(
     project_metadata: dict[str, object] | None,
 ) -> _BootstrapEnvironment:
     notebook_metadata = _read_target_notebook_metadata(target.notebook) or {}
-    provider_ids = _target_provider_ids(target)
+    providers = _target_providers(target)
     marker_environment = _target_marker_environment(
         notebook_metadata,
         project_metadata,
-        provider_ids,
+        tuple(sorted(providers)),
     )
     requirements = bootstrap_launch_requirements(
         studio_requirement=f"marimo-studio=={_package_version()}",
-        provider_ids=provider_ids,
+        providers=providers,
         builtin_requirements=BUILTIN_PROVIDER_REQUIREMENTS,
         notebook_metadata=notebook_metadata,
         project_metadata=project_metadata,
@@ -685,20 +685,26 @@ def _invoking_studio_source(source_root: Path | None) -> list[str]:
     return []
 
 
-def _target_provider_ids(target: EnvironmentTarget) -> tuple[str, ...]:
-    selected = (
-        target.provider_ids if isinstance(target, _ProviderEnvironmentTarget) else ()
-    )
+def _target_providers(target: EnvironmentTarget) -> dict[str, tuple[Path, ...]]:
+    """Map each provider the target needs to the view manifests selecting it."""
+    providers: dict[str, tuple[Path, ...]] = {
+        provider: ()
+        for provider in (
+            target.provider_ids
+            if isinstance(target, _ProviderEnvironmentTarget)
+            else ()
+        )
+    }
     if isinstance(target, StudioWorkspace):
-        configured = tuple(view.provider for view in target.views.values())
-        return tuple(sorted({*configured, *selected}))
-    definition = discover_studio_definition(target.notebook)
-    if definition is None:
-        return selected
-    configured = tuple(
-        view.provider for view in discover_views(definition.locations).values()
-    )
-    return tuple(sorted({*configured, *selected}))
+        views = tuple(target.views.values())
+    else:
+        definition = discover_studio_definition(target.notebook)
+        if definition is None:
+            return providers
+        views = tuple(discover_views(definition.locations).values())
+    for view in views:
+        providers[view.provider] = (*providers.get(view.provider, ()), view.manifest)
+    return providers
 
 
 def run_in_notebook_environment(
