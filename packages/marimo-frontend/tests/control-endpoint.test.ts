@@ -366,6 +366,47 @@ describe("Control endpoint", () => {
     expect(registry.registerInstance).toBe(original);
   });
 
+  test("a closed endpoint dispatches no queued update", async () => {
+    const registry = new FakeRegistry();
+    registry.set("slider-0", 0);
+    const sent = Promise.withResolvers<null>();
+    const send = vi.fn<SendControlValues>(() => sent.promise);
+    const controls = endpoint(registry, send);
+
+    const first = controls.apply([{ objectId: "slider-0", value: 1 }]);
+    const queued = controls.apply([{ objectId: "slider-0", value: 2 }]);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    controls.dispose();
+    sent.resolve(null);
+
+    await expect(first).rejects.toThrow("The control endpoint closed before the update applied.");
+    await expect(queued).rejects.toThrow("The control endpoint closed before the update applied.");
+    await expect(controls.apply([{ objectId: "slider-0", value: 3 }])).rejects.toThrow(
+      "The control endpoint closed before the update applied.",
+    );
+    expect(send).toHaveBeenCalledOnce();
+    expect(registry.lookupValue("slider-0")).toBe(0);
+  });
+
+  test("a closed endpoint's late acknowledgement leaves its successor's value", async () => {
+    const registry = new FakeRegistry();
+    registry.set("slider-0", 0);
+    const sent = Promise.withResolvers<null>();
+    const send = vi.fn<SendControlValues>(() => sent.promise);
+    const retired = endpoint(registry, send);
+    const late = retired.apply([{ objectId: "slider-0", value: 1 }]);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    retired.dispose();
+
+    const successor = endpoint(registry, async () => null);
+    await successor.apply([{ objectId: "slider-0", value: 2 }]);
+    sent.resolve(null);
+    await late.catch(() => undefined);
+
+    expect(registry.lookupValue("slider-0")).toBe(2);
+    successor.dispose();
+  });
+
   test("retries broker disposal after another registry owner unwinds", () => {
     const registry = new FakeRegistry();
     const original = registry.registerInstance;

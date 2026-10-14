@@ -154,6 +154,7 @@ export const connectControlEndpoint = (
   subscribeControlBindings: SubscribeControlBindings = () => () => {},
 ): ControlEndpoint => {
   let applying = false;
+  let closed = false;
   let applyTail = Promise.resolve();
   const disposers = new Set<() => void>();
   const listeners = new Set<(update: ControlEvent) => void>();
@@ -172,7 +173,11 @@ export const connectControlEndpoint = (
       topologyListeners.forEach((topologyListener) => topologyListener(objectId)),
     value: (objectId) => notify(objectId, "registration"),
   });
+  const closedError = () => new Error("The control endpoint closed before the update applied.");
   const applyLocal = async (updates: readonly ControlUpdate[]): Promise<void> => {
+    if (closed) {
+      throw closedError();
+    }
     if (updates.length === 0) {
       return;
     }
@@ -193,6 +198,9 @@ export const connectControlEndpoint = (
     }
   };
   const apply = async (updates: readonly ControlUpdate[]): Promise<void> => {
+    if (closed) {
+      throw closedError();
+    }
     const accepted: ControlUpdate[] = [];
     const created: string[] = [];
     applying = true;
@@ -216,11 +224,17 @@ export const connectControlEndpoint = (
           values: accepted.map(({ value }) => value),
         });
       } catch (error) {
-        // SAFETY: Marimo exposes entries as a Map. ControlRegistry narrows it
-        // to read-only access outside this rollback boundary.
-        const entries = registry.entries as Map<string, UIElementEntry>;
-        created.forEach((objectId) => entries.delete(objectId));
+        // A successor endpoint owns the registry once this one closes.
+        if (!closed) {
+          // SAFETY: Marimo exposes entries as a Map. ControlRegistry narrows it
+          // to read-only access outside this rollback boundary.
+          const entries = registry.entries as Map<string, UIElementEntry>;
+          created.forEach((objectId) => entries.delete(objectId));
+        }
         throw error;
+      }
+      if (closed) {
+        throw closedError();
       }
       accepted.forEach((update) =>
         registry.broadcastMessage(
@@ -267,6 +281,9 @@ export const connectControlEndpoint = (
       return dispose;
     },
     apply(updates) {
+      if (closed) {
+        return Promise.reject(closedError());
+      }
       if (updates.length === 0) {
         return Promise.resolve();
       }
@@ -276,6 +293,7 @@ export const connectControlEndpoint = (
     },
     applyLocal,
     dispose() {
+      closed = true;
       Array.from(disposers).forEach((dispose) => dispose());
       releaseRegistrations();
     },
