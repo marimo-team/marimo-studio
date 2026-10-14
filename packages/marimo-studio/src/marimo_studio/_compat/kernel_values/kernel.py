@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import time
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,12 +27,8 @@ from marimo_studio._compat.kernel_values.authorization import (
     STALE_PROJECTION_BINDING_MESSAGE,
     AuthorizedProjections,
     ProjectionAuthorizationError,
-    RuntimeCellBinding,
     verify_output_arguments,
     verify_value_ownership_arguments,
-)
-from marimo_studio._compat.kernel_values.dependencies import (
-    current_dependency_closure,
 )
 from marimo_studio._compat.kernel_values.lens import lens_overlay
 from marimo_studio._compat.kernel_values.models import (
@@ -55,7 +51,6 @@ from marimo_studio._compat.kernel_values.selectors import (
     _read_values,
 )
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS, QUERY_OPERATION_QUERY_PARAM
-from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._projections.resolution import MAX_UNIQUE_OUTPUT_TARGETS
 from marimo_studio._projections.runtime_records import (
     MAX_OUTPUT_BYTES,
@@ -134,47 +129,21 @@ def _install_execution_markers(context: Any) -> None:
 def _current_selectors(
     context: Any,
     authorized: AuthorizedProjections,
+    *,
+    cells: Mapping[str, Any] | None = None,
 ) -> dict[str, ValueSelector]:
     graph = context._kernel.graph
-    current_cells = tuple(
-        RuntimeCellBinding(reference, str(cell_id))
-        for (cell_id, cell), reference in zip(
-            graph.cells.items(),
-            cell_refs(cell.code for cell in graph.cells.values()),
-            strict=True,
-        )
-    )
-    current_by_runtime_id = {
-        binding.runtime_cell_id: binding for binding in current_cells
-    }
+    if cells is None:
+        cells = {str(cell_id): cell for cell_id, cell in graph.cells.items()}
     for target, binding in authorized.bindings.items():
-        # Marimo re-inserts an edited cell at the end of its graph mapping.
-        # Restore notebook order from the signed runtime IDs before comparing
-        # the live CellRefs and exact ancestor set.
-        ordered_current = tuple(
-            current
-            for expected in binding.dependency_closure
-            if (current := current_by_runtime_id.get(expected.runtime_cell_id))
-            is not None
-        )
-        current_closure = current_dependency_closure(
-            graph,
-            ordered_current,
-            binding.runtime_cell_id,
-        )
-        if tuple(item.runtime_cell_id for item in current_closure) != tuple(
-            item.runtime_cell_id for item in binding.dependency_closure
-        ):
-            raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
-        cell = next(
-            (
-                candidate
-                for cell_id, candidate in graph.cells.items()
-                if str(cell_id) == binding.runtime_cell_id
-            ),
-            None,
-        )
+        cell = cells.get(binding.runtime_cell_id)
         if cell is None or authorized.selectors[target].root not in cell.defs:
+            raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
+        # Code edits retain authorization when runtime IDs, ancestors, and
+        # the selector root's definition stay bound to the same cells.
+        current = {str(cell_id) for cell_id in graph.ancestors(binding.runtime_cell_id)}
+        current.add(binding.runtime_cell_id)
+        if current != {item.runtime_cell_id for item in binding.dependency_closure}:
             raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
     return authorized.selectors
 
@@ -528,8 +497,14 @@ class _KernelBridgeLifespan:
                     selectors = authorized.selectors
                     active_selectors = active_authorized.selectors
                 else:
-                    selectors = _current_selectors(context, authorized)
-                    active_selectors = _current_selectors(context, active_authorized)
+                    cells = {
+                        str(cell_id): cell
+                        for cell_id, cell in context._kernel.graph.cells.items()
+                    }
+                    selectors = _current_selectors(context, authorized, cells=cells)
+                    active_selectors = _current_selectors(
+                        context, active_authorized, cells=cells
+                    )
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return ValueReadResult(
@@ -620,8 +595,14 @@ class _KernelBridgeLifespan:
                     selectors = authorized.selectors
                     active_selectors = active_authorized.selectors
                 else:
-                    selectors = _current_selectors(context, authorized)
-                    active_selectors = _current_selectors(context, active_authorized)
+                    cells = {
+                        str(cell_id): cell
+                        for cell_id, cell in context._kernel.graph.cells.items()
+                    }
+                    selectors = _current_selectors(context, authorized, cells=cells)
+                    active_selectors = _current_selectors(
+                        context, active_authorized, cells=cells
+                    )
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return OutputRenderResult(
