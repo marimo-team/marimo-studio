@@ -55,7 +55,10 @@ def _stem(notebook: Path) -> str:
             max_bytes=_NOTEBOOK_STEM_MAX_BYTES,
         )
     except ValueError as error:
-        raise ConfigurationError(str(error)) from error
+        raise ConfigurationError(
+            f"{notebook.name} cannot name a Studio view folder. {error}. "
+            "Rename the notebook, then retry."
+        ) from error
     return notebook.stem
 
 

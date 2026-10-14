@@ -135,6 +135,18 @@ def test_notebook_stems_are_portable_filesystem_components(
         default_view_root(tmp_path / name)
 
 
+def test_invalid_notebook_stem_names_the_notebook_and_the_fix(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ConfigurationError) as raised:
+        default_view_root(tmp_path / "analysis .py")
+
+    assert str(raised.value) == (
+        "analysis .py cannot name a Studio view folder. Notebook filename stem "
+        "must not end with a dot or space. Rename the notebook, then retry."
+    )
+
+
 def test_workspace_names_accept_their_maximum_portable_size(tmp_path: Path) -> None:
     view_name = "v" * 240
     notebook_stem = "n" * 252
