@@ -365,3 +365,37 @@ def test_a_running_warmup_preempted_by_a_foreground_publication_reports_supersed
             await coordinator.close()
 
     assert isinstance(asyncio.run(exercise()), PublicationSuperseded)
+
+
+def test_foreground_settled_waits_for_a_released_foreground_worker() -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def held() -> str:
+        started.set()
+        assert release.wait(timeout=5)
+        return "done"
+
+    async def exercise() -> None:
+        coordinator = DevelopmentCoordinator()
+        registry = coordinator._publications
+        foreground = asyncio.create_task(coordinator.publish("selected", 1, held))
+        try:
+            assert await asyncio.to_thread(started.wait, 1)
+            foreground.cancel()
+            for _ in range(200):
+                if not registry._publications:
+                    break
+                await asyncio.sleep(0.005)
+            assert not registry._publications
+            settled = asyncio.create_task(coordinator.foreground_settled())
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(settled), timeout=0.1)
+            release.set()
+            await asyncio.wait_for(settled, timeout=2)
+        finally:
+            release.set()
+            await asyncio.gather(foreground, return_exceptions=True)
+            await coordinator.close()
+
+    asyncio.run(exercise())

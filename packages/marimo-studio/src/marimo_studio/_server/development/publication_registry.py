@@ -96,6 +96,9 @@ class PublicationRegistry:
         self._require_view = require_view
         self._inactive_condition = asyncio.Condition(lock)
         self._inactive_active = 0
+        # Foreground tasks stay here until they finish, including after a
+        # released publication leaves the registry and its worker drains.
+        self._foreground_tasks: set[asyncio.Task[Any]] = set()
         self._publications: dict[_PublicationKey, _Publication] = {}
         self._baselines: dict[_BaselineKey, _Baseline] = {}
 
@@ -132,9 +135,11 @@ class PublicationRegistry:
                     self._publications[key] = publication
                     self._prune_publications(view_name, generation)
                     if not warmup:
+                        self._track_foreground(task)
                         self._preempt_warmups(publication)
                 elif not warmup and not publication.admission.foreground:
                     publication.admission.foreground = True
+                    self._track_foreground(publication.task)
                     self._inactive_condition.notify_all()
                     self._preempt_warmups(publication)
                 if draining is None:
@@ -333,18 +338,14 @@ class PublicationRegistry:
             admission is not None and admission.cancelled and not admission.foreground
         )
 
+    def _track_foreground(self, task: asyncio.Task[Any]) -> None:
+        self._foreground_tasks.add(task)
+        task.add_done_callback(self._foreground_tasks.discard)
+
     async def foreground_settled(self) -> None:
-        """Wait until no foreground publication is running."""
-        while True:
-            async with self._lock:
-                running = [
-                    publication.task
-                    for publication in self._publications.values()
-                    if publication.admission.foreground and not publication.task.done()
-                ]
-            if not running:
-                return
-            await asyncio.wait(running)
+        """Wait until every foreground publication task has finished."""
+        while self._foreground_tasks:
+            await asyncio.wait(tuple(self._foreground_tasks))
 
     async def _claim_slot(self, admission: _PublicationAdmission) -> bool:
         async with self._inactive_condition:
