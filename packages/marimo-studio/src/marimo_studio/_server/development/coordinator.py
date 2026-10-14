@@ -388,7 +388,14 @@ class DevelopmentCoordinator:
                 return None
             monitor = self._source_monitors.monitor_locked(key)
             if monitor is None or monitor is not expected:
-                return None
+                return next(
+                    (
+                        event
+                        for event in expected.journal
+                        if expected.retired and event.generation > after
+                    ),
+                    None,
+                )
             if monitor.journal and after < monitor.journal[0].generation - 1:
                 return SourcePoll(
                     monitor.generation,
@@ -694,6 +701,15 @@ class DevelopmentCoordinator:
                 monitor,
                 committed=retirement.committed,
             )
+            if close_monitor and monitor is not None:
+                # Streams on the retired view hold this monitor. One final views
+                # change tells each browser to refresh its inventory.
+                monitor.retired = True
+                monitor.generation += 1
+                monitor.journal.append(
+                    SourcePoll(monitor.generation, SourceChange("views", ()))
+                )
+                monitor.changed.set()
             if (
                 not retirement.committed
                 and not self._closed

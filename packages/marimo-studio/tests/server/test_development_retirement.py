@@ -262,3 +262,36 @@ def test_cancelled_retirement_guard_drains_the_publication_before_reopening() ->
             await coordinator.close()
 
     assert asyncio.run(exercise()) == "stopped"
+
+
+def test_a_stream_on_a_removed_view_receives_one_views_change(
+    notebook_path: Any,
+) -> None:
+    from marimo_studio._views.api import create_view
+    from marimo_studio._views.remove import delete_view
+    from marimo_studio._workspace import load_studio
+
+    from ..source_change_test_support import next_source
+
+    create_view(notebook_path, "report")
+    create_view(notebook_path, "summary")
+    studio = load_studio(notebook_path)
+
+    async def exercise() -> tuple[str, Any]:
+        coordinator = DevelopmentCoordinator()
+        subscription = await coordinator.subscribe(studio, "report")
+        try:
+            while await subscription.poll() is not None:
+                pass
+            async with coordinator.retiring_view("report") as retirement:
+                await asyncio.to_thread(
+                    delete_view, load_studio(notebook_path), "report"
+                )
+                retirement.commit()
+            change = (await next_source(subscription)).change.kind
+            return change, await subscription.poll()
+        finally:
+            await subscription.close()
+            await coordinator.close()
+
+    assert asyncio.run(asyncio.wait_for(exercise(), timeout=10)) == ("views", None)

@@ -87,6 +87,7 @@ class _SourceMonitor:
     scan_control: ProviderCancellation | None = None
     scan_task: asyncio.Task[Any] | None = None
     rebuild: bool = False
+    retired: bool = False
     changed: asyncio.Event = field(default_factory=asyncio.Event)
     error: Exception | None = None
     activation_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
