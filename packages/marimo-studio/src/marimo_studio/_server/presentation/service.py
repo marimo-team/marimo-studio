@@ -37,6 +37,9 @@ from marimo_studio._processes.provider_operation import (
 )
 from marimo_studio._projections.resolved import ResolvedStudio
 from marimo_studio._projections.symbol_graph import NotebookSymbolGraph
+from marimo_studio._server.development.publication_registry import (
+    PublicationSuperseded,
+)
 from marimo_studio._views.inspection import view_project_state
 from marimo_studio._views.presentation_publication import publish_presentation
 from marimo_studio._views.resolve import resolve_studio
@@ -452,18 +455,21 @@ class NotebookPresentation:
                         return cached
                     continue
             prepared = PreparedViewProject(catalog.inspection, catalog.input_id)
-            await development.publish(
-                selected,
-                catalog.generation,
-                partial(
-                    publish_presentation,
-                    studio,
+            try:
+                await development.publish(
                     selected,
-                    prepared,
+                    catalog.generation,
+                    partial(
+                        publish_presentation,
+                        studio,
+                        selected,
+                        prepared,
+                        profile=profile,
+                    ),
                     profile=profile,
-                ),
-                profile=profile,
-            )
+                )
+            except PublicationSuperseded:
+                continue
             snapshot = await asyncio.to_thread(
                 self._resolve_snapshot,
                 selected,

@@ -21,6 +21,12 @@ from marimo_studio._server.development.task_ownership import run_owned_worker
 from marimo_studio.view_providers import BuildProfile
 
 _INACTIVE_PUBLICATION_LIMIT = 2
+
+
+class PublicationSuperseded(Exception):
+    """A newer request replaced this publication before it started."""
+
+
 _PublicationKey = tuple[str, int, BuildProfile]
 _BaselineKey = tuple[str, int]
 
@@ -319,7 +325,7 @@ class PublicationRegistry:
             ):
                 await self._inactive_condition.wait()
             if admission.cancelled:
-                raise asyncio.CancelledError
+                raise PublicationSuperseded
             if admission.foreground:
                 admission.claimed = True
                 return False
@@ -389,10 +395,10 @@ class PublicationRegistry:
                 self._baselines.pop(key, None)
 
     def _cancel_publication(self, publication: _Publication) -> None:
+        # An unclaimed publication wakes in _claim_slot and reports the
+        # supersede to its waiters, so they never see a foreign cancellation.
         publication.control.cancel()
         publication.admission.cancelled = True
-        if not publication.admission.claimed:
-            publication.task.cancel()
         self._inactive_condition.notify_all()
 
     def _preempt_warmups(self, selected: _Publication) -> None:

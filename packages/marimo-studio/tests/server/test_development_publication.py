@@ -237,3 +237,94 @@ def test_repeated_cancellation_drains_a_baseline_waiter_blocked_on_the_lock(
         assert not coordinator._publications._baselines
 
     asyncio.run(exercise())
+
+
+def test_a_warmup_preempted_before_its_slot_reports_supersede() -> None:
+    from marimo_studio._server.development.publication_registry import (
+        PublicationSuperseded,
+    )
+
+    held_started = threading.Barrier(3)
+    release_held = threading.Event()
+
+    def held() -> str:
+        held_started.wait(timeout=2)
+        assert release_held.wait(timeout=5)
+        return "held"
+
+    async def exercise() -> BaseException | str:
+        coordinator = DevelopmentCoordinator()
+        running = [
+            asyncio.create_task(coordinator.publish(name, 1, held, warmup=True))
+            for name in ("first", "second")
+        ]
+        try:
+            await asyncio.to_thread(held_started.wait, 2)
+            queued = asyncio.create_task(
+                coordinator.publish("third", 1, lambda: "third", warmup=True)
+            )
+            await asyncio.sleep(0)
+            assert await coordinator.publish("selected", 1, lambda: "ok") == "ok"
+            (outcome,) = await asyncio.gather(queued, return_exceptions=True)
+            return outcome
+        finally:
+            release_held.set()
+            await asyncio.gather(*running, return_exceptions=True)
+            await coordinator.close()
+
+    assert isinstance(asyncio.run(exercise()), PublicationSuperseded)
+
+
+def test_presentation_stream_serves_the_generation_after_a_superseded_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from marimo_studio._server.development import routes
+    from marimo_studio._server.development.publication_registry import (
+        PublicationSuperseded,
+    )
+    from marimo_studio.errors import ConfigurationError
+
+    async def unavailable_catalog(*_args: object) -> object:
+        raise ConfigurationError("Provider inspection is unavailable.")
+
+    async def publish(_view: str, generation: int, *_args: object, **_kwargs: object):
+        if generation == 1:
+            raise PublicationSuperseded
+        return {"schema": 1, "phase": "published"}, "rev-2", "art-2"
+
+    async def exercise() -> bytes:
+        coordinator = DevelopmentCoordinator()
+        monkeypatch.setattr(coordinator, "project_catalog", unavailable_catalog)
+        monkeypatch.setattr(coordinator, "publish", publish)
+        broker = routes._EventBroker()
+        requests: asyncio.Queue[Any] = asyncio.Queue(maxsize=1)
+        routes._request_presentation(requests, routes._PresentationRequest(1))
+        producer = routes._start_producer(
+            lambda: routes._produce_publication_events(
+                SimpleNamespace(views={"dashboard": object()}),
+                "dashboard",
+                coordinator,
+                requests,
+                asyncio.Event(),
+                broker,
+            ),
+            broker,
+        )
+        try:
+            while requests.qsize():
+                await asyncio.sleep(0.01)
+            routes._request_presentation(requests, routes._PresentationRequest(2))
+            while True:
+                event = await broker.receive()
+                assert isinstance(event, bytes), event
+                if b'"kind":"presentation"' in event:
+                    return event
+        finally:
+            producer.cancel()
+            await asyncio.gather(producer, return_exceptions=True)
+            await coordinator.close()
+
+    presentation = asyncio.run(asyncio.wait_for(exercise(), timeout=5))
+    assert b'"revision":"rev-2"' in presentation

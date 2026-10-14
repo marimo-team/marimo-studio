@@ -33,6 +33,9 @@ from marimo_studio._server.development.coordinator import (
     DevelopmentCoordinator,
     SourceSubscription,
 )
+from marimo_studio._server.development.publication_registry import (
+    PublicationSuperseded,
+)
 from marimo_studio._server.development.source_changes import (
     SourceChange,
     SourceChangeProducer,
@@ -563,19 +566,22 @@ async def _produce_publication_events(
     first = True
     while True:
         request = await requests.get()
-        async for kind, event in _presentation_events(
-            studio,
-            selected_view,
-            request.generation,
-            development,
-            previous_revision=request.previous_revision,
-        ):
-            await broker.emit_publication(
+        try:
+            async for kind, event in _presentation_events(
+                studio,
                 selected_view,
-                kind,
                 request.generation,
-                event,
-            )
+                development,
+                previous_revision=request.previous_revision,
+            ):
+                await broker.emit_publication(
+                    selected_view,
+                    kind,
+                    request.generation,
+                    event,
+                )
+        except PublicationSuperseded:
+            continue
         if first:
             first = False
             initial_ready.set()
@@ -711,6 +717,8 @@ async def _prepare_inactive_presentations(
             raise
         except ProcessCleanupError:
             raise
+        except PublicationSuperseded:
+            return
         except (MarimoStudioError, OSError) as error:
             raise_process_cleanup(error)
             return
