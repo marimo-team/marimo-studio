@@ -1,0 +1,23 @@
+packages/presentation/tests/revision-document.test.ts
+  s_b34a627c8c0b18::t_37dfe5021ca09c 772
+  s_b34a627c8c0b18::t_475eb31a5bca55 758-760,762,769-771,774-776
+  s_b34a627c8c0b18::t_5e57d92488f9f3 757,761,763-768,773,777-778
+packages/presentation/src/document/revision-document.ts
+  s_b34a627c8c0b18::t_708ca20b69a9bb 38-54,127,371
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "398665b0e8c3593e0f4f58bd58fd2e63a887e1aa",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
