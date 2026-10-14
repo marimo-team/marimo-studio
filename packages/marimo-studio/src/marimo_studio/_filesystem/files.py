@@ -467,6 +467,10 @@ class FileTree:
         """
         target = self._target(path, allow_root=allow_root)
         if target == self.root:
+            if self._anchored and DESCRIPTORS:
+                # An anchored root refuses a symlinked ancestor before lstat.
+                with suppress(FileNotFoundError):
+                    os.close(self._open_root())
             state = _lstat(Entry(target, None))
             if state is not None and stat.S_ISDIR(state.st_mode) and not is_link(state):
                 self._bind(state)

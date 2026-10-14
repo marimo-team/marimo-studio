@@ -161,3 +161,18 @@ def test_tree_version_tracks_contents_not_directory_timestamps(
     (nested / "app.js").write_bytes(b"two!")
 
     assert tree.tree_version(tree.root, max_entries=10) != before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows addresses paths directly")
+def test_an_anchored_tree_refuses_a_root_reached_through_a_symlink(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path.resolve()
+    (root / "real" / "views").mkdir(parents=True)
+    (root / "linked").symlink_to(root / "real", target_is_directory=True)
+
+    with pytest.raises(UnsafePathError):
+        FileTree(root / "linked" / "views", anchored=True).stat(
+            root / "linked" / "views"
+        )
+    assert FileTree(root / "missing", anchored=True).stat(root / "missing") is None
