@@ -1,0 +1,22 @@
+packages/studio/tests/studio-host.test.tsx
+  s_b34a627c8c0b18::t_9e8b313fe8efab 292-314,316-332,334-344
+  s_b34a627c8c0b18::t_d51cefc0aeb2be 315,333
+packages/studio/src/app/StudioHost.tsx
+  s_b34a627c8c0b18::t_86173c7583c0bd 285-286,288-293
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1c737daf592ae2304ecc1a4d508fdb8a1aa16819",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

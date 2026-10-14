@@ -1,0 +1,23 @@
+packages/studio/tests/view-mutation-ownership.test.tsx
+  s_b34a627c8c0b18::t_bfbc5850f3bca5 341-372
+packages/studio/src/features/views/controller.ts
+  s_b34a627c8c0b18::t_b64a3b32924fb8 417-418
+packages/studio/src/features/views/useViewMenu.ts
+  s_b34a627c8c0b18::t_b64a3b32924fb8 225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d28a84c7b6d98d64d05f367ec9c7f3b44aebcdf9",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

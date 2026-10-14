@@ -1,0 +1,21 @@
+packages/studio/tests/preview-deck-diagnostics.test.ts
+  s_b34a627c8c0b18::t_31855667a774b1 60-86
+packages/studio/src/features/preview/deck.ts
+  s_b34a627c8c0b18::t_2f22bd7988741c 820-821
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7389a72819f889baa29ba39ca5b988ff65f11182",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

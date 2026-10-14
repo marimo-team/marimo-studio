@@ -1,0 +1,22 @@
+packages/presentation/src/prepared/portals.tsx
+  s_b34a627c8c0b18::t_4656fb7e25a8f7 56-58
+packages/presentation/tests/prepared-projections.test.ts
+  s_b34a627c8c0b18::t_31b5cd82413849 376-380,383-396,402-412
+  s_b34a627c8c0b18::t_a1a0f9ec160ab2 375,381-382,397-401
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ba0d156015b561cffbd0f77ded00eff47e289d56",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
