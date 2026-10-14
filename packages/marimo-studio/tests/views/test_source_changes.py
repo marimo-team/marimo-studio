@@ -91,6 +91,38 @@ def test_catalog_reuses_unchanged_inspection_and_detects_direct_edits(
     assert provider.inspections == 2
 
 
+def test_an_edit_during_inspection_triggers_reinspection(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = created_one_view(notebook_path)
+    project = studio.views["dashboard"]
+    provider = _counting_registry(monkeypatch, project.provider)
+    source = project.root / "index.html"
+    inspect = provider.inspect
+
+    def inspect_then_edit(request: Any) -> Any:
+        inspection = inspect(request)
+        if provider.inspections == 1:
+            source.write_text(
+                source.read_text(encoding="utf-8") + "\n<p>edited</p>\n",
+                encoding="utf-8",
+            )
+        return inspection
+
+    monkeypatch.setattr(provider, "inspect", inspect_then_edit)
+
+    producer = SourceChangeProducer(studio, project.name)
+
+    assert not producer.catalog_current()
+    change = producer.poll()
+    assert change is not None
+    assert change.kind == "project"
+    assert provider.inspections == 2
+    assert producer.catalog_current()
+    assert producer.poll() is None
+
+
 def test_publication_hold_release_and_expiry_trigger_reconciliation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -268,6 +268,19 @@ class SourceChangeProducer:
         self._publication_hold_stamp = _publication_hold_stamp(project)
         self._reinspect_project()
 
+    def _pre_inspection_tree(
+        self, project: CatalogProject
+    ) -> dict[_WatchKey, _TreeStamp]:
+        scope = (*self._scope_files, *self._roots)
+        if scope:
+            return _tree_stamps(scope, self._excluded_roots)
+        try:
+            return _tree_stamps((project.root,), (project_artifacts(project),))
+        except ConfigurationError:
+            # A root larger than the watch budget, such as one holding
+            # node_modules, still inspects. Only the edit-race check is skipped.
+            return {}
+
     def _reinspect_project(
         self,
         observed_tree: dict[_WatchKey, _TreeStamp] | None = None,
@@ -282,6 +295,11 @@ class SourceChangeProducer:
             project = registry.validate_project(project)
             self._project = project
             provider = registry.get(project.provider)
+            before = (
+                observed_tree
+                if observed_tree is not None
+                else self._pre_inspection_tree(project)
+            )
             inspection = provider.inspect(inspection_request(project))
             input_files, roots = _validated_inputs(project, inspection)
             document_files = _validated_document_files(project, inspection)
@@ -334,6 +352,12 @@ class SourceChangeProducer:
         self._scope_files = scope_files
         self._roots = roots
         self._excluded_roots = excluded_roots
+        if _changed_during_inspection(before, tree):
+            # The provider may have read the earlier content. An empty tree and
+            # catalog make the next scan reinspect what is on disk now.
+            self._tree = {}
+            self._catalog_stamps = {}
+            return
         self._tree = tree
         self._catalog_stamps = _catalog_stamps(
             project,
@@ -640,6 +664,17 @@ def _tree_stamps(
             else:
                 result[("root", entry.path)] = entry.kind
     return result
+
+
+def _changed_during_inspection(
+    before: dict[_WatchKey, _TreeStamp],
+    after: dict[_WatchKey, _TreeStamp],
+) -> bool:
+    observed = {path: (kind, stamp) for (kind, path), stamp in before.items()}
+    return any(
+        observed.get(path, (kind, stamp)) != (kind, stamp)
+        for (kind, path), stamp in after.items()
+    )
 
 
 def _changed_keys(
