@@ -1,0 +1,24 @@
+packages/marimo-studio/tests/server/test_prepared_delivery.py
+  s_234de107cab5bb::t_0b582174d340d4 5,10,20-21,23,58-59,63-70,72,75-88,91,93,105-112,114-118,127,134,136,138,140,142,144-146,148,150,154-155,166-167,172,174,199,201
+  s_234de107cab5bb::t_2c7f6ea09aef06 163,180
+  s_234de107cab5bb::t_ba86a970363a35 181-182
+  s_234de107cab5bb::t_405a641a2bc5c8 183-190,193,198
+  s_234de107cab5bb::t_32836a8a6e5f08 123-126,128-130
+  s_234de107cab5bb::t_da78d0fcf6079b 135,137,139,141,147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "413c3ab290ab4b22df1eca262800faf16fbb2eaa",
+  "prompts": {},
+  "sessions": {
+    "s_234de107cab5bb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "agent-addb008f-f191-4c34-8b8a-d25be9440d96",
+        "model": "unknown"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
