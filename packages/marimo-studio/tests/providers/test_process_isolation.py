@@ -1144,7 +1144,7 @@ def test_isolated_provider_reports_incomplete_results_and_failures(
         "before returning a complete result. "
         "Check the provider installation and retry."
         if status is not None
-        else "The custom analyzer failed."
+        else "ValueError: The custom analyzer failed."
     )
     if mode == "import-error":
         detail += "\nModuleNotFoundError: No module named 'analyzer'"

@@ -13,7 +13,9 @@ from pathlib import Path, PurePosixPath
 from typing import cast
 
 from marimo_studio._processes.cancellation import provider_cancellation
+from marimo_studio._processes.operation import ProviderCommandError
 from marimo_studio._processes.provider_runner import create_provider_runner
+from marimo_studio.errors import MarimoStudioError
 from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
@@ -323,12 +325,15 @@ def main() -> int:
             )
         response: dict[str, object] = {"schema": 1, "ok": True, "value": value}
     except BaseException as error:
-        response = {
-            "schema": 1,
-            "ok": False,
-            "value": str(error)
-            or "Provider operation failed. Check its implementation and retry.",
-        }
+        message = (
+            str(error)
+            or "Provider operation failed. Check its implementation and retry."
+        )
+        # Match in-process providers: a command limit or Studio error explains
+        # itself, and any other exception is a provider bug whose type helps.
+        if not isinstance(error, (ProviderCommandError, MarimoStudioError)):
+            message = f"{type(error).__name__}: {message}"
+        response = {"schema": 1, "ok": False, "value": message}
     response_path.write_text(
         json.dumps(response, ensure_ascii=True, separators=(",", ":")),
         encoding="utf-8",
