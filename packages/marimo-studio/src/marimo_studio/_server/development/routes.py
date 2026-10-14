@@ -520,7 +520,6 @@ async def _produce_source_events(
                 "schema": 1,
                 "kind": change.kind,
                 "files": list(change.files),
-                **({"error": change.error} if change.error is not None else {}),
             },
         )
         resync = _encode(
@@ -529,7 +528,6 @@ async def _produce_source_events(
                 "schema": 1,
                 "kind": change.kind,
                 "files": [],
-                **({"error": change.error} if change.error is not None else {}),
             },
         )
         await broker.emit_source(
