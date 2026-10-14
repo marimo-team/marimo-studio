@@ -549,7 +549,9 @@ def read_json(root: Path, path: Path, label: str) -> object:
             parse_constant=reject_constant,
             object_pairs_hook=unique_object,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, RecursionError) as error:
+        # ValueError covers JSONDecodeError, UnicodeError, and decoder limits such
+        # as oversized integers. Deep nesting raises RecursionError.
         raise ConfigurationError(f"Could not read {label}: {path}: {error}") from error
 
 

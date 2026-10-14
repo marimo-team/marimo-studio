@@ -427,3 +427,23 @@ def test_a_missing_published_revision_asks_for_a_rebuild(tmp_path: Path) -> None
         f"The published development build of view {project.name!r} is missing. "
         "Build the view again."
     )
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["[" * 1500 + "]" * 1500, '{"schema": ' + "9" * 5000 + "}"],
+    ids=("deep-nesting", "oversized-integer"),
+)
+def test_a_build_replaces_a_receipt_beyond_the_json_decoder_limits(
+    tmp_path: Path,
+    damage: str,
+) -> None:
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    _profile_path(project, "development").write_text(damage, encoding="utf-8")
+
+    rebuilt = publish_artifact(project, "development")
+
+    assert read_build_state(project, "development").artifact_revision == (
+        rebuilt.artifact_revision
+    )
