@@ -3,7 +3,13 @@ import { afterEach, expect, it, vi } from "vite-plus/test";
 import { PreviewControlController } from "../src/features/preview/control-controller.ts";
 import { PreviewController } from "../src/features/preview/controller.ts";
 import { installFrameBridge } from "./frame-bridge-test-support.ts";
-import { controller, dispatchPreviewMessage, frame, previewDeck } from "./preview-test-support.ts";
+import {
+  attachedServerDeck,
+  controller,
+  dispatchPreviewMessage,
+  frame,
+  previewDeck,
+} from "./preview-test-support.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -58,24 +64,7 @@ const interactiveHarness = () => {
 };
 
 it("blocks the preview frame once the Studio server restarts", () => {
-  const preview = frame("complete");
-  const previewWindow = { postMessage: vi.fn() };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const deck = previewDeck();
-  deck.attach(frame("complete"), new Map([["server", preview]]));
-  const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
-  for (const type of ["marimo-studio:receiver-ready", "marimo-studio:view-ready"] as const) {
-    dispatchPreviewMessage(previewWindow, {
-      type,
-      runtime: "server",
-      lifecycleId,
-      view: "dashboard",
-      revision: "revision-1",
-    });
-  }
+  const { deck } = attachedServerDeck({ postMessage: vi.fn() }, true);
   expect(deck.getSnapshot().frames.find(({ active }) => active)?.interactive).toBe(true);
 
   deck.serverRestarted();

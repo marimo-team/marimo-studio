@@ -4,6 +4,7 @@ import { PreviewController } from "../src/features/preview/controller.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 import {
   acknowledgementPort,
+  attachedServerDeck,
   cachedFramesWithWindows,
   dispatchPreviewMessage,
   dispatchPreviewRefreshHandshake,
@@ -332,7 +333,6 @@ it("recreates a cached view after a pending mutation reloads the editor document
 });
 
 it("keeps the published preview when the editor cannot save the notebook", async () => {
-  const preview = frame("complete");
   // The presentation document accepts the mutation barrier it receives.
   const previewWindow = {
     dispatchEvent: vi.fn(),
@@ -346,22 +346,7 @@ it("keeps the published preview when the editor cannot save the notebook", async
       }
     }),
   };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const deck = previewDeck();
-  deck.attach(frame("complete"), new Map([["server", preview]]));
-  const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
-  for (const type of ["marimo-studio:receiver-ready", "marimo-studio:view-ready"] as const) {
-    dispatchPreviewMessage(previewWindow, {
-      type,
-      runtime: "server",
-      lifecycleId,
-      view: "dashboard",
-      revision: "revision-1",
-    });
-  }
+  const { deck } = attachedServerDeck(previewWindow, true);
   const interactive = () => deck.getSnapshot().frames.find(({ active }) => active)?.interactive;
   const mutation = acknowledgementPort();
   deck.notebookMutationPending(1, mutation.port);

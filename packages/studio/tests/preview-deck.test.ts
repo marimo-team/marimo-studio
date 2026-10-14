@@ -4,6 +4,7 @@ import { PreviewController } from "../src/features/preview/controller.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 import {
   acknowledgementPort,
+  attachedServerDeck,
   cachedFrames,
   cachedFramesWithWindows,
   dispatchPreviewMessage,
@@ -705,16 +706,8 @@ it("addresses activated documents before rendering and rejects a retired selecti
 });
 
 it("asks for a page reload after the Studio server restarts", () => {
-  const editor = frame("complete");
-  const serverFrame = frame("complete");
-  const serverWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
-  Object.defineProperty(serverFrame, "contentWindow", {
-    configurable: true,
-    value: serverWindow,
-  });
-  const deck = previewDeck();
-  deck.attach(editor, new Map([["server", serverFrame]]));
-  const source = serverFrame.src;
+  const { deck, preview } = attachedServerDeck({ postMessage: vi.fn() });
+  const source = preview.src;
 
   deck.serverRestarted();
 
@@ -732,6 +725,6 @@ it("asks for a page reload after the Studio server restarts", () => {
   vi.stubGlobal("location", { reload });
   deck.reload();
   expect(reload).toHaveBeenCalledOnce();
-  expect(serverFrame.src).toBe(source);
+  expect(preview.src).toBe(source);
   deck.dispose();
 });

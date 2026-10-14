@@ -68,6 +68,7 @@ export const controller = (
   report = vi.fn(),
   navigate = vi.fn(),
   syncQuery = vi.fn(),
+  syncEditorQuery: ConstructorParameters<typeof PreviewController>[7] = async () => "accepted",
 ) =>
   new PreviewController(
     "dashboard",
@@ -77,7 +78,7 @@ export const controller = (
     viewUrl,
     (view) => `/support/${view}`,
     syncQuery,
-    vi.fn(async () => "accepted" as const),
+    syncEditorQuery,
     navigate,
     report,
   );
@@ -164,3 +165,35 @@ export const previewDeck = (options: Partial<PreviewDeckOptions> = {}): PreviewD
     navigate: vi.fn(),
     ...options,
   });
+
+type ServerPreviewWindow = {
+  dispatchEvent?: (event: Event) => void;
+  postMessage: (
+    message: { generation?: number; type: string },
+    origin?: string,
+    ports?: MessagePort[],
+  ) => void;
+};
+
+export const attachedServerDeck = (previewWindow: ServerPreviewWindow, ready = false) => {
+  const preview = frame("complete");
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const deck = previewDeck();
+  deck.attach(frame("complete"), new Map([["server", preview]]));
+  const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
+  if (ready) {
+    for (const type of ["marimo-studio:receiver-ready", "marimo-studio:view-ready"] as const) {
+      dispatchPreviewMessage(previewWindow, {
+        type,
+        runtime: "server",
+        lifecycleId,
+        view: "dashboard",
+        revision: "revision-1",
+      });
+    }
+  }
+  return { deck, lifecycleId, preview, previewWindow };
+};

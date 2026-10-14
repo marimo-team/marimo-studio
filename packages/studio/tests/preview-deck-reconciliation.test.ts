@@ -541,7 +541,6 @@ it("admits a replacement document that boots while a presentation change is pend
   server.presentationBuildCompleted("revision-2");
   expect(postMessage).toHaveBeenCalledWith(presentationChange, "*");
   dispatchPreviewMessage(previewWindow, { type: "marimo-studio:receiver-unready", ...identity });
-  // The refreshing document loses its kernel and fails before it reloads.
   dispatchPreviewMessage(previewWindow, {
     type: "marimo-studio:view-error",
     ...identity,

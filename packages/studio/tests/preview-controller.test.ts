@@ -578,27 +578,17 @@ it("reports a query failure and clears it after the editor recovers", async () =
 
 it("reports a query failure beside a preview that fills the diagnostic budget", async () => {
   const syncEditorQuery = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<ConstructorParameters<typeof PreviewController>[7]>()
     .mockRejectedValue(new Error("editor query unavailable"));
-  const report = vi.fn();
-  const server = new PreviewController(
-    "dashboard",
+  const server = controller(
     "wasm",
     frame("loading"),
     frame("complete"),
     (view, runtime) => `/${view}?runtime=${runtime}`,
-    (view) => `http://localhost:3000/support/${view}`,
+    vi.fn(),
+    vi.fn(),
     vi.fn(),
     syncEditorQuery,
-    vi.fn(),
-    report,
   );
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   dispatchPreviewMessage(null, {
