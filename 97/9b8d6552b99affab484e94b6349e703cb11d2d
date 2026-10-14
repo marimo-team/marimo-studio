@@ -1,0 +1,24 @@
+packages/marimo-studio/src/marimo_studio/_server/middleware.py
+  s_80c04bef0fc32a::t_b1c1bc48ad33ea 508,609
+packages/marimo-studio/src/marimo_studio/_server/studio/routes.py
+  s_80c04bef0fc32a::t_b1c1bc48ad33ea 133-134
+packages/marimo-studio/src/marimo_studio/_views/sources.py
+  s_80c04bef0fc32a::t_0a29c15b869348 185,224
+  s_80c04bef0fc32a::t_998632a1d0844c 279-283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "979b8d6552b99affab484e94b6349e703cb11d2d",
+  "prompts": {},
+  "sessions": {
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

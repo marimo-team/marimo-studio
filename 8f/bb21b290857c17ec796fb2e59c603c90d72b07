@@ -1,0 +1,21 @@
+packages/presentation/tests/static-document.test.ts
+  s_80c04bef0fc32a::t_a4d1dbd4599dea 48
+packages/presentation/src/static.ts
+  s_80c04bef0fc32a::t_edfddcd2e6793e 50-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8fbb21b290857c17ec796fb2e59c603c90d72b07",
+  "prompts": {},
+  "sessions": {
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
