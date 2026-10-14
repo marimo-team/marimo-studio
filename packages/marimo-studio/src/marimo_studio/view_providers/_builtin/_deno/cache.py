@@ -25,8 +25,11 @@ def _ensure_directory(path: Path) -> None:
     _validate_directory(path)
 
 
+# gVisor follows a trailing symlink when O_DIRECTORY accompanies O_NOFOLLOW,
+# so every open below uses O_NOFOLLOW alone and fstat confirms a directory.
+# O_NONBLOCK keeps a FIFO swapped in at the path from blocking the open.
 _DIRECTORY_FLAGS = (
-    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
 )
 
 
@@ -37,9 +40,15 @@ _DIRECTORY_FLAGS = (
 _NOFOLLOW_ANY = getattr(os, "O_NOFOLLOW_ANY", 0)
 _WALK_FLAGS = (
     (getattr(os, "O_PATH", 0) or os.O_RDONLY)
-    | getattr(os, "O_DIRECTORY", 0)
     | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
 )
+
+
+def _require_directory(descriptor: int, path: Path) -> None:
+    # Linux O_PATH with O_NOFOLLOW opens a final symlink itself.
+    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        raise OSError(f"Provider cache path is not a directory: {path}")
 
 
 def _open_resolved(path: Path) -> int:
@@ -50,18 +59,20 @@ def _open_resolved(path: Path) -> int:
     """
     if _NOFOLLOW_ANY:
         # macOS rejects O_NOFOLLOW_ANY combined with O_NOFOLLOW.
-        return os.open(
-            path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | _NOFOLLOW_ANY
+        descriptor = os.open(
+            path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | _NOFOLLOW_ANY
         )
-    descriptor = os.open(path.anchor, _WALK_FLAGS)
+        parts: tuple[str, ...] = ()
+    else:
+        descriptor = os.open(path.anchor, _WALK_FLAGS)
+        parts = path.parts[1:]
     try:
-        for part in path.parts[1:]:
+        _require_directory(descriptor, path)
+        for part in parts:
             next_descriptor = os.open(part, _WALK_FLAGS, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
-            # Linux O_PATH with O_NOFOLLOW opens a final symlink itself.
-            if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
-                raise OSError(f"Provider cache path is not a directory: {path}")
+            _require_directory(descriptor, path)
     except BaseException:
         os.close(descriptor)
         raise
@@ -92,6 +103,10 @@ def _ensure_descendant_with_descriptors(
             os.close(descriptor)
             descriptor = next_descriptor
             current /= part
+            if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                raise ValueError(
+                    f"Provider cache path must be a regular directory: {current}"
+                )
         return current
     except OSError as error:
         raise ValueError(
