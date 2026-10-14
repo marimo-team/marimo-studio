@@ -820,3 +820,58 @@ def test_react_nested_scopes_keep_module_targets(tmp_path: Path, scope: str) -> 
     assert inspection.diagnostics == ()
     (site,) = inspection.sites
     assert site.targets == ("first",)
+
+
+@pytest.mark.parametrize("imported", [False, True], ids=("outer", "imported"))
+@pytest.mark.parametrize(
+    ("parameter", "body"),
+    [
+        ("card = <output mo-value={target} />", "var target = load();"),
+        ("{ card = <output mo-value={target} /> } = {}", "var { target } = props;"),
+        ("card = () => <output mo-value={target} />", "if (ready) { var target; }"),
+    ],
+    ids=("default", "destructured-default", "default-closure"),
+)
+def test_react_parameter_initializers_resolve_targets_outside_the_function_body(
+    tmp_path: Path, imported: bool, parameter: str, body: str
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    root.joinpath("src/targets.ts").write_text(
+        'export const target = "first";\n', encoding="utf-8"
+    )
+    binding = (
+        'import { target } from "./targets.ts";\n'
+        if imported
+        else 'const target = "first";\n'
+    )
+    root.joinpath("src/App.tsx").write_text(
+        binding + f"function Card({parameter}) {{ {body} return card; }}\n",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == ("first",)
+
+
+def test_react_function_body_var_shadows_outer_targets_before_its_declaration(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    root.joinpath("src/App.tsx").write_text(
+        'const target = "first";\n'
+        "function Card() {\n"
+        '  const card = <output mo-value={target} data-marimo-allow="*" />;\n'
+        "  var target = load();\n"
+        "  return card;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == "*"

@@ -66,6 +66,9 @@ const lexicalContainer = (node: BindingDeclaration): ts.Node => {
     (ts.getCombinedNodeFlags(owner.parent) & ts.NodeFlags.BlockScoped) !== 0;
   let current = owner.parent;
   while (current !== undefined) {
+    if (!blockScoped && ts.isFunctionLike(current) && "body" in current) {
+      return current.body ?? current;
+    }
     if (
       ts.isSourceFile(current) || ts.isFunctionLike(current) ||
       ts.isClassStaticBlockDeclaration(current) || ts.isModuleBlock(current) ||
