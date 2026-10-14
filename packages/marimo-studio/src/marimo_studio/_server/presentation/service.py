@@ -83,6 +83,11 @@ _SNAPSHOT_HISTORY_LIMIT = 8
 _BUILD_HISTORY_LIMIT = 2
 _SNAPSHOT_RECONCILIATION_LIMIT = 8
 _SnapshotKey = tuple[str, BuildProfile]
+_PresentationStamps = tuple[
+    tuple[int, int, int],
+    tuple[tuple[str, int, int, int], ...],
+    tuple[int, int, int, int] | None,
+]
 
 
 @dataclass(frozen=True)
@@ -470,6 +475,12 @@ class NotebookPresentation:
                 )
             except PublicationSuperseded:
                 continue
+            accepted_stamps = await asyncio.to_thread(
+                self._presentation_stamps,
+                catalog.project,
+                catalog.inspection,
+                profile,
+            )
             snapshot = await asyncio.to_thread(
                 self._resolve_snapshot,
                 selected,
@@ -506,22 +517,30 @@ class NotebookPresentation:
                 raise RuntimeSyncError(
                     "The view sources are still changing. Studio will retry shortly."
                 )
-            accepted_stamps = await asyncio.to_thread(
-                self._presentation_stamps,
-                current.project,
-                current.inspection,
-                profile,
-            )
-            with self._lock:
-                self._snapshot_generations[key] = current.generation
-                self._snapshot_notebook_stamps[key] = accepted_stamps[0]
-                self._snapshot_document_stamps[key] = accepted_stamps[1]
-                self._snapshot_publication_stamps[key] = accepted_stamps[2]
+            self._accept_stamps(key, snapshot, current.generation, accepted_stamps)
             return snapshot
         raise RuntimeSyncError(
             "The view sources kept changing during presentation capture. "
             "Studio will retry shortly."
         )
+
+    def _accept_stamps(
+        self,
+        key: _SnapshotKey,
+        snapshot: PresentationSnapshot,
+        generation: int,
+        stamps: _PresentationStamps,
+    ) -> None:
+        # Stamps read before the capture can only be older than the snapshot,
+        # which costs one extra capture. Stamps read after it can describe a
+        # later publication and pin this snapshot until the next file change.
+        with self._lock:
+            if self._snapshots.get(key) is not snapshot:
+                return
+            self._snapshot_generations[key] = generation
+            self._snapshot_notebook_stamps[key] = stamps[0]
+            self._snapshot_document_stamps[key] = stamps[1]
+            self._snapshot_publication_stamps[key] = stamps[2]
 
     def _notebook_stamp(self) -> tuple[int, int, int]:
         state = self.notebook.stat()
@@ -551,11 +570,7 @@ class NotebookPresentation:
         project: CatalogProject,
         inspection: ProjectInspection,
         profile: BuildProfile = "development",
-    ) -> tuple[
-        tuple[int, int, int],
-        tuple[tuple[str, int, int, int], ...],
-        tuple[int, int, int, int] | None,
-    ]:
+    ) -> _PresentationStamps:
         try:
             return (
                 self._notebook_stamp(),
@@ -758,24 +773,7 @@ class NotebookPresentation:
             current = await development.project_catalog(studio, view_name)
             if current.generation != catalog.generation:
                 continue
-            try:
-                accepted_stamps = await asyncio.to_thread(
-                    self._presentation_stamps,
-                    current.project,
-                    current.inspection,
-                    profile,
-                )
-            except RuntimeSyncError:
-                if cached is not None:
-                    return await asyncio.to_thread(
-                        self._require_cached_snapshot, cached
-                    )
-                raise
-            with self._lock:
-                self._snapshot_generations[key] = current.generation
-                self._snapshot_notebook_stamps[key] = accepted_stamps[0]
-                self._snapshot_document_stamps[key] = accepted_stamps[1]
-                self._snapshot_publication_stamps[key] = accepted_stamps[2]
+            self._accept_stamps(key, published, current.generation, current_stamps)
             return published
         if cached is not None:
             return await asyncio.to_thread(self._require_cached_snapshot, cached)

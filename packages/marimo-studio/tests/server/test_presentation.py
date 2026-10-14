@@ -276,6 +276,53 @@ def test_last_good_cache_observes_a_publication_completed_in_the_same_generation
     asyncio.run(exercise())
 
 
+def test_display_snapshot_observes_a_publication_that_lands_during_capture(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = configured(notebook_path)
+    project = studio.view("dashboard")
+    coordinator = DevelopmentCoordinator()
+    presentation = NotebookPresentation(studio.notebook, development=coordinator)
+    native_resolve = presentation._resolve_snapshot
+    publish_during_capture = Event()
+
+    def resolve_then_publish(*args: Any, **kwargs: Any) -> Any:
+        snapshot = native_resolve(*args, **kwargs)
+        if publish_during_capture.is_set():
+            publish_during_capture.clear()
+            with publish_artifact(project, "development"):
+                pass
+        return snapshot
+
+    monkeypatch.setattr(presentation, "_resolve_snapshot", resolve_then_publish)
+
+    async def exercise() -> None:
+        try:
+            initial = await presentation.display_snapshot_async("dashboard")
+            source = project.root / "index.html"
+            source.write_text(
+                source.read_text(encoding="utf-8").replace(
+                    "</main>",
+                    "<h1>Published during capture</h1></main>",
+                ),
+                encoding="utf-8",
+            )
+            await coordinator.refresh("dashboard")
+            publish_during_capture.set()
+            retained = await presentation.display_snapshot_async("dashboard")
+            current = await presentation.display_snapshot_async("dashboard")
+
+            assert retained.revision == initial.revision
+            assert current.revision != retained.revision
+            assert "Published during capture" in current.document
+        finally:
+            presentation.close()
+            await coordinator.close()
+
+    asyncio.run(exercise())
+
+
 def test_first_preview_reports_provider_failure_and_recovers_after_repair(
     notebook_path: Path,
 ) -> None:
