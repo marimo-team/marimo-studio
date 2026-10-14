@@ -18,6 +18,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
 from marimo_studio._delivery.urls import STUDIO_CLIENT_QUERY_PARAM
+from marimo_studio._processes.ownership import settle_ownership
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.client_identity import parse_studio_client_id
 from marimo_studio._server.files import ResponseOwnerTask
@@ -98,7 +99,8 @@ async def zero_python_response(
         path = await asyncio.to_thread(lambda: asset.path)
         return _immutable_file(path, asset.close)
     except BaseException:
-        asset.close()
+        # close() waits on the lock that a cancelled verification still holds.
+        await settle_ownership(asyncio.to_thread(asset.close))
         raise
 
 

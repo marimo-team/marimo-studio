@@ -140,3 +140,65 @@ def test_a_rejected_range_releases_its_lease(tmp_path: Path) -> None:
         return statuses, lease.closed
 
     assert asyncio.run(exercise()) == ([416], True)
+
+
+def test_cancelling_during_verification_keeps_the_event_loop_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+    import time
+
+    import marimo_export.prepared as prepared_module
+
+    entered = threading.Event()
+    release = threading.Event()
+    verify = prepared_module.verify_member
+
+    def slow_verify(*args: Any) -> Any:
+        entered.set()
+        assert release.wait(2)
+        return verify(*args)
+
+    async def exercise() -> tuple[float, bool]:
+        content = b"value"
+        path = tmp_path / "assets" / "value.bin"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(content)
+        lease = _Lease()
+        digest = hashlib.sha256(content).hexdigest()
+        member = ClosureMember(sha256=digest, size=len(content))
+        asset = cast(Any, PreparedAsset)._create(
+            path, lease, "assets/value.bin", member
+        )
+        monkeypatch.setattr(prepared_module, "verify_member", slow_verify)
+
+        class Publications:
+            async def publication_asset(self, *_args: object) -> PreparedAsset:
+                return asset
+
+        serving = asyncio.create_task(
+            zero_python_response(
+                Request(_scope()),
+                cast(Any, Publications()),
+                "dashboard",
+                f"{_INSTANCE}/assets/value.bin",
+                clients=cast(Any, SimpleNamespace()),
+                allow_refresh=False,
+            )
+        )
+        await asyncio.to_thread(entered.wait, 2)
+        threading.Timer(0.4, release.set).start()
+        started = time.monotonic()
+        ran: list[float] = []
+        asyncio.get_running_loop().call_later(
+            0.05, lambda: ran.append(time.monotonic() - started)
+        )
+        serving.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await serving
+        return ran[0], lease.closed
+
+    callback_delay, closed = asyncio.run(exercise())
+
+    assert callback_delay < 0.2
+    assert closed is True
