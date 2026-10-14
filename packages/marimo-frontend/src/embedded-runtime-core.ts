@@ -320,6 +320,8 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
       stopExposingSession = exposeSession(sessionId, options.exposeSession);
       renderer.render(initialized, options.render, sessionId, options.autoInstantiate);
     } catch (error) {
+      // The mount error replaces the startup result, which no renderer will observe.
+      initialized?.catch(() => undefined);
       const cleanupErrors = runDisposers(disposers);
       if (disposers.size === 0) {
         releaseOwner();

@@ -813,6 +813,40 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
   ).toThrow("already mounted");
 });
 
+test("a mount rollback leaves no unhandled transport startup failure", async () => {
+  const theme = createThemeSource();
+  const host = new RuntimeHostDouble();
+  host.transport.prepareWasm = () => {
+    throw new Error("worker failed to start");
+  };
+  host.renderError = new Error("runtime render failed");
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  const unhandled = vi.fn();
+  process.on("unhandledRejection", unhandled);
+
+  try {
+    expect(() =>
+      mountEmbeddedRuntime({
+        autoInstantiate: false,
+        exposeSession: false,
+        initialMode: "read",
+        presentation: presentation(),
+        render: () => null,
+        root: root(),
+        theme: theme.source,
+        transport: wasmTransport(),
+        viewMode: "read",
+      }),
+    ).toThrow("runtime render failed");
+    // Node reports unhandled rejections after the microtask queue drains.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    process.off("unhandledRejection", unhandled);
+  }
+
+  expect(unhandled).not.toHaveBeenCalled();
+});
+
 test("accepts JSON function results and rejects runtime-only values", () => {
   expect(parseEmbeddedJsonValue({ found: true, values: [1, "ready", null] })).toEqual({
     found: true,
