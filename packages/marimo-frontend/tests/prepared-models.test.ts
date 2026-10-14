@@ -16,9 +16,11 @@ import type {
 
 import { createPreparedModelLifecycle } from "../src/prepared-models.ts";
 
-// SAFETY: The test observes the browser global owned by the prepared model facade.
+// SAFETY: The test observes the browser global owned by the prepared model facade,
+// and an evaluating widget module publishes its release hook on the same object.
 const browser = globalThis as typeof globalThis & {
   __MARIMO_STATIC__?: { readonly files: Readonly<Record<string, string>> };
+  releasePreparedModule?: () => void;
 };
 
 let lifecycle: PreparedModelLifecycleHandle | undefined;
@@ -45,6 +47,9 @@ const openNotification = (
 });
 
 afterEach(async () => {
+  // A module that never finishes evaluating would hold disposal open.
+  browser.releasePreparedModule?.();
+  delete browser.releasePreparedModule;
   await lifecycle?.dispose();
   lifecycle = undefined;
   vi.restoreAllMocks();
@@ -151,8 +156,6 @@ test("native model replacement rejects malformed lifecycle and widget modules be
 });
 
 test("cancelling a replacement settles it while a widget module still evaluates", async () => {
-  // SAFETY: The module below publishes its release hook on the global object.
-  const pending = globalThis as typeof globalThis & { releasePreparedModule?: () => void };
   const source =
     "await new Promise((resolve) => { globalThis.releasePreparedModule = resolve; });" +
     "export default { render() {} };";
@@ -171,15 +174,13 @@ test("cancelling a replacement settles it while a widget module still evaluates"
     },
     selection.signal,
   );
-  await vi.waitFor(() => assert.ok(pending.releasePreparedModule));
+  await vi.waitFor(() => assert.ok(browser.releasePreparedModule));
 
   selection.abort(new DOMException("A newer Prepared state was selected.", "AbortError"));
 
   await assert.rejects(replacement, { name: "AbortError" });
   await lifecycle.dispose();
   lifecycle = undefined;
-  pending.releasePreparedModule?.();
-  delete pending.releasePreparedModule;
 });
 
 test("native model disposal restores prior page resources", async () => {
