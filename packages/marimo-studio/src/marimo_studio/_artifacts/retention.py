@@ -16,6 +16,7 @@ after the final lease closes.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import tempfile
@@ -28,7 +29,7 @@ from threading import Lock
 from types import TracebackType
 from typing import BinaryIO
 
-from marimo_studio._artifacts.codec import profile_state
+from marimo_studio._artifacts.codec import ArtifactFormatError, profile_state
 from marimo_studio._artifacts.lock import artifact_lock
 from marimo_studio._artifacts.paths import (
     artifact_base,
@@ -59,6 +60,7 @@ from marimo_studio.view_providers import (
     ProjectDiagnostic,
 )
 
+_LOGGER = logging.getLogger("marimo.studio")
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _PIN = re.compile(r"([1-9][0-9]*)-([0-9a-f]{32})")
 _QUARANTINE = re.compile(r"([0-9a-f]{64})-([0-9a-f]{32})")
@@ -257,9 +259,21 @@ def prune_artifacts_locked(project: CatalogProject) -> None:
         for profile in ("development", "production"):
             try:
                 state = read_profile_state(project, profile)
-            except (OSError, ConfigurationError):
-                # A damaged sibling receipt has unknown ownership. Leave every
-                # revision in place until that profile repairs its own state.
+            except ArtifactFormatError:
+                # Readers treat another format's receipt as unbuilt, so its
+                # revision is unreachable until the next build replaces it.
+                continue
+            except (OSError, ConfigurationError) as error:
+                # A damaged receipt has unknown ownership. Keep every revision
+                # until that profile builds again and repairs its own state.
+                _LOGGER.warning(
+                    "Kept every revision of %s because its %s receipt is "
+                    "unreadable: %s. Build the view with that profile to repair "
+                    "it.",
+                    project.root,
+                    profile,
+                    error,
+                )
                 return
             if state is not None and state.published is not None:
                 protected.add(state.published.artifact_revision)
