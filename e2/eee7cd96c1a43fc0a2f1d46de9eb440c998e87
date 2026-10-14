@@ -1,0 +1,30 @@
+packages/marimo-studio/tests/artifacts/test_build_execution.py
+  s_80c04bef0fc32a::t_9f2496b227dc26 305-341
+packages/marimo-studio/src/marimo_studio/_views/build.py
+  s_427468f19bd474::t_3c5b312d047542 92
+  s_80c04bef0fc32a::t_c54abc6f10a80f 144,174-176,200,212-214,472,520
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e2eee7cd96c1a43fc0a2f1d46de9eb440c998e87",
+  "prompts": {},
+  "sessions": {
+    "s_427468f19bd474": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13955-f51e-70f2-91dc-e41714d1a6a2",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
