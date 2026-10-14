@@ -808,49 +808,25 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
         _kill_reported_processes(marker, pids)
 
 
-def test_cli_sigint_drains_the_provider_process_tree(
+@pytest.mark.parametrize(
+    "stop",
+    [
+        "interrupt",
+        pytest.param(
+            "kill",
+            marks=pytest.mark.skipif(
+                os.name == "nt",
+                reason="a Windows job ends with its owner",
+            ),
+        ),
+    ],
+    ids=("sigint-drains", "killed"),
+)
+def test_stopped_cli_leaves_no_provider_process_tree(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
-    script = (
-        "import marimo_studio.view_providers._host as providers; "
-        "from tests.providers.test_process_isolation import _registry; "
-        "providers._REGISTRY = _registry('build-tree', 'build_tree_provider'); "
-        "from marimo_studio._cli.main import cli; "
-        f"cli.main(args=['validate', 'dashboard', '--target', "
-        f"{str(studio.notebook)!r}])"
-    )
-    environment = os.environ.copy()
-    environment["PYTHONPATH"] = str(Path(__file__).parents[2])
-    environment[SANDBOX_ENV] = "1"
-    process = subprocess.Popen(
-        [sys.executable, "-c", script],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=environment,
-    )
-    pids: tuple[int, ...] = ()
-    try:
-        pids = _wait_for_pids(marker, 3)
-        os.kill(process.pid, signal.SIGINT)
-        process.wait(timeout=5)
-        _wait_until_dead(pids)
-        assert process.returncode != 0
-    finally:
-        if process.poll() is None:
-            process.kill()
-            process.wait(timeout=5)
-        _kill_reported_processes(marker, pids)
-
-
-@pytest.mark.skipif(os.name == "nt", reason="a Windows job ends with its owner")
-def test_killed_cli_leaves_no_provider_process_tree(
-    notebook_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    stop: str,
 ) -> None:
     studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
     script = (
@@ -874,9 +850,14 @@ def test_killed_cli_leaves_no_provider_process_tree(
     pids: tuple[int, ...] = ()
     try:
         pids = _wait_for_pids(marker, 3)
-        process.kill()
+        if stop == "interrupt":
+            os.kill(process.pid, signal.SIGINT)
+        else:
+            process.kill()
         process.wait(timeout=5)
         _wait_until_dead(pids)
+        if stop == "interrupt":
+            assert process.returncode != 0
     finally:
         if process.poll() is None:
             process.kill()
@@ -1047,24 +1028,11 @@ class _FifoStarterProvider(ProviderStub):
         transfer = response.parent / "transfer"
         transfer.mkdir()
         os.mkfifo(transfer / "00000000.bin")
+        digest = "0" * 64
         response.write_text(
-            json.dumps(
-                {
-                    "schema": 1,
-                    "ok": True,
-                    "value": {
-                        "cell_targets": [],
-                        "files": [
-                            {
-                                "path": "index.html",
-                                "blob": "00000000.bin",
-                                "size": 0,
-                                "sha256": "0" * 64,
-                            }
-                        ],
-                    },
-                }
-            ),
+            '{"schema": 1, "ok": true, "value": {"cell_targets": [], "files": [{'
+            f'"path": "index.html", "blob": "00000000.bin", "size": 0, '
+            f'"sha256": "{digest}"}}]}}}}',
             encoding="utf-8",
         )
         os._exit(0)
@@ -1121,8 +1089,9 @@ broken_response_provider = _BrokenResponseProvider("test-process/broken", "defau
 
 
 @pytest.mark.parametrize(
-    "mode,status",
+    ("mode", "status"),
     [("missing", 0), ("truncated", 9), ("import-error", 1), ("raises", None)],
+    ids=("missing", "truncated", "import-error", "raised"),
 )
 def test_isolated_provider_reports_incomplete_results_and_failures(
     tmp_path: Path,
@@ -1135,12 +1104,8 @@ def test_isolated_provider_reports_incomplete_results_and_failures(
     installed = _registry("broken", "broken_response_provider").get(
         "test-process/broken"
     )
-    project = ViewProject(
-        "dashboard", tmp_path, tmp_path / "view.toml", installed.key, {}
-    )
-    project.manifest.write_text("schema = 1\n", encoding="utf-8")
     with pytest.raises(ViewProjectError) as error:
-        installed.inspect(inspection_request(project))
+        installed.inspect(inspection_request(_project(tmp_path, installed.key)))
 
     detail = (
         f"Provider process exited with status {status} "
@@ -1161,8 +1126,6 @@ def test_isolated_provider_reports_incomplete_results_and_failures(
 def test_a_worker_orphaned_before_its_watch_starts_stops_at_once(
     tmp_path: Path,
 ) -> None:
-    import signal
-
     from marimo_studio.view_providers._host.operations.codec import (
         SERVER_PROCESS_ENV,
     )
