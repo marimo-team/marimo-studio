@@ -1,0 +1,11 @@
+packages/marimo-studio/tests/marimo_compat/test_browser_notebook.py
+  ai_agent 6,273,277-278,283-294,300-301,304-316,320,328,332,335-336,348-351
+packages/marimo-studio/tests/notebook/test_inspection.py
+  ai_agent 1222-1232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5e746a1cdf6c484eff7f4ec3156c0289b0e44b04",
+  "prompts": {}
+}
