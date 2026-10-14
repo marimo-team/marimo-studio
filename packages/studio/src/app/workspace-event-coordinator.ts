@@ -432,7 +432,11 @@ export class WorkspaceEventCoordinator {
     } else if (this.connectionGeneration === connectionGeneration) {
       clearTimeout(this.reconnect);
       this.reconnect = setTimeout(() => {
-        if (!this.disposed && this.connectionGeneration === connectionGeneration) {
+        if (
+          !this.disposed &&
+          this.connectionGeneration === connectionGeneration &&
+          request.generation === this.latestActivation
+        ) {
           this.connect(this.currentView);
         }
       }, this.activationReplays.next());

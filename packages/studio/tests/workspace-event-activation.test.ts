@@ -175,6 +175,46 @@ it("backs off replaying an activation the browser keeps declining", async () => 
   coordinator.dispose();
 });
 
+it("a declined activation's pending replay leaves a newer activation able to retry", async () => {
+  vi.useFakeTimers();
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const { acknowledge, coordinator, model } = setup(["dashboard", "report", "analysis"]);
+  const analysis = deferred<boolean>();
+  model.ensureAvailable.mockImplementation(async (view) =>
+    view === "analysis" ? analysis.promise : false,
+  );
+  const older = { schema: 1, generation: 5, view: "report" } as const;
+  const newer = { schema: 1, generation: 6, view: "analysis" } as const;
+  const replay = (events: EventSourceStub, activation: typeof older | typeof newer) => {
+    events.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
+    events.emit("activate", JSON.stringify(activation));
+  };
+  // The server replays its pending activation once on each new stream.
+  let replayed = 0;
+  const replayNewStreams = (activation: typeof older | typeof newer) => {
+    EventSourceStub.instances.slice(replayed).forEach((events) => replay(events, activation));
+    replayed = EventSourceStub.instances.length;
+  };
+
+  replayNewStreams(older);
+  await vi.advanceTimersByTimeAsync(0);
+  replayNewStreams(older);
+  await vi.advanceTimersByTimeAsync(10);
+  EventSourceStub.instances.at(-1)?.emit("activate", JSON.stringify(newer));
+  await vi.advanceTimersByTimeAsync(1_000);
+  replayNewStreams(newer);
+  analysis.resolve(false);
+  await vi.advanceTimersByTimeAsync(10);
+  model.ensureAvailable.mockResolvedValue(true);
+  replayNewStreams(newer);
+
+  await vi.waitFor(() =>
+    expect(acknowledge).toHaveBeenCalledWith(newer, expect.anything(), expect.any(AbortSignal)),
+  );
+  warning.mockRestore();
+  coordinator.dispose();
+});
+
 it("restores the previous view after terminal acknowledgement failure", async () => {
   const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   const { acknowledge, coordinator, model } = setup();
