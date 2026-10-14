@@ -1,0 +1,19 @@
+docs/reference/cli.md
+  s_44b9639489bcb6::t_c843b03855ed02 383-384
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b8265a733cd0823737fc8639347f3c6fa5795cb0",
+  "prompts": {},
+  "sessions": {
+    "s_44b9639489bcb6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13a1b-d74a-7390-a341-eedbeffbc372",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
