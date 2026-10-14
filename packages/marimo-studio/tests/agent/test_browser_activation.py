@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from starlette.testclient import TestClient
@@ -119,22 +120,27 @@ def test_browser_mutation_http_rejects_noncanonical_records(
                 assert response.json()["field"] == field, path
 
 
+def _agent_response(
+    notebook_path: Path, path: str, *, method: str = "POST", **kwargs: Any
+):
+    server = agent_edit_server(notebook_path)
+    with TestClient(server.app) as client:
+        return client.request(method, path, headers=server.headers, **kwargs)
+
+
 def test_an_unregistered_client_handoff_explains_how_to_recover(
     notebook_path: Path,
 ) -> None:
-    server = agent_edit_server(notebook_path)
-
-    with TestClient(server.app) as client:
-        response = client.post(
-            "/_marimo-studio/active-view-handoffs/handoff-operation-1",
-            headers=server.headers,
-            json={
-                "schema": 1,
-                "clientId": "browser-client-1234",
-                "fromView": "dashboard",
-                "toView": "executive",
-            },
-        )
+    response = _agent_response(
+        notebook_path,
+        "/_marimo-studio/active-view-handoffs/handoff-operation-1",
+        json={
+            "schema": 1,
+            "clientId": "browser-client-1234",
+            "fromView": "dashboard",
+            "toView": "executive",
+        },
+    )
 
     assert response.status_code == 409
     assert response.json() == {
@@ -148,45 +154,41 @@ def test_an_unregistered_client_handoff_explains_how_to_recover(
     }
 
 
-@pytest.mark.skipif(
-    not 0 < getattr(sys, "get_int_max_str_digits", lambda: 0)() <= 5000,
-    reason="json.loads limits integer digits from Python 3.10.7",
+@pytest.mark.parametrize(
+    "case",
+    (
+        pytest.param(
+            "digits",
+            marks=pytest.mark.skipif(
+                not 0 < getattr(sys, "get_int_max_str_digits", lambda: 0)() <= 5000,
+                reason="json.loads limits integer digits from Python 3.10.7",
+            ),
+        ),
+        "recursion",
+    ),
+    ids=("digit-limit", "recursion-limit"),
 )
-def test_an_integer_beyond_the_decoder_digit_limit_is_invalid_json(
-    notebook_path: Path,
-) -> None:
-    server = agent_edit_server(notebook_path)
-
-    with TestClient(server.app) as client:
-        response = client.post(
-            "/_marimo-studio/views",
-            content=b'{"writeGeneration":' + b"9" * 5000 + b"}",
-            headers=server.headers,
-        )
-
-    assert response.status_code == 400
-    assert response.json()["error"] == "invalid-json"
-
-
-def test_json_nested_beyond_the_decoder_recursion_limit_is_invalid_json(
+def test_json_beyond_the_decoder_limits_is_invalid_json(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    case: str,
 ) -> None:
-    # The decoder's nesting limit depends on the interpreter and its C stack.
-    # Python 3.14 parses 20,000 levels, more than this route's body limit
-    # holds, so the decoder raises its RecursionError directly here.
-    def exceed_recursion_limit(_source: str) -> object:
-        raise RecursionError("maximum recursion depth exceeded")
+    if case == "recursion":
+        # The decoder's nesting limit depends on the interpreter and its C stack.
+        # Python 3.14 parses 20,000 levels, more than this route's body limit
+        # holds, so the decoder raises its RecursionError directly here.
+        def exceed_recursion_limit(_source: str) -> object:
+            raise RecursionError("maximum recursion depth exceeded")
 
-    monkeypatch.setattr(
-        request_body_module, "json", SimpleNamespace(loads=exceed_recursion_limit)
-    )
-    server = agent_edit_server(notebook_path)
-
-    with TestClient(server.app) as client:
-        response = client.post(
-            "/_marimo-studio/views", content=b"[[[0]]]", headers=server.headers
+        monkeypatch.setattr(
+            request_body_module,
+            "json",
+            SimpleNamespace(loads=exceed_recursion_limit),
         )
+        body = b"[[[0]]]"
+    else:
+        body = b'{"writeGeneration":' + b"9" * 5000 + b"}"
+    response = _agent_response(notebook_path, "/_marimo-studio/views", content=body)
 
     assert response.status_code == 400
     assert response.json()["error"] == "invalid-json"
@@ -195,38 +197,35 @@ def test_json_nested_beyond_the_decoder_recursion_limit_is_invalid_json(
 def test_a_query_with_an_unpaired_surrogate_is_an_invalid_query(
     notebook_path: Path,
 ) -> None:
-    server = agent_edit_server(notebook_path)
-
-    with TestClient(server.app) as client:
-        response = client.post(
-            "/_marimo-studio/query",
-            headers=server.headers,
-            content=(
-                b'{"clientId": "browser-client-1234", "operationId": "op-123", '
-                b'"query": "?q=\\ud800", "writeGeneration": 1}'
-            ),
-        )
+    response = _agent_response(
+        notebook_path,
+        "/_marimo-studio/query",
+        content=(
+            b'{"clientId": "browser-client-1234", "operationId": "op-123", '
+            b'"query": "?q=\\ud800", "writeGeneration": 1}'
+        ),
+    )
 
     assert response.status_code == 400
     assert response.json()["error"] == "invalid-query"
 
 
 def test_oversized_decimal_identifiers_are_client_errors(notebook_path: Path) -> None:
-    server = agent_edit_server(notebook_path)
-
-    with TestClient(server.app) as client:
-        activation = client.post(
-            "/_marimo-studio/activations/" + "9" * 5000 + "/ack",
-            content=b"{}",
-            headers=server.headers,
-        )
-        preview = client.get(
-            "/dashboard/",
-            params={
-                "marimo_studio_lifecycle": "9" * 5000,
-                "marimo_studio_client": "browser-client-1234",
-            },
-        )
+    digits = "9" * 5000
+    activation = _agent_response(
+        notebook_path,
+        "/_marimo-studio/activations/" + digits + "/ack",
+        content=b"{}",
+    )
+    preview = _agent_response(
+        notebook_path,
+        "/dashboard/",
+        method="GET",
+        params={
+            "marimo_studio_lifecycle": digits,
+            "marimo_studio_client": "browser-client-1234",
+        },
+    )
 
     assert activation.status_code == 404
     assert preview.status_code < 500

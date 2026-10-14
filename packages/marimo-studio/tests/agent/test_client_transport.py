@@ -358,17 +358,16 @@ def test_cancelled_request_does_not_send_after_connection_finishes(
     assert requested is False
 
 
-def test_timed_out_connection_close_responses_release_their_workers() -> None:
+def test_timed_out_connection_close_responses_release_their_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import contextlib
-    import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    from marimo_studio._browser_client.transport import (
-        StudioServerConnection,
-        request_json,
-    )
-    from marimo_studio.errors import AgentRequestError
-
+    # getresponse() keeps a Connection: close socket on the response. Bytes
+    # keep arriving so the socket timeout does not free the worker first.
+    slots = threading.BoundedSemaphore(2)
+    monkeypatch.setattr(browser_transport, "_HTTP_WORKER_SLOTS", slots)
     stop = threading.Event()
 
     class SlowBody(BaseHTTPRequestHandler):
@@ -393,25 +392,24 @@ def test_timed_out_connection_close_responses_release_their_workers() -> None:
                     self.wfile.write(b"x")
                     self.wfile.flush()
 
-    class Server(ThreadingHTTPServer):
-        request_queue_size = 32
-
-    server = Server(("127.0.0.1", 0), SlowBody)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SlowBody)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    connection = StudioServerConnection(f"http://127.0.0.1:{server.server_port}")
+    connection = browser_transport.StudioServerConnection(
+        f"http://127.0.0.1:{server.server_port}"
+    )
+
+    async def slow() -> str:
+        with pytest.raises(browser_transport.AgentRequestError) as raised:
+            await browser_transport.request_json(connection, "/slow", timeout=0.2)
+        return raised.value.code
 
     async def exercise() -> object:
-        async def slow() -> str:
-            with pytest.raises(AgentRequestError) as raised:
-                await request_json(connection, "/slow", timeout=0.2)
-            return raised.value.code
-
-        assert (
-            await asyncio.gather(*(slow() for _ in range(8))) == ["request-timeout"] * 8
-        )
-        await asyncio.sleep(0.3)
-        return await request_json(connection, "/fast", timeout=1)
+        assert await asyncio.gather(slow(), slow()) == ["request-timeout"] * 2
+        if not await asyncio.to_thread(slots.acquire, timeout=1):
+            raise AssertionError("timed-out request kept its worker")
+        slots.release()
+        return await browser_transport.request_json(connection, "/fast", timeout=1)
 
     try:
         assert asyncio.run(exercise()) == {}
