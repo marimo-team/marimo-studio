@@ -69,10 +69,30 @@ def _show_click_error(error: click.ClickException) -> None:
     echo_error(f"Error: {error.format_message()}")
 
 
-def _error_details(error: MarimoStudioError) -> dict[str, object] | None:
+_GENERATION_CONFLICTS = frozenset(
+    {"view-generation-conflict", "workspace-generation-conflict"}
+)
+
+
+def _hint(error: MarimoStudioError, command: str | None) -> str:
+    # Each CLI run opens the workspace again, so the browser and agent hints
+    # for stale state become a rerun or, for a conditional write, a new read.
+    if command == "view write" and (
+        error.code in _GENERATION_CONFLICTS or error.code == "source-conflict"
+    ):
+        return (
+            "Run `marimo-studio view read VIEW PATH --json` for the current "
+            "revision and generations, then retry the write."
+        )
+    if error.code in _GENERATION_CONFLICTS:
+        return "Run the command again."
+    return error.public_hint
+
+
+def _error_details(error: MarimoStudioError, hint: str) -> dict[str, object] | None:
     details = error.diagnostic_details()
-    if error.public_hint:
-        details["hint"] = error.public_hint
+    if hint:
+        details["hint"] = hint
     if error.transient:
         details["transient"] = True
     return details or None
@@ -96,16 +116,17 @@ def main() -> None:
         if exit_code:
             raise SystemExit(exit_code)
     except MarimoStudioError as error:
+        hint = _hint(error, diagnostics.command)
         if not diagnostics.emit(
             code=error.code,
             message=str(error),
             severity="error",
             exit_code=error.exit_code,
-            details=_error_details(error),
+            details=_error_details(error, hint),
         ):
             echo_error(f"Error: {error}")
-            if error.public_hint:
-                click.echo(f"Hint: {error.public_hint}", err=True)
+            if hint:
+                click.echo(f"Hint: {hint}", err=True)
         raise SystemExit(error.exit_code) from None
     except click.ClickException as error:
         if not diagnostics.emit(

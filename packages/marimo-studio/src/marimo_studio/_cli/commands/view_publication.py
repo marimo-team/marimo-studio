@@ -85,4 +85,7 @@ def release(view_name: str, target: Path | None, token: str, json_output: bool) 
             }
         )
         return
+    if result is None:
+        click.echo(f"View {view_name} has no publication hold to release")
+        return
     click.echo(f"Publication released for {view_name}")

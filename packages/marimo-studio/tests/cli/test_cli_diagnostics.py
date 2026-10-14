@@ -683,7 +683,55 @@ def test_main_reports_a_source_precondition_conflict_without_mutation(
     assert event["command"] == "view write"
     assert event["code"] == "source-conflict"
     assert event["exit_code"] == 3
+    assert event["details"]["hint"] == (
+        "Run `marimo-studio view read VIEW PATH --json` for the current "
+        "revision and generations, then retry the write."
+    )
     assert setup.root.joinpath("index.html").read_text(encoding="utf-8") == current
+
+
+def test_main_tells_a_stale_view_write_to_read_again(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    loaded = read_source(studio, "dashboard", "index.html")
+    prepare_view(notebook_path, "report")
+    replacement = tmp_path / "replacement.html"
+    replacement.write_text(loaded.content, encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "marimo-studio",
+            "view",
+            "write",
+            "dashboard",
+            "index.html",
+            "--target",
+            str(notebook_path),
+            "--expected-revision",
+            loaded.revision,
+            "--catalog-generation",
+            studio.catalog_generation,
+            "--view-generation",
+            studio.view_generations["dashboard"],
+            "--from",
+            str(replacement),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    assert raised.value.code == 3
+    assert capsys.readouterr().err.splitlines()[-1] == (
+        "Hint: Run `marimo-studio view read VIEW PATH --json` for the current "
+        "revision and generations, then retry the write."
+    )
 
 
 def test_main_preserves_view_not_found_details(

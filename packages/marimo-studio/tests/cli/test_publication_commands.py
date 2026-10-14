@@ -194,3 +194,25 @@ def test_cli_hold_rejects_an_unusable_owner(notebook_path: Path, owner: str) -> 
 
     assert result.exit_code == 2
     assert "must contain 1 to 256 characters" in result.output
+
+
+def test_cli_release_without_a_hold_says_nothing_was_held(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "release",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--token",
+            "unknown",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "View dashboard has no publication hold to release\n"
