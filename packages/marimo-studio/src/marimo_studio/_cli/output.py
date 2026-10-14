@@ -254,6 +254,8 @@ def render_static_export(result: StaticExportResult) -> None:
     )
     for issue in preflight.issues:
         echo(f"    {issue.severity} {issue.code}: {issue.message}")
+        if issue.hint:
+            echo(f"      {light_blue('repair')} {issue.hint}")
     for warning in result.warnings:
         echo(f"  {yellow('warning')} {warning.code}: {warning.message}")
     echo(f"  {light_blue('open')} {result.entrypoint}")
@@ -292,6 +294,8 @@ def render_static_preflight(result: StaticPreflightReport) -> None:
                 f"    {issue.severity} {issue.code}: {issue.message} "
                 f"({issue.source.path}:{issue.source.line}:{issue.source.column})"
             )
+            if issue.hint:
+                echo(f"      {light_blue('repair')} {issue.hint}")
 
 
 def render_binding(result: BindingResult) -> None:

@@ -5,6 +5,7 @@ import json
 from pathlib import Path, PurePosixPath
 
 import pytest
+from click import unstyle
 from click.testing import CliRunner
 
 import marimo_studio.authoring as studio_authoring
@@ -127,6 +128,54 @@ def test_preflight_command_verifies_static_delivery_without_an_output(
     assert payload["projections"]
     assert progress[0]["progress"]["event"]["kind"] == "build_started"
     assert progress[-1]["progress"]["event"]["kind"] == "preflight_finished"
+
+
+@pytest.mark.parametrize("command", ("preflight", "export"))
+def test_static_delivery_text_shows_each_issue_repair(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    view_root = configure_export_view(notebook_path)
+    view_root.joinpath("app.js").write_text("export {};\n", encoding="utf-8")
+    document = view_root / "index.html"
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            "</head>",
+            '<script type="module" src="./app.js"></script></head>',
+        ),
+        encoding="utf-8",
+    )
+    add_provider_outputs(
+        monkeypatch,
+        load_studio(notebook_path).view("dashboard"),
+        {PurePosixPath("app.js"): b"void import(globalThis.target);\n"},
+    )
+    output = ["--output", str(tmp_path / "site")] if command == "export" else []
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            command,
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--runtime",
+            "wasm",
+            *output,
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    lines = unstyle(result.stdout).splitlines()
+    issue = next(
+        index for index, line in enumerate(lines) if "static-module-computed" in line
+    )
+    assert lines[issue + 1].strip() == (
+        "repair Verify the computed module target is available after publication."
+    )
 
 
 def test_export_help_explains_runtime_and_preparation_timeout() -> None:
