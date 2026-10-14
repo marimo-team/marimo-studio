@@ -407,6 +407,26 @@ describe("Control endpoint", () => {
     successor.dispose();
   });
 
+  test("a closed endpoint's rejected update withdraws only the controls it staged", async () => {
+    const registry = new FakeRegistry();
+    const sent = Promise.withResolvers<null>();
+    const retired = endpoint(registry, () => sent.promise);
+    const late = retired.apply([
+      { objectId: "pending-0", value: 1 },
+      { objectId: "replaced-0", value: 1 },
+    ]);
+    await vi.waitFor(() => expect(registry.has("pending-0")).toBe(true));
+    retired.dispose();
+
+    const successor = endpoint(registry, async () => null);
+    registry.set("replaced-0", 2);
+    sent.reject(new Error("kernel connection closed"));
+    await expect(late).rejects.toThrow("kernel connection closed");
+
+    expect(successor.snapshot()).toEqual([{ objectId: "replaced-0", value: 2 }]);
+    successor.dispose();
+  });
+
   test("retries broker disposal after another registry owner unwinds", () => {
     const registry = new FakeRegistry();
     const original = registry.registerInstance;

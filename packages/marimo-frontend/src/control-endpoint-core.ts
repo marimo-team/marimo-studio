@@ -202,13 +202,13 @@ export const connectControlEndpoint = (
       throw closedError();
     }
     const accepted: ControlUpdate[] = [];
-    const created: string[] = [];
+    const created = new Map<string, UIElementEntry | undefined>();
     applying = true;
     try {
       for (const update of updates) {
         if (!registry.has(update.objectId)) {
           registry.set(update.objectId, update.value);
-          created.push(update.objectId);
+          created.set(update.objectId, registry.entries.get(update.objectId));
         }
         if (!registry.has(update.objectId)) {
           continue;
@@ -224,13 +224,16 @@ export const connectControlEndpoint = (
           values: accepted.map(({ value }) => value),
         });
       } catch (error) {
-        // A successor endpoint owns the registry once this one closes.
-        if (!closed) {
-          // SAFETY: Marimo exposes entries as a Map. ControlRegistry narrows it
-          // to read-only access outside this rollback boundary.
-          const entries = registry.entries as Map<string, UIElementEntry>;
-          created.forEach((objectId) => entries.delete(objectId));
-        }
+        // SAFETY: Marimo exposes entries as a Map. ControlRegistry narrows it
+        // to read-only access outside this rollback boundary.
+        const entries = registry.entries as Map<string, UIElementEntry>;
+        // Marimo replaces the entry object on set, so a successor endpoint's
+        // control under the same ID survives this rollback.
+        created.forEach((entry, objectId) => {
+          if (entries.get(objectId) === entry) {
+            entries.delete(objectId);
+          }
+        });
         throw error;
       }
       if (closed) {
