@@ -617,7 +617,7 @@ def _write_bundle(
     config_stamp: tuple[int, int, int, int],
     runtime: StaticRuntime,
     publication: StaticPublication | None,
-) -> int:
+) -> tuple[int, Callable[[], None]]:
     output = bundle.root
     artifact = lease.artifact
     manifest: bytes | None = None
@@ -669,38 +669,45 @@ def _write_bundle(
         bundle.ensure_directory(manifest_path.parent)
         bundle.write(manifest_path, manifest, mode=0o644)
     bundle.write(output / ".nojekyll", b"", mode=0o644)
-    try:
-        lease.verify()
-        project = provider_registry().validate_project(studio.views[view_name])
-        inspection = inspect_view_project_sync(project)
-        stable = (
-            assets
-            == _asset_plan(
-                studio,
-                view_name,
-                lease,
-                closure=closure,
-                include_manifest=manifest is not None,
-                include_config=config is not None,
+
+    def require_current() -> None:
+        try:
+            lease.verify()
+            project = provider_registry().validate_project(studio.views[view_name])
+            inspection = inspect_view_project_sync(project)
+            stable = (
+                assets
+                == _asset_plan(
+                    studio,
+                    view_name,
+                    lease,
+                    closure=closure,
+                    include_manifest=manifest is not None,
+                    include_config=config is not None,
+                )
+                and artifact.project_revision
+                == project_revision(
+                    project,
+                    inspection,
+                    provider_registry().get(project.provider).provenance(),
+                )
+                and document == lease.read_text(artifact.document)
+                and notebook_source == _notebook_text(studio.notebook)
+                and notebook_stamp == _file_stamp(studio.notebook)
+                and config_stamp == _file_stamp(studio.config_path)
+                and (publication is None or _publication_inputs_current(publication))
             )
-            and artifact.project_revision
-            == project_revision(
-                project,
-                inspection,
-                provider_registry().get(project.provider).provenance(),
-            )
-            and document == lease.read_text(artifact.document)
-            and notebook_source == _notebook_text(studio.notebook)
-            and notebook_stamp == _file_stamp(studio.notebook)
-            and config_stamp == _file_stamp(studio.config_path)
-            and (publication is None or _publication_inputs_current(publication))
-        )
-    except (OSError, MarimoStudioError) as error:
-        raise_process_cleanup(error)
-        stable = False
-    if not stable:
-        raise _sources_changed()
-    return len(assets) + 2 + int(config is not None) + int(manifest is not None)
+        except (OSError, MarimoStudioError) as error:
+            raise_process_cleanup(error)
+            stable = False
+        if not stable:
+            raise _sources_changed()
+
+    require_current()
+    return (
+        len(assets) + 2 + int(config is not None) + int(manifest is not None),
+        require_current,
+    )
 
 
 def _sources_changed() -> StaticExportError:
@@ -960,7 +967,7 @@ def _export_to_delivery(
                 ),
             )
             bundle = FileTree(delivery.path)
-            files = _write_bundle(
+            files, require_bundle_current = _write_bundle(
                 bundle,
                 adapters,
                 studio,
@@ -1039,6 +1046,7 @@ def _export_to_delivery(
             )
 
             def require_current() -> None:
+                require_bundle_current()
                 _require_export_current(
                     target,
                     studio,

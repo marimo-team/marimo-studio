@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +56,7 @@ def test_export_preserves_a_destination_claimed_while_the_bundle_is_built(
     output = tmp_path / "site"
     write_bundle = export_module._write_bundle
 
-    def claim_destination(*args: Any, **kwargs: Any) -> int:
+    def claim_destination(*args: Any, **kwargs: Any) -> tuple[int, Callable[[], None]]:
         files = write_bundle(*args, **kwargs)
         output.mkdir()
         output.joinpath("concurrent.txt").write_text("keep", encoding="utf-8")
@@ -80,7 +81,7 @@ def test_forced_export_preserves_a_destination_changed_during_generation(
     concurrent = b"concurrent export destination edit\n"
     write_bundle = export_module._write_bundle
 
-    def change_destination(*args: Any, **kwargs: Any) -> int:
+    def change_destination(*args: Any, **kwargs: Any) -> tuple[int, Callable[[], None]]:
         files = write_bundle(*args, **kwargs)
         entrypoint.write_bytes(concurrent)
         return files
@@ -107,7 +108,9 @@ def test_forced_export_preserves_destination_when_view_owner_changes_before_comm
     owner_path = view_owner_path(studio.view_root, "dashboard")
     write_bundle = export_module._write_bundle
 
-    def replace_owner_after_write(*args: Any, **kwargs: Any) -> int:
+    def replace_owner_after_write(
+        *args: Any, **kwargs: Any
+    ) -> tuple[int, Callable[[], None]]:
         files = write_bundle(*args, **kwargs)
         source = owner_path.read_text(encoding="utf-8")
         owner_path.write_text(
@@ -228,3 +231,32 @@ def test_forced_export_protects_authored_namespaces(notebook_path: Path) -> None
 
     assert notebook_path.is_file()
     assert (studio.views["executive"].root / "view.toml").is_file()
+
+
+@pytest.mark.parametrize("changed", ["view", "public"])
+def test_export_rejects_source_changes_at_commit_and_preserves_destination(
+    notebook_path: Path,
+    tmp_path: Path,
+    changed: str,
+) -> None:
+    output = _existing_export(notebook_path, tmp_path)
+    expected = output.joinpath("index.html").read_bytes()
+    if changed == "view":
+        source = load_studio(notebook_path).views["dashboard"].root / "index.html"
+    else:
+        source = notebook_path.parent / "public" / "data.txt"
+        source.parent.mkdir()
+        source.write_text("old data", encoding="utf-8")
+
+    def change_source(event: StaticExportProgress) -> None:
+        if event.event.kind == "commit_started":
+            source.write_text(
+                source.read_text(encoding="utf-8") + "new source", encoding="utf-8"
+            )
+
+    with pytest.raises(StaticExportError, match="sources changed"):
+        export_view(
+            notebook_path, output, runtime="wasm", force=True, progress=change_source
+        )
+
+    assert output.joinpath("index.html").read_bytes() == expected
