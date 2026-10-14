@@ -522,6 +522,81 @@ test("retries only failed disposal work", async () => {
   expect(host.renderer?.disposeCalls).toBe(1);
 });
 
+test("disposal retries the cleanup of a transport that failed to start", async () => {
+  const theme = createThemeSource();
+  const host = new RuntimeHostDouble();
+  const startupError = new Error("worker failed to start");
+  let releaseAttempts = 0;
+  host.transport.prepareWasm = () => {
+    throw startupError;
+  };
+  host.transport.releaseWasm = () => {
+    releaseAttempts += 1;
+    if (releaseAttempts === 1) {
+      throw new Error("worker release failed");
+    }
+  };
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  let handle!: EmbeddedRuntimeHandle;
+
+  await act(async () => {
+    handle = mountEmbeddedRuntime({
+      autoInstantiate: false,
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: root(),
+      theme: theme.source,
+      transport: wasmTransport(),
+      viewMode: "read",
+    });
+    await handle.initialized.catch(() => undefined);
+  });
+  await expect(handle.initialized).rejects.toBeInstanceOf(AggregateError);
+
+  await act(async () => handle.dispose());
+
+  expect(releaseAttempts).toBe(2);
+});
+
+test("disposal retries the cleanup of a server transport update that failed to start", async () => {
+  const theme = createThemeSource();
+  const host = new RuntimeHostDouble();
+  const { runtime } = host.transport;
+  const originalGetWsURL = runtime.getWsURL;
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  let handle!: EmbeddedRuntimeHandle;
+  await act(async () => {
+    handle = mountEmbeddedRuntime({
+      autoInstantiate: true,
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: root(),
+      theme: theme.source,
+      transport: serverTransport(),
+      viewMode: "read",
+    });
+    await handle.initialized;
+  });
+  let patchedGetWsURL = runtime.getWsURL;
+  // Another owner wraps the URL method while request activation fails, so
+  // the update cannot restore the URL patch it applied.
+  host.transport.activateServerRequests = () => {
+    patchedGetWsURL = runtime.getWsURL;
+    runtime.getWsURL = (sessionId) => patchedGetWsURL(sessionId);
+    throw new Error("request client failed to start");
+  };
+
+  expect(() => handle.updateServerTransport(serverTransport())).toThrow(AggregateError);
+
+  runtime.getWsURL = patchedGetWsURL;
+  await act(async () => handle.dispose());
+  expect(runtime.getWsURL).toBe(originalGetWsURL);
+});
+
 test("waits for WebAssembly readiness before reporting initialization", async () => {
   const target = root();
   const theme = createThemeSource();
