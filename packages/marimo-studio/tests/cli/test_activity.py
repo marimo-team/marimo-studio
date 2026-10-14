@@ -88,6 +88,39 @@ def test_heartbeat_reports_last_observed_state_and_stops_on_exit() -> None:
     assert heartbeat["details"]["elapsed_seconds"] >= 0
 
 
+def test_text_heartbeat_repeats_the_latest_progress_line() -> None:
+    observed = Event()
+
+    class Output(StringIO):
+        def write(self, value: str) -> int:
+            written = super().write(value)
+            if value.startswith("Still running"):
+                observed.set()
+            return written
+
+    output = Output()
+    stream = DiagnosticStream(command="view export", diagnostic_stream=output)
+    with activity(stream, phase="prepare", view="report", interval=0.01) as progress:
+        progress(
+            StaticExportProgress.from_export(
+                ProgressEvent(
+                    kind="state_started",
+                    state="reviewed",
+                    cache=CacheActivity(authored_hits=2),
+                ),
+                view="report",
+                runtime="zero-python",
+            )
+        )
+        assert observed.wait(2), "heartbeat did not arrive during active preparation"
+    heartbeat = next(
+        line for line in output.getvalue().splitlines() if line.startswith("Still")
+    )
+    assert heartbeat.split(" | ", 1)[1] == (
+        "State started: reviewed | authored 2 hit, 0 miss | projections 0 hit, 0 miss"
+    )
+
+
 def test_operation_failure_stops_the_heartbeat_before_propagating() -> None:
     observed = Event()
     workers: list[Thread] = []
