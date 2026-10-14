@@ -45,4 +45,5 @@ test("loads a static document with an empty projection catalog", async () => {
   await vi.waitFor(() =>
     expect(document.querySelector<HTMLElement>("marimo-document")?.dataset.state).toBe("ready"),
   );
+  await vi.waitFor(() => expect(document.documentElement.dataset.marimoStudioState).toBe("ready"));
 });

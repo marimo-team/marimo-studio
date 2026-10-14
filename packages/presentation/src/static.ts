@@ -47,6 +47,9 @@ export const startStaticPresentation = (registry: RuntimeRegistry): void => {
     }
     if (config.sites.length > 0) {
       await mountConfiguredRuntime(registry, config, runtimeRoot);
+    } else {
+      // A document that reads no notebook values has no runtime to connect.
+      setRuntimeConnectionState("ready");
     }
     lifetime.signal.throwIfAborted();
     window.__MARIMO_STUDIO_RUNTIME_STATE__ = "mounted";
