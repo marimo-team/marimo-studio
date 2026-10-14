@@ -150,6 +150,38 @@ test("native model replacement rejects malformed lifecycle and widget modules be
   assert.equal(WIDGET_REGISTRY.getModelSync(id), undefined);
 });
 
+test("cancelling a replacement settles it while a widget module still evaluates", async () => {
+  // SAFETY: The module below publishes its release hook on the global object.
+  const pending = globalThis as typeof globalThis & { releasePreparedModule?: () => void };
+  const source =
+    "await new Promise((resolve) => { globalThis.releasePreparedModule = resolve; });" +
+    "export default { render() {} };";
+  lifecycle = createPreparedModelLifecycle();
+  const selection = new AbortController();
+  const replacement = lifecycle.replace(
+    {
+      files: {},
+      modelNotifications: [
+        openNotification(
+          modelId("prepared-evaluating-model"),
+          {},
+          { url: `data:text/javascript,${encodeURIComponent(source)}`, hash: "evaluating-module" },
+        ),
+      ],
+    },
+    selection.signal,
+  );
+  await vi.waitFor(() => assert.ok(pending.releasePreparedModule));
+
+  selection.abort(new DOMException("A newer Prepared state was selected.", "AbortError"));
+
+  await assert.rejects(replacement, { name: "AbortError" });
+  await lifecycle.dispose();
+  lifecycle = undefined;
+  pending.releasePreparedModule?.();
+  delete pending.releasePreparedModule;
+});
+
 test("native model disposal restores prior page resources", async () => {
   browser.__MARIMO_STATIC__ = { files: { "existing.css": "data:text/css,body{}" } };
   lifecycle = createPreparedModelLifecycle();
