@@ -1,0 +1,21 @@
+packages/marimo-studio/tests/agent/test_client_transport.py
+  s_80c04bef0fc32a::t_9c6c8b7d8f441a 359-395,400-422
+packages/marimo-studio/src/marimo_studio/_browser_client/transport.py
+  ai_agent 94-97,103-106,143-144,177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cda59c83e1993520fd538d6ec3f14e651a7f4108",
+  "prompts": {},
+  "sessions": {
+    "s_80c04bef0fc32a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a16b6c4-199f-49d4-aa77-e0554d2023c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
