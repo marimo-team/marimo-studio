@@ -15,6 +15,7 @@ import {
   preparedRuntimeConfig as config,
   preparedTheme as theme,
   projectionUiId,
+  withHostSites,
 } from "./prepared-fixture.ts";
 
 interface PreparedWidgetLifecycleCounts {
@@ -234,6 +235,7 @@ test("prepared widget checkpoints retain browser edits after captured lifecycle 
     <div id="runtime"></div>
     <marimo-output value="widget.first"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   widgetBrowser.__preparedWidgetLifecycle = {
     initialize: {},
@@ -301,6 +303,7 @@ test("prepared widget projections preserve browser state through restore and tra
     <marimo-output value="widget.first"></marimo-output>
     <marimo-output value="widget.second"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   widgetBrowser.__preparedWidgetLifecycle = {
     initialize: {},
@@ -387,6 +390,7 @@ test("prepared checkpoints restore live widget state and UI drafts after differe
     <marimo-output value="checkpoint.widget"></marimo-output>
     <marimo-output value="checkpoint.control"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   widgetBrowser.__preparedWidgetLifecycle = {
     initialize: {},
@@ -475,6 +479,7 @@ test("prepared checkpoints reject active AnyWidget replacement and succeed once 
     <marimo-output value="checkpoint.widget"></marimo-output>
     <marimo-output value="checkpoint.control"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   widgetBrowser.__preparedWidgetLifecycle = {
     initialize: {},
@@ -531,6 +536,7 @@ test("prepared widget replacement loads changed ESM and retains browser state", 
     <div id="runtime"></div>
     <marimo-output value="widget.replaced"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   widgetBrowser.__preparedWidgetLifecycle = {
     initialize: {},

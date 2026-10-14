@@ -81,3 +81,49 @@ export const preparedTheme = {
 export const settlePreparedRender = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
+
+const SITE_SOURCE = { path: "index.html", line: 1, column: 1 };
+
+/**
+ * Give each output and cell host under `root` the provider site a build
+ * records, so the hosts resolve the way an exported view's hosts do.
+ */
+export const withHostSites = (
+  config: RuntimeConfig,
+  root: ParentNode = document,
+): RuntimeConfig => {
+  const sites = [...config.sites];
+  const variables = { ...config.projectionTargets.variables };
+  const cells = { ...config.projectionTargets.cells };
+  const target = (producer: string) => ({
+    status: "ready" as const,
+    producer,
+    dependencyClosure: [producer],
+  });
+  root.querySelectorAll("marimo-output[value], marimo-cell[name]").forEach((host) => {
+    const kind = host.localName === "marimo-cell" ? "cell" : "output";
+    const name = host.getAttribute(kind === "cell" ? "name" : "value") ?? "";
+    const id = `site:${kind}:${name}`;
+    host.setAttribute("data-marimo-studio-site", id);
+    if (!sites.some((site) => site.id === id)) {
+      sites.push({ id, kind, source: SITE_SOURCE, targets: [name], accept: [], size: null });
+    }
+    if (kind === "cell") {
+      cells[name] ??= target(`cell:v1:${name}`);
+    } else {
+      const variable = name.split(/[.[]/u)[0] ?? name;
+      variables[variable] ??= target(`cell:v1:${variable}`);
+    }
+  });
+  // The runtime keys site policy on the projection revision, so new sites need a new one.
+  const hash = sites
+    .map(({ id }) => id)
+    .join("\0")
+    .split("")
+    .reduce(
+      (value, character) => Math.imul(value ^ character.charCodeAt(0), 16_777_619),
+      2_166_136_261,
+    );
+  const projectionRevision = (hash >>> 0).toString(16).padStart(8, "0").repeat(8);
+  return { ...config, projectionRevision, sites, projectionTargets: { cells, variables } };
+};

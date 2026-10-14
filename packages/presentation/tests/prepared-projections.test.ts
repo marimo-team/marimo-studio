@@ -28,6 +28,7 @@ import {
   preparedTheme as theme,
   projectionUiId,
   settlePreparedRender as settle,
+  withHostSites,
 } from "./prepared-fixture.ts";
 
 const snapshot = (label: string): PreparedProjectionSnapshot => ({
@@ -239,6 +240,7 @@ test("prepared projections render values, native outputs, and a complete cell", 
     <marimo-output value="report.failure"></marimo-output>
     <marimo-cell name="summary" aria-label="Summary projection"></marimo-cell>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const controls: Array<{ objectId: string; value: unknown }> = [];
   const handle = mountPreparedProjections({
@@ -312,6 +314,7 @@ test("prepared hosts keep media marimo cannot show for the document that reads i
     <div id="runtime"></div>
     <marimo-output hidden value="report.output"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const handle = mountPreparedProjections({
     root: document.querySelector<HTMLElement>("#runtime")!,
@@ -337,6 +340,38 @@ test("prepared hosts keep media marimo cannot show for the document that reads i
   );
 });
 
+test("prepared hosts show only targets their site permits", async () => {
+  document.body.innerHTML = `
+    <div id="runtime"></div>
+    <marimo-output id="output" value="report.output"></marimo-output>
+    <marimo-output value="report.bundle"></marimo-output>
+    <marimo-cell id="cell" name="summary"></marimo-cell>
+  `;
+  commitRuntimeConfig(withHostSites(config));
+  projectionHosts.connect();
+  const handle = mountPreparedProjections({
+    root: document.querySelector<HTMLElement>("#runtime")!,
+    presentation,
+    theme,
+  });
+  handles.push(handle);
+  await handle.replace(snapshot("one"));
+  await settle();
+  const output = document.querySelector<HTMLElement>("#output")!;
+  const cell = document.querySelector<HTMLElement>("#cell")!;
+  assert.match(output.textContent ?? "", /output one/u);
+
+  output.setAttribute("value", "report.bundle");
+  cell.setAttribute("name", "report");
+  await settle();
+
+  assert.equal(output.dataset.state, "error");
+  assert.equal(output.dataset.marimoDiagnosticCode, "projection-target-not-allowed");
+  assert.doesNotMatch(output.textContent ?? "", /bundle one/u);
+  assert.equal(cell.dataset.state, "error");
+  assert.equal(cell.dataset.marimoDiagnosticCode, "projection-target-not-allowed");
+});
+
 test("prepared generations replace hosts and retain the last good result", async () => {
   commitRuntimeConfig(config);
   document.body.innerHTML = `
@@ -345,6 +380,7 @@ test("prepared generations replace hosts and retain the last good result", async
     <marimo-output value="report.output"></marimo-output>
     <marimo-cell name="summary"></marimo-cell>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const handle = mountPreparedProjections({
     root: document.querySelector<HTMLElement>("#runtime")!,
@@ -357,6 +393,7 @@ test("prepared generations replace hosts and retain the last good result", async
   const oldHost = document.querySelector("marimo-output")!;
   const replacement = document.createElement("marimo-output");
   replacement.setAttribute("value", "report.output");
+  replacement.setAttribute("data-marimo-studio-site", "site:output:report.output");
   oldHost.replaceWith(replacement);
   await settle();
   assert.match(replacement.textContent ?? "", /output one/u);
@@ -488,6 +525,7 @@ test("prepared function and stdin resources fail through the capability boundary
     <marimo-output value="report.output"></marimo-output>
     <marimo-cell name="summary"></marimo-cell>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const handle = mountPreparedProjections({
     root: document.querySelector<HTMLElement>("#runtime")!,
@@ -522,6 +560,7 @@ test("prepared UI values mount before controls and clear across a null generatio
     <div id="runtime"></div>
     <marimo-output value="report.output"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const controlEvents: Array<{ objectId: string; value: unknown }> = [];
   const handle = mountPreparedProjections({
@@ -609,6 +648,7 @@ test("same-owner null cells preserve a surviving UI output across states", async
     <marimo-output value="shared.output"></marimo-output>
     <marimo-cell name="shared"></marimo-cell>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const handle = mountPreparedProjections({
     root: document.querySelector<HTMLElement>("#runtime")!,
@@ -693,6 +733,7 @@ test("prepared UI values reject conflicts across projections", async () => {
     <div id="runtime"></div>
     <marimo-output value="report.output"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const handle = mountPreparedProjections({
     root: document.querySelector<HTMLElement>("#runtime")!,
@@ -752,6 +793,7 @@ test("prepared resources deduplicate shared models and reject conflicts", async 
     <marimo-output value="report.output"></marimo-output>
     <marimo-output value="report.bundle"></marimo-output>
   `;
+  commitRuntimeConfig(withHostSites(config));
   projectionHosts.connect();
   const handle = mountPreparedProjections({
     root: document.querySelector<HTMLElement>("#runtime")!,

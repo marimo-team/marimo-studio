@@ -19,6 +19,8 @@ import type {
 import { getCellHosts, setCellHostState, subscribeCellHosts } from "../cells/host.ts";
 import { getOutputHosts, setOutputHostState, subscribeOutputHosts } from "../outputs/host.ts";
 import { setProjectionRuntimeCell } from "../projections/instances.ts";
+import { createProjectionInventory } from "../projections/resolution.ts";
+import { useRuntimeProjectionConfig } from "../runtime/use-runtime-config.ts";
 
 const hostIds = new WeakMap<HTMLElement, number>();
 let nextHostId = 0;
@@ -39,24 +41,51 @@ const clearDiagnostics = (host: HTMLElement): void => {
   delete host.dataset.marimoDiagnosticHint;
 };
 
-const MissingProjection = ({ kind, name }: { kind: "cell" | "output"; name: string }) => (
+interface ProjectionFailure {
+  readonly code: string;
+  readonly message: string;
+}
+
+const FailedProjection = ({ failure }: { failure: ProjectionFailure }) => (
   <div className="marimo-cell-diagnostic" role="status">
-    <strong>{`Prepared ${kind} ${JSON.stringify(name)} is unavailable.`}</strong>
+    <strong>{failure.message}</strong>
   </div>
 );
 
+const showFailure = (host: HTMLElement, failure: ProjectionFailure): void => {
+  host.dataset.marimoDiagnosticCode = failure.code;
+  host.dataset.marimoDiagnosticMessage = failure.message;
+};
+
 const PreparedOutputPortal = ({
   host,
+  rejection,
   snapshot,
   timestamp,
 }: {
   host: MarimoOutputElement;
+  rejection: ProjectionFailure | undefined;
   snapshot: PreparedOutputSnapshot | undefined;
   timestamp: number;
 }) => {
+  const name = host.valueSelector;
+  const failure = useMemo<ProjectionFailure | undefined>(
+    () =>
+      rejection ??
+      (snapshot === undefined
+        ? {
+            code: "prepared-output-missing",
+            message: `Prepared output ${JSON.stringify(name)} is unavailable.`,
+          }
+        : undefined),
+    [name, rejection, snapshot],
+  );
   // A document viewer posts the media output a hidden host carries, whose data
   // is a data URL. Native outputs with structured data stay with the host.
   useLayoutEffect(() => {
+    if (failure) {
+      return;
+    }
     const rendered = renderedOutputSchema.safeParse({
       ownerCellId: snapshot?.ownerCellId,
       mimetype: snapshot?.output?.mimetype,
@@ -71,18 +100,15 @@ const PreparedOutputPortal = ({
     return () => {
       host.marimoOutput = undefined;
     };
-  }, [host, snapshot, timestamp]);
+  }, [failure, host, snapshot, timestamp]);
 
   useLayoutEffect(() => {
     const selector = host.valueSelector;
-    if (snapshot === undefined) {
-      host.dataset.marimoDiagnosticCode = "prepared-output-missing";
-      host.dataset.marimoDiagnosticMessage = `Prepared output ${JSON.stringify(selector)} is unavailable.`;
-      setOutputHostState(host, "error", {
-        selector,
-        code: "prepared-output-missing",
-        message: host.dataset.marimoDiagnosticMessage,
-      });
+    if (failure || snapshot === undefined) {
+      if (failure) {
+        showFailure(host, failure);
+        setOutputHostState(host, "error", { selector, ...failure });
+      }
       return;
     }
     clearDiagnostics(host);
@@ -99,10 +125,10 @@ const PreparedOutputPortal = ({
       cellId: snapshot.ownerCellId,
       mimetype: outputMime,
     });
-  }, [host, snapshot]);
+  }, [failure, host, snapshot]);
 
-  if (snapshot === undefined) {
-    return createPortal(<MissingProjection kind="output" name={host.valueSelector} />, host);
+  if (failure || snapshot === undefined) {
+    return failure ? createPortal(<FailedProjection failure={failure} />, host) : null;
   }
   if (snapshot.output === null) {
     return null;
@@ -126,14 +152,28 @@ const PreparedOutputPortal = ({
 
 const PreparedCellPortal = ({
   host,
+  rejection,
   snapshot,
   timestamp,
 }: {
   host: MarimoCellElement;
+  rejection: ProjectionFailure | undefined;
   snapshot: PreparedCellSnapshot | undefined;
   timestamp: number;
 }) => {
-  const output = snapshot?.output;
+  const name = host.cellName;
+  const failure = useMemo<ProjectionFailure | undefined>(
+    () =>
+      rejection ??
+      (snapshot === undefined
+        ? {
+            code: "prepared-cell-missing",
+            message: `Prepared cell ${JSON.stringify(name)} is unavailable.`,
+          }
+        : undefined),
+    [name, rejection, snapshot],
+  );
+  const output = failure ? undefined : snapshot?.output;
   useLayoutEffect(() => {
     host.marimoOutput = output ? { mimetype: output.mimetype, data: output.data } : undefined;
     return () => {
@@ -143,14 +183,11 @@ const PreparedCellPortal = ({
 
   useLayoutEffect(() => {
     const alias = host.cellName;
-    if (snapshot === undefined) {
-      host.dataset.marimoDiagnosticCode = "prepared-cell-missing";
-      host.dataset.marimoDiagnosticMessage = `Prepared cell ${JSON.stringify(alias)} is unavailable.`;
-      setCellHostState(host, "error", {
-        alias,
-        code: "prepared-cell-missing",
-        message: host.dataset.marimoDiagnosticMessage,
-      });
+    if (failure || snapshot === undefined) {
+      if (failure) {
+        showFailure(host, failure);
+        setCellHostState(host, "error", { alias, ...failure });
+      }
       return;
     }
     clearDiagnostics(host);
@@ -167,10 +204,10 @@ const PreparedCellPortal = ({
       runtimeId: snapshot.cell.id,
       outputMime,
     });
-  }, [host, snapshot]);
+  }, [failure, host, snapshot]);
 
-  if (snapshot === undefined) {
-    return createPortal(<MissingProjection kind="cell" name={host.cellName} />, host);
+  if (failure || snapshot === undefined) {
+    return failure ? createPortal(<FailedProjection failure={failure} />, host) : null;
   }
   const prepared: PreparedCellPresentationSnapshot = {
     accessibleName: host.getAttribute("aria-label")?.trim() || host.cellName,
@@ -191,6 +228,22 @@ export const PreparedProjectionPortals = ({
 }) => {
   const cellHosts = useSyncExternalStore(subscribeCellHosts, getCellHosts, getCellHosts);
   const outputHosts = useSyncExternalStore(subscribeOutputHosts, getOutputHosts, getOutputHosts);
+  const projectionConfig = useRuntimeProjectionConfig();
+  // Prepared delivery applies the same site policy as live outputs, so a
+  // captured record reaches only hosts whose site permits its target.
+  const rejections = useMemo(() => {
+    const inventory = createProjectionInventory(projectionConfig, document);
+    const rejected = new Map<HTMLElement, ProjectionFailure>();
+    const check = (host: HTMLElement, kind: "cell" | "output") => {
+      const { resolution } = inventory.resolve(host, kind);
+      if (!resolution.ok) {
+        rejected.set(host, { code: resolution.error.code, message: resolution.error.message });
+      }
+    };
+    outputHosts.forEach((host) => check(host, "output"));
+    cellHosts.forEach((host) => check(host, "cell"));
+    return rejected;
+  }, [cellHosts, outputHosts, projectionConfig]);
   const cells = useMemo(
     () => new Map(snapshot.cells.map((cell) => [cell.alias, cell])),
     [snapshot.cells],
@@ -206,6 +259,7 @@ export const PreparedProjectionPortals = ({
         <PreparedOutputPortal
           key={`output:${hostId(host)}:${host.valueSelector}`}
           host={host}
+          rejection={rejections.get(host)}
           snapshot={outputs.get(host.valueSelector)}
           timestamp={timestamp}
         />
@@ -214,6 +268,7 @@ export const PreparedProjectionPortals = ({
         <PreparedCellPortal
           key={`cell:${hostId(host)}:${host.cellName}`}
           host={host}
+          rejection={rejections.get(host)}
           snapshot={cells.get(host.cellName)}
           timestamp={timestamp}
         />
