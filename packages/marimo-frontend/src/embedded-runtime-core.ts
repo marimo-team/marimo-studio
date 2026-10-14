@@ -191,12 +191,9 @@ export const createTransportInitializer = (
       try {
         release();
       } catch (releaseError) {
-        return {
-          initialized: Promise.reject(new AggregateError([error, releaseError])),
-          release,
-        };
+        throw new AggregateError([error, releaseError]);
       }
-      return { initialized: Promise.reject(error), release };
+      throw error;
     }
   };
 };
@@ -296,8 +293,13 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
         options.theme.current(),
       );
       sessionId = host.currentSessionId();
-      transport = host.initializeTransport(options.transport);
-      initialized = transport.initialized;
+      try {
+        transport = host.initializeTransport(options.transport);
+        initialized = transport.initialized;
+      } catch (error) {
+        // The renderer reports a failed transport like a failed startup.
+        initialized = Promise.reject(error);
+      }
       host.setConnecting();
       const syncTheme = () => host.configureTheme(presentation, options.theme.current());
       stopTheme = options.theme.subscribe(syncTheme);

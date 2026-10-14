@@ -587,6 +587,53 @@ test("reports synchronous transport failures through the handle", async () => {
   await act(async () => handle.dispose());
 });
 
+test("restores the previous server transport when an update fails", async () => {
+  const host = new RuntimeHostDouble();
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  let handle!: EmbeddedRuntimeHandle;
+  await act(async () => {
+    handle = mountEmbeddedRuntime({
+      autoInstantiate: false,
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: root(),
+      theme: createThemeSource().source,
+      transport: serverTransport((url) => {
+        url.searchParams.set("revision", "first");
+        return url;
+      }),
+      viewMode: "read",
+    });
+    await handle.initialized;
+  });
+  const activate = host.transport.activateServerRequests.bind(host.transport);
+  vi.spyOn(host.transport, "activateServerRequests")
+    .mockImplementationOnce(() => {
+      throw new Error("request client rejected the next transport");
+    })
+    .mockImplementation(activate);
+
+  expect(() =>
+    handle.updateServerTransport(
+      serverTransport((url) => {
+        url.searchParams.set("revision", "next");
+        return url;
+      }),
+    ),
+  ).toThrow("request client rejected the next transport");
+
+  expect(host.transport.runtime.getWsURL(testSessionId()).searchParams.get("revision")).toBe(
+    "first",
+  );
+  expect(host.transport.runtime.headers()["Marimo-Session-Id"]).toBe("s_view01");
+  expect(host.transport.serverRequestActivations).toBe(2);
+  expect(host.transport.serverRequestReleases).toBe(1);
+  await act(async () => handle.dispose());
+  expect(host.transport.serverRequestReleases).toBe(2);
+});
+
 test("allows one embedded runtime owner per mount boundary", async () => {
   const theme = createThemeSource();
   const host = new RuntimeHostDouble();
