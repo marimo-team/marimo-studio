@@ -311,10 +311,40 @@ class PublicationRegistry:
 
         claimed = admission is not None and await self._claim_slot(admission)
         try:
-            return await run_owned_worker(control.cancellation, run)
+            result = await run_owned_worker(control.cancellation, run)
+        except Exception as error:
+            if self._preempted(admission) and not process_cleanup_errors((error,)):
+                raise PublicationSuperseded from error
+            raise
         finally:
             if claimed:
                 await self._release_slot()
+        if self._preempted(admission):
+            raise PublicationSuperseded
+        return result
+
+    @staticmethod
+    def _preempted(admission: _PublicationAdmission | None) -> bool:
+        # A foreground publication cancels running warmups. A cancelled build
+        # still returns its failed build state, so the waiters learn about the
+        # preemption here and warm the view again later. Process cleanup
+        # failures still surface unchanged.
+        return (
+            admission is not None and admission.cancelled and not admission.foreground
+        )
+
+    async def foreground_settled(self) -> None:
+        """Wait until no foreground publication is running."""
+        while True:
+            async with self._lock:
+                running = [
+                    publication.task
+                    for publication in self._publications.values()
+                    if publication.admission.foreground and not publication.task.done()
+                ]
+            if not running:
+                return
+            await asyncio.wait(running)
 
     async def _claim_slot(self, admission: _PublicationAdmission) -> bool:
         async with self._inactive_condition:

@@ -328,3 +328,40 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
 
     presentation = asyncio.run(asyncio.wait_for(exercise(), timeout=5))
     assert b'"revision":"rev-2"' in presentation
+
+
+def test_a_running_warmup_preempted_by_a_foreground_publication_reports_supersede() -> (
+    None
+):
+    from marimo_studio._server.development.publication_registry import (
+        PublicationSuperseded,
+    )
+
+    started = threading.Event()
+    cancelled = threading.Event()
+
+    def warm() -> dict[str, str]:
+        control = current_provider_cancellation()
+        assert control is not None
+        control.register(cancelled.set)
+        started.set()
+        assert cancelled.wait(timeout=5)
+        # Presentation publication returns a cancelled build as failed state.
+        return {"phase": "failed"}
+
+    async def exercise() -> BaseException | dict[str, str]:
+        coordinator = DevelopmentCoordinator()
+        warmup = asyncio.create_task(
+            coordinator.publish("target", 1, warm, warmup=True)
+        )
+        try:
+            assert await asyncio.to_thread(started.wait, 1)
+            assert await coordinator.publish("selected", 1, lambda: "ok") == "ok"
+            (outcome,) = await asyncio.gather(warmup, return_exceptions=True)
+            return outcome
+        finally:
+            cancelled.set()
+            await asyncio.gather(warmup, return_exceptions=True)
+            await coordinator.close()
+
+    assert isinstance(asyncio.run(exercise()), PublicationSuperseded)

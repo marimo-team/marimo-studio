@@ -52,6 +52,7 @@ from marimo_studio.errors import MarimoStudioError
 from marimo_studio.errors._internal import ViewRetirementInProgress
 
 _T = TypeVar("_T")
+_WARMUP_ATTEMPTS = 3
 _EVENT_POLL_INTERVAL = 0.05
 _STOP_POLL_INTERVAL = 0.25
 _HEARTBEAT_INTERVAL = 15.0
@@ -709,23 +710,27 @@ async def _prepare_inactive_presentations(
     development: DevelopmentCoordinator,
 ) -> None:
     async def prepare(view_name: str) -> None:
-        try:
-            await _prepare_presentation(
-                studio,
-                view_name,
-                None,
-                development,
-                warmup=True,
-            )
-        except asyncio.CancelledError:
-            raise
-        except ProcessCleanupError:
-            raise
-        except PublicationSuperseded:
-            return
-        except (MarimoStudioError, OSError) as error:
-            raise_process_cleanup(error)
-            return
+        # A foreground publication preempts warmups. Warm the view again once
+        # that publication finishes, so inactive views still become ready.
+        for _attempt in range(_WARMUP_ATTEMPTS):
+            try:
+                await _prepare_presentation(
+                    studio,
+                    view_name,
+                    None,
+                    development,
+                    warmup=True,
+                )
+                return
+            except asyncio.CancelledError:
+                raise
+            except ProcessCleanupError:
+                raise
+            except PublicationSuperseded:
+                await development.foreground_settled()
+            except (MarimoStudioError, OSError) as error:
+                raise_process_cleanup(error)
+                return
 
     tasks = [
         asyncio.create_task(prepare(view_name))

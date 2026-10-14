@@ -385,3 +385,47 @@ def test_inactive_warmup_cleanup_failure_survives_primary_failure(
             await development.close()
 
     asyncio.run(exercise())
+
+
+def test_inactive_warmup_retries_a_superseded_view_after_the_foreground_settles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_studio._server.development.publication_registry import (
+        PublicationSuperseded,
+    )
+
+    events: list[str] = []
+
+    async def prepare(
+        _studio: object,
+        view_name: str,
+        _generation: object,
+        _development: DevelopmentCoordinator,
+        *,
+        warmup: bool = False,
+    ) -> tuple[dict[str, object], None, None]:
+        assert warmup
+        events.append(f"prepare {view_name}")
+        if events.count(f"prepare {view_name}") == 1:
+            raise PublicationSuperseded
+        return {}, None, None
+
+    async def foreground_settled() -> None:
+        events.append("foreground settled")
+
+    async def exercise() -> None:
+        studio: Any = SimpleNamespace(views={"overview": object(), "gallery": object()})
+        development = DevelopmentCoordinator()
+        monkeypatch.setattr(dev_module, "_prepare_presentation", prepare)
+        monkeypatch.setattr(
+            development, "foreground_settled", foreground_settled, raising=False
+        )
+        try:
+            await dev_module._prepare_inactive_presentations(
+                studio, "overview", development
+            )
+        finally:
+            await development.close()
+
+    asyncio.run(exercise())
+    assert events == ["prepare gallery", "foreground settled", "prepare gallery"]

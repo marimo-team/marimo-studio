@@ -616,6 +616,10 @@ class DevelopmentCoordinator:
             warmup=warmup,
         )
 
+    async def foreground_settled(self) -> None:
+        """Wait until no foreground publication is running."""
+        await self._publications.foreground_settled()
+
     async def baseline(
         self,
         view_name: str,
