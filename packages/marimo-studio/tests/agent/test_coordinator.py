@@ -588,8 +588,12 @@ def test_a_show_cancelled_while_the_store_is_busy_frees_the_browser() -> None:
         holder = asyncio.create_task(queued_holder())
         await asyncio.sleep(0)
         condition.release()
-        while not agents._store.activation_operations:
-            await asyncio.sleep(0)
+
+        async def activation_started() -> None:
+            while not agents._store.activation_operations:
+                await asyncio.sleep(0)
+
+        await asyncio.wait_for(activation_started(), 5)
         request.cancel()
         with pytest.raises(asyncio.CancelledError):
             await request
