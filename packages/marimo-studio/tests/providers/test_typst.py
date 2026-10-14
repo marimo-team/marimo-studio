@@ -462,3 +462,16 @@ def test_static_validation_checks_the_values_a_document_reads(
     assert {issue.target for issue in run.report.issues if issue.view == "report"} == {
         "missing_total"
     }
+
+
+def test_build_uses_default_for_computed_output_targets(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        '#import "marimo.typ": marimo_output\n'
+        "#let chart(name) = figure(marimo_output(name, width: 80%))\n"
+        '#chart("plot")\n',
+    )
+    assert inspect_view_project_sync(project).render_outputs == ()
+
+    with build_view_project_sync(project, profile="production") as lease:
+        assert lease.read_bytes(PurePosixPath("main.pdf")).startswith(b"%PDF-")

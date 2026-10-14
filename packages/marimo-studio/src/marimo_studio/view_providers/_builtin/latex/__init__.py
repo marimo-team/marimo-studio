@@ -131,7 +131,14 @@ class LatexProvider:
             )
         if compiled.document is None:
             return compiled
-        return BuildResult(entry, output_sizes=compiled.output_sizes)
+        return BuildResult(
+            entry,
+            output_sizes={
+                output.target: compiled.output_sizes[output.target]
+                for output in request.inspection.render_outputs
+                if output.target in compiled.output_sizes
+            },
+        )
 
     def render(self, request: RenderRequest) -> BuildResult:
         base = request.template_root.joinpath(*request.document.parent.parts)
