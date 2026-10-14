@@ -18,6 +18,7 @@ from marimo_studio.errors import (
     ConfigurationError,
     PublicationHeldError,
     ViewGenerationConflictError,
+    ViewNotFoundError,
 )
 
 DEFAULT_PUBLICATION_HOLD_SECONDS = 300.0
@@ -133,6 +134,8 @@ def _require_generation(root: Path, expected: str | None) -> str:
     try:
         current = view_name_generation(root.parent, root.name)
     except FileNotFoundError as error:
+        if expected is None:
+            raise ViewNotFoundError(root.name) from error
         raise ViewGenerationConflictError(root.name, None) from error
     if expected is not None and current != expected:
         raise ViewGenerationConflictError(root.name, current)

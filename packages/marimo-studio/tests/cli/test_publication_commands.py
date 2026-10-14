@@ -13,8 +13,8 @@ from marimo_studio.authoring import open_workspace
 from marimo_studio.errors import (
     ConfigurationError,
     SourceConflictError,
+    ViewNotFoundError,
     ViewProjectError,
-    WorkspaceGenerationConflictError,
 )
 
 
@@ -149,5 +149,27 @@ def test_absent_view_handle_cannot_hold_a_later_view(notebook_path: Path) -> Non
     absent = open_workspace(notebook_path).view("later")
     prepare_view(notebook_path, "later")
 
-    with pytest.raises(WorkspaceGenerationConflictError):
+    with pytest.raises(ViewNotFoundError):
         asyncio.run(absent.hold_publication(owner="stale editor"))
+    with pytest.raises(ViewNotFoundError):
+        asyncio.run(absent.release_publication("token"))
+
+
+def test_cli_hold_reports_a_missing_view(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "hold",
+            "dashbaord",
+            "--target",
+            str(notebook_path),
+            "--owner",
+            "editor",
+        ],
+    )
+
+    assert isinstance(result.exception, ViewNotFoundError)
+    assert str(result.exception) == "View 'dashbaord' does not exist."
