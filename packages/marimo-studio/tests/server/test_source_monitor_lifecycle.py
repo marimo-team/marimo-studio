@@ -862,3 +862,66 @@ def test_a_scan_cancelled_during_inspection_recovers_on_the_next_subscriber(
             await coordinator.close()
 
     assert asyncio.run(asyncio.wait_for(exercise(), timeout=10)).startswith("sha256:")
+
+
+def test_catalog_rebuilds_a_scan_cancelled_during_its_current_probe(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = created_one_view(notebook_path)
+    probe_started = threading.Event()
+    release_probe = threading.Event()
+    scan_started = threading.Event()
+    scan_cancelled = threading.Event()
+
+    async def exercise() -> None:
+        coordinator = DevelopmentCoordinator(project_watcher=WatcherFactory())
+        subscription = await coordinator.subscribe(studio, "dashboard")
+        monitor = subscription._monitor
+        initial = monitor.producer.catalog()[2]
+        original_probe = monitor.producer.catalog_current
+
+        def probe() -> bool:
+            current = original_probe()
+            probe_started.set()
+            assert release_probe.wait(5)
+            return current
+
+        def poll() -> None:
+            control = current_provider_cancellation()
+            assert control is not None
+            unregister = control.register(scan_cancelled.set)
+            scan_started.set()
+            try:
+                assert scan_cancelled.wait(5)
+            finally:
+                unregister()
+
+        monkeypatch.setattr(monitor.producer, "catalog_current", probe)
+        monkeypatch.setattr(monitor.producer, "poll", poll)
+        reading = asyncio.create_task(coordinator.project_catalog(studio, "dashboard"))
+        scanning: asyncio.Task[None] | None = None
+        try:
+            assert await asyncio.to_thread(probe_started.wait, 2)
+            scanning = asyncio.create_task(coordinator.refresh("dashboard"))
+            assert await asyncio.to_thread(scan_started.wait, 2)
+            source = studio.view("dashboard").root / "index.html"
+            source.write_text(source.read_text(encoding="utf-8") + "\n<p>new</p>\n")
+            scanning.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await scanning
+            release_probe.set()
+            catalog = await asyncio.wait_for(reading, 5)
+            assert catalog.input_id != initial
+            assert catalog.generation == subscription.generation + 1
+        finally:
+            release_probe.set()
+            scan_cancelled.set()
+            pending: list[asyncio.Task[Any]] = (
+                [reading] if scanning is None else [reading, scanning]
+            )
+            await asyncio.gather(*pending, return_exceptions=True)
+            await subscription.close()
+            await coordinator.close()
+
+    asyncio.run(exercise())

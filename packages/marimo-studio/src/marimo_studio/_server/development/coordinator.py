@@ -295,34 +295,41 @@ class DevelopmentCoordinator:
                     "catalog_current",
                     lambda: True,
                 )
-                if (
+                current = (
                     monitor.error is None
                     and not monitor.rebuild
                     and await self._catalog_current(monitor, catalog_current)
-                ):
-                    break
-                generation = monitor.generation
-                await self._scan_monitor(view_name, monitor)
-                if monitor.error is not None or monitor.generation == generation:
-                    break
-            async with monitor.scan_lock:
-                if monitor.error is not None:
-                    raise ConfigurationError(
-                        "Source monitoring failed for view "
-                        f"{view_name!r}: {monitor.error}"
-                    ) from monitor.error
-                project, inspection, input_id = monitor.producer.catalog()
-                async with self._lock:
-                    if (
-                        view_name in self._retiring_views
-                        or not self._source_monitors.contains_locked(
-                            view_name,
-                            monitor,
-                        )
-                    ):
-                        raise ViewRetirementInProgress(view_name)
+                )
+                if not current:
                     generation = monitor.generation
-            return ProjectCatalog(project, inspection, input_id, generation)
+                    await self._scan_monitor(view_name, monitor)
+                    current = (
+                        monitor.error is not None or monitor.generation == generation
+                    )
+                async with monitor.scan_lock:
+                    if monitor.rebuild or not current:
+                        continue
+                    if monitor.error is not None:
+                        raise ConfigurationError(
+                            "Source monitoring failed for view "
+                            f"{view_name!r}: {monitor.error}"
+                        ) from monitor.error
+                    project, inspection, input_id = monitor.producer.catalog()
+                    async with self._lock:
+                        if (
+                            view_name in self._retiring_views
+                            or not self._source_monitors.contains_locked(
+                                view_name,
+                                monitor,
+                            )
+                        ):
+                            raise ViewRetirementInProgress(view_name)
+                        generation = monitor.generation
+                    return ProjectCatalog(project, inspection, input_id, generation)
+            raise ConfigurationError(
+                f"Source kept changing while inspecting view {view_name!r}. "
+                "Wait for source edits to settle and retry."
+            )
         finally:
             await subscription.close()
 
