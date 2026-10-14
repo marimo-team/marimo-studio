@@ -1,0 +1,22 @@
+packages/marimo-frontend/tests/embedded-runtime.test.ts
+  s_b34a627c8c0b18::t_2daf5c73727666 525-562
+  s_b34a627c8c0b18::t_9dbbd44ffca7ec 563-599
+packages/marimo-frontend/src/embedded-runtime-core.ts
+  s_b34a627c8c0b18::t_7493f7e3beb3d2 21-30,204,312-314,354-356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "50d85348b908cd00948eeec93473c81773a8488c",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
