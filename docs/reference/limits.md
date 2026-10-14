@@ -68,7 +68,7 @@ on every site.
 | Encoded render values for one render          |  8 MiB | `document-values-too-large`       |
 | Rendered outputs for one render               | 16 MiB | `document-outputs-too-large`      |
 | Rendered document                             | 64 MiB | `document-render-too-large`       |
-| Provider commands during one render           |   60 s |                                   |
+| Provider commands during one render           |   60 s | `document-render-failed`          |
 | Prepared states rendered by one static export |    256 | `document-render-states-exceeded` |
 
 ## Active presentation projections

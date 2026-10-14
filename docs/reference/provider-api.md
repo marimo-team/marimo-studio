@@ -52,7 +52,7 @@ in an environment that contains credentials or private notebook source.
 
 ## Register the provider
 
-Publish one provider object through Python package metadata, and bound the
+Publish one provider object through Python package metadata, and bind the
 Studio dependency to the minor line the provider has tested:
 
 ```toml

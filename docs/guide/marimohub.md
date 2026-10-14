@@ -34,8 +34,8 @@ session, and **Add view** warns about them. For a Git-synced notebook, follow th
 [marimo-studio steps](https://marimohub.docs.marimo.io/apps#use-marimo-studio)
 and commit `notebook.py` and the view folder before you stop the session.
 
-The saved workspace leaves out `__marimo__/`, where Studio keeps build state,
-so each new session rebuilds every view.
+The saved workspace leaves out `__marimo__/`, where Studio keeps build state by
+default, so each new session rebuilds every view.
 
 Studio needs
 [supported storage](../reference/compatibility.md#workspace-storage) for the

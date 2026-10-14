@@ -72,8 +72,9 @@ uv pip install "marimo-studio[lens]"
 ```
 
 For a sandboxed notebook, also add `marimo-studio[lens]` to the script's
-dependencies. Notebook and Preview then each show a Lens dock, and
-selections from both reach the agent. Select a result, add a note, and ask:
+dependencies. When the notebook creates no Lens of its own, marimo mounts one,
+and Notebook and Preview each show a Lens dock whose selections reach the
+agent. Select a result, add a note, and ask:
 
 > Use Lens to address my current selection in this Studio view.
 

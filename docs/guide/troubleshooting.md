@@ -59,9 +59,9 @@ they collide, Studio stops with one of these errors:
 | `MARIMO_STUDIO_STATE_DIR` must be an absolute path                   | Set an absolute path, or leave it empty                                                                                                           |
 | `state_dir` must be a non-empty relative path                        | Set a folder inside the project, or use `MARIMO_STUDIO_STATE_DIR`                                                                                 |
 
-Choosing another
+For a conflict between view folders and build state, choosing another
 [build state location](../reference/configuration.md#build-state-location)
-also resolves the build state errors.
+also resolves it.
 
 ## A starter is unavailable
 
@@ -205,7 +205,7 @@ notebook's execution state unchanged.
 
 If the page shows an earlier edit, check freshness with `view inspect`. An
 exact preview URL returns HTTP 409 once the view's revision changes or its
-source fails to build, so build the source and request a fresh URL. See
+source is unbuilt or fails to build, so build the source and request a fresh URL. See
 [`preview_url()`](../reference/python-api.md#preview-url) and
 [`marimo-studio view preview`](../reference/cli.md#marimo-studio-view-preview).
 

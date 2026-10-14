@@ -22,7 +22,8 @@ shortcode also writes. Typst reads targets with `marimo_value()`,
 `\marimographics`, and `\marimocell`, as
 [Rendered documents](#rendered-documents) describes.
 
-Hosts behave the same in the Python (`server`) and Browser (`wasm`) runtimes.
+The Python (`server`) and Browser (`wasm`) runtimes use the same authored
+hosts.
 In HTML, close each host explicitly and place hosts beside each other.
 Rendering a host replaces its contents. The build rejects nested hosts and
 self-closing elements such as `<h1 mo-value="total"/>`.

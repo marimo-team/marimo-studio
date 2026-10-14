@@ -58,7 +58,7 @@ the artifact.
 | Projection revision   | Presentation projection targets, policy, runtime bindings, diagnostics, and runtime instance | Projection authorization or runtime binding state changes                              |
 
 An artifact revision stays current across repeated builds that produce a
-byte-identical browser file tree. Development and production profiles can
+byte-identical browser file tree and the same projection declarations. Development and production profiles can
 publish the same artifact revision and still keep separate build attempt and
 publication state.
 

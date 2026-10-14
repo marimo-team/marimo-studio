@@ -38,7 +38,9 @@ provider requirements from the notebook's
 When the current process lacks a required Studio extra or third-party
 provider, Studio reruns the command through `uv` in the notebook's declared
 environment. `uv` may resolve and install packages before provider code loads,
-so keep the `uv` executable available.
+so keep the `uv` executable available. A pixi workspace runs Studio in its own
+activated environment instead, so declare Studio, its extras, and every
+provider in the workspace.
 
 `validate --level runtime`, and `view preflight` or `view export` with
 `--runtime zero-python`, execute notebook Python. When the notebook declares

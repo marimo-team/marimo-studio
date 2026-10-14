@@ -50,7 +50,8 @@ uvx --with marimo-studio marimo run analysis.py --sandbox --host 127.0.0.1 --por
 For a notebook in a uv project:
 
 ```console
-uv run --with marimo-studio --project . marimo run analysis.py --no-sandbox
+uv run --with marimo-studio --project . marimo run analysis.py --no-sandbox \
+  --host 127.0.0.1 --port 8000
 ```
 
 The default view opens at `http://127.0.0.1:8000/`, and a view named `report`

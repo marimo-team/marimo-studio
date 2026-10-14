@@ -33,8 +33,9 @@ pattern closest to your tool:
 | [Rendered document](#publish-a-document)                               | renders a PDF, SVG, or PNG with notebook values | `RenderValue`, `RenderOutput`, `RenderCell`, `render()`     | [`typst`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/typst)           |
 
 When no pattern fits, start from the HTML page provider and replace `build()`
-with your tool's steps. The Quarto provider uses only the public module, so its
-source reads as a complete example.
+with your tool's steps. The built-in Quarto provider also imports private
+`_builtin.quarto` helpers, so copy its use of the public module and keep
+your provider's imports to `marimo_studio.view_providers`.
 
 ## Ask a coding agent
 

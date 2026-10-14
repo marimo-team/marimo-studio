@@ -109,7 +109,7 @@ What's going on here:
 Studio resolves every name to the cell that computes it. A reader who doubts a
 number on the page can follow it to that cell and through marimo's
 [dataflow graph](https://docs.marimo.io/guides/editor_features/dataflow/) to the data behind
-it, and `marimo-studio validate` reports every name a view uses that the
+it, and `marimo-studio validate` reports each name a view declares that the
 notebook no longer defines.
 
 ## Pages and documents

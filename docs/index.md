@@ -37,7 +37,7 @@ features:
       width: "24"
       height: "24"
     title: Pages and documents
-    details: Write a view in HTML, React, Svelte, Reveal.js, Quarto, Typst, or LaTeX, or add a provider for another tool.
+    details: Write a view in HTML, React, Svelte, Reveal.js, Notebook Kit, Quarto, Typst, or LaTeX, or add a provider for another tool.
     link: ./guide/formats
   - icon:
       src: /icons/code-xml.svg

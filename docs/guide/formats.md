@@ -17,7 +17,7 @@ Pick one in **Add view**, or pass `--starter` to `marimo-studio view create`.
 | `marimo-studio/notebook-kit:default` | An Observable notebook of JavaScript and HTML cells        | `marimo-studio[deno]`  |
 | `marimo-studio/quarto:default`       | A [Quarto](https://quarto.org/) Markdown document          | Quarto 1.9.38 or newer |
 | `marimo-studio/typst:default`        | A PDF typeset with [Typst](https://typst.app/)             | `marimo-studio[typst]` |
-| `marimo-studio/latex:default`        | A PDF typeset with [LaTeX](https://www.latex-project.org/) | Tectonic               |
+| `marimo-studio/latex:default`        | A PDF typeset with [LaTeX](https://www.latex-project.org/) | Tectonic 0.15 or newer |
 
 The first six are pages, so their controls stay live in the browser. Typst
 and LaTeX views are documents: Studio compiles a PDF from the notebook's
@@ -72,22 +72,22 @@ Then create the view:
 ::: code-group
 
 ```console [React]
-marimo-studio view create operations --target analysis.py \
+uv run marimo-studio view create operations --target analysis.py \
   --starter marimo-studio/react:default
 ```
 
 ```console [Reveal.js]
-marimo-studio view create briefing --target analysis.py \
+uv run marimo-studio view create briefing --target analysis.py \
   --starter marimo-studio/react:reveal
 ```
 
 ```console [Svelte]
-marimo-studio view create explorer --target analysis.py \
+uv run marimo-studio view create explorer --target analysis.py \
   --starter marimo-studio/svelte:default
 ```
 
 ```console [Notebook Kit]
-marimo-studio view create monitor --target analysis.py \
+uv run marimo-studio view create monitor --target analysis.py \
   --starter marimo-studio/notebook-kit:default
 ```
 
@@ -147,7 +147,7 @@ Install the compiler in the notebook's Python project, then create a view:
 
 ```console
 uv add 'marimo-studio[typst]'
-marimo-studio view create report --target analysis.py \
+uv run marimo-studio view create report --target analysis.py \
   --starter marimo-studio/typst:default
 ```
 
@@ -206,11 +206,12 @@ journal template with the notebook's figures and tables.
 
 ## When documents render
 
-| Where the view runs                 | Typst and LaTeX views show                          |
-| ----------------------------------- | --------------------------------------------------- |
-| Studio editor, or `marimo run`      | A PDF compiled again when a result it reads changes |
-| Prepared export                     | One PDF for each prepared input state               |
-| Browser runtime, or a `wasm` export | The PDF compiled when the view was built            |
+| Where the view runs                                       | Typst and LaTeX views show                          |
+| --------------------------------------------------------- | --------------------------------------------------- |
+| Studio editor, in any runtime                             | A PDF compiled again when a result it reads changes |
+| `marimo run` with the Python runtime                      | A PDF compiled again when a result it reads changes |
+| Prepared export                                           | One PDF for each prepared input state               |
+| `marimo run` with the Browser runtime, or a `wasm` export | The PDF compiled when the view was built            |
 
 A page can also draw a PDF in the browser from `mo-value` data with a
 JavaScript PDF library, which works in every runtime. The **Field report** view

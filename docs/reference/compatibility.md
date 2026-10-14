@@ -34,8 +34,8 @@ set, each view rebuilds once in the new location and leaves its old
 
 To move the views, update the notebook's `marimo-studio` requirement to the
 current release first, because Studio 0.3 looks for views only in the old
-folder. Then stop Studio, move the folder, and delete the build state that
-moved with it:
+folder. Then stop Studio, move the folder to `studio/analysis`, which must not exist
+yet, and delete the build state that moved with it:
 
 ```console
 mkdir -p studio

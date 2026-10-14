@@ -111,7 +111,8 @@ marimo-output[value="revenue_chart"] {
 }
 ```
 
-Set `data-skeleton="none"` on a host to leave its slot empty while it loads.
+Set `data-skeleton="none"` on a `marimo-cell` or `marimo-output` host to
+leave its slot empty while it loads.
 Hosts also expose `data-state` for your own loading and error styles.
 [Notebook result projections](../reference/projections.md#host-lifecycle)
 lists the states.
