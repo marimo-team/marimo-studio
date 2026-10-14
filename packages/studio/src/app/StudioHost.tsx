@@ -28,7 +28,7 @@ import { StudioThemeProvider, useResolvedStudioTheme } from "../shared/theme.tsx
 import { useControllerSnapshot } from "../shared/useControllerSnapshot.ts";
 import { StudioRoutes } from "./routes.ts";
 import { StudioApp, type StudioOptions } from "./StudioApp.tsx";
-import { workspaceEventsUrl, workspaceStreamRetired } from "./workspace-event-coordinator.ts";
+import { watchWorkspaceStreamClosure, workspaceEventsUrl } from "./workspace-event-coordinator.ts";
 
 interface StudioHostProps extends StudioOptions {
   editorFrame: HTMLIFrameElement;
@@ -276,22 +276,16 @@ export const StudioHost = ({
       const stream = new EventSource(streamUrl);
       events = stream;
       stream.addEventListener("open", () => reconnects.reset());
-      // A non-200 or non-stream response closes an EventSource for good.
-      stream.addEventListener("error", () => {
-        if (stream.readyState !== EventSource.CLOSED) {
+      watchWorkspaceStreamClosure(stream, streamUrl, (retired) => {
+        if (events !== stream || closed) {
           return;
         }
-        void workspaceStreamRetired(streamUrl).then((retired) => {
-          if (events !== stream || closed) {
-            return;
-          }
-          // A restarted server issues new URLs, and only the host page carries them.
-          if (retired) {
-            globalThis.location.reload();
-            return;
-          }
-          reconnect = setTimeout(connect, reconnects.next());
-        });
+        // A restarted server issues new URLs, and only the host page carries them.
+        if (retired) {
+          globalThis.location.reload();
+          return;
+        }
+        reconnect = setTimeout(connect, reconnects.next());
       });
       stream.addEventListener("activate", (event) => {
         const payload = parseActiveViewRequest(

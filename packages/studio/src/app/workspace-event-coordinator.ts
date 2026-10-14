@@ -84,18 +84,27 @@ export const workspaceEventsUrl = (eventsUrl: string, activeView?: string): stri
   return url.href;
 };
 
-// The server answers a stream URL issued by an earlier server process with 204,
-// which closes the EventSource for good. A proxy error or an expired sign-in
-// closes it the same way. A probe without a stream generation tells them apart
-// and opens no stream on a live server.
-export const workspaceStreamRetired = async (streamUrl: string): Promise<boolean> => {
-  const probe = new URL(streamUrl);
-  probe.searchParams.delete(WORKSPACE_STREAM_QUERY_PARAM);
-  try {
-    return (await fetch(probe, { cache: "no-store" })).status === 204;
-  } catch {
-    return false;
-  }
+// EventSource retries network errors itself, but a non-200 or non-stream
+// response closes it for good. The server answers a stream URL issued by an
+// earlier server process with 204. A proxy error or an expired sign-in closes
+// the stream the same way. A probe without a stream generation tells them
+// apart and opens no stream on a live server.
+export const watchWorkspaceStreamClosure = (
+  stream: EventSource,
+  streamUrl: string,
+  closed: (retired: boolean) => void,
+): void => {
+  stream.addEventListener("error", () => {
+    if (stream.readyState !== EventSource.CLOSED) {
+      return;
+    }
+    const probe = new URL(streamUrl);
+    probe.searchParams.delete(WORKSPACE_STREAM_QUERY_PARAM);
+    void fetch(probe, { cache: "no-store" }).then(
+      (response) => closed(response.status === 204),
+      () => closed(false),
+    );
+  });
 };
 
 export class WorkspaceEventCoordinator {
@@ -260,24 +269,15 @@ export class WorkspaceEventCoordinator {
         connectionReady?.();
       }),
     );
-    // EventSource retries network errors itself, but a non-200 or non-stream
-    // response, such as a proxy 502 or an expired sign-in, closes it for good.
-    events.addEventListener("error", () =>
+    watchWorkspaceStreamClosure(events, streamUrl, (retired) =>
       pending(() => {
-        if (events.readyState !== EventSource.CLOSED) {
+        if (retired) {
+          this.options.preview.serverRestarted();
           return;
         }
-        void workspaceStreamRetired(streamUrl).then((retired) =>
-          pending(() => {
-            if (retired) {
-              this.options.preview.serverRestarted();
-              return;
-            }
-            this.reconnect = setTimeout(
-              () => this.connect(undefined, connectionReady, this.notebookMutationGeneration),
-              this.reconnects.next(),
-            );
-          }),
+        this.reconnect = setTimeout(
+          () => this.connect(undefined, connectionReady, this.notebookMutationGeneration),
+          this.reconnects.next(),
         );
       }),
     );
