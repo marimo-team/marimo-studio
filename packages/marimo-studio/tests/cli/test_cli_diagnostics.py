@@ -287,6 +287,32 @@ def test_main_structures_configuration_errors(
     assert event["exit_code"] == 3
 
 
+def test_main_structures_a_view_manifest_that_is_not_utf8(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest = prepare_view(notebook_path).root / "view.toml"
+    manifest.write_bytes(b"# Gr\xfc\xdfe\n" + manifest.read_bytes())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["marimo-studio", "status", "--target", str(notebook_path), "--json"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    output = capsys.readouterr()
+    event = json.loads(output.err)
+    assert raised.value.code == 3
+    assert output.out == ""
+    assert event["code"] == "configuration-error"
+    assert event["message"] == (
+        f"{manifest} is not UTF-8 text. Save it as UTF-8, then retry."
+    )
+
+
 def test_main_structures_static_preflight_failures(
     notebook_path: Path,
     tmp_path: Path,
