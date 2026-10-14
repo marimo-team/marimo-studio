@@ -414,8 +414,8 @@ export class ViewController {
     });
   }
 
-  clearCreateMessage(): void {
-    if (this.snapshot.createMessage !== undefined) {
+  clearCreateError(): void {
+    if (this.snapshot.createMessage?.state === "error") {
       this.update({ createMessage: undefined });
     }
   }

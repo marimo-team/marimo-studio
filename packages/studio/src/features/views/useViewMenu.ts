@@ -222,7 +222,7 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
   const changeName = useCallback(
     (next: string) => {
       setName(next);
-      controller.clearCreateMessage();
+      controller.clearCreateError();
     },
     [controller],
   );

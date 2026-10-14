@@ -338,3 +338,35 @@ it("clears a creation error once the view name changes", async () => {
   expect(screen.queryByText("A view named 'dashboard' already exists.")).toBeNull();
   controller.dispose();
 });
+
+it("keeps the created-view warning while the view name changes", async () => {
+  const remote: ViewRemote = {
+    list: vi.fn(async () => viewList(["dashboard"])),
+    create: vi.fn(async (name: string) => ({ schema: 1 as const, name })),
+    remove: vi.fn(),
+  };
+  const controller = new ViewController(
+    "dashboard",
+    ["dashboard"],
+    remote,
+    vi.fn(async () => false),
+    vi.fn(async () => true),
+    vi.fn(),
+    [starter],
+    starter.id,
+  );
+  await controller.refreshInventory();
+  const user = userEvent.setup();
+  render(<ViewMenu controller={controller} />);
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
+  await user.type(screen.getByRole("textbox", { name: "New view" }), "report");
+  await user.click(screen.getByRole("button", { name: "Create" }));
+  const warning = "View created. Resolve the current source, then select it from Views.";
+  expect(await screen.findByText(warning)).toBeVisible();
+
+  await user.type(screen.getByRole("textbox", { name: "New view" }), "-2");
+
+  expect(screen.getByText(warning)).toBeVisible();
+  controller.dispose();
+});
