@@ -65,7 +65,7 @@ e2e = [
 ]
 marimo-studio-build = [
     { name = "agent-plugins", specifier = ">=0.2.4" },
-    { name = "uv-build", specifier = ">=0.12,<0.13" },
+    { name = "uv-build", specifier = ">=0.12,<0.14" },
 ]
 release = [{ name = "twine", specifier = ">=6.2" }]
 test = [

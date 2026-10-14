@@ -30,7 +30,7 @@ dev = [
   "ty>=0.0.64",
 ]
 e2e = ["anywidget", "marimo-studio[lens]", "marimo-studio-e2e-provider"]
-marimo-studio-build = ["agent-plugins>=0.2.4", "uv-build>=0.12,<0.13"]
+marimo-studio-build = ["agent-plugins>=0.2.4", "uv-build>=0.12,<0.14"]
 release = ["twine>=6.2"]
 
 [tool.pytest.ini_options]
@@ -108,7 +108,7 @@ reportPrivateLocalImportUsage = false
 root = "packages/marimo-studio/src"
 
 [tool.uv]
-required-version = ">=0.12,<0.13"
+required-version = ">=0.12,<0.14"
 exclude-newer = "7 days"
 exclude-newer-package = { agent-plugins = false, marimo = false, marimo-export = false, marimo-lens = false, marimo-studio = false }
 
