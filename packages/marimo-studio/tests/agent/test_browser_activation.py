@@ -112,3 +112,31 @@ def test_browser_mutation_http_rejects_noncanonical_records(
             assert response.json()["error"] == error, path
             if field is not None:
                 assert response.json()["field"] == field, path
+
+
+def test_a_refused_active_view_handoff_explains_the_conflict(
+    notebook_path: Path,
+) -> None:
+    server = agent_edit_server(notebook_path)
+
+    with TestClient(server.app) as client:
+        response = client.post(
+            "/_marimo-studio/active-view-handoffs/handoff-operation-1",
+            headers=server.headers,
+            json={
+                "schema": 1,
+                "clientId": "browser-client-1234",
+                "fromView": "dashboard",
+                "toView": "executive",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "active-view-handoff-refused",
+        "message": (
+            "Studio could not hand off the active view because this browser "
+            "is already switching views or handling an agent request."
+        ),
+        "hint": "Wait for that to finish, then switch views again.",
+    }
