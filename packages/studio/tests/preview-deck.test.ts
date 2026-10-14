@@ -601,7 +601,7 @@ it("disposes an unresponsive active reader before acknowledging the editor", asy
   expect(deck.getSnapshot().states.server?.status.message).toBe("Updating preview");
   deck.notebookMutationTransactionFailed(9);
   expect(deck.getSnapshot().states.server?.status.message).toBe("Needs repair");
-  deck.presentationBuildStarted("dashboard", 9);
+  deck.presentationBuildStarted("dashboard");
   expect(frameElement.src).toContain("/dashboard?runtime=server");
   deck.dispose();
   acknowledgement.channel.port2.close();

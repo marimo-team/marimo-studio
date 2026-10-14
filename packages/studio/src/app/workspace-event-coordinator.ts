@@ -45,7 +45,7 @@ interface WorkspacePreviewPort {
   reload(): void;
   automationTarget(view: string, reload: boolean, signal: AbortSignal): PreviewAutomationTarget;
   presentationBaseline(view: string, revision: string | null): void;
-  presentationBuildStarted(view: string, notebookMutationGeneration?: number): void;
+  presentationBuildStarted(view: string): void;
   presentationBuildCompleted(
     view: string,
     revision: string | null,
@@ -204,11 +204,7 @@ export class WorkspaceEventCoordinator {
     let streamMutationGeneration = notebookMutationGeneration;
     const previous = this.events;
     this.pendingEvents?.close();
-    if (notebookMutationGeneration === undefined) {
-      this.options.preview.presentationBuildStarted(view);
-    } else {
-      this.options.preview.presentationBuildStarted(view, notebookMutationGeneration);
-    }
+    this.options.preview.presentationBuildStarted(view);
     const events = new EventSource(workspaceEventsUrl(this.options.eventsUrl, view));
     this.pendingEvents = previous === undefined ? undefined : events;
     if (previous === undefined) {
@@ -316,11 +312,7 @@ export class WorkspaceEventCoordinator {
     if (kind === "build") {
       const build = parsePresentationBuild(data);
       if (build?.phase === "building") {
-        if (notebookMutationGeneration === undefined) {
-          this.options.preview.presentationBuildStarted(view);
-        } else {
-          this.options.preview.presentationBuildStarted(view, notebookMutationGeneration);
-        }
+        this.options.preview.presentationBuildStarted(view);
       } else if (build?.phase === "complete") {
         if (build.revision === null || build.build.phase === "failed") {
           const detail = build.build.diagnostics.find(({ severity }) => severity === "error");

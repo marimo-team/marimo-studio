@@ -406,7 +406,7 @@ export class PreviewDeck {
     this.notebookMutations.transactionApplied(generation, changed);
   }
 
-  presentationBuildStarted(view: string, _notebookMutationGeneration?: number): void {
+  presentationBuildStarted(view: string): void {
     this.presentationBuilds.add(view);
     const previous = this.presentations.get(view);
     if (previous) this.presentations.set(view, { revision: previous.revision });

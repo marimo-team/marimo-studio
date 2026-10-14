@@ -221,7 +221,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
 
   coordinator.reconcileNotebookMutation(7);
   const reconciliation = EventSourceStub.instances[1];
-  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard", 7);
+  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard");
   reconciliation?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "dashboard", revision: "presentation-v1" }),
@@ -244,7 +244,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
   coordinator.reconcileNotebookMutation(8);
   await model.views.choose("report", "preserve");
   const switched = EventSourceStub.instances.at(-1);
-  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("report", 8);
+  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("report");
   switched?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "report", revision: "presentation-report" }),
@@ -288,7 +288,7 @@ it("consumes a stream mutation tag after its first completed build", () => {
     }),
   );
 
-  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard", 7);
+  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard");
   expect(preview.presentationBuildCompleted).toHaveBeenLastCalledWith("dashboard", "v1", 7);
   preview.presentationBuildStarted.mockClear();
   preview.presentationBuildCompleted.mockClear();
