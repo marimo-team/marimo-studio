@@ -1,0 +1,50 @@
+packages/marimo-studio/tests/cli/test_publication_commands.py
+  s_91ee146f1c7dec::t_f68138321faf21 158-161,165,171-175,179,190
+packages/marimo-studio/tests/providers/test_process_isolation.py
+  s_80c04bef0fc32a::t_73628769f9ef6c 1087,1099
+  s_80c04bef0fc32a::t_0d01c517484400 847-848,852,854,863,873,1102-1103,1118-1119,1121-1122,1128,1132,1137,1140,1144,1151,1157-1185
+  s_80c04bef0fc32a::t_f4b0268a91d2ce 1113-1116,1124-1125,1152-1153
+  s_80c04bef0fc32a::t_4eac313246dbf0 1150
+packages/marimo-studio/tests/cli/test_validate_command.py
+  s_80c04bef0fc32a::t_8aeda3e92b586b 65-66,68-70,72-73
+  s_91ee146f1c7dec::t_0507c5801954e9 59-64,67,71
+packages/marimo-studio/tests/cli/test_view_catalog_commands.py
+  s_91ee146f1c7dec::t_178a18dd57a6b9 196,198
+  s_91ee146f1c7dec::t_53dbdb948588fc 197,201,203
+packages/marimo-studio/tests/providers/test_deno_svelte.py
+  s_80c04bef0fc32a::t_85395d63684cf4 577-591,611,616,618-619,621-624,631-638
+packages/marimo-studio/tests/providers/test_deno_react.py
+  s_80c04bef0fc32a::t_33ad22989690e9 709-730,762,764-779
+  s_df50519b55c80f::t_f7eeca10fc5798 734-736,816,818-837,839,841-843,845-856
+packages/marimo-studio/tests/agent/test_client_transport.py
+  s_91ee146f1c7dec::t_da90ff34466769 368,402-405,407-411
+  s_80c04bef0fc32a::t_9c6c8b7d8f441a 359-360,364-366,371-375,377-394,396-397,401,406,413-420
+  s_91ee146f1c7dec::t_1c8a83df064335 361-363,367,369-370,395,398-400,412
+  s_80c04bef0fc32a::t_c5055976958d0a 376
+packages/marimo-studio/tests/agent/test_browser_activation.py
+  s_91ee146f1c7dec::t_ee1354cf6c94bc 129,136-143,157-169,171,174,176-186,188-190,202,204-207,219
+  s_80c04bef0fc32a::t_44a0e0cc9e456a 121-122,132-133,144-148,153-154
+  s_80c04bef0fc32a::t_1d2197a104f9e6 5,173
+  s_80c04bef0fc32a::t_69bd9de1e75649 8
+  s_91ee146f1c7dec::t_46f83d50c20c7e 123,125-128
+  s_91ee146f1c7dec::t_8aabd10eeccff4 135,201,216
+  s_80c04bef0fc32a::t_75c0eca856c7a3 155-156,170,172,175,187,192-199,208-213,229-231
+  s_91ee146f1c7dec::t_ac4613ec9b14f6 124
+  s_91ee146f1c7dec::t_6733fa424277f4 214-215,217,220-228
+  s_91ee146f1c7dec::t_d339c88eee3965 6
+  s_80c04bef0fc32a::t_7eac3afd37c67f 11-12
+  s_91ee146f1c7dec::t_d0fdbb77f578c7 203
+  s_91ee146f1c7dec::t_9d39a8a5825c03 218
+  s_91ee146f1c7dec::t_393b4623a69905 134,191,200
+packages/marimo-studio/tests/cli/test_cli_diagnostics.py
+  s_91ee146f1c7dec::t_b5f90ed613f1bc 290-295,299,302-313,328
+  s_91ee146f1c7dec::t_3487248461029f 627-632,637,642-649,651-671,677-678,683-690
+packages/marimo-studio/tests/cli/test_activity.py
+  s_91ee146f1c7dec::t_ee7bd9677ad057 55-58,60,65-70,76,91-99,106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e374654d7533cf7243d3364603750a98bb1f1bd1",
+  "prompts": {}
+}
