@@ -1,0 +1,29 @@
+packages/marimo-studio/tests/artifacts/test_recovery.py
+  s_a4c5e29f8ae5ed::t_b6e34b3d71bc9a 26
+packages/marimo-studio/tests/artifacts/test_build_lifecycle.py
+  s_a4c5e29f8ae5ed::t_a3b8b1fcb95fdc 771,777-779,792
+  s_a4c5e29f8ae5ed::t_1df081a4c20867 754-758,761,764-766,769,773,783-788,800-808
+  s_a4c5e29f8ae5ed::t_8242d22cb9465e 774-776
+  s_a4c5e29f8ae5ed::t_0990c0522284cc 5
+packages/marimo-studio/tests/artifacts/test_build_execution.py
+  s_a4c5e29f8ae5ed::t_e5aff4f2a66280 262-267,270,277,280,283,289-291,298
+packages/marimo-studio/tests/artifacts/test_serving.py
+  s_a4c5e29f8ae5ed::t_9c11c73b33a94f 343
+  s_a4c5e29f8ae5ed::t_463501a8762e9d 189-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1930fa1eb2af417e2e6ac92d8ef62583eaea4230",
+  "prompts": {},
+  "sessions": {
+    "s_a4c5e29f8ae5ed": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "agent-3b398714-57cc-496b-bfef-51c5913e960d",
+        "model": "unknown"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
