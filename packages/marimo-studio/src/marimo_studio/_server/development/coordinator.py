@@ -295,9 +295,10 @@ class DevelopmentCoordinator:
                     "catalog_current",
                     lambda: True,
                 )
-                if monitor.error is None and await self._catalog_current(
-                    monitor,
-                    catalog_current,
+                if (
+                    monitor.error is None
+                    and not monitor.rebuild
+                    and await self._catalog_current(monitor, catalog_current)
                 ):
                     break
                 generation = monitor.generation
@@ -406,6 +407,7 @@ class DevelopmentCoordinator:
         catalog_current = getattr(monitor.producer, "catalog_current", lambda: True)
         if probe and (
             monitor.error is not None
+            or monitor.rebuild
             or not await self._catalog_current(monitor, catalog_current)
         ):
             await self._scan_monitor(key, monitor)
@@ -517,6 +519,11 @@ class DevelopmentCoordinator:
                     lambda path: self._watch_changed(key, monitor, path),
                     lambda: self._monitor_active(key, monitor),
                 )
+            except asyncio.CancelledError:
+                # A cancelled poll may have recorded part of its scan and lost
+                # its change. Rebuild the producer from disk on the next scan.
+                monitor.rebuild = True
+                raise
             except Exception as error:
                 raise_process_cleanup(error)
                 change = (

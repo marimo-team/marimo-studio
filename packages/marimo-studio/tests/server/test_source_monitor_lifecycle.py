@@ -778,3 +778,87 @@ def test_subscription_release_finishes_after_cancellation(
         await coordinator.close()
 
     asyncio.run(exercise())
+
+
+def test_a_scan_cancelled_during_inspection_recovers_on_the_next_subscriber(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+    from pathlib import PurePosixPath
+
+    from marimo_studio._server.development import source_changes
+    from marimo_studio.view_providers import BuildInput
+    from marimo_studio.view_providers._host import provider_registry
+    from marimo_studio.view_providers._host.operations.process import (
+        ProviderOperationCancelled,
+    )
+
+    studio = created_one_view(notebook_path)
+    project = studio.views["dashboard"]
+    (project.root / "src").mkdir()
+    source = project.root / "src" / "app.js"
+    source.write_text("export const value = 1;\n", encoding="utf-8")
+    builtin = provider_registry().get(project.provider)
+    blocked = threading.Event()
+    block = False
+
+    class CancellableProvider:
+        def inspect(self, request: Any) -> Any:
+            if block:
+                control = current_provider_cancellation()
+                assert control is not None
+                cancelled = threading.Event()
+                unregister = control.register(cancelled.set)
+                blocked.set()
+                try:
+                    assert cancelled.wait(5)
+                finally:
+                    unregister()
+                raise ProviderOperationCancelled("Provider operation was cancelled")
+            inspection = builtin.inspect(request)
+            return replace(
+                inspection,
+                inputs=(
+                    *inspection.inputs,
+                    BuildInput(PurePosixPath("src"), "directory"),
+                ),
+            )
+
+        def provenance(self) -> Any:
+            return builtin.provenance()
+
+    provider = CancellableProvider()
+    monkeypatch.setattr(
+        source_changes,
+        "provider_registry",
+        lambda: SimpleNamespace(
+            get=lambda _selected: provider,
+            validate_project=lambda selected: selected,
+        ),
+    )
+
+    async def exercise() -> str:
+        nonlocal block
+        coordinator = DevelopmentCoordinator(project_watcher=WatcherFactory())
+        try:
+            tab = await coordinator.subscribe(studio, project.name)
+            await coordinator.project_catalog(studio, project.name)
+            block = True
+            source.write_text("export const value = 2;\n", encoding="utf-8")
+            read = asyncio.create_task(
+                coordinator.project_catalog(studio, project.name)
+            )
+            assert await asyncio.to_thread(blocked.wait, 5)
+            read.cancel()
+            await asyncio.gather(read, return_exceptions=True)
+            block = False
+            try:
+                catalog = await coordinator.project_catalog(studio, project.name)
+                return catalog.input_id
+            finally:
+                await tab.close()
+        finally:
+            await coordinator.close()
+
+    assert asyncio.run(asyncio.wait_for(exercise(), timeout=10)).startswith("sha256:")
