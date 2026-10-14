@@ -1,0 +1,21 @@
+packages/marimo-frontend/tests/control-endpoint.test.ts
+  s_b34a627c8c0b18::t_3876e2d4b79e16 410-429
+packages/marimo-frontend/src/control-endpoint-core.ts
+  s_b34a627c8c0b18::t_815bf5542b5add 205,211,227-236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "00e3527a5fa0f0a64a09dce8b7be7eda3ad47533",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
