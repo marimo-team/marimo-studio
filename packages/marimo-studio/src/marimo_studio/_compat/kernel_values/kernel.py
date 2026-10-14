@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 import time
 from collections.abc import Awaitable, Callable, Iterator
@@ -783,16 +784,46 @@ class _KernelBridgeLifespan:
                 if exc_value is not None
                 else RuntimeError("The Marimo kernel lifespan setup failed.")
             )
-        self._close()
+        ledger, self._observation_ledger = self._observation_ledger, None
+        failure: BaseException | None = None
+        try:
+            self._close()
+        except BaseException as error:
+            failure = error
+        if ledger is not None:
+            try:
+                await asyncio.to_thread(ledger.close)
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise failure
         return False
 
     def _close(self) -> None:
         failure: BaseException | None = None
+        release, self._observation_ledger_release = (
+            self._observation_ledger_release,
+            None,
+        )
+        if release is not None:
+            try:
+                release()
+            except BaseException as error:
+                failure = error
+        ledger, self._observation_ledger = self._observation_ledger, None
+        if ledger is not None:
+            try:
+                ledger.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
         if self._value_encoder is not None:
             try:
                 self._value_encoder.close()
             except BaseException as error:
-                failure = error
+                if failure is None:
+                    failure = error
             else:
                 self._value_encoder = None
         if self._output_renderer is not None:

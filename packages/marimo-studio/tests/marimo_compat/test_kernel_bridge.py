@@ -978,3 +978,80 @@ default = "dashboard"
             None,
         ),
     ]
+
+
+@pytest.mark.parametrize("release_fails", [False, True])
+def test_kernel_lifespan_releases_observation_owners(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    release_fails: bool,
+) -> None:
+    from threading import get_ident
+
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+    from marimo._session.model import SessionMode
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    tmp_path.joinpath("pyproject.toml").write_text(
+        '[tool.marimo-studio]\nnotebook = "notebook.py"\ndefault = "dashboard"\n',
+        encoding="utf-8",
+    )
+    events: list[str] = []
+    close_threads: list[int] = []
+
+    class Ledger:
+        def __init__(self, filename: Path) -> None:
+            assert filename == notebook
+            events.append("open")
+
+        def close(self) -> None:
+            close_threads.append(get_ident())
+            events.append("close")
+
+    def install(_context: Any, _ledger: Any) -> Any:
+        events.append("install")
+
+        def release() -> None:
+            events.append("release")
+            if release_fails:
+                raise RuntimeError("hook release failed")
+
+        return release
+
+    current = _native_output_context()
+    current.filename = str(notebook)
+    current.session_mode = SessionMode.EDIT
+    current._kernel = SimpleNamespace(
+        app_metadata=SimpleNamespace(filename=str(notebook))
+    )
+    monkeypatch.setattr(runtime_context, "get_context", lambda: current)
+    monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", type(current))
+    monkeypatch.setattr(kernel_values_module, "ObservationLedger", Ledger)
+    monkeypatch.setattr(kernel_values_module, "install_observation_ledger", install)
+    monkeypatch.setattr(
+        kernel_values_module, "keep_cached_cells_compatible", lambda: lambda: None
+    )
+    lifespan = _KernelBridgeLifespan()
+
+    async def exercise() -> None:
+        loop_thread = get_ident()
+        await lifespan.__aenter__()
+        assert events == ["open", "install"]
+        if release_fails:
+            with pytest.raises(RuntimeError, match="hook release failed"):
+                await lifespan.__aexit__(None, None, None)
+        else:
+            await lifespan.__aexit__(None, None, None)
+        assert events == ["open", "install", "release", "close"]
+        assert close_threads[0] != loop_thread
+        await lifespan.__aexit__(None, None, None)
+        assert events == ["open", "install", "release", "close"]
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+    assert current.function_registry.namespaces == {}
