@@ -6,6 +6,7 @@ import asyncio
 from enum import Enum
 
 from marimo_studio._browser_client.records import PreviewAutomationTarget
+from marimo_studio._processes.ownership import settle_ownership
 from marimo_studio._server.agent.clients import PeerStatus, PeerTarget
 from marimo_studio._server.agent.events import ViewActivation
 from marimo_studio._server.agent.store import (
@@ -67,21 +68,17 @@ class ActivationCoordinator:
                 view=view,
                 owner=owner,
             )
-            operation = PendingActivation(activation)
-            self._store.activation_operations[target.client_id] = operation
-            self._store.condition.notify_all()
-        async with self._store.condition:
-            self._store.require_open()
             if not self._matches(activation, require_connected=True):
-                if self._store.activation_operations.get(target.client_id) is operation:
-                    self._store.activation_operations.pop(target.client_id)
-                self._store.condition.notify_all()
                 raise AgentRequestError(
                     "browser-session-changed",
                     "The Studio browser changed Marimo sessions before "
                     "activation began.",
                     status_code=409,
                 )
+            self._store.activation_operations[target.client_id] = PendingActivation(
+                activation
+            )
+            self._store.condition.notify_all()
         return activation
 
     async def acknowledge(
@@ -176,32 +173,29 @@ class ActivationCoordinator:
         timed_out = False
         closed = False
         failure: MarimoStudioError | None = None
-        async with self._store.condition:
-            try:
-                await asyncio.wait_for(
-                    self._store.condition.wait_for(lambda: self._finished(activation)),
-                    timeout,
-                )
-            except asyncio.TimeoutError:
-                timed_out = not self._finished(activation)
-            except asyncio.CancelledError:
-                self._discard_unacknowledged(activation)
-                raise
-            closed = self._store.closed
-            operation = self._operation_for(activation)
-            if isinstance(operation, RejectedActivation):
-                failure = operation.error
-            if isinstance(operation, AcknowledgedActivation):
-                self._store.activation_operations[activation.client_id] = (
-                    RetainedActivation(
-                        operation.activation,
-                        operation.active_view_generation,
-                        operation.preview,
+        try:
+            async with self._store.condition:
+                try:
+                    await asyncio.wait_for(
+                        self._store.condition.wait_for(
+                            lambda: self._finished(activation)
+                        ),
+                        timeout,
                     )
-                )
-                self._store.condition.notify_all()
-            elif not isinstance(operation, RetainedActivation):
-                self._discard_unacknowledged(activation)
+                except asyncio.TimeoutError:
+                    timed_out = not self._finished(activation)
+                closed = self._store.closed
+                operation = self._operation_for(activation)
+                if isinstance(operation, RejectedActivation):
+                    failure = operation.error
+                self._settle(activation)
+        except asyncio.CancelledError:
+            # An abandoned request must still release the browser, whether it
+            # stopped before, while, or after the browser acknowledged.
+            _result, _cancellation = await settle_ownership(
+                self._settle_locked(activation)
+            )
+            raise
         if closed:
             raise coordinator_closed_error()
         if failure is not None:
@@ -270,6 +264,24 @@ class ActivationCoordinator:
             or not isinstance(operation, PendingActivation)
             or not self._matches(activation)
         )
+
+    async def _settle_locked(self, activation: ViewActivation) -> None:
+        async with self._store.condition:
+            self._settle(activation)
+
+    def _settle(self, activation: ViewActivation) -> None:
+        operation = self._operation_for(activation)
+        if isinstance(operation, AcknowledgedActivation):
+            self._store.activation_operations[activation.client_id] = (
+                RetainedActivation(
+                    operation.activation,
+                    operation.active_view_generation,
+                    operation.preview,
+                )
+            )
+            self._store.condition.notify_all()
+        elif not isinstance(operation, RetainedActivation):
+            self._discard_unacknowledged(activation)
 
     def _discard_unacknowledged(self, activation: ViewActivation) -> None:
         operation = self._operation_for(activation)

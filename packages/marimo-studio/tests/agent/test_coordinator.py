@@ -564,3 +564,69 @@ def test_closed_coordinator_rejects_every_request_visible_operation() -> None:
         await clients.close()
 
     asyncio.run(exercise())
+
+
+async def _show(agents: AgentCoordinator, target: PeerTarget, view: str) -> object:
+    activation = await agents.activate(target, view)
+    return await agents.wait_for_activation(activation, 5)
+
+
+def test_a_show_cancelled_while_the_store_is_busy_frees_the_browser() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target, _lease = await connected_target(clients)
+        condition = agents._store.condition
+        await condition.acquire()
+        request = asyncio.create_task(_show(agents, target, "executive"))
+        await asyncio.sleep(0)
+
+        async def queued_holder() -> None:
+            async with condition:
+                await asyncio.sleep(0)
+
+        holder = asyncio.create_task(queued_holder())
+        await asyncio.sleep(0)
+        condition.release()
+        while not agents._store.activation_operations:
+            await asyncio.sleep(0)
+        request.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await request
+        await holder
+
+        replacement = await agents.activate(target, "report")
+        assert replacement.view == "report"
+        await agents.close()
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
+def test_a_show_cancelled_after_the_browser_acknowledged_frees_the_browser() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target, _lease = await connected_target(clients)
+        activation = await agents.activate(target, "executive")
+        waiter = asyncio.create_task(agents.wait_for_activation(activation, 5))
+        await asyncio.sleep(0)
+        outcome = await agents.acknowledge_activation(
+            target.client_id,
+            activation.generation,
+            "executive",
+            preview=PREVIEW_TARGET,
+        )
+        async with agents._store.condition:
+            waiter.cancel()
+        assert outcome is ActivationAckOutcome.APPLIED
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+
+        current = await clients.select_target(client_id=target.client_id)
+        replacement = await agents.activate(current, "report")
+        assert replacement.view == "report"
+        await agents.close()
+        await clients.close()
+
+    asyncio.run(exercise())
