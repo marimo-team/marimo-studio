@@ -124,6 +124,8 @@ def test_zero_python_export_loads_document_viewer_with_no_reads(
     assert result.preflight.ok
 
 
+@pytest.mark.native_process
+@pytest.mark.xdist_group("managed-export")
 def test_export_renders_typst_prose_with_function_shaped_text(
     notebook_path: Path,
     tmp_path: Path,
