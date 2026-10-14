@@ -176,6 +176,44 @@ test("reports a render that stays unavailable after its retries", async () => {
   expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe("Busy.");
 });
 
+test("tells the reader how to recover a published document that is missing", async () => {
+  stubFetch([() => new Response("Not found", { status: 404 })]);
+  document.body.innerHTML = `
+    <main id="app-shell">
+      <marimo-document src="card.svg" type="image/svg+xml"></marimo-document>
+    </main>
+  `;
+  const viewer = document.querySelector<HTMLElement>("marimo-document")!;
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("error"));
+  expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe(
+    "The published document could not be loaded." +
+      "Rebuild the view to publish its document, then reload the page.",
+  );
+});
+
+test("keeps render diagnostics when the published document also fails to show", async () => {
+  stubFetch([
+    () => failure(422, { error: "render-failed", message: "unknown variable: totl" }),
+    () => svg(),
+  ]);
+  HTMLImageElement.prototype.decode = () => Promise.reject(new Error("The image is corrupt."));
+  const { viewer, host } = mount();
+
+  try {
+    settle(host, 1);
+
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(viewer.dataset.state).toBe("error");
+    expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe(
+      "unknown variable: totl",
+    );
+  } finally {
+    HTMLImageElement.prototype.decode = () => Promise.resolve();
+  }
+});
+
 test("shows the published document with a note in a browser runtime's run mode", async () => {
   commitRuntimeConfig(
     runtimeConfig({

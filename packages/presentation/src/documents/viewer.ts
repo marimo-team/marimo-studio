@@ -461,7 +461,16 @@ export class MarimoDocumentElement extends HTMLElement {
       response = await fetchDocument(src);
     }
     if (!response.ok) {
-      throw new Error(`The document is unavailable (${response.status}).`);
+      if (!signal.aborted) {
+        this.showProblems([
+          problem(
+            "document-unavailable",
+            "The published document could not be loaded.",
+            "Rebuild the view to publish its document, then reload the page.",
+          ),
+        ]);
+      }
+      return;
     }
     await this.show(await response.blob(), signal, unrendered && !rendered ? UNRENDERED_NOTE : "");
     if (!signal.aborted) {
@@ -522,11 +531,17 @@ export class MarimoDocumentElement extends HTMLElement {
     if (this.shown) {
       return;
     }
-    const response = await fetch(new URL(this.getAttribute("src") ?? "", document.baseURI), {
-      signal,
-    }).catch(() => undefined);
-    if (response?.ok) {
-      await this.display(await response.blob(), signal);
+    // The published document is a backdrop for the diagnostics, so its own
+    // failure leaves them in place.
+    try {
+      const response = await fetch(new URL(this.getAttribute("src") ?? "", document.baseURI), {
+        signal,
+      });
+      if (response.ok) {
+        await this.display(await response.blob(), signal);
+      }
+    } catch {
+      // The diagnostics above already explain the failure.
     }
   }
 
