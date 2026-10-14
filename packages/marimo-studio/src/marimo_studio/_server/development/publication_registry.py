@@ -35,7 +35,6 @@ _BaselineKey = tuple[str, int]
 class _PublicationAdmission:
     foreground: bool
     cancelled: bool = False
-    claimed: bool = False
 
 
 @dataclass
@@ -358,10 +357,8 @@ class PublicationRegistry:
             if admission.cancelled:
                 raise PublicationSuperseded
             if admission.foreground:
-                admission.claimed = True
                 return False
             self._inactive_active += 1
-            admission.claimed = True
             return True
 
     async def _release_slot(self) -> None:
