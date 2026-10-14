@@ -1,0 +1,21 @@
+packages/studio/src/app/workspace-event-coordinator.ts
+  s_b34a627c8c0b18::t_3bbffe3ac0ae69 435-439
+packages/studio/tests/workspace-event-activation.test.ts
+  s_b34a627c8c0b18::t_1d99d0e3f0bda7 178-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "73ffd5541e08ec22f74bd9b12c167f35c4b86a45",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
