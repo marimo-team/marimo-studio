@@ -302,36 +302,36 @@ async def change_events(
                 if studio is not None and development is not None
                 else None
             )
+            sources = (
+                await asyncio.to_thread(SourceChangeProducer, studio, selected_view)
+                if studio is not None and source_subscription is None
+                else None
+            )
+            baseline_operation = (
+                partial(_presentation_baseline, studio, selected_view)
+                if studio is not None
+                else None
+            )
+            baseline: dict[str, object]
+            if (
+                baseline_operation is not None
+                and development is not None
+                and source_subscription is not None
+                and selected_view is not None
+            ):
+                baseline = await development.baseline(
+                    selected_view,
+                    source_subscription.generation,
+                    baseline_operation,
+                )
+            elif baseline_operation is not None:
+                baseline = await _publish_async(baseline_operation)
+            else:
+                baseline = {}
         except ViewRetirementInProgress:
             # The response has already started. End it so the browser
             # reconnects after the removal or rename settles.
             return
-        sources = (
-            await asyncio.to_thread(SourceChangeProducer, studio, selected_view)
-            if studio is not None and source_subscription is None
-            else None
-        )
-        baseline_operation = (
-            partial(_presentation_baseline, studio, selected_view)
-            if studio is not None
-            else None
-        )
-        baseline: dict[str, object]
-        if (
-            baseline_operation is not None
-            and development is not None
-            and source_subscription is not None
-            and selected_view is not None
-        ):
-            baseline = await development.baseline(
-                selected_view,
-                source_subscription.generation,
-                baseline_operation,
-            )
-        elif baseline_operation is not None:
-            baseline = await _publish_async(baseline_operation)
-        else:
-            baseline = {}
 
         broker = _EventBroker()
         if browser is not None:
