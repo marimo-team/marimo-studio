@@ -50,9 +50,14 @@ def _mutation_lock(
 ) -> Generator[bool, None, None]:
     root = view_root.absolute()
     lock_path = root / ".locks" / filename
-    # The lock tree starts at the filesystem anchor so a link anywhere above
-    # the view root is refused before the lock file is created.
-    tree = FileTree(Path(root.anchor))
+    # The lock tree starts at the nearest existing ancestor of the view root,
+    # which callers resolve, so a link at or below it is refused. Opening
+    # ancestors above it would need read permission on folders a notebook
+    # reaches with search permission alone.
+    boundary = root.parent
+    while not boundary.is_dir() and boundary != boundary.parent:
+        boundary = boundary.parent
+    tree = FileTree(boundary)
     thread_lock = _thread_lock(lock_path)
     if not thread_lock.acquire(blocking=blocking):
         yield False

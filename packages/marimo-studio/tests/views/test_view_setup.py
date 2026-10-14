@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import os
 import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
@@ -88,6 +89,25 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     assert sentinel.read_bytes() == b"preserve existing view"
     report = load_studio(notebook_path).views["report"].root
     assert report.joinpath("index.html").is_file()
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="directory modes do not restrict listing on Windows or for root",
+)
+def test_view_setup_works_below_a_search_only_ancestor(tmp_path: Path) -> None:
+    shared = tmp_path / "shared"
+    notebook = shared / "team" / "analysis.py"
+    notebook.parent.mkdir(parents=True)
+    notebook.write_text(empty_notebook_source(), encoding="utf-8")
+    shared.chmod(0o311)
+    try:
+        result = prepare_view(notebook)
+    finally:
+        shared.chmod(0o755)
+
+    assert result.root == notebook.parent / "studio" / "analysis" / "dashboard"
+    assert result.root.joinpath("index.html").is_file()
 
 
 @pytest.mark.parametrize("name", ("con", "a" * 241))
