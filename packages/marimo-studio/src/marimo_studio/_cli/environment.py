@@ -600,12 +600,13 @@ def environment_command(
     args: list[str],
     *,
     quiet: bool = False,
+    uv: str = "uv",
 ) -> list[str]:
-    """Build the uv command for a notebook environment."""
-    uv = shutil.which("uv")
-    if uv is None:
-        raise DependencyError("uv is required for notebook environment execution")
+    """Build the uv command for a notebook environment.
 
+    ``uv`` is the executable that starts the command. The default spells the
+    command a person runs.
+    """
     command = [uv, "run"]
     if quiet:
         command.append("--quiet")
@@ -715,10 +716,17 @@ def run_in_notebook_environment(
         child_env.pop(name, None)
     child_env.pop(_RESULT_CHANNEL_ENV, None)
     child_env.pop(_DIAGNOSTIC_CHANNEL_ENV, None)
+    uv = shutil.which("uv")
+    if uv is None:
+        raise DependencyError(
+            "uv is required to run this command in the notebook's "
+            "environment. Install uv from https://docs.astral.sh/uv/, then retry."
+        )
     command = environment_command(
         target,
         ["marimo-studio", *args],
         quiet=capture_result or diagnostic_stream is not None,
+        uv=uv,
     )
     return _run_command(
         command,
