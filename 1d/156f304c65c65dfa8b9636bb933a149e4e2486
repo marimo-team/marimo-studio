@@ -1,0 +1,19 @@
+packages/marimo-frontend/tests/prepared-models.test.ts
+  s_b34a627c8c0b18::t_55cd92b29384e0 19-20,23,50-52,177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1d156f304c65c65dfa8b9636bb933a149e4e2486",
+  "prompts": {},
+  "sessions": {
+    "s_b34a627c8c0b18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ee59b0f-4a01-4dcd-96ba-29f3694871f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
