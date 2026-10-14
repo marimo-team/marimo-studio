@@ -472,3 +472,27 @@ def test_quarto_from_a_conda_environment_requires_activation(
         assert not availability.available
         assert "not activated" in (availability.reason or "")
         assert "pixi shell" in (availability.action or "")
+
+
+@pytest.mark.parametrize(
+    "shortcode",
+    [
+        '{{< marimo cell="" >}}',
+        '{{< marimo cell="1st plot" >}}',
+        '{{< marimo value="a..b" >}}',
+    ],
+)
+def test_inspection_locates_invalid_shortcode_targets(
+    tmp_path: Path, shortcode: str
+) -> None:
+    project = _project(tmp_path, f"# Report\n\n{shortcode}\n")
+
+    inspection = inspect_view_project_sync(project)
+
+    assert INDEX in {doc.path for doc in inspection.documents}
+    assert inspection.sites == ()
+    (diagnostic,) = inspection.diagnostics
+    assert diagnostic.code == "projection-target-invalid"
+    assert diagnostic.source is not None
+    assert diagnostic.source.path == INDEX
+    assert (diagnostic.source.line, diagnostic.source.column) == (3, 1)

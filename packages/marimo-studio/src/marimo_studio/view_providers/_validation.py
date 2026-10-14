@@ -115,7 +115,10 @@ def validate_projection_site(
     if value.kind not in {"cell", "output", "value"}:
         raise ValueError("Projection site kind is invalid")
     _validate_source_location(value.source, documents, label="Projection source")
-    _validate_targets(value.kind, value.targets)
+    try:
+        _validate_targets(value.kind, value.targets)
+    except ValueError as error:
+        raise InvalidTargetError(str(error), value.source) from error
     _validate_accept(value.kind, value.accept, optional=True)
     _validate_page_media(value.accept)
     if (
