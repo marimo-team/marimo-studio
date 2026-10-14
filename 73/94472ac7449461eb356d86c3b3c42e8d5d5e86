@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/server/test_presentation.py
+  s_234de107cab5bb::t_9c274c37a6f70e 241-246,249,256-257,259-265,267,276,281-282,284-286,291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7394472ac7449461eb356d86c3b3c42e8d5d5e86",
+  "prompts": {},
+  "sessions": {
+    "s_234de107cab5bb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "agent-addb008f-f191-4c34-8b8a-d25be9440d96",
+        "model": "unknown"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
