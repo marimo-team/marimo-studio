@@ -89,20 +89,25 @@ test("stale bindings retry until the presentation revision changes", () => {
   assert.equal(refresh.needsRetry("revision-b"), false);
 });
 
-test("a refresh waiting on a running widget request retries without blaming the view source", () => {
-  const diagnostic = refreshDiagnostic(new ProjectedOutputFunctionDrainTimeoutError(), "dashboard");
-
-  assert.equal(diagnostic.severity, "warning");
-  assert.equal(
-    diagnostic.hint,
+test.each([
+  [
+    "waiting on a running widget request retries without blaming the view source",
+    new ProjectedOutputFunctionDrainTimeoutError(),
+    "warning",
+    "presentation-refresh-waiting-for-function",
     "Wait for the running widget request to finish. The preview refreshes after it does.",
+  ],
+  [
+    "failing in the view source asks the author to fix it",
+    new Error("The view shell is malformed."),
+    "error",
+    "presentation-refresh-failed",
+    "Fix the view source, then save it again.",
+  ],
+])("a refresh %s", (_case, cause, severity, code, hint) => {
+  const diagnostic = refreshDiagnostic(cause, "dashboard");
+  assert.deepEqual(
+    { severity: diagnostic.severity, code: diagnostic.code, hint: diagnostic.hint },
+    { severity, code, hint },
   );
-});
-
-test("a refresh that fails in the view source asks the author to fix it", () => {
-  const diagnostic = refreshDiagnostic(new Error("The view shell is malformed."), "dashboard");
-
-  assert.equal(diagnostic.severity, "error");
-  assert.equal(diagnostic.code, "presentation-refresh-failed");
-  assert.equal(diagnostic.hint, "Fix the view source, then save it again.");
 });
