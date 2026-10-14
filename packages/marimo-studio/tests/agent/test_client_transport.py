@@ -356,3 +356,67 @@ def test_cancelled_request_does_not_send_after_connection_finishes(
     asyncio.run(exercise())
 
     assert requested is False
+
+
+def test_timed_out_connection_close_responses_release_their_workers() -> None:
+    import contextlib
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from marimo_studio._browser_client.transport import (
+        StudioServerConnection,
+        request_json,
+    )
+    from marimo_studio.errors import AgentRequestError
+
+    stop = threading.Event()
+
+    class SlowBody(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *_args: object) -> None:
+            pass
+
+        def do_GET(self) -> None:
+            fast = self.path == "/fast"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "2" if fast else "1000000")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            with contextlib.suppress(OSError):
+                if fast:
+                    self.wfile.write(b"{}")
+                    return
+                self.wfile.write(b'{"value":"')
+                while not stop.wait(0.02):
+                    self.wfile.write(b"x")
+                    self.wfile.flush()
+
+    class Server(ThreadingHTTPServer):
+        request_queue_size = 32
+
+    server = Server(("127.0.0.1", 0), SlowBody)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = StudioServerConnection(f"http://127.0.0.1:{server.server_port}")
+
+    async def exercise() -> object:
+        async def slow() -> str:
+            with pytest.raises(AgentRequestError) as raised:
+                await request_json(connection, "/slow", timeout=0.2)
+            return raised.value.code
+
+        assert (
+            await asyncio.gather(*(slow() for _ in range(8))) == ["request-timeout"] * 8
+        )
+        await asyncio.sleep(0.3)
+        return await request_json(connection, "/fast", timeout=1)
+
+    try:
+        assert asyncio.run(exercise()) == {}
+    finally:
+        stop.set()
+        server.shutdown()
+        server.server_close()
+        thread.join()

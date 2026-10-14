@@ -91,16 +91,20 @@ class _HttpExchange:
         self._lock = threading.Lock()
         self._cancelled = threading.Event()
         self._connection: http.client.HTTPConnection | None = None
+        # getresponse() moves a Connection: close socket from the connection to
+        # the response, so cancellation keeps its own reference to interrupt
+        # the body read.
+        self._socket: socket.socket | None = None
 
     def cancel(self) -> None:
         self._cancelled.set()
         with self._lock:
             connection = self._connection
+            sock = self._socket
+        if sock is not None:
+            with suppress(OSError):
+                sock.shutdown(socket.SHUT_RDWR)
         if connection is not None:
-            sock = getattr(connection, "sock", None)
-            if sock is not None:
-                with suppress(OSError):
-                    sock.shutdown(socket.SHUT_RDWR)
             with suppress(OSError):
                 connection.close()
 
@@ -136,6 +140,8 @@ class _HttpExchange:
         target = urlunsplit(("", "", parts.path or "/", parts.query, ""))
         try:
             connection.connect()
+            with self._lock:
+                self._socket = getattr(connection, "sock", None)
             if self._cancelled.is_set():
                 connection.close()
                 raise AgentRequestError(
@@ -168,6 +174,7 @@ class _HttpExchange:
             with self._lock:
                 if self._connection is connection:
                     self._connection = None
+                    self._socket = None
 
 
 def server_request_url(
