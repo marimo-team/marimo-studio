@@ -153,6 +153,8 @@ def render_status(result: StudioOverview) -> None:
     if result.config_path is not None:
         source = f" {result.config_source}" if result.config_source is not None else ""
         echo(f"  {light_blue('config')}{source} {result.config_path}")
+    echo(f"  {light_blue('views')} {result.view_root}")
+    echo(f"  {light_blue('build state')} {result.state_root}")
     if result.default_runtime is not None:
         echo(f"  {light_blue('runtime')} {result.default_runtime}")
     if result.runtimes:

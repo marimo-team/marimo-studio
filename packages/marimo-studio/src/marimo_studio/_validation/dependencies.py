@@ -15,10 +15,10 @@ from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
 from marimo_studio._workspace.config import (
-    canonical_view_root,
     discover_studio_definition,
     discover_views,
 )
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.python_project import (
     pixi_declarations,
@@ -268,12 +268,19 @@ def diagnose_dependencies(notebook: Path) -> DependencyReport:
     except (ConfigurationError, WorkspaceGenerationConflictError) as error:
         issues.append(DependencyIssue(error.code, str(error)))
         definition = None
-    view_root = (
-        definition.view_root
-        if definition is not None
-        else canonical_view_root(notebook)
-    )
-    for view in discover_views(view_root).values():
+    try:
+        locations = (
+            definition.locations
+            if definition is not None
+            else CatalogLocations.default(notebook)
+        )
+        views = discover_views(locations)
+    except ConfigurationError as error:
+        issue = DependencyIssue(error.code, str(error))
+        if issue not in issues:
+            issues.append(issue)
+        views = {}
+    for view in views.values():
         try:
             requirement = registry.get(view.provider).requirement
         except MarimoStudioError as error:

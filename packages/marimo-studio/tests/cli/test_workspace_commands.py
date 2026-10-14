@@ -74,6 +74,9 @@ def test_status_human_output_includes_configuration_runtime_and_aliases(
     output = unstyle(result.output)
     assert result.exit_code == 0, result.output
     assert f"config notebook {notebook_path}" in output
+    assert f"views {notebook_path.parent / 'studio' / 'analysis'}" in output
+    state = notebook_path.parent / "__marimo__" / "studio" / "analysis"
+    assert f"build state {state}" in output
     assert "runtime server" in output
     assert "runtimes server" in output
     assert "aliases" in output

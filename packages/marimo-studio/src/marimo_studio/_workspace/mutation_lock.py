@@ -10,6 +10,7 @@ from pathlib import Path
 from weakref import WeakValueDictionary
 
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._filesystem.ignore import ignore_generated_directory
 from marimo_studio._workspace.models import VIEW_PATTERN
 from marimo_studio.errors import ConfigurationError
 
@@ -77,6 +78,9 @@ def _mutation_lock(
             if not acquired:
                 yield False
                 return
+            # Lock files stay in the authored catalog, where every process
+            # that changes it finds them, so the directory ignores itself.
+            ignore_generated_directory(tree, lock_path.parent)
             held.add(lock_path)
             try:
                 yield True
@@ -123,12 +127,19 @@ def artifact_lease_lock(view_root: Path, view_name: str) -> Iterator[None]:
 
 
 @contextmanager
-def view_build_lock(view_root: Path, view_name: str) -> Iterator[None]:
-    """Serialize builds with removal and rename while authored files stay writable."""
+def view_build_lock(
+    view_root: Path, view_name: str, *, blocking: bool = True
+) -> Iterator[bool]:
+    """Serialize builds with removal and rename while authored files stay writable.
+
+    Yields ``False`` when ``blocking`` is false and a build holds the lock.
+    """
     if VIEW_PATTERN.fullmatch(view_name) is None:
         raise ConfigurationError(f"Invalid Studio view name {view_name!r}")
-    with _mutation_lock(view_root, f"{view_name}.build.lock"):
-        yield
+    with _mutation_lock(
+        view_root, f"{view_name}.build.lock", blocking=blocking
+    ) as acquired:
+        yield acquired
 
 
 @contextmanager

@@ -37,13 +37,7 @@ export class InstalledWorkspace {
     const notebookPath = resolve(workspaceDirectory, "notebook.py");
     const staticDirectory = resolve(this.#root, "static");
     const preparedDirectory = resolve(staticDirectory, "prepared");
-    const viewDirectory = resolve(
-      workspaceDirectory,
-      "__marimo__",
-      "studio",
-      "notebook",
-      "dashboard",
-    );
+    const viewDirectory = resolve(workspaceDirectory, "studio", "notebook", "dashboard");
     const python = environmentExecutable(environmentDirectory, "python");
     const studio = environmentExecutable(environmentDirectory, "marimo-studio");
 

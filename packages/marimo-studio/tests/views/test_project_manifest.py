@@ -7,8 +7,9 @@ import pytest
 
 import marimo_studio._workspace.project_manifest as manifest_module
 from marimo_studio._views.inspection import inspection_request
-from marimo_studio._workspace.project_manifest import load_view_project
 from marimo_studio.errors import ConfigurationError
+
+from ..helpers import load_standalone_project
 
 pytestmark = pytest.mark.supported_python
 
@@ -37,7 +38,7 @@ thresholds = [0, 0.5]
 """,
     )
 
-    project = load_view_project(root)
+    project = load_standalone_project(root)
 
     assert project.provider == "third-party/missing"
     assert project.options == {
@@ -70,7 +71,7 @@ def test_manifest_load_keeps_lexical_identity_after_a_root_swap(
 
     monkeypatch.setattr(manifest_module, "read_toml", read_then_swap)
 
-    project = load_view_project(root)
+    project = load_standalone_project(root)
     request = inspection_request(project)
 
     assert project.root == root.absolute()
@@ -106,4 +107,4 @@ def test_manifest_rejects_invalid_shapes(
     root = _manifest(tmp_path, source)
 
     with pytest.raises(ConfigurationError, match=message):
-        load_view_project(root)
+        load_standalone_project(root)

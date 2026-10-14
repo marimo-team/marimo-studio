@@ -16,7 +16,7 @@ import {
   writeWorkspaceFile,
 } from "./fixture.ts";
 
-const reportSource = resolve(workspaceDirectory, "__marimo__/studio/notebook/report/main.typ");
+const reportSource = resolve(workspaceDirectory, "studio/notebook/report/main.typ");
 
 test("renders a Typst document again when a notebook value changes", async ({
   page,

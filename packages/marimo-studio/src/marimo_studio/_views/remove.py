@@ -8,6 +8,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from marimo_studio._artifacts.retention import artifact_exclusion_guard
+from marimo_studio._artifacts.store import remove_artifact_state
 from marimo_studio._filesystem.files import ABSENT, FileTree, Version
 from marimo_studio._filesystem.names import temporary_name
 from marimo_studio._notebook.locking import notebook_write_lock
@@ -209,6 +210,10 @@ def _delete_view_locked(
                 cleanup=staging_root,
                 committed_workspace=updated,
             ) from error
+        finally:
+            # The catalog no longer names the view, so its build state goes
+            # even when the staged project files stay behind.
+            remove_artifact_state(project)
     return updated
 
 

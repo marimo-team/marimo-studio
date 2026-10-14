@@ -71,7 +71,10 @@ from marimo_studio._views.publication_hold import read_publication_hold
 from marimo_studio._views.records import DiagnosticsError, ViewBuild
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.mutation_lock import view_build_lock, view_mutation_lock
-from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
+    load_view_project,
+)
 from marimo_studio.errors import (
     ConfigurationError,
     ViewGenerationConflictError,
@@ -113,7 +116,7 @@ def _inspection_failures(
 
 
 def _require_buildable_inspection(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     inspection: ProjectInspection,
     started: float,
@@ -132,7 +135,7 @@ def _require_buildable_inspection(
 
 
 def _inspect_provider(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     provider: BuildProvider,
     started: float,
@@ -183,7 +186,7 @@ def _inspect_provider(
 
 
 def _inspect_snapshot(
-    project: ViewProject,
+    project: CatalogProject,
     snapshot: ViewProject,
     profile: BuildProfile,
     provider: BuildProvider,
@@ -218,7 +221,7 @@ def _inspect_snapshot(
 
 
 def _project_stability_failure(
-    project: ViewProject,
+    project: CatalogProject,
     inspection: ProjectInspection,
     expected_state: BuildInputState,
 ) -> ProjectDiagnostic | None:
@@ -246,7 +249,7 @@ def _project_stability_failure(
 
 
 def _capture_commit_state(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     inspection: ProjectInspection,
     expected_revision: str,
@@ -296,7 +299,7 @@ def _capture_commit_state(
 
 @contextmanager
 def _stable_artifact_commit(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     inspection: ProjectInspection,
     expected_revision: str,
@@ -335,7 +338,7 @@ def _stable_artifact_commit(
 
 
 def _require_build_generation(
-    project: ViewProject,
+    project: CatalogProject,
     expected_generation: str | None,
 ) -> None:
     if expected_generation is None:
@@ -348,7 +351,7 @@ def _require_build_generation(
         raise ViewGenerationConflictError(project.name, current_generation)
 
 
-def _publication_hold_diagnostic(project: ViewProject) -> ProjectDiagnostic | None:
+def _publication_hold_diagnostic(project: CatalogProject) -> ProjectDiagnostic | None:
     hold = read_publication_hold(project.root)
     if hold is None or hold.status != "active":
         return None
@@ -364,15 +367,19 @@ def _publication_hold_diagnostic(project: ViewProject) -> ProjectDiagnostic | No
 
 
 def _load_build_owner(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
-) -> tuple[ViewProject, BuildProfile, BuildProvider]:
+) -> tuple[CatalogProject, BuildProfile, BuildProvider]:
     registry = provider_registry()
     with view_mutation_lock(project.root.parent, project.name):
-        selected = registry.validate_project(load_view_project(project.root))
+        selected = registry.validate_project(
+            load_view_project(project.root, locations=project.locations)
+        )
         selected_profile = registry.validate_profile(selected.provider, profile)
         provider = registry.get(selected.provider)
-        current = registry.validate_project(load_view_project(selected.root))
+        current = registry.validate_project(
+            load_view_project(selected.root, locations=selected.locations)
+        )
         if current != selected:
             raise ConfigurationError(
                 f"View project {selected.name!r} changed before its build started"
@@ -381,7 +388,7 @@ def _load_build_owner(
 
 
 def publish_view(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     *,
     inspection: ProjectInspection | None = None,
@@ -410,7 +417,7 @@ def publish_view(
 
 
 def _publish_locked(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
     provider: BuildProvider,
     *,
@@ -784,7 +791,7 @@ def _publish_locked(
 
 
 def build_view_project_sync(
-    project: ViewProject,
+    project: CatalogProject,
     *,
     profile: BuildProfile = "development",
     control: ProviderOperationControl | None = None,
@@ -801,7 +808,7 @@ def build_view_project_sync(
 
 
 def _build_view_project_result_sync(
-    project: ViewProject,
+    project: CatalogProject,
     *,
     profile: BuildProfile,
     expected_generation: str | None,
@@ -824,7 +831,7 @@ def _build_view_project_result_sync(
 
 
 async def build_view_project(
-    project: ViewProject,
+    project: CatalogProject,
     *,
     profile: BuildProfile = "development",
     expected_generation: str | None = None,

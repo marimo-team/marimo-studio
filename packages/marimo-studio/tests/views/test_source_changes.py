@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import pytest
 
-from marimo_studio._artifacts.paths import artifact_root
+from marimo_studio._artifacts.paths import artifact_root, project_artifacts
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.development import source_changes
 from marimo_studio._server.development.source_changes import (
@@ -217,7 +217,7 @@ def test_watch_plan_stays_bounded_by_declared_roots(
     plan = SourceChangeProducer(studio, project.name).watch_plan
 
     assert plan.roots == (project.root.absolute(),)
-    assert plan.excluded == (artifact_root(project).absolute(),)
+    assert plan.excluded == (project_artifacts(project).absolute(),)
     assert len(plan.files) <= len(studio.views) + 4
     assert set(plan.files).isdisjoint(source.absolute() for source in sources)
 

@@ -31,6 +31,7 @@ from typing import BinaryIO
 from marimo_studio._artifacts.codec import profile_state
 from marimo_studio._artifacts.lock import artifact_lock
 from marimo_studio._artifacts.paths import (
+    artifact_base,
     artifact_paths,
     artifact_root,
     assert_secure_path,
@@ -50,12 +51,12 @@ from marimo_studio._workspace.mutation_lock import (
     artifact_lease_lock,
     view_mutation_lock,
 )
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError, ViewInUseError
 from marimo_studio.errors._internal import ArtifactIntegrityError
 from marimo_studio.view_providers import (
     BuildProfile,
     ProjectDiagnostic,
-    ViewProject,
 )
 
 _DIGEST = re.compile(r"[0-9a-f]{64}")
@@ -108,15 +109,15 @@ def _verified_snapshot(
         raise
 
 
-def _pins_root(project: ViewProject) -> Path:
+def _pins_root(project: CatalogProject) -> Path:
     return artifact_root(project) / ".pins"
 
 
-def _quarantine_root(project: ViewProject) -> Path:
+def _quarantine_root(project: CatalogProject) -> Path:
     return artifact_root(project) / ".quarantine"
 
 
-def _project_root_missing(project: ViewProject) -> bool:
+def _project_root_missing(project: CatalogProject) -> bool:
     try:
         project.root.lstat()
     except FileNotFoundError:
@@ -124,7 +125,7 @@ def _project_root_missing(project: ViewProject) -> bool:
     return False
 
 
-def _existing_artifact_root(project: ViewProject) -> Path | None:
+def _existing_artifact_root(project: CatalogProject) -> Path | None:
     if _project_root_missing(project):
         return None
     assert_secure_path(
@@ -139,7 +140,7 @@ def _existing_artifact_root(project: ViewProject) -> Path | None:
     except FileNotFoundError:
         return None
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         root,
         "Artifact control root",
         final_kind="directory",
@@ -148,24 +149,24 @@ def _existing_artifact_root(project: ViewProject) -> Path | None:
 
 
 def _live_pin_revisions(
-    project: ViewProject,
+    project: CatalogProject,
     *,
     create: bool = True,
 ) -> dict[str, set[int]]:
     """Map each revision with a live pin to the processes holding its pins."""
     root = _pins_root(project)
     if create:
-        ensure_secure_directory(project.root, root, "Artifact pins directory")
+        ensure_secure_directory(artifact_base(project), root, "Artifact pins directory")
     elif not root.exists() and not root.is_symlink():
         return {}
     else:
         assert_secure_path(
-            project.root,
+            artifact_base(project),
             root,
             "Artifact pins directory",
             final_kind="directory",
         )
-    tree = FileTree(project.root)
+    tree = FileTree(artifact_base(project))
     live: dict[str, set[int]] = {}
     for directory in tree.children(root):
         if _DIGEST.fullmatch(directory.name) is None:
@@ -189,17 +190,17 @@ def _live_pin_revisions(
     return live
 
 
-def _prune_quarantine_locked(project: ViewProject) -> None:
+def _prune_quarantine_locked(project: CatalogProject) -> None:
     root = _quarantine_root(project)
     if not root.exists() and not root.is_symlink():
         return
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         root,
         "Artifact quarantine directory",
         final_kind="directory",
     )
-    tree = FileTree(project.root)
+    tree = FileTree(artifact_base(project))
     for path in tree.children(root):
         if _QUARANTINE.fullmatch(path.name) is None:
             raise ConfigurationError(f"Artifact quarantine name is invalid: {path}")
@@ -212,7 +213,7 @@ def _prune_quarantine_locked(project: ViewProject) -> None:
 
 
 def quarantine_artifact_revision_locked(
-    project: ViewProject,
+    project: CatalogProject,
     artifact_revision: str,
 ) -> Path:
     """Move one damaged physical revision aside while its leases drain."""
@@ -221,20 +222,24 @@ def quarantine_artifact_revision_locked(
         raise ConfigurationError(f"Invalid artifact revision: {artifact_revision}")
     source = revision_root(project, artifact_revision)
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         source,
         "Artifact revision",
         final_kind="directory",
     )
     root = _quarantine_root(project)
-    ensure_secure_directory(project.root, root, "Artifact quarantine directory")
+    ensure_secure_directory(
+        artifact_base(project), root, "Artifact quarantine directory"
+    )
     destination = root / f"{digest}-{uuid.uuid4().hex}"
-    assert_secure_path(project.root, destination, "Artifact quarantine revision")
-    FileTree(project.root).replace(source, destination)
+    assert_secure_path(
+        artifact_base(project), destination, "Artifact quarantine revision"
+    )
+    FileTree(artifact_base(project)).replace(source, destination)
     return destination
 
 
-def prune_artifacts_locked(project: ViewProject) -> None:
+def prune_artifacts_locked(project: CatalogProject) -> None:
     """Delete revisions with no profile publication or live snapshot owner."""
     try:
         project.root.lstat()
@@ -263,12 +268,12 @@ def prune_artifacts_locked(project: ViewProject) -> None:
         if not revisions.exists() and not revisions.is_symlink():
             return
         assert_secure_path(
-            project.root,
+            artifact_base(project),
             revisions,
             "Artifact revisions directory",
             final_kind="directory",
         )
-        tree = FileTree(project.root)
+        tree = FileTree(artifact_base(project))
         for path in tree.children(revisions):
             if _DIGEST.fullmatch(path.name) is None:
                 raise ConfigurationError(f"Artifact revision name is invalid: {path}")
@@ -278,7 +283,7 @@ def prune_artifacts_locked(project: ViewProject) -> None:
         return
 
 
-def prune_artifacts(project: ViewProject) -> None:
+def prune_artifacts(project: CatalogProject) -> None:
     """Prune unowned revisions outside view-source mutation locks."""
     if _existing_artifact_root(project) is None:
         return
@@ -291,7 +296,7 @@ def prune_artifacts(project: ViewProject) -> None:
 
 
 @contextmanager
-def artifact_exclusion_guard(project: ViewProject) -> Iterator[None]:
+def artifact_exclusion_guard(project: CatalogProject) -> Iterator[None]:
     """Block new leases and reject a view move while another process owns one."""
     with (
         view_mutation_lock(project.root.parent, project.name),
@@ -320,7 +325,7 @@ def artifact_exclusion_guard(project: ViewProject) -> Iterator[None]:
 class _ArtifactPin:
     """Filesystem lock retaining one immutable revision directory."""
 
-    project: ViewProject
+    project: CatalogProject
     path: Path
     held: ExitStack
     closed: bool = False
@@ -347,13 +352,13 @@ class _ArtifactPin:
                 if not acquired:
                     return
                 assert_secure_path(
-                    self.project.root,
+                    artifact_base(self.project),
                     self.path,
                     "Artifact pin",
                     final_kind="file",
                 )
                 self._release()
-                tree = FileTree(self.project.root)
+                tree = FileTree(artifact_base(self.project))
                 tree.remove(self.path)
                 with suppress(OSError):
                     tree.remove_empty_directory(self.path.parent)
@@ -366,14 +371,14 @@ class _ArtifactPin:
 
 
 def _pin_revision_locked(
-    project: ViewProject,
+    project: CatalogProject,
     artifact_revision: str,
 ) -> _ArtifactPin:
     digest = artifact_revision.removeprefix("sha256:")
     if _DIGEST.fullmatch(digest) is None:
         raise ConfigurationError(f"Invalid artifact revision: {artifact_revision}")
     assert_secure_path(
-        project.root,
+        artifact_base(project),
         revision_root(project, artifact_revision),
         "Artifact revision",
         final_kind="directory",
@@ -381,10 +386,10 @@ def _pin_revision_locked(
     root = _pins_root(project)
     directory = root / digest
     path = directory / f"{os.getpid()}-{uuid.uuid4().hex}"
-    assert_secure_path(project.root, root, "Artifact pins directory")
-    assert_secure_path(project.root, directory, "Artifact revision pins")
-    assert_secure_path(project.root, path, "Artifact pin")
-    tree = FileTree(project.root)
+    assert_secure_path(artifact_base(project), root, "Artifact pins directory")
+    assert_secure_path(artifact_base(project), directory, "Artifact revision pins")
+    assert_secure_path(artifact_base(project), path, "Artifact pin")
+    tree = FileTree(artifact_base(project))
     held = ExitStack()
     try:
         held.enter_context(tree.lock(path))
@@ -434,7 +439,7 @@ class _SharedArtifactPin:
 class ArtifactLease:
     """Explicit lifetime owner for one verified published artifact."""
 
-    project: ViewProject
+    project: CatalogProject
     artifact: ViewArtifact
     _owner: _SharedArtifactPin | None
     _lock: Lock = field(default_factory=Lock, repr=False)
@@ -456,19 +461,24 @@ class ArtifactLease:
 
     def _ensure_live_locked(self) -> None:
         with artifact_lock(self.project, create=False) as acquired:
-            if not acquired or self._owner is None:
+            # Generated state can outlive a project removed outside Studio.
+            if (
+                not acquired
+                or self._owner is None
+                or _project_root_missing(self.project)
+            ):
                 raise ConfigurationError(
                     f"Artifact project was removed: {self.project.root}"
                 )
             pin = self._owner.current()
             assert_secure_path(
-                self.project.root,
+                artifact_base(self.project),
                 pin.path,
                 "Artifact pin",
                 final_kind="file",
             )
             assert_secure_path(
-                self.project.root,
+                artifact_base(self.project),
                 self.artifact.root,
                 "Artifact revision files",
                 final_kind="directory",
@@ -694,7 +704,7 @@ class LeasedArtifactFile:
 
 
 def lease_artifact_locked(
-    project: ViewProject,
+    project: CatalogProject,
     artifact: ViewArtifact,
 ) -> ArtifactLease:
     """Acquire a lease for a verified artifact under the publication lock."""
@@ -706,7 +716,7 @@ def lease_artifact_locked(
 
 
 def lease_published_artifact(
-    project: ViewProject,
+    project: CatalogProject,
     profile: BuildProfile,
 ) -> ArtifactLease | None:
     """Acquire the current profile publication and its immutable revision."""

@@ -17,8 +17,8 @@ export const prepareCollaborativeWorkspace = async () => {
     resolve(collaborativeWorkspaceDirectory, "notebook.py"),
   );
   await cp(
-    resolve(fixtureDirectory, "__marimo__/studio/notebook"),
-    resolve(collaborativeWorkspaceDirectory, "__marimo__/studio/notebook"),
+    resolve(fixtureDirectory, "studio/notebook"),
+    resolve(collaborativeWorkspaceDirectory, "studio/notebook"),
     { recursive: true },
   );
   await copyFixtureProviderPackage(collaborativeWorkspaceDirectory);

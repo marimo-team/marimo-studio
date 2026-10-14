@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import (
     ViewGenerationConflictError,
     ViewNotFoundError,
     WorkspaceGenerationConflictError,
 )
-from marimo_studio.view_providers import ViewProject
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ def require_owned_view(
     studio: StudioWorkspace,
     name: str,
     owner: PresentViewOwner | None,
-) -> ViewProject:
+) -> CatalogProject:
     """Return the named view for a catalog change its caller still owns.
 
     A catalog change checks the catalog generation first, so a stale handle

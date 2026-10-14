@@ -18,6 +18,7 @@ from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.view_owners import (
     decode_view_owner,
     encode_view_owner,
@@ -180,9 +181,10 @@ def test_reconciliation_refreshes_membership_after_concurrent_creation(
     generation = "a" * 64
     raced = False
 
-    def create_after_discovery(view_root: Path):
+    def create_after_discovery(locations: CatalogLocations):
+        view_root = locations.view_root
         nonlocal raced
-        discovered = discover(view_root)
+        discovered = discover(locations)
         if not raced:
             raced = True
             shutil.copytree(
@@ -214,9 +216,10 @@ def test_reconciliation_refreshes_membership_after_concurrent_deletion(
     generation = "b" * 64
     raced = False
 
-    def delete_after_discovery(view_root: Path):
+    def delete_after_discovery(locations: CatalogLocations):
+        view_root = locations.view_root
         nonlocal raced
-        discovered = discover(view_root)
+        discovered = discover(locations)
         if not raced:
             raced = True
             shutil.rmtree(discovered["report"].root)
@@ -245,9 +248,10 @@ def test_materialization_rejects_a_mixed_same_name_replacement(
     discover = workspace_config.discover_views
     raced = False
 
-    def replace_after_discovery(view_root: Path):
+    def replace_after_discovery(locations: CatalogLocations):
+        view_root = locations.view_root
         nonlocal raced
-        discovered = discover(view_root)
+        discovered = discover(locations)
         if not raced:
             raced = True
             discovered["dashboard"].manifest.write_text(

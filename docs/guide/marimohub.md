@@ -39,11 +39,10 @@ describe. See the hub's
 [configuration reference](https://marimohub.docs.marimo.io/configuration) for
 the setting.
 
-Studio marks each view's build cache and unfinished builds with a
-[`CACHEDIR.TAG`](https://bford.info/cachedir/) file, and the hub leaves tagged
-folders out of the saved workspace. A notebook with a React view and an HTML
-view saves about 3 MB: the view sources plus their built revisions. The first
-build in a new session downloads the view's packages again.
+By default, Studio keeps view build state in `__marimo__/studio/`, and the hub
+leaves `__marimo__/` out of the saved workspace. The saved workspace holds the view
+sources, so the first build in a new session rebuilds each view and downloads
+its packages again.
 
 Studio edits view projects inside the sandbox workspace, so that workspace must
 use [supported storage](../reference/compatibility.md#workspace-storage). Hub
@@ -158,19 +157,9 @@ view of the app named `sales`. An app link without `__mh_path` serves the
 default view.
 
 An app builds a view's production revision the first time a visitor opens it.
-With `MARIMOHUB_PERSIST_WORKSPACE=workspace`, build that revision for a React,
-Svelte, Reveal.js, or Notebook Kit view before you stop the editor session, and
-the app serves it without a build. Run this code through the hub's MCP
-`execute_code` or `marimo pair`, as
-[Coding agents in marimohub](#coding-agents-in-marimohub) shows:
-
-```python
-import marimo_studio
-
-await marimo_studio.agent.current_workspace().view("dashboard").build(
-    profile="production"
-)
-```
+The hub leaves `__marimo__/`, where Studio keeps build state, out of the saved
+workspace, so each new app session builds the view again. React, Svelte,
+Reveal.js, and Notebook Kit views download their packages during that build.
 
 [Run or export a view](run-and-share.md) covers runtimes and static export for
 the same view outside the hub.

@@ -89,4 +89,4 @@ Studio wraps the page body in `#app-shell`. Leave that ID to Studio.
 
 You own this view project's `.gitignore`. Ignore files that local Quarto runs
 create, such as `.quarto/`, `*_files/`, and rendered `*.html` next to
-`index.qmd`. Studio supplies workspace rules for its own artifacts and locks.
+`index.qmd`. Studio keeps its own build state and lock files out of Git.

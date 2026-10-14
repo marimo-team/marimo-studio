@@ -27,7 +27,7 @@ test("view responses validate list, create, and delete envelopes", () => {
     generation: "c".repeat(64),
     default_view: "dashboard",
     default_starter: "marimo-studio/vanilla:default",
-    view_root: "__marimo__/studio/analysis",
+    view_root: "studio/analysis",
     persistence: null,
     views: [
       { generation: dashboardGeneration, name: "dashboard" },

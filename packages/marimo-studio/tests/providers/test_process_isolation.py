@@ -718,10 +718,8 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
     import json
 
     import marimo_studio.view_providers._host as providers_module
-    from marimo_studio._workspace.config import (
-        canonical_view_root,
-        load_studio_definition,
-    )
+    from marimo_studio._workspace.config import load_studio_definition
+    from marimo_studio._workspace.locations import default_view_root
 
     from ..app_helpers import configured
 
@@ -801,7 +799,7 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
         results = await asyncio.gather(operation, return_exceptions=True)
         assert isinstance(results[0], asyncio.CancelledError)
         await asyncio.to_thread(_wait_until_dead, recorded)
-        assert not (canonical_view_root(notebook_path) / "cancelled").exists()
+        assert not (default_view_root(notebook_path) / "cancelled").exists()
         return recorded
 
     try:

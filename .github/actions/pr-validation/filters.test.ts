@@ -164,7 +164,7 @@ test("documentation and example changes build the complete site on the pull requ
     "docs/guide/views.md",
     "apps/docs/examples.ts",
     "examples/athletes.py",
-    "examples/__marimo__/studio/athletes/overview/index.html",
+    "examples/studio/athletes/overview/index.html",
     ".github/workflows/pages.yml",
   ]) {
     assert.equal(matches("docs_site", path), true, path);

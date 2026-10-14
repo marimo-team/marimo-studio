@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import pytest
 
-from marimo_studio._artifacts.paths import artifact_root
+from marimo_studio._artifacts.paths import project_artifacts
 from marimo_studio._processes.supervisor import ProcessResult
 from marimo_studio._views.inspection import (
     inspect_view_project_sync,
@@ -71,7 +71,7 @@ def test_provider_inspection_selects_cache_without_mutating_the_project(
     assert request.cache_root == inspection_request(project).cache_root
     assert project.root not in request.cache_root.parents
     assert not request.cache_root.exists()
-    assert not artifact_root(project).exists()
+    assert not project_artifacts(project).exists()
 
 
 @pytest.mark.parametrize(
@@ -97,7 +97,7 @@ def test_framework_inspection_preserves_the_project_tree(
 
     assert not [item for item in inspection.diagnostics if item.severity == "error"]
     assert _project_tree(root) == before
-    assert not artifact_root(project).exists()
+    assert not project_artifacts(project).exists()
 
 
 def test_deno_execution_forwards_command_environment_and_cache(
@@ -160,7 +160,7 @@ def test_deno_execution_forwards_command_environment_and_cache(
     assert environment["DENO_DIR"] == str((cache_root / "deno" / "2.10.0").resolve())
     assert environment["STUDIO_TEST"] == "ready"
     assert cache_root.is_dir()
-    assert not (artifact_root(project) / ".cache").exists()
+    assert not (project_artifacts(project) / ".cache").exists()
 
 
 def test_deno_cache_rejects_nested_symlink_before_process_start(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+from functools import partial
 
 from marimo_studio._artifacts.inputs import build_input_state, project_source_snapshot
 from marimo_studio._artifacts.repository import read_artifact_state
@@ -49,19 +50,23 @@ def inspect_view_manifest(
     )
     from marimo_studio._artifacts.paths import assert_secure_path
     from marimo_studio._artifacts.records import ViewBuildState
+    from marimo_studio._artifacts.store import owns_view_state
     from marimo_studio._views.sources import read_view_manifest_with_owner
 
     observed = read_view_manifest_with_owner(studio, name)
+    locations = studio.locations
     root = studio.view_root / name
-    pointer = root / ".artifacts" / "development.json"
-    assert_secure_path(root, pointer, "Artifact profile receipt")
+    pointer = locations.artifacts(name) / "development.json"
+    anchor = locations.artifact_base(root)
+    assert_secure_path(anchor, pointer, "Artifact profile receipt")
     receipt = None
-    if pointer.exists() or pointer.is_symlink():
+    if owns_view_state(locations, name) and (pointer.exists() or pointer.is_symlink()):
         # A receipt from another Studio version describes nothing this version
         # can publish, so the repair reads the view as unbuilt.
         with suppress(ArtifactFormatError):
             receipt = decode_profile_state(
-                read_json(root, pointer, "artifact profile receipt"), "development"
+                read_json(anchor, pointer, "artifact profile receipt"),
+                "development",
             )
     current = read_view_manifest_with_owner(studio, name)
     if current.view_generation != observed.view_generation:
@@ -122,7 +127,9 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
     source = None
     files_complete = False
     try:
-        project = await asyncio.to_thread(load_view_project, project.root)
+        project = await asyncio.to_thread(
+            partial(load_view_project, project.root, locations=project.locations)
+        )
         project = provider_registry().validate_project(project)
         inspection = await inspect_view_project(project)
         source = await asyncio.to_thread(
@@ -194,7 +201,7 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
             "View source changed during inspection. Inspect again."
         )
     if files_complete and project != await asyncio.to_thread(
-        load_view_project, project.root
+        partial(load_view_project, project.root, locations=project.locations)
     ):
         raise ConfigurationError(
             "View configuration changed during inspection. Inspect again."

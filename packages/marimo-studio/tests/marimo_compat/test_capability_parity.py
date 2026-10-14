@@ -56,7 +56,7 @@ def test_status_adapters_follow_the_workspace_lifecycle(notebook_path) -> None:
     assert unconfigured["state"] == "unconfigured"
     assert unconfigured["views"] == []
     assert notebook_path.read_bytes() == original
-    assert not (notebook_path.parent / "__marimo__").exists()
+    assert not (notebook_path.parent / "studio").exists()
 
     view = asyncio.run(workspace.create_view("dashboard"))
     ready = status()
@@ -64,7 +64,7 @@ def test_status_adapters_follow_the_workspace_lifecycle(notebook_path) -> None:
     views = cast(list[dict[str, object]], ready["views"])
     assert [view["name"] for view in views] == ["dashboard"]
 
-    shutil.rmtree(view.workspace.notebook.parent / "__marimo__")
+    shutil.rmtree(view.workspace.notebook.parent / "studio")
     needs_view = status()
     assert needs_view["state"] == "needs-view"
     assert needs_view["default_view"] == "dashboard"

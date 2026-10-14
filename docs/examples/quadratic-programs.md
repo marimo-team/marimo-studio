@@ -65,10 +65,10 @@ Typst compiler from `marimo-studio[typst]` and its embedded fonts.
 ## Read the source
 
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/quadratic_program.py)
-- [Lecture view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/lecture)
-- [Explainer view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/explainer)
-- [Lab view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/lab)
-- [Report view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/quadratic_program/report)
+- [Lecture view](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/quadratic_program/lecture)
+- [Explainer view](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/quadratic_program/explainer)
+- [Lab view](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/quadratic_program/lab)
+- [Report view](https://github.com/marimo-team/marimo-studio/tree/main/examples/studio/quadratic_program/report)
 
 The notebook adapts the
 [quadratic program notebook](https://github.com/marimo-team/learn/blob/main/optimization/04_quadratic_program.py)

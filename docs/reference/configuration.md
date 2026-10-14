@@ -74,16 +74,17 @@ Creating the first view can add these settings to a standalone notebook:
 # ///
 ```
 
-| Field                   | Type                           | Default                                   | Behavior                                                                       |
-| ----------------------- | ------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| `default`               | string                         | Required                                  | Selects the initial Studio workspace view and the view served at run-mode `/`  |
-| `runtime`               | `"server"` or `"wasm"`         | `"server"`                                | Chooses the notebook runtime when the URL has no valid override                |
-| `runtimes`              | non-empty array of runtime IDs | `[runtime]`                               | Lists the distinct runtimes people may select. It must contain `runtime`       |
-| `preserve_session`      | boolean                        | `false`                                   | Reconnects an eligible Python runtime refresh to its matching notebook session |
-| `show_cell_logs`        | boolean                        | `true`                                    | Includes stdout and stderr in complete-cell projections                        |
-| `view_root`             | relative path                  | See [Project settings](#project-settings) | Stores authored view projects at a configurable location                       |
-| `cells`                 | table                          | Empty                                     | Stores stable aliases for existing notebook cells                              |
-| `provider_dependencies` | array of requirements          | Omitted                                   | Inline PEP 723 ownership record for third-party requirements that Studio added |
+| Field                   | Type                           | Default                                           | Behavior                                                                       |
+| ----------------------- | ------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `default`               | string                         | Required                                          | Selects the initial Studio workspace view and the view served at run-mode `/`  |
+| `runtime`               | `"server"` or `"wasm"`         | `"server"`                                        | Chooses the notebook runtime when the URL has no valid override                |
+| `runtimes`              | non-empty array of runtime IDs | `[runtime]`                                       | Lists the distinct runtimes people may select. It must contain `runtime`       |
+| `preserve_session`      | boolean                        | `false`                                           | Reconnects an eligible Python runtime refresh to its matching notebook session |
+| `show_cell_logs`        | boolean                        | `true`                                            | Includes stdout and stderr in complete-cell projections                        |
+| `view_root`             | relative path                  | See [Project settings](#project-settings)         | Stores authored view projects at a configurable location                       |
+| `state_dir`             | relative path                  | See [Build state location](#build-state-location) | Stores view build state in a folder per notebook inside this directory         |
+| `cells`                 | table                          | Empty                                             | Stores stable aliases for existing notebook cells                              |
+| `provider_dependencies` | array of requirements          | Omitted                                           | Inline PEP 723 ownership record for third-party requirements that Studio added |
 
 For a standalone notebook, view creation pins the installed Studio version.
 React, Svelte, and Notebook Kit add the `deno` extra, and Typst adds the `typst` extra, to that exact Studio requirement. An
@@ -126,7 +127,6 @@ dependencies = ["marimo-studio"]
 
 [tool.marimo-studio]
 notebook = "analysis.py"
-view_root = "studio"
 default = "dashboard"
 runtime = "server"
 runtimes = ["server", "wasm"]
@@ -140,11 +140,18 @@ project's dependency workflow.
 
 `view_root` is optional. It is a portable relative path resolved from the file
 that contains `[tool.marimo-studio]`. When omitted, Studio stores views at
-`__marimo__/studio/<notebook-stem>/` beside the notebook. Set it when the host
-or deployment treats `__marimo__/` as generated runtime state and persists
-authored project files from another workspace directory.
+`studio/<notebook-stem>/` beside the notebook.
+
+`state_dir` is optional. It names a directory for view build state, as a
+portable relative path resolved from the same file. See
+[View projects](#view-projects) for the default locations, the
+`MARIMO_STUDIO_STATE_DIR` host setting, and catalogs created by earlier Studio
+releases.
 
 ## Process settings
+
+`MARIMO_STUDIO_STATE_DIR` moves view build state for every notebook the process
+opens. See [Build state location](#build-state-location).
 
 `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` controls which cross-origin parent
 documents may frame the Studio edit workspace. Pass a comma-separated list of
@@ -250,11 +257,12 @@ provider or align those ranges before retrying.
 
 ## View projects
 
-By default, views for `analysis.py` live beside the notebook:
+By default, views for `analysis.py` live in `studio/analysis/` beside the
+notebook, and their build state lives in marimo's output directory:
 
 ```text
-__marimo__/studio/analysis/
-  .gitignore
+analysis.py
+studio/analysis/
   .owners/
     dashboard.toml
   dashboard/
@@ -262,7 +270,100 @@ __marimo__/studio/analysis/
     index.html
     style.css
     main.js
+__marimo__/studio/analysis/
+  dashboard/
+    .artifacts/
 ```
+
+Commit `studio/analysis/`. Studio writes only replaceable build state under
+`__marimo__/`, the directory where marimo also keeps session snapshots and
+caches. Each `.artifacts/` folder contains a `.gitignore` that ignores it, so
+Git skips the build state without a repository rule.
+
+### Build state location
+
+Each view keeps its build state in `<state_root>/<view>/.artifacts/`, where
+`state_root` is one folder for the notebook. Studio chooses it from the first
+of these settings that is present:
+
+| Setting                                        | Applies to                       | `state_root`                                           |
+| ---------------------------------------------- | -------------------------------- | ------------------------------------------------------ |
+| `MARIMO_STUDIO_STATE_DIR` environment variable | every notebook the process opens | a folder for the notebook inside that directory        |
+| `state_dir` in `[tool.marimo-studio]`          | one notebook                     | a folder for the notebook inside that directory        |
+| none                                           | one notebook                     | `studio/<notebook-stem>/` in marimo's output directory |
+
+A folder inside a state directory is named by a hash of the resolved notebook
+path, so notebooks at different paths keep separate state. Moving or renaming
+the notebook starts a new folder, and each view rebuilds once there.
+
+A project keeps its build state in a folder of its own with `state_dir`:
+
+```toml
+[tool.marimo-studio]
+state_dir = ".cache/studio"
+```
+
+A hosted service sets `MARIMO_STUDIO_STATE_DIR` to keep build state out of
+every user's working tree without editing their notebooks:
+
+```console
+MARIMO_STUDIO_STATE_DIR="/var/cache/marimo-studio/$USER" marimo edit analysis.py
+```
+
+The value must be an absolute path. An empty value leaves the setting off. Set
+the same value for every process that opens the notebook, including the CLI and
+agents, because each process reads and protects only the state it can see.
+Studio serves what it finds in the directory, so keep it readable and writable
+only by the account that runs Studio. Studio creates each notebook's folder
+private to that account. It leaves the folders of moved or deleted notebooks in
+place. Deleting a folder that no running Studio process uses makes its views
+rebuild.
+
+The variable moves Studio's build state only. marimo keeps session snapshots,
+which hold cell outputs, along with caches and exports in its output
+directory. marimo's output directory follows
+[`PYTHONPYCACHEPREFIX`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPYCACHEPREFIX),
+Python's setting for writing bytecode caches to a separate tree. Without either
+Studio setting, that environment variable moves Studio's build state together
+with marimo's own output.
+
+`marimo-studio status` prints the folder of the views and the folder of their
+build state. Its JSON output names them `view_root` and `state_root`. Each view
+starts from a fresh build after its build state location changes.
+
+### View folders from Studio 0.3
+
+Studio 0.3.0 and earlier created views in `__marimo__/studio/<notebook-stem>/`.
+Studio keeps opening a view folder there until you move the views. That folder
+is also the default `state_root`, so without `MARIMO_STUDIO_STATE_DIR`,
+`state_dir`, or `PYTHONPYCACHEPREFIX`, each view keeps its build state inside
+its project. With one of those settings, each view rebuilds once in the new
+location and leaves its `.artifacts/` folder unused.
+
+To use the current layout, first update the notebook's `marimo-studio`
+requirement to this release, because Studio 0.3 looks for views only in the
+older folder. Then stop Studio and move the folder:
+
+```console
+mkdir -p studio
+mv __marimo__/studio/analysis studio/analysis
+rm -rf studio/analysis/*/.artifacts
+```
+
+The last command deletes the build state that moved along with the views. Each
+view rebuilds once in `state_root`. Other checkouts keep their own build state
+in `__marimo__/studio/analysis/` after they pull the move. Delete that folder
+there once the pull has removed the views from it.
+
+A configured `view_root` from Studio 0.3 keeps its views where they are. Each
+view rebuilds once in `state_root`, so delete the `.artifacts/` folder inside
+each view.
+
+Studio reports a configuration error when both folders contain views, or when
+the build state folder of a view holds another view project. With the default
+build state location, a configured `view_root` that leaves a view with the same
+name in `__marimo__/studio/analysis/` causes the second error. Move the views
+you keep into the folder Studio uses, then remove the older folder.
 
 A new Vanilla view creates `index.html` and `AGENTS.md` as editable Source
 documents. Directly referenced local `style.css` and `main.js` files also enter
@@ -378,12 +479,14 @@ authoring status values.
 
 Commit `.owners/`, `view.toml`, Source documents, build inputs, frontend
 configuration, and dependency lockfiles. Studio writes replaceable build state
-beneath each view's `.artifacts/` directory and cross-process locks beneath the
-workspace `.locks/` directory. The workspace `.gitignore` excludes both
-generated paths.
+to each view's `.artifacts/` directory under `state_root`, and cross-process
+locks to `.locks/` in the view folder, such as `studio/analysis/.locks/`. Each
+of those directories contains a `.gitignore` that excludes its whole content,
+so Git skips them whatever the repository's own ignore rules say.
 
-Delete one view's `.artifacts/` directory when its generated state needs a
-clean rebuild. The next build recreates it from saved source.
+Removing a view through Studio removes its build state, and renaming a view
+moves it. Delete one view's `.artifacts/` directory when its generated state
+needs a clean rebuild. The next build recreates it from saved source.
 
 ## Cell aliases
 
@@ -401,12 +504,24 @@ anonymous cells placed by the selected starter.
 ## Rename a notebook
 
 The notebook filename stem must fit one portable cross-platform filename. With
-the default view root, it also determines the view directory. Rename both in
-the same change:
+the default view root, it also determines the view directory.
+
+Run `marimo-studio status` first. When it prints `__marimo__/studio/analysis`
+as the folder of the views, they are in a
+[view folder from Studio 0.3](#view-folders-from-studio-0-3). Move them to the
+current layout before you rename. Note the folder of the build state, then
+rename the notebook and its views in the same change:
 
 ```console
 mv analysis.py revenue.py
-mv __marimo__/studio/analysis __marimo__/studio/revenue
+mv studio/analysis studio/revenue
+```
+
+Build state follows the notebook, so each view rebuilds once. Delete the old
+build state, here at the default location:
+
+```console
+rm -rf __marimo__/studio/analysis/*/.artifacts
 ```
 
 When `view_root` is configured, rename the notebook and keep the configured

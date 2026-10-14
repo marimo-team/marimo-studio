@@ -31,14 +31,17 @@ from marimo_studio._artifacts.limits import (
     FileBudgetTracker,
 )
 from marimo_studio._artifacts.paths import (
-    artifact_root,
+    artifact_base,
     assert_secure_path,
     normalized_artifact_path,
+    project_artifacts,
     verified_secure_file,
 )
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.tree import bounded_tree_entries
 from marimo_studio._processes.cancellation import current_provider_cancellation
+from marimo_studio._workspace.locations import ARTIFACT_DIRECTORY
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
     BuildInput,
@@ -140,7 +143,7 @@ def _input_entry(project: ViewProject, value: PurePosixPath) -> _InputEntry:
         value.as_posix(),
         "View project input path",
     )
-    if relative.parts[0] == ".artifacts":
+    if relative.parts[0] == ARTIFACT_DIRECTORY:
         raise ConfigurationError("Build inputs must not include artifact control files")
     return relative, project.root.joinpath(*relative.parts), "View project input"
 
@@ -254,7 +257,7 @@ def _input_catalog(
             target,
             max_entries=BUILD_INPUT_BUDGET.max_files,
             label="Build inputs",
-            excluded_paths=(artifact_root(project),),
+            excluded_paths=(project_artifacts(project),),
             seen=seen_entries,
             cancelled=(
                 (lambda: cancellation.cancelled) if cancellation is not None else None
@@ -328,7 +331,7 @@ def build_input_state(
         )
     # Entry names catch an added input file even where creating a child leaves
     # the directory mtime alone. Studio's artifact state is outside the inputs.
-    artifacts = artifact_root(project)
+    artifacts = project_artifacts(project)
     directories: dict[PurePosixPath, tuple[int, int, int, str]] = {}
     for relative in directory_paths:
         path = project.root.joinpath(*relative.parts)
@@ -417,13 +420,13 @@ def project_revision(
 
 
 def snapshot_project(
-    project: ViewProject,
+    project: CatalogProject,
     inspection: ProjectInspection,
     snapshot_root: Path,
 ) -> ProjectSnapshot:
-    """Copy declared project inputs into a private build root."""
-    assert_secure_path(project.root, snapshot_root, "View input snapshot")
-    tree = FileTree(project.root)
+    """Copy declared project inputs into a build root inside generated state."""
+    assert_secure_path(artifact_base(project), snapshot_root, "View input snapshot")
+    tree = FileTree(artifact_base(project))
     tree.ensure_directory(snapshot_root)
     manifest_relative = _manifest_path(project)
     before = build_input_state(project, inspection)

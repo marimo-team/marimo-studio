@@ -10,6 +10,10 @@ from typing import Any
 import marimo
 import pytest
 
+from marimo_studio._workspace.locations import CatalogLocations
+from marimo_studio._workspace.project_manifest import CatalogProject, load_view_project
+from marimo_studio.view_providers import ViewProject
+
 
 def link_directory(target: Path, link: Path) -> None:
     """Point ``link`` at ``target`` as a symlink, or as a junction on Windows.
@@ -160,3 +164,24 @@ def write_marimohub_context(
     path.write_text(json.dumps(context), encoding="utf-8")
     monkeypatch.setenv("MARIMOHUB_CONTEXT_FILE", str(path))
     return path
+
+
+def load_standalone_project(root: Path) -> CatalogProject:
+    """Load a view project outside any catalog with its state inside it.
+
+    Studio 0.3 default catalogs keep each view's state in its ``.artifacts/``
+    directory, so these projects exercise that supported layout.
+    """
+    return load_view_project(root, locations=CatalogLocations.inside_views(root.parent))
+
+
+def catalog_project(project: ViewProject) -> CatalogProject:
+    """Give a provider-facing project record state inside its directory."""
+    return CatalogProject(
+        project.name,
+        project.root,
+        project.manifest,
+        project.provider,
+        project.options,
+        locations=CatalogLocations.inside_views(project.root.parent),
+    )

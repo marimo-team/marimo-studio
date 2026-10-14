@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 import marimo_studio._artifacts.retention as retention_module
-from marimo_studio._artifacts.paths import artifact_root
+from marimo_studio._artifacts.paths import artifact_base, artifact_root
 from marimo_studio._artifacts.repository import read_build_state
 from marimo_studio._artifacts.retention import (
     lease_published_artifact,
@@ -25,16 +25,16 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.remove import delete_view
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.mutation_lock import (
     view_build_lock,
     view_mutation_lock,
     workspace_catalog_lock,
 )
-from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.project_manifest import CatalogProject, load_view_project
 from marimo_studio.errors import ConfigurationError, ViewInUseError
 from marimo_studio.view_providers import (
     BuildProfile,
-    ViewProject,
 )
 
 from ..artifact_test_support import (
@@ -47,10 +47,13 @@ from ..artifact_test_support import (
     publish_artifact,
 )
 from ..artifact_test_support import wait_for_file as _wait_for_file
+from ..helpers import load_standalone_project
 
 
 def _publish_in_process(root: str, profile: BuildProfile) -> str:
-    return publish_artifact(load_view_project(Path(root)), profile).artifact_revision
+    return publish_artifact(
+        load_standalone_project(Path(root)), profile
+    ).artifact_revision
 
 
 def test_prune_settles_when_revisions_disappear_after_validation(
@@ -89,7 +92,7 @@ def test_prune_settles_when_project_disappears_before_pin_scan(
     live_pins = retention_module._live_pin_revisions
 
     def remove_before_scan(
-        selected: ViewProject,
+        selected: CatalogProject,
         *,
         create: bool = True,
     ) -> dict[str, set[int]]:
@@ -156,8 +159,10 @@ def test_public_prune_rejects_existing_non_directory_roots(
         prune_artifacts(project)
 
 
-def _publish_stale_project_in_process(root: str, started: str) -> str:
-    project = load_view_project(Path(root))
+def _publish_stale_project_in_process(
+    root: str, locations: CatalogLocations, started: str
+) -> str:
+    project = load_view_project(Path(root), locations=locations)
     Path(started).write_text("started\n", encoding="utf-8")
     try:
         with publish_artifact_lease(project, "development") as lease:
@@ -189,8 +194,10 @@ def _delete_view_in_process(
     return "deleted"
 
 
-def _hold_artifact_lease_in_process(root: str, ready: str, release: str) -> str:
-    project = load_view_project(Path(root))
+def _hold_artifact_lease_in_process(
+    root: str, locations: CatalogLocations, ready: str, release: str
+) -> str:
+    project = load_view_project(Path(root), locations=locations)
     lease = lease_published_artifact(project, "development")
     if lease is None:
         return "missing"
@@ -263,6 +270,7 @@ def test_external_publication_cannot_recreate_a_deleted_view(
         publication = executor.submit(
             _publish_stale_project_in_process,
             str(project.root),
+            project.locations,
             str(publication_started),
         )
         _wait_for_file(publication_started)
@@ -272,6 +280,7 @@ def test_external_publication_cannot_recreate_a_deleted_view(
 
     assert publication_result.startswith("ConfigurationError:")
     assert not project.root.exists()
+    assert not artifact_base(project).exists()
     assert project.name not in load_studio(notebook_path).views
 
 
@@ -294,6 +303,7 @@ def test_deletion_rejects_artifact_lease_owned_by_another_process(
         holder = executor.submit(
             _hold_artifact_lease_in_process,
             str(project.root),
+            project.locations,
             str(ready),
             str(release),
         )
@@ -325,7 +335,7 @@ def test_deletion_closes_view_local_lock_before_rename(
     def checked_publish(tree: FileTree, source: Path, destination: Path) -> None:
         nonlocal observed
         if Path(source) == project.root:
-            with FileTree(project.root).lock(
+            with FileTree(artifact_base(project)).lock(
                 lock_path, blocking=False, create=False
             ) as acquired:
                 assert acquired
@@ -346,7 +356,9 @@ def test_stale_artifact_lease_does_not_recreate_removed_project(
     project = _project(tmp_path)
     lease = publish_artifact_lease(project, "development")
     missing = tmp_path / "removed" / "view"
-    stale_project = replace(project, root=missing)
+    stale_project = replace(
+        project, root=missing, locations=CatalogLocations.inside_views(missing.parent)
+    )
     lease.project = stale_project
     lease.artifact = replace(
         lease.artifact,

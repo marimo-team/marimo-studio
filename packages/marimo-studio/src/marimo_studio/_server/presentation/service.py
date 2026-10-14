@@ -56,6 +56,7 @@ from marimo_studio._workspace.models import (
     StudioDefinition,
     StudioWorkspace,
 )
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import (
     AgentRequestError,
     ConfigurationError,
@@ -541,7 +542,7 @@ class NotebookPresentation:
 
     def _presentation_stamps(
         self,
-        project: ViewProject,
+        project: CatalogProject,
         inspection: ProjectInspection,
         profile: BuildProfile = "development",
     ) -> tuple[
@@ -563,7 +564,7 @@ class NotebookPresentation:
 
     @staticmethod
     def _publication_stamp(
-        project: ViewProject,
+        project: CatalogProject,
         profile: BuildProfile = "development",
     ) -> tuple[int, int, int, int] | None:
         try:

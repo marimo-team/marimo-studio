@@ -7,6 +7,7 @@ import {
   stopRegisteredNotebookProcesses,
 } from "./notebook-process-registry.ts";
 import { notebookProcessRegistryDirectory, repositoryDirectory } from "./paths.ts";
+import { withDefaultViewState } from "./preparation-process.ts";
 import { ServerHandle, type ProcessOutput } from "./server-process.ts";
 
 interface ServicesOptions {
@@ -64,12 +65,12 @@ export class NotebookServices {
       cwd: this.#options.cwd ?? repositoryDirectory,
       directory: this.#registry.directory,
       forward: this.#options.forward,
-      env: {
+      env: withDefaultViewState({
         ...(this.#options.environment ?? process.env),
         ...options.environment,
         PYTHONUNBUFFERED: "1",
         XDG_CONFIG_HOME: this.#configDirectory,
-      },
+      }),
     });
     this.#servers.push(server);
     try {

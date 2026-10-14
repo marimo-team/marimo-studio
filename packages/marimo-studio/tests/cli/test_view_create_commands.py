@@ -93,7 +93,7 @@ def test_view_create_bootstraps_lists_and_checks_named_views(
     assert checked.exit_code == 0, checked.output
     assert json.loads(created.stdout)["view"] == "dashboard"
     assert Path(json.loads(created.stdout)["root"]) == (
-        notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
+        notebook_path.parent / "studio" / "analysis" / "dashboard"
     )
     assert json.loads(added.stdout)["view"] == "executive"
     overview_payload = json.loads(overview.stdout)
@@ -137,6 +137,7 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
     assert preview_payload["schema"] == 1
     assert preview_payload["created"]
     assert notebook_path.read_bytes() == original
+    assert not (notebook_path.parent / "studio").exists()
     assert not (notebook_path.parent / "__marimo__").exists()
 
     created = runner.invoke(

@@ -26,6 +26,7 @@ from marimo_studio.view_providers._host.registry import (
     provider_key,
 )
 
+from ..helpers import catalog_project
 from ..provider_test_support import (
     EntryPointStub,
     ProviderStub,
@@ -390,12 +391,8 @@ def test_public_build_surfaces_provider_process_cleanup_failure(
     monkeypatch.setattr(providers_module, "_REGISTRY", registry)
     root = tmp_path / "view"
     root.mkdir()
-    project = ViewProject(
-        "dashboard",
-        root,
-        root / "view.toml",
-        installed.key,
-        {},
+    project = catalog_project(
+        ViewProject("dashboard", root, root / "view.toml", installed.key, {})
     )
     project.manifest.write_text(
         encode_view_manifest(installed.key),

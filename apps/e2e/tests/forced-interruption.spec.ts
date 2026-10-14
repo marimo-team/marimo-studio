@@ -41,11 +41,9 @@ test("forced runner shutdown drains every open native notebook session", async (
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
   await cp(resolve(workspace, "notebook.py"), resolve(workspace, "peer.py"));
-  await cp(
-    resolve(workspace, "__marimo__/studio/notebook"),
-    resolve(workspace, "__marimo__/studio/peer"),
-    { recursive: true },
-  );
+  await cp(resolve(workspace, "studio/notebook"), resolve(workspace, "studio/peer"), {
+    recursive: true,
+  });
   await copyFixtureProviderPackage(workspace);
   const endpoint = e2eNetwork.main.forcedInterruption;
   const server = startNotebookServer({

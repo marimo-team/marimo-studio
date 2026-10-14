@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
 from pathlib import Path
 from threading import Lock, RLock
-from typing import cast
+from typing import TypeVar, cast
 
 from packaging.utils import canonicalize_name
 
@@ -85,6 +85,8 @@ from marimo_studio.view_providers._host.starters import (
 )
 
 ENTRY_POINT_GROUP = "marimo_studio.view_provider"
+# Option validation keeps the record type, so a catalog project stays one.
+_Project = TypeVar("_Project", bound=ViewProject)
 _ENTRY_POINT_NAME = re.compile(r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?")
 _DISCOVERY_WORKERS = 8
 _STARTER_WORKERS = 8
@@ -696,8 +698,10 @@ class ProviderRegistry:
             )
         return tuple(records)
 
-    def validate_project(self, project: ViewProject) -> ViewProject:
-        return self.get(project.provider)._conformance.validate_project(project)
+    def validate_project(self, project: _Project) -> _Project:
+        """Return ``project`` with options validated by its provider."""
+        validated = self.get(project.provider)._conformance.validate_project(project)
+        return cast(_Project, validated)
 
     def validate_profile(self, key: str, profile: object) -> BuildProfile:
         return self.get(key)._conformance.validate_profile(profile)

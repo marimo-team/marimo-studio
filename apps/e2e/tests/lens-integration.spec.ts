@@ -66,7 +66,7 @@ async function openView(
   mount: "projected" | "notebook" | "installed" | "anonymous" = "projected",
 ) {
   const fixtures = resolve(fixtureDirectory, "lens");
-  await rm(resolve(workspaceDirectory, "__marimo__/studio/notebook"), {
+  await rm(resolve(workspaceDirectory, "studio/notebook"), {
     recursive: true,
     force: true,
   });
@@ -114,7 +114,7 @@ async function openView(
   if (mount === "installed")
     document = document.replace('<marimo-output id="rich" value="rich"></marimo-output>', "");
   await writeWorkspaceFile(
-    resolve(workspaceDirectory, "__marimo__/studio/notebook/lens", destination),
+    resolve(workspaceDirectory, "studio/notebook/lens", destination),
     document,
   );
   await cli.buildWorkspaceView("lens");

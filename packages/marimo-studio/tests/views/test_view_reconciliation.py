@@ -135,6 +135,23 @@ def test_manifest_parse_failure_has_repair_document_and_last_publication(
     assert asyncio.run(inspect_view(studio, "dashboard")).freshness == "current"
 
 
+def test_manifest_repair_reports_only_a_build_of_this_view(
+    notebook_path: Path,
+) -> None:
+    from marimo_studio._authoring.view import inspect_view as inspect_authored
+
+    studio = published_dashboard(notebook_path)
+    # State that another tool copied in carries no record of this view.
+    studio.locations.artifacts("dashboard").joinpath("owner").unlink()
+    studio.view("dashboard").manifest.write_text("provider = [")
+
+    invalid = asyncio.run(inspect_authored(notebook_path, "dashboard"))
+
+    assert [item.path.as_posix() for item in invalid.documents] == ["view.toml"]
+    assert invalid.build is None
+    assert invalid.freshness == "failed"
+
+
 def test_inspection_rejects_source_changes_during_provider_observation(
     notebook_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -257,7 +274,7 @@ def test_manifest_repair_reads_a_receipt_from_an_earlier_studio_as_unbuilt(
 ) -> None:
     studio = published_dashboard(notebook_path)
     root = studio.view("dashboard").root
-    receipt_path = root / ".artifacts" / "development.json"
+    receipt_path = studio.locations.artifacts("dashboard") / "development.json"
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     receipt["schema"] = 1
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")

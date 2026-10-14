@@ -9,7 +9,7 @@ from marimo_studio._prepared.state_space import (
 )
 from marimo_studio.errors import PublicationError
 
-_EXAMPLES = Path(__file__).resolve().parents[4] / "examples" / "__marimo__" / "studio"
+_EXAMPLES = Path(__file__).resolve().parents[4] / "examples" / "studio"
 
 
 def test_state_space_source_uses_the_view_states_file(tmp_path: Path) -> None:

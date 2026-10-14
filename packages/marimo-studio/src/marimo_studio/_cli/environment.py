@@ -695,7 +695,7 @@ def _target_provider_ids(target: EnvironmentTarget) -> tuple[str, ...]:
     if definition is None:
         return selected
     configured = tuple(
-        view.provider for view in discover_views(definition.view_root).values()
+        view.provider for view in discover_views(definition.locations).values()
     )
     return tuple(sorted({*configured, *selected}))
 

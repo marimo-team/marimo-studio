@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import cast
 
 import tomlkit
 
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._workspace.locations import (
+    ARTIFACT_DIRECTORY,
+    VIEW_MANIFEST,
+    CatalogLocations,
+)
 from marimo_studio._workspace.toml import read_toml
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
@@ -18,7 +24,6 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._validation import validate_provider_key
 
-VIEW_MANIFEST = "view.toml"
 VIEW_MANIFEST_PATH = PurePosixPath(VIEW_MANIFEST)
 VIEW_MANIFEST_DOCUMENT = SourceDocument(
     VIEW_MANIFEST_PATH,
@@ -101,7 +106,31 @@ def encode_view_manifest(
     return tomlkit.dumps(document)
 
 
-def load_view_project(root: Path) -> ViewProject:
+@dataclass(frozen=True)
+class CatalogProject(ViewProject):
+    """A view project in a Studio catalog, with its generated-state location.
+
+    Providers receive the ``ViewProject`` fields. ``locations`` stays with
+    Studio, which keeps build receipts, revisions, pins, and provider caches
+    in ``artifacts``.
+    """
+
+    locations: CatalogLocations
+
+    @property
+    def artifacts(self) -> Path:
+        """Return the directory that holds this view's generated state."""
+        if self.locations.keeps_state_in_views:
+            return self.root / ARTIFACT_DIRECTORY
+        return self.locations.artifacts(self.name)
+
+    @property
+    def artifact_base(self) -> Path:
+        """Return the directory that bounds this view's generated-state paths."""
+        return self.locations.artifact_base(self.root)
+
+
+def load_view_project(root: Path, *, locations: CatalogLocations) -> CatalogProject:
     """Load one required ``view.toml`` from a named view directory."""
     manifest = root / VIEW_MANIFEST
     try:
@@ -115,10 +144,11 @@ def load_view_project(root: Path) -> ViewProject:
     if not present:
         raise ConfigurationError(f"View project manifest is missing: {manifest}")
     provider, options = decode_view_manifest(read_toml(manifest), manifest)
-    return ViewProject(
+    return CatalogProject(
         name=root.name,
         root=root.absolute(),
         manifest=manifest.absolute(),
         provider=provider,
         options=options,
+        locations=locations,
     )

@@ -80,7 +80,9 @@ content. Read it before retrying an interrupted or uncertain replacement.
 Edit view source with your editor, patch tool, shell, or Studio. Use the project
 root returned by `view inspect --json`. Provider inspection determines which
 files appear in Source and which files affect builds, regardless of how they
-were edited. Keep generated `.artifacts/` content under Studio's ownership.
+were edited. Studio owns each view's build state in
+`<state_root>/<view>/.artifacts/`, where `marimo-studio status` reports
+`state_root`.
 
 Inspect and build after editing:
 

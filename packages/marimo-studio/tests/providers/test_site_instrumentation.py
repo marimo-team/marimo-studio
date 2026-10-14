@@ -9,7 +9,10 @@ import pytest
 from marimo_studio._artifacts.repository import read_profile_state
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.inspection import inspect_view_project_sync
-from marimo_studio._workspace.project_manifest import encode_view_manifest
+from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
+    encode_view_manifest,
+)
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildInput,
@@ -34,6 +37,7 @@ from marimo_studio.view_providers._artifact_sites import (
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 from marimo_studio.view_providers._validation import accept_diagnostics
 
+from ..helpers import catalog_project
 from ..provider_test_support import (
     ProviderStub,
     candidate,
@@ -108,7 +112,7 @@ def _project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     page: bytes,
-) -> tuple[ViewProject, CopyProvider]:
+) -> tuple[CatalogProject, CopyProvider]:
     provider = CopyProvider()
     registry = ProviderRegistry(
         (candidate("page", provider, distribution="test-copy"),)
@@ -119,7 +123,8 @@ def _project(
     key = registry.ids[0]
     root.joinpath("view.toml").write_text(encode_view_manifest(key), encoding="utf-8")
     root.joinpath(ENTRY).write_bytes(page)
-    return ViewProject("dashboard", root, root / "view.toml", key, {}), provider
+    project = ViewProject("dashboard", root, root / "view.toml", key, {})
+    return catalog_project(project), provider
 
 
 def _page(body: str) -> bytes:

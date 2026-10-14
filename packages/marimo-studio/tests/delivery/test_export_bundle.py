@@ -26,13 +26,14 @@ from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._filesystem.files import FileTree, Snapshot
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import (
     RuntimeConfigTooLargeError,
     StaticExportError,
     ViewProjectError,
 )
 from marimo_studio.errors._internal import CompatibilityError
-from marimo_studio.view_providers import BuildProfile, ViewProject
+from marimo_studio.view_providers import BuildProfile
 
 from ..artifact_test_support import add_provider_outputs
 from ..helpers import replace_app_shell
@@ -416,7 +417,7 @@ def test_export_rejects_unlisted_artifact_files(
     publish = export_module.publish_view
 
     def publish_with_extra_file(
-        project: ViewProject,
+        project: CatalogProject,
         profile: BuildProfile,
         *,
         expected_generation: str | None = None,

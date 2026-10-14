@@ -86,7 +86,7 @@ test("keeps an agent preview URL live on a directory server beneath a stripped p
   );
   const source = resolve(
     dirname(proxiedDirectoryNotebookPath),
-    "__marimo__/studio/notebook/report/index.html",
+    "studio/notebook/report/index.html",
   );
   const original = await readFile(source, "utf8");
   try {

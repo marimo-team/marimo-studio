@@ -78,8 +78,10 @@ retrying the operation.
 
 ### `StudioOverview`
 
-Describes the configuration source, notebook, view root, runtime choices, cell
-aliases, and configured views returned by `Workspace.status()`.
+Describes the configuration source, notebook, view root, build state root,
+runtime choices, cell aliases, and configured views returned by
+`Workspace.status()`. `view_root` holds the authored view projects, and
+`state_root` holds their replaceable build state.
 `generation` identifies the returned catalog and changes when its configuration
 or view incarnations change.
 
@@ -804,17 +806,17 @@ surfaces. Nested notebook records are documented under `NotebookSpec` and
 
 ### Workspace and view records
 
-| Record               | Fields                                                                                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `StudioOverview`     | `notebook`, `state`, `generation`, `config_path`, `config_source`, `view_root`, `default_view`, `default_runtime`, `runtimes`, `bindings`, `views`, `launch_requirements`, `persistence` |
-| `ViewOverview`       | `name`, `generation`, `path`, `default`, `provider`, `documents`, `artifact_revision`                                                                                                    |
-| `Starter`            | `id`, `title`, `summary`, `provider`, `documents`, `availability`                                                                                                                        |
-| `BindingResult`      | `alias`, `cell`, `config_path`, `catalog_generation`, `dry_run`, `previous_ref`                                                                                                          |
-| `ViewDocument`       | `path`, `language`, `access`, `content`, `revision`                                                                                                                                      |
-| `ViewInspection`     | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `build`                                                                                                                     |
-| `ViewBuild`          | `view`, `profile`, `revision`, `issues`                                                                                                                                                  |
-| `ViewCatalog`        | `notebook`, `default_view`, `views`, `catalog_generation`                                                                                                                                |
-| `StaticExportResult` | `notebook`, `view`, `runtime`, `document`, `cache_activity`, `preflight`, `delivery` and computed `output`, `files`, `warnings`, `entrypoint`                                            |
+| Record               | Fields                                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `StudioOverview`     | `notebook`, `state`, `generation`, `config_path`, `config_source`, `view_root`, `state_root`, `default_view`, `default_runtime`, `runtimes`, `bindings`, `views`, `launch_requirements`, `persistence` |
+| `ViewOverview`       | `name`, `generation`, `path`, `default`, `provider`, `documents`, `artifact_revision`                                                                                                                  |
+| `Starter`            | `id`, `title`, `summary`, `provider`, `documents`, `availability`                                                                                                                                      |
+| `BindingResult`      | `alias`, `cell`, `config_path`, `catalog_generation`, `dry_run`, `previous_ref`                                                                                                                        |
+| `ViewDocument`       | `path`, `language`, `access`, `content`, `revision`                                                                                                                                                    |
+| `ViewInspection`     | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `build`                                                                                                                                   |
+| `ViewBuild`          | `view`, `profile`, `revision`, `issues`                                                                                                                                                                |
+| `ViewCatalog`        | `notebook`, `default_view`, `views`, `catalog_generation`                                                                                                                                              |
+| `StaticExportResult` | `notebook`, `view`, `runtime`, `document`, `cache_activity`, `preflight`, `delivery` and computed `output`, `files`, `warnings`, `entrypoint`                                                          |
 
 `StudioOverview.state` is `unconfigured`, `needs-view`, or `ready`.
 `ViewInspection.freshness` is `current`, `stale`, `unbuilt`, `building`, or

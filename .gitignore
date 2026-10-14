@@ -24,7 +24,7 @@ apps/e2e/playwright-report/
 apps/e2e/test-results/
 tools/example-showcase/shots/
 
-# Generated state within authored Studio workspaces
+# Default view build state and catalog locks of Studio 0.3.0 fixtures
 **/__marimo__/studio/*/*/.artifacts/
 **/__marimo__/studio/*/.locks/
 

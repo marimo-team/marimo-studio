@@ -59,7 +59,13 @@ Text \textbf{bold} \textit{italic} \texttt{mono} {\footnotesize small}
 TEX
 compile "$work" packages.tex
 
-for manifest in "$root"/examples/__marimo__/studio/*/*/view.toml; do
+shopt -s nullglob
+manifests=("$root"/examples/studio/*/*/view.toml)
+if [ "${#manifests[@]}" -eq 0 ]; then
+    echo "No example view manifests found under $root/examples/studio" >&2
+    exit 1
+fi
+for manifest in "${manifests[@]}"; do
     if grep -q '^provider = "marimo-studio/latex"' "$manifest"; then
         compile "$(dirname "$manifest")" main.tex
     fi

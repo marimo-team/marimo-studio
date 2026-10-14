@@ -12,7 +12,6 @@ from marimo_studio._views.records import (
     ViewOverview,
 )
 from marimo_studio._workspace.config import (
-    canonical_view_root,
     discover_studio_definition,
     discover_views,
 )
@@ -21,6 +20,7 @@ from marimo_studio._workspace.generation import (
     view_generation,
     workspace_catalog_generation,
 )
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.view_owners import reconcile_view_owners
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers._host.requirements import (
@@ -45,13 +45,15 @@ def overview(
 
     definition = discover_studio_definition(notebook_path)
     if definition is None:
+        catalog = CatalogLocations.default(notebook_path)
         return StudioOverview(
             notebook=notebook_path,
             state="unconfigured",
             generation=None,
             config_path=None,
             config_source=None,
-            view_root=canonical_view_root(notebook_path),
+            view_root=catalog.view_root,
+            state_root=catalog.state_root,
             default_view=None,
             default_runtime=None,
             runtimes=(),
@@ -61,14 +63,14 @@ def overview(
             persistence=persistence,
         )
 
-    discovered = discover_views(definition.view_root)
+    discovered = discover_views(definition.locations)
     owner_names = reconcile_view_owners(
         definition.view_root,
         set(discovered),
-        refresh_names=lambda: set(discover_views(definition.view_root)),
+        refresh_names=lambda: set(discover_views(definition.locations)),
     )
     if owner_names != set(discovered):
-        discovered = discover_views(definition.view_root)
+        discovered = discover_views(definition.locations)
         if set(discovered) != owner_names:
             raise ConfigurationError(
                 "The view catalog changed while Studio inspected it. Run again."
@@ -116,6 +118,7 @@ def overview(
         config_path=definition.config_path,
         config_source=definition.config_source,
         view_root=definition.view_root,
+        state_root=definition.state_root,
         default_view=definition.default_view,
         default_runtime=definition.default_runtime,
         runtimes=definition.runtimes,

@@ -369,10 +369,7 @@ test("publishes a framework edit and retains the last good view across a failed 
   }
   await sourceTab.click();
   const editor = page.getByLabel("src/App.tsx source");
-  const path = resolve(
-    workspaceNotebookPath,
-    "../__marimo__/studio/notebook/react-view/src/App.tsx",
-  );
+  const path = resolve(workspaceNotebookPath, "../studio/notebook/react-view/src/App.tsx");
   const source = await readWorkspaceFile(path);
   expect(source).toContain("React View");
   const initialRevision = await preview
@@ -634,7 +631,7 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   await expect(preview.getByRole("heading", { name: "Qa View" })).toBeVisible();
   await expect(preview.locator('marimo-cell[name="controls"]')).toBeVisible();
 
-  const createdDirectory = resolve(workspaceNotebookPath, "../__marimo__/studio/notebook/qa-view");
+  const createdDirectory = resolve(workspaceNotebookPath, "../studio/notebook/qa-view");
   await expect.poll(async () => access(createdDirectory).then(() => true)).toBe(true);
   const supersededDashboardRenewal = browserDiagnostics.expectActiveRequestAbort({
     origin: studioOrigin(),

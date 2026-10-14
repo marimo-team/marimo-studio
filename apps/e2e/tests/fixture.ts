@@ -66,13 +66,13 @@ export {
   type WorkspaceEventStreamCapture,
 } from "./browser-diagnostics.ts";
 
-const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
+const dashboardDirectory = resolve(workspaceDirectory, "studio/notebook/dashboard");
 const collaborativeDashboardDirectory = resolve(
   collaborativeWorkspaceDirectory,
-  "__marimo__/studio/notebook/dashboard",
+  "studio/notebook/dashboard",
 );
-const plainDashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/dashboard");
-const plainReportDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/report");
+const plainDashboardDirectory = resolve(workspaceDirectory, "studio/plain/dashboard");
+const plainReportDirectory = resolve(workspaceDirectory, "studio/plain/report");
 const removeTree = (path: string) =>
   rm(path, {
     force: true,
@@ -80,6 +80,12 @@ const removeTree = (path: string) =>
     recursive: true,
     retryDelay: 25,
   });
+// A notebook's views live in studio/<stem>/ and their build state in
+// __marimo__/studio/<stem>/.
+const removeViews = async (directory: string, notebook: string) => {
+  await removeTree(resolve(directory, "studio", notebook));
+  await removeTree(resolve(directory, "__marimo__/studio", notebook));
+};
 
 export const dashboardHtmlPath = resolve(dashboardDirectory, "src/index.html");
 export const dashboardCssPath = resolve(dashboardDirectory, "src/app.css");
@@ -89,9 +95,9 @@ export const collaborativeDashboardHtmlPath = resolve(
   "src/index.html",
 );
 export const collaborativeCreatedViewHtmlPath = (view: string) =>
-  resolve(collaborativeWorkspaceDirectory, "__marimo__/studio/notebook", view, "index.html");
+  resolve(collaborativeWorkspaceDirectory, "studio/notebook", view, "index.html");
 export const workspaceCreatedViewHtmlPath = (view: string) =>
-  resolve(workspaceDirectory, "__marimo__/studio/notebook", view, "index.html");
+  resolve(workspaceDirectory, "studio/notebook", view, "index.html");
 export const plainDashboardHtmlPath = resolve(plainDashboardDirectory, "index.html");
 export const plainReportHtmlPath = resolve(plainReportDirectory, "index.html");
 export const plainNotebookPath = resolve(workspaceDirectory, "plain.py");
@@ -100,7 +106,7 @@ export const workspaceNoDisplayNotebookPath = noDisplayNotebookPath;
 export const workspaceNoDisplayStaticExportPath = noDisplayStaticExportDirectory;
 export const hostedDashboardHtmlPath = resolve(
   hostedWorkspaceDirectory,
-  "__marimo__/studio/notebook/dashboard/index.html",
+  "studio/notebook/dashboard/index.html",
 );
 export const hostedViewFixturePath = resolve(hostedFixtureDirectory, "dashboard.html");
 export const studioOrigin = () => e2eNetwork.main.studio.origin;
@@ -134,25 +140,25 @@ const copyFixtureFile = async (relativePath: string) => {
 export const restoreWorkspace = async () => {
   await copyFixtureProviderPackage(workspaceDirectory);
   await removeTree(resolve(workspaceDirectory, "__marimo__/session"));
-  await removeTree(resolve(workspaceDirectory, "__marimo__/studio/notebook"));
-  await removeTree(resolve(workspaceDirectory, "__marimo__/studio/no-display"));
+  await removeViews(workspaceDirectory, "notebook");
+  await removeViews(workspaceDirectory, "no-display");
   await copyFixtureFile("notebook.py");
   await copyFixtureFile("no-display.py");
   await removeTree(noDisplayStaticExportDirectory);
   await copyFixtureFile("plain.py");
   await rm(resolve(workspaceDirectory, "first-save.py"), { force: true });
   await rm(resolve(workspaceDirectory, "lens-onboarding.py"), { force: true });
-  await removeTree(resolve(workspaceDirectory, "__marimo__/studio/lens-onboarding"));
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/view.toml");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/index.html");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/app.css");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/scripts/app.js");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/scripts/message.js");
-  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/view.toml");
-  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/index.html");
-  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/styles/app.css");
-  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/scripts/app.js");
-  await removeTree(resolve(workspaceDirectory, "__marimo__/studio/plain"));
+  await removeViews(workspaceDirectory, "lens-onboarding");
+  await copyFixtureFile("studio/notebook/dashboard/view.toml");
+  await copyFixtureFile("studio/notebook/dashboard/src/index.html");
+  await copyFixtureFile("studio/notebook/dashboard/src/app.css");
+  await copyFixtureFile("studio/notebook/dashboard/src/scripts/app.js");
+  await copyFixtureFile("studio/notebook/dashboard/src/scripts/message.js");
+  await copyFixtureFile("studio/notebook/vanilla-local/view.toml");
+  await copyFixtureFile("studio/notebook/vanilla-local/index.html");
+  await copyFixtureFile("studio/notebook/vanilla-local/styles/app.css");
+  await copyFixtureFile("studio/notebook/vanilla-local/scripts/app.js");
+  await removeViews(workspaceDirectory, "plain");
 };
 
 export const restoreHostedWorkspace = async () => {
@@ -163,10 +169,12 @@ export const restoreHostedWorkspace = async () => {
     await cp(source, target, { force: true });
   }
   await removeTree(resolve(hostedWorkspaceDirectory, "__marimo__"));
+  await removeTree(resolve(hostedWorkspaceDirectory, "studio"));
 };
 
 export const restoreProxiedWorkspace = async () => {
   await removeTree(resolve(proxiedWorkspaceDirectory, "__marimo__"));
+  await removeTree(resolve(proxiedWorkspaceDirectory, "studio"));
   await cp(resolve(proxiedFixtureDirectory, "notebook.py"), proxiedNotebookPath, { force: true });
 };
 

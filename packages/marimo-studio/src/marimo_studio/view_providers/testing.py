@@ -52,10 +52,9 @@ from marimo_studio._views.records import (
     StudioDiagnostic,
     ViewInspection,
 )
-from marimo_studio._workspace.config import canonical_view_root
+from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.project_manifest import (
     encode_view_manifest,
-    load_view_project,
 )
 from marimo_studio.errors import MarimoStudioError
 from marimo_studio.view_providers import (
@@ -239,7 +238,7 @@ async def _check(
                 f"{key} is unavailable: {availability.reason}{action}"
             )
         view = await workspace.create_view(f"check-{index}", starter=starter)
-        root = canonical_view_root(notebook) / view.name
+        root = load_studio(notebook).view(view.name).root
         if options:
             (root / "view.toml").write_text(
                 encode_view_manifest(key, dict(options)), encoding="utf-8"
@@ -253,7 +252,7 @@ async def _check(
             raise ProviderCheckError(f"{starter.id}: inspect() is not repeatable.")
         documents = tuple(item.path for item in second.documents)
         build = await view.build()
-        project = load_view_project(root)
+        project = load_studio(notebook).view(view.name)
         lease = lease_published_artifact(project, "development")
         if lease is None:
             raise ProviderCheckError(f"{starter.id}: the build published nothing.")

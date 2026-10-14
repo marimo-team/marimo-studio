@@ -49,7 +49,7 @@ const replaceMetricCell = async (page: Page, source: string) => {
 test.afterAll(async () => {
   await Promise.all(
     generatedViews.map((view) =>
-      rm(resolve(workspaceDirectory, "__marimo__/studio/notebook", view), {
+      rm(resolve(workspaceDirectory, "studio/notebook", view), {
         force: true,
         recursive: true,
       }),
@@ -84,7 +84,7 @@ test("reuses isolated named-view documents after their cold load", async ({
 }) => {
   for (const view of generatedViews) {
     await studioCli.addWorkspaceView(workspaceNotebookPath, view);
-    const path = resolve(workspaceDirectory, `__marimo__/studio/notebook/${view}/index.html`);
+    const path = resolve(workspaceDirectory, `studio/notebook/${view}/index.html`);
     const source = await readWorkspaceFile(path);
     const withDraft = source.replace(
       "</main>",
@@ -138,7 +138,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   test.setTimeout(180_000);
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   await studioCli.addWorkspaceView(workspaceNotebookPath, "report");
-  const reportPath = resolve(workspaceDirectory, "__marimo__/studio/notebook/report/index.html");
+  const reportPath = resolve(workspaceDirectory, "studio/notebook/report/index.html");
   const reportSource = await readWorkspaceFile(reportPath);
   const resultsSection = '<section class="grid gap-6" aria-label="Notebook results">';
   const projectedReport = reportSource.replace(

@@ -106,7 +106,9 @@ marimo-studio status [--target PATH] [--json]
 
 Returns the notebook, active configuration source, default view, allowed
 runtimes, cell aliases, named views, and exact `launch_requirements` for Studio
-and configured provider distributions. In a
+and configured provider distributions. `view_root` is the folder of authored
+view projects, and `state_root` is the folder of their build state. See
+[View projects](configuration.md#view-projects). In a
 [marimohub](../guide/marimohub.md) session, `persistence` reports which files
 the hub saves when the session ends. It is `null` outside marimohub and before
 the hub publishes the session. An

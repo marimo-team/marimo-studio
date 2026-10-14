@@ -165,11 +165,11 @@ it("shows the folder where a new view's files are created", async () => {
   await user.click(screen.getByText("Files created"));
   const files = screen.getByText("Files created").closest("details");
   await user.type(screen.getByLabelText("New view"), "Briefing");
-  expect(files).toHaveTextContent("__marimo__/studio/analysis/…/");
+  expect(files).toHaveTextContent("studio/analysis/…/");
   await user.clear(screen.getByLabelText("New view"));
   await user.type(screen.getByLabelText("New view"), "briefing");
 
-  expect(files).toHaveTextContent("__marimo__/studio/analysis/briefing/");
+  expect(files).toHaveTextContent("studio/analysis/briefing/");
   controller.dispose();
 });
 

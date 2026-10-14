@@ -18,7 +18,10 @@ const providerToolSources = [
   "packages/marimo-studio/src/marimo_studio/view_providers/_builtin/**/starters/**",
 ];
 
-const ignored = [...generated, ...providerToolSources, ...antiSlopIgnorePatterns];
+// Example and fixture view projects keep the formatting their starters wrote.
+const viewProjects = ["apps/e2e/fixtures/studio/**", "examples/studio/**"];
+
+const ignored = [...generated, ...viewProjects, ...providerToolSources, ...antiSlopIgnorePatterns];
 
 const studioPackageRestrictedImports = [
   "@marimo-studio/marimo-frontend",

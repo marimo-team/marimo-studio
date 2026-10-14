@@ -12,14 +12,13 @@ from marimo_studio._notebook.records import (
     CellRef,
     CellSpec,
 )
+from marimo_studio._workspace.locations import CatalogLocations
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError, ViewNotFoundError
 from marimo_studio.errors._internal import WorkspaceInitializationError
-from marimo_studio.view_providers import ViewProject
 
 DEFAULT_VIEW_NAME = "dashboard"
 PYPROJECT_NAME = "pyproject.toml"
-MARIMO_DIRECTORY = "__marimo__"
-STUDIO_DIRECTORY = "studio"
 ALIAS_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 VIEW_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 RUNTIME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
@@ -60,7 +59,7 @@ class StudioDefinition:
     config_path: Path
     config_source: Literal["notebook", "pyproject"]
     notebook: Path
-    view_root: Path
+    locations: CatalogLocations
     default_view: str
     default_runtime: str
     runtimes: tuple[str, ...]
@@ -73,10 +72,18 @@ class StudioDefinition:
     def uses_notebook_config(self) -> bool:
         return self.config_source == "notebook"
 
+    @property
+    def view_root(self) -> Path:
+        return self.locations.view_root
+
+    @property
+    def state_root(self) -> Path:
+        return self.locations.state_root
+
 
 @dataclass(frozen=True)
 class StudioWorkspace(StudioDefinition):
-    views: dict[str, ViewProject]
+    views: dict[str, CatalogProject]
     view_generations: dict[str, str]
     catalog_generation: str
 
@@ -92,7 +99,7 @@ class StudioWorkspace(StudioDefinition):
         if self.view_generations.keys() != self.views.keys():
             raise ConfigurationError("View generations must match the view catalog")
 
-    def view(self, name: str | None = None) -> ViewProject:
+    def view(self, name: str | None = None) -> CatalogProject:
         selected = name or self.default_view
         try:
             return self.views[selected]

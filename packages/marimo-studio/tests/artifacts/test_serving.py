@@ -41,8 +41,9 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.revisions import PresentationSourceSnapshot
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.view_providers import BuildProfile, ViewProject
+from marimo_studio.view_providers import BuildProfile
 
 from ..artifact_test_support import (
     add_provider_outputs as _add_provider_outputs,
@@ -804,7 +805,7 @@ def test_presentation_capture_retains_construction_error_after_cleanup_failures(
     }
 
     def publish(
-        project: ViewProject,
+        project: CatalogProject,
         _profile: BuildProfile,
         *,
         expected_generation: str | None = None,

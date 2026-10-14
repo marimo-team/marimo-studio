@@ -15,10 +15,10 @@ def test_mutable_symlink_rejects_the_setup_before_notebook_changes(
     tmp_path: Path,
 ) -> None:
     original = notebook_path.read_bytes()
-    marimo_dir = notebook_path.parent / "__marimo__"
+    studio_dir = notebook_path.parent / "studio"
     external = tmp_path / "external"
     external.mkdir()
-    marimo_dir.symlink_to(external, target_is_directory=True)
+    studio_dir.symlink_to(external, target_is_directory=True)
 
     with pytest.raises(ConfigurationError, match="symlink"):
         prepare_view(notebook_path)

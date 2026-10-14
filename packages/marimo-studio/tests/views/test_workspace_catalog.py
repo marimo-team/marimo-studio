@@ -12,6 +12,7 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.mutation_lock import (
     view_mutation_lock,
     workspace_catalog_lock,
@@ -44,15 +45,16 @@ def test_view_inventory_ignores_a_project_removed_during_load(
         )
     native_load = workspace_config.load_view_project
 
-    def load(directory: Path):
+    def load(directory: Path, *, locations: CatalogLocations):
         if directory.name == "gone":
             shutil.rmtree(directory)
             raise ConfigurationError(f"View project manifest is missing: {directory}")
-        return native_load(directory)
+        return native_load(directory, locations=locations)
 
     monkeypatch.setattr(workspace_config, "load_view_project", load)
 
-    assert set(workspace_config.discover_views(root)) == {"stable"}
+    catalog = CatalogLocations.resolve(tmp_path / "analysis.py", root)
+    assert set(workspace_config.discover_views(catalog)) == {"stable"}
 
 
 def test_a_misnamed_view_folder_is_a_configuration_error(notebook_path: Path) -> None:

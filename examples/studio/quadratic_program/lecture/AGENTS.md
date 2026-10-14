@@ -138,6 +138,6 @@ print(marimo_studio.agent.skill().file("references/projections.md").read_text())
 You own this view project's `.gitignore`. When adding libraries, extensions, or
 build tools, ignore their generated files, caches, local configuration, and
 secrets. Keep authored source, dependency manifests, and lockfiles tracked.
-Studio supplies workspace rules for its own artifacts and locks. Check
+Studio keeps its own build state and lock files out of Git. Check
 `git status --short --ignored` after running new tooling and update the view's
 ignore rules before committing.

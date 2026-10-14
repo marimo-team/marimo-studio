@@ -4,6 +4,7 @@ import ctypes
 import errno
 import json
 import os
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -79,6 +80,20 @@ def outside_marimohub() -> Iterator[None]:
     with pytest.MonkeyPatch.context() as environment:
         environment.delenv("MARIMOHUB_CONTEXT_FILE", raising=False)
         environment.delenv("MARIMOHUB_KERNEL_URL", raising=False)
+        yield
+
+
+@pytest.fixture(autouse=True)
+def without_cache_prefix() -> Iterator[None]:
+    """Keep generated view state beside each test notebook.
+
+    A developer's ``PYTHONPYCACHEPREFIX`` or ``MARIMO_STUDIO_STATE_DIR`` would
+    otherwise move it, in the test process and in every child process.
+    """
+    with pytest.MonkeyPatch.context() as environment:
+        environment.setattr(sys, "pycache_prefix", None)
+        environment.delenv("PYTHONPYCACHEPREFIX", raising=False)
+        environment.delenv("MARIMO_STUDIO_STATE_DIR", raising=False)
         yield
 
 

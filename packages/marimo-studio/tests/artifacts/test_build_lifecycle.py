@@ -30,7 +30,7 @@ from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.generation import view_generation
-from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio._workspace.view_owners import (
     encode_view_owner,
     reconcile_view_owners,
@@ -47,7 +47,6 @@ from marimo_studio.view_providers import (
     BuildResult,
     ProjectDiagnostic,
     SourceLocation,
-    ViewProject,
 )
 from marimo_studio.view_providers._host import provider_registry
 
@@ -69,6 +68,7 @@ from ..artifact_test_support import (
 from ..artifact_test_support import (
     write_json as _write_json,
 )
+from ..helpers import load_standalone_project
 
 
 def test_cache_hit_preserves_successful_build_evidence(
@@ -162,7 +162,7 @@ def test_copied_artifact_rebuilds_for_its_new_view_name(
     renamed_root = project.root.with_name("renamed")
     shutil.copytree(project.root, renamed_root)
     reconcile_view_owners(project.root.parent, {project.name, "renamed"})
-    renamed = load_view_project(renamed_root)
+    renamed = load_standalone_project(renamed_root)
     renamed_generation = view_generation(renamed)
     assert renamed_generation != original_generation
     copied = read_published_artifact(renamed, "development")
@@ -421,7 +421,7 @@ def test_prune_failure_does_not_leave_an_unreturned_artifact_pin(
     if cache_hit:
         publish_artifact_lease(project, "development").close()
 
-    def fail_prune(_project: ViewProject) -> None:
+    def fail_prune(_project: CatalogProject) -> None:
         raise RuntimeError("forced prune failure")
 
     monkeypatch.setattr(publication_module, "prune_artifacts_locked", fail_prune)
@@ -442,7 +442,7 @@ def test_base_exception_after_pin_acquisition_releases_the_pin(
 ) -> None:
     project = _project(tmp_path)
 
-    def interrupt_prune(_project: ViewProject) -> None:
+    def interrupt_prune(_project: CatalogProject) -> None:
         raise KeyboardInterrupt("publication interrupted")
 
     monkeypatch.setattr(

@@ -268,7 +268,12 @@ await view.write("index.html", updated, expected_revision=document.revision)
 Confirm the intended text exists before replacing it. A `SourceConflictError`
 requires a fresh read and reconciliation with the concurrent edit. Filesystem
 tools can also edit `inspection.root`. Inspect again after external changes.
-Keep generated `.artifacts/` files under Studio's ownership.
+Studio keeps build state in `<state_root>/<view>/.artifacts/`, and
+`workspace.status()` reports `state_root`. When `state_root` equals
+`view_root`, the build state sits in `.artifacts/` inside `inspection.root`.
+Leave `.artifacts/` and `.locks/` to Studio. Run Studio commands with the same
+`MARIMO_STUDIO_STATE_DIR` value as the Studio server, so both read one build
+state.
 
 For new files, manifest changes, multi-file edits, or recovery, read
 [authoring](references/authoring.md). Publication holds delay artifact

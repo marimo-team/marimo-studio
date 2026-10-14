@@ -36,9 +36,29 @@ reports an unconfigured notebook or a configured notebook with no view.
 
 Run mode serves the notebook as a marimo app while its view root contains no
 view, and the server logs a warning naming the notebook. `marimo-studio status`
-then reports `needs-view`. Restore the view directory beside the notebook, or
-set [`view_root`](../reference/configuration.md#project-settings) when the host
-persists authored files outside `__marimo__/`.
+then reports `needs-view` and the views folder it searched. Restore the view
+folder there, `studio/<notebook-stem>/` beside the notebook by default, or set
+[`view_root`](../reference/configuration.md#project-settings) to the folder
+that holds the views.
+
+## Studio reports a view folder conflict
+
+`marimo-studio status` prints the folder of authored views and the folder of
+their build state. Studio stops with a configuration error in these cases:
+
+| Error                                                                | Fix                                                                                                     |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Views exist in both `studio/<stem>/` and `__marimo__/studio/<stem>/` | Move the views you keep into `studio/<stem>/`, then remove the older folder                             |
+| The build state folder of a view holds another view project          | Move that view out of the folder named in the error, or choose another build state location             |
+| `view_root` is inside Studio's view build state                      | Keep the views outside the build state folder, or choose another build state location                   |
+| A view contains Studio's view build state                            | Rename the view, or choose a build state location outside the view folder                               |
+| Studio cannot keep view build state in a folder                      | Replace the link or file named in the error with a folder, or choose another build state location       |
+| Could not create the view state directory                            | Make the directory writable for the account that runs Studio, or choose another build state location    |
+| `MARIMO_STUDIO_STATE_DIR` must be an absolute path                   | Set it to an absolute folder path, or leave it empty                                                    |
+| `state_dir` must be a non-empty relative path                        | Set `state_dir` to a folder inside the project, or set `MARIMO_STUDIO_STATE_DIR` for a folder elsewhere |
+
+[Build state location](../reference/configuration.md#build-state-location)
+lists the settings that choose the build state location.
 
 ## A starter is unavailable
 
