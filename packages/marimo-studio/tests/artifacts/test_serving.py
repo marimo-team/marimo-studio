@@ -186,7 +186,13 @@ def _artifact_route(
     )
     adapters = cast(
         ServerAdapters,
-        SimpleNamespace(peer_commands=SimpleNamespace(enable=lambda _location: None)),
+        SimpleNamespace(
+            peer_commands=SimpleNamespace(enable=lambda _location: None),
+            server=None,
+            session_state=None,
+            sessions=None,
+            projections=None,
+        ),
     )
     return (
         ReadyWorkspaceHandler(
@@ -334,7 +340,7 @@ def test_support_route_releases_its_response_owner_after_disconnect(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _handler, route, presentation = _artifact_route(notebook_path)
+    handler, route, presentation = _artifact_route(notebook_path)
     released = Event()
 
     async def owned_support(*_args: object, **_kwargs: object) -> Response:
@@ -344,18 +350,6 @@ def test_support_route_releases_its_response_owner_after_disconnect(
         raise OSError("peer disconnected")
 
     monkeypatch.setattr(ready_handler_module, "support_response", owned_support)
-    adapters = SimpleNamespace(
-        peer_commands=SimpleNamespace(enable=lambda _location: None),
-        server=None,
-        session_state=None,
-        sessions=None,
-        projections=None,
-    )
-    handler = ReadyWorkspaceHandler(
-        cast(ServerAdapters, adapters),
-        cast(RuntimeRegistry, object()),
-        lambda _scope: SecurityPolicy(),
-    )
     try:
         with pytest.raises(OSError, match="peer disconnected"):
             asyncio.run(

@@ -23,7 +23,7 @@ from marimo_studio._artifacts.repository import (
 from marimo_studio._artifacts.retention import lease_published_artifact
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._workspace.project_manifest import CatalogProject
-from marimo_studio.errors import ViewProjectError
+from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers._host import provider_registry
 
 from ..artifact_test_support import (
@@ -396,8 +396,6 @@ def test_state_recovery_rejects_recreated_project_after_old_build_lock(
 def test_damaged_build_state_errors_name_the_view_and_the_next_step(
     tmp_path: Path,
 ) -> None:
-    from marimo_studio.errors import ConfigurationError
-
     project = _project(tmp_path)
     publish_artifact(project, "development")
     _profile_path(project, "development").write_text("{", encoding="utf-8")
@@ -414,8 +412,6 @@ def test_damaged_build_state_errors_name_the_view_and_the_next_step(
 
 
 def test_a_missing_published_revision_asks_for_a_rebuild(tmp_path: Path) -> None:
-    from marimo_studio.errors import ConfigurationError
-
     project = _project(tmp_path)
     publish_artifact(project, "development")
     shutil.rmtree(artifact_root(project) / "revisions")

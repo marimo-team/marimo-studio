@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -750,47 +751,61 @@ def test_publication_acquires_its_lease_before_replacing_the_profile_pointer(
     }
 
 
-def test_a_publication_with_more_diagnostics_than_a_receipt_holds_stays_readable(
+@pytest.mark.parametrize(
+    "case",
+    ("count", "long-text", "embedded-control"),
+)
+def test_publication_receipt_bounds_diagnostics(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    case: str,
 ) -> None:
-    import re
-
-    from marimo_studio.view_providers import ProjectDiagnostic
-    from marimo_studio.view_providers._host import provider_registry
-
     project = _project(tmp_path)
-    publish_artifact(project, "development")
-    _change_document(project, "warned generation")
+    if case == "count":
+        publish_artifact(project, "development")
+        _change_document(project, "warned generation")
     provider = provider_registry().get(project.provider)
     build = provider.build
+    payload = "x" * 65536 if case == "long-text" else "x\x01" * 32768
 
-    def warn_and_drop_a_site(request: Any) -> Any:
+    def wrapped(request: BuildRequest) -> BuildResult:
         result = build(request)
-        document = request.staging_root / result.document
-        document.write_text(
-            re.sub(r' data-marimo-studio-site="[^"]*"', "", document.read_text())
-        )
+        if case == "count":
+            document_path = result.document
+            assert document_path is not None
+            document = request.staging_root / document_path
+            document.write_text(
+                re.sub(r' data-marimo-studio-site="[^"]*"', "", document.read_text())
+            )
         return replace(
             result,
             diagnostics=tuple(
-                ProjectDiagnostic("compiler-warning", "warning", f"Warning {index}")
-                for index in range(512)
+                ProjectDiagnostic(
+                    "compiler-warning",
+                    "warning",
+                    f"Warning {index}" if case == "count" else payload,
+                )
+                for index in range(512 if case == "count" else 256)
             ),
         )
 
-    monkeypatch.setattr(provider, "build", warn_and_drop_a_site)
+    monkeypatch.setattr(provider, "build", wrapped)
     published = publish_artifact(project, "development")
 
     retained = read_published_artifact(project, "development")
     assert retained is not None
     assert retained.artifact_revision == published.artifact_revision
     diagnostics = read_build_state(project, "development").diagnostics
-    assert len(diagnostics) == 512
     assert diagnostics[-1].code == "build-diagnostics-truncated"
-    assert diagnostics[-1].message == (
-        "Studio kept the first 511 build diagnostics and omitted 2 more."
-    )
+    if case == "count":
+        assert len(diagnostics) == 512
+        assert diagnostics[-1].message == (
+            "Studio kept the first 511 build diagnostics and omitted 2 more."
+        )
+        return
+    assert _profile_path(project).stat().st_size < 16 * 1024 * 1024
+    assert diagnostics[0].message == payload
+    assert len(diagnostics) < 256
 
 
 def test_corrupt_sibling_profile_does_not_fail_a_completed_publication(
@@ -966,35 +981,3 @@ def test_stale_prepared_build_preserves_newer_publication_receipt(
     assert state.phase == "published"
     assert state.project_revision == current_revision
     assert _profile_path(project).read_bytes() == accepted
-
-
-@pytest.mark.parametrize("message", ("x" * 65536, "x\x01" * 32768))
-def test_publication_receipt_bounds_serialized_diagnostics(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    message: str,
-) -> None:
-    project = _project(tmp_path)
-    provider = provider_registry().get(project.provider)
-    build = provider.build
-
-    def verbose_build(request: BuildRequest) -> BuildResult:
-        return replace(
-            build(request),
-            diagnostics=tuple(
-                ProjectDiagnostic("compiler-warning", "warning", message)
-                for _ in range(256)
-            ),
-        )
-
-    monkeypatch.setattr(provider, "build", verbose_build)
-    published = publish_artifact(project, "development")
-
-    assert _profile_path(project).stat().st_size < 16 * 1024 * 1024
-    retained = read_published_artifact(project, "development")
-    assert retained is not None
-    assert retained.artifact_revision == published.artifact_revision
-    diagnostics = read_build_state(project, "development").diagnostics
-    assert diagnostics[0].message == message
-    assert diagnostics[-1].code == "build-diagnostics-truncated"
-    assert len(diagnostics) < 256
