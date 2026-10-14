@@ -103,6 +103,12 @@ const endpoint = (
   );
 };
 
+const holdSend = (registry: FakeRegistry) => {
+  const sent = Promise.withResolvers<null>();
+  const send = vi.fn<SendControlValues>(() => sent.promise);
+  return { controls: endpoint(registry, send), send, sent };
+};
+
 describe("Control endpoint", () => {
   test("connects iframe globals and publishes real ready events", () => {
     const frame = document.createElement("iframe");
@@ -369,21 +375,17 @@ describe("Control endpoint", () => {
   test("a closed endpoint dispatches no queued update", async () => {
     const registry = new FakeRegistry();
     registry.set("slider-0", 0);
-    const sent = Promise.withResolvers<null>();
-    const send = vi.fn<SendControlValues>(() => sent.promise);
-    const controls = endpoint(registry, send);
-
+    const { controls, send, sent } = holdSend(registry);
+    const closed = "The control endpoint closed before the update applied.";
     const first = controls.apply([{ objectId: "slider-0", value: 1 }]);
     const queued = controls.apply([{ objectId: "slider-0", value: 2 }]);
     await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
     controls.dispose();
     sent.resolve(null);
 
-    await expect(first).rejects.toThrow("The control endpoint closed before the update applied.");
-    await expect(queued).rejects.toThrow("The control endpoint closed before the update applied.");
-    await expect(controls.apply([{ objectId: "slider-0", value: 3 }])).rejects.toThrow(
-      "The control endpoint closed before the update applied.",
-    );
+    await expect(first).rejects.toThrow(closed);
+    await expect(queued).rejects.toThrow(closed);
+    await expect(controls.apply([{ objectId: "slider-0", value: 3 }])).rejects.toThrow(closed);
     expect(send).toHaveBeenCalledOnce();
     expect(registry.lookupValue("slider-0")).toBe(0);
   });
@@ -391,9 +393,7 @@ describe("Control endpoint", () => {
   test("a closed endpoint's late acknowledgement leaves its successor's value", async () => {
     const registry = new FakeRegistry();
     registry.set("slider-0", 0);
-    const sent = Promise.withResolvers<null>();
-    const send = vi.fn<SendControlValues>(() => sent.promise);
-    const retired = endpoint(registry, send);
+    const { controls: retired, send, sent } = holdSend(registry);
     const late = retired.apply([{ objectId: "slider-0", value: 1 }]);
     await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
     retired.dispose();
@@ -409,8 +409,7 @@ describe("Control endpoint", () => {
 
   test("a closed endpoint's rejected update withdraws only the controls it staged", async () => {
     const registry = new FakeRegistry();
-    const sent = Promise.withResolvers<null>();
-    const retired = endpoint(registry, () => sent.promise);
+    const { controls: retired, sent } = holdSend(registry);
     const late = retired.apply([
       { objectId: "pending-0", value: 1 },
       { objectId: "replaced-0", value: 1 },
