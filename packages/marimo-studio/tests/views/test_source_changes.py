@@ -656,3 +656,22 @@ def test_file_inputs_detect_an_addition_during_inspection(
     )
     assert provider.inspections == inspection_number + 1
     assert producer.poll() is None
+
+
+def test_a_cancelled_root_scan_skips_provider_inspection(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = created_one_view(notebook_path)
+    project = studio.views["dashboard"]
+    provider = _counting_registry(monkeypatch, project.provider)
+    monkeypatch.setattr(
+        source_changes,
+        "current_provider_cancellation",
+        lambda: SimpleNamespace(cancelled=True),
+    )
+
+    with pytest.raises(ConfigurationError, match="scan was cancelled"):
+        SourceChangeProducer(studio, project.name)
+
+    assert provider.inspections == 0

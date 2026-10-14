@@ -279,6 +279,10 @@ class SourceChangeProducer:
         except ConfigurationError:
             # A root larger than the watch budget, such as one holding
             # node_modules, still inspects. Only the edit-race check is skipped.
+            # A cancelled scan stops before the provider inspects.
+            cancellation = current_provider_cancellation()
+            if cancellation is not None and cancellation.cancelled:
+                raise
             return {}
 
     def _reinspect_project(
