@@ -817,7 +817,8 @@ export class PreviewDeck {
           runtime,
           view,
           active,
-          interactive: active && !stale && (controller?.readyForInteraction() ?? false),
+          interactive:
+            !this.restarted && active && !stale && (controller?.readyForInteraction() ?? false),
           primary: view === this.view,
         };
       }),

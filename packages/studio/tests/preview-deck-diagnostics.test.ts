@@ -57,6 +57,33 @@ const interactiveHarness = () => {
   return { preview, previewWindow, server };
 };
 
+it("blocks the preview frame once the Studio server restarts", () => {
+  const preview = frame("complete");
+  const previewWindow = { postMessage: vi.fn() };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const deck = previewDeck();
+  deck.attach(frame("complete"), new Map([["server", preview]]));
+  const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
+  for (const type of ["marimo-studio:receiver-ready", "marimo-studio:view-ready"] as const) {
+    dispatchPreviewMessage(previewWindow, {
+      type,
+      runtime: "server",
+      lifecycleId,
+      view: "dashboard",
+      revision: "revision-1",
+    });
+  }
+  expect(deck.getSnapshot().frames.find(({ active }) => active)?.interactive).toBe(true);
+
+  deck.serverRestarted();
+
+  expect(deck.getSnapshot().frames.find(({ active }) => active)?.interactive).toBe(false);
+  deck.dispose();
+});
+
 it("keeps an exact projection failure interactive while a runtime failure blocks the frame", () => {
   const preview = frame("complete");
   const previewWindow = { postMessage: vi.fn() };
