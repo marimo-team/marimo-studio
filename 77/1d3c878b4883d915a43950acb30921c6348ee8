@@ -1,0 +1,37 @@
+docs/reference/cli.md
+  s_44b9639489bcb6::t_c843b03855ed02 383-384
+packages/marimo-studio/tests/artifacts/test_build_lifecycle.py
+  s_44b9639489bcb6::t_b6dc1e87961aca 969-1000
+  s_80c04bef0fc32a::t_43469c660653ab 753-795
+packages/marimo-studio/src/marimo_studio/_artifacts/codec.py
+  s_44b9639489bcb6::t_637c384c9331ad 45-47,54-61,63
+  s_80c04bef0fc32a::t_6fb4e3309472cf 44,48-53,62,64-77,426,529
+packages/marimo-studio/tests/views/test_view_setup.py
+  s_80c04bef0fc32a::t_e24feaa00709b1 197,202-203
+  s_44b9639489bcb6::t_62711627cda2b4 1068-1105
+  s_44b9639489bcb6::t_c843b03855ed02 1106-1139
+packages/marimo-studio/tests/cli/test_cli_diagnostics.py
+  s_44b9639489bcb6::t_32f2c14548a497 687-689,733-735
+packages/marimo-studio/src/marimo_studio/_workspace/mutation_lock.py
+  s_44b9639489bcb6::t_c843b03855ed02 6,13,47-82,92-94,101
+  s_80c04bef0fc32a::t_fe21aae679a103 98,100
+  s_44b9639489bcb6::t_a1ba5d4ced88a6 99
+  s_80c04bef0fc32a::t_0f7fba223f563a 14
+packages/marimo-studio/tests/delivery/test_export_output.py
+  s_44b9639489bcb6::t_637c384c9331ad 293-295
+  s_44b9639489bcb6::t_b6dc1e87961aca 263-286,288-292,296-303
+packages/marimo-studio/src/marimo_studio/_delivery/export.py
+  s_44b9639489bcb6::t_637c384c9331ad 1031-1044,1046
+packages/marimo-studio/tests/agent/test_workspace.py
+  s_80c04bef0fc32a::t_9173340e57791d 829-836,838-854,856-857,868,875
+  s_80c04bef0fc32a::t_0a29c15b869348 870
+  s_44b9639489bcb6::t_5150988233c384 879-892
+  s_80c04bef0fc32a::t_ae83568c0582b5 40
+  s_80c04bef0fc32a::t_ed36095bae95fe 837,860
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "771d3c878b4883d915a43950acb30921c6348ee8",
+  "prompts": {}
+}
