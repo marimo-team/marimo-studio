@@ -522,7 +522,11 @@ it("opens an already-created first view after a bootstrap retry", async () => {
         bootstraps += 1;
         return bootstraps === 1
           ? Response.json(
-              { error: "temporary", message: "Bootstrap is temporarily unavailable." },
+              {
+                error: "temporary",
+                message: "Bootstrap is temporarily unavailable.",
+                hint: "Open the view again.",
+              },
               { status: 503 },
             )
           : Response.json(configured);
@@ -553,7 +557,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
   await user.click(await screen.findByRole("button", { name: "Create view" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Bootstrap is temporarily unavailable.",
+    "Bootstrap is temporarily unavailable. Open the view again.",
   );
   await user.click(screen.getByRole("button", { name: "Open dashboard" }));
   await vi.waitFor(() => expect(publishBootstrap).toHaveBeenCalledWith(configured));

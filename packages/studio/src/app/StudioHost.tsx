@@ -4,7 +4,6 @@ import {
   parseActiveViewRequest,
   type ActiveViewRequest,
 } from "@marimo-studio/protocol/development-events";
-import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import {
   EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
   publicNotebookQuery,
@@ -24,7 +23,7 @@ import { FirstViewToolbar } from "../features/views/FirstViewToolbar.tsx";
 import { createViewRemote } from "../features/views/remote.ts";
 import { preferredStarterId } from "../features/views/starters.ts";
 import { useEditorWorkspace } from "../shared/editor-workspace.ts";
-import { errorMessage } from "../shared/errors.ts";
+import { errorMessage, responseErrorMessage } from "../shared/errors.ts";
 import { StudioThemeProvider, useResolvedStudioTheme } from "../shared/theme.tsx";
 import { useControllerSnapshot } from "../shared/useControllerSnapshot.ts";
 import { StudioRoutes } from "./routes.ts";
@@ -41,17 +40,6 @@ interface StudioHostProps extends StudioOptions {
 }
 
 const responseJson = async (response: Response) => jsonValueSchema.parse(await response.json());
-
-const responseError = async (response: Response): Promise<string> => {
-  try {
-    return (
-      parseErrorResponse(await responseJson(response)).message ??
-      `Studio workspace request failed (${response.status})`
-    );
-  } catch {
-    return `Studio workspace request failed (${response.status})`;
-  }
-};
 
 const EDITOR_AUTHORITY_QUERY_KEYS = new Set([
   "file",
@@ -223,7 +211,12 @@ export const StudioHost = ({
           url.searchParams.set("marimo_studio_view", view);
           const response = await fetch(url, { cache: "no-store" });
           if (!response.ok) {
-            throw new Error(await responseError(response));
+            throw new Error(
+              await responseErrorMessage(
+                response,
+                `Studio workspace request failed (${response.status})`,
+              ),
+            );
           }
           const candidate = parseStudioBootstrap(await responseJson(response), response.url || url);
           if (!activeEditor || !trustedEditor) {

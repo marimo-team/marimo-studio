@@ -6,6 +6,8 @@ import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 import { parseViewProject } from "@marimo-studio/protocol/view-project";
 
+import { responseErrorMessage } from "../../shared/errors.ts";
+
 export interface RemoteSource {
   content: string;
   revision: string;
@@ -45,16 +47,6 @@ export class RevisionConflict extends Error {
 export class SourceUnavailable extends Error {}
 
 const responseJson = async (response: Response) => jsonValueSchema.parse(await response.json());
-
-const responseErrorMessage = async (response: Response, fallback: string): Promise<string> => {
-  try {
-    const error = parseErrorResponse(await responseJson(response));
-    const message = error.message ?? fallback;
-    return error.hint ? `${message} ${error.hint}` : message;
-  } catch {
-    return fallback;
-  }
-};
 
 export const createSourceRemote = (
   supportUrl: (view: string) => string,
