@@ -679,3 +679,46 @@ def test_kernel_projection_discards_staged_arrow_after_response_failure(
             encoder.close()
     finally:
         context.virtual_file_registry.shutdown()
+
+
+@pytest.mark.parametrize("display_method", ["_mime_", "_repr_json_"])
+def test_kernel_json_display_text_survives_server_fingerprint_validation(
+    display_method: str,
+) -> None:
+    from marimo_studio._compat.kernel_values.session import _parse_result
+
+    class Report:
+        pass
+
+    text = '{"papers": 3, "label": "\\u00e9"}'
+    setattr(
+        Report,
+        display_method,
+        lambda self: ("application/json", text) if display_method == "_mime_" else text,
+    )
+    result = _read_values(
+        {"report": Report(), "plain": {"papers": 3}},
+        _selectors("report", "plain"),
+    )
+    parsed = _parse_result(
+        result.to_dict(), expected_selectors=frozenset({"report", "plain"})
+    )
+    assert parsed.values == {
+        "report": _encoded_json({"papers": 3, "label": "é"}),
+        "plain": _encoded_json({"papers": 3}),
+    }
+    assert parsed.errors == {}
+
+
+def test_kernel_json_display_text_uses_encoded_value_for_byte_limits() -> None:
+    class Report:
+        def _mime_(self) -> tuple[str, str]:
+            return "application/json", '{   "papers" : 3   }'
+
+    result = _read_values(
+        {"report": Report()},
+        _selectors("report"),
+        limits=ValueLimits(json_value_bytes=12, json_read_bytes=12),
+    )
+    assert result.values == {"report": _encoded_json({"papers": 3})}
+    assert result.errors == {}

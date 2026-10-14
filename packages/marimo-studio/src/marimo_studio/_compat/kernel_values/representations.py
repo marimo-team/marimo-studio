@@ -154,6 +154,9 @@ class ValueEncoder:
         try:
             encoded = represent(value, JSON_ACCEPT).data
             parsed = json.loads(encoded)
+            encoded = json.dumps(
+                parsed, allow_nan=False, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
         except RepresentationTooLarge as error:
             return None, ValueReadError(
                 "value-too-large",
