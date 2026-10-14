@@ -117,8 +117,7 @@ activity. Each progress record names its owning source and nests that owner's
 event. With `--json`, stdout remains one terminal result and stderr contains
 JSON Lines progress and diagnostics. Events are flushed during environment
 re-entry. Five-second heartbeats report the phase, state, elapsed time, and
-latest cache evidence. Unavailable state, cache, or active-cell evidence is
-`null`.
+latest cache evidence. Unavailable state or cache evidence is `null`.
 
 Prepared keeps notebook source on the machine that runs the export and
 publishes prepared outputs. Browser includes saved notebook source for browser

@@ -32,7 +32,6 @@ def activity(
         "phase": phase,
         "state": None,
         "cache": None,
-        "cell": None,
     }
 
     def progress(event: StaticExportProgress) -> None:
@@ -53,7 +52,6 @@ def activity(
                     message = (
                         f"{status['phase']} | state {status['state'] or 'unavailable'}"
                         f" | {elapsed:.1f}s | cache {status['cache'] or 'unavailable'}"
-                        " | cell unavailable"
                     )
                     if not stream.emit(
                         code="heartbeat",

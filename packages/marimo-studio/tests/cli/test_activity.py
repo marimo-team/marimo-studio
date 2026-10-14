@@ -85,7 +85,6 @@ def test_heartbeat_reports_last_observed_state_and_stops_on_exit() -> None:
     )
     assert heartbeat["details"]["state"] == "reviewed"
     assert heartbeat["details"]["cache"]["authored_hits"] == 2
-    assert heartbeat["details"]["cell"] is None
     assert heartbeat["details"]["elapsed_seconds"] >= 0
 
 

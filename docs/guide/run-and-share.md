@@ -133,8 +133,7 @@ Export and preflight flush progress as it arrives, including when the CLI
 re-enters a project environment. Long operations emit a heartbeat every five
 seconds with phase, elapsed time, state name, and the latest cache evidence.
 `--json` keeps the terminal result on stdout and progress on stderr as JSONL.
-Unknown state or cache evidence is `null`. The current export API does not expose
-an active notebook cell, so the heartbeat's `cell` is `null`.
+Unknown state or cache evidence is `null`.
 
 Each Prepared export uses the authored notebook's `__marimo__/cache/`
 directory. [marimo's native cell cache](https://docs.marimo.io/api/caching/)
