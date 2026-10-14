@@ -372,6 +372,44 @@ test("prepared hosts show only targets their site permits", async () => {
   assert.equal(cell.dataset.marimoDiagnosticCode, "projection-target-not-allowed");
 });
 
+test("a prepared host rejected by a new site policy drops the runtime identity of its last target", async () => {
+  document.body.innerHTML = `
+    <div id="runtime"></div>
+    <marimo-output id="output" value="report.output"></marimo-output>
+    <marimo-cell id="cell" name="summary"></marimo-cell>
+  `;
+  const permitted = withHostSites(config);
+  commitRuntimeConfig(permitted);
+  projectionHosts.connect();
+  const handle = mountPreparedProjections({
+    root: document.querySelector<HTMLElement>("#runtime")!,
+    presentation,
+    theme,
+  });
+  handles.push(handle);
+  await handle.replace(snapshot("one"));
+  await settle();
+  const output = document.querySelector<HTMLElement>("#output")!;
+  const cell = document.querySelector<HTMLElement>("#cell")!;
+  assert.equal(output.dataset.runtimeCellId, "prepared-report-output");
+  assert.equal(cell.dataset.state, "ready");
+
+  commitRuntimeConfig({
+    ...permitted,
+    projectionRevision: "f".repeat(64),
+    sites: permitted.sites.map((site) => ({ ...site, targets: ["elsewhere"] })),
+  });
+  await settle();
+
+  assert.equal(output.dataset.state, "error");
+  assert.equal(output.dataset.marimoSelector, undefined);
+  assert.equal(output.dataset.runtimeCellId, undefined);
+  assert.equal(output.dataset.outputMime, undefined);
+  assert.equal(cell.dataset.state, "error");
+  assert.equal(cell.dataset.marimoSelector, undefined);
+  assert.equal(cell.dataset.runtimeCellId, undefined);
+});
+
 test("prepared generations replace hosts and retain the last good result", async () => {
   commitRuntimeConfig(config);
   document.body.innerHTML = `

@@ -53,6 +53,9 @@ const FailedProjection = ({ failure }: { failure: ProjectionFailure }) => (
 );
 
 const showFailure = (host: HTMLElement, failure: ProjectionFailure): void => {
+  delete host.dataset.marimoSelector;
+  delete host.dataset.outputMime;
+  setProjectionRuntimeCell(host, undefined);
   host.dataset.marimoDiagnosticCode = failure.code;
   host.dataset.marimoDiagnosticMessage = failure.message;
 };
