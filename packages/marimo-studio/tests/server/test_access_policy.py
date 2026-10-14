@@ -532,3 +532,15 @@ def test_view_asset_route_rejects_parent_paths(notebook_path: Path) -> None:
 
     assert traversal.status_code == 404
     assert symlink.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("header", "matches"),
+    [(b"token-1", True), (b"token-2", False), (b"\xff\xfe", False)],
+)
+def test_server_token_check_compares_header_bytes(header: bytes, matches: bool) -> None:
+    from marimo_studio._server.auth import server_token_matches
+
+    scope = {"type": "http", "headers": [(b"marimo-server-token", header)]}
+
+    assert server_token_matches(scope, "token-1") is matches
