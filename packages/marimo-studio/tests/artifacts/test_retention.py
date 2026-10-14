@@ -76,6 +76,28 @@ def test_development_rebuilds_prune_beside_a_receipt_from_another_format(
     ]
 
 
+@pytest.mark.parametrize("folder", ["revisions", ".pins", ".quarantine"])
+def test_foreign_files_in_artifact_state_do_not_block_builds(
+    tmp_path: Path,
+    folder: str,
+) -> None:
+    project = _project(tmp_path)
+    first = publish_artifact(project, "development")
+    foreign = artifact_root(project) / folder / ".DS_Store"
+    foreign.parent.mkdir(exist_ok=True)
+    foreign.write_bytes(b"finder")
+
+    _change_document(project, "next")
+    latest = publish_artifact(project, "development")
+    lease = lease_published_artifact(project, "development")
+    assert lease is not None
+    with lease:
+        assert lease.artifact.artifact_revision == latest.artifact_revision
+
+    assert latest.artifact_revision != first.artifact_revision
+    assert foreign.read_bytes() == b"finder"
+
+
 def test_prune_settles_when_revisions_disappear_after_validation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

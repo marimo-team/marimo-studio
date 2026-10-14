@@ -172,11 +172,13 @@ def _live_pin_revisions(
     live: dict[str, set[int]] = {}
     for directory in tree.children(root):
         if _DIGEST.fullmatch(directory.name) is None:
-            raise ConfigurationError(f"Artifact pin revision is invalid: {directory}")
+            _skip_foreign_entry(directory)
+            continue
         for pin in tree.children(directory):
             holder = _PIN.fullmatch(pin.name)
             if holder is None:
-                raise ConfigurationError(f"Artifact pin name is invalid: {pin}")
+                _skip_foreign_entry(pin)
+                continue
             # A pin whose holder exited unlocks, so a lock attempt that
             # succeeds identifies a stale pin.
             with tree.lock(pin, blocking=False, create=False) as stale:
@@ -192,6 +194,12 @@ def _live_pin_revisions(
     return live
 
 
+def _skip_foreign_entry(path: Path) -> None:
+    # Finder and sync clients drop files such as .DS_Store into any folder.
+    # Studio leaves entries it never creates in place and prunes around them.
+    _LOGGER.debug("Ignored an entry Studio did not create: %s", path)
+
+
 def _prune_quarantine_locked(project: CatalogProject) -> None:
     root = _quarantine_root(project)
     if not root.exists() and not root.is_symlink():
@@ -205,7 +213,8 @@ def _prune_quarantine_locked(project: CatalogProject) -> None:
     tree = FileTree(artifact_base(project))
     for path in tree.children(root):
         if _QUARANTINE.fullmatch(path.name) is None:
-            raise ConfigurationError(f"Artifact quarantine name is invalid: {path}")
+            _skip_foreign_entry(path)
+            continue
         try:
             tree.remove(path)
         except OSError:
@@ -290,7 +299,8 @@ def prune_artifacts_locked(project: CatalogProject) -> None:
         tree = FileTree(artifact_base(project))
         for path in tree.children(revisions):
             if _DIGEST.fullmatch(path.name) is None:
-                raise ConfigurationError(f"Artifact revision name is invalid: {path}")
+                _skip_foreign_entry(path)
+                continue
             if f"sha256:{path.name}" not in protected:
                 tree.remove(path)
     except FileNotFoundError:
