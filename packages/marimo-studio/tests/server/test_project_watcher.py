@@ -311,7 +311,7 @@ def test_emitter_stop_failure_retains_registration_for_retry_and_reacquisition(
         assert first.unscheduled == 0
         assert file_watcher._SHARED_WATCHDOG is not None
 
-        with pytest.raises(ProcessCleanupError, match="still retiring"):
+        with pytest.raises(ProcessCleanupError, match="injected emitter stop failure"):
             file_watcher._watchdog_owner(
                 plan,
                 asyncio.get_running_loop(),
@@ -776,6 +776,84 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
         assert watcher._observer is None
         assert watcher._notify_task is None or watcher._notify_task.done()
         assert not watcher._pending
+
+    asyncio.run(exercise())
+
+
+def test_project_watcher_reactivated_after_a_failed_close_retries_its_stop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.txt"
+    source.write_text("source", encoding="utf-8")
+
+    class Observer:
+        def __init__(self) -> None:
+            self.watch = object()
+            self.alive = True
+            self.stop_calls = 0
+            self.join_timeouts: list[float | None] = []
+
+        def start(self) -> None:
+            return
+
+        def schedule(
+            self,
+            _handler: object,
+            _path: str,
+            *,
+            recursive: bool,
+            event_filter: object = None,
+        ) -> object:
+            assert not recursive
+            return self.watch
+
+        def remove_handler_for_watch(
+            self,
+            _handler: object,
+            watch: object,
+        ) -> None:
+            assert watch is self.watch
+
+        def unschedule(self, watch: object) -> None:
+            assert watch is self.watch
+
+        def stop(self) -> None:
+            self.stop_calls += 1
+
+        def join(self, timeout: float | None = None) -> None:
+            self.join_timeouts.append(timeout)
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    observer = Observer()
+    monkeypatch.setattr(file_watcher, "_new_watchdog_observer", lambda: observer)
+    monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
+    monkeypatch.setattr(file_watcher, "_COALESCE_SECONDS", 0)
+
+    async def exercise() -> None:
+        watcher = file_watcher.PrivateProjectWatcher()
+        plan = ProjectWatchPlan((source,), ())
+
+        async def ignore(_path: Path) -> None:
+            return
+
+        await watcher.replace(plan, ignore)
+        with pytest.raises(ProcessCleanupError):
+            await asyncio.wait_for(watcher.close(), timeout=1)
+        failed_stop_attempts = observer.stop_calls
+
+        observer.alive = False
+        delivered = asyncio.Event()
+
+        async def callback(_path: Path) -> None:
+            delivered.set()
+
+        await watcher.replace(plan, callback)
+        await asyncio.wait_for(delivered.wait(), timeout=1)
+        assert observer.stop_calls > failed_stop_attempts
+        await watcher.close()
 
     asyncio.run(exercise())
 
