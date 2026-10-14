@@ -240,7 +240,7 @@ class ReadyWorkspaceHandler:
                 send,
             )
         else:
-            await _send_response(response, route.scope, receive, send)
+            await _send_artifact_response(response, route.scope, receive, send)
 
     async def _artifact_response(
         self,
@@ -324,13 +324,3 @@ async def _send_artifact_response(
         await response(scope, receive, send)
     finally:
         await _finish_cleanup(lambda: close_artifact_response(response))
-
-
-async def _send_response(
-    response: Response,
-    scope: Scope,
-    receive: Receive,
-    send: Send,
-) -> None:
-    response.headers.setdefault("Cache-Control", "no-store")
-    await response(scope, receive, send)
