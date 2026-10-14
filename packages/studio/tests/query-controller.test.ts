@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vite-plus/test";
 import type { EditorQuerySyncResult } from "../src/features/preview/query-remote.ts";
 
 import { PreviewQueryController } from "../src/features/preview/query-controller.ts";
+import { QuerySyncRejectedError } from "../src/features/preview/query-remote.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 
 type SyncEditorQuery = ConstructorParameters<typeof PreviewQueryController>[3];
@@ -200,6 +201,37 @@ it("reports a rejected editor write until its retry recovers", async () => {
   await vi.runOnlyPendingTimersAsync();
   await vi.waitFor(() => expect(statuses.at(-1)).toBe("ready"));
 
+  expect(sync).toHaveBeenCalledTimes(2);
+  controller.cancel();
+});
+
+it("stops sending a query the server refused until the query changes", async () => {
+  vi.useFakeTimers();
+  const sync = vi
+    .fn<SyncEditorQuery>()
+    .mockRejectedValueOnce(
+      new QuerySyncRejectedError("The query may contain at most 100 fields.", undefined),
+    )
+    .mockResolvedValueOnce("accepted");
+  const statuses: string[] = [];
+  const controller = new PreviewQueryController(
+    "wasm",
+    frame(),
+    vi.fn(),
+    sync,
+    vi.fn(),
+    "",
+    (status) => statuses.push(status.phase),
+  );
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+  controller.previewChanged("region=apac");
+  await vi.waitFor(() => expect(statuses.at(-1)).toBe("degraded"));
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  expect(sync).toHaveBeenCalledOnce();
+
+  controller.previewChanged("region=emea");
+  await vi.waitFor(() => expect(statuses.at(-1)).toBe("ready"));
   expect(sync).toHaveBeenCalledTimes(2);
   controller.cancel();
 });

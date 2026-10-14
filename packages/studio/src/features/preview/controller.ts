@@ -30,6 +30,7 @@ import { ControlRequestError, fetchRuntimeControls } from "./control-remote.ts";
 import { releaseFrameBridge, resizeFrame } from "./frame-bridge.ts";
 import { PreviewMutationBarriers } from "./mutation-barriers.ts";
 import { PreviewQueryController, type QuerySyncStatus } from "./query-controller.ts";
+import { QuerySyncRejectedError } from "./query-remote.ts";
 import { RetrySchedule } from "./retry-schedule.ts";
 import { RuntimeDiagnostics } from "./runtime-diagnostics.ts";
 import { previewStatus, type PreviewStatus } from "./status.ts";
@@ -793,13 +794,18 @@ export class PreviewController {
       return;
     }
     this.queryPhase = status.phase;
+    const rejected = status.error instanceof QuerySyncRejectedError ? status.error : undefined;
     this.queryDiagnostic =
       status.phase === "degraded"
         ? this.lifecycleDiagnostic(
             "query-sync-failed",
             "warning",
-            "Query state could not be synchronized.",
-            status.error?.message ?? "Retry the current query.",
+            rejected
+              ? `Query state could not be synchronized. ${rejected.message}`
+              : "Query state could not be synchronized.",
+            rejected
+              ? (rejected.hint ?? "Change the query, then try again.")
+              : (status.error?.message ?? "Retry the current query."),
           )
         : undefined;
     if (this.admission.viewIsReady) {
