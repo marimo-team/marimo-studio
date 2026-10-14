@@ -282,9 +282,15 @@ export const StudioHost = ({
           return;
         }
         void workspaceStreamRetired(streamUrl).then((retired) => {
-          if (!retired && events === stream && !closed) {
-            reconnect = setTimeout(connect, reconnects.next());
+          if (events !== stream || closed) {
+            return;
           }
+          // A restarted server issues new URLs, and only the host page carries them.
+          if (retired) {
+            globalThis.location.reload();
+            return;
+          }
+          reconnect = setTimeout(connect, reconnects.next());
         });
       });
       stream.addEventListener("activate", (event) => {

@@ -289,6 +289,59 @@ it("replaces a first-view event stream the browser closed", async () => {
   editorFrame.remove();
 });
 
+it("reloads the first-view page once a server restart retires its event stream", async () => {
+  const streams: ClosingEventSource[] = [];
+  class ClosingEventSource {
+    static readonly CLOSED = 2;
+    readonly listeners = new Map<string, (event: Event) => void>();
+    readyState = 1;
+
+    constructor() {
+      streams.push(this);
+    }
+
+    addEventListener(type: string, listener: (event: Event) => void): void {
+      this.listeners.set(type, listener);
+    }
+
+    close(): void {
+      this.readyState = ClosingEventSource.CLOSED;
+    }
+  }
+  vi.stubGlobal("EventSource", ClosingEventSource);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      input instanceof URL && input.pathname === "/_marimo-studio/dev/events"
+        ? new Response(null, { status: 204 })
+        : Response.json(viewList([], "dashboard", [starter])),
+    ),
+  );
+  const editorFrame = document.createElement("iframe");
+  document.body.append(editorFrame);
+  const { unmount } = render(
+    <StudioHost
+      host={host}
+      editorFrame={editorFrame}
+      editorSource={editorFrame.src}
+      publishBootstrap={vi.fn()}
+      brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+    />,
+  );
+  await vi.waitFor(() => expect(streams).toHaveLength(1));
+  const reload = vi.fn();
+  vi.stubGlobal("location", { reload });
+
+  const retired = streams[0]!;
+  retired.readyState = ClosingEventSource.CLOSED;
+  retired.listeners.get("error")?.(new Event("error"));
+
+  await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  expect(streams).toHaveLength(1);
+  unmount();
+  editorFrame.remove();
+});
+
 it("refreshes first-view ownership after a create conflict", async () => {
   vi.stubGlobal("EventSource", EventSourceStub);
   const initialGeneration = viewGeneration(10);
