@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from starlette.testclient import TestClient
+
+import marimo_studio._server.request_body as request_body_module
 
 from ..agent_support import agent_edit_server
 
@@ -144,29 +147,44 @@ def test_a_refused_active_view_handoff_explains_the_conflict(
     }
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        pytest.param(
-            b'{"writeGeneration":' + b"9" * 5000 + b"}",
-            id="oversized-integer",
-            marks=pytest.mark.skipif(
-                not 0 < getattr(sys, "get_int_max_str_digits", lambda: 0)() <= 5000,
-                reason="json.loads limits integer digits from Python 3.10.7",
-            ),
-        ),
-        pytest.param(b"[" * 4096 + b"0" + b"]" * 4096, id="deep-nesting"),
-    ],
+@pytest.mark.skipif(
+    not 0 < getattr(sys, "get_int_max_str_digits", lambda: 0)() <= 5000,
+    reason="json.loads limits integer digits from Python 3.10.7",
 )
-def test_json_beyond_the_decoder_limits_is_invalid_json(
+def test_an_integer_beyond_the_decoder_digit_limit_is_invalid_json(
     notebook_path: Path,
-    body: bytes,
 ) -> None:
     server = agent_edit_server(notebook_path)
 
     with TestClient(server.app) as client:
         response = client.post(
-            "/_marimo-studio/views", content=body, headers=server.headers
+            "/_marimo-studio/views",
+            content=b'{"writeGeneration":' + b"9" * 5000 + b"}",
+            headers=server.headers,
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid-json"
+
+
+def test_json_nested_beyond_the_decoder_recursion_limit_is_invalid_json(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The decoder's nesting limit depends on the interpreter and its C stack.
+    # Python 3.14 parses 20,000 levels, more than this route's body limit
+    # holds, so the decoder raises its RecursionError directly here.
+    def exceed_recursion_limit(_source: str) -> object:
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(
+        request_body_module, "json", SimpleNamespace(loads=exceed_recursion_limit)
+    )
+    server = agent_edit_server(notebook_path)
+
+    with TestClient(server.app) as client:
+        response = client.post(
+            "/_marimo-studio/views", content=b"[[[0]]]", headers=server.headers
         )
 
     assert response.status_code == 400
