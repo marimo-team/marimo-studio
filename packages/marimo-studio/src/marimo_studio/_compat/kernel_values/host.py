@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -153,14 +154,17 @@ class PrivateKernelProjectionHost:
             WeakKeyDictionary()
         )
 
-    def _live_state(self, session: Any) -> _LiveProjectionState:
-        signature = _executed_signature(session)
-        current = self._live_states.get(session)
-        if current is not None and current.signature == signature:
+    async def _live_state(self, session: Any) -> _LiveProjectionState:
+        while True:
+            signature = _executed_signature(session)
+            current = self._live_states.get(session)
+            if current is not None and current.signature == signature:
+                return current
+            current = await asyncio.to_thread(_build_live_projection_state, signature)
+            if _executed_signature(session) != signature:
+                continue
+            self._live_states[session] = current
             return current
-        current = _build_live_projection_state(signature)
-        self._live_states[session] = current
-        return current
 
     async def read_values(
         self,
@@ -181,7 +185,7 @@ class PrivateKernelProjectionHost:
                 transient=True,
                 status_code=409,
             )
-        state = self._live_state(session)
+        state = await self._live_state(session)
         return await read_session_values(
             session,
             revision,
@@ -209,7 +213,7 @@ class PrivateKernelProjectionHost:
                 transient=True,
                 status_code=409,
             )
-        state = self._live_state(session)
+        state = await self._live_state(session)
         return await render_session_outputs(
             session,
             revision,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import sys
@@ -602,3 +603,130 @@ def test_kernel_rejects_a_new_producer_after_capability_binding(
     graph.parents["runtime-summary"] = {"runtime-missing"}
     with pytest.raises(ProjectionAuthorizationError, match="dependency closure"):
         _current_selectors(context, authorized)
+
+
+@pytest.mark.parametrize("operation", ["read_values", "render_outputs"])
+def test_projection_host_builds_live_state_while_the_event_loop_remains_available(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    from threading import Event
+
+    from marimo_studio._compat.kernel_values import host as host_module
+    from marimo_studio._projections.runtime_records import (
+        OutputRenderResult,
+        ValueReadResult,
+    )
+
+    class Session:
+        document = SimpleNamespace(cells=[SimpleNamespace(id="runtime-summary")])
+        session_view = SimpleNamespace(
+            last_executed_code={"runtime-summary": "summary = {'total': 3}"}
+        )
+
+    session = Session()
+    host = host_module.PrivateKernelProjectionHost()
+    pulse = Event()
+    original = host_module._build_live_projection_state
+
+    def build(signature: Any) -> Any:
+        assert pulse.wait(1), "Projection compilation blocked the event loop"
+        return original(signature)
+
+    async def invoke(*_args: Any, **_kwargs: Any) -> Any:
+        return (
+            ValueReadResult({}, {})
+            if operation == "read_values"
+            else OutputRenderResult({}, {})
+        )
+
+    monkeypatch.setattr(host_module, "current_session", lambda *_: session)
+    monkeypatch.setattr(host_module, "_build_live_projection_state", build)
+    monkeypatch.setattr(host_module, "read_session_values", invoke)
+    monkeypatch.setattr(host_module, "render_session_outputs", invoke)
+
+    async def exercise() -> None:
+        asyncio.get_running_loop().call_soon(pulse.set)
+        await getattr(host, operation)(
+            SimpleNamespace(),
+            "session",
+            "revision-1",
+            (_projection(),),
+            (_projection(),),
+            consumer_id="preview-a",
+            runtime_cell_refs={_projection().producer: "runtime-summary"},
+        )
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("changes_during_build", [False, True])
+def test_projection_host_revalidates_changed_execution_before_invoking_the_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+    changes_during_build: bool,
+) -> None:
+    from threading import Event
+
+    from marimo_studio._compat.kernel_values import host as host_module
+    from marimo_studio._projections.runtime_records import ValueReadResult
+
+    class Session:
+        document = SimpleNamespace(cells=[SimpleNamespace(id="runtime-summary")])
+        session_view = SimpleNamespace(
+            last_executed_code={"runtime-summary": "summary = {'total': 3}"}
+        )
+
+    session = Session()
+    host = host_module.PrivateKernelProjectionHost()
+    original = host_module._build_live_projection_state
+    builds: list[Any] = []
+    reads: list[str] = []
+    pulse = Event()
+    loop: Any = None
+
+    def change() -> None:
+        session.session_view.last_executed_code["runtime-summary"] = "moved = 3"
+        pulse.set()
+
+    def build(signature: Any) -> Any:
+        builds.append(signature)
+        if changes_during_build and len(builds) == 1:
+            loop.call_soon_threadsafe(change)
+            assert pulse.wait(1)
+        return original(signature)
+
+    async def read(*_args: Any, **_kwargs: Any) -> ValueReadResult:
+        reads.append("read")
+        return ValueReadResult({}, {})
+
+    monkeypatch.setattr(host_module, "current_session", lambda *_: session)
+    monkeypatch.setattr(host_module, "_build_live_projection_state", build)
+    monkeypatch.setattr(host_module, "read_session_values", read)
+
+    async def invoke() -> None:
+        await host.read_values(
+            cast(Any, SimpleNamespace()),
+            "session",
+            "revision-1",
+            (_projection(),),
+            (_projection(),),
+            consumer_id="preview-a",
+            runtime_cell_refs={_projection().producer: "runtime-summary"},
+        )
+
+    async def exercise() -> None:
+        nonlocal loop
+        loop = asyncio.get_running_loop()
+        if not changes_during_build:
+            await invoke()
+            await invoke()
+            assert len(builds) == 1
+            assert reads == ["read", "read"]
+            change()
+        with pytest.raises(ProjectionUnavailable) as raised:
+            await invoke()
+        assert raised.value.code == "stale-projection-binding"
+        assert len(builds) == 2
+        assert reads == ([] if changes_during_build else ["read", "read"])
+
+    asyncio.run(exercise())
