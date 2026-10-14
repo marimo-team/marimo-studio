@@ -276,15 +276,11 @@ def _manifest_owner_generations(
         workspace = materialize_studio_workspace(studio)
     except (MarimoStudioError, OSError):
         workspace = None
-    if workspace is not None:
-        if view_name in workspace.view_generations:
-            return (
-                workspace.catalog_generation,
-                workspace.view_generations[view_name],
-            )
-        target = studio.view_root / view_name
-        if not target.is_dir() or not (target / VIEW_MANIFEST_PATH.name).is_file():
-            raise ViewGenerationConflictError(view_name, None)
+    if workspace is not None and view_name in workspace.view_generations:
+        return (
+            workspace.catalog_generation,
+            workspace.view_generations[view_name],
+        )
     target = studio.view_root / view_name
     if not target.is_dir() or not (target / VIEW_MANIFEST_PATH.name).is_file():
         raise ViewGenerationConflictError(view_name, None)

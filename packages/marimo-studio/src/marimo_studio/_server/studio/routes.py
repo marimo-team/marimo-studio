@@ -130,8 +130,8 @@ async def create_view_response(
             "invalid-view-create-request",
             "View creation requires name, starter, and catalog generation.",
         )
-    name = body.get("name") if isinstance(body, dict) else None
-    starter = body.get("starter") if isinstance(body, dict) else None
+    name = body.get("name")
+    starter = body.get("starter")
     catalog_generation = _owner_generation(body.get("catalog_generation"))
     if not isinstance(name, str):
         return _invalid_request("invalid-view-name", "name must be a string.")

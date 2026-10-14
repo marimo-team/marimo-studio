@@ -52,9 +52,6 @@ from marimo_studio._server.presentation.access import (
     replace_relative_path,
     send_capability_app,
 )
-from marimo_studio._server.presentation.capability import (
-    PresentationCapabilityRoute,
-)
 from marimo_studio._server.presentation.session import (
     assign_presentation_session,
     presentation_session_redirect,
@@ -508,7 +505,7 @@ class PresentationMiddleware:
                 lifecycle.definition.default_view
                 if isinstance(lifecycle, (NeedsView, Invalid))
                 and lifecycle.definition is not None
-                else _request_view_name(relative, None)
+                else _request_view_name(relative)
             )
         )
         presentation_session = resolve_presentation_session(
@@ -609,10 +606,5 @@ def _accepts_json(request: Request) -> bool:
     return "application/json" in request.headers.get("accept", "")
 
 
-def _request_view_name(
-    relative: str,
-    capability: PresentationCapabilityRoute | None,
-) -> str:
-    if capability is not None:
-        return capability.view
+def _request_view_name(relative: str) -> str:
     return relative.strip("/").split("/", 1)[0]
