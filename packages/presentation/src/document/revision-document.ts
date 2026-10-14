@@ -35,6 +35,23 @@ const commitHistory = (mode: RevisionHistoryMode, url: string | null): void => {
   }
 };
 
+// A transport failure, for example during a server restart, retries on its own.
+const fetchDocument = async (url: string, init: RequestInit): Promise<Response> => {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    if (init.signal?.aborted) {
+      throw error;
+    }
+    throw new RuntimeConfigRequestError(
+      "The preview could not reach the Studio server.",
+      "presentation-unavailable",
+      true,
+      "Wait for the Studio server to become available.",
+    );
+  }
+};
+
 const scrollToFragment = (url: string | null): void => {
   if (url === null) {
     return;
@@ -107,7 +124,7 @@ export class DocumentRevisionAdapter {
     let previousShell: HTMLElement | undefined;
     let shellMorphed = false;
     try {
-      const response = await fetch(nextDocumentUrl, {
+      const response = await fetchDocument(nextDocumentUrl, {
         cache: "no-store",
         headers: {
           Accept: "application/json",
@@ -351,7 +368,7 @@ export class DocumentRevisionAdapter {
     config: ReturnType<typeof getRuntimeConfig>,
     signal: AbortSignal,
   ): Promise<void> {
-    const response = await fetch(documentUrl, {
+    const response = await fetchDocument(documentUrl, {
       cache: "no-store",
       headers: {
         "Marimo-Studio-Preview-Session-Id": this.presentationSessionId,

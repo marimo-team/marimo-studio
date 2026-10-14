@@ -754,6 +754,28 @@ test("failed document refresh preserves error context in browser diagnostics", a
   }
 });
 
+test("an unreachable document server reports a refresh that retries on its own", async () => {
+  const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
+  const { refreshDiagnostic } = await import("../src/document/presentation-refresh.ts");
+  document.body.innerHTML = '<main id="app-shell">Retained report</main>';
+  commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
+  const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    }),
+  );
+
+  const failure = await adapter
+    .replace("/dashboard/", "/support/new", new AbortController().signal, vi.fn())
+    .catch((cause: unknown) => cause);
+
+  expect(failure).toMatchObject({ transient: true });
+  expect(refreshDiagnostic(failure, "dashboard").severity).toBe("warning");
+  expect(document.querySelector("#app-shell")?.textContent).toBe("Retained report");
+});
+
 test("an exact refresh rejects another revision before replacing its retained presentation", async () => {
   const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
   document.body.innerHTML = '<main id="app-shell">Retained report</main>';
