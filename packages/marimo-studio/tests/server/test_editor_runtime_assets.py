@@ -925,3 +925,40 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
     assert [response.content for response in before] == [
         response.content for response in after
     ]
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/assets/index-STALE123.js", "/assets/cells-STALE123.js"],
+)
+def test_a_missing_editor_asset_keeps_marimos_not_found_response(path: str) -> None:
+    from starlette.responses import PlainTextResponse
+
+    sent: list[Message] = []
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "headers": [],
+        "query_string": b"",
+    }
+    asyncio.run(
+        PrivateEditorRuntimeBootstrap().serve(
+            PlainTextResponse("Not Found", status_code=404),
+            scope,
+            receive,
+            send,
+            resource_path=path,
+            eager_runtime=True,
+        )
+    )
+
+    assert [message["status"] for message in sent if "status" in message] == [404]
+    assert b"".join(message.get("body", b"") for message in sent) == b"Not Found"
