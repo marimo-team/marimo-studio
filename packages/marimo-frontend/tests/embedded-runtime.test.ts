@@ -29,7 +29,9 @@ import type {
   EmbeddedRuntimeView,
   EmbeddedServerTransport,
   EmbeddedThemeSource,
+  EmbeddedTransport,
   EmbeddedWasmTransport,
+  MountEmbeddedRuntimeOptions,
 } from "../src/embedded-runtime.tsx";
 import type { SessionId } from "../src/session-bootstrap.ts";
 
@@ -313,6 +315,42 @@ const wasmTransport = (
   waitForReady,
 });
 
+interface ReadRuntimeOptions {
+  readonly autoInstantiate?: boolean;
+  readonly ignoreInitialization?: boolean;
+}
+
+const readMount = (
+  transport: EmbeddedTransport,
+  options?: ReadRuntimeOptions,
+): MountEmbeddedRuntimeOptions => ({
+  autoInstantiate: options?.autoInstantiate ?? false,
+  exposeSession: false,
+  initialMode: "read",
+  presentation: presentation(),
+  render: () => null,
+  root: root(),
+  theme: createThemeSource().source,
+  transport,
+  viewMode: "read",
+});
+
+const mountReadRuntime = async (
+  host: RuntimeHostDouble,
+  transport: EmbeddedTransport,
+  options?: ReadRuntimeOptions,
+): Promise<EmbeddedRuntimeHandle> => {
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  let handle!: EmbeddedRuntimeHandle;
+  await act(async () => {
+    handle = mountEmbeddedRuntime(readMount(transport, options));
+    await (options?.ignoreInitialization
+      ? handle.initialized.catch(() => undefined)
+      : handle.initialized);
+  });
+  return handle;
+};
+
 beforeEach(() => {
   document.body.replaceChildren();
   delete globalThis.__MARIMO_STUDIO_SESSION_ID__;
@@ -523,12 +561,10 @@ test("retries only failed disposal work", async () => {
 });
 
 test("disposal retries the cleanup of a transport that failed to start", async () => {
-  const theme = createThemeSource();
   const host = new RuntimeHostDouble();
-  const startupError = new Error("worker failed to start");
   let releaseAttempts = 0;
   host.transport.prepareWasm = () => {
-    throw startupError;
+    throw new Error("worker failed to start");
   };
   host.transport.releaseWasm = () => {
     releaseAttempts += 1;
@@ -536,23 +572,7 @@ test("disposal retries the cleanup of a transport that failed to start", async (
       throw new Error("worker release failed");
     }
   };
-  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
-  let handle!: EmbeddedRuntimeHandle;
-
-  await act(async () => {
-    handle = mountEmbeddedRuntime({
-      autoInstantiate: false,
-      exposeSession: false,
-      initialMode: "read",
-      presentation: presentation(),
-      render: () => null,
-      root: root(),
-      theme: theme.source,
-      transport: wasmTransport(),
-      viewMode: "read",
-    });
-    await handle.initialized.catch(() => undefined);
-  });
+  const handle = await mountReadRuntime(host, wasmTransport(), { ignoreInitialization: true });
   await expect(handle.initialized).rejects.toBeInstanceOf(AggregateError);
 
   await act(async () => handle.dispose());
@@ -561,26 +581,10 @@ test("disposal retries the cleanup of a transport that failed to start", async (
 });
 
 test("disposal retries the cleanup of a server transport update that failed to start", async () => {
-  const theme = createThemeSource();
   const host = new RuntimeHostDouble();
   const { runtime } = host.transport;
   const originalGetWsURL = runtime.getWsURL;
-  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
-  let handle!: EmbeddedRuntimeHandle;
-  await act(async () => {
-    handle = mountEmbeddedRuntime({
-      autoInstantiate: true,
-      exposeSession: false,
-      initialMode: "read",
-      presentation: presentation(),
-      render: () => null,
-      root: root(),
-      theme: theme.source,
-      transport: serverTransport(),
-      viewMode: "read",
-    });
-    await handle.initialized;
-  });
+  const handle = await mountReadRuntime(host, serverTransport(), { autoInstantiate: true });
   let patchedGetWsURL = runtime.getWsURL;
   // Another owner wraps the URL method while request activation fails, so
   // the update cannot restore the URL patch it applied.
@@ -664,25 +668,13 @@ test("reports synchronous transport failures through the handle", async () => {
 
 test("restores the previous server transport when an update fails", async () => {
   const host = new RuntimeHostDouble();
-  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
-  let handle!: EmbeddedRuntimeHandle;
-  await act(async () => {
-    handle = mountEmbeddedRuntime({
-      autoInstantiate: false,
-      exposeSession: false,
-      initialMode: "read",
-      presentation: presentation(),
-      render: () => null,
-      root: root(),
-      theme: createThemeSource().source,
-      transport: serverTransport((url) => {
-        url.searchParams.set("revision", "first");
-        return url;
-      }),
-      viewMode: "read",
-    });
-    await handle.initialized;
-  });
+  const handle = await mountReadRuntime(
+    host,
+    serverTransport((url) => {
+      url.searchParams.set("revision", "first");
+      return url;
+    }),
+  );
   const activate = host.transport.activateServerRequests.bind(host.transport);
   vi.spyOn(host.transport, "activateServerRequests")
     .mockImplementationOnce(() => {
@@ -814,7 +806,6 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
 });
 
 test("a mount rollback leaves no unhandled transport startup failure", async () => {
-  const theme = createThemeSource();
   const host = new RuntimeHostDouble();
   host.transport.prepareWasm = () => {
     throw new Error("worker failed to start");
@@ -825,19 +816,7 @@ test("a mount rollback leaves no unhandled transport startup failure", async () 
   process.on("unhandledRejection", unhandled);
 
   try {
-    expect(() =>
-      mountEmbeddedRuntime({
-        autoInstantiate: false,
-        exposeSession: false,
-        initialMode: "read",
-        presentation: presentation(),
-        render: () => null,
-        root: root(),
-        theme: theme.source,
-        transport: wasmTransport(),
-        viewMode: "read",
-      }),
-    ).toThrow("runtime render failed");
+    expect(() => mountEmbeddedRuntime(readMount(wasmTransport()))).toThrow("runtime render failed");
     // Node reports unhandled rejections after the microtask queue drains.
     await new Promise((resolve) => setTimeout(resolve, 0));
   } finally {
