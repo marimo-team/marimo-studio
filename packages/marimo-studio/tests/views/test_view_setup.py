@@ -37,8 +37,10 @@ from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio._workspace.view_owners import load_view_owner, view_owner_path
 from marimo_studio.errors import (
     ConfigurationError,
+    InvalidViewNameError,
     NotebookSourceError,
     ViewExistsError,
+    ViewNotFoundError,
 )
 from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import StarterPlan
@@ -130,6 +132,17 @@ def test_unreadable_view_folder_is_a_configuration_error(
         f"Studio cannot read view folder {locked}. Fix its permissions or move "
         f"it out of {locked.parent}, then retry."
     )
+
+
+def test_an_empty_view_name_never_selects_the_default_view(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+
+    with pytest.raises(InvalidViewNameError):
+        prepare_view(notebook_path, "")
+    with pytest.raises(ViewNotFoundError):
+        load_studio(notebook_path).view("")
 
 
 @pytest.mark.parametrize("name", ("con", "a" * 241))

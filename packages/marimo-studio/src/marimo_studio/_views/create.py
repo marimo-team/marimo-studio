@@ -165,8 +165,12 @@ def _validate_view_creation(
         config_snapshot.config_identity if config_snapshot is not None else None
     )
     _require_notebook_config_identity(config_snapshot, saved_notebook)
-    selected = name or (
-        studio.default_view if studio is not None else DEFAULT_VIEW_NAME
+    selected = (
+        name
+        if name is not None
+        else studio.default_view
+        if studio is not None
+        else DEFAULT_VIEW_NAME
     )
     validate_view_name(selected)
     locations = (
@@ -340,8 +344,10 @@ def prepare_view(
                     current_generation = locked_studio.config_generation
             if current_generation != expected_catalog_generation:
                 raise WorkspaceGenerationConflictError()
-        locked_selected = name or (
-            locked_studio.default_view
+        locked_selected = (
+            name
+            if name is not None
+            else locked_studio.default_view
             if locked_studio is not None
             else DEFAULT_VIEW_NAME
         )

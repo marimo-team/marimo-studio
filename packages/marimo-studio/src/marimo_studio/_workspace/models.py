@@ -100,7 +100,7 @@ class StudioWorkspace(StudioDefinition):
             raise ConfigurationError("View generations must match the view catalog")
 
     def view(self, name: str | None = None) -> CatalogProject:
-        selected = name or self.default_view
+        selected = self.default_view if name is None else name
         try:
             return self.views[selected]
         except KeyError as error:

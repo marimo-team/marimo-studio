@@ -191,3 +191,16 @@ def test_view_remove_requires_yes_for_noninteractive_use(
     assert result.stdout == ""
     assert "Pass --yes" in result.stderr
     assert "report" in load_studio(notebook_path).views
+
+
+@pytest.mark.parametrize("command", ("build", "inspect", "hold"))
+def test_cli_rejects_an_empty_view_name(notebook_path: Path, command: str) -> None:
+    prepare_view(notebook_path)
+    owner = ["--owner", "editor"] if command == "hold" else []
+
+    result = CliRunner().invoke(
+        cli, ["view", command, "", "--target", str(notebook_path), *owner]
+    )
+
+    assert result.exit_code == 2
+    assert "must name a view" in result.output
