@@ -333,8 +333,8 @@ def _zero_python_runtime_config(
     artifact: ViewArtifact,
     document: str,
     notebook_source: str,
-    publication: StaticPublication,
-) -> tuple[str, bytes, bytes, _assets.BrowserEntryClosure]:
+    publication: StaticPublication | None,
+) -> tuple[str, bytes, bytes | None, _assets.BrowserEntryClosure]:
     cell_refs = resolved.runtime_cell_refs(None)
     paths = _StaticViewPaths.of(view_name, artifact)
     sites = tuple(site.to_dict() for site in artifact.sites)
@@ -344,11 +344,13 @@ def _zero_python_runtime_config(
         source_revision=_digest(
             notebook_source,
             studio.config_path.read_text(encoding="utf-8"),
-            publication.state_space_source.digest,
+            publication.state_space_source.digest if publication is not None else "",
         ),
         view=view_name,
         runtime_id="zero-python",
-        runtime_instance=publication.instance,
+        runtime_instance=publication.instance
+        if publication is not None
+        else artifact.artifact_revision,
         sites=sites,
         projection_targets=targets,
         projection_policy=policy,
@@ -360,9 +362,15 @@ def _zero_python_runtime_config(
         view=view_name,
         views=(view_name,),
         runtime_id="zero-python",
-        runtime_instance=publication.instance,
-        runtime_data={"planDigest": publication.plan_digest},
-        runtime_paths={"manifest": f"{paths.support}/zero-python/current"},
+        runtime_instance=publication.instance
+        if publication is not None
+        else artifact.artifact_revision,
+        runtime_data={"planDigest": publication.plan_digest}
+        if publication is not None
+        else {},
+        runtime_paths={"manifest": f"{paths.support}/zero-python/current"}
+        if publication is not None
+        else {},
         public_root_path="/",
         document_root_path="/",
         support_path=paths.support,
@@ -385,7 +393,7 @@ def _zero_python_runtime_config(
         view_name,
         document,
         artifact.artifact_revision,
-        publication.instance,
+        publication.instance if publication is not None else "",
         json.dumps(
             runtime_fields,
             ensure_ascii=False,
@@ -414,11 +422,15 @@ def _zero_python_runtime_config(
         runtime_entry=entry,
         runtime_styles=styles,
     )
-    manifest = publication.manifest(f"./{publication.instance}/")
+    manifest = (
+        prepared_manifest_bytes(publication.manifest(f"./{publication.instance}/"))
+        if publication is not None
+        else None
+    )
     return (
         rendered,
         encode_runtime_config(config),
-        prepared_manifest_bytes(manifest),
+        manifest,
         closure,
     )
 
@@ -619,7 +631,7 @@ def _write_bundle(
             document,
             notebook_source,
         )
-    elif publication is None:
+    elif publication is None and artifact.template is None:
         rendered, config, closure = document, None, None
     else:
         rendered, config, manifest, closure = _zero_python_runtime_config(
