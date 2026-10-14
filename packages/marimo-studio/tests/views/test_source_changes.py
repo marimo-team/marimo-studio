@@ -614,3 +614,45 @@ def test_failed_reinspection_invalidates_the_previous_catalog(
     )
     assert producer.poll() is not None
     assert producer.catalog()[1].documents
+
+
+@pytest.mark.parametrize("inspection_number", [1, 2])
+def test_file_inputs_detect_an_addition_during_inspection(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    inspection_number: int,
+) -> None:
+    studio = created_one_view(notebook_path)
+    project = studio.views["dashboard"]
+    source_root = project.root / "src"
+    source_root.mkdir()
+    source = source_root / "app.js"
+    source.write_text("export const value = 1;\n", encoding="utf-8")
+    provider = _counting_registry(monkeypatch, project.provider)
+    inspect = provider.inspect
+
+    def inspect_then_create(request: InspectionRequest) -> object:
+        inspection = inspect(request)
+        inputs = tuple(
+            BuildInput(PurePosixPath(path.relative_to(project.root).as_posix()), "file")
+            for path in sorted(source_root.glob("*.js"))
+        )
+        if provider.inspections == inspection_number:
+            (source_root / "chart.js").write_text("export {};\n", encoding="utf-8")
+        return replace(inspection, documents=(), inputs=inputs, sites=())
+
+    monkeypatch.setattr(provider, "inspect", inspect_then_create)
+    producer = SourceChangeProducer(studio, project.name)
+    if inspection_number == 2:
+        source.write_text("export const value = 2;\n", encoding="utf-8")
+        assert producer.poll() is not None
+
+    assert not producer.catalog_current()
+    assert producer.poll() is not None
+    assert producer.catalog_current()
+    assert tuple(item.path.as_posix() for item in producer.catalog()[1].inputs) == (
+        "src/app.js",
+        "src/chart.js",
+    )
+    assert provider.inspections == inspection_number + 1
+    assert producer.poll() is None
