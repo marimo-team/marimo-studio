@@ -15,6 +15,7 @@ from marimo_studio._projections.resolution import (
     projection_policy,
     projection_targets,
     resolve_projection,
+    validate_artifact_site,
 )
 from marimo_studio._projections.symbol_graph import build_notebook_symbol_graph
 from marimo_studio.view_providers import (
@@ -303,3 +304,27 @@ def test_value_targets_identify_the_producer_without_mounting_its_cell(
             "dependencyClosure": [str(cell.ref) for cell in notebook.cells],
         }
     }
+
+
+def test_stale_projection_host_gives_a_page_reload_step(notebook_path: Path) -> None:
+    graph = build_notebook_symbol_graph(inspect_notebook(notebook_path), {})
+    site = _site("site-" + "a" * 64, "value", ("doubled",))
+    with pytest.raises(ProjectionResolutionError) as raised:
+        resolve_projection(graph, (), _request(site, "doubled"))
+    assert str(raised.value) == (
+        "This projection host belongs to an earlier build of the view. Reload the page."
+    )
+
+
+@pytest.mark.parametrize("targets", [(), ("doubled", "doubled"), ("",)])
+def test_invalid_projection_hosts_name_the_source_and_repair_step(
+    targets: tuple[str, ...],
+) -> None:
+    site = _site("site-" + "a" * 64, "value", targets)
+    with pytest.raises(ProjectionResolutionError) as raised:
+        validate_artifact_site(site)
+    assert str(raised.value) == (
+        "The value projection host at src/App.tsx:12:7 has invalid targets. "
+        "Choose non-empty, distinct targets within the 4,096-byte limit, "
+        "then rebuild the view."
+    )
