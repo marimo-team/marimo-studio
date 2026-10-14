@@ -742,6 +742,8 @@ _needs_deno = pytest.mark.skipif(
         "function Card([target]: string[])",
         "function Card() { let target = getTarget(); return (() =>",
         "function Card() { const { target } = props; return (() =>",
+        "function Card() { function target() {} return (() =>",
+        "function Card() { class target {} return (() =>",
     ],
     ids=(
         "parameter",
@@ -749,13 +751,15 @@ _needs_deno = pytest.mark.skipif(
         "array-parameter",
         "nested-let",
         "nested-const",
+        "nested-function",
+        "nested-class",
     ),
 )
 def test_react_shadowed_bindings_keep_dynamic_target_allowance(
     tmp_path: Path, binding: str
 ) -> None:
     body = 'return <output mo-value={target} data-marimo-allow="*" />;'
-    closing = " }})(); }}" if binding.endswith("=>") else " }"
+    closing = " })(); }" if binding.endswith("=>") else " }"
     source = f'const target = "first";\n{binding} {{ {body}{closing}'
     assert _react_targets(tmp_path, source) == "*"
 

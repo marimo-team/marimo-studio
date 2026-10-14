@@ -30,7 +30,9 @@ const scriptKind = (path: string): ts.ScriptKind =>
 type BindingDeclaration =
   | ts.VariableDeclaration
   | ts.ParameterDeclaration
-  | ts.BindingElement;
+  | ts.BindingElement
+  | ts.FunctionDeclaration
+  | ts.ClassDeclaration;
 
 const declarations = (
   source: ts.SourceFile,
@@ -40,8 +42,10 @@ const declarations = (
   const visit = (node: ts.Node): void => {
     if (
       (ts.isVariableDeclaration(node) || ts.isParameter(node) ||
-        ts.isBindingElement(node)) &&
-      ts.isIdentifier(node.name) && node.name.text === name
+        ts.isBindingElement(node) || ts.isFunctionDeclaration(node) ||
+        ts.isClassDeclaration(node)) &&
+      node.name !== undefined && ts.isIdentifier(node.name) &&
+      node.name.text === name
     ) {
       matches.push(node);
     }
