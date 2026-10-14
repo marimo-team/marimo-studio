@@ -182,7 +182,7 @@ class _EnteredKernelLifespan:
     def __init__(
         self,
         lifespan: AbstractAsyncContextManager[None],
-        resume: Callable[[], None] | None = None,
+        resume: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._lifespan = lifespan
         self._resume = resume
@@ -202,7 +202,7 @@ class _EnteredKernelLifespan:
         if self._closed:
             raise RuntimeError("The Marimo kernel lifespan has already exited.")
         if self._resume is not None:
-            self._resume()
+            await self._resume()
         return None
 
     async def __aexit__(
@@ -231,7 +231,7 @@ class _EnteredKernelLifespan:
 
 def _guard_entered_lifespan(
     context: Any,
-    resume: Callable[[], None] | None = None,
+    resume: Callable[[], Awaitable[None]] | None = None,
 ) -> _EnteredKernelLifespan | None:
     kernel = context._kernel
     lifespan = getattr(kernel, "_lifespan", None)
@@ -363,7 +363,16 @@ class _KernelBridgeLifespan:
         return True
 
     async def __aenter__(self) -> None:
-        self._resume()
+        await self._enter_lifespan()
+
+    async def _enter_lifespan(self) -> None:
+        try:
+            self._resume()
+        except BaseException:
+            # A failed setup gets no __aexit__, so it joins the ledger closes
+            # its rollback scheduled. The setup failure stays primary.
+            await self._join_observation_closes()
+            raise
 
     def _resume(self) -> None:
         from marimo._runtime.context import get_context
@@ -382,7 +391,7 @@ class _KernelBridgeLifespan:
         )
         if _is_studio_notebook(_kernel_filename(context)) and not is_probe:
             _install_execution_markers(context)
-        self._entered_lifespan = _guard_entered_lifespan(context, self._resume)
+        self._entered_lifespan = _guard_entered_lifespan(context, self._enter_lifespan)
         try:
             self._enter(
                 context,
@@ -739,15 +748,20 @@ class _KernelBridgeLifespan:
             self._close()
         except BaseException as error:
             failure = error
-        pending, self._observation_closes = self._observation_closes, []
-        if pending:
-            results = await asyncio.gather(*pending, return_exceptions=True)
-            for result in results:
-                if isinstance(result, BaseException) and failure is None:
-                    failure = result
+        closed = await self._join_observation_closes()
+        failure = failure or closed
         if failure is not None:
             raise failure
         return False
+
+    async def _join_observation_closes(self) -> BaseException | None:
+        """Wait for scheduled ledger closes and return the first failure."""
+        pending, self._observation_closes = self._observation_closes, []
+        results = await asyncio.gather(*pending, return_exceptions=True)
+        return next(
+            (result for result in results if isinstance(result, BaseException)),
+            None,
+        )
 
     def _close_observation_ledger(self, ledger: ObservationLedger) -> None:
         try:
@@ -789,15 +803,10 @@ class _KernelBridgeLifespan:
         self._observation_filename = filename
 
     def _close_observations(self) -> None:
-        release, self._observation_ledger_release = (
-            self._observation_ledger_release,
-            None,
-        )
-        ledger, self._observation_ledger = self._observation_ledger, None
-        _attempt_all(
-            release,
-            None if ledger is None else partial(self._close_observation_ledger, ledger),
-        )
+        # The ledger closes only after its hook detaches. A failed detach keeps
+        # both owners so the next teardown retries it.
+        self._release("_observation_ledger_release", lambda release: release())
+        self._release("_observation_ledger", self._close_observation_ledger)
 
     def _release(self, owner: str, close: Callable[[Any], object]) -> None:
         # A failed close keeps its owner so the next teardown retries it.
@@ -818,12 +827,10 @@ class _KernelBridgeLifespan:
         )
 
 
-def _attempt_all(*steps: Callable[[], object] | None) -> None:
+def _attempt_all(*steps: Callable[[], object]) -> None:
     """Run every cleanup step and raise the first failure afterwards."""
     failure: BaseException | None = None
     for step in steps:
-        if step is None:
-            continue
         try:
             step()
         except BaseException as error:

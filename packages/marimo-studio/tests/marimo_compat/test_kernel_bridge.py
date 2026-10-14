@@ -991,14 +991,14 @@ def _configured_notebook(directory: Path, name: str, source: str) -> Path:
     return notebook
 
 
-@pytest.mark.parametrize("release_fails", [False, True])
-@pytest.mark.parametrize("close_on_rename", [False, True])
-def test_kernel_lifespan_releases_observation_owners(
+def _observed_kernel(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    release_fails: bool,
-    close_on_rename: bool,
-) -> None:
+    events: list[str],
+    close_threads: list[int],
+    *,
+    release_fails: bool = False,
+) -> Any:
     from threading import get_ident
 
     from marimo._runtime import context as runtime_context
@@ -1006,8 +1006,6 @@ def test_kernel_lifespan_releases_observation_owners(
     from marimo._session.model import SessionMode
 
     notebook = _configured_notebook(tmp_path, "notebook.py", "import marimo\n")
-    events: list[str] = []
-    close_threads: list[int] = []
 
     class Ledger:
         def __init__(self, filename: Path) -> None:
@@ -1023,7 +1021,7 @@ def test_kernel_lifespan_releases_observation_owners(
 
         def release() -> None:
             events.append("release")
-            if release_fails:
+            if release_fails and events.count("release") == 1:
                 raise RuntimeError("hook release failed")
 
         return release
@@ -1041,6 +1039,24 @@ def test_kernel_lifespan_releases_observation_owners(
     monkeypatch.setattr(
         kernel_values_module, "keep_cached_cells_compatible", lambda: lambda: None
     )
+    return current
+
+
+@pytest.mark.parametrize("release_fails", [False, True])
+@pytest.mark.parametrize("close_on_rename", [False, True])
+def test_kernel_lifespan_releases_observation_owners(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    release_fails: bool,
+    close_on_rename: bool,
+) -> None:
+    from threading import get_ident
+
+    events: list[str] = []
+    close_threads: list[int] = []
+    current = _observed_kernel(
+        tmp_path, monkeypatch, events, close_threads, release_fails=release_fails
+    )
     lifespan = _KernelBridgeLifespan()
 
     async def exercise() -> None:
@@ -1055,10 +1071,15 @@ def test_kernel_lifespan_releases_observation_owners(
                 assert lifespan._activate(current, renamed, None)
         with failed if release_fails and not close_on_rename else nullcontext():
             await lifespan.__aexit__(None, None, None)
-        assert events == ["open", "install", "release", "close"]
+        if release_fails and not close_on_rename:
+            # A failed detach keeps the ledger open until a retry detaches it.
+            assert events == ["open", "install", "release"]
+            await lifespan.__aexit__(None, None, None)
+        detached = ["release", "release"] if release_fails else ["release"]
+        assert events == ["open", "install", *detached, "close"]
         assert close_threads[0] != loop_thread
         await lifespan.__aexit__(None, None, None)
-        assert events == ["open", "install", "release", "close"]
+        assert events == ["open", "install", *detached, "close"]
 
     try:
         with current.install():
@@ -1066,6 +1087,31 @@ def test_kernel_lifespan_releases_observation_owners(
     finally:
         current.virtual_file_registry.shutdown()
     assert current.function_registry.namespaces == {}
+
+
+def test_failed_kernel_setup_finishes_closing_its_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    current = _observed_kernel(tmp_path, monkeypatch, events, [])
+
+    def fail(_encoder: Any, _context: Any) -> None:
+        raise RuntimeError("value encoder failed")
+
+    monkeypatch.setattr(kernel_values_module.ValueEncoder, "__init__", fail)
+    lifespan = _KernelBridgeLifespan()
+
+    async def exercise() -> None:
+        with pytest.raises(RuntimeError, match="value encoder failed"):
+            await lifespan.__aenter__()
+        assert events == ["open", "install", "release", "close"]
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
 
 
 def test_kernel_observations_follow_a_configured_notebook_rename(
