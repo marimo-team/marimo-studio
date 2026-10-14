@@ -1381,3 +1381,20 @@ def test_build_uses_default_for_computed_output_targets(
 
     assert result.document == MAIN
     assert result.output_sizes == {}
+
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        (r"Text\\marimovalue{missing}", []),
+        (r"Text\\\marimovalue{actual}", ["actual"]),
+        (r"Text\% \marimovalue{actual}", ["actual"]),
+    ],
+)
+def test_inspection_distinguishes_control_symbols_and_projection_macros(
+    tmp_path: Path,
+    body: str,
+    expected: list[str],
+) -> None:
+    inspection = inspect_view_project_sync(_project(tmp_path, _document(body)))
+    assert [read.target for read in inspection.render_values] == expected
