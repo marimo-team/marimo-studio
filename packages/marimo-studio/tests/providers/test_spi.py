@@ -457,6 +457,45 @@ def test_provider_site_targets_use_the_runtime_selector_grammar(
     assert diagnostic.source == SourceLocation(PurePosixPath("index.html"), 1, 1)
 
 
+@pytest.mark.parametrize(
+    ("targets", "message"),
+    (
+        ((), "non-empty tuple"),
+        (("summary", "summary"), "unique"),
+        (tuple(f"value_{index}" for index in range(101)), "100-target limit"),
+    ),
+)
+def test_provider_site_target_lists_are_provider_contracts(
+    tmp_path: Path,
+    targets: tuple[str, ...],
+    message: str,
+) -> None:
+    provider = ProviderStub("example/html", "html")
+    provider.inspection = replace(
+        inspection(),
+        sites=(
+            ProjectionSite(
+                "value",
+                targets,
+                SourceLocation(PurePosixPath("index.html"), 1, 1),
+                0,
+            ),
+        ),
+    )
+    registry = ProviderRegistry((candidate("html", provider),))
+    installed = registry.get(registry.ids[0])
+    project = ViewProject(
+        "dashboard",
+        tmp_path,
+        tmp_path / "view.toml",
+        installed.key,
+        {},
+    )
+
+    with pytest.raises(ConfigurationError, match=message):
+        installed.inspect(inspection_request(project))
+
+
 def test_provider_site_accepts_nested_value_targets(tmp_path: Path) -> None:
     provider = ProviderStub("example/html", "html")
     target = 'report.rows[0]["market.value"].total'

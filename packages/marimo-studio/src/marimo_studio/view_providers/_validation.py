@@ -92,7 +92,7 @@ def _validate_source_location(
     return source
 
 
-def _validate_targets(kind: str, value: object) -> None:
+def _validate_targets(kind: str, value: object, source: SourceLocation) -> None:
     if value == "*":
         return
     if not isinstance(value, tuple) or not value:
@@ -100,7 +100,10 @@ def _validate_targets(kind: str, value: object) -> None:
     maximum = MAX_CELL_TARGETS if kind == "cell" else MAX_VALUE_TARGETS
     if len(value) > maximum:
         raise ValueError(f"Projection site targets exceed the {maximum}-target limit")
-    targets = tuple(validate_projection_target(kind, target) for target in value)
+    try:
+        targets = tuple(validate_projection_target(kind, target) for target in value)
+    except ValueError as error:
+        raise InvalidTargetError(str(error), source) from error
     if len(set(targets)) != len(targets):
         raise ValueError("Projection site targets must be unique")
 
@@ -115,10 +118,7 @@ def validate_projection_site(
     if value.kind not in {"cell", "output", "value"}:
         raise ValueError("Projection site kind is invalid")
     _validate_source_location(value.source, documents, label="Projection source")
-    try:
-        _validate_targets(value.kind, value.targets)
-    except ValueError as error:
-        raise InvalidTargetError(str(error), value.source) from error
+    _validate_targets(value.kind, value.targets, value.source)
     _validate_accept(value.kind, value.accept, optional=True)
     _validate_page_media(value.accept)
     if (
@@ -285,6 +285,7 @@ def validate_artifact_site(value: object) -> ArtifactSite:
     _validate_targets(
         value.kind,
         "*" if value.targets is None else value.targets,
+        value.source,
     )
     if value.kind == "value":
         if value.accept not in {(), ("application/json",)}:
