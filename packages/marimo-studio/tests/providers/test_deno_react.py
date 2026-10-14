@@ -766,3 +766,31 @@ def test_react_catch_bindings_end_with_their_catch_block(
     assert inspection.diagnostics == ()
     (site,) = inspection.sites
     assert site.targets == targets
+
+
+@pytest.mark.parametrize(
+    ("choices", "targets"),
+    [
+        ('{ __proto__: "first", other: "second" }', "*"),
+        ('{ "__proto__": "first", other: "second" }', "*"),
+        ('{ __proto__: "first", ...{ __proto__: "second" } }', "*"),
+    ],
+    ids=("identifier-prototype", "string-prototype", "spread-prototype"),
+)
+def test_react_object_prototype_keys_create_no_targets(
+    tmp_path: Path, choices: str, targets: object
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    root.joinpath("src/App.tsx").write_text(
+        f"const choices = {choices};\n"
+        "function Card() {\n"
+        '  return <output mo-value={choices["__proto__"]} data-marimo-allow="*" />;\n'
+        "}\n",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == targets

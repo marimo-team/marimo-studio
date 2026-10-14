@@ -119,6 +119,9 @@ export const evaluateTypeScript = (
         ? property.name.text
         : null;
       if (name === null) return dynamic();
+      // A literal `__proto__: value` entry sets the prototype and creates no
+      // own property.
+      if (name === "__proto__" && ts.isPropertyAssignment(property)) continue;
       const value = ts.isPropertyAssignment(property)
         ? evaluateTypeScript(
           property.initializer,

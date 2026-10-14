@@ -590,3 +590,30 @@ def test_svelte_computed_member_keys_resolve_their_values(
     assert inspection.diagnostics == ()
     (site,) = inspection.sites
     assert site.targets == expected
+
+
+@pytest.mark.parametrize(
+    "choices,expected",
+    [
+        ('{ __proto__: "first", other: "second" }', "*"),
+        ('{ "__proto__": "first", other: "second" }', "*"),
+        ('{ ["__proto__"]: "first", other: "second" }', ("first",)),
+    ],
+    ids=("identifier-prototype", "string-prototype", "computed-own-property"),
+)
+def test_svelte_object_prototype_keys_create_no_targets(
+    tmp_path: Path, choices: str, expected: object
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    root.joinpath("src/App.svelte").write_text(
+        f'<script lang="ts">\nconst choices = {choices};\n</script>\n'
+        '<main id="app-shell"><output mo-value={choices["__proto__"]} '
+        'data-marimo-allow="*" /></main>',
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == expected

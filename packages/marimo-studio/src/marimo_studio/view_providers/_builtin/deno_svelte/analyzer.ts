@@ -310,6 +310,14 @@ const evaluate = (
       }
       const name = propertyName(property.key);
       if (name === null) return dynamic();
+      // A literal `__proto__: value` entry sets the prototype and creates no
+      // own property.
+      if (
+        name === "__proto__" && property.computed !== true &&
+        property.shorthand !== true
+      ) {
+        continue;
+      }
       const value = evaluate(
         property.value as AstNode,
         document,
