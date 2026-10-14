@@ -972,3 +972,89 @@ def _capture_error(
         operation(request)
     except BaseException as error:
         errors.append(error)
+
+
+class _FifoResponseProvider(ProviderStub):
+    def availability(self) -> ProviderAvailability:
+        os.mkfifo(sys.argv[2])
+        os._exit(0)
+
+
+fifo_response_provider = _FifoResponseProvider("test-process/fifo", "default")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs require POSIX")
+def test_isolated_provider_rejects_fifo_response_within_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    command = (
+        "from tests.providers.test_process_isolation import _registry; "
+        "registry = _registry('fifo', 'fifo_response_provider', timeout=1); "
+        "provider = registry.get('test-process/fifo'); "
+        "result = provider.availability(); "
+        "assert not result.available; "
+        "assert 'response is invalid' in result.reason"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", command], capture_output=True, text=True, timeout=5
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+class _FifoStarterProvider(ProviderStub):
+    def create(self, starter: ProviderStarter, context: StarterContext) -> StarterPlan:
+        del starter, context
+        response = Path(sys.argv[2])
+        transfer = response.parent / "transfer"
+        transfer.mkdir()
+        os.mkfifo(transfer / "00000000.bin")
+        response.write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "ok": True,
+                    "value": {
+                        "cell_targets": [],
+                        "files": [
+                            {
+                                "path": "index.html",
+                                "blob": "00000000.bin",
+                                "size": 0,
+                                "sha256": "0" * 64,
+                            }
+                        ],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        os._exit(0)
+
+
+fifo_starter_provider = _FifoStarterProvider("test-process/fifo-starter", "default")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs require POSIX")
+def test_isolated_provider_rejects_fifo_starter_blob_within_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    command = (
+        "from pathlib import Path; "
+        "from tests.providers.test_process_isolation import _registry; "
+        "from tests.provider_test_support import provider_starter_context; "
+        "from marimo_studio.errors import ViewProjectError; "
+        "registry = _registry('fifo-starter', 'fifo_starter_provider', timeout=1); "
+        "provider = registry.get('test-process/fifo-starter'); "
+        f"context = provider_starter_context(Path({str(tmp_path)!r})); "
+        "\ntry:\n provider.create(provider.starters()[0], context)"
+        "\nexcept ViewProjectError as error:"
+        "\n assert 'blob size does not match' in str(error)"
+        "\nelse:\n raise AssertionError('Accepted a FIFO starter blob')"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", command], capture_output=True, text=True, timeout=5
+    )
+    assert completed.returncode == 0, completed.stderr
