@@ -767,3 +767,28 @@ def test_cold_server_lifecycle_repairs_a_malformed_manifest(
     assert still_invalid == "schema = "
     assert repaired_write.status_code == 204
     assert repaired.status_code == 200
+
+
+def test_creating_a_view_from_an_unknown_starter_is_a_client_error(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        generation = client.get("/_marimo-studio/views").json()["generation"]
+        created = client.post(
+            "/_marimo-studio/views",
+            headers=headers,
+            json={
+                "catalog_generation": generation,
+                "name": "operations",
+                "starter": "marimo-studio/vanilla:missing",
+            },
+        )
+
+    assert created.status_code == 404
+    assert created.json()["error"] == "starter-not-found"
+    assert "marimo-studio/vanilla:default" in created.json()["available_starters"]
