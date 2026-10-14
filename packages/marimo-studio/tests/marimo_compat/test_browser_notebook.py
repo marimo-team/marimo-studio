@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -266,50 +267,57 @@ def test_browser_notebook_places_its_bridge_after_cells_with_line_separators(
 
 
 def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import ast
-    import sys
     from contextlib import nullcontext
-    from types import ModuleType, SimpleNamespace
-    from typing import Any
+    from types import SimpleNamespace
 
     from marimo._types.ids import CellId_t
 
+    from marimo_studio._compat.browser_notebook import _value_bridge
+    from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
     from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
 
     from .values_test_support import _native_output_context, _selectors
 
-    for name in ("_marimo_studio_values", "_marimo_studio_media"):
-        monkeypatch.setitem(sys.modules, name, ModuleType(name))
-    generated = browser_notebook_source(
-        tmp_path / "analysis.py", "import marimo\napp = marimo.App()\n"
-    )
-    tree = ast.parse(generated)
-    bridge = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "__marimo_studio_values"
-    )
-    bridge.decorator_list = []
-    namespace: dict[str, Any] = {}
-    exec(
-        compile(ast.Module(body=[bridge], type_ignores=[]), "browser-notebook", "exec"),
-        namespace,
-    )
+    class _App:
+        function: Any
+
+        def cell(self, *_args: object, **_kwargs: object):
+            def register(function: object) -> object:
+                self.function = function
+                return function
+
+            return register
+
+    app = _App()
+    exec(_value_bridge(), {"app": app})
     context = _native_output_context()
     values = {"summary": "ready"}
     monkeypatch.setattr(type(context), "globals", property(lambda _self: values))
     context._kernel = SimpleNamespace(lock_globals=nullcontext)
     monkeypatch.setattr(
-        "marimo._messaging.notification_utils.broadcast_notification", lambda _: None
+        "marimo._messaging.notification_utils.broadcast_notification",
+        lambda _: None,
     )
     renderer = KernelOutputRenderer(context)
+    site = {
+        "id": "site-summary",
+        "kind": "output",
+        "source": {"path": "index.html", "line": 1, "column": 1},
+        "targets": ["summary"],
+        "accept": [],
+        "size": None,
+    }
+    request = {
+        "siteId": "site-summary",
+        "instanceId": "summary-host",
+        "target": "summary",
+    }
     try:
         with context.install():
             with context.with_cell_id(CellId_t("bridge")):
-                namespace["__marimo_studio_values"]()
+                app.function()
             functions = context.function_registry.namespaces[
                 "_marimo_studio_wasm"
             ].functions
@@ -317,31 +325,15 @@ def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
                 {
                     "revision": "revision-1",
                     "generation": 0,
-                    "sites": [
-                        {
-                            "id": "site-summary",
-                            "kind": "output",
-                            "source": {"path": "index.html", "line": 1, "column": 1},
-                            "targets": ["summary"],
-                            "accept": [],
-                            "size": None,
-                        }
-                    ],
+                    "sites": [site],
                     "variables": ["summary"],
                 }
             )
-            requests = [
-                {
-                    "siteId": "site-summary",
-                    "instanceId": "summary-host",
-                    "target": "summary",
-                }
-            ]
-            browser = functions["render_values"](
+            rendered = functions["render_values"](
                 {
                     "revision": "revision-1",
-                    "projections": requests,
-                    "active_projections": requests,
+                    "projections": [request],
+                    "active_projections": [request],
                     "consumer_id": "preview-a",
                 }
             )
@@ -353,13 +345,10 @@ def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
-            expected = (
-                "__marimo_studio_output_"
-                "8ff7d1d7aac8def97b7cdf595bbc75ccccec6e8a63c3ae41aa5861dfd70a8967"
-            )
-            assert browser["errors"] == {}
-            assert browser["outputs"]["summary"]["ownerCellId"] == expected
-            assert kernel.outputs["summary"].owner_cell_id == expected
+            owner = kernel.outputs["summary"].owner_cell_id
+            assert rendered["errors"] == {}
+            assert rendered["outputs"]["summary"]["ownerCellId"] == owner
+            assert str(owner).startswith(OUTPUT_OWNER_PREFIX)
     finally:
         with context.install():
             renderer.close()

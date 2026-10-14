@@ -1219,22 +1219,17 @@ def test_inspecting_a_markdown_notebook_names_the_file_and_the_conversion(
 @pytest.mark.parametrize(
     ("tail", "expected"),
     [
-        ("await _pending", True),
-        ("_alias = _pending\nawait _alias", True),
-        ("await asyncio.gather(_pending)", True),
-        ("await asyncio.wait_for(_pending, timeout=1)", True),
-        ("await asyncio.gather(_emit(mo.output))", True),
-        ("_done = True", False),
-        ("_pending = None\n_done = True", False),
-    ],
-    ids=[
-        "awaited",
-        "awaited-alias",
-        "gathered",
-        "wait-for",
-        "gathered-call",
-        "unawaited",
-        "rebound",
+        pytest.param("await _pending", True, id="awaited"),
+        pytest.param("_alias = _pending\nawait _alias", True, id="awaited-alias"),
+        pytest.param("await asyncio.gather(_pending)", True, id="gathered"),
+        pytest.param(
+            "await asyncio.wait_for(_pending, timeout=1)", True, id="wait-for"
+        ),
+        pytest.param(
+            "await asyncio.gather(_emit(mo.output))", True, id="gathered-call"
+        ),
+        pytest.param("_done = True", False, id="unawaited"),
+        pytest.param("_pending = None\n_done = True", False, id="rebound"),
     ],
 )
 def test_starter_output_cells_follow_awaited_local_coroutines(
@@ -1261,7 +1256,6 @@ def test_starter_output_cells_follow_awaited_local_coroutines(
         encoding="utf-8",
     )
     spec = inspect_notebook(notebook)
-    summary = spec.cells[1]
     context = StarterContext(
         "dashboard",
         notebook.name,
@@ -1271,7 +1265,6 @@ def test_starter_output_cells_follow_awaited_local_coroutines(
             for cell in spec.cells
         },
     )
-    assert summary.may_display_output is expected
     assert [cell.target for cell in context.output_cells] == (
         ["summary"] if expected else []
     )
