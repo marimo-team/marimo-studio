@@ -24,6 +24,10 @@ from marimo_studio._compat.kernel_values.session import (
 from marimo_studio._compat.server.session_state import current_session
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef
+from marimo_studio._processes.ownership import (
+    propagate_cancellation,
+    settle_ownership,
+)
 from marimo_studio._projections.resolution import ResolvedProjection
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
@@ -138,21 +142,30 @@ class PrivateKernelProjectionHost:
     """Read, render, and update one live kernel through its session queue."""
 
     def __init__(self) -> None:
+        self._live_locks: WeakKeyDictionary[Any, asyncio.Lock] = WeakKeyDictionary()
         self._live_states: WeakKeyDictionary[Any, _LiveProjectionState] = (
             WeakKeyDictionary()
         )
 
     async def _live_state(self, session: Any) -> _LiveProjectionState:
-        while True:
-            signature = _executed_signature(session)
-            current = self._live_states.get(session)
-            if current is not None and current.signature == signature:
+        lock = self._live_locks.setdefault(session, asyncio.Lock())
+        async with lock:
+            while True:
+                signature = _executed_signature(session)
+                current = self._live_states.get(session)
+                if current is not None and current.signature == signature:
+                    return current
+                # Retain the session lock until compilation drains, including
+                # when its requesting browser disconnects.
+                current, cancellation = await settle_ownership(
+                    asyncio.to_thread(_build_live_projection_state, signature)
+                )
+                if _executed_signature(session) != signature:
+                    propagate_cancellation(cancellation)
+                    continue
+                self._live_states[session] = current
+                propagate_cancellation(cancellation)
                 return current
-            current = await asyncio.to_thread(_build_live_projection_state, signature)
-            if _executed_signature(session) != signature:
-                continue
-            self._live_states[session] = current
-            return current
 
     async def read_values(
         self,

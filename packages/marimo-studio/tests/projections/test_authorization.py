@@ -763,3 +763,165 @@ def test_value_ownership_keeps_requested_and_mounted_selectors_separate() -> Non
     )
     assert set(authorized.selectors) == {"summary.total"}
     assert set(active.selectors) == {"summary.total", "summary"}
+
+
+@pytest.mark.parametrize("transition", ["current", "edited", "cancelled", "failed"])
+def test_concurrent_projection_requests_share_session_graph_builds(
+    monkeypatch: pytest.MonkeyPatch,
+    transition: str,
+) -> None:
+    from threading import Event
+
+    from marimo_studio._compat.kernel_values import host as host_module
+    from marimo_studio._projections.runtime_records import (
+        OutputRenderResult,
+        ValueReadResult,
+    )
+
+    class Session:
+        document = SimpleNamespace(cells=[SimpleNamespace(id="runtime-summary")])
+        session_view = SimpleNamespace(
+            last_executed_code={"runtime-summary": "summary = {'total': 3}"}
+        )
+
+    session = Session()
+    host = host_module.PrivateKernelProjectionHost()
+    started = Event()
+    release = Event()
+    original = host_module._build_live_projection_state
+    builds: list[Any] = []
+
+    def build(signature: Any) -> Any:
+        builds.append(signature)
+        if len(builds) == 1:
+            started.set()
+            assert release.wait(5)
+            if transition == "failed":
+                raise RuntimeError("graph compilation failed")
+        return original(signature)
+
+    async def read(*_args: Any, **_kwargs: Any) -> ValueReadResult:
+        return ValueReadResult({}, {})
+
+    async def render(*_args: Any, **_kwargs: Any) -> OutputRenderResult:
+        return OutputRenderResult({}, {})
+
+    monkeypatch.setattr(host_module, "current_session", lambda *_: session)
+    monkeypatch.setattr(host_module, "_build_live_projection_state", build)
+    monkeypatch.setattr(host_module, "read_session_values", read)
+    monkeypatch.setattr(host_module, "render_session_outputs", render)
+
+    async def invoke(operation: str) -> Any:
+        return await getattr(host, operation)(
+            cast(Any, SimpleNamespace()),
+            "session",
+            "revision-1",
+            (_projection(),),
+            (_projection(),),
+            consumer_id="preview-a",
+            runtime_cell_refs={_projection().producer: "runtime-summary"},
+        )
+
+    async def exercise() -> None:
+        first = asyncio.create_task(invoke("read_values"))
+        second: asyncio.Task[Any] | None = None
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            second = asyncio.create_task(invoke("render_outputs"))
+            await asyncio.sleep(0)
+            if transition == "edited":
+                session.session_view.last_executed_code["runtime-summary"] = (
+                    "summary = {'total': 4}"
+                )
+            elif transition == "cancelled":
+                first.cancel()
+                await asyncio.sleep(0)
+                first.cancel()
+                await asyncio.sleep(0)
+                assert not first.done()
+            release.set()
+            if transition == "cancelled":
+                with pytest.raises(asyncio.CancelledError):
+                    await first
+            elif transition == "failed":
+                with pytest.raises(RuntimeError, match="graph compilation failed"):
+                    await first
+            else:
+                assert isinstance(await first, ValueReadResult)
+            assert isinstance(await second, OutputRenderResult)
+            assert isinstance(await invoke("read_values"), ValueReadResult)
+            assert len(builds) == (2 if transition in {"edited", "failed"} else 1)
+            if transition == "edited":
+                assert builds[1] == (("runtime-summary", "summary = {'total': 4}"),)
+        finally:
+            release.set()
+            pending = [first] if second is None else [first, second]
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+def test_a_projection_build_keeps_other_sessions_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from threading import Event
+
+    from marimo_studio._compat.kernel_values import host as host_module
+    from marimo_studio._projections.runtime_records import ValueReadResult
+
+    class Session:
+        def __init__(self, total: int) -> None:
+            self.document = SimpleNamespace(
+                cells=[SimpleNamespace(id="runtime-summary")]
+            )
+            self.session_view = SimpleNamespace(
+                last_executed_code={
+                    "runtime-summary": f"summary = {{'total': {total}}}"
+                }
+            )
+
+    sessions = {"first": Session(3), "second": Session(4)}
+    host = host_module.PrivateKernelProjectionHost()
+    started = Event()
+    release = Event()
+    original = host_module._build_live_projection_state
+
+    def build(signature: Any) -> Any:
+        if signature == (("runtime-summary", "summary = {'total': 3}"),):
+            started.set()
+            assert release.wait(5)
+        return original(signature)
+
+    async def read(*_args: Any, **_kwargs: Any) -> ValueReadResult:
+        return ValueReadResult({}, {})
+
+    monkeypatch.setattr(host_module, "current_session", lambda _, key: sessions[key])
+    monkeypatch.setattr(host_module, "_build_live_projection_state", build)
+    monkeypatch.setattr(host_module, "read_session_values", read)
+
+    async def invoke(session_id: str) -> ValueReadResult:
+        return await host.read_values(
+            cast(Any, SimpleNamespace()),
+            session_id,
+            "revision-1",
+            (_projection(),),
+            (_projection(),),
+            consumer_id="preview-a",
+            runtime_cell_refs={_projection().producer: "runtime-summary"},
+        )
+
+    async def exercise() -> None:
+        first = asyncio.create_task(invoke("first"))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            assert isinstance(
+                await asyncio.wait_for(invoke("second"), 2), ValueReadResult
+            )
+            assert not first.done()
+            release.set()
+            assert isinstance(await first, ValueReadResult)
+        finally:
+            release.set()
+            await asyncio.gather(first, return_exceptions=True)
+
+    asyncio.run(exercise())
