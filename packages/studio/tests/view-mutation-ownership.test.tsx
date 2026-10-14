@@ -306,11 +306,31 @@ it.each(["success", "failure"] as const)(
   },
 );
 
-it("clears a creation error once the view name changes", async () => {
+it.each([
+  {
+    notice: "clears a creation error",
+    name: "dashboard",
+    opened: true,
+    rejected: true,
+    message: "A view named 'dashboard' already exists.",
+    remains: false,
+  },
+  {
+    notice: "keeps the created-view warning",
+    name: "report",
+    opened: false,
+    rejected: false,
+    message: "View created. Resolve the current source, then select it from Views.",
+    remains: true,
+  },
+])("$notice after the view name changes", async ({ name, opened, rejected, message, remains }) => {
   const remote: ViewRemote = {
     list: vi.fn(async () => viewList(["dashboard"])),
-    create: vi.fn(async () => {
-      throw new Error("A view named 'dashboard' already exists.");
+    create: vi.fn(async (viewName: string) => {
+      if (rejected) {
+        throw new Error(message);
+      }
+      return { schema: 1 as const, name: viewName };
     }),
     remove: vi.fn(),
   };
@@ -318,38 +338,7 @@ it("clears a creation error once the view name changes", async () => {
     "dashboard",
     ["dashboard"],
     remote,
-    vi.fn(async () => true),
-    vi.fn(async () => true),
-    vi.fn(),
-    [starter],
-    starter.id,
-  );
-  await controller.refreshInventory();
-  const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  await user.click(screen.getByRole("button", { name: "New view" }));
-  await user.type(screen.getByRole("textbox", { name: "New view" }), "dashboard");
-  await user.click(screen.getByRole("button", { name: "Create" }));
-  expect(await screen.findByText("A view named 'dashboard' already exists.")).toBeVisible();
-
-  await user.type(screen.getByRole("textbox", { name: "New view" }), "-2");
-
-  expect(screen.queryByText("A view named 'dashboard' already exists.")).toBeNull();
-  controller.dispose();
-});
-
-it("keeps the created-view warning while the view name changes", async () => {
-  const remote: ViewRemote = {
-    list: vi.fn(async () => viewList(["dashboard"])),
-    create: vi.fn(async (name: string) => ({ schema: 1 as const, name })),
-    remove: vi.fn(),
-  };
-  const controller = new ViewController(
-    "dashboard",
-    ["dashboard"],
-    remote,
-    vi.fn(async () => false),
+    vi.fn(async () => opened),
     vi.fn(async () => true),
     vi.fn(),
     [starter],
@@ -360,13 +349,16 @@ it("keeps the created-view warning while the view name changes", async () => {
   render(<ViewMenu controller={controller} />);
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
-  await user.type(screen.getByRole("textbox", { name: "New view" }), "report");
+  await user.type(screen.getByRole("textbox", { name: "New view" }), name);
   await user.click(screen.getByRole("button", { name: "Create" }));
-  const warning = "View created. Resolve the current source, then select it from Views.";
-  expect(await screen.findByText(warning)).toBeVisible();
+  expect(await screen.findByText(message)).toBeVisible();
 
   await user.type(screen.getByRole("textbox", { name: "New view" }), "-2");
 
-  expect(screen.getByText(warning)).toBeVisible();
+  if (remains) {
+    expect(screen.getByText(message)).toBeVisible();
+  } else {
+    expect(screen.queryByText(message)).toBeNull();
+  }
   controller.dispose();
 });
