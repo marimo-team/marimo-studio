@@ -347,6 +347,8 @@ class _KernelBridgeLifespan:
         self._query_operations: dict[tuple[str, str], tuple[str, tuple[int, int]]] = {}
         self._cached_cells = _CachedCellCompatibility()
         self._entered_lifespan: _EnteredKernelLifespan | None = None
+        self._observation_closes: list[asyncio.Task[None]] = []
+        self._observation_filename: Path | None = None
         self._observation_ledger: ObservationLedger | None = None
         self._observation_ledger_release: Callable[[], None] | None = None
 
@@ -356,9 +358,29 @@ class _KernelBridgeLifespan:
         filename: Path | None,
         inspection: _ProbeSelectorLease | None,
     ) -> bool:
-        if self._output_renderer is not None:
-            return True
         filename = _kernel_filename(context) or filename
+        if self._output_renderer is not None:
+            if filename != self._observation_filename:
+                self._close_observations()
+                from marimo._session.model import SessionMode
+
+                if (
+                    filename is not None
+                    and inspection is None
+                    and not is_owned_session()
+                    and getattr(context, "session_mode", None) == SessionMode.EDIT
+                    and _is_studio_notebook(filename)
+                ):
+                    ledger = ObservationLedger(filename)
+                    try:
+                        release = install_observation_ledger(context, ledger)
+                    except BaseException:
+                        self._close_observation_ledger(ledger)
+                        raise
+                    self._observation_ledger = ledger
+                    self._observation_ledger_release = release
+                self._observation_filename = filename
+            return True
         if is_owned_session() or filename is None:
             return False
         configured = _is_studio_notebook(filename)
@@ -401,7 +423,7 @@ class _KernelBridgeLifespan:
                     cleanup_error = cleanup
             if observation_ledger is not None:
                 try:
-                    observation_ledger.close()
+                    self._close_observation_ledger(observation_ledger)
                 except BaseException as cleanup:
                     if cleanup_error is None:
                         cleanup_error = cleanup
@@ -418,6 +440,7 @@ class _KernelBridgeLifespan:
             if cleanup_error is not None:
                 raise error from cleanup_error
             raise
+        self._observation_filename = filename
         self._observation_ledger = observation_ledger
         self._observation_ledger_release = observation_ledger_release
         self._output_renderer = output_renderer
@@ -784,23 +807,34 @@ class _KernelBridgeLifespan:
                 if exc_value is not None
                 else RuntimeError("The Marimo kernel lifespan setup failed.")
             )
-        ledger, self._observation_ledger = self._observation_ledger, None
         failure: BaseException | None = None
         try:
             self._close()
         except BaseException as error:
             failure = error
-        if ledger is not None:
-            try:
-                await asyncio.to_thread(ledger.close)
-            except BaseException as error:
-                if failure is None:
-                    failure = error
+        pending, self._observation_closes = self._observation_closes, []
+        if pending:
+            results = await asyncio.gather(*pending, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException) and failure is None:
+                    failure = result
         if failure is not None:
             raise failure
         return False
 
-    def _close(self) -> None:
+    def _close_observation_ledger(self, ledger: ObservationLedger) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            ledger.close()
+        else:
+            # Marimo activates synchronously on its control queue. The lifespan
+            # owns pending joins so rebinding can release the hook immediately.
+            self._observation_closes.append(
+                loop.create_task(asyncio.to_thread(ledger.close))
+            )
+
+    def _close_observations(self) -> None:
         failure: BaseException | None = None
         release, self._observation_ledger_release = (
             self._observation_ledger_release,
@@ -814,10 +848,19 @@ class _KernelBridgeLifespan:
         ledger, self._observation_ledger = self._observation_ledger, None
         if ledger is not None:
             try:
-                ledger.close()
+                self._close_observation_ledger(ledger)
             except BaseException as error:
                 if failure is None:
                     failure = error
+        if failure is not None:
+            raise failure
+
+    def _close(self) -> None:
+        failure: BaseException | None = None
+        try:
+            self._close_observations()
+        except BaseException as error:
+            failure = error
         if self._value_encoder is not None:
             try:
                 self._value_encoder.close()

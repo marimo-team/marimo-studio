@@ -981,10 +981,12 @@ default = "dashboard"
 
 
 @pytest.mark.parametrize("release_fails", [False, True])
+@pytest.mark.parametrize("close_on_rename", [False, True])
 def test_kernel_lifespan_releases_observation_owners(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     release_fails: bool,
+    close_on_rename: bool,
 ) -> None:
     from threading import get_ident
 
@@ -1039,7 +1041,15 @@ def test_kernel_lifespan_releases_observation_owners(
         loop_thread = get_ident()
         await lifespan.__aenter__()
         assert events == ["open", "install"]
-        if release_fails:
+        if close_on_rename:
+            renamed = tmp_path / "moved.py"
+            current._kernel.app_metadata.filename = str(renamed)
+            if release_fails:
+                with pytest.raises(RuntimeError, match="hook release failed"):
+                    lifespan._activate(current, renamed, None)
+            else:
+                assert lifespan._activate(current, renamed, None)
+        if release_fails and not close_on_rename:
             with pytest.raises(RuntimeError, match="hook release failed"):
                 await lifespan.__aexit__(None, None, None)
         else:
@@ -1055,3 +1065,103 @@ def test_kernel_lifespan_releases_observation_owners(
     finally:
         current.virtual_file_registry.shutdown()
     assert current.function_registry.namespaces == {}
+
+
+def test_kernel_observations_follow_a_configured_notebook_rename(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo
+    from marimo._ast.compiler import compile_cell
+    from marimo._runtime.dataflow import DirectedGraph
+    from marimo._runtime.runner.hook_context import CancelledCells, OnFinishHookContext
+    from marimo._runtime.runner.hooks import NotebookCellHooks
+    from marimo._session.model import SessionMode
+    from marimo._types.ids import CellId_t
+    from marimo_export.repository import ExportRepository
+
+    from marimo_studio import inspect_notebook
+
+    monkeypatch.setenv("MARIMO_EXPORT_REPOSITORY", str(tmp_path / "repository"))
+    source = f'''import marimo
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+@app.cell
+def _():
+    import marimo as mo
+    x = mo.ui.slider(1, 2, value=1)
+    return (mo, x)
+
+if __name__ == "__main__":
+    app.run()
+'''
+    paths: list[Path] = []
+    for directory in (tmp_path / "original", tmp_path / "renamed"):
+        directory.mkdir()
+        notebook = directory / "analysis.py"
+        notebook.write_text(source, encoding="utf-8")
+        directory.joinpath("pyproject.toml").write_text(
+            '[tool.marimo-studio]\nnotebook = "analysis.py"\ndefault = "dashboard"\n',
+            encoding="utf-8",
+        )
+        paths.append(notebook)
+    original, renamed = paths
+    hooks = NotebookCellHooks()
+    graph = DirectedGraph()
+    for cell in inspect_notebook(original, include_code=True).cells:
+        cell_id = CellId_t(cell.runtime_id)
+        assert cell.code is not None
+        graph.register_cell(cell_id, compile_cell(cell.code, cell_id=cell_id))
+    native = _native_output_context()
+    with native.install(), native.with_cell_id(CellId_t("control")):
+        control = marimo.ui.slider(1, 2, value=1)
+    metadata = SimpleNamespace(filename=str(original))
+    context = SimpleNamespace(
+        filename=str(original),
+        session_mode=SessionMode.EDIT,
+        _kernel=SimpleNamespace(
+            app_metadata=metadata,
+            _hooks=hooks,
+            graph=graph,
+            globals={"mo": marimo, "x": control},
+        ),
+    )
+    finished = OnFinishHookContext(
+        cells_to_run=tuple(graph.cells),
+        interrupted=False,
+        exceptions={},
+        cancelled_cells=CancelledCells(),
+        graph=graph,
+    )
+    bridge = _KernelBridgeLifespan()
+    try:
+        with ExportRepository.open() as repository:
+            assert bridge._activate(context, original, None)
+            ledger = bridge._observation_ledger
+            assert ledger is not None
+            for hook in hooks.on_finish_hooks:
+                hook(finished)
+            ledger.flush()
+            assert repository.status().observations == 1
+
+            metadata.filename = context.filename = str(renamed)
+            with native.install(), native.with_cell_id(CellId_t("control")):
+                context._kernel.globals["x"] = marimo.ui.slider(1, 2, value=2)
+            assert bridge._activate(context, renamed, None)
+            current = bridge._observation_ledger
+            assert current is not None
+            for hook in hooks.on_finish_hooks:
+                hook(finished)
+            current.flush()
+            assert repository.status().observations == 2
+
+            assert bridge._activate(context, renamed, None)
+            assert bridge._observation_ledger is current
+            asyncio.run(bridge.__aexit__(None, None, None))
+            for hook in hooks.on_finish_hooks:
+                hook(finished)
+            assert repository.status().observations == 2
+    finally:
+        bridge._close()
+        native.virtual_file_registry.shutdown()
