@@ -1,0 +1,21 @@
+packages/marimo-studio/tests/marimo_compat/test_kernel_bridge.py
+  s_d1c7da0877c821::t_58f7a856256242 1050,1054,1056
+  s_d1c7da0877c821::t_6ba0591d114a65 1087-1094
+  s_d1c7da0877c821::t_3e17052a3f2c15 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9fadb17869a51a4ac0233e1c027430c21293d735",
+  "prompts": {},
+  "sessions": {
+    "s_d1c7da0877c821": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "agent-1098f2d3-f670-481c-99d5-bcc35fe32097",
+        "model": "unknown"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
