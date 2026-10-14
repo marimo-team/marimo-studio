@@ -1,0 +1,9 @@
+packages/marimo-studio/tests/providers/test_deno_runtime.py
+  ai_agent 315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "adb3d165e074dacb9a58a729c31ea285cc4fc264",
+  "prompts": {}
+}
