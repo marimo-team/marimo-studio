@@ -287,13 +287,30 @@ def test_main_structures_configuration_errors(
     assert event["exit_code"] == 3
 
 
-def test_main_structures_a_view_manifest_that_is_not_utf8(
+@pytest.mark.parametrize(
+    "manifest_case",
+    ("non-utf8", "unknown-provider"),
+    ids=("non-utf8", "unknown-provider"),
+)
+def test_status_names_the_view_manifest_when_configuration_is_unusable(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    manifest_case: str,
 ) -> None:
     manifest = prepare_view(notebook_path).root / "view.toml"
-    manifest.write_bytes(b"# Gr\xfc\xdfe\n" + manifest.read_bytes())
+    if manifest_case == "non-utf8":
+        manifest.write_bytes(b"# Gr\xfc\xdfe\n" + manifest.read_bytes())
+        message = f"{manifest} is not UTF-8 text. Save it as UTF-8, then retry."
+    else:
+        manifest.write_text(
+            'schema = 1\nprovider = "marimo-studio/nope"\n',
+            encoding="utf-8",
+        )
+        message = (
+            "Unknown built-in view provider 'marimo-studio/nope' selected in "
+            f"{manifest}. Set provider to an installed view provider, then retry."
+        )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -308,9 +325,7 @@ def test_main_structures_a_view_manifest_that_is_not_utf8(
     assert raised.value.code == 3
     assert output.out == ""
     assert event["code"] == "configuration-error"
-    assert event["message"] == (
-        f"{manifest} is not UTF-8 text. Save it as UTF-8, then retry."
-    )
+    assert event["message"] == message
 
 
 def test_main_structures_static_preflight_failures(
@@ -425,32 +440,6 @@ def test_bootstrap_rejects_invalid_targets_before_provider_discovery(
     )
 
     assert isinstance(result.exception, ConfigurationError)
-
-
-def test_unknown_built_in_provider_names_the_view_manifest(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    manifest = prepare_view(notebook_path).root / "view.toml"
-    manifest.write_text(
-        'schema = 1\nprovider = "marimo-studio/nope"\n', encoding="utf-8"
-    )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["marimo-studio", "status", "--target", str(notebook_path), "--json"],
-    )
-
-    with pytest.raises(SystemExit):
-        main()
-
-    event = json.loads(capsys.readouterr().err)
-    assert event["code"] == "configuration-error"
-    assert event["message"] == (
-        f"Unknown built-in view provider 'marimo-studio/nope' selected in "
-        f"{manifest}. Set provider to an installed view provider, then retry."
-    )
 
 
 def test_view_create_rejects_the_starter_target_limit_without_mutation(
@@ -635,105 +624,71 @@ def test_main_structures_live_agent_request_errors(
     assert "Hint: Pass one browser client ID." in human.err
 
 
-def test_main_reports_a_source_precondition_conflict_without_mutation(
+@pytest.mark.parametrize(
+    "conflict",
+    ("source", "generation"),
+    ids=("source-conflict", "generation-conflict"),
+)
+def test_a_conflicting_view_write_keeps_the_source_and_names_its_target(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    conflict: str,
 ) -> None:
     setup = prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     loaded = read_source(studio, "dashboard", "index.html")
-    current = loaded.content.replace("Dashboard", "Current source")
-    setup.root.joinpath("index.html").write_text(current, encoding="utf-8")
+    if conflict == "source":
+        current = loaded.content.replace("Dashboard", "Current source")
+        setup.root.joinpath("index.html").write_text(current, encoding="utf-8")
+        replacement_text = loaded.content.replace("Dashboard", "Stale replacement")
+    else:
+        current = loaded.content
+        prepare_view(notebook_path, "report")
+        replacement_text = loaded.content
     replacement = tmp_path / "replacement.html"
-    replacement.write_text(
-        loaded.content.replace("Dashboard", "Stale replacement"),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "marimo-studio",
-            "view",
-            "write",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            loaded.revision,
-            "--catalog-generation",
-            studio.catalog_generation,
-            "--view-generation",
-            studio.view_generations["dashboard"],
-            "--from",
-            str(replacement),
-            "--json",
-        ],
-    )
+    replacement.write_text(replacement_text, encoding="utf-8")
+    argv = [
+        "marimo-studio",
+        "view",
+        "write",
+        "dashboard",
+        "index.html",
+        "--target",
+        str(notebook_path),
+        "--expected-revision",
+        loaded.revision,
+        "--catalog-generation",
+        studio.catalog_generation,
+        "--view-generation",
+        studio.view_generations["dashboard"],
+        "--from",
+        str(replacement),
+    ]
+    if conflict == "source":
+        argv.append("--json")
+    monkeypatch.setattr(sys, "argv", argv)
 
     with pytest.raises(SystemExit) as raised:
         main()
 
-    output = capsys.readouterr()
-    event = json.loads(output.err)
     assert raised.value.code == 3
-    assert event["command"] == "view write"
-    assert event["code"] == "source-conflict"
-    assert event["exit_code"] == 3
-    assert event["details"]["hint"] == (
+    output = capsys.readouterr()
+    hint = (
         "Run `marimo-studio view read VIEW PATH --target TARGET --json` with "
         "the same --target as the write for the current revision and "
         "generations, then retry the write."
     )
+    if conflict == "source":
+        event = json.loads(output.err)
+        assert event["command"] == "view write"
+        assert event["code"] == "source-conflict"
+        assert event["exit_code"] == 3
+        assert event["details"]["hint"] == hint
+    else:
+        assert output.err.splitlines()[-1] == f"Hint: {hint}"
     assert setup.root.joinpath("index.html").read_text(encoding="utf-8") == current
-
-
-def test_main_tells_a_stale_view_write_to_read_again(
-    notebook_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
-    loaded = read_source(studio, "dashboard", "index.html")
-    prepare_view(notebook_path, "report")
-    replacement = tmp_path / "replacement.html"
-    replacement.write_text(loaded.content, encoding="utf-8")
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "marimo-studio",
-            "view",
-            "write",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            loaded.revision,
-            "--catalog-generation",
-            studio.catalog_generation,
-            "--view-generation",
-            studio.view_generations["dashboard"],
-            "--from",
-            str(replacement),
-        ],
-    )
-
-    with pytest.raises(SystemExit) as raised:
-        main()
-
-    assert raised.value.code == 3
-    assert capsys.readouterr().err.splitlines()[-1] == (
-        "Hint: Run `marimo-studio view read VIEW PATH --target TARGET --json` with "
-        "the same --target as the write for the current revision and "
-        "generations, then retry the write."
-    )
 
 
 def test_main_preserves_view_not_found_details(

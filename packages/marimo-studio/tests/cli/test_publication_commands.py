@@ -155,42 +155,28 @@ def test_absent_view_handle_cannot_hold_a_later_view(notebook_path: Path) -> Non
         asyncio.run(absent.release_publication("token"))
 
 
+def _invoke(notebook: Path, *args: str):
+    return CliRunner().invoke(cli, ["view", *args, "--target", str(notebook)])
+
+
 def test_cli_hold_reports_a_missing_view(notebook_path: Path) -> None:
     prepare_view(notebook_path)
 
-    result = CliRunner().invoke(
-        cli,
-        [
-            "view",
-            "hold",
-            "dashbaord",
-            "--target",
-            str(notebook_path),
-            "--owner",
-            "editor",
-        ],
-    )
+    result = _invoke(notebook_path, "hold", "dashbaord", "--owner", "editor")
 
     assert isinstance(result.exception, ViewNotFoundError)
     assert str(result.exception) == "View 'dashbaord' does not exist."
 
 
-@pytest.mark.parametrize("owner", ("", " ", "x" * 257))
+@pytest.mark.parametrize(
+    "owner",
+    ("", " ", "x" * 257),
+    ids=("empty", "blank", "too-long"),
+)
 def test_cli_hold_rejects_an_unusable_owner(notebook_path: Path, owner: str) -> None:
     prepare_view(notebook_path)
 
-    result = CliRunner().invoke(
-        cli,
-        [
-            "view",
-            "hold",
-            "dashboard",
-            "--target",
-            str(notebook_path),
-            "--owner",
-            owner,
-        ],
-    )
+    result = _invoke(notebook_path, "hold", "dashboard", "--owner", owner)
 
     assert result.exit_code == 2
     assert "must contain 1 to 256 characters" in result.output
@@ -201,18 +187,7 @@ def test_cli_release_without_a_hold_says_nothing_was_held(
 ) -> None:
     prepare_view(notebook_path)
 
-    result = CliRunner().invoke(
-        cli,
-        [
-            "view",
-            "release",
-            "dashboard",
-            "--target",
-            str(notebook_path),
-            "--token",
-            "unknown",
-        ],
-    )
+    result = _invoke(notebook_path, "release", "dashboard", "--token", "unknown")
 
     assert result.exit_code == 0, result.output
     assert result.stdout == "View dashboard has no publication hold to release\n"

@@ -389,13 +389,11 @@ def test_create_reports_the_project_editor_command_without_uv_installed(
         '[project]\nname = "analysis"\nversion = "0.1"\ndependencies = []\n'
     )
     monkeypatch.setattr(environment_module.shutil, "which", lambda _name: None)
-
     result = CliRunner().invoke(
         cli,
         ["view", "create", "dashboard", "--target", str(notebook_path)],
         env={SANDBOX_ENV: "1"},
     )
-
     assert result.exit_code == 0, result.output
     assert "uv run --project" in result.stderr
     assert load_studio(notebook_path).default_view == "dashboard"
