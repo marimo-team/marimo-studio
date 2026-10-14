@@ -46,6 +46,17 @@ const mount = () => {
   return { viewer, host };
 };
 
+const mountPublished = (
+  markup = `<marimo-document src="card.svg" type="image/svg+xml"></marimo-document>`,
+): HTMLElement => {
+  document.body.innerHTML = `<main id="app-shell">${markup}</main>`;
+  const viewer = document.querySelector<HTMLElement>("marimo-document");
+  if (!viewer) {
+    throw new Error("The document fixture did not mount");
+  }
+  return viewer;
+};
+
 const shadow = (viewer: HTMLElement): ShadowRoot => {
   if (!viewer.shadowRoot) {
     throw new Error("The document viewer has no shadow root");
@@ -176,33 +187,17 @@ test("reports a render that stays unavailable after its retries", async () => {
   expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe("Busy.");
 });
 
-test("tells the reader how to recover a published document that is missing", async () => {
-  stubFetch([() => new Response("Not found", { status: 404 })]);
-  document.body.innerHTML = `
-    <main id="app-shell">
-      <marimo-document src="card.svg" type="image/svg+xml"></marimo-document>
-    </main>
-  `;
-  const viewer = document.querySelector<HTMLElement>("marimo-document")!;
-
-  await vi.waitFor(() => expect(viewer.dataset.state).toBe("error"));
-  expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe(
-    "The published document could not be loaded." +
-      "Rebuild the view to publish its document, then reload the page.",
-  );
-});
-
 test.each([
-  [403, "Reload the page to open the view with current access."],
-  [503, "Reload the page. If the document still fails, check the Studio server log."],
-])("matches the recovery hint to a published document that answers %i", async (status, hint) => {
+  ["missing", 404, "Rebuild the view to publish its document, then reload the page."],
+  ["forbidden", 403, "Reload the page to open the view with current access."],
+  [
+    "unavailable",
+    503,
+    "Reload the page. If the document still fails, check the Studio server log.",
+  ],
+])("matches the recovery hint to a published document that is %s", async (_case, status, hint) => {
   stubFetch([() => new Response("Unavailable", { status })]);
-  document.body.innerHTML = `
-    <main id="app-shell">
-      <marimo-document src="card.svg" type="image/svg+xml"></marimo-document>
-    </main>
-  `;
-  const viewer = document.querySelector<HTMLElement>("marimo-document")!;
+  const viewer = mountPublished();
 
   await vi.waitFor(() => expect(viewer.dataset.state).toBe("error"));
   expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe(
@@ -459,13 +454,8 @@ test("shows the rebuilt document when a new artifact revision keeps the same src
   base.set("/artifacts/first/");
   commitRuntimeConfig(runtimeConfig({ revision: "first" }));
   stubFetch([() => svg(), () => svg()]);
-  document.body.innerHTML = `
-    <main id="app-shell">
-      <marimo-document src="card.svg" type="image/svg+xml"></marimo-document>
-    </main>
-  `;
-  const viewer = document.querySelector<HTMLElement>("marimo-document");
-  await vi.waitFor(() => expect(viewer?.dataset.state).toBe("ready"));
+  const viewer = mountPublished();
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
 
   base.set("/artifacts/second/");
   commitRuntimeConfig(runtimeConfig({ revision: "second" }));
@@ -475,7 +465,7 @@ test("shows the rebuilt document when a new artifact revision keeps the same src
     "/artifacts/first/card.svg",
     "/artifacts/second/card.svg",
   ]);
-  expect(viewer?.dataset.state).toBe("ready");
+  expect(viewer.dataset.state).toBe("ready");
 });
 
 test("returns to ready when a Prepared host settles on the state it already showed", async () => {
@@ -502,15 +492,12 @@ test("returns to ready when a Prepared host settles on the state it already show
 
 test("returns to ready after the viewer moves within the page", async () => {
   stubFetch([() => svg()]);
-  document.body.innerHTML = `
-    <main id="app-shell">
-      <section><marimo-document src="card.svg" type="image/svg+xml"></marimo-document></section>
-      <section></section>
-    </main>
-  `;
-  const viewer = document.querySelector<HTMLElement>("marimo-document");
+  const viewer = mountPublished(`
+    <section><marimo-document src="card.svg" type="image/svg+xml"></marimo-document></section>
+    <section></section>
+  `);
   const target = document.querySelectorAll("section")[1];
-  if (!viewer || !target) {
+  if (!target) {
     throw new Error("The move fixture did not mount");
   }
   await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
