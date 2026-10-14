@@ -380,7 +380,8 @@ missing fetched assets, and unresolved local module paths. It warns when a
 computed module import, URL constructor target, bare module specifier, parser
 limitation, or size bound prevents complete static inspection. A warning
 preserves a successful result and gives the caller the remaining review
-boundary.
+boundary. Preflight prints the complete report and exits with status `1` when
+any error remains.
 
 Use `--runtime zero-python` to discover projected outputs that retain Python
 callbacks or fail during prepared-state capture. The diagnostic preserves the
@@ -493,7 +494,7 @@ and your browser's assertions to check rendered behavior.
 |  Exit | Meaning                                                           |
 | ----: | ----------------------------------------------------------------- |
 |   `0` | The requested operation completed                                 |
-|   `1` | Validation or a named provider check failed                       |
+|   `1` | Validation, preflight, or a named provider check failed           |
 |   `2` | Arguments or capability input are invalid                         |
 |   `3` | Configuration, saved source, or a mutation precondition conflicts |
 |   `4` | A notebook cell alias is invalid                                  |
