@@ -30,18 +30,38 @@ _DIRECTORY_FLAGS = (
 )
 
 
+# Both opens below need only search permission on the folders above the
+# cache, so a notebook below a folder Studio can search but not list builds.
+# macOS refuses a symlink anywhere in the path with O_NOFOLLOW_ANY. Elsewhere
+# the walk opens one component at a time, with O_PATH where Linux offers it.
+_NOFOLLOW_ANY = getattr(os, "O_NOFOLLOW_ANY", 0)
+_WALK_FLAGS = (
+    (getattr(os, "O_PATH", 0) or os.O_RDONLY)
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+
+
 def _open_resolved(path: Path) -> int:
-    """Open a resolved directory one component at a time without following links.
+    """Open a resolved directory without following a link in any component.
 
     The cache root lies inside a view project that other local processes can
     change, so a component replaced by a symlink after resolution fails here.
     """
-    descriptor = os.open(path.anchor, _DIRECTORY_FLAGS)
+    if _NOFOLLOW_ANY:
+        # macOS rejects O_NOFOLLOW_ANY combined with O_NOFOLLOW.
+        return os.open(
+            path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | _NOFOLLOW_ANY
+        )
+    descriptor = os.open(path.anchor, _WALK_FLAGS)
     try:
         for part in path.parts[1:]:
-            next_descriptor = os.open(part, _DIRECTORY_FLAGS, dir_fd=descriptor)
+            next_descriptor = os.open(part, _WALK_FLAGS, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
+            # Linux O_PATH with O_NOFOLLOW opens a final symlink itself.
+            if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                raise OSError(f"Provider cache path is not a directory: {path}")
     except BaseException:
         os.close(descriptor)
         raise
