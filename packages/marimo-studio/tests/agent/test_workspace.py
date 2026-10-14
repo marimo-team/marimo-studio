@@ -37,7 +37,7 @@ from marimo_studio.errors import (
 )
 from marimo_studio.view_providers._host import provider_registry
 
-from ..helpers import write_marimohub_context
+from ..helpers import notebook_source, write_marimohub_context
 
 
 def _workspace(notebook: Path) -> studio_authoring.Workspace:
@@ -826,3 +826,27 @@ def test_view_show_rejects_a_name_created_after_the_handle_was_captured(
 
     with pytest.raises(ViewGenerationConflictError):
         asyncio.run(stale.show())
+
+
+def test_a_view_handle_taken_before_configuration_cannot_write_after_creation(
+    tmp_path: Path,
+) -> None:
+    from marimo_studio.errors import WorkspaceGenerationConflictError
+
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(notebook_source("stale-handle"), encoding="utf-8")
+
+    async def exercise() -> str:
+        workspace = studio_authoring.open_workspace(notebook)
+        early = workspace.view("dashboard")
+        created = await workspace.create_view("dashboard")
+        document = await created.read("index.html")
+        with pytest.raises(WorkspaceGenerationConflictError):
+            await early.write(
+                "index.html",
+                document.content + "\n<!-- stale handle -->\n",
+                expected_revision=document.revision,
+            )
+        return (await created.read("index.html")).content
+
+    assert "stale handle" not in asyncio.run(exercise())

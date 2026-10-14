@@ -11,6 +11,7 @@ from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationLevel, ValidationReport
 from marimo_studio._views.records import Starter
+from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.ownership import (
     observed_view_owner,
     workspace_view_owner,
@@ -76,10 +77,15 @@ class Workspace(SavedWorkspace):
         if not isinstance(name, str) or not name:
             raise ValueError("view name must be a non-empty string")
         if self._catalog_generation is None:
+            # Pin the unconfigured catalog so a handle taken before the view
+            # exists stops matching once configuration or creation lands.
             return View._create(
                 self,
                 name,
-                owner=None,
+                owner=observed_view_owner(
+                    unconfigured_catalog_generation(self.notebook),
+                    None,
+                ),
             )
         try:
             studio = self._current_workspace()

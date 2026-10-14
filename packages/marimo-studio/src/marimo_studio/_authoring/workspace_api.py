@@ -31,6 +31,7 @@ from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import discover_studio_definition
 from marimo_studio._workspace.generation import (
     provider_free_catalog_generation,
+    unconfigured_catalog_generation,
     view_name_generation,
 )
 from marimo_studio._workspace.models import (
@@ -189,10 +190,15 @@ class Workspace:
         if not isinstance(name, str) or not name:
             raise ValueError("view name must be a non-empty string")
         if self._catalog_generation is None:
+            # Pin the unconfigured catalog so a handle taken before the view
+            # exists stops matching once configuration or creation lands.
             return View._create(
                 self,
                 name,
-                owner=None,
+                owner=observed_view_owner(
+                    unconfigured_catalog_generation(self.notebook),
+                    None,
+                ),
             )
         try:
             studio = self._current_workspace()
