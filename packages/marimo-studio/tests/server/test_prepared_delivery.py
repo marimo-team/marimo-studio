@@ -1,13 +1,13 @@
-"""Release Prepared asset leases on every response exit."""
-
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import marimo_export.prepared as prepared_module
 import pytest
 from marimo_export._prepared_integrity import ClosureMember
 from marimo_export.prepared import PreparedAsset
@@ -17,7 +17,10 @@ from starlette.types import Message
 from marimo_studio._server.ready_handler import _send_artifact_response
 from marimo_studio._server.zero_python_api import zero_python_response
 
+from ..async_test_support import wait_for_event
+
 _INSTANCE = "a" * 64
+_RELATIVE = "assets/value.bin"
 
 
 class _Lease:
@@ -52,29 +55,42 @@ def _scope(headers: list[tuple[bytes, bytes]] | None = None) -> dict[str, Any]:
     }
 
 
+def _stored_asset(tmp_path: Path, content: bytes) -> tuple[Any, _Lease]:
+    path = tmp_path / _RELATIVE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    lease = _Lease()
+    asset = cast(Any, PreparedAsset)._create(
+        path,
+        lease,
+        _RELATIVE,
+        ClosureMember(
+            sha256=hashlib.sha256(content).hexdigest(),
+            size=len(content),
+        ),
+    )
+    return asset, lease
+
+
+class _Publications:
+    def __init__(self, asset: Any) -> None:
+        self._asset = asset
+
+    async def publication_asset(self, *_args: object) -> Any:
+        return self._asset
+
+
 async def _response(
     tmp_path: Path,
     content: bytes,
     headers: list[tuple[bytes, bytes]] | None = None,
 ) -> tuple[Any, _Lease]:
-    path = tmp_path / "assets" / "value.bin"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
-    lease = _Lease()
-    member = ClosureMember(
-        sha256=hashlib.sha256(content).hexdigest(), size=len(content)
-    )
-    asset = cast(Any, PreparedAsset)._create(path, lease, "assets/value.bin", member)
-
-    class Publications:
-        async def publication_asset(self, *_args: object) -> PreparedAsset:
-            return asset
-
+    asset, lease = _stored_asset(tmp_path, content)
     response = await zero_python_response(
         Request(_scope(headers)),
-        cast(Any, Publications()),
+        cast(Any, _Publications(asset)),
         "dashboard",
-        f"{_INSTANCE}/assets/value.bin",
+        f"{_INSTANCE}/{_RELATIVE}",
         clients=cast(Any, SimpleNamespace()),
         allow_refresh=False,
     )
@@ -86,115 +102,100 @@ async def _never() -> Message:
     raise AssertionError("unreachable")
 
 
-@pytest.mark.parametrize("failure_at", ["http.response.start", "http.response.body"])
-def test_a_failed_prepared_download_releases_its_lease(
-    tmp_path: Path, failure_at: str
+@pytest.mark.parametrize(
+    "exit_path",
+    ["start-disconnect", "body-disconnect", "cancelled-body", "rejected-range"],
+    ids=["start-disconnect", "body-disconnect", "cancelled-body", "rejected-range"],
+)
+def test_prepared_download_releases_its_lease_on_every_exit(
+    tmp_path: Path,
+    exit_path: str,
 ) -> None:
-    async def exercise() -> bool:
-        response, lease = await _response(tmp_path, b"value")
-
-        async def send(message: Message) -> None:
-            if message["type"] == failure_at:
-                raise OSError("peer disconnected")
-
-        with pytest.raises(OSError, match="peer disconnected"):
-            await _send_artifact_response(response, _scope(), _never, send)
-        return lease.closed
-
-    assert asyncio.run(exercise()) is True
-
-
-def test_a_cancelled_prepared_download_releases_its_lease(tmp_path: Path) -> None:
-    async def exercise() -> bool:
-        response, lease = await _response(tmp_path, b"x" * 131072)
+    async def exercise() -> None:
+        rejected = exit_path == "rejected-range"
+        headers = [(b"range", b"bytes=999-1000")] if rejected else None
+        content = b"x" * 131072 if exit_path == "cancelled-body" else b"value"
+        response, lease = await _response(tmp_path, content, headers)
+        statuses: list[int] = []
         sending = asyncio.Event()
 
         async def send(message: Message) -> None:
-            if message["type"] == "http.response.body":
+            kind = message["type"]
+            if kind == "http.response.start":
+                statuses.append(message["status"])
+            if exit_path == "start-disconnect" and kind == "http.response.start":
+                raise OSError("peer disconnected")
+            if exit_path == "body-disconnect" and kind == "http.response.body":
+                raise OSError("peer disconnected")
+            if exit_path == "cancelled-body" and kind == "http.response.body":
                 sending.set()
                 await asyncio.Future()
 
-        serving = asyncio.create_task(
-            _send_artifact_response(response, _scope(), _never, send)
-        )
-        await asyncio.wait_for(sending.wait(), timeout=2)
-        serving.cancel()
-        with pytest.raises(asyncio.CancelledError):
+        scope = _scope(headers)
+        serving = _send_artifact_response(response, scope, _never, send)
+        if exit_path == "cancelled-body":
+            task = asyncio.create_task(serving)
+            await wait_for_event(sending, timeout=2)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        elif rejected:
             await serving
-        return lease.closed
+            assert statuses == [416]
+        else:
+            with pytest.raises(OSError, match="peer disconnected"):
+                await serving
+        assert lease.closed
 
-    assert asyncio.run(exercise()) is True
-
-
-def test_a_rejected_range_releases_its_lease(tmp_path: Path) -> None:
-    async def exercise() -> tuple[list[int], bool]:
-        headers = [(b"range", b"bytes=999-1000")]
-        response, lease = await _response(tmp_path, b"value", headers)
-        statuses: list[int] = []
-
-        async def send(message: Message) -> None:
-            if message["type"] == "http.response.start":
-                statuses.append(message["status"])
-
-        await _send_artifact_response(response, _scope(headers), _never, send)
-        return statuses, lease.closed
-
-    assert asyncio.run(exercise()) == ([416], True)
+    asyncio.run(exercise())
 
 
 def test_cancelling_during_verification_keeps_the_event_loop_running(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import threading
-
-    import marimo_export.prepared as prepared_module
-
     entered = threading.Event()
     release = threading.Event()
     verify = prepared_module.verify_member
 
     def slow_verify(*args: Any) -> Any:
         entered.set()
-        assert release.wait(2)
+        assert release.wait(5)
         return verify(*args)
 
-    async def exercise() -> bool:
-        content = b"value"
-        path = tmp_path / "assets" / "value.bin"
-        path.parent.mkdir(parents=True)
-        path.write_bytes(content)
-        lease = _Lease()
-        digest = hashlib.sha256(content).hexdigest()
-        member = ClosureMember(sha256=digest, size=len(content))
-        asset = cast(Any, PreparedAsset)._create(
-            path, lease, "assets/value.bin", member
-        )
+    async def exercise() -> None:
+        asset, lease = _stored_asset(tmp_path, b"value")
         monkeypatch.setattr(prepared_module, "verify_member", slow_verify)
-
-        class Publications:
-            async def publication_asset(self, *_args: object) -> PreparedAsset:
-                return asset
-
         serving = asyncio.create_task(
             zero_python_response(
                 Request(_scope()),
-                cast(Any, Publications()),
+                cast(Any, _Publications(asset)),
                 "dashboard",
-                f"{_INSTANCE}/assets/value.bin",
+                f"{_INSTANCE}/{_RELATIVE}",
                 clients=cast(Any, SimpleNamespace()),
                 allow_refresh=False,
             )
         )
         await asyncio.to_thread(entered.wait, 2)
-        loop_ran = asyncio.Event()
+        serving.cancel()
+        # close() waits on the lock verification still holds, so a second
+        # thread has to see that the event loop still runs.
+        loop_ran = threading.Event()
+        frozen = threading.Event()
+
+        def watch_loop() -> None:
+            if not loop_ran.wait(0.5):
+                frozen.set()
+            release.set()
+
         asyncio.get_running_loop().call_soon(loop_ran.set)
         try:
-            await asyncio.wait_for(loop_ran.wait(), 2)
-            serving.cancel()
+            await asyncio.to_thread(watch_loop)
             with pytest.raises(asyncio.CancelledError):
                 await serving
         finally:
             release.set()
-        return lease.closed
+        assert not frozen.is_set()
+        assert lease.closed
 
-    assert asyncio.run(exercise()) is True
+    asyncio.run(exercise())
