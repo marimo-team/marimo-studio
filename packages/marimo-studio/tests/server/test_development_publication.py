@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -303,7 +303,7 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
         routes._request_presentation(requests, routes._PresentationRequest(1))
         producer = routes._start_producer(
             lambda: routes._produce_publication_events(
-                SimpleNamespace(views={"dashboard": object()}),
+                cast(Any, SimpleNamespace(views={"dashboard": object()})),
                 "dashboard",
                 coordinator,
                 requests,

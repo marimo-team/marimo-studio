@@ -374,7 +374,7 @@ def test_timed_out_connection_close_responses_release_their_workers() -> None:
     class SlowBody(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *_args: object) -> None:
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
         def do_GET(self) -> None:

@@ -834,7 +834,7 @@ def test_a_view_handle_taken_before_configuration_cannot_write_after_creation(
     from marimo_studio.errors import WorkspaceGenerationConflictError
 
     notebook = tmp_path / "analysis.py"
-    notebook.write_text(notebook_source("stale-handle"), encoding="utf-8")
+    notebook.write_text(notebook_source(tmp_path / "marker"), encoding="utf-8")
 
     async def exercise() -> str:
         workspace = studio_authoring.open_workspace(notebook)
@@ -857,7 +857,7 @@ def test_project_configured_views_outside_the_notebook_folder_are_readable(
 ) -> None:
     notebook = tmp_path / "notebooks" / "analysis.py"
     notebook.parent.mkdir()
-    notebook.write_text(notebook_source("sibling-views"), encoding="utf-8")
+    notebook.write_text(notebook_source(tmp_path / "marker"), encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text(
         "[tool.marimo-studio]\n"
         'notebook = "notebooks/analysis.py"\n'

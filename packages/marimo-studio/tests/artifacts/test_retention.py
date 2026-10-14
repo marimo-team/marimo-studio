@@ -66,9 +66,11 @@ def test_development_rebuilds_prune_beside_a_receipt_from_another_format(
         '{"schema": 1, "profile": "production"}', encoding="utf-8"
     )
 
-    for index in range(3):
+    for index in range(2):
         _change_document(project, f"edit {index}")
-        latest = publish_artifact(project, "development")
+        publish_artifact(project, "development")
+    _change_document(project, "latest edit")
+    latest = publish_artifact(project, "development")
 
     revisions = artifact_root(project) / "revisions"
     assert [path.name for path in revisions.iterdir()] == [

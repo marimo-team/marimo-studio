@@ -4,7 +4,7 @@ import asyncio
 from importlib.metadata import entry_points
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib.parse import urlencode
 
 import pytest
@@ -533,6 +533,7 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
     from marimo._messaging.serde import serialize_kernel_message
     from marimo._runtime.commands import CreateNotebookCommand, UpdateUIElementCommand
     from marimo._session.types import KernelState
+    from marimo._types.ids import CellId_t
 
     from marimo_studio._compat.execution_markers import make_marker
 
@@ -559,7 +560,7 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
         def put_control_request(self, *_args: object, **_kwargs: object) -> None:
             pass
 
-    def marker(phase: str) -> bytes:
+    def marker(phase: Literal["start", "done", "failed"]) -> bytes:
         return serialize_kernel_message(
             CompletedRunNotification(
                 run_id=make_marker(phase, "CreateNotebookCommand", "create-1")
@@ -588,7 +589,9 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
     tracker.on_notification_sent(session, marker("start"))
     tracker.on_notification_sent(
         session,
-        serialize_kernel_message(CellNotification(cell_id="load", status="running")),
+        serialize_kernel_message(
+            CellNotification(cell_id=CellId_t("load"), status="running")
+        ),
     )
     session.session_view.last_executed_code["load"] = "frame = slow_load()"
 
@@ -598,7 +601,9 @@ def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
 
     tracker.on_notification_sent(
         session,
-        serialize_kernel_message(CellNotification(cell_id="load", status="idle")),
+        serialize_kernel_message(
+            CellNotification(cell_id=CellId_t("load"), status="idle")
+        ),
     )
     tracker.on_notification_sent(session, marker("done"))
     completed = asyncio.Event()
