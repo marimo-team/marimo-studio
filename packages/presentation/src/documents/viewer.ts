@@ -126,6 +126,16 @@ const loadImage = async (blob: Blob, name: string): Promise<DocumentPages> => {
   return { pages: [image], resize: () => {}, destroy: () => URL.revokeObjectURL(url) };
 };
 
+const documentRecoveryHint = (status: number): string => {
+  if (status === 404) {
+    return "Rebuild the view to publish its document, then reload the page.";
+  }
+  if (status === 401 || status === 403) {
+    return "Reload the page to open the view with current access.";
+  }
+  return "Reload the page. If the document still fails, check the Studio server log.";
+};
+
 /**
  * Show the document a Studio document view publishes, and render it again
  * when one of the `mo-value`, `marimo-output`, or `marimo-cell` hosts inside
@@ -466,7 +476,7 @@ export class MarimoDocumentElement extends HTMLElement {
           problem(
             "document-unavailable",
             "The published document could not be loaded.",
-            "Rebuild the view to publish its document, then reload the page.",
+            documentRecoveryHint(response.status),
           ),
         ]);
       }

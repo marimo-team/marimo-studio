@@ -192,6 +192,24 @@ test("tells the reader how to recover a published document that is missing", asy
   );
 });
 
+test.each([
+  [403, "Reload the page to open the view with current access."],
+  [503, "Reload the page. If the document still fails, check the Studio server log."],
+])("matches the recovery hint to a published document that answers %i", async (status, hint) => {
+  stubFetch([() => new Response("Unavailable", { status })]);
+  document.body.innerHTML = `
+    <main id="app-shell">
+      <marimo-document src="card.svg" type="image/svg+xml"></marimo-document>
+    </main>
+  `;
+  const viewer = document.querySelector<HTMLElement>("marimo-document")!;
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("error"));
+  expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe(
+    `The published document could not be loaded.${hint}`,
+  );
+});
+
 test("keeps render diagnostics when the published document also fails to show", async () => {
   stubFetch([
     () => failure(422, { error: "render-failed", message: "unknown variable: totl" }),
