@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
-import stat
 import threading
 from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from weakref import WeakValueDictionary
 
+from marimo_studio._filesystem._entry import is_link
 from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.ignore import ignore_generated_directory
@@ -60,7 +60,7 @@ def _mutation_lock(
     while not boundary.is_dir() and boundary != boundary.parent:
         boundary = boundary.parent
     for ancestor in (*reversed(boundary.parents), boundary):
-        if stat.S_ISLNK(ancestor.lstat().st_mode):
+        if is_link(ancestor.lstat()):
             raise UnsafePathError(f"Path is a symlink: {ancestor}")
     tree = FileTree(boundary)
     thread_lock = _thread_lock(lock_path)

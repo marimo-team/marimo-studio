@@ -1065,3 +1065,41 @@ def test_invalid_notebook_filename_is_escaped_in_the_diagnostic(
     assert message.startswith(f"{name!r} cannot name a Studio view folder.")
     assert "\n" not in message
     assert "\x1b" not in message
+
+
+def test_view_lock_refuses_an_ancestor_with_junction_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from marimo_studio._filesystem import _entry
+    from marimo_studio._filesystem.errors import UnsafePathError
+    from marimo_studio._workspace.mutation_lock import view_mutation_lock
+
+    ancestor = tmp_path / "shared"
+    root = ancestor / "team" / "studio" / "analysis"
+    root.mkdir(parents=True)
+    lstat = Path.lstat
+
+    def junction_metadata(path: Path) -> Any:
+        if path == ancestor:
+            return SimpleNamespace(
+                st_mode=lstat(path).st_mode,
+                st_file_attributes=0x400,
+                st_reparse_tag=0xA0000003,
+            )
+        return lstat(path)
+
+    # Exercise Windows junction metadata through the mutation boundary even
+    # on hosts where creating a junction requires another operating system.
+    monkeypatch.setattr(
+        _entry,
+        "os",
+        SimpleNamespace(name="nt", open=os.open, fstat=os.fstat, close=os.close),
+    )
+    monkeypatch.setattr(Path, "lstat", junction_metadata)
+
+    with pytest.raises(UnsafePathError), view_mutation_lock(root, "dashboard"):
+        pass
+    assert not (root / ".locks").exists()
