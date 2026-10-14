@@ -1,0 +1,24 @@
+packages/studio/tests/view-mutation-ownership.test.tsx
+  s_a83325528b47a1::t_1ec546fa184a7b 326
+  s_a83325528b47a1::t_8cdac067cfcf03 329-333,341,352,354,358-362
+  s_a83325528b47a1::t_e37fc0f1c7df1a 309-325
+packages/studio/tests/studio-host.test.tsx
+  s_a83325528b47a1::t_bc069111982aad 264-306,308-311
+  s_a83325528b47a1::t_61496c473a02f7 90-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ed5d32f5f61e02fd02dbd8a9257c7e1902434608",
+  "prompts": {},
+  "sessions": {
+    "s_a83325528b47a1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "agent-712fbb4d-facd-405b-9131-6d685fa8c9a1",
+        "model": "unknown"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
