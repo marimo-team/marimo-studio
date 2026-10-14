@@ -59,6 +59,9 @@ const lexicalContainer = (node: BindingDeclaration): ts.Node => {
   while (ts.isBindingElement(owner) || ts.isBindingPattern(owner)) {
     owner = owner.parent;
   }
+  if (ts.isVariableDeclaration(owner) && ts.isCatchClause(owner.parent)) {
+    return owner.parent;
+  }
   const blockScoped = !ts.isVariableDeclaration(owner) ||
     (ts.getCombinedNodeFlags(owner.parent) & ts.NodeFlags.BlockScoped) !== 0;
   let current = owner.parent;

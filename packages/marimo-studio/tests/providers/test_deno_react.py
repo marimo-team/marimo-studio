@@ -733,3 +733,28 @@ def test_react_shadowed_bindings_keep_dynamic_target_allowance(
     assert inspection.diagnostics == ()
     (site,) = inspection.sites
     assert site.targets == "*"
+
+
+@pytest.mark.parametrize(
+    ("catch", "targets"),
+    [
+        ("try { load(); } catch (target) { report(target); }", ("first",)),
+        ("try { load(); } catch ({ target }) { report(target); }", ("first",)),
+    ],
+    ids=("catch-variable", "destructured-catch-variable"),
+)
+def test_react_catch_bindings_end_with_their_catch_block(
+    tmp_path: Path, catch: str, targets: tuple[str, ...]
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    root.joinpath("src/App.tsx").write_text(
+        'const target = "first";\n'
+        f"function Card() {{ {catch} return <output mo-value={{target}} />; }}\n",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == targets
