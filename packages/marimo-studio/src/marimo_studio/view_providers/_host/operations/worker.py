@@ -37,6 +37,7 @@ from marimo_studio.view_providers._host.starters import (
 )
 
 from .codec import (
+    SERVER_PROCESS_ENV,
     availability_payload,
     build_result_payload,
     inspection_from_payload,
@@ -292,7 +293,11 @@ def _stop_with_server() -> None:
     # worker stops its own group, which holds every provider command.
     if os.name != "posix" or os.getpgid(0) != os.getpid():
         return
-    server = os.getppid()
+    launcher = os.environ.get(SERVER_PROCESS_ENV, "")
+    server = int(launcher) if launcher.isdecimal() else os.getppid()
+    if os.getppid() != server:
+        # The server died before this watch started.
+        os.killpg(0, signal.SIGKILL)
 
     def watch() -> None:
         while os.getppid() == server:

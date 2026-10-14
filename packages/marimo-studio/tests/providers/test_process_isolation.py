@@ -1152,3 +1152,31 @@ def test_isolated_provider_reports_incomplete_results_and_failures(
         "View provider 'test-process/broken' could not inspect view 'dashboard': "
         + detail
     )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_worker_orphaned_before_its_watch_starts_stops_at_once(
+    tmp_path: Path,
+) -> None:
+    import signal
+
+    from marimo_studio.view_providers._host.operations.codec import (
+        SERVER_PROCESS_ENV,
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "marimo_studio.view_providers._host.operations.worker",
+            str(tmp_path / "request.json"),
+            str(tmp_path / "response.json"),
+        ],
+        env={**os.environ, SERVER_PROCESS_ENV: str(os.getpid() + 1_000_000)},
+        start_new_session=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == -signal.SIGKILL
+    assert not (tmp_path / "response.json").exists()

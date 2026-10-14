@@ -29,6 +29,7 @@ from marimo_studio.view_providers import (
 )
 
 from .codec import (
+    SERVER_PROCESS_ENV,
     availability_from_payload,
     build_result_from_payload,
     inspection_from_payload,
@@ -248,6 +249,7 @@ def _operation_timeout(command_timeout: float) -> float:
 def _provider_environment() -> dict[str, str]:
     environment = os.environ.copy()
     environment.pop(_PROJECTION_AUTHORIZATION_ENV, None)
+    environment[SERVER_PROCESS_ENV] = str(os.getpid())
     return environment
 
 

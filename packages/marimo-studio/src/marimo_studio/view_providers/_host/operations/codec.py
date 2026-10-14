@@ -41,6 +41,9 @@ from marimo_studio.view_providers import (
     ViewProject,
 )
 
+# The worker compares its parent with this server process to detect an orphan.
+SERVER_PROCESS_ENV = "MARIMO_STUDIO_PROVIDER_SERVER_PID"
+
 
 def project_payload(project: ViewProject) -> dict[str, object]:
     return {
