@@ -10,6 +10,7 @@ from marimo_studio._views.inspection import (
     inspect_view_project_sync,
     inspection_request,
 )
+from marimo_studio.view_providers import SourceLocation
 from marimo_studio.view_providers._builtin.vanilla import provider
 
 from ..helpers import no_display_notebook_source
@@ -336,7 +337,11 @@ def test_vanilla_rejects_symlinked_entrypoint(tmp_path: Path) -> None:
     assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
 
 
-@pytest.mark.parametrize("target", ["1st plot", "_", "my.plot"])
+@pytest.mark.parametrize(
+    "target",
+    ["1st plot", "_", "my.plot"],
+    ids=("leading-digit", "underscore", "dotted-name"),
+)
 def test_inspection_locates_invalid_cell_targets_and_retains_documents(
     tmp_path: Path, target: str
 ) -> None:
@@ -355,7 +360,5 @@ def test_inspection_locates_invalid_cell_targets_and_retains_documents(
     (diagnostic,) = inspection.diagnostics
     assert diagnostic.code == "projection-target-invalid"
     assert diagnostic.severity == "error"
-    assert diagnostic.source is not None
-    assert diagnostic.source.path == PurePosixPath("index.html")
-    assert (diagnostic.source.line, diagnostic.source.column) == (2, 1)
+    assert diagnostic.source == SourceLocation(PurePosixPath("index.html"), 2, 1)
     assert diagnostic.hint

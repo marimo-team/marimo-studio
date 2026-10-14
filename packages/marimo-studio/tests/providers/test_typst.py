@@ -517,10 +517,7 @@ def test_build_retains_errors_from_data_inputs(tmp_path: Path) -> None:
         ('#marimo_value("real").at(0)marimo_value("missing")\n', ["real"]),
         (
             '#figure(marimo_value("first"))[#marimo_value("second")]\n',
-            [
-                "first",
-                "second",
-            ],
+            ["first", "second"],
         ),
     ],
 )
@@ -532,11 +529,9 @@ def test_inspection_reads_typst_code_expressions(
 
 
 def test_inspection_handles_oversized_unicode_escape(tmp_path: Path) -> None:
-    project = _project(
-        tmp_path, r'#marimo_value("\u{FFFFFFFFFFFFFFFFFFFFFF}", default: 1)'
+    inspection = inspect_view_project_sync(
+        _project(tmp_path, r'#marimo_value("\u{FFFFFFFFFFFFFFFFFFFFFF}", default: 1)')
     )
 
-    inspection = inspect_view_project_sync(project)
-
     assert inspection.render_values == ()
-    assert MAIN in {doc.path for doc in inspection.documents}
+    assert MAIN in {document.path for document in inspection.documents}

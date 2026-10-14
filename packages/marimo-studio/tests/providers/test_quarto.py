@@ -17,7 +17,7 @@ from marimo_studio._workspace.project_manifest import (
     encode_view_manifest,
 )
 from marimo_studio.errors import ViewProjectError
-from marimo_studio.view_providers import JsonValue, ProviderError
+from marimo_studio.view_providers import JsonValue, ProviderError, SourceLocation
 from marimo_studio.view_providers._builtin.quarto import provider
 
 from ..helpers import load_standalone_project
@@ -481,21 +481,20 @@ def test_quarto_from_a_conda_environment_requires_activation(
         '{{< marimo cell="1st plot" >}}',
         '{{< marimo value="a..b" >}}',
     ],
+    ids=("empty-cell", "spaced-cell", "dotted-value"),
 )
 def test_inspection_locates_invalid_shortcode_targets(
     tmp_path: Path, shortcode: str
 ) -> None:
-    project = _project(tmp_path, f"# Report\n\n{shortcode}\n")
-
-    inspection = inspect_view_project_sync(project)
+    inspection = inspect_view_project_sync(
+        _project(tmp_path, f"# Report\n\n{shortcode}\n")
+    )
 
     assert INDEX in {doc.path for doc in inspection.documents}
     assert inspection.sites == ()
     (diagnostic,) = inspection.diagnostics
     assert diagnostic.code == "projection-target-invalid"
-    assert diagnostic.source is not None
-    assert diagnostic.source.path == INDEX
-    assert (diagnostic.source.line, diagnostic.source.column) == (3, 1)
+    assert diagnostic.source == SourceLocation(INDEX, 3, 1)
 
 
 def test_inspection_exposes_included_text_as_editable_markdown(tmp_path: Path) -> None:

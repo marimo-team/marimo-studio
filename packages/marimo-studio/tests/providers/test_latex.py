@@ -643,13 +643,19 @@ def test_marimo_warnings_in_the_log_appear_beside_the_document(
     ]
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Provider commands exceeded their 120 second aggregate budget",
+        "The compiler reached its time limit",
+    ],
+    ids=("aggregate-budget", "command-timeout"),
+)
 def test_a_build_that_outlasts_its_budget_explains_the_first_compile(
-    tmp_path: Path, stand_in: None
+    tmp_path: Path, stand_in: None, message: str
 ) -> None:
     project = _project(tmp_path)
-    error = ProviderCommandError(
-        "Provider commands exceeded their 120 second aggregate budget", timed_out=True
-    )
+    error = ProviderCommandError(message, timed_out=True)
 
     result = _build(project, tmp_path / "staging", _Raising(error))
 
@@ -1398,16 +1404,3 @@ def test_inspection_distinguishes_control_symbols_and_projection_macros(
 ) -> None:
     inspection = inspect_view_project_sync(_project(tmp_path, _document(body)))
     assert [read.target for read in inspection.render_values] == expected
-
-
-def test_build_timeout_diagnostic_uses_command_failure_reason(
-    tmp_path: Path,
-    stand_in: None,
-) -> None:
-    project = _project(tmp_path)
-    error = ProviderCommandError("The compiler reached its time limit", timed_out=True)
-
-    result = _build(project, tmp_path / "staging", _Raising(error))
-
-    (diagnostic,) = result.diagnostics
-    assert diagnostic.code == "latex-compile-unfinished"

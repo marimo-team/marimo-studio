@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, cast
 
-from marimo_export._repository.models import RepositoryBusyError
+from marimo_export.repository import RepositoryBusyError
 
 from marimo_studio._prepared.errors import publication_error
 
