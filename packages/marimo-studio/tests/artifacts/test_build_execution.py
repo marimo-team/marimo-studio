@@ -302,6 +302,43 @@ def test_cancelled_async_build_does_not_publish_a_completed_candidate(
     assert [item.code for item in state.diagnostics] == ["build-cancelled"]
 
 
+def test_a_provider_that_raises_on_cancellation_records_a_cancelled_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = make_project(tmp_path)
+    first = publish_artifact(project, "development")
+    change_document(project, "cancelled generation")
+    provider = provider_registry().get(project.provider)
+    started = Event()
+
+    def raise_when_cancelled(request: BuildRequest) -> BuildResult:
+        cancelled = Event()
+        unregister = request.cancellation.register(cancelled.set)
+        started.set()
+        try:
+            assert cancelled.wait(timeout=2)
+        finally:
+            unregister()
+        raise RuntimeError("Provider operation was cancelled")
+
+    monkeypatch.setattr(provider, "build", raise_when_cancelled)
+
+    async def exercise() -> None:
+        task = asyncio.create_task(build_view_project(project))
+        assert await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(exercise())
+
+    state = read_build_state(project, "development")
+    assert state.phase == "failed"
+    assert state.artifact_revision == first.artifact_revision
+    assert [item.code for item in state.diagnostics] == ["build-cancelled"]
+
+
 @pytest.mark.parametrize(
     "cache_hit",
     (False, True),
