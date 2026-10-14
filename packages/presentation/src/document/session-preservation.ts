@@ -55,8 +55,11 @@ const serverSessionConfig = (config: RuntimeConfig): ServerSessionConfig | undef
   };
 };
 
+// Replay persistence is optional, so denied access and a full storage area
+// leave the presentation running without it.
 const storageUnavailable = (cause: unknown): boolean =>
-  cause instanceof DOMException && cause.name === "SecurityError";
+  cause instanceof DOMException &&
+  ["SecurityError", "QuotaExceededError", "NS_ERROR_DOM_QUOTA_REACHED"].includes(cause.name);
 
 const browserStorage = (): SessionEnvironment["storage"] => {
   try {

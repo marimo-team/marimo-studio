@@ -411,6 +411,32 @@ test("session storage failures outside browser access policy remain visible", ()
   );
 });
 
+test("full session storage keeps the presentation running without replay", () => {
+  const storage = new Map<string, string>();
+  const browser = environment(storage);
+  let writes = 0;
+  const replay = new BrowserSessionReplay({
+    ...browser.value,
+    storage: {
+      getItem: (key) => storage.get(key) ?? null,
+      removeItem: (key) => storage.delete(key),
+      setItem: (key, item) => {
+        writes += 1;
+        if (writes > 1) {
+          throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+        }
+        storage.set(key, item);
+      },
+    },
+  });
+
+  replay.remember(config(true), "s_abc123");
+  const reload = environment(storage, { navigationType: "reload" });
+
+  assert.equal(new BrowserSessionReplay(reload.value).preflight(config(true)), false);
+  assert.deepEqual(reload.replaced, []);
+});
+
 test("WASM navigation omits forged native session state", () => {
   const browser = environment(new Map(), {
     href: "https://example.test/dashboard/?runtime=wasm",
