@@ -317,10 +317,13 @@ def _run_provider_process(
             try:
                 response = json.loads(_read_response(response_path))
             except (OSError, ValueError) as error:
+                stderr = completed.stderr.decode(errors="replace").strip()
+                output = "\n".join(stderr.splitlines()[-20:])
                 raise ProviderOperationError(
                     f"Provider process exited with status {completed.returncode} "
                     "before returning a complete result. "
                     "Check the provider installation and retry."
+                    + (f"\n{output}" if output else "")
                 ) from error
             if not isinstance(response, dict) or set(response) != {
                 "schema",

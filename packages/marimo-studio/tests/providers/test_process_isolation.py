@@ -1069,6 +1069,10 @@ class _BrokenResponseProvider(ProviderStub):
             os._exit(9)
         if mode == "missing":
             os._exit(0)
+        if mode == "import-error":
+            sys.stderr.write("ModuleNotFoundError: No module named 'analyzer'\n")
+            sys.stderr.flush()
+            os._exit(1)
         raise ValueError("The custom analyzer failed.")
 
 
@@ -1076,7 +1080,8 @@ broken_response_provider = _BrokenResponseProvider("test-process/broken", "defau
 
 
 @pytest.mark.parametrize(
-    "mode,status", [("missing", 0), ("truncated", 9), ("raises", None)]
+    "mode,status",
+    [("missing", 0), ("truncated", 9), ("import-error", 1), ("raises", None)],
 )
 def test_isolated_provider_reports_incomplete_results_and_failures(
     tmp_path: Path,
@@ -1103,6 +1108,8 @@ def test_isolated_provider_reports_incomplete_results_and_failures(
         if status is not None
         else "The custom analyzer failed."
     )
+    if mode == "import-error":
+        detail += "\nModuleNotFoundError: No module named 'analyzer'"
     assert str(error.value) == (
         "View provider 'test-process/broken' could not inspect view 'dashboard': "
         + detail
