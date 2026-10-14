@@ -5,9 +5,9 @@ description: Serve a Studio view with authentication, a managed process, a rever
 
 # Deploy a live Python view
 
-A live Python view runs notebook code on the server for each marimo session.
-Deploy it with the same care as an application that can read the notebook's
-files, packages, databases, network, and credentials.
+A live Python view runs notebook code on the server for each marimo session,
+with access to the notebook's files, packages, databases, network, and
+credentials. Deploy it like any application with that access.
 
 ## Start an authenticated process
 
@@ -22,122 +22,89 @@ uvx --with marimo-studio marimo run /srv/analysis/analysis.py \
   --token-password-file /run/secrets/marimo-token
 ```
 
-Binding to `127.0.0.1` keeps the process behind the local reverse proxy. The
-token protects the marimo and Studio routes with session-based authentication.
-Keep the token file outside the repository and rotate it through the deployment
-secret manager.
+`--host 127.0.0.1` keeps the process behind the local reverse proxy, and the
+token protects the marimo and Studio routes. Keep the token file outside the
+repository and rotate it through the deployment secret manager.
 
 `--sandbox` installs the notebook's
 [PEP 723](https://peps.python.org/pep-0723/) dependencies with
-[uv](https://docs.astral.sh/uv/). It manages the Python environment and does
-not isolate untrusted notebook code. Build the environment ahead of time when
-startup cannot depend on package indexes or when production policy requires a
-reviewed lock and image.
+[uv](https://docs.astral.sh/uv/). It does not isolate untrusted notebook code.
+Build the environment ahead of time when startup cannot reach package indexes
+or policy requires a reviewed lock and image.
 
-Studio writes view build state beside the notebook in marimo's `__marimo__/`
-folder. Set `MARIMO_STUDIO_STATE_DIR` to another writable directory to keep
-build state out of the notebook's folder. Keep the view folder writable.
-Studio records view owners in `.owners/` and takes lock files in `.locks/`
-there. See
+Studio writes view build state to marimo's `__marimo__/` folder beside the
+notebook, or to `MARIMO_STUDIO_STATE_DIR` when set. Keep the view folder
+writable too, for Studio's `.owners/` records and `.locks/` files. See
 [Build state location](../reference/configuration.md#build-state-location).
 
 ## Put a reverse proxy in front
 
-A reverse proxy accepts public requests, applies access and transport policy,
-then forwards them to the Studio process. Terminate
-[TLS](https://developer.mozilla.org/en-US/docs/Glossary/TLS), which encrypts the
-public connection, at the proxy. Forward HTTP plus
+Terminate [TLS](https://developer.mozilla.org/en-US/docs/Glossary/TLS) at the
+proxy, forward HTTP and
 [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
-connections so live notebook updates continue to work. Studio builds every URL
-from the requested path, so the proxy may rewrite `Host`. Restrict the upstream
-port to trusted local or private-network clients.
+connections so live notebook updates arrive, and restrict the upstream port to
+trusted local or private-network clients. Studio builds every URL from the
+requested path, so the proxy may rewrite `Host`.
 
 ### Serve beneath a path prefix
 
-Studio writes each page, redirect, and live-connection URL relative to the URL
-the browser requested, so a deployment can publish the notebook beneath a path
-prefix such as `https://example.com/occupancy/`. Configure marimo for the way
-the proxy forwards that prefix:
+Studio writes every URL relative to the requested URL, so the notebook can live
+beneath a prefix such as `https://example.com/occupancy/`. Set marimo's base
+URL by how the proxy forwards the prefix:
 
-| Proxy forwards `https://example.com/occupancy/studio/` as | marimo option           |
-| --------------------------------------------------------- | ----------------------- |
-| `/occupancy/studio/`                                      | `--base-url /occupancy` |
-| `/studio/`                                                | No base URL             |
+| Proxy forwards `https://example.com/occupancy/studio/` as | Proxies that do this                                                                                                                                                                                                                       | marimo option           |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| `/occupancy/studio/`                                      | `/proxy/absolute/<port>/` in jupyter-server-proxy, `/absproxy/<port>/` in code-server                                                                                                                                                      | `--base-url /occupancy` |
+| `/studio/`                                                | `/s/<session>/p/<port>/` in [Posit Workbench](https://docs.posit.co/ide/server-pro/), `/proxy/<port>/` in [jupyter-server-proxy](https://jupyter-server-proxy.readthedocs.io/) and [code-server](https://coder.com/docs/code-server/guide) | No base URL             |
 
-When the proxy keeps the prefix, pass the same value to marimo:
+When the proxy keeps the prefix, add `--base-url /occupancy` to the command in
+[Start an authenticated process](#start-an-authenticated-process).
 
-```console
-uvx --with marimo-studio marimo run /srv/analysis/analysis.py \
-  --sandbox \
-  --headless \
-  --host 127.0.0.1 \
-  --port 8000 \
-  --base-url /occupancy \
-  --token-password-file /run/secrets/marimo-token
-```
-
-When the proxy strips the prefix, start marimo with no base URL. IDE servers
-publish a local port this way, and the prefix can change between sessions.
-[Posit Workbench](https://docs.posit.co/ide/server-pro/) publishes ports beneath
-`/s/<session>/p/<port>/` and strips that prefix.
-[jupyter-server-proxy](https://jupyter-server-proxy.readthedocs.io/) and
-[code-server](https://coder.com/docs/code-server/guide) strip it on
-`/proxy/<port>/`. Their `/proxy/absolute/<port>/` and `/absproxy/<port>/` routes
-keep the prefix and pair with `--base-url`.
-
-Open the public root with a trailing slash, such as
-`https://example.com/occupancy/`. Browsers resolve relative references against
-the requested directory, so configure the proxy to redirect
-`https://example.com/occupancy` to that directory.
+Browsers resolve relative references against the requested directory, so open
+the public root with a trailing slash and have the proxy redirect
+`https://example.com/occupancy` to `https://example.com/occupancy/`.
 
 marimo's password form submits to the server root, which a stripping proxy does
-not forward. Open the notebook once with `?access_token=<token>`. Studio
-starts the session and removes the token with a redirect beneath the prefix, in
-edit and run mode. That first request carries the token in its query string,
-so proxy and server access logs can record it. Redact `access_token` from those
-logs. Starting marimo with `--no-token` also works, but it lets
-every account on the machine reach the notebook through its local port. Keep a
-token on shared hosts.
+not forward. Open the notebook once with `?access_token=<token>` instead, and
+Studio redirects beneath the prefix to drop the token, in edit and run mode.
+Access logs can record that first query string, so redact `access_token` from
+proxy and server logs. `--no-token` also works, but lets every account on the
+machine reach the notebook through its local port. Keep a token on shared
+hosts.
 
-Use `--allow-origins` when browser clients must connect from another explicit
-origin. Keep the list to origins that should receive notebook sessions.
+Pass `--allow-origins` when browser clients send requests from another origin,
+and list only origins that should receive notebook sessions.
 
 ## Embed the Studio edit workspace
 
-Set `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` when another site embeds Studio's edit
-workspace. The value is a comma-separated list of exact HTTP or HTTPS origins:
+Set `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` to the exact HTTP or HTTPS origins,
+comma-separated, of parent pages that may frame Studio's edit workspace:
 
 ```console
 MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS=http://localhost:55021,https://notebooks.example.com \
   marimo edit /srv/analysis/analysis.py --headless --port 8000
 ```
 
-Studio adds these origins to the
+Studio adds them to the
 [`frame-ancestors`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors)
-Content Security Policy directive on the workspace and native editor documents.
-`'self'` remains present for Studio's internal editor iframe. Studio normalizes
-host casing, default ports, and an optional trailing slash, then removes
-duplicates. The configuration accepts at most 32 origin entries and 4,096
-UTF-8 bytes. An invalid or oversized value stops server startup and names the
-rejected setting.
+Content Security Policy directive of the workspace and native editor. An
+invalid value stops server startup. See
+[Process settings](../reference/configuration.md#process-settings) for limits.
 
 Allow a parent origin only when you trust its pages to present Studio controls.
 An allowed parent can position the authenticated workspace inside its own
 interface and attempt clickjacking, where a user is misled into interacting with
-the framed application. The allowlist changes framing policy. marimo
-authentication remains required. marimo token sessions use `SameSite=Lax`
-cookies. For a same-site parent on another origin, authenticate on the Studio
-origin before loading the workspace in the frame. A cross-site parent needs an
-external authentication layer designed for third-party iframe contexts.
-
-This setting controls which parent documents may frame Studio. marimo's
-`--allow-origins` option controls request origins for browser clients.
+the framed application. marimo authentication still applies. marimo token
+sessions use `SameSite=Lax` cookies, so for a same-site parent on another
+origin, authenticate on the Studio origin before loading the frame. A
+cross-site parent needs an external authentication layer designed for
+third-party iframes.
 
 ## Run as an ASGI application
 
 [ASGI](https://asgi.readthedocs.io/en/latest/) is the standard interface
-between asynchronous Python web applications and servers. Studio exposes an
-environment-configured ASGI entry point:
+between asynchronous Python web applications and servers. Serve Studio's ASGI
+entry point with the notebook path in the environment:
 
 ```console
 MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
@@ -147,7 +114,7 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
     --lifespan on
 ```
 
-The equivalent Python API is:
+Or build the application in Python:
 
 ```python
 from marimo_studio import create_asgi_app
@@ -155,48 +122,37 @@ from marimo_studio import create_asgi_app
 app = create_asgi_app("/srv/analysis/analysis.py")
 ```
 
-The application lifespan opens Studio services and closes notebook sessions,
-provider operations, and background tasks during shutdown. Start with one ASGI
-worker for one notebook application because live session and presentation
-authority is process-local.
+At shutdown, the application lifespan closes notebook sessions, provider
+operations, and background tasks. Run one ASGI worker per notebook, because
+live session and presentation authority is process-local.
 
-Cookie-authenticated reverse proxies can require same-origin Server runtime
-documents. Set the trusted runtime policy in the process that serves Studio:
+`create_asgi_app()` takes no token. Put it behind an access-controlled reverse
+proxy, or inside an application that owns authentication, before you expose it
+beyond a trusted network.
 
-```console
-MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1 \
-  MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
-  uvicorn marimo_studio.asgi:app --host 127.0.0.1 --port 8000 --lifespan on
-```
-
-The policy covers the view document, the workspace preview iframe, and the
-ASGI application path. It is process-wide and is read when composition starts,
-so restart the process after changing it. Use it when the notebook and
-authored view code are trusted with the authenticated host. Server-authored
-code can access host cookies, local storage, the parent document, and
-same-origin requests. Browser and Prepared runtimes retain opaque-origin
-isolation.
-
-`create_asgi_app()` has no token configuration argument. Put this form behind
-an access-controlled reverse proxy or compose it into an application that owns
-authentication before exposing it beyond a trusted network.
+When a cookie-authenticated reverse proxy requires Server runtime documents on
+the same origin, add `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` to the
+environment of the process that serves Studio, then restart it. The policy
+covers the view document, the workspace preview iframe, and the
+ASGI application. Set it only when you trust the notebook and authored
+view code with the authenticated host, because Server-authored code can then
+access host cookies, local storage, the parent document, and same-origin
+requests. Browser and Prepared runtimes keep opaque-origin isolation.
 
 ## Check readiness and shutdown
 
-Use the marimo health endpoint for the process check:
+Point the process check at marimo's health endpoint, or `/occupancy/health`
+for a prefixed deployment. Keep health checks on the trusted side of the proxy:
 
 ```console
 curl --fail http://127.0.0.1:8000/health
 ```
 
-For a prefixed deployment, request `/occupancy/health`. Keep health checks on
-the trusted side of the proxy.
-
-Send the process its normal termination signal and allow the application
-lifespan to finish. A forced stop can interrupt sessions, builds, and artifact
+Stop the process with its normal termination signal and let the application
+lifespan finish. A forced stop can interrupt sessions, builds, and artifact
 leases.
 
-After deployment, open the default and one named view, authenticate, change a
-notebook control, reload the page, and inspect browser diagnostics. Use
-[Navigate and preserve state](navigation-and-sessions.md) when the deployment
-must replay Python sessions across reloads.
+After deployment, authenticate, open the default view and one named view,
+change a control, reload, and inspect browser diagnostics.
+To replay Python sessions across reloads, see
+[Navigate and preserve state](navigation-and-sessions.md).

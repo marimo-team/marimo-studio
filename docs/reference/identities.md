@@ -5,9 +5,9 @@ description: Canonical product terms, stable names, revisions, generations, runt
 
 # Identities and state
 
-Studio attaches every mutation, build, and presentation to
-the state it observed. Names identify durable product objects. Revisions identify
-content. Generations identify replaceable owners and incarnations.
+Studio binds every mutation, build, and presentation to the state it
+observed. Names identify durable product objects, revisions identify content,
+and generations identify replaceable owners and incarnations.
 
 ## Product terms
 
@@ -30,10 +30,10 @@ content. Generations identify replaceable owners and incarnations.
 | Browser runtime   | Notebook execution in a browser worker through [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/). Its configuration ID is `wasm` |
 | Prepared runtime  | Browser rendering from verified outputs computed during export. Its static runtime ID is `zero-python`                                                     |
 
-Source documents and build inputs are separate allowlists. A read-only lockfile
-can affect a build without accepting Source writes. An editable guidance file
-can remain outside the build input set when editing it should not rebuild the
-artifact.
+Source documents and build inputs are separate allowlists. A read-only
+lockfile can affect a build without accepting Source writes. An editable
+guidance file can stay out of the build inputs so editing it does not rebuild
+the artifact.
 
 ## Stable names
 
@@ -57,10 +57,10 @@ artifact.
 | Presentation revision | Selected view, saved notebook and configuration, build profile, and artifact                 | Any input to the delivered presentation changes                                        |
 | Projection revision   | Presentation projection targets, policy, runtime bindings, diagnostics, and runtime instance | Projection authorization or runtime binding state changes                              |
 
-An artifact revision can remain current across repeated builds when the
-validated browser file tree is byte-identical. Development and production
-profiles can publish the same artifact revision while retaining separate build
-attempt and publication state.
+An artifact revision stays current across repeated builds that produce a
+byte-identical browser file tree. Development and production profiles can
+publish the same artifact revision and still keep separate build attempt and
+publication state.
 
 ## Ownership generations
 
@@ -73,9 +73,11 @@ Both generations are opaque 64-character lowercase hexadecimal strings. Read
 them from `status`, `view read --json`, or the Python handles that return them.
 Do not construct or persist them as long-term identifiers.
 
-`view write` checks the source revision, catalog generation, and view generation
-immediately before commit. A failed check preserves the current file and
-returns a conflict. Read the current source and retry from that state.
+`view write` checks the source revision, catalog generation, and view
+generation immediately before commit. A failed check preserves the current
+file and returns a conflict. Read the current source and retry from that state.
+[Errors and JSON](errors-and-json.md#public-error-classes) lists the conflict
+codes.
 
 Removing a view terminates its view generation. Renaming a view terminates the
 old name's generation and starts a generation for the new name. Recreating a
@@ -93,10 +95,9 @@ to the incarnation they observed.
 | Projection instance ID | One active element in the browser [DOM](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model) at one projection site |
 
 The browser document exposes its committed presentation revision as
-`data-marimo-studio-revision` on `<html>`. Read it alongside
-`data-marimo-studio-state` and assert the application's intended content and
-behavior. An exact preview URL rejects a different presentation revision or
-unbuilt or failed view source, including when a previous artifact is retained.
+`data-marimo-studio-revision` on `<html>`, beside `data-marimo-studio-state`.
+An exact preview URL rejects a different presentation revision or unbuilt or
+failed view source, even when a previous artifact is retained.
 
 ## Workspace state
 
@@ -121,7 +122,7 @@ freshness:
 | `building` | Build in progress     | Optional          | Studio is preparing a candidate from the current snapshot                                   |
 | `failed`   | Latest attempt failed | Absent            | No successful development artifact is available                                             |
 
-`ViewInspection.build` describes the retained successful artifact. It can remain
+`ViewInspection.build` describes the retained successful artifact and stays
 present when `freshness` is `stale`.
 
 ## Projection state
@@ -132,11 +133,6 @@ DOM attributes and events.
 
 ## Validation state
 
-Validation levels are cumulative:
-
-| Level     | Required evidence                                                                  |
-| --------- | ---------------------------------------------------------------------------------- |
-| `static`  | Saved notebook, configuration, view source, build contract, and projection targets |
-| `runtime` | Static evidence plus one complete supervised notebook execution                    |
-
-See [Errors and JSON](errors-and-json.md) for conflict codes and machine output.
+Validation levels are cumulative.
+[`marimo-studio validate`](cli.md#marimo-studio-validate) lists the evidence
+each level requires.

@@ -20,7 +20,7 @@ const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
 const socialImage = new URL("og.png", siteUrl).href;
 const socialDescription =
-  "Build multiple custom web views from one marimo notebook with modern web tools and coding agents.";
+  "Build web pages, slide decks, and Typst or LaTeX documents from the cells, outputs, and values of a marimo notebook.";
 const basePath = normalizeBasePath(process.env.BASE_PATH);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const publicPath = (path: string): string => withBasePath(basePath, path);
@@ -134,13 +134,13 @@ export default defineConfig({
           items: startItems,
         },
         {
-          text: "Author",
+          text: "Build views",
           collapsed: false,
           items: authoringItems,
         },
         {
-          text: "Deliver",
-          collapsed: true,
+          text: "Share",
+          collapsed: false,
           items: deliveryItems,
         },
         { text: "Examples", link: routes.examples.index },

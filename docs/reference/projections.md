@@ -5,9 +5,9 @@ description: Exact cell, output, value, selector, event, state, duplication, and
 
 # Notebook result projections
 
-A projection host places one notebook result in an authored view. Studio
-resolves the host to one producer cell, runs its dependency closure in the
-selected notebook runtime, and mounts the result in the host element.
+A projection host places one notebook result in a view. Studio resolves the
+host to one producer cell, runs its dependency closure in the selected notebook
+runtime, and mounts the result in the host element.
 
 | Host                            | Target                          | Browser result                                           |
 | ------------------------------- | ------------------------------- | -------------------------------------------------------- |
@@ -15,12 +15,17 @@ selected notebook runtime, and mounts the result in the host element.
 | `<marimo-output value="chart">` | Notebook value selector         | One value rendered by marimo's output renderer           |
 | `mo-value="metrics.total"`      | Notebook value selector         | JSON value or Arrow-backed table exposed to browser code |
 
-The Python runtime is configured as `server`. The Browser runtime is
-configured as `wasm`. Both use the same authored projection hosts.
+A view is a web page or a rendered document, and both name the same cells,
+outputs, and values. Pages use the hosts above, which Quarto's `marimo`
+shortcode also writes. Typst reads targets with `marimo_value()`,
+`marimo_output()`, and `marimo_cell()`, and LaTeX with `\marimovalue`,
+`\marimographics`, and `\marimocell`, as
+[Rendered documents](#rendered-documents) describes.
 
-In HTML, close each projection host explicitly and place hosts beside each
-other. Rendering a host replaces its contents. The build rejects nested hosts
-and self-closing HTML elements such as `<h1 mo-value="total"/>`.
+Hosts behave the same in the Python (`server`) and Browser (`wasm`) runtimes.
+In HTML, close each host explicitly and place hosts beside each other.
+Rendering a host replaces its contents. The build rejects nested hosts and
+self-closing elements such as `<h1 mo-value="total"/>`.
 
 ```html
 <h1 mo-value="total"></h1>
@@ -34,14 +39,13 @@ and self-closing HTML elements such as `<h1 mo-value="total"/>`.
 <marimo-cell name="summary"></marimo-cell>
 ```
 
-`name` accepts a native marimo cell name or an alias stored under
+`name` accepts a native marimo cell name or an alias under
 `[tool.marimo-studio.cells]`. The host receives the cell's native output,
 controls, console output when `show_cell_logs` is enabled, error state, and
 reactive updates.
 
-One presentation can mount a cell target once. A second host for the same
-target enters `data-state="error"` with diagnostic code
-`duplicate-cell-host`.
+A presentation mounts each cell target once. A second host for the same target
+enters `data-state="error"` with code `duplicate-cell-host`.
 
 ## Rendered outputs
 
@@ -50,9 +54,8 @@ target enters `data-state="error"` with diagnostic code
 ```
 
 `value` selects a Python value, so assign the figure or object to a notebook
-variable, such as `chart = plot_revenue(rows)`. marimo renders the selected
-object through its native output renderer and keeps the result current when its
-producer reruns.
+variable, such as `chart = plot_revenue(rows)`. marimo renders it through its
+native output renderer and updates it when its producer reruns.
 
 `accept` shows the value as an image instead. List image types in order of
 preference, separated by spaces or commas:
@@ -64,35 +67,33 @@ preference, separated by spaces or commas:
 Studio renders the value in the first listed type it supports through
 marimo-export's
 [`represent()`](https://marimo-team.github.io/marimo-export/reference/python/values).
-The notebook's own output settings stay unchanged, so the notebook can show a
-PNG while the page shows a sharp SVG.
+The notebook's output settings stay unchanged, so the notebook can show a PNG
+while the page shows an SVG.
 
 - A page host accepts `image/svg+xml`, `image/png`, `image/jpeg`, and
-  `image/gif`, the images marimo's output renderer shows.
+  `image/gif`.
 - A matplotlib figure or axes renders as SVG or PNG. A PNG displays at the size
-  marimo shows the figure, with twice the pixels, so it stays sharp on
-  high-density screens.
+  marimo shows the figure with twice the pixels, for high-density screens.
 - An Altair chart renders as SVG or PNG with `vl-convert-python`. The Browser
-  runtime has no `vl-convert-python`, so leave `accept` off to show the
-  interactive chart there. Read the chart itself, not a `mo.ui.altair_chart`
+  runtime lacks `vl-convert-python`, so leave `accept` off there to show the
+  interactive chart. Select the chart itself, not a `mo.ui.altair_chart`
   wrapper.
 - Other values use their display methods.
-- A figure keeps the style it was drawn with, including the dark style marimo
-  applies when the editor uses its dark theme.
+- A figure keeps the style it was drawn with, including marimo's dark-theme
+  style.
 
 A value without an accepted type puts the host in `data-state="error"` with
-code `output-media-unavailable`. Studio reads `accept` when it builds the view,
-so a script that changes the attribute later has no effect.
+code `output-media-unavailable`. Studio reads `accept` at build time, so later
+script changes to the attribute have no effect.
 
-A view reads each output target in one form. Every literal host that names a
-target in `value`, and every document that reads it, lists the same media types. A different list reports `output-accept-conflict` at its source
-location. A host with `data-marimo-allow="*"` shows each target in the form
-its literal hosts declare, and an `accept` on that host reports
-`projection-accept-invalid`.
+A view reads each output target in one form. Every literal host and every
+document that reads a target lists the same media types, and a different list
+reports `output-accept-conflict` at its source location. A host with
+`data-marimo-allow="*"` shows each target in the form its literal hosts
+declare, and an `accept` on that host reports `projection-accept-invalid`.
 
-One presentation can mount an output target once. A second host for the same
-target enters `data-state="error"` with diagnostic code
-`duplicate-output-host`.
+A presentation mounts each output target once. A second host for the same
+target enters `data-state="error"` with code `duplicate-output-host`.
 
 ## Browser values
 
@@ -100,10 +101,9 @@ target enters `data-state="error"` with diagnostic code
 <strong mo-value="metrics.total"></strong>
 ```
 
-Studio writes a scalar value into the element's text content. It renders
-`null` as an empty string and renders arrays and objects as compact JSON. The
-host also exposes the decoded value through its non-enumerable, read-only
-`marimoValue` property:
+Studio writes a scalar value into the element's text content, `null` as an
+empty string, and arrays and objects as compact JSON. The host's
+non-enumerable, read-only `marimoValue` property holds the decoded value:
 
 ```js
 const host = document.querySelector('[mo-value="metrics.total"]');
@@ -114,7 +114,7 @@ host.addEventListener("marimo-value-updated", (event) => {
 });
 ```
 
-Several `mo-value` hosts may select the same target. Each host receives its own
+Several `mo-value` hosts may select the same target. Each receives its own
 update event and reads the current decoded value.
 
 ### Value selectors
@@ -136,12 +136,12 @@ lookup["north-region"]
 | `["key"]` | Item access with a JSON string key              |
 
 The root uses Python identifier syntax. Dot selection rejects names that start
-with `_`. Bracket indexes must be JavaScript safe integers. A selector may
-contain at most 64 path steps and 4,096 UTF-8 bytes. Studio parses selectors
-with marimo-export's
+with `_`. Bracket indexes must be JavaScript safe integers. A selector has at
+most 64 path steps and 4,096 UTF-8 bytes. Studio parses selectors with
+marimo-export's
 [`ValueSelector`](https://marimo-team.github.io/marimo-export/reference/python/values#valueselector),
-so a view and a Prepared export accept the same selectors. See
-[Limits](limits.md) for the complete projection budget.
+so a view and a Prepared export accept the same selectors.
+[Limits](limits.md) lists the complete projection budget.
 
 ### Value codecs
 
@@ -151,23 +151,23 @@ so a view and a Prepared export accept the same selectors. See
 | `arrow-ipc-v1` | [Flechette](https://github.com/uwdata/flechette) `Table` | `marimoValue` returns the table with its source bytes and fingerprint attached |
 
 A `json-v1` value encodes within 1,000,000 bytes and an `arrow-ipc-v1` value
-within 64 MiB. See [Runtime payloads](limits.md#runtime-payloads) for the
+within 64 MiB. [Runtime payloads](limits.md#runtime-payloads) lists the
 per-read budgets.
 
 Studio decodes Arrow tables with Flechette's default extraction options.
-Integer columns, including 64-bit integers, read as numbers, and reading a
-64-bit value beyond `Number.MAX_SAFE_INTEGER` throws. Booleans and strings keep
-their JavaScript types, list cells read as arrays, and dates and timestamps read
-as epoch milliseconds. `table.toArray()` returns plain row objects.
+Integer columns, including 64-bit integers, read as numbers, and a 64-bit value
+beyond `Number.MAX_SAFE_INTEGER` throws. Booleans and strings keep their
+JavaScript types, list cells read as arrays, and dates and timestamps read as
+epoch milliseconds. `table.toArray()` returns plain row objects.
 
 React starters export `useMarimoValue()` and `getMarimoDataSource()` from
-`src/lib/use-marimo-value.ts`. Svelte starters export
+`src/lib/use-marimo-value.ts`, and Svelte starters export
 `observeMarimoValue()` and `getMarimoDataSource()` from
 `src/lib/marimo-value.ts`. `getMarimoDataSource(table)` returns the codec,
 fingerprint, and immutable
 [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)
-bytes attached to an Arrow-backed table. Arrow IPC is a columnar data
-interchange format.
+bytes of an Arrow-backed table. Arrow IPC is a columnar data interchange
+format.
 
 ## Host lifecycle
 
@@ -182,7 +182,7 @@ Studio records the current lifecycle phase in `data-state`.
 | `missing`    | A complete-cell target has no current result                          | Removed                           |
 | `error`      | Resolution, execution, rendering, duplication, or decoding failed     | Removed                           |
 
-Value hosts retain their previous `marimoValue` while entering `loading` or
+Value hosts keep their previous `marimoValue` while entering `loading` or
 `stale`. A terminal value error clears the property and dispatches
 `marimo-value-error`.
 
@@ -211,22 +211,21 @@ Value hosts retain their previous `marimoValue` while entering `loading` or
 
 Host events bubble and cross
 [shadow DOM](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_shadow_DOM)
-boundaries. Shadow DOM is a browser boundary that encapsulates a component's
+boundaries. Shadow DOM is the browser boundary that encapsulates a component's
 internal document tree. Listen on the host for one projection or on `document`
 for the presentation.
 
 ## Authored sites and dynamic targets
 
-A view provider reports each authored projection host as a projection site.
-Studio adds `data-marimo-studio-site` to the host in the build snapshot, and
-the attribute carries the site into the built page. Leave that attribute to
-Studio.
+A view provider reports each authored host as a projection site. Studio adds
+`data-marimo-studio-site` to the host in the build snapshot, and the attribute
+carries the site into the built page. Leave that attribute to Studio.
 
 A site with a finite target set can request those targets. A site with targets
-`"*"` permits a dynamic target of the declared kind.
-Built-in React and Svelte providers infer finite targets from literals and
-bounded constant expressions. Add `data-marimo-allow="*"` when a framework
-expression intentionally selects its target at runtime:
+`"*"` permits a dynamic target of the declared kind. The built-in React and
+Svelte providers infer finite targets from literals and bounded constant
+expressions. Add `data-marimo-allow="*"` when a framework expression selects
+its target at runtime:
 
 ```tsx
 <marimo-cell name={selectedName} data-marimo-allow="*" />
@@ -239,23 +238,22 @@ wildcard when page JavaScript changes the host's selector:
 <span id="details" hidden mo-value="details.first" data-marimo-allow="*"></span>
 ```
 
-An unbounded expression without that literal wildcard produces
-`projection-target-unbounded`. Any other `data-marimo-allow` value produces
-`projection-wildcard-invalid`. Static validation checks finite targets. Browser
-assertions verify the rendered results of a dynamic site.
+An unbounded expression without the literal wildcard produces
+`projection-target-unbounded`, and any other `data-marimo-allow` value produces
+`projection-wildcard-invalid`. Static validation checks finite targets, and
+browser assertions verify the rendered results of a dynamic site.
 
 Changing `name`, `value`, or `mo-value` releases the prior target and resolves
-the same DOM instance against the new target. Removing the host releases its
+the same DOM instance against the new one. Removing the host releases its
 projection ownership.
 
 ## Rendered documents
 
-A rendered document, such as the PDF that the Typst or LaTeX provider
-compiles, reads notebook values and outputs when Studio renders it. The view
-page shows the document in a `<marimo-document>` viewer. Studio renders it
-again when a value or output it reads changes.
-The viewer keeps the last document on screen while a new one renders and shows
-render errors beside it.
+A rendered document, such as the PDF that the Typst or LaTeX provider compiles,
+reads notebook values and outputs when Studio renders it. The view page shows
+it in a `<marimo-document>` viewer, and Studio renders it again when a value or
+output it reads changes. The viewer keeps the last document on screen while a
+new one renders and shows render errors beside it.
 
 ```typst
 #import "marimo.typ": marimo_output, marimo_value
@@ -266,19 +264,18 @@ Rooms in use: #marimo_value("summary.rooms", default: 0)
 #marimo_output("occupancy_chart", width: 100%)
 ```
 
-Values reach the renderer in their
-[JSON form](../guide/notebook-results.md#documents-read-json), so a dataframe
-arrives as a list of row objects and a date as ISO 8601 text. A value without
-a JSON form fails with `render-value-not-json`. Outputs reach the renderer in
-the first media type the document accepts that the value supports, such as
-PDF for a matplotlib figure in a Typst report, drawn at the size the build
-measured where the document places it. An output without an accepted type
-renders with the template's default, and the viewer names it. A `zero-python`
-export renders every output in every prepared state, so the export stops when
-one state's value has no accepted type. A cell read receives the cell's output
-as marimo shows it, in the first accepted type the output carries, such as PNG
-for a matplotlib figure. A cell whose output has no accepted type, such as
-text or a table, renders with the template's default.
+Values arrive in their
+[JSON form](../guide/notebook-results.md#documents-read-json): a dataframe as a
+list of row objects and a date as ISO 8601 text. A value without a JSON form
+fails with `render-value-not-json`. An output arrives in the first media type
+the document accepts and the value supports, such as PDF for a matplotlib
+figure in a Typst report, drawn at the size the build measured at its
+placement. A cell read receives the cell's output as marimo shows it, in the
+first accepted type it carries, such as PNG for a matplotlib figure. An output
+or cell without an accepted type, such as text or a table, renders with the
+template's default, and the viewer names a missing output. A `zero-python`
+export renders every output in every prepared state and stops when one state's
+value has no accepted type.
 
 Each runtime supplies values from a different place:
 
@@ -291,49 +288,48 @@ Each runtime supplies values from a different place:
 | Static export, `zero-python` | Each prepared notebook state                | One document per state, rendered at export |
 | Static export, `wasm`        | Unavailable                                 | The document rendered at build time        |
 
-Outputs and cells follow the same rows. They come from the reader's kernel
-session, from the preview's `marimo-output` and `marimo-cell` hosts, or from
-each prepared state.
+Outputs and cells follow the same rows, from the reader's kernel session, the
+preview's `marimo-output` and `marimo-cell` hosts, or each prepared state.
 
-Studio renders documents from session values for published views and refuses
+For published views, Studio renders documents from session values and refuses
 values posted in run mode with `render-values-unverified`. Where no current
-values reach the document, the viewer shows the build-time document with the
-note `Showing the document without current notebook values.` A `wasm` export,
-and a `zero-python` export state without a rendition, show the same note.
+values reach the document, including a `wasm` export and a `zero-python` export
+state without a rendition, the viewer shows the build-time document with the
+note `Showing the document without current notebook values.`
 
 ## Presentation readiness
 
 Wait for `html[data-marimo-studio-state="ready"]` before asserting the
-application's expected result. This state covers Studio's runtime and mounted
-projections. Custom chart, framework, and remote-request completion need their
-own application assertions. Read `data-marimo-studio-revision` on `<html>` for
-the committed presentation revision.
+application's result. This state covers Studio's runtime and mounted
+projections. Custom charts, frameworks, and remote requests need their own
+assertions. `data-marimo-studio-revision` on `<html>` holds the
+committed presentation revision.
 
 An uncaught error or unhandled rejection from a view file or inline module
 script sets the state to `error` for the rest of that document. Studio shows
 the first one with its built file and position, such as
-`main.js:2:23: TypeError: <message>`, or `inline script:2:23: ...`, and
-`marimoStudio.diagnostics()` reports it with the `view-script-error` code.
-Studio's runtime, notebook files, remote scripts, and browser warnings such as
-ResizeObserver loop notices leave the state unchanged.
+`main.js:2:23: TypeError: <message>` or `inline script:2:23: ...`, and
+`marimoStudio.diagnostics()` reports it with code `view-script-error`. Errors
+from Studio's runtime, notebook files, and remote scripts, and browser warnings
+such as ResizeObserver loop notices, leave the state unchanged.
 
-Projection host state is the lifecycle contract for one mounted result.
+Host state is the lifecycle contract for one mounted result.
 `marimo-studio:runtime-ready` fires on `document` when the notebook runtime
-reaches its ready boundary. `marimo-studio:idle` fires when Studio's presentation
-reaches a settled state. Inspect the current DOM state when attaching after
-those events.
+reaches its ready boundary, and `marimo-studio:idle` fires when the
+presentation settles. Inspect the current DOM state when attaching after those
+events.
 
-Use [`STUDIO_RESULT_SELECTOR`](python-api.md#studio-result-selector) to locate
-connected cell, output, and value hosts in browser automation.
+Browser automation locates connected cell, output, and value hosts with
+[`STUDIO_RESULT_SELECTOR`](python-api.md#studio-result-selector).
 
 ## Trace custom JavaScript rendering
 
-For point-and-note feedback with producer context, follow
-[Select results with Lens](../guide/coding-agents.md#select-results-with-lens).
+[Select results with Lens](../guide/coding-agents.md#select-results-with-lens)
+covers point-and-note feedback with producer context.
 
-Prefer `mo-value`, `marimo-output`, and `marimo-cell` when they can render the
-result directly. For a custom chart or component, retain its connection to the
-notebook through the existing projection hosts:
+Use `mo-value`, `marimo-output`, and `marimo-cell` when they can render the
+result directly. A custom chart or component keeps its notebook connection
+through hidden projection hosts:
 
 ```html
 <span id="rows-data" hidden mo-value="rows"></span>
@@ -343,29 +339,29 @@ notebook through the existing projection hosts:
 </section>
 ```
 
-`data-marimo-lens-inputs` lists unique projection host IDs, separated by spaces, in
-the same document. It declares the region's complete notebook input set.
-[Lens](https://marimo-team.github.io/marimo-lens/) reads the hosts' resolved
-symbolic selectors and producing cells. Authors do not copy runtime metadata.
-References can also point to `marimo-output` or `marimo-cell` hosts.
-Missing, duplicate, or unbound references make the region unavailable.
-References cannot chain through other annotated regions.
+`data-marimo-lens-inputs` lists unique projection host IDs in the same
+document, separated by spaces, and declares the region's complete notebook
+input set. [Lens](https://marimo-team.github.io/marimo-lens/) reads the hosts'
+resolved symbolic selectors and producing cells, so authors copy no runtime
+metadata. References can also point to `marimo-output` or `marimo-cell` hosts.
+Missing, duplicate, or unbound references make the region unavailable, and
+references cannot chain through other annotated regions.
 
-Alternatively, put existing hidden `mo-value` hosts directly inside their
-consuming region. `STUDIO_RESULT_SELECTOR` includes those parents and explicitly
-annotated regions, as well as direct projections. Pass it to
-`Lens(dom_selector=STUDIO_RESULT_SELECTOR)` to select these results. A custom
-Lens CSS selector can choose other containing regions.
+Alternatively, put hidden `mo-value` hosts directly inside their consuming
+region. `STUDIO_RESULT_SELECTOR` matches those parents, annotated regions, and
+direct projections. Pass it to `Lens(dom_selector=STUDIO_RESULT_SELECTOR)` to
+select these results, or pass a custom CSS selector to choose other containing
+regions.
 
-Keep references current when JS dependencies change, including transformed
-inputs and portals. Use `aria-busy="true"` while asynchronous rendering is
-incomplete and clear it on completion. Lens retains value selectors and producer
-context. It does not infer arbitrary JS dataflow or pin historical kernel
-values to captured pixels.
+Update references when JavaScript dependencies change, including transformed
+inputs and portals. Set `aria-busy="true"` during asynchronous rendering and
+clear it on completion. Lens retains value selectors and
+producer context. It does not infer arbitrary JavaScript dataflow or pin
+historical kernel values to captured pixels.
 
 ### Select individual results
 
-Give each metric its own inputs instead of assigning only the entire row or page:
+Give each metric its own input host:
 
 ```html
 <article class="metric">
@@ -375,32 +371,32 @@ Give each metric its own inputs instead of assigning only the entire row or page
 </article>
 ```
 
-The hidden host makes the metric selectable with its exact symbolic field path.
-Use a visible `mo-value` directly when native formatting is sufficient. Hidden
-projection hosts stay hidden even under ordinary application layout styles.
-For dynamic rows or thresholds, update the projection selector with the same
-state used to render the result. For non-JSON values, reference a hidden
-`marimo-output` host through `data-marimo-lens-inputs`.
+The hidden host makes the metric selectable by its exact field path. Use a
+visible `mo-value` when native formatting suffices. Hidden hosts stay hidden
+under ordinary layout styles. For dynamic rows
+or thresholds, update the selector from the state that renders the result. For
+non-JSON values, reference a hidden `marimo-output` host through
+`data-marimo-lens-inputs`.
 
-Dynamic selectors require the Python or Browser runtime. Prepared exports need
-a finite authored target set. Use `view export --runtime wasm` when row or
-threshold selection generates paths at runtime.
+Dynamic selectors require the Python or Browser runtime, because Prepared
+exports need a finite authored target set. Use `view export --runtime wasm`
+when row or threshold selection generates paths at runtime.
 
-Prepared views can project a collection through a fixed selector and reference
-that host from each row. Add the selected row path with `data-marimo-lens-detail`
-and a `data-marimo-lens-label`. The path supplies descriptive selection context.
-The resolved source selector remains the collection.
+A Prepared view can project a collection through a fixed selector and
+reference that host from each row, with the row path in
+`data-marimo-lens-detail` and a `data-marimo-lens-label`. The path is
+descriptive context, and the resolved source selector remains the collection.
 
-Browser calculations must reference their real kernel inputs. They can be
-separate targets even when they share a dataframe. Canvas charts and PDF pages
+Browser calculations must reference their real kernel inputs, and can be
+separate targets that share a dataframe. Canvas charts and PDF pages
 are single surfaces unless their renderer supplies finer DOM targets.
 
 ### Selection labels
 
-While Lens is selecting a target, it outlines the element and attaches a compact
-label to its edge. Studio supplies the resolved cell or variable name and its
-producer automatically. Custom regions inherit the labels of their source hosts.
-Override the display text when a region needs a more specific name:
+While selecting, Lens outlines the target element and attaches a compact label
+to its edge. Studio supplies the resolved cell or variable name and its
+producer. Custom regions inherit their source hosts' labels. Override the text
+when a region needs a more specific name:
 
 ```html
 <section
@@ -412,16 +408,16 @@ Override the display text when a region needs a more specific name:
 </section>
 ```
 
-Lens owns this plain-text label contract and presentation. The labels do not
-replace source links or change the selection's notebook identity. Authored labels
-on native projection hosts also take precedence over Studio's defaults.
+Lens owns this plain-text label contract and its presentation. Labels leave
+source links and the selection's notebook identity unchanged. Authored labels
+on native projection hosts take precedence over Studio's defaults.
 
 ### Select authored page regions
 
-Studio makes authored HTML inside `#app-shell` selectable, including copy and
-layout with no notebook inputs. Lens groups a click into the nearest section,
-card, figure, or block. It retains the clicked child's text, path, and relative
-bounds as a compact DOM hint. Native notebook outputs retain their own targets.
+Authored HTML inside `#app-shell` is selectable, including copy and layout
+with no notebook inputs. Lens groups a click into the nearest section,
+card, figure, or block and keeps the clicked child's text, path, and relative
+bounds as a compact DOM hint. Native notebook outputs keep their own targets.
 
 Set the grouping selector on the view shell:
 
@@ -431,8 +427,8 @@ Set the grouping selector on the view shell:
 </main>
 ```
 
-Use `data-marimo-lens-target` to give an authored region explicit target identity
-and `data-marimo-lens-render-source` to identify its source file:
+`data-marimo-lens-target` gives an authored region explicit target identity,
+and `data-marimo-lens-render-source` identifies its source file:
 
 ```html
 <header
@@ -445,15 +441,15 @@ and `data-marimo-lens-render-source` to identify its source file:
 </header>
 ```
 
-Keep the ID stable across rebuilds so Lens can reconnect feedback. An authored
-region with no notebook inputs retains its note and image with empty notebook
+Keep the ID stable across rebuilds so Lens can reconnect feedback. A region
+with no notebook inputs keeps its note and image with empty notebook
 provenance. Use `data-marimo-lens-inputs` when the region consumes notebook
 results.
 
 ### Project an authored Lens
 
 Development previews reuse the Lens that marimo mounts in the notebook. To put
-an explicitly authored Lens in another Python runtime view, define it in the notebook:
+an authored Lens in another Python runtime view, define it in the notebook:
 
 ```python
 from marimo_lens import Lens
@@ -463,14 +459,14 @@ studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
 None
 ```
 
-The final `None` leaves the notebook cell output empty. Project the value into
-the view to place the Lens dock there:
+The final `None` leaves the cell output empty. Project the value into the view
+to place the Lens dock there:
 
 ```html
 <marimo-output value="studio_lens"></marimo-output>
 ```
 
-marimo skips its automatic Lens in a notebook that constructs its own Lens, so
+marimo skips its automatic Lens in a notebook that constructs its own, so
 `studio_lens` is the notebook's only Lens.
 
 The [Lens agent guide](https://marimo-team.github.io/marimo-lens/agents) defines

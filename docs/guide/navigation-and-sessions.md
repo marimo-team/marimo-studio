@@ -1,21 +1,17 @@
 ---
-title: Navigate and preserve state
-description: Link named views, synchronize public query parameters, use fragments, and control Python session replay.
+title: Link views and keep state
+description: Link a notebook's views, share state through query parameters and fragments, and reconnect Python sessions across reloads.
 ---
 
-# Navigate and preserve state
+# Link views and keep state
 
-Each named view has a stable route. The configured default opens at `/`. A view
-named `report` opens at `/report/`.
+Each view has a stable URL. The default view opens at `/`, and a view named
+`report` opens at `/report/`.
 
-Studio keeps public query parameters and the URL fragment with the active
-presentation while removing private routing and credential parameters from
-notebook query state.
+## Link views
 
-## Link named views
-
-Use sibling-relative links when a group of views should work under a live
-server, a deployment base path, and a copied static export:
+Use sibling-relative links, so the links keep working under a live server, a
+deployment base path, and a copied static export:
 
 ```html
 <nav aria-label="Analysis views">
@@ -24,22 +20,12 @@ server, a deployment base path, and a copied static export:
 </nav>
 ```
 
-Export linked views into sibling directories:
+Export linked views into sibling folders, such as `dist/analysis/dashboard/`
+and `dist/analysis/report/`.
 
-```text
-dist/analysis/
-  dashboard/
-    index.html
-  report/
-    index.html
-```
+## Share state in the URL
 
-Studio carries the active public query and fragment through an in-product view
-switch. An authored link controls its own destination URL.
-
-## Read and write public query parameters
-
-Use `mo.query_params()` in the notebook:
+Read and write query parameters in the notebook with `mo.query_params()`:
 
 ```python
 @app.cell
@@ -49,90 +35,43 @@ def filters(mo):
     return (region,)
 ```
 
-Open the view with a public parameter:
+`/report/?region=emea` then opens the report filtered to EMEA. Changes the
+notebook makes through `mo.query_params()` update the browser URL and history.
+Repeated keys and blank values stay distinct, as in `?tag=a&tag=b&empty=`.
 
-```text
-/report/?region=emea
-```
+An anchor such as `<a href="#errors">` stays inside the current view. Studio
+applies the fragment once the view is ready, and back and forward restore the
+query, the fragment, and the selected view. Switching views in Studio carries
+the current query and fragment along.
 
-Changes made through `mo.query_params()` synchronize with Preview and browser
-history. Repeated keys and blank values remain distinct:
-
-```text
-/?tag=first&tag=second&empty=
-```
-
-Studio keeps routing keys such as `runtime`, `session_id`, access tokens, and
-its `marimo_studio_*` capabilities out of the public notebook query.
-
-## Use fragments for local navigation
-
-An anchor stays inside the current view:
-
-```html
-<a href="#error-evidence">Review errors</a>
-
-<section id="error-evidence">...</section>
-```
-
-Studio applies the fragment after the presentation is ready. Browser back and
-forward navigation restores the public query, fragment, and selected view.
-
-## Choose runtime from the URL
-
-When both runtimes are configured, `runtime` selects the notebook runtime for
-the request:
-
-```text
-/?runtime=wasm
-/?runtime=server
-```
-
-The parameter must name one of the configured `runtimes`. Studio treats it as
-routing state, so notebook code does not receive it through
-`mo.query_params()`.
+Studio keeps its own parameters, such as `runtime`, `session_id`, and access
+tokens, out of `mo.query_params()`. When a notebook allows both runtimes,
+`?runtime=wasm` or `?runtime=server` picks one for the request.
 
 ## Open multiple tabs
 
-In edit mode, Studio uses [marimo's native sessions](https://docs.marimo.io/).
-Tabs opened on the same notebook and server share one Python kernel. Changing
-a control recomputes notebook outputs across Python previews. Widget state and
-public query parameters synchronize across those tabs. Each Studio tab keeps
-its selected view.
+In `marimo edit`, tabs on the same notebook share one Python kernel. Changing
+a control in one tab recomputes results in every Python preview, and widget
+state and query parameters sync across tabs. Each tab keeps its own selected
+view.
 
-marimo gives the first connection editing control. Other tabs can interact
-with the notebook through its kiosk view. Select **Take over** in the embedded
-editor to move editing control to that tab. Closing the editor tab leaves the
-remaining tabs connected to the same kernel.
+The first tab has editing control. Other tabs can still use the notebook, and
+**Take over** in the embedded editor moves editing control to them.
 
-Run mode follows marimo's visitor sessions. The Browser runtime runs a separate
-notebook in each browser worker. Selecting another runtime changes which
-notebook instance supplies that tab's outputs.
+In `marimo run`, each visitor gets their own session. The Browser runtime runs
+a separate notebook in each browser.
 
-## Preserve a Python session across navigation
+## Keep a Python session across reloads
 
-Enable session replay in the notebook configuration:
+By default, a reload in `marimo run` starts a fresh Python session. Turn on
+`preserve_session` to reconnect to the existing one:
 
 ```toml
 [tool.marimo-studio]
-runtime = "server"
-runtimes = ["server", "wasm"]
 preserve_session = true
 ```
 
-In run mode, Studio can reconnect a navigation or reload to the existing
-Python runtime session when all of these still match:
-
-- saved notebook
-- Python runtime
-- view path and public query
-- current server process and live session
-
-A different public query starts or selects the session for that query. A
-missing, expired, or mismatched session starts a fresh one. The Browser runtime
-manages its notebook instance in the visitor's browser and does not use
-`preserve_session`.
-
-Leave `preserve_session = false` when each reload should receive a fresh Python
-session. Continue with [Run or export a view](run-and-share.md) to choose a
-runtime and delivery path.
+Studio reconnects when the saved notebook, the Python runtime, the view path
+and query, and the server process all still match. Anything else starts a new
+session, and a different query selects the session for that query. The
+Browser runtime ignores this setting.

@@ -11,14 +11,9 @@
   <a href="https://marimo-team.github.io/marimo-studio/examples/">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-studio/showcase/marimo-studio-wall-dark.webp">
-      <img alt="Four example notebooks, each heading a column of its views" src="https://marimo-team.github.io/marimo-studio/showcase/marimo-studio-wall-light.webp" width="100%">
+      <img alt="Four example notebooks, each heading a column of its four views" src="https://marimo-team.github.io/marimo-studio/showcase/marimo-studio-wall-light.webp" width="100%">
     </picture>
   </a>
-</p>
-
-<p align="center">
-  <b>One reactive notebook. Many views.</b><br>
-  Turn a <a href="https://marimo.io/">marimo</a> notebook into apps, presentations, articles, and PDF reports, by hand or with a coding agent.
 </p>
 
 <p align="center">
@@ -27,17 +22,60 @@
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python 3.10 through 3.14" src="https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg"></a>
 </p>
 
-Studio keeps data, computation, and controls in the notebook and gives each
-audience its own view, such as a dashboard, a slide deck, an article, or a PDF
-report. A view places the notebook's cells, outputs, and values by name. Web
-pages keep them live, so changing an input updates every result that depends
-on it, and Typst and LaTeX documents render again with the new values. Every
-result a view shows traces back to the notebook cell that computed it.
+marimo-studio builds views of a [marimo](https://marimo.io/) notebook: web
+pages, slide decks, and typeset PDF documents that place the notebook's
+results by name. A view can place a cell with its controls, a rendered output
+such as a chart, or a value such as a number or a table. The notebook keeps the
+data and the computation. Each view keeps its own source in a folder beside the
+notebook, in the format its audience needs: an HTML page, a React or Svelte
+app, a Reveal.js deck, a Quarto article, or a Typst or LaTeX PDF.
+
+Pages stay live, so changing a control updates every result that depends on
+it. Documents typeset again with the new values. Every result traces back to
+the notebook cell that computed it.
 
 Studio is experimental and changing rapidly. Pin `marimo-studio` and
 third-party view providers in saved projects.
 
-## Start with a coding agent
+## Example
+
+Two cells from a notebook that solves an optimization problem:
+
+```python
+@app.cell
+def solution(q, solve):
+    solution = solve(q)
+    return (solution,)
+
+
+@app.cell
+def level_curves(bowl, draw_problem, region, solution):
+    problem_figure = draw_problem(region, bowl, solution)
+    problem_figure
+    return (problem_figure,)
+```
+
+An HTML page places the figure and the optimal value:
+
+```html
+<marimo-output value="problem_figure"></marimo-output>
+<p>The optimal value is <strong mo-value="solution.value"></strong>.</p>
+```
+
+A Typst report places the same two results in a PDF:
+
+```typst
+#import "marimo.typ": marimo_output, marimo_value
+
+#marimo_output("problem_figure", width: 100%)
+The optimal value is #marimo_value("solution.value", default: 0).
+```
+
+[What is Studio?](https://marimo-team.github.io/marimo-studio/what-is-studio) explains the model, and the
+[Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs) example shows both
+views next to the notebook.
+
+## Get started
 
 Paste this request into Claude Code, Codex, or another terminal agent:
 
@@ -47,64 +85,57 @@ a scrollytelling report and a slide deck explaining calculus basics.
 ```
 
 The agent reads the instructions Studio ships for coding agents, starts a
-notebook with Studio in your browser, and writes the calculus in Python cells.
-It then builds both views and shows them beside the notebook. Change the topic,
-or name a notebook you already have. [uv](https://docs.astral.sh/uv/) supplies
-`uvx`.
+notebook with Studio, writes the calculus in Python cells, then builds both
+views and shows them beside the notebook. [uv](https://docs.astral.sh/uv/)
+supplies `uvx`.
 
-[Author with a coding agent](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-covers pairing with a running notebook and pointing at results with
-[Lens](https://marimo-team.github.io/marimo-lens/).
-
-## Start by hand
+To work by hand, open a notebook with Studio:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
-Add a cell that displays a result, then click **Add view** in the Studio
-toolbar. Save the notebook if prompted, choose **HTML document**, and create
-the view. Notebook and Preview open side by side. Saving view source rebuilds
-Preview, and a failed build keeps the last successful view.
+Click **Add view** in the toolbar, choose **HTML document**, and create the
+view. Notebook and Preview open side by side, and saving view source rebuilds
+Preview.
 
 ![Notebook, Preview, and view source in Studio](https://marimo-team.github.io/marimo-studio/screenshots/studio-develop.png)
 
-[Getting started](https://marimo-team.github.io/marimo-studio/guide/getting-started)
-walks through a complete first view.
+[Getting started](https://marimo-team.github.io/marimo-studio/guide/getting-started) walks through a first view,
+and [Author with a coding agent](https://marimo-team.github.io/marimo-studio/guide/coding-agents) covers working
+with an agent.
 
 ## Examples
 
-Each example notebook backs several views, each built with its own document
-technology.
+Each example notebook backs four views:
 
-- [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs): a Reveal.js lecture, an HTML
-  explainer, a Svelte and D3 lab, and a Typst PDF report.
-- [Rio 2016 athletes](https://marimo-team.github.io/marimo-studio/examples/athletes): an HTML overview, a Mosaic explorer, a
-  Three.js presentation, and a Quarto paper typeset with KaTeX.
-- [Earthquake watch](https://marimo-team.github.io/marimo-studio/examples/earthquakes): an Observable Plot story, a MapLibre
-  operations map, a Reveal.js briefing, and a Quarto bulletin.
-- [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy): a Notebook Kit monitor, a pdfcn PDF
-  report, a LaTeX journal paper, and a Recharts model review.
+- [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs): a Reveal.js
+  lecture, an HTML explainer, a Svelte and D3 lab, and a Typst report.
+- [Rio 2016 athletes](https://marimo-team.github.io/marimo-studio/examples/athletes): an HTML overview, a Mosaic
+  explorer, a Three.js presentation, and a Quarto paper.
+- [Earthquake watch](https://marimo-team.github.io/marimo-studio/examples/earthquakes): an Observable Plot story,
+  a MapLibre operations map, a Reveal.js briefing, and a Quarto bulletin.
+- [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy): a Notebook Kit monitor, a
+  PDF field report, a LaTeX journal paper, and a Recharts model review.
 
 ## Run or export a view
 
-Serve the notebook's views as a live **Python** app:
+Serve the notebook's views as a live Python app:
 
 ```console
 uvx --with marimo-studio marimo run analysis.py --sandbox
 ```
 
-Export the `report` view with **Prepared** results as a static site:
+Or export the `report` view as a static site:
 
 ```console
 uvx marimo-studio view export report --target analysis.py --output dist/report
 ```
 
-A Prepared export publishes the exported results and finite input states and
-keeps notebook source on the machine that runs the export. Views can also run
-Python in the visitor's **Browser**.
-[Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
-compares what visitors receive.
+The export runs the notebook on your machine, prepares results for each input
+state the view lists, and leaves the notebook source out of the site. Views can also
+run Python in the visitor's browser.
+[Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share) compares the options.
 
 ## Documentation
 

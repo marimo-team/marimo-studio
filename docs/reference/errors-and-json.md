@@ -5,27 +5,26 @@ description: Stable JSON result, JSON Lines progress and diagnostics, HTTP error
 
 # Errors and JSON
 
-`--json` gives commands separate result and diagnostic channels:
+`--json` gives commands separate result and diagnostic channels. Keep them
+separate when another program reads the result:
 
 - Standard output contains one JSON result after a successful operation.
 - Standard error contains one JSON object per progress or diagnostic line.
 - The process exit status identifies the failure category.
-
-Keep the streams separate when another program reads the result.
 
 ```sh
 marimo-studio status --target analysis.py --json \
   >status.json 2>diagnostics.jsonl
 ```
 
-Every top-level result record has `schema: 1`. The command-specific result
-shape matches the `to_dict()` contract of its Python record. See [Python
+Every top-level result record has `schema: 1`. Each command's result shape
+matches the `to_dict()` contract of its Python record. See [Python
 API](python-api.md#public-records) for record fields.
 
 ## Diagnostic events
 
 [JSON Lines](https://jsonlines.org/) stores one JSON object on each line, so a
-caller can process diagnostics as they arrive. One event has this shape:
+caller can process diagnostics as they arrive. An event has this shape:
 
 ```json
 {
@@ -53,15 +52,14 @@ caller can process diagnostics as they arrive. One event has this shape:
 | `status`    | string, optional              | Operation-specific state                                              |
 | `details`   | object, optional              | Structured paths, revisions, hints, recovery files, and other context |
 
-Output from a provider or child process that is not a valid trusted diagnostic
-event becomes a bounded `process-output` warning. Studio retains at most the
-last 16,384 characters of that text and reports omitted character counts in
-`details`.
+Provider or child process output that is not a valid trusted diagnostic event
+becomes a bounded `process-output` warning. Studio keeps the last 16,384
+characters of that text and reports omitted character counts in `details`.
 
 ## Progress events
 
-Long-running static preflight and export commands stream progress on standard
-error. One JSON Lines record has this shape:
+Static preflight and export commands stream progress on standard error. A
+record has this shape:
 
 ```json
 {
@@ -90,31 +88,22 @@ error. One JSON Lines record has this shape:
 }
 ```
 
-Consumers may render, retain, or discard these records. The successful terminal
-result remains one JSON object on standard output. A re-entered notebook
-environment relays the same progress records instead of folding them into
-process-output warnings.
+Each record includes the view, runtime, owning source, and nested event.
+Events owned by `marimo-export` keep its state counts, cache activity, elapsed
+time, and message unchanged. Consumers may stream, retain, or discard these
+records independently of the result, which stays one JSON object on standard
+output. A command that
+re-enters the notebook environment relays the same progress records, separate
+from process-output warnings.
 
 ## Expected command failures
 
 An expected `MarimoStudioError` produces one error diagnostic with its stable
 `code`, message, exit status, optional `hint`, optional `transient: true`, and
-`diagnostic_details()` fields.
-
-Click argument errors use code `usage-error` and exit status `2`. An interrupted
-confirmation or command uses code `interrupted` and exit status `130`.
-
-|  Exit | Category                                                       |
-| ----: | -------------------------------------------------------------- |
-|   `0` | Operation completed                                            |
-|   `1` | Validation or a named provider availability check failed       |
-|   `2` | Arguments or capability input are invalid                      |
-|   `3` | Configuration, source, build, export, or mutation state failed |
-|   `4` | Cell alias binding failed                                      |
-|   `5` | A live Studio request failed                                   |
-|   `6` | Studio and marimo protocol contracts disagree                  |
-|   `7` | The target Python environment could not be prepared            |
-| `130` | The command was interrupted                                    |
+`diagnostic_details()` fields. Its exit status follows the
+[CLI exit status](cli.md#exit-status) categories. Argument parsing errors use
+code `usage-error` and exit status `2`. An interrupted confirmation or command
+uses code `interrupted` and exit status `130`.
 
 ## Python error contract
 
@@ -184,7 +173,7 @@ Every expected error exposes:
 Generation and incomplete-mutation errors marked `transient` require a fresh
 read before retry. A `configuration-error` marked `transient` reports a file
 that kept changing while Studio read it, such as a notebook during repeated
-saves. Retry the operation. `AgentRequestError` can also carry a
+saves, and the operation can be retried. `AgentRequestError` can also carry a
 server-supplied retry classification.
 
 ## HTTP error responses
@@ -199,14 +188,14 @@ Studio routes encode expected errors as JSON:
 }
 ```
 
-The response status equals `error.status_code`. `Marimo-Studio-Error` repeats
-the code in a response header, and expected error responses use
+The response status equals `error.status_code`. The `Marimo-Studio-Error`
+response header repeats the code, and expected error responses use
 `Cache-Control: no-store`. An available hint appears as `hint`. A retryable
 failure includes `transient: true`.
 
-Studio's Python runtime routes use two synchronization codes. `runtime-sync-pending`
-is transient while the editor session is applying changed cells, so the browser
-can retry the request. `runtime-sync-required` is terminal for the current
+Python runtime routes use two synchronization codes. `runtime-sync-pending` is
+transient while the editor session applies changed cells, so the browser can
+retry the request. `runtime-sync-required` is terminal for the current
 notebook state. Run the changed cells in the editor, then retry the preview.
 
 Authentication failures use route-owned codes such as

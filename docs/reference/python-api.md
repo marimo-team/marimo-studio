@@ -7,11 +7,10 @@ description: Inspect notebooks, author views, verify the current Studio tab, and
 
 Use `marimo_studio.authoring` for a saved notebook on disk. Use
 `marimo_studio.agent` inside
-[marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)
-when an operation needs the current Studio tab. Code mode gives a coding agent
-a Python execution inside the live notebook kernel. Public records are frozen
-dataclasses. Their `to_dict()` methods produce the schema used by
-`marimo-studio --json`.
+[marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode),
+which runs a coding agent's Python inside the live notebook kernel, when an
+operation needs the current Studio tab. Public records are frozen dataclasses
+whose `to_dict()` methods produce the schema of `marimo-studio --json`.
 
 ## `marimo_studio.authoring`
 
@@ -27,10 +26,9 @@ workspace = open_workspace("analysis.py")
 open_workspace(notebook: str | Path) -> Workspace
 ```
 
-Returns a workspace handle for an existing regular file. The call resolves the
-path and verifies the file. It raises `ConfigurationError` when the resolved path
-is not a regular file. Each operation loads and validates the notebook and Studio
-configuration it needs.
+Resolves the path and returns a workspace handle. Raises `ConfigurationError`
+when the resolved path is not a regular file. Each operation loads and
+validates the notebook and Studio configuration it needs.
 
 ### `Workspace`
 
@@ -60,30 +58,29 @@ await workspace.validate(
 ) -> ValidationReport
 ```
 
-Static notebook inspection never executes notebook code. Runtime inspection
-and runtime validation execute the complete notebook in an owned child process.
-The child inherits the interpreter environment, current directory, OS user
-permissions, filesystem access, and network access. The process boundary owns
-cleanup and terminates the child process tree after cancellation or a timeout.
-It is a lifecycle boundary, not a security sandbox. Run trusted notebook code.
+Static inspection never executes notebook code. Runtime inspection and runtime
+validation execute the complete notebook in an owned child process, which
+inherits the interpreter environment, current directory, OS user permissions,
+filesystem access, and network access. The process boundary terminates the
+child process tree after cancellation or a timeout. It bounds the lifecycle
+and is not a security sandbox, so run trusted notebook code only.
 
-Use `context="upstream"` with one or more selectors to include every cell that
+`context="upstream"` with one or more selectors includes every cell that
 produces their inputs.
 
 `create_view()` raises `ViewExistsError` when the name already has a view.
 `view()` reads the current catalog and returns a handle bound to that workspace
-and view incarnation. `create_view()` and `bind()` reject a replacement
-workspace with `WorkspaceGenerationConflictError`. Open a new workspace before
-retrying the operation.
+and view incarnation. `create_view()` and `bind()` raise
+`WorkspaceGenerationConflictError` for a replaced workspace. Open a new
+workspace before retrying.
 
 ### `StudioOverview`
 
-Describes the configuration source, notebook, view root, build state root,
-runtime choices, cell aliases, and configured views returned by
-`Workspace.status()`. `view_root` holds the authored view projects, and
-`state_root` holds their replaceable build state.
-`generation` identifies the returned catalog and changes when its configuration
-or view incarnations change.
+Returned by `Workspace.status()`. Describes the configuration source, notebook,
+view root, build state root, runtime choices, cell aliases, and configured
+views. `view_root` holds the authored view projects, and `state_root` holds
+their replaceable build state. `generation` identifies the returned catalog and
+changes when its configuration or view incarnations change.
 
 In a [marimohub](../guide/marimohub.md) session, `persistence` reports which
 files the hub saves when the session ends: `"workspace"` saves workspace files,
@@ -92,15 +89,14 @@ It is `None` outside marimohub and before the hub publishes the session.
 
 `launch_requirements` lists the exact Studio requirement with configured
 provider extras and the exact installed third-party provider distributions
-required to reopen the workspace in another `uv` environment. The `uv`
-executable must be available when Studio needs to prepare or re-enter that
-environment.
+needed to reopen the workspace in another `uv` environment. Studio needs the
+`uv` executable to prepare or re-enter that environment.
 
 ### `ViewOverview`
 
 Identifies one configured view, its project path, provider, Source document
-paths, default status, generation, and current artifact revision. Call
-`View.inspect()` to read each document's access mode.
+paths, default status, generation, and current artifact revision.
+`View.inspect()` reads each document's access mode.
 
 ### `InspectionResult`
 
@@ -148,9 +144,8 @@ UI object reset identifiers.
 
 Describes one installed starter through `id`, `title`, `summary`, `provider`,
 the initial Source document plan in `documents`, and current `availability`.
-Run `marimo-studio view create VIEW --target PATH --dry-run` to inspect the
-complete created file set before committing it. `Workspace.create_view()`
-creates the view directly.
+`marimo-studio view create VIEW --target PATH --dry-run` lists the complete
+file set before creation. `Workspace.create_view()` creates the view directly.
 
 ### `BindingResult`
 
@@ -166,14 +161,14 @@ that the handle observed.
 
 Successful `Workspace.bind()`, `Workspace.create_view()`, `View.make_default()`,
 `View.rename()`, and `View.remove()` advance the owning `Workspace`. Existing
-`View` handles remain bound to their original generations. Use the handle that
+`View` handles stay bound to their original generations. Use the handle that
 `make_default()` or `rename()` returns, or reacquire handles with
 `workspace.view(name)` after a catalog mutation.
 
-Use Studio's remove and create operations for same-name replacement. Direct
-filesystem delete and recreation completed between observations is outside the
-0.1 mutation-ownership contract when it reuses `(device, inode, mode)`. This
-includes exact-byte recreation.
+Replace a same-name view with Studio's remove and create operations. A direct
+filesystem delete and recreation between observations that reuses
+`(device, inode, mode)`, including exact-byte recreation, falls outside the
+mutation-ownership contract.
 
 ```text
 await view.inspect() -> ViewInspection
@@ -218,16 +213,16 @@ await view.remove() -> ViewCatalog
 bound to the committed catalog. Selecting the current default leaves the
 catalog unchanged.
 
-`rename(new_name)` moves the view project to `new_name` with its source,
-artifacts, and build history, and returns the handle for the new name. A
-default view stays the default. The project reads as `stale` until its next
-`build()`, which republishes it under the new name. Handles bound to the old
-name raise `ViewGenerationConflictError` from view operations such as
-`inspect()` and `build()`. `rename()` raises `ViewExistsError` for a taken
-name, including the view's own name, `InvalidViewNameError` for a name outside
-the view name rules, `PublicationHeldError` while a publication hold is
-active, and `ViewRenameError` when the project folder cannot move. The view
-keeps its old name after each of these errors.
+`rename(new_name)` moves the view project with its source, artifacts, and build
+history, and returns the handle for the new name. A default view stays the
+default. The project reads as `stale` until its next `build()` republishes it
+under the new name. Handles bound to the old name raise
+`ViewGenerationConflictError` from view operations such as `inspect()` and
+`build()`. `rename()` raises `ViewExistsError` for a taken name, including the
+view's own name, `InvalidViewNameError` for a name outside the view name rules,
+`PublicationHeldError` while a publication hold is active, and
+`ViewRenameError` when the project folder cannot move. After each of these
+errors the view keeps its old name.
 
 `remove()` deletes the view project and returns the remaining views as a
 `ViewCatalog`. It raises `LastViewError` for the only view. `ViewDeletionError`
@@ -247,66 +242,62 @@ replacement, makes `make_default()`, `rename()`, and `remove()` raise
 `WorkspaceGenerationConflictError`. Open a new `Workspace` and acquire the
 view again.
 
-`inspect()` reads current filesystem state. Source can be edited through
-filesystem tools or `write()`. Provider inspection continues to own document
-access and build-input discovery. See [Manage view source](../guide/manage-source.md)
-for multi-file edits and recovery.
+`inspect()` reads current filesystem state. Edit source with filesystem tools
+or `write()`. Provider inspection owns document access and build-input
+discovery. See [Work in Studio](../guide/work-in-studio.md) for multi-file
+edits and recovery.
 
-`write()` checks the expected source revision under the same lock used by the
-Studio editor. A stale revision raises `SourceConflictError` and preserves the
-newer file.
+`write()` checks the expected source revision under the Studio editor's lock.
+A stale revision raises `SourceConflictError` and preserves the newer file.
 
 `show()`, `write()`, `build()`, `validate()`, `preflight()`, and `export()`
 verify the handle's catalog and view generation. A same-name replacement raises
 `ViewGenerationConflictError` before browser activation, source writes, or
 artifact publication. `export()` checks again before replacing its destination,
-including when `force=True`.
+including with `force=True`.
 
 `preflight()` builds, prepares, and inspects the complete static bundle in a
-temporary directory. It returns before publishing a caller-owned destination.
+temporary directory and returns before publishing a caller-owned destination.
 `export()` runs the same preflight before it writes one static runtime.
 `runtime="zero-python"` prepares the configured notebook states.
 `runtime="wasm"` packages notebook source for execution through Pyodide in each
-visitor's browser.
-`prepare_timeout` bounds Prepared preparation and uses 30 seconds when
-omitted. Passing `prepare_timeout` with `runtime="wasm"` raises `ValueError`
+visitor's browser. `prepare_timeout` bounds Prepared preparation and defaults
+to 30 seconds. With `runtime="wasm"`, `prepare_timeout` raises `ValueError`
 before Studio loads the workspace or builds the provider artifact.
 
 `progress` receives ordered `StaticExportProgress` records from the synchronous
 export worker. Each record wraps either a `marimo_export.ProgressEvent` or a
 Studio-owned `StaticExportStep`. Keep callbacks fast and thread-safe. An
-exception raised by the callback cancels static destination publication.
+exception from the callback cancels static destination publication.
 
-`build()` returns the artifact revision produced by the selected development or
-production build. The profiles maintain independent publications. A failed
-build leaves the last successful artifact for that profile available.
+`build()` returns the artifact revision of the selected development or
+production build. The profiles keep independent publications. A failed build
+leaves the last successful artifact for that profile available.
 
 #### `preview_url()`
 
-Returns the running view's URL in a top-level browser document. Choose
-`runtime="server"`, `"wasm"`, or `"zero-python"` explicitly. The server must
-expose that runtime. Saved-workspace callers supply `server`, and the URL keeps
-its origin and path, including a proxy path prefix. A live code-mode view infers
-the local server address that marimo uses for callbacks, and follows the
+Returns the running view's URL for a top-level browser document. Choose
+`runtime="server"`, `"wasm"`, or `"zero-python"` explicitly, and the server
+must expose that runtime. Saved-workspace callers supply `server`, and the URL
+keeps its origin and path, including a proxy path prefix. A live code-mode view
+infers the local server address that marimo uses for callbacks and follows the
 attached Studio tab. Behind a proxy, open the same path beneath the browser's
 public root. In a [marimohub](../guide/marimohub.md) session, a code-mode URL
 uses the hub's public address for the sandbox. `access_token` authenticates the
-server request. On an edit-mode
-server, `browser_client` selects the Studio tab that a Python or Prepared
-preview follows. Either one requires `server`. The browser still needs the
-server's normal authentication.
+server request. On an edit-mode server, `browser_client` selects the Studio tab
+that a Python or Prepared preview follows. Both require `server`. The browser
+still needs the server's normal authentication.
 
 The default URL follows the current presentation when opened or reloaded.
 `exact=True` requires current source to be built for the served profile
-(development in edit mode, production in run mode), then pins its presentation
+(development in edit mode, production in run mode) and pins its presentation
 revision. Opening that URL returns HTTP 409 when the revision differs or view
-source is unbuilt or failed, even if the previous artifact is retained. This
-method returns an address and does not open or select a browser tab.
+source is unbuilt or failed, even when the previous artifact is retained. The
+method returns an address and leaves browser tabs untouched.
 
-Finish code-mode execution before waiting for output in the browser. Wait for
-`html[data-marimo-studio-state="ready"]`, then assert the application's
-content and behavior. The document's `data-marimo-studio-revision` records the
-committed presentation revision. Use `inspect()` for source and build freshness.
+Finish code-mode execution before waiting for output in the browser, then
+follow [Presentation readiness](projections.md#presentation-readiness).
+`inspect()` reports source and build freshness.
 
 ### `View.hold_publication` and `View.release_publication`
 
@@ -316,32 +307,31 @@ await view.release_publication(token: str) -> PublicationHold | None
 ```
 
 `hold_publication()` delays replacement publication across processes while
-source editing remains available. Existing published artifacts can be reused.
-`owner` identifies the editor and must contain 1 to 256 characters, including
-at least one non-whitespace character. `ttl` is a finite number of seconds
-greater than zero and at most 3600. Invalid arguments raise `ValueError`.
-An active hold raises `PublicationHeldError` with its owner and expiry.
+source editing stays available. Existing published artifacts can be reused.
+`owner` identifies the editor and has 1 to 256 characters, at least one of them
+non-whitespace. `ttl` is a finite number of seconds greater than zero and at
+most 3600. Invalid arguments raise `ValueError`. An active hold raises
+`PublicationHeldError` with its owner and expiry.
 
-Retain the returned token. In a later execution,
+Keep the returned token. In a later execution,
 `(await view.inspect()).publication_hold` returns the current hold with its
 token, or `None` when the view has no hold record. `release_publication()`
-releases the matching hold and returns its receipt. Repeating the release
-returns the same receipt.
-It returns `None` when the view has no hold record. A mismatched token raises
-`ConfigurationError`. Both methods enforce the handle's view generation.
-They remain available when the manifest needs repair.
+releases the matching hold and returns its receipt, and repeating the release
+returns the same receipt. It returns `None` when the view has no hold record. A
+mismatched token raises `ConfigurationError`. Both methods enforce the handle's
+view generation and stay available when the manifest needs repair.
 
-Release or expiry permits the live editor to reconcile and publish current
-source. For an offline workflow, call `build()` after release. Source changes
-remain on disk after release, expiry, or editing-process exit.
+Release or expiry lets the live editor reconcile and publish current source.
+For an offline workflow, call `build()` after release. Source changes stay on
+disk after release, expiry, or editing-process exit.
 
 ### `PublicationHold`
 
 Contains `token`, `owner`, view `generation`, `expires_at` as Unix seconds, and
 `released`. The computed `status` is `active`, `expired`, or `released`. The
 computed `expiry` renders `expires_at` as UTC text, such as
-`2026-09-30 14:32:45 UTC`.
-`to_dict()` includes `status` with the token, owner, generation, and expiry.
+`2026-09-30 14:32:45 UTC`. `to_dict()` includes `status` with the token, owner,
+generation, and expiry.
 
 ### `ViewBuild`
 
@@ -377,11 +367,12 @@ Contains current filesystem and development publication evidence:
 | `files`, `files_complete`                          | Observed source and build-input inventory and whether discovery completed.                      |
 | `publication_hold`                                 | Current, expired, or released hold receipt, or `None`.                                          |
 
-Provider or manifest failure returns diagnostics and an incomplete inventory.
-Repair `view.toml` through its manifest path, then inspect again. Artifact
-metadata describes disk publication. Browser assertions check one rendered
-presentation. See [Identities and
-state](identities.md#build-freshness) for freshness values.
+A provider or manifest failure returns diagnostics and an incomplete inventory.
+When `view.toml` needs repair, `provider` is `None` and publication fields
+describe stored build receipts. Repair the manifest through its path, then
+inspect again to verify the provider and artifact. Artifact metadata describes
+disk publication, and browser assertions check one rendered presentation.
+[Identities and state](identities.md#build-freshness) lists freshness values.
 
 ```text
 inspection.changes_since(previous: ViewInspection) -> ViewSourceChanges
@@ -390,19 +381,15 @@ inspection.changes_since(previous: ViewInspection) -> ViewSourceChanges
 Compares file revisions from two complete inventories. Raises `ValueError`
 when either inventory is incomplete or the root, view, or generation differs.
 
-When `view.toml` needs repair, `provider` is `None`, the inventory is incomplete,
-and publication fields describe stored build receipts. Repair the manifest and
-inspect again to verify the provider and artifact.
-
 ### `ViewSourceFile`
 
-`ViewSourceFile` contains a project-relative `path` and content `revision`.
-A `None` revision records an expected file that is missing.
+Contains a project-relative `path` and content `revision`. A `None` revision
+records an expected file that is missing.
 
 ### `ViewSourceChanges`
 
-`ViewSourceChanges` contains `added`, `modified`, and `deleted` path tuples.
-Its `to_dict()` serializes each tuple as a list of forward-slash paths.
+Contains `added`, `modified`, and `deleted` path tuples. `to_dict()` serializes
+each tuple as a list of forward-slash paths.
 
 ### `StudioDiagnostic`
 
@@ -411,8 +398,8 @@ optional source location.
 
 ### `StaticRuntime`
 
-`Literal["zero-python", "wasm"]`. The value selects the single notebook runtime
-written into a static export.
+`Literal["zero-python", "wasm"]`. Selects the single notebook runtime written
+into a static export.
 
 ### `StaticExportResult`
 
@@ -420,7 +407,7 @@ Contains `notebook`, `view`, selected `runtime`, provider artifact `document`,
 `cache_activity`, `preflight`, and `marimo-export`'s `DeliveryResult`. The
 `output`, `files`, and `warnings` properties expose the committed delivery.
 A Prepared result carries `marimo-export`'s authored and projection cache
-dispositions. A Browser result sets `cache_activity` to `None`. The
+dispositions, and a Browser result sets `cache_activity` to `None`. The
 `entrypoint` property resolves `output / document`. `to_dict()` emits the
 flattened output path, file count, warnings, and resolved entrypoint.
 
@@ -436,8 +423,7 @@ completion.
 
 Contains a Studio-owned `kind` and optional `completed`, `total`,
 `elapsed_seconds`, and `message` fields. Import `ProgressEvent` from
-`marimo_export` when code needs to distinguish preparation events from Studio
-steps. `StaticExportEvent` is the union of those two records.
+`marimo_export` to distinguish preparation events from Studio steps.
 
 ### `StaticExportEvent`
 
@@ -467,14 +453,14 @@ source location, reason, and status:
 
 Names one source-located delivery diagnostic with `code`, `severity`,
 `message`, optional `reference`, and `hint`. Errors stop export before the
-destination changes. Warnings identify browser dependencies that require
-caller review.
+destination changes. Warnings identify browser dependencies for the caller to
+review.
 
 ### `ViewCatalog`
 
-`ViewCatalog` records the views of a notebook after a catalog change.
-`View.remove()` returns it. `views` maps each view name to its view generation
-in name order, `default_view` names the view at `/`, and `catalog_generation`
+Records the views of a notebook after a catalog change, as returned by
+`View.remove()`. `views` maps each view name to its view generation in name
+order, `default_view` names the view at `/`, and `catalog_generation`
 identifies the committed catalog that the owning workspace captured.
 
 ### `ValidationReport`
@@ -509,7 +495,7 @@ ValidationIssue(
 ```
 
 Names one problem and the next repair action. Errors make `ValidationReport.ok`
-false. Warnings remain available for task-specific judgment.
+false. Warnings are left to task-specific judgment.
 
 ### `doctor`
 
@@ -533,9 +519,9 @@ load error, provider metadata, availability, and discovered starter IDs.
 
 ## `marimo_studio.agent`
 
-`import marimo_studio` exposes this module as `marimo_studio.agent`. Studio
-loads it on first attribute access. For typed editor completion, import
-`marimo_studio.agent` directly.
+`import marimo_studio` exposes this module as `marimo_studio.agent` and loads
+it on first attribute access. Import `marimo_studio.agent` directly for typed
+editor completion.
 
 ### Installed briefing
 
@@ -603,29 +589,35 @@ Call it once in each code-mode execution.
 
 ### `Workspace`
 
-The live workspace supports the saved-notebook operations documented in
+The live workspace supports the saved-notebook operations of
 `marimo_studio.authoring`. `inspect_notebook()` reads saved source, and runtime
-inspection executes a separate process. Neither returns the live kernel globals.
-Workspace-wide validation remains static or isolated runtime validation.
+inspection executes a separate process, so neither returns the live kernel
+globals. Workspace-wide validation stays static or isolated runtime
+validation.
+
+The live API returns the same `PublicationHold`, `ViewInspection`,
+`ViewSourceFile`, `ViewSourceChanges`, `ValidationReport`, and
+`ValidationIssue` records as saved-workspace authoring. `ViewInspection`
+source evidence describes saved files.
 
 ### `View`
 
 The live view supports `preview_url()` with the current server inferred from
-code mode. It also supports activation in the user's Studio tab:
+code mode, and activation in the user's Studio tab:
 
 ```text
 await view.show() -> ShowResult
 ```
 
 `show()` selects the view in the current Studio tab. Run it in a separate
-code-mode execution so the notebook can finish rendering. Open the URL returned
-by `preview_url(runtime="server")` with your preferred browser tool for direct
-page inspection.
+code-mode execution so the notebook can finish rendering. For direct page
+inspection, open the URL from `preview_url(runtime="server")` in a browser
+tool.
 
-The attached Studio server runs `rename()` and `remove()`, and first releases
+The attached Studio server runs `rename()` and `remove()` and first releases
 the artifacts it serves for the view. A failure raises `AgentRequestError`
 whose `code` names the error, such as `view-exists` or `view-in-use`, and whose
-`details` carry the same diagnostic details. Call `show()` on the handle that
+`details` carry the diagnostic details. Call `show()` on the handle that
 `rename()` returns to display the renamed view in the Studio tab.
 
 ### `ShowResult`
@@ -644,38 +636,10 @@ ShowResult(
 ```
 
 Confirms that the intended Studio tab accepted the view selection.
-`generation` is the tab's monotonically increasing activation generation. It
-is distinct from the 64-character view generation used for mutation ownership.
-`preview_url` and `frame_selector` address the activated document in that Studio
-tab. `View.preview_url()` returns a separate top-level presentation URL.
-
-### `PublicationHold`
-
-The live API returns the same [publication hold](#publicationhold) record as
-saved-workspace authoring.
-
-### `ViewInspection`
-
-The live API returns the same [source inspection](#viewinspection) record as
-saved-workspace authoring. Its source evidence describes saved files.
-
-### `ViewSourceFile`
-
-The live API uses the common [file revision](#viewsourcefile) record.
-
-### `ViewSourceChanges`
-
-The live API uses the common [source comparison](#viewsourcechanges) record.
-
-### `ValidationReport`
-
-The live API returns the common validation record documented under
-`marimo_studio.authoring`.
-
-### `ValidationIssue`
-
-The live API returns the common issue record documented under
-`marimo_studio.authoring`.
+`generation` is the tab's monotonically increasing activation generation,
+distinct from the 64-character view generation used for mutation ownership.
+`preview_url` and `frame_selector` address the activated document in that
+Studio tab. `View.preview_url()` returns a separate top-level presentation URL.
 
 ## `marimo_studio`
 
@@ -704,8 +668,8 @@ notebook = inspect_notebook("analysis.py", include_code=True)
 inspect_notebook(path: str | Path, *, include_code: bool = False) -> NotebookSpec
 ```
 
-Compiles the saved notebook and returns its cells, source spans, definitions,
-references, and dependency relationships without executing it.
+Compiles the saved notebook without executing it and returns its cells, source
+spans, definitions, references, and dependency relationships.
 
 ### `create_asgi_app`
 
@@ -722,14 +686,14 @@ create_asgi_app(notebook: str | Path) -> ASGIApp
 Returns a marimo run-mode [ASGI](https://asgi.readthedocs.io/en/latest/)
 application that serves the notebook's default and named views. ASGI is the
 standard interface between asynchronous Python web applications and servers.
-The application lifespan opens Studio services and closes its notebook
-sessions and background tasks during shutdown.
+The application lifespan opens Studio services and, at shutdown, closes its
+notebook sessions and background tasks, so forward the lifespan through the
+ASGI server.
 
-Forward the application lifespan through the ASGI server. marimo owns
-authentication and supplies read and edit scopes to Studio routes. The hosting
-stack owns TLS, proxy headers, process supervision, network exposure, and
-resource limits. See [Compatibility and
-support](compatibility.md#deployment-boundary).
+marimo owns authentication and supplies read and edit scopes to Studio routes.
+The hosting stack owns TLS, proxy headers, process supervision, network
+exposure, and resource limits. See
+[Compatibility and support](compatibility.md#deployment-boundary).
 
 `marimo_studio.asgi:app` reads the notebook path from
 `MARIMO_STUDIO_NOTEBOOK` for application servers:
@@ -743,12 +707,9 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
 
 CSS selector for connected cell, output, and value hosts, parents containing
 hidden value hosts, custom regions annotated with `data-marimo-lens-inputs`,
-and authored regions marked with `data-marimo-lens-target`.
-See [custom JavaScript rendering](projections.md#trace-custom-javascript-rendering)
-for the authoring contract.
-
-Pass the selector to [Lens](https://marimo-team.github.io/marimo-lens/)
-to collect feedback from native projections and custom rendered regions:
+and authored regions marked with `data-marimo-lens-target`. Pass it to
+[Lens](https://marimo-team.github.io/marimo-lens/) to collect feedback from
+native projections and custom rendered regions:
 
 ```python
 from marimo_lens import Lens
@@ -759,12 +720,14 @@ studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
 
 Render `studio_lens` through `<marimo-output value="studio_lens">` in the view.
 Lens reads resolved producer and value-selector metadata from the linked hosts.
-Studio also publishes a document-local `data-marimo-lens-scope` on `#app-shell`
-so unannotated HTML can receive feedback. Its value is a CSS selector for
-preferred grouping regions, with the nearest block as a fallback. Set it in a
-view's source to choose that view's grouping policy. `data-marimo-lens-target`
-makes an explicit parent take precedence over smaller targets inside it. Give
-regions stable IDs to preserve feedback across rebuilds.
+Studio publishes a document-local `data-marimo-lens-scope` on `#app-shell` so
+unannotated HTML can receive feedback. Its value is a CSS selector for
+preferred grouping regions, with the nearest block as a fallback, and a view's
+source can set its own. `data-marimo-lens-target` makes an explicit parent take
+precedence over smaller targets inside it. Stable region IDs preserve feedback
+across rebuilds. See
+[custom JavaScript rendering](projections.md#trace-custom-javascript-rendering)
+for the authoring contract.
 
 ### `ASGIApp`
 
@@ -794,15 +757,14 @@ Every expected error exposes a stable `code`, CLI `exit_code`, HTTP
 `status_code`, retry classification, public hint, and structured diagnostic
 details. Catch a narrower class such as `SourceConflictError`,
 `ViewNotFoundError`, or `RuntimeTimeoutError` when the recovery differs.
-
-The complete class, code, status, and recovery table is in [Errors and
-JSON](errors-and-json.md#public-error-classes).
+[Errors and JSON](errors-and-json.md#public-error-classes) lists every class,
+code, status, and recovery.
 
 ## Public records
 
 These tables list fields that have related names across command and Python
-surfaces. Nested notebook records are documented under `NotebookSpec` and
-`InspectionResult`.
+surfaces. `NotebookSpec` and `InspectionResult` document their nested notebook
+records.
 
 ### Workspace and view records
 
@@ -850,9 +812,9 @@ the qualified starter IDs.
 | `RenderedOutput`     | `owner_cell_id`, `mimetype`, `data`, `timestamp`, `reset_ui_object_ids`                                                                                                                                                       |
 
 `InspectionResult.to_dict()` embeds runtime cell state into selected cell
-records. Its top-level `runtime` field contains serialized values and value
-errors. `RuntimeProbe.outputs` remains available on the Python record for
-requested rendered output selectors.
+records, and its top-level `runtime` field contains serialized values and value
+errors. `RuntimeProbe.outputs` stays on the Python record for requested
+rendered output selectors.
 
 ### Validation and browser records
 
@@ -862,7 +824,7 @@ requested rendered output selectors.
 | `ValidationIssue`  | `stage`, `severity`, `code`, `message`, `advice`, optional `view`, `target`, `source`        |
 | `ShowResult`       | `notebook`, `view`, `generation`, `session_id`, `client_id`, `preview_url`, `frame_selector` |
 
-Static and runtime evidence contain named check records. Browser checks use
-the actual document's readiness and committed revision together with
-application assertions. [Identities and state](identities.md#runtime-and-browser-identities)
+Static and runtime evidence contain named check records. Browser checks combine
+the actual document's readiness and committed revision with application
+assertions. [Identities and state](identities.md#runtime-and-browser-identities)
 defines presentation and runtime identities.

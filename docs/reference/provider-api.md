@@ -6,9 +6,9 @@ description: Register a view provider that creates, inspects, and builds fronten
 # View provider API
 
 A view provider connects a frontend project format and its build command to
-Studio. It tells Studio which starters it offers, which Source documents people
-edit, which build inputs affect the page, where the page shows notebook
-results, and how to build the page or document that Studio publishes.
+Studio. It declares its starters, the Source documents people edit, the build
+inputs that affect the view, where the view shows notebook results, and how to
+build the page or document that Studio publishes.
 
 Studio owns notebook execution, Source writes, build snapshots, artifact
 validation and publication, presentations, browser sessions, and agent
@@ -25,9 +25,6 @@ in an environment that contains credentials or private notebook source.
 :::
 
 ## Terms
-
-Each term names one concept, and the third column names the record or field
-that holds it.
 
 | Term              | Meaning                                                                    | In the API               |
 | ----------------- | -------------------------------------------------------------------------- | ------------------------ |
@@ -55,8 +52,8 @@ that holds it.
 
 ## Register the provider
 
-Publish one provider object through Python package metadata. Bound the Studio
-dependency to the minor line that the provider has tested:
+Publish one provider object through Python package metadata, and bound the
+Studio dependency to the minor line the provider has tested:
 
 ```toml
 [project]
@@ -69,7 +66,7 @@ report = "acme_views:provider"
 ```
 
 Studio derives the provider key from the canonical distribution name and the
-entry point registration. Distribution `acme-views` and registration `report`
+entry point registration: distribution `acme-views` and registration `report`
 produce `acme-views/report`. Moving a provider to another distribution changes
 its key, so existing views must name the new key in `view.toml`.
 
@@ -105,17 +102,16 @@ class ViewProvider(Protocol):
 ```
 
 A provider that renders documents with notebook values implements
-`DocumentProvider`, which adds `render()`.
-[Render documents with notebook values](#render-documents-with-notebook-values)
-describes that contract.
+`DocumentProvider`, which adds `render()`, described in
+[Render documents with notebook values](#render-documents-with-notebook-values).
 
 ```python
 class DocumentProvider(ViewProvider, Protocol):
     def render(self, request: RenderRequest) -> BuildResult: ...
 ```
 
-Provider methods are synchronous. Studio runs them away from the server event
-loop and supplies a cancellation owner and a supervised command runner. Import
+Provider methods are synchronous. Studio runs them off the server event loop
+and supplies a cancellation owner and a supervised command runner. Import
 every name from `marimo_studio.view_providers`. Studio's other modules change
 without notice.
 
@@ -124,14 +120,14 @@ diagnostics, plus `options`, the provider options the provider reads.
 
 ## Create starting files
 
-`starters()` returns `ProviderStarter` records. Each has a starter key, a title
-and summary for the picker, and `documents`, the Source documents a new view
-starts with. Studio prefixes the starter key with the provider key to form the
-starter ID: starter key `default` from `acme-views/report` becomes
+`starters()` returns `ProviderStarter` records, each with a starter key, a
+title and summary for the picker, and `documents`, the Source documents a new
+view starts with. Studio prefixes the starter key with the provider key to form
+the starter ID: starter key `default` from `acme-views/report` becomes
 `acme-views/report:default`.
 
 `create()` returns a `StarterPlan`. `StarterPlan.files` holds every file the
-provider writes, and it must include each path in `ProviderStarter.documents`.
+provider writes and must include each path in `ProviderStarter.documents`.
 Studio writes `view.toml` itself. Starter files cannot claim Studio paths such
 as `view.toml`, `.artifacts/`, `.locks/`, or `.gitignore`. A starter may ship
 `AGENTS.md` and `DESIGN.md` for coding agents, and Studio shows them in Source
@@ -143,11 +139,11 @@ definitions, references, and dependency edges. `create()` receives saved
 notebook code, so install a provider only when its package is trusted with that
 source.
 
-`StarterContext.cell_targets` maps each ordinary cell to a `StarterCellTarget`.
-The target is the cell's marimo name, an existing Studio alias, or a new alias
-that Studio proposes for an unnamed cell. `StarterContext.output_cells` returns
-the targets for cells that marimo runs and that may display output, in notebook
-order. It skips disabled cells and cells downstream of a disabled cell.
+`StarterContext.cell_targets` maps each ordinary cell to a `StarterCellTarget`:
+the cell's marimo name, an existing Studio alias, or a new alias that Studio
+proposes for an unnamed cell. `StarterContext.output_cells` returns, in
+notebook order, the targets for cells that marimo runs and that may display
+output. It skips disabled cells and cells downstream of a disabled cell.
 
 Generated source uses `target.target` and returns the targets it used in
 `StarterPlan.cell_targets`:
@@ -182,9 +178,8 @@ def create(starter, context):
 Studio validates `StarterPlan.cell_targets` against the context, then saves the
 new aliases together with the project files. A notebook change or an alias
 conflict before that commit rejects the whole creation. When saving aliases
-changes notebook-local configuration, Studio calls `create()` a second time
-with the notebook as it will be saved. Return the same `cell_targets` from both
-calls.
+changes notebook-local configuration, Studio calls `create()` again with the
+notebook as it will be saved. Return the same `cell_targets` from both calls.
 
 ### Ship starter files as package data
 
@@ -263,12 +258,12 @@ produce a JSON string literal that is safe inside a `<script>` element, and
 Studio watches the Source documents and the build inputs. The build inputs
 also decide the project revision and the contents of the build snapshot.
 Studio adds `view.toml` to the build inputs and lists `view.toml`, `AGENTS.md`,
-and `DESIGN.md` in Source. A Source document can stay out of the build inputs
-when editing it should not rebuild the view.
+and `DESIGN.md` in Source. Leave a Source document out of the build inputs
+when editing it should skip a rebuild.
 
+For a project whose build inputs follow its directory layout,
 `project_files(project, roots=..., exclude=...)` lists the files a build can
-read, skipping hidden top-level entries and the files Studio owns. Use it
-for a project whose build inputs follow its directory layout.
+read.
 
 `inspect()` must leave the project unchanged. Keep downloaded or generated data
 beneath `request.cache_root`.
@@ -303,8 +298,8 @@ def inspect(self, request):
     )
 ```
 
-An invalid value raises `ProviderError` located at `view.toml`, and Studio
-shows it as a diagnostic.
+An invalid value raises `ProviderError` located at `view.toml`, which Studio
+shows as a diagnostic.
 
 ### Report projection sites
 
@@ -387,8 +382,7 @@ the build input paths, the project revision, the build profile, three working
 directories, a cancellation owner, a command budget, and a supervised runner.
 
 Write the output beneath `request.staging_root` and return the entry document
-in `BuildResult`. `copy_inputs(request, destination)` copies every build input
-except `view.toml`. A build that copies its sources is two lines:
+in `BuildResult`. A build that copies its sources is two lines:
 
 ```python
 def build(self, request):
@@ -413,8 +407,7 @@ def build(self, request):
     return BuildResult(ENTRY)
 ```
 
-`request.cache_root` persists between builds. The entry document decides what
-Studio publishes:
+The entry document decides what Studio publishes:
 
 | Provider           | Entry document              | Published view                                                                   |
 | ------------------ | --------------------------- | -------------------------------------------------------------------------------- |
@@ -422,7 +415,7 @@ Studio publishes:
 | `ViewProvider`     | A `.pdf`, `.svg`, or `.png` | Static document shown in a Studio viewer page                                    |
 | `DocumentProvider` | A template file of any type | Rendered document. Studio renders the template with the reader's notebook values |
 
-The `development` profile builds Studio Preview. The `production` profile
+The `development` profile builds Studio Preview, and the `production` profile
 builds run mode and static export. Each profile keeps its own build state and
 publication.
 
@@ -434,10 +427,12 @@ sites, and the complete output before publication.
 
 A provider whose object has a `render()` method is a `DocumentProvider`. It
 publishes a document template, and Studio renders the template with notebook
-results. The built-in Typst and LaTeX providers compile `main.typ` and
-`main.tex` into a PDF each time a result they read changes.
-[Publish a document](../guide/view-providers.md#publish-a-document) builds one
-step by step.
+results. A page names cells, outputs, and values with projection hosts, and a
+document template reads the same targets through its own functions, which
+`inspect()` reports as render records. The built-in Typst and LaTeX providers
+compile `main.typ` and `main.tex` into a PDF each time a result they read
+changes. [Publish a document](../guide/view-providers.md#publish-a-document)
+builds one step by step.
 
 1. `inspect()` reports each value the template reads as JSON as a
    `RenderValue`, each value it places, such as a figure, as a `RenderOutput`,
@@ -446,7 +441,7 @@ step by step.
    renderer can place.
 2. `build()` writes the template files beneath `request.staging_root` and
    returns the template's entry file, such as `main.typ`. Studio stores the
-   template with the artifact and keeps it private. Readers receive rendered
+   template privately with the artifact, and readers receive rendered
    documents. A build that compiles the template can measure where it places
    each output and return those sizes in `BuildResult.output_sizes`.
 3. Studio calls `render()` once with no values to check the template and
@@ -458,22 +453,21 @@ step by step.
 
 `render()` must depend only on the template and the request's `values`,
 `outputs`, and `cells`. Studio caches each rendition by artifact revision and
-inputs, and shares it among readers. Studio may run two renders of one view at
+inputs and shares it among readers. Studio may run two renders of one view at
 once, each with its own template copy and output directory. Treat the request's
-results as untrusted data from the notebook a reader is viewing. A target
-without a current result is absent, so the template applies its own default.
+results as untrusted data from the notebook a reader is viewing.
 
-Return the rendered file's path relative to `request.output_root`. It must end
-in `.pdf`, `.svg`, or `.png`. When the template cannot render with the supplied
+Return the rendered file's path relative to `request.output_root`, ending in
+`.pdf`, `.svg`, or `.png`. When the template cannot render with the supplied
 results, raise `ProviderError` or return error diagnostics, and Studio shows
 them beside the last rendered document.
 
 Render values hold the
 [JSON form](../guide/notebook-results.md#documents-read-json) of each notebook
-value, so a dataframe arrives as a list of row objects, a date as ISO 8601
-text, and a step through `None` as `null`. Give `null` the same default as an
-absent target. [Rendered documents](projections.md#rendered-documents)
-describes how each runtime supplies results.
+value: a dataframe arrives as a list of row objects, a date as ISO 8601 text,
+and a step through `None` as `null`. Give `null` the same default as an absent
+target. [Rendered documents](projections.md#rendered-documents) describes how
+each runtime supplies results.
 
 ## Report problems
 
@@ -488,18 +482,17 @@ raise ProviderError(
 )
 ```
 
-`hint` names the next step the author can take. Put tool output, such as a
-compiler's error text, in the message. Studio shows the message and hint
-beside `source` in Source and keeps the last published view. When `inspect()`
-raises, Studio opens the `source` file in Source so the author can repair it
-there. When a build error's `source` names a
-file outside Source, Studio puts that location at the start of the message.
-Studio strips surrounding whitespace from the message and hint.
+`hint` names the author's next step. Put tool output, such as a compiler's
+error text, in the message. Studio strips surrounding whitespace from both,
+shows them beside `source` in Source, and keeps the last published view. When
+`inspect()` raises, Studio opens the `source` file in Source for repair. When a
+build error's `source` names a file outside Source, Studio puts that location
+at the start of the message.
 
 Return diagnostics in `ProjectInspection.diagnostics` or
 `BuildResult.diagnostics` to report several problems at once, or a warning that
-still publishes. Any other exception is a provider failure, and Studio reports
-it with the provider key.
+still publishes. Studio reports any other exception as a provider failure with
+the provider key.
 
 ## Run commands
 
@@ -512,12 +505,11 @@ inside `request.template_root`.
   command in one request also shares `request.command_timeout` as a total
   budget.
 - `environment=None` inherits the Studio process environment. A mapping
-  replaces the whole environment for the command, so pass
-  `environment={**os.environ, ...}` to add variables.
-- The result holds `returncode`, bounded `stdout`, and bounded `stderr`.
+  replaces the whole environment, so pass `environment={**os.environ, ...}` to
+  add variables.
 
 The runner raises `ProviderCommandError` when a command exceeds its budget or
-its output limit, or when the operation is cancelled. Let it propagate.
+output limit, or when the operation is cancelled. Let it propagate.
 
 `request.cancellation.raise_if_cancelled(action)` stops long filesystem work
 that the runner does not own. A callback registered with
@@ -547,8 +539,7 @@ def availability(self):
 ```
 
 Studio shows `reason` and `action` in the view picker and in
-`marimo-studio doctor`. The process remembers a reported version until the
-executable changes. Studio records the `availability()` version with each
+`marimo-studio doctor`. Studio records the `availability()` version with each
 build, so a tool upgrade rebuilds the views that use the provider.
 
 ## Record reference
@@ -574,9 +565,7 @@ ProviderStarter(
 ```
 
 Studio validates `ProviderInfo` when it discovers the provider. Return `reason`
-and an actionable `action` when `available` is false. `ProviderStarter.key` is
-the starter key, and `documents` lists the Source documents a new view starts
-with.
+and an actionable `action` when `available` is false.
 
 ### `ViewProject`
 
@@ -592,7 +581,7 @@ ViewProject(
 project.path_option(name: str, *, default: str, suffix: str | None = None) -> PurePosixPath
 ```
 
-`manifest` is the path of `view.toml`, and `provider` is the provider key.
+`manifest` is the path of `view.toml`, `provider` is the provider key, and
 `options` holds the provider options as detached JSON-compatible data.
 `path_option()` returns option `name`, or `default`, as a project-relative
 path. It raises `ProviderError` at `view.toml` when the value leaves the
@@ -635,10 +624,10 @@ create_starter(
 script_json(value: str) -> str
 ```
 
-`StarterContext.output_cells` returns the cell targets for cells that marimo
-runs and that may display output. `app_title` returns the notebook's configured
-app title or `None`, and `notebook_label` returns the app title or a readable
-form of the notebook filename.
+`StarterContext.app_title` returns the notebook's configured app title or
+`None`, and `notebook_label` returns the app title or a readable form of the
+notebook filename. [Create starting files](#create-starting-files) describes
+`output_cells`.
 
 `create_starter()` reads the files in `<package>/files`, replaces each marker
 with its value from `StarterMarkers.values`, and returns the plan with
@@ -691,21 +680,21 @@ is the editor language ID, and `label` is an optional tab name. A directory
 `BuildInput` covers every file beneath it, within Studio's input limits.
 `ProjectionSite.targets` must be non-empty and unique, and `"*"` permits any
 valid target of `kind`. A `RenderCell` target is a cell name. Several render
-records of one kind may share a target.
+records of one kind may share a target. `SourceLocation` lines and columns are
+one-based.
 
 `accept` lists lowercase `type/subtype` media types in order of preference,
 such as `("application/pdf", "image/svg+xml", "image/png")`. An output site, a
 `RenderOutput`, and a `RenderCell` take one. Studio passes a cell's output as
-marimo shows it, in the first listed type the output carries. Studio renders an
+marimo shows it, in the first listed type the output carries, and renders an
 output's value in the first type the value supports through marimo-export's
 [`represent()`](https://marimo-team.github.io/marimo-export/reference/python/values),
 whatever output settings the notebook uses. An output site without `accept`
-shows marimo's native output. An output site lists images a page shows:
+shows marimo's native output. An output site lists image types a page shows:
 `image/svg+xml`, `image/png`, `image/jpeg`, or `image/gif`. A `"*"` output site
 declares no `accept` and shows each target in the form its literal sites
 declare. Every read of one output or cell target in a view uses the same accept
 list, and a different list reports `output-accept-conflict`.
-`SourceLocation` lines and columns are one-based.
 
 Each artifact revision records the provider distribution's version and the
 `availability()` version, so an upgrade never reuses output built by the
@@ -788,8 +777,8 @@ intermediate files, and `cache_root` persists between builds. Return
 `document=None` when diagnostics prevent publication.
 
 `BuildResult.output_sizes` maps a `RenderOutput` target to the
-[`Size`](https://marimo-team.github.io/marimo-export/reference/python/values#size)
-the template places it at, in points: its width, and its height when the
+[`Size`](https://marimo-team.github.io/marimo-export/reference/python/values#size),
+in points, at which the template places it: its width, and its height when the
 template sets one. Studio then draws a matplotlib figure or a Vega-Lite chart
 at that size for every render, so its text keeps the point size the notebook
 set. A target without a size arrives at the size the notebook drew it. A size
@@ -800,20 +789,16 @@ the Typst provider queries the records `marimo_output()` places.
 `RenderRequest.template_root` is a private, writable copy of the document
 template, and `document` is the template entry that `build()` returned.
 `values` holds the JSON form of each available `RenderValue` target. `outputs`
-holds a
-marimo-export
+and `cells` hold a marimo-export
 [`Representation`](https://marimo-team.github.io/marimo-export/reference/python/values#representation)
-for each available `RenderOutput` target, in one of the media types its
-`accept` lists, such as `Representation("application/pdf", b"%PDF-...")`.
-`cells` holds a `Representation` for each available `RenderCell` target in the
-same way. Text media types hold UTF-8 bytes. A PNG figure also carries its
-display `width` and `height` in CSS pixels. A target is absent when it has no
-current result, or when the result has no accepted media type, and the template
-then shows its default. Write files the renderer reads, such as images, into
-`template_root`.
-`output_root` starts empty. `render()` returns a `BuildResult` whose document is
-a `.pdf`, `.svg`, or `.png` path relative to `output_root`, or `document=None`
-with an error diagnostic.
+for each available `RenderOutput` and `RenderCell` target, in one of the media
+types its `accept` lists, such as
+`Representation("application/pdf", b"%PDF-...")`. Text media types hold UTF-8
+bytes. A PNG figure also carries its display `width` and `height` in CSS
+pixels. A target without a current result, or whose result has no accepted
+media type, is absent, and the template shows its default. Write files the
+renderer reads, such as images, into `template_root`. `output_root` starts
+empty.
 
 ### Commands and cancellation
 
@@ -833,7 +818,7 @@ cancellation.register(callback: Callable[[], None]) -> Callable[[], None]
 
 `request.runner` is a `ProviderRunner`, and `request.cancellation` is a
 `ProviderCancellation`. `ProviderCommandResult` holds `returncode`, bounded
-`stdout`, and bounded `stderr`. The runner and `raise_if_cancelled()` raise
+`stdout`, and bounded `stderr`. `raise_if_cancelled()` also raises
 `ProviderCommandError`.
 
 ### Type aliases
@@ -879,9 +864,11 @@ probe_tool(
 
 `project_files()` returns the sorted regular files under `project.root`.
 `roots` keeps only these top-level entries, and `exclude` skips top-level
-directories by name. Hidden top-level entries such as `.env`, `view.toml`,
-`AGENTS.md`, and `DESIGN.md` are skipped. It raises `ProviderError` for a
-symlink or a project over the [input limits](limits.md#provider-records).
+directories by name. It skips hidden top-level entries, such as `.env`, and
+the files Studio owns, such as `view.toml`, `AGENTS.md`, and `DESIGN.md`. It
+raises
+`ProviderError` for a symlink or a project over the
+[input limits](limits.md#provider-records).
 
 `copy_inputs()` copies each path in `request.inputs` except `view.toml` to the
 same relative path beneath `destination`.
@@ -897,22 +884,22 @@ parsed, the result keeps the sites found before the parse error.
 
 `parse_accept()` reads a host's `accept` attribute text, such as
 `"image/svg+xml, image/png"`, into lowercase media types in preference order.
-Pass `None` for a host without the attribute to get an empty tuple. Spaces or
+`None`, for a host without the attribute, returns an empty tuple. Spaces or
 commas separate the types, and each must be `image/svg+xml`, `image/png`,
 `image/jpeg`, or `image/gif`. It raises `ValueError` for an `accept` on a cell
 or value host, an empty list, a malformed or repeated type, or another media
 type. Report the message as a `projection-accept-invalid` diagnostic at the
 host, and keep reporting the file's other hosts.
 
-`probe_tool()` finds `command[0]` on `PATH` unless it is a path, runs it, and
-compares the first dotted version in its output with `minimum`. It reads
-standard error when standard output has none, and a prerelease such as
-`2.9.5-rc.1` compares below its release. The command has
-30 seconds to finish. An unavailable result carries a `reason`, such as a
-timeout, an exit status, or an old version, and `install` as its `action`. The
-process remembers a reported version until the executable changes, and checks
-again after a failed or cancelled check. It raises `ProviderCommandError` when the operation
-is cancelled.
+`probe_tool()` finds `command[0]` on `PATH` unless it is a path, runs it with a
+30 second deadline, and compares the first dotted version in its output with
+`minimum`. It reads standard error when standard output has none, and a
+prerelease such as `2.9.5-rc.1` compares below its release. An unavailable
+result carries a `reason`, such as a timeout, an exit status, or an old
+version, and `install` as its `action`. The process remembers a reported
+version until the executable changes, and checks again after a failed or
+cancelled check. It raises `ProviderCommandError` when the operation is
+cancelled.
 
 ### `check_provider()`
 
@@ -967,8 +954,8 @@ documents, and `warnings` lists the build's warning diagnostics.
 It raises `ProviderCheckError`, an `AssertionError`, with the message, hint,
 and location Studio would show for the first problem found. It blocks until
 the check finishes, and inside a running event loop, such as an async test or
-a notebook cell, it runs the check on a worker thread. The check also
-fails when `inspect()` changes the project, when two inspections differ, when
+a notebook cell, it runs the check on a worker thread. The check also fails
+when `inspect()` changes the project, when two inspections differ, when
 inspection reports an error, and when the package that defines the provider
 imports Studio modules outside `marimo_studio.view_providers` and
 `marimo_studio.view_providers.testing`.
