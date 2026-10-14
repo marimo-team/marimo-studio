@@ -1,0 +1,9 @@
+packages/marimo-studio/src/marimo_studio/_artifacts/retention.py
+  ai_agent 175-176,180-181,197-202,216-217,302-303
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ca0586158e842d4b5591ad68320ad942a6aac9cf",
+  "prompts": {}
+}
