@@ -122,3 +122,18 @@ def test_zero_python_export_loads_document_viewer_with_no_reads(
     assert config["sites"] == []
     assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
     assert result.preflight.ok
+
+
+def test_export_renders_typst_prose_with_function_shaped_text(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    setup = prepare_view(notebook_path, "report", starter="marimo-studio/typst:default")
+    setup.root.joinpath("main.typ").write_text(
+        'Text: marimo_value("missing")\n', encoding="utf-8"
+    )
+
+    result = export_view(notebook_path, tmp_path / "site", view="report")
+
+    assert result.preflight.ok
+    assert result.output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")

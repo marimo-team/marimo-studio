@@ -493,3 +493,38 @@ def test_build_retains_errors_from_data_inputs(tmp_path: Path) -> None:
     assert "data.xml" in diagnostic.message
     assert "XML" in diagnostic.message
     assert diagnostic.source is None
+
+
+@pytest.mark.parametrize(
+    "main,targets",
+    [
+        ('Text: marimo_value("missing")\n', []),
+        ('#marimo_value("real") marimo_value("missing")\n', ["real"]),
+        (
+            '#let f(name) = marimo_value("real")\nPlain marimo_value("missing")',
+            ["real"],
+        ),
+        (
+            '#{ let x = marimo_value("first");\n marimo_value("second") }',
+            ["first", "second"],
+        ),
+        ('#let f = [marimo_value("missing") #marimo_value("real")]\n', ["real"]),
+        ('#(marimo_value("real"))\n', ["real"]),
+    ],
+)
+def test_inspection_reads_typst_code_expressions(
+    tmp_path: Path, main: str, targets: list[str]
+) -> None:
+    inspection = inspect_view_project_sync(_project(tmp_path, main))
+    assert [read.target for read in inspection.render_values] == targets
+
+
+def test_inspection_handles_oversized_unicode_escape(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path, r'#marimo_value("\u{FFFFFFFFFFFFFFFFFFFFFF}", default: 1)'
+    )
+
+    inspection = inspect_view_project_sync(project)
+
+    assert inspection.render_values == ()
+    assert MAIN in {doc.path for doc in inspection.documents}
