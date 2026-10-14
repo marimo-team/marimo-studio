@@ -18,6 +18,7 @@ import {
 } from "@marimo-studio/protocol/studio-bootstrap";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { RetrySchedule } from "../features/preview/retry-schedule.ts";
 import { StarterCatalogController } from "../features/views/catalog.ts";
 import { FirstViewToolbar } from "../features/views/FirstViewToolbar.tsx";
 import { createViewRemote } from "../features/views/remote.ts";
@@ -274,16 +275,33 @@ export const StudioHost = ({
     if (bootstrap) {
       return;
     }
-    const events = new EventSource(workspaceEventsUrl(host.urls.events));
-    events.addEventListener("activate", (event) => {
-      const payload = parseActiveViewRequest(
-        event instanceof MessageEvent ? String(event.data) : "",
-      );
-      if (payload) {
-        void openWorkspace(payload.view, payload);
-      }
-    });
-    return () => events.close();
+    const reconnects = new RetrySchedule();
+    let events: EventSource;
+    let reconnect: ReturnType<typeof setTimeout> | undefined;
+    const connect = () => {
+      const stream = new EventSource(workspaceEventsUrl(host.urls.events));
+      events = stream;
+      stream.addEventListener("open", () => reconnects.reset());
+      // A non-200 or non-stream response closes an EventSource for good.
+      stream.addEventListener("error", () => {
+        if (stream.readyState === EventSource.CLOSED) {
+          reconnect = setTimeout(connect, reconnects.next());
+        }
+      });
+      stream.addEventListener("activate", (event) => {
+        const payload = parseActiveViewRequest(
+          event instanceof MessageEvent ? String(event.data) : "",
+        );
+        if (payload) {
+          void openWorkspace(payload.view, payload);
+        }
+      });
+    };
+    connect();
+    return () => {
+      clearTimeout(reconnect);
+      events.close();
+    };
   }, [bootstrap, host.urls.events, openWorkspace]);
 
   if (bootstrap) {

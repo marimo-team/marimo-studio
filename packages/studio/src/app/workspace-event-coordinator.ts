@@ -19,6 +19,7 @@ import {
 
 import type { ViewLanding, ViewSelectionOwner } from "../features/views/transition.ts";
 
+import { RetrySchedule } from "../features/preview/retry-schedule.ts";
 import {
   type AcknowledgeViewActivation,
   ViewActivationAcknowledgementError,
@@ -93,6 +94,8 @@ export class WorkspaceEventCoordinator {
   private activationAbort: AbortController | undefined;
   private readonly activationInFlight = new Set<number>();
   private notebookMutationGeneration: number | undefined;
+  private readonly reconnects = new RetrySchedule();
+  private reconnect: ReturnType<typeof setTimeout> | undefined;
   private started = false;
   private disposed = false;
 
@@ -117,6 +120,7 @@ export class WorkspaceEventCoordinator {
       return;
     }
     this.disposed = true;
+    clearTimeout(this.reconnect);
     this.activationAbort?.abort();
     this.activationAbort = undefined;
     this.stopViews?.();
@@ -192,6 +196,7 @@ export class WorkspaceEventCoordinator {
       this.options.preview.presentationStreamAbandoned(abandonedView);
     }
     const generation = ++this.connectionGeneration;
+    clearTimeout(this.reconnect);
     const view = this.currentView;
     let streamMutationGeneration = notebookMutationGeneration;
     const previous = this.events;
@@ -229,6 +234,7 @@ export class WorkspaceEventCoordinator {
           this.events = events;
           previous?.close();
         }
+        this.reconnects.reset();
         this.refreshInventory();
         this.options.source.reconcile();
         const baseline = parsePresentationBaseline(this.data(event));
@@ -237,6 +243,20 @@ export class WorkspaceEventCoordinator {
           baseline?.view === view ? baseline.revision : null,
         );
         connectionReady?.();
+      }),
+    );
+    // EventSource retries network errors itself, but a non-200 or non-stream
+    // response, such as a proxy 502 or an expired sign-in, closes it for good.
+    events.addEventListener("error", () =>
+      pending(() => {
+        if (events.readyState !== EventSource.CLOSED) {
+          return;
+        }
+        console.warn("Studio lost its workspace event stream and will reconnect");
+        this.reconnect = setTimeout(
+          () => this.connect(undefined, connectionReady, this.notebookMutationGeneration),
+          this.reconnects.next(),
+        );
       }),
     );
     events.addEventListener("change", (event) =>

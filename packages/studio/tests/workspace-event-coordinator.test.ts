@@ -385,6 +385,52 @@ it("ignores callbacks from a replaced stream", async () => {
   coordinator.dispose();
 });
 
+it("replaces a stream the browser closed and resumes its events", async () => {
+  vi.useFakeTimers();
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const { coordinator, source } = setup();
+  const closed = EventSourceStub.instances[0]!;
+  closed.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
+
+  closed.fail();
+  expect(EventSourceStub.instances).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+
+  expect(EventSourceStub.instances).toHaveLength(2);
+  const replacement = EventSourceStub.instances[1]!;
+  expect(replacement.url).toContain("marimo_studio_view=dashboard");
+  replacement.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v2" }));
+  replacement.emit(
+    "change",
+    JSON.stringify({ kind: "project", files: [{ path: "index.html", revision: "sha256:next" }] }),
+  );
+  expect(source.externalChanges).toHaveBeenCalledWith([
+    { path: "index.html", revision: "sha256:next" },
+  ]);
+  coordinator.dispose();
+  warning.mockRestore();
+});
+
+it("backs off while a replacement stream keeps closing", async () => {
+  vi.useFakeTimers();
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const { coordinator } = setup();
+
+  EventSourceStub.instances[0]!.fail();
+  await vi.advanceTimersByTimeAsync(1_000);
+  EventSourceStub.instances[1]!.fail();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(EventSourceStub.instances).toHaveLength(2);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(EventSourceStub.instances).toHaveLength(3);
+
+  coordinator.dispose();
+  EventSourceStub.instances[2]!.fail();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(EventSourceStub.instances).toHaveLength(3);
+  warning.mockRestore();
+});
+
 it("forwards build source locations to the presentation diagnostic", () => {
   const { coordinator, preview } = setup();
   const stream = EventSourceStub.instances[0]!;

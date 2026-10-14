@@ -242,6 +242,53 @@ it("retries first-view authoring options after a transient inventory failure", a
   editorFrame.remove();
 });
 
+it("replaces a first-view event stream the browser closed", async () => {
+  const streams: ClosingEventSource[] = [];
+  class ClosingEventSource {
+    static readonly CLOSED = 2;
+    readonly listeners = new Map<string, (event: Event) => void>();
+    readyState = 1;
+
+    constructor() {
+      streams.push(this);
+    }
+
+    addEventListener(type: string, listener: (event: Event) => void): void {
+      this.listeners.set(type, listener);
+    }
+
+    close(): void {
+      this.readyState = ClosingEventSource.CLOSED;
+    }
+  }
+  vi.stubGlobal("EventSource", ClosingEventSource);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(viewList([], "dashboard", [starter]))),
+  );
+  const editorFrame = document.createElement("iframe");
+  document.body.append(editorFrame);
+
+  const { unmount } = render(
+    <StudioHost
+      host={host}
+      editorFrame={editorFrame}
+      editorSource={editorFrame.src}
+      publishBootstrap={vi.fn()}
+      brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+    />,
+  );
+  await vi.waitFor(() => expect(streams).toHaveLength(1));
+  const closed = streams[0]!;
+  closed.readyState = ClosingEventSource.CLOSED;
+  closed.listeners.get("error")?.(new Event("error"));
+
+  await vi.waitFor(() => expect(streams).toHaveLength(2), { timeout: 3_000 });
+  expect(streams[1]?.listeners.has("activate")).toBe(true);
+  unmount();
+  editorFrame.remove();
+});
+
 it("refreshes first-view ownership after a create conflict", async () => {
   vi.stubGlobal("EventSource", EventSourceStub);
   const initialGeneration = viewGeneration(10);
