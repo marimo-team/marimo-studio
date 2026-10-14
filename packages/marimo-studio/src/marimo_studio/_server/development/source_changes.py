@@ -316,15 +316,7 @@ class SourceChangeProducer:
             scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
             excluded_roots = (project_artifacts(project),)
             after = _tree_stamps((*scope_files, *roots), excluded_roots)
-            tree = (
-                observed_tree
-                if observed_tree is not None
-                and scope_files == self._scope_files
-                and roots == self._roots
-                and excluded_roots == self._excluded_roots
-                else after
-            )
-            inputs = _input_paths_from_tree(project, input_files, roots, tree)
+            inputs = _input_paths_from_tree(project, input_files, roots, after)
             input_id = project_revision(
                 project,
                 inspection,
@@ -362,12 +354,7 @@ class SourceChangeProducer:
         self._scope_files = scope_files
         self._roots = roots
         self._excluded_roots = excluded_roots
-        catalog_stamps = _catalog_stamps(
-            project,
-            inputs,
-            (*scope_files, *roots),
-            tree,
-        )
+        catalog_stamps = _catalog_stamps(project, inputs, (*scope_files, *roots), after)
         directories_changed = any(
             stamp != "missing"
             and stat.S_ISDIR(stamp[0])
@@ -381,7 +368,7 @@ class SourceChangeProducer:
             self._tree = {}
             self._catalog_stamps = {}
             return
-        self._tree = tree
+        self._tree = after
         self._catalog_stamps = catalog_stamps
 
 
