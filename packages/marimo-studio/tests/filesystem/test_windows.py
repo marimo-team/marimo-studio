@@ -125,3 +125,27 @@ def test_reopened_handle_rejects_a_replaced_entry(
         )
 
     assert kernel32.closed == [102, 101]
+
+
+def test_handle_inspection_failure_reports_the_windows_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import ctypes
+
+    kernel32 = _Kernel32()
+    kernel32.GetFileInformationByHandle = _Function(lambda _handle, _pointer: False)
+    monkeypatch.setattr(windows, "_kernel32", lambda: kernel32)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 5, raising=False)
+
+    with pytest.raises(windows.UnsafePathError) as raised:
+        windows._open_handle(
+            Path("view"),
+            windows._GENERIC_READ,
+            0,
+            "Directory",
+            share=windows._FILE_SHARE_ALL,
+        )
+
+    assert str(raised.value) == "Could not inspect directory: view (Windows error 5)"
+    assert raised.value.errno is None
+    assert kernel32.closed == [101]

@@ -82,7 +82,9 @@ def _open_handle(
         information = ByHandleFileInformation()
         if not get_information(handle, ctypes.byref(information)):
             error = cast(Any, ctypes).get_last_error()
-            raise UnsafePathError(error, f"Could not inspect {label.lower()}: {path}")
+            raise UnsafePathError(
+                f"Could not inspect {label.lower()}: {path} (Windows error {error})"
+            )
         return information
 
     def file_identity(
