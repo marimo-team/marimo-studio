@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -193,3 +194,22 @@ def test_projection_portability_keeps_runtime_choice_explicit() -> None:
     assert [item.status for item in wasm] == ["supported", "supported"]
     verified = verify_projection_portability(zero_python)
     assert [item.status for item in verified] == ["incompatible", "verified"]
+
+
+def test_preflight_resolves_javascript_surrogate_pair_imports(tmp_path: Path) -> None:
+    tmp_path.joinpath("index.html").write_text(
+        "<!doctype html><html><head>"
+        '<script type="module" src="./app.js"></script>'
+        "</head><body></body></html>",
+        encoding="utf-8",
+    )
+    tmp_path.joinpath("app.js").write_text(
+        r'import "./chart-\uD83D\uDCC8.js";', encoding="utf-8"
+    )
+    tmp_path.joinpath("chart-📈.js").write_text("export {};", encoding="utf-8")
+
+    report = _preflight(tmp_path)
+
+    assert report.ok
+    assert report.issues == ()
+    json.dumps(report.to_dict(), ensure_ascii=False).encode("utf-8")
