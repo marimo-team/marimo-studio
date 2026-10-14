@@ -260,3 +260,44 @@ def test_export_rejects_source_changes_at_commit_and_preserves_destination(
         )
 
     assert output.joinpath("index.html").read_bytes() == expected
+
+
+@pytest.mark.parametrize("changed", ("view", "public", "notebook", "generation"))
+def test_preflight_rechecks_sources_and_owner_after_inspection(
+    notebook_path: Path,
+    changed: str,
+) -> None:
+    configure_export_view(notebook_path)
+    studio = load_studio(notebook_path)
+    source = (
+        studio.views["dashboard"].root / "index.html"
+        if changed == "view"
+        else notebook_path
+    )
+    if changed == "public":
+        source = notebook_path.parent / "public" / "data.txt"
+        source.parent.mkdir()
+        source.write_text("old data", encoding="utf-8")
+
+    def change_source(event: StaticExportProgress) -> None:
+        if event.event.kind != "preflight_finished":
+            return
+        if changed == "generation":
+            path = view_owner_path(studio.view_root, "dashboard")
+            generation = load_view_owner(studio.view_root, "dashboard").generation
+            replacement = "0" * 64 if generation != "0" * 64 else "1" * 64
+            path.write_text(path.read_text().replace(generation, replacement, 1))
+        else:
+            source.write_text(source.read_text() + "\nnew source\n")
+
+    error = (
+        ViewGenerationConflictError if changed == "generation" else StaticExportError
+    )
+    with pytest.raises(error):
+        export_module.preflight_view(
+            notebook_path,
+            runtime="wasm",
+            expected_catalog_generation=studio.catalog_generation,
+            expected_generation=studio.view_generations["dashboard"],
+            progress=change_source,
+        )

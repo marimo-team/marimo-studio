@@ -1028,7 +1028,22 @@ def _export_to_delivery(
                     ),
                 ),
             )
+
+            def require_current() -> None:
+                require_bundle_current()
+                _require_export_current(
+                    target,
+                    studio,
+                    selected,
+                    notebook_stamp=notebook_stamp,
+                    config_stamp=config_stamp,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
+                    publication=publication,
+                )
+
             if preflight_only:
+                require_current()
                 return preflight
             if not preflight.ok:
                 first = next(
@@ -1048,19 +1063,6 @@ def _export_to_delivery(
                     runtime=runtime,
                 ),
             )
-
-            def require_current() -> None:
-                require_bundle_current()
-                _require_export_current(
-                    target,
-                    studio,
-                    selected,
-                    notebook_stamp=notebook_stamp,
-                    config_stamp=config_stamp,
-                    expected_catalog_generation=expected_catalog_generation,
-                    expected_generation=expected_generation,
-                    publication=publication,
-                )
 
             try:
                 delivered = delivery.commit(guard=require_current)
