@@ -196,7 +196,7 @@ def test_invalid_notebook_stem_names_the_notebook_and_the_fix(
         default_view_root(tmp_path / "analysis .py")
 
     assert str(raised.value) == (
-        "analysis .py cannot name a Studio view folder. Notebook filename stem "
+        "'analysis .py' cannot name a Studio view folder. Notebook filename stem "
         "must not end with a dot or space. Rename the notebook, then retry."
     )
 
@@ -1051,3 +1051,17 @@ default = "dashboard"
     updated = load_studio(pyproject)
     assert updated.default_view == "executive"
     assert list(updated.views) == ["executive"]
+
+
+@pytest.mark.parametrize("name", ("analysis\n.py", "analysis\x1b[31m.py"))
+def test_invalid_notebook_filename_is_escaped_in_the_diagnostic(
+    tmp_path: Path,
+    name: str,
+) -> None:
+    with pytest.raises(ConfigurationError) as raised:
+        default_view_root(tmp_path / name)
+
+    message = str(raised.value)
+    assert message.startswith(f"{name!r} cannot name a Studio view folder.")
+    assert "\n" not in message
+    assert "\x1b" not in message

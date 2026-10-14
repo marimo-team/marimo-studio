@@ -56,7 +56,7 @@ def _stem(notebook: Path) -> str:
         )
     except ValueError as error:
         raise ConfigurationError(
-            f"{notebook.name} cannot name a Studio view folder. {error}. "
+            f"{notebook.name!r} cannot name a Studio view folder. {error}. "
             "Rename the notebook, then retry."
         ) from error
     return notebook.stem
