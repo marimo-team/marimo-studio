@@ -1196,3 +1196,21 @@ def test_cell_fingerprint_distinguishes_multiline_string_values() -> None:
     assert _cell_fingerprint(indented) != _cell_fingerprint(flush)
     assert _cell_fingerprint(leading_newline) != _cell_fingerprint(no_leading_newline)
     assert _layout_fingerprint(indented) != _layout_fingerprint(flush)
+
+
+def test_inspecting_a_markdown_notebook_names_the_file_and_the_conversion(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notes.md"
+    notebook.write_text(
+        "---\ntitle: Notes\n---\n\n```python {.marimo}\nx = 1\n```\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError) as raised:
+        inspect_notebook(notebook)
+
+    assert str(raised.value) == (
+        f"Expected a Python marimo notebook: {notebook.resolve()}. "
+        "Convert other notebook formats with `marimo convert`."
+    )
