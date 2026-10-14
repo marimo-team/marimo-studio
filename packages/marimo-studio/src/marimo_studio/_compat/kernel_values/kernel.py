@@ -8,6 +8,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from threading import Lock
 from types import TracebackType
@@ -330,25 +331,7 @@ class _KernelBridgeLifespan:
         filename = _kernel_filename(context) or filename
         if self._output_renderer is not None:
             if filename != self._observation_filename:
-                self._close_observations()
-                from marimo._session.model import SessionMode
-
-                if (
-                    filename is not None
-                    and inspection is None
-                    and not is_owned_session()
-                    and getattr(context, "session_mode", None) == SessionMode.EDIT
-                    and _is_studio_notebook(filename)
-                ):
-                    ledger = ObservationLedger(filename)
-                    try:
-                        release = install_observation_ledger(context, ledger)
-                    except BaseException:
-                        self._close_observation_ledger(ledger)
-                        raise
-                    self._observation_ledger = ledger
-                    self._observation_ledger_release = release
-                self._observation_filename = filename
+                self._bind_observations(context, filename, inspection)
             return True
         if is_owned_session() or filename is None:
             return False
@@ -366,52 +349,15 @@ class _KernelBridgeLifespan:
         output_renderer = KernelOutputRenderer(
             context, overlays=lens_overlay if edit_preview else None
         )
-        observation_ledger: ObservationLedger | None = None
-        observation_ledger_release: Callable[[], None] | None = None
         try:
-            records_observations = (
-                configured
-                and inspection is None
-                and getattr(context, "session_mode", None) == SessionMode.EDIT
-                and not is_owned_session()
-            )
-            if records_observations:
-                observation_ledger = ObservationLedger(filename)
             self._cached_cells.activate()
-            if observation_ledger is not None:
-                observation_ledger_release = install_observation_ledger(
-                    context,
-                    observation_ledger,
-                )
+            self._bind_observations(context, filename, inspection)
         except BaseException as error:
-            cleanup_error: BaseException | None = None
-            if observation_ledger_release is not None:
-                try:
-                    observation_ledger_release()
-                except BaseException as cleanup:
-                    cleanup_error = cleanup
-            if observation_ledger is not None:
-                try:
-                    self._close_observation_ledger(observation_ledger)
-                except BaseException as cleanup:
-                    if cleanup_error is None:
-                        cleanup_error = cleanup
             try:
-                self._cached_cells.close()
+                _attempt_all(self._cached_cells.close, output_renderer.close)
             except BaseException as cleanup:
-                if cleanup_error is None:
-                    cleanup_error = cleanup
-            try:
-                output_renderer.close()
-            except BaseException as cleanup:
-                if cleanup_error is None:
-                    cleanup_error = cleanup
-            if cleanup_error is not None:
-                raise error from cleanup_error
+                raise error from cleanup
             raise
-        self._observation_filename = filename
-        self._observation_ledger = observation_ledger
-        self._observation_ledger_release = observation_ledger_release
         self._output_renderer = output_renderer
         self._value_encoder = ValueEncoder(context)
         return True
@@ -815,64 +761,76 @@ class _KernelBridgeLifespan:
                 loop.create_task(asyncio.to_thread(ledger.close))
             )
 
+    def _bind_observations(
+        self,
+        context: Any,
+        filename: Path | None,
+        inspection: _ProbeSelectorLease | None,
+    ) -> None:
+        """Record notebook observations for the current file of an edit session."""
+        from marimo._session.model import SessionMode
+
+        self._close_observations()
+        if (
+            filename is not None
+            and inspection is None
+            and not is_owned_session()
+            and getattr(context, "session_mode", None) == SessionMode.EDIT
+            and _is_studio_notebook(filename)
+        ):
+            ledger = ObservationLedger(filename)
+            try:
+                release = install_observation_ledger(context, ledger)
+            except BaseException:
+                self._close_observation_ledger(ledger)
+                raise
+            self._observation_ledger = ledger
+            self._observation_ledger_release = release
+        self._observation_filename = filename
+
     def _close_observations(self) -> None:
-        failure: BaseException | None = None
         release, self._observation_ledger_release = (
             self._observation_ledger_release,
             None,
         )
-        if release is not None:
-            try:
-                release()
-            except BaseException as error:
-                failure = error
         ledger, self._observation_ledger = self._observation_ledger, None
-        if ledger is not None:
-            try:
-                self._close_observation_ledger(ledger)
-            except BaseException as error:
-                if failure is None:
-                    failure = error
-        if failure is not None:
-            raise failure
+        _attempt_all(
+            release,
+            None if ledger is None else partial(self._close_observation_ledger, ledger),
+        )
+
+    def _release(self, owner: str, close: Callable[[Any], object]) -> None:
+        # A failed close keeps its owner so the next teardown retries it.
+        value = getattr(self, owner)
+        if value is not None:
+            close(value)
+            setattr(self, owner, None)
 
     def _close(self) -> None:
-        failure: BaseException | None = None
+        _attempt_all(
+            self._close_observations,
+            partial(self._release, "_value_encoder", ValueEncoder.close),
+            partial(self._release, "_output_renderer", KernelOutputRenderer.close),
+            partial(
+                self._release, "_registry", lambda registry: registry.delete(NAMESPACE)
+            ),
+            self._cached_cells.close,
+        )
+
+
+def _attempt_all(*steps: Callable[[], object] | None) -> None:
+    """Run every cleanup step and raise the first failure afterwards."""
+    failure: BaseException | None = None
+    for step in steps:
+        if step is None:
+            continue
         try:
-            self._close_observations()
-        except BaseException as error:
-            failure = error
-        if self._value_encoder is not None:
-            try:
-                self._value_encoder.close()
-            except BaseException as error:
-                if failure is None:
-                    failure = error
-            else:
-                self._value_encoder = None
-        if self._output_renderer is not None:
-            try:
-                self._output_renderer.close()
-            except BaseException as error:
-                if failure is None:
-                    failure = error
-            else:
-                self._output_renderer = None
-        if self._registry is not None:
-            try:
-                self._registry.delete(NAMESPACE)
-            except BaseException as error:
-                if failure is None:
-                    failure = error
-            else:
-                self._registry = None
-        try:
-            self._cached_cells.close()
+            step()
         except BaseException as error:
             if failure is None:
                 failure = error
-        if failure is not None:
-            raise failure
+    if failure is not None:
+        raise failure
 
 
 def kernel_lifespan(_: None) -> _KernelBridgeLifespan:
