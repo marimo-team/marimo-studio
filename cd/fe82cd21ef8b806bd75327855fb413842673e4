@@ -1,0 +1,49 @@
+docs/guide/troubleshooting.md
+  s_07c67c12264282::t_f634fd945ce15b 62,64,208
+docs/reference/limits.md
+  s_07c67c12264282::t_f634fd945ce15b 71
+docs/guide/index.md
+  s_07c67c12264282::t_78970dd278e180 14-20
+docs/what-is-studio.md
+  s_07c67c12264282::t_78970dd278e180 112
+docs/index.md
+  s_07c67c12264282::t_78970dd278e180 40
+docs/reference/identities.md
+  s_07c67c12264282::t_f634fd945ce15b 61
+docs/guide/formats.md
+  s_07c67c12264282::t_78970dd278e180 20,75,80,85,90,150,209-214
+docs/guide/view-providers.md
+  s_07c67c12264282::t_78970dd278e180 36-38
+docs/reference/compatibility.md
+  s_07c67c12264282::t_78970dd278e180 37-38
+docs/guide/marimohub.md
+  s_07c67c12264282::t_f634fd945ce15b 37-38
+docs/reference/provider-api.md
+  s_07c67c12264282::t_78970dd278e180 55
+docs/guide/styling.md
+  s_07c67c12264282::t_f634fd945ce15b 114-115
+docs/guide/run-and-share.md
+  s_07c67c12264282::t_f634fd945ce15b 53-54
+docs/reference/projections.md
+  s_07c67c12264282::t_f634fd945ce15b 25-26
+docs/guide/coding-agents.md
+  s_07c67c12264282::t_78970dd278e180 75-77
+docs/reference/cli.md
+  s_07c67c12264282::t_f634fd945ce15b 41-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cdfe82cd21ef8b806bd75327855fb413842673e4",
+  "prompts": {},
+  "sessions": {
+    "s_07c67c12264282": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e62e3a7-2fd7-4e95-915b-da3ec8a13756",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
