@@ -173,3 +173,24 @@ def test_cli_hold_reports_a_missing_view(notebook_path: Path) -> None:
 
     assert isinstance(result.exception, ViewNotFoundError)
     assert str(result.exception) == "View 'dashbaord' does not exist."
+
+
+@pytest.mark.parametrize("owner", ("", " ", "x" * 257))
+def test_cli_hold_rejects_an_unusable_owner(notebook_path: Path, owner: str) -> None:
+    prepare_view(notebook_path)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "hold",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--owner",
+            owner,
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "must contain 1 to 256 characters" in result.output
