@@ -182,7 +182,7 @@ def _read_document_snapshot(
         )
     path = root.joinpath(*spec.path.parts)
     try:
-        snapshot = FileTree(studio.notebook.parent).read(
+        snapshot = FileTree(studio.view_root).read(
             path, max_bytes=SOURCE_DOCUMENT_MAX_BYTES
         )
         content = snapshot.content.decode("utf-8")
@@ -221,7 +221,7 @@ def _manifest_root(studio: StudioDefinition, view_name: str) -> Path:
     except ConfigurationError as error:
         raise SourceNotFoundError(f"Unknown view {view_name!r}.") from error
     root = studio.view_root / view_name
-    tree = FileTree(studio.notebook.parent)
+    tree = FileTree(studio.view_root)
     tree.stat(root / VIEW_MANIFEST_PATH.name)
     if not tree.is_directory(root):
         raise SourceNotFoundError(f"Unknown view {view_name!r}.")

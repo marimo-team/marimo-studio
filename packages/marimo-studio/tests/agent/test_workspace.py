@@ -850,3 +850,27 @@ def test_a_view_handle_taken_before_configuration_cannot_write_after_creation(
         return (await created.read("index.html")).content
 
     assert "stale handle" not in asyncio.run(exercise())
+
+
+def test_project_configured_views_outside_the_notebook_folder_are_readable(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebooks" / "analysis.py"
+    notebook.parent.mkdir()
+    notebook.write_text(notebook_source("sibling-views"), encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.marimo-studio]\n"
+        'notebook = "notebooks/analysis.py"\n'
+        'default = "dashboard"\n'
+        'view_root = "views"\n',
+        encoding="utf-8",
+    )
+
+    async def exercise() -> list[str]:
+        view = await studio_authoring.open_workspace(notebook).create_view("dashboard")
+        return [
+            (await view.read(path)).path.as_posix()
+            for path in ("index.html", "view.toml")
+        ]
+
+    assert asyncio.run(exercise()) == ["index.html", "view.toml"]
