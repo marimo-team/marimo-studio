@@ -414,6 +414,12 @@ export class ViewController {
     });
   }
 
+  clearCreateMessage(): void {
+    if (this.snapshot.createMessage !== undefined) {
+      this.update({ createMessage: undefined });
+    }
+  }
+
   dismissPanels(): void {
     this.update({
       removing: undefined,
