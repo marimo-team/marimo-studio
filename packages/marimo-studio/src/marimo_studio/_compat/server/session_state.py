@@ -918,39 +918,13 @@ class PrivateSessionState:
             self._start_failures[session] = failure
             raise RuntimeStartupError(failure)
         if tracker.pending(session):
-            waiting_since = self._waiting_since.setdefault(session, monotonic())
-            if monotonic() - waiting_since >= _NATIVE_INSTANTIATION_TIMEOUT_SECONDS:
-                failure = (
-                    "Marimo did not finish notebook startup within "
-                    f"{_NATIVE_INSTANTIATION_TIMEOUT_SECONDS:g} seconds. "
-                    "Reload the editor to retry."
-                )
-                self._start_failures[session] = failure
-                raise RuntimeStartupError(failure)
-            return False
-        if tracker.attached and not tracker.create_accepted:
-            waiting_since = self._waiting_since.setdefault(session, monotonic())
-            if (
-                session.kernel_state() is KernelState.RUNNING
-                and session not in self._instantiation_requested
-            ):
-                session.instantiate(
-                    instantiate_notebook_request(auto_run=False),
-                    http_request=None,
-                )
-                self._instantiation_requested.add(session)
-            if monotonic() - waiting_since >= _NATIVE_INSTANTIATION_TIMEOUT_SECONDS:
-                failure = (
-                    "Marimo did not initialize the notebook within "
-                    f"{_NATIVE_INSTANTIATION_TIMEOUT_SECONDS:g} seconds. "
-                    "Reload the editor to retry."
-                )
-                self._start_failures[session] = failure
-                raise RuntimeStartupError(failure)
+            # The notebook's own first run keeps a live kernel pending for as
+            # long as its cells take, so only a stopped kernel fails startup.
+            self._waiting_since.pop(session, None)
             return False
         last_executed_code = session.session_view.last_executed_code
         queued = {str(cell_id) for cell_id in last_executed_code}
-        if not queued and not tracker.create_accepted:
+        if not tracker.create_accepted and (tracker.attached or not queued):
             waiting_since = self._waiting_since.setdefault(session, monotonic())
             if (
                 session.kernel_state() is KernelState.RUNNING
@@ -970,8 +944,6 @@ class PrivateSessionState:
                 self._start_failures[session] = failure
                 raise RuntimeStartupError(failure)
             return False
-        # Sessions without the event-bus adapter retain the old compatibility
-        # barrier. Native sessions use the explicit CreateNotebook event above.
         self._waiting_since.pop(session, None)
         self._instantiation_requested.discard(session)
         task = asyncio.create_task(self._start(session, session_id))

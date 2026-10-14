@@ -521,3 +521,100 @@ def test_stale_development_stream_stops_reconnecting(
         )
 
     assert response.status_code == 204
+
+
+def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._messaging.notification import (
+        CellNotification,
+        CompletedRunNotification,
+    )
+    from marimo._messaging.serde import serialize_kernel_message
+    from marimo._runtime.commands import CreateNotebookCommand, UpdateUIElementCommand
+    from marimo._session.types import KernelState
+
+    from marimo_studio._compat.execution_markers import make_marker
+
+    class Session:
+        def __init__(self) -> None:
+            self.document = SimpleNamespace(
+                cells=[SimpleNamespace(id="load", code="frame = slow_load()")]
+            )
+            self.session_view = SimpleNamespace(
+                last_executed_code={}, cell_notifications={}
+            )
+            self._event_bus = SimpleNamespace(
+                _listeners=[], subscribe=lambda _listener: None
+            )
+
+        @staticmethod
+        def kernel_exit_info() -> None:
+            return None
+
+        @staticmethod
+        def kernel_state() -> KernelState:
+            return KernelState.RUNNING
+
+        def put_control_request(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+    def marker(phase: str) -> bytes:
+        return serialize_kernel_message(
+            CompletedRunNotification(
+                run_id=make_marker(phase, "CreateNotebookCommand", "create-1")
+            )
+        )
+
+    session: Any = Session()
+    now = 10.0
+    monkeypatch.setattr(session_state_module, "current_session", lambda *_args: session)
+    monkeypatch.setattr(session_state_module, "monotonic", lambda: now)
+    state = PrivateSessionState()
+    context: Any = SimpleNamespace()
+    tracker = session_state_module._ensure_execution_tracker(session)
+    tracker.on_received_command(
+        session,
+        CreateNotebookCommand(
+            execution_requests=(),
+            cell_ids=(),
+            set_ui_element_value_request=UpdateUIElementCommand(
+                object_ids=[], values=[]
+            ),
+            auto_run=True,
+        ),
+        None,
+    )
+    tracker.on_notification_sent(session, marker("start"))
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CellNotification(cell_id="load", status="running")),
+    )
+    session.session_view.last_executed_code["load"] = "frame = slow_load()"
+
+    assert state.ensure_started(context, "s_123456") is False
+    now += session_state_module._NATIVE_INSTANTIATION_TIMEOUT_SECONDS + 10
+    assert state.ensure_started(context, "s_123456") is False
+
+    tracker.on_notification_sent(
+        session,
+        serialize_kernel_message(CellNotification(cell_id="load", status="idle")),
+    )
+    tracker.on_notification_sent(session, marker("done"))
+    completed = asyncio.Event()
+
+    async def read_barrier(*_args: object, **_kwargs: object) -> object:
+        completed.set()
+        return object()
+
+    monkeypatch.setattr(session_state_module, "read_session_values", read_barrier)
+
+    async def finish() -> None:
+        assert state.ensure_started(context, "s_123456") is False
+        await asyncio.wait_for(state._starting[session], timeout=1)
+        callback_turn = asyncio.Event()
+        asyncio.get_running_loop().call_soon(callback_turn.set)
+        await asyncio.wait_for(callback_turn.wait(), timeout=1)
+        assert state.ensure_started(context, "s_123456") is True
+
+    asyncio.run(finish())
