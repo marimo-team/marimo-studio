@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import PurePosixPath
+from types import SimpleNamespace
 from typing import Any, Literal, cast
 
 import pytest
@@ -197,3 +199,99 @@ def _resource_element_class() -> type[Any]:
             return value
 
     return ResourceElement
+
+
+class _SummarySession:
+    # The host keys live graphs in a WeakKeyDictionary, so the session has to
+    # be a hashable object. SimpleNamespace is unhashable.
+    def __init__(self, code: str = "summary = {'total': 3}") -> None:
+        self.document = SimpleNamespace(cells=[SimpleNamespace(id="runtime-summary")])
+        self.session_view = SimpleNamespace(
+            last_executed_code={"runtime-summary": code}
+        )
+
+
+def _install_projection_host(
+    monkeypatch: pytest.MonkeyPatch,
+    session: Any,
+    build: Any,
+    *,
+    read: Any | None = None,
+    render: Any | None = None,
+    current_session: Any | None = None,
+) -> Any:
+    from marimo_studio._compat.kernel_values import host as projection_host
+    from marimo_studio._projections.runtime_records import (
+        OutputRenderResult,
+        ValueReadResult,
+    )
+
+    async def empty_read(*_args: Any, **_kwargs: Any) -> ValueReadResult:
+        return ValueReadResult({}, {})
+
+    async def empty_render(*_args: Any, **_kwargs: Any) -> OutputRenderResult:
+        return OutputRenderResult({}, {})
+
+    monkeypatch.setattr(
+        projection_host,
+        "current_session",
+        current_session if current_session is not None else (lambda *_args: session),
+    )
+    monkeypatch.setattr(projection_host, "_build_live_projection_state", build)
+    monkeypatch.setattr(projection_host, "read_session_values", read or empty_read)
+    monkeypatch.setattr(
+        projection_host, "render_session_outputs", render or empty_render
+    )
+    return projection_host.PrivateKernelProjectionHost()
+
+
+async def _call_projection(
+    host: Any,
+    operation: str,
+    projection: Any,
+    session_id: str = "session",
+) -> Any:
+    return await getattr(host, operation)(
+        SimpleNamespace(),
+        session_id,
+        "revision-1",
+        (projection,),
+        (projection,),
+        consumer_id="preview-a",
+        runtime_cell_refs={projection.producer: "runtime-summary"},
+    )
+
+
+def _sample_arrow_table() -> Any:
+    import pyarrow as pa
+
+    return pa.table({"x": [1]})
+
+
+@contextmanager
+def _installed_value_encoder() -> Iterator[tuple[Any, Any]]:
+    from marimo_studio._compat.kernel_values.representations import ValueEncoder
+
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+    try:
+        with context.install():
+            yield context, encoder
+    finally:
+        context.virtual_file_registry.shutdown()
+
+
+def _preview_value_read(
+    encoder: Any,
+    values: dict[str, object],
+    *names: str,
+) -> Any:
+    from marimo_studio._compat.kernel_values.selectors import _read_values
+
+    return _read_values(
+        values,
+        _selectors(*names),
+        consumer_id="preview",
+        revision="revision-1",
+        encoder=encoder,
+    )
