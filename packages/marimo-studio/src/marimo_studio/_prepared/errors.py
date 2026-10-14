@@ -13,7 +13,7 @@ from marimo_export.errors import (
     SpecError,
     TransportError,
 )
-from marimo_export.repository import RepositoryLimitError
+from marimo_export.repository import RepositoryLimitError, RepositoryUnavailableError
 
 from marimo_studio._prepared.compiler import CompiledExportView
 from marimo_studio.errors import PublicationError, PublicationLimitError
@@ -104,6 +104,18 @@ def publication_error(
                 "outputs, then retry."
             ),
         )
+    if isinstance(error, RepositoryUnavailableError):
+        unavailable = PublicationError(
+            f"Could not prepare the notebook states: {error}",
+            code=error.code,
+            details={"runtime": "zero-python", "marimo_export": wire},
+            hint=(
+                "The shared export cache is busy or unavailable. Retry after "
+                "other exports finish."
+            ),
+        )
+        unavailable.transient = True
+        return unavailable
     identity = _projection_identity(compiled, details.get("output"))
     identities = (
         _projection_identities(compiled)
