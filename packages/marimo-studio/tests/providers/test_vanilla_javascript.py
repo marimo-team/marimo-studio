@@ -120,4 +120,5 @@ def test_javascript_dependencies_decode_utf16_escapes(
     specifier: str, expected: str | None
 ) -> None:
     (dependency,) = javascript_dependencies(f'import "{specifier}";')
+    assert dependency.kind == "import"
     assert dependency.specifier == expected
