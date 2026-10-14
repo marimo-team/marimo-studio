@@ -510,6 +510,18 @@ def test_build_retains_errors_from_data_inputs(tmp_path: Path) -> None:
         ),
         ('#let f = [marimo_value("missing") #marimo_value("real")]\n', ["real"]),
         ('#(marimo_value("real"))\n', ["real"]),
+        ('#box(width: 1em)marimo_value("missing")\n', []),
+        ('#strong[Total]marimo_value("missing")\n', []),
+        ('#"label"marimo_value("missing")\n', []),
+        ('#{ 1 }marimo_value("missing")\n', []),
+        ('#marimo_value("real").at(0)marimo_value("missing")\n', ["real"]),
+        (
+            '#figure(marimo_value("first"))[#marimo_value("second")]\n',
+            [
+                "first",
+                "second",
+            ],
+        ),
     ],
 )
 def test_inspection_reads_typst_code_expressions(

@@ -96,46 +96,66 @@ _STATEMENT = re.compile(
 def _masked(source: str) -> str:
     clean = _uncommented(source)
     characters = list(clean)
-    # An inline code expression returns to its surrounding markup or math.
-    # Delimited code and content blocks retain their enclosing mode.
-    modes: list[tuple[str, str, bool]] = [("markup", "", False)]
+    # An inline code expression returns to its surrounding markup or math after
+    # its name, field accesses, call arguments, and trailing content blocks.
+    # Delimited code and content blocks retain their enclosing mode. The last
+    # flag marks an inline expression whose latest group or string has closed.
+    modes: list[tuple[str, str, bool, bool]] = [("markup", "", False, False)]
+
+    def complete() -> None:
+        mode, closing, statement, _ = modes[-1]
+        if mode == "code" and not closing and not statement:
+            modes[-1] = (mode, closing, statement, True)
+
     index = 0
     while index < len(clean):
-        mode, closing, statement = modes[-1]
+        mode, closing, statement, done = modes[-1]
         character = clean[index]
         if closing and character == closing:
             modes.pop()
+            complete()
         elif mode == "code":
             if not closing and (
-                character in "\n;]$" or (character.isspace() and not statement)
+                character in "\n;]$" if statement else not _continues(character, done)
             ):
                 modes.pop()
                 continue
+            if done:
+                modes[-1] = (mode, closing, statement, False)
             if character == '"':
                 end = _string_end(clean, index + 1) or index + 1
                 _blank(characters, index + 1, end)
                 index = end
+                complete()
                 continue
             if character in "({":
-                modes.append(("code", ")" if character == "(" else "}", True))
+                modes.append(("code", ")" if character == "(" else "}", True, False))
             elif character == "[":
-                modes.append(("markup", "]", False))
+                modes.append(("markup", "]", False, False))
             elif character == "$":
-                modes.append(("math", "$", False))
+                modes.append(("math", "$", False, False))
         elif character == "\\":
             _blank(characters, index, min(len(clean), index + 2))
             index += 2
             continue
         elif character == "#":
-            modes.append(("code", "", _STATEMENT.match(clean, index + 1) is not None))
+            statement = _STATEMENT.match(clean, index + 1) is not None
+            modes.append(("code", "", statement, False))
         elif character == "[" and mode == "markup":
-            modes.append(("markup", "]", False))
+            modes.append(("markup", "]", False, False))
         elif character == "$" and mode == "markup":
-            modes.append(("math", "$", False))
+            modes.append(("math", "$", False, False))
         if mode != "code":
             _blank(characters, index, index + 1)
         index += 1
     return "".join(characters)
+
+
+def _continues(character: str, done: bool) -> bool:
+    """Return whether an inline code expression continues at ``character``."""
+    if done:
+        return character in ".(["
+    return character.isalnum() or character in '_-.([{"'
 
 
 def _string_end(source: str, start: int) -> int | None:
