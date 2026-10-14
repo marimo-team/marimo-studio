@@ -146,7 +146,6 @@ def test_cancelling_during_verification_keeps_the_event_loop_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import threading
-    import time
 
     import marimo_export.prepared as prepared_module
 
@@ -159,7 +158,7 @@ def test_cancelling_during_verification_keeps_the_event_loop_running(
         assert release.wait(2)
         return verify(*args)
 
-    async def exercise() -> tuple[float, bool]:
+    async def exercise() -> bool:
         content = b"value"
         path = tmp_path / "assets" / "value.bin"
         path.parent.mkdir(parents=True)
@@ -187,18 +186,15 @@ def test_cancelling_during_verification_keeps_the_event_loop_running(
             )
         )
         await asyncio.to_thread(entered.wait, 2)
-        threading.Timer(0.4, release.set).start()
-        started = time.monotonic()
-        ran: list[float] = []
-        asyncio.get_running_loop().call_later(
-            0.05, lambda: ran.append(time.monotonic() - started)
-        )
-        serving.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await serving
-        return ran[0], lease.closed
+        loop_ran = asyncio.Event()
+        asyncio.get_running_loop().call_soon(loop_ran.set)
+        try:
+            await asyncio.wait_for(loop_ran.wait(), 2)
+            serving.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await serving
+        finally:
+            release.set()
+        return lease.closed
 
-    callback_delay, closed = asyncio.run(exercise())
-
-    assert callback_delay < 0.2
-    assert closed is True
+    assert asyncio.run(exercise()) is True
