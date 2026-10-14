@@ -1,3 +1,4 @@
+import { type ErrorResponse, parseErrorResponse } from "@marimo-studio/protocol/errors";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import type { StagedPreviewView } from "../features/preview/navigation.ts";
@@ -92,6 +93,18 @@ const handoffRequest = async (
   }
 };
 
+const refusalMessage = async (response: Response): Promise<string> => {
+  let detail: ErrorResponse = {};
+  try {
+    detail = parseErrorResponse(await response.json());
+  } catch {
+    // An empty refusal carries no reason, so the default explains it.
+  }
+  const message = detail.message ?? "Studio could not take over the active view.";
+  const hint = detail.hint ?? "Wait for any view switch in progress to finish, then try again.";
+  return `${message} ${hint}`;
+};
+
 const acquireHandoff = async (
   url: string,
   serverToken: string,
@@ -113,7 +126,7 @@ const acquireHandoff = async (
       return;
     }
     if (response && response.status < 500) {
-      throw new Error(`Active view ownership could not be handed off (${response.status}).`);
+      throw new Error(await refusalMessage(response));
     }
     if (response) {
       lastFailure = new Error(`Active view ownership handoff failed (${response.status}).`);
