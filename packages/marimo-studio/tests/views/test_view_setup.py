@@ -110,6 +110,28 @@ def test_view_setup_works_below_a_search_only_ancestor(tmp_path: Path) -> None:
     assert result.root.joinpath("index.html").is_file()
 
 
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="directory modes do not restrict listing on Windows or for root",
+)
+def test_unreadable_view_folder_is_a_configuration_error(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    locked = prepare_view(notebook_path, "report").root
+    locked.chmod(0)
+    try:
+        with pytest.raises(ConfigurationError) as raised:
+            load_studio(notebook_path)
+    finally:
+        locked.chmod(0o755)
+
+    assert str(raised.value) == (
+        f"Studio cannot read view folder {locked}. Fix its permissions or move "
+        f"it out of {locked.parent}, then retry."
+    )
+
+
 @pytest.mark.parametrize("name", ("con", "a" * 241))
 def test_view_names_are_portable_filesystem_components(name: str) -> None:
     with pytest.raises(ConfigurationError):
