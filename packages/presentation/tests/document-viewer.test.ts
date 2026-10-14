@@ -2,6 +2,7 @@ import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
 
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vite-plus/test";
 
+import { DocumentBase } from "../src/document/base.ts";
 import { registerMarimoDocumentElement } from "../src/documents/viewer.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
@@ -78,6 +79,7 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.replaceChildren();
+  document.querySelector("base")?.remove();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -394,6 +396,74 @@ test("shows the published document before the prepared state API is installed", 
 
   await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
   expect(calls.map(({ url }) => new URL(url).pathname)).toEqual(["/card.svg"]);
+});
+
+test("shows the rebuilt document when a new artifact revision keeps the same src", async () => {
+  const base = new DocumentBase();
+  base.set("/artifacts/first/");
+  commitRuntimeConfig(runtimeConfig({ revision: "first" }));
+  stubFetch([() => svg(), () => svg()]);
+  document.body.innerHTML = `
+    <main id="app-shell">
+      <marimo-document src="card.svg" type="image/svg+xml"></marimo-document>
+    </main>
+  `;
+  const viewer = document.querySelector<HTMLElement>("marimo-document");
+  await vi.waitFor(() => expect(viewer?.dataset.state).toBe("ready"));
+
+  base.set("/artifacts/second/");
+  commitRuntimeConfig(runtimeConfig({ revision: "second" }));
+
+  await vi.waitFor(() => expect(calls).toHaveLength(2));
+  expect(calls.map(({ url }) => new URL(url).pathname)).toEqual([
+    "/artifacts/first/card.svg",
+    "/artifacts/second/card.svg",
+  ]);
+  expect(viewer?.dataset.state).toBe("ready");
+});
+
+test("returns to ready when a Prepared host settles on the state it already showed", async () => {
+  vi.stubGlobal("marimoStudio", undefined);
+  commitRuntimeConfig(
+    runtimeConfig({
+      runtime: { id: "zero-python", instance: "prepared", data: {}, urls: {} },
+      mode: "run",
+    }),
+  );
+  stubFetch([() => svg()]);
+  const { viewer, host } = mount();
+  settle(host, 1);
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+
+  host.dataset.state = "loading";
+  host.dispatchEvent(new CustomEvent("marimo-value-updated", { bubbles: true, composed: true }));
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("loading"));
+  settle(host, 2);
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+  expect(calls).toHaveLength(1);
+});
+
+test("returns to ready after the viewer moves within the page", async () => {
+  stubFetch([() => svg()]);
+  document.body.innerHTML = `
+    <main id="app-shell">
+      <section><marimo-document src="card.svg" type="image/svg+xml"></marimo-document></section>
+      <section></section>
+    </main>
+  `;
+  const viewer = document.querySelector<HTMLElement>("marimo-document");
+  const target = document.querySelectorAll("section")[1];
+  if (!viewer || !target) {
+    throw new Error("The move fixture did not mount");
+  }
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+
+  target.append(viewer);
+  expect(viewer.dataset.state).toBe("loading");
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+  expect(calls).toHaveLength(1);
 });
 
 test("posts the output each cell host shows", async () => {
