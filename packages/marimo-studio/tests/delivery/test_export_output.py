@@ -17,6 +17,17 @@ from marimo_studio.errors import StaticExportError, ViewGenerationConflictError
 from .export_test_support import configure_export_view
 
 
+def _tracked_source(notebook: Path, changed: str) -> Path:
+    if changed == "public":
+        source = notebook.parent / "public" / "data.txt"
+        source.parent.mkdir()
+        source.write_text("old data", encoding="utf-8")
+        return source
+    if changed == "notebook":
+        return notebook
+    return load_studio(notebook).views["dashboard"].root / "index.html"
+
+
 def _existing_export(notebook: Path, tmp_path: Path) -> Path:
     configure_export_view(notebook)
     output = tmp_path / "site"
@@ -233,7 +244,7 @@ def test_forced_export_protects_authored_namespaces(notebook_path: Path) -> None
     assert (studio.views["executive"].root / "view.toml").is_file()
 
 
-@pytest.mark.parametrize("changed", ["view", "public"])
+@pytest.mark.parametrize("changed", ("view", "public"))
 def test_export_rejects_source_changes_at_commit_and_preserves_destination(
     notebook_path: Path,
     tmp_path: Path,
@@ -241,12 +252,7 @@ def test_export_rejects_source_changes_at_commit_and_preserves_destination(
 ) -> None:
     output = _existing_export(notebook_path, tmp_path)
     expected = output.joinpath("index.html").read_bytes()
-    if changed == "view":
-        source = load_studio(notebook_path).views["dashboard"].root / "index.html"
-    else:
-        source = notebook_path.parent / "public" / "data.txt"
-        source.parent.mkdir()
-        source.write_text("old data", encoding="utf-8")
+    source = _tracked_source(notebook_path, changed)
 
     def change_source(event: StaticExportProgress) -> None:
         if event.event.kind == "commit_started":
@@ -269,15 +275,7 @@ def test_preflight_rechecks_sources_and_owner_after_inspection(
 ) -> None:
     configure_export_view(notebook_path)
     studio = load_studio(notebook_path)
-    source = (
-        studio.views["dashboard"].root / "index.html"
-        if changed == "view"
-        else notebook_path
-    )
-    if changed == "public":
-        source = notebook_path.parent / "public" / "data.txt"
-        source.parent.mkdir()
-        source.write_text("old data", encoding="utf-8")
+    source = _tracked_source(notebook_path, changed)
 
     def change_source(event: StaticExportProgress) -> None:
         if event.event.kind != "preflight_finished":

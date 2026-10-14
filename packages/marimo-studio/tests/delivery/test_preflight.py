@@ -213,4 +213,4 @@ def test_preflight_resolves_javascript_surrogate_pair_imports(tmp_path: Path) ->
     assert report.ok
     assert report.references == 2
     assert report.issues == ()
-    json.dumps(report.to_dict(), ensure_ascii=False).encode("utf-8")
+    assert json.dumps(report.to_dict(), ensure_ascii=False).encode("utf-8")

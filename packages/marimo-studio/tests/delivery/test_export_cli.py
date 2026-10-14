@@ -6,7 +6,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 from click import unstyle
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
@@ -17,6 +17,44 @@ from ..artifact_test_support import add_provider_outputs
 from .export_test_support import configure_export_view
 
 _PREPARE_TIMEOUT = 120.0
+_MODULE_TAG = '<script type="module" src="./app.js"></script>'
+
+
+def _invoke_static_view(notebook: Path, command: str, *extra: str) -> Result:
+    return CliRunner().invoke(
+        cli,
+        [
+            "view",
+            command,
+            "dashboard",
+            "--target",
+            str(notebook),
+            "--runtime",
+            "wasm",
+            *extra,
+        ],
+    )
+
+
+def _install_app_module(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    script: bytes,
+) -> None:
+    root = configure_export_view(notebook_path)
+    root.joinpath("app.js").write_text("export {};\n", encoding="utf-8")
+    document = root / "index.html"
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            "</head>", f"{_MODULE_TAG}</head>"
+        ),
+        encoding="utf-8",
+    )
+    add_provider_outputs(
+        monkeypatch,
+        load_studio(notebook_path).view("dashboard"),
+        {PurePosixPath("app.js"): script},
+    )
 
 
 @pytest.mark.native_process
@@ -137,36 +175,13 @@ def test_static_delivery_text_shows_each_issue_repair(
     monkeypatch: pytest.MonkeyPatch,
     command: str,
 ) -> None:
-    view_root = configure_export_view(notebook_path)
-    view_root.joinpath("app.js").write_text("export {};\n", encoding="utf-8")
-    document = view_root / "index.html"
-    document.write_text(
-        document.read_text(encoding="utf-8").replace(
-            "</head>",
-            '<script type="module" src="./app.js"></script></head>',
-        ),
-        encoding="utf-8",
-    )
-    add_provider_outputs(
+    _install_app_module(
+        notebook_path,
         monkeypatch,
-        load_studio(notebook_path).view("dashboard"),
-        {PurePosixPath("app.js"): b"void import(globalThis.target);\n"},
+        b"void import(globalThis.target);\n",
     )
-    output = ["--output", str(tmp_path / "site")] if command == "export" else []
-
-    result = CliRunner().invoke(
-        cli,
-        [
-            "view",
-            command,
-            "dashboard",
-            "--target",
-            str(notebook_path),
-            "--runtime",
-            "wasm",
-            *output,
-        ],
-    )
+    output = ("--output", str(tmp_path / "site")) if command == "export" else ()
+    result = _invoke_static_view(notebook_path, command, *output)
 
     assert result.exit_code == 0, result.output
     lines = unstyle(result.stdout).splitlines()
@@ -306,38 +321,13 @@ def test_preflight_reports_every_error_and_exits_unsuccessfully(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    root = configure_export_view(notebook_path)
-    root.joinpath("app.js").write_text("export {};\n", encoding="utf-8")
-    document = root / "index.html"
-    document.write_text(
-        document.read_text(encoding="utf-8").replace(
-            "</head>", '<script type="module" src="./app.js"></script></head>'
-        ),
-        encoding="utf-8",
-    )
-    add_provider_outputs(
+    _install_app_module(
+        notebook_path,
         monkeypatch,
-        load_studio(notebook_path).view("dashboard"),
-        {
-            PurePosixPath(
-                "app.js"
-            ): b'import "./missing-first.js"; import "./missing-second.js";'
-        },
+        b'import "./missing-first.js"; import "./missing-second.js";',
     )
 
-    result = CliRunner().invoke(
-        cli,
-        [
-            "view",
-            "preflight",
-            "dashboard",
-            "--target",
-            str(notebook_path),
-            "--runtime",
-            "wasm",
-            "--json",
-        ],
-    )
+    result = _invoke_static_view(notebook_path, "preflight", "--json")
 
     assert result.exit_code == 1
     assert result.stdout, (result.exception, result.output)
