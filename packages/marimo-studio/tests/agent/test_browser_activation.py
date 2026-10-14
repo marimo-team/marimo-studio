@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from starlette.testclient import TestClient
 
 from ..agent_support import agent_edit_server
@@ -140,3 +141,63 @@ def test_a_refused_active_view_handoff_explains_the_conflict(
         ),
         "hint": "Wait for that to finish, then switch views again.",
     }
+
+
+@pytest.mark.parametrize(
+    "body",
+    [b'{"writeGeneration":' + b"9" * 5000 + b"}", b"[" * 4096 + b"0" + b"]" * 4096],
+    ids=("oversized-integer", "deep-nesting"),
+)
+def test_json_beyond_the_decoder_limits_is_invalid_json(
+    notebook_path: Path,
+    body: bytes,
+) -> None:
+    server = agent_edit_server(notebook_path)
+
+    with TestClient(server.app) as client:
+        response = client.post(
+            "/_marimo-studio/views", content=body, headers=server.headers
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid-json"
+
+
+def test_a_query_with_an_unpaired_surrogate_is_an_invalid_query(
+    notebook_path: Path,
+) -> None:
+    server = agent_edit_server(notebook_path)
+
+    with TestClient(server.app) as client:
+        response = client.post(
+            "/_marimo-studio/query",
+            headers=server.headers,
+            content=(
+                b'{"clientId": "browser-client-1234", "operationId": "op-123", '
+                b'"query": "?q=\\ud800", "writeGeneration": 1}'
+            ),
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid-query"
+
+
+def test_oversized_decimal_identifiers_are_client_errors(notebook_path: Path) -> None:
+    server = agent_edit_server(notebook_path)
+
+    with TestClient(server.app) as client:
+        activation = client.post(
+            "/_marimo-studio/activations/" + "9" * 5000 + "/ack",
+            content=b"{}",
+            headers=server.headers,
+        )
+        preview = client.get(
+            "/dashboard/",
+            params={
+                "marimo_studio_lifecycle": "9" * 5000,
+                "marimo_studio_client": "browser-client-1234",
+            },
+        )
+
+    assert activation.status_code == 404
+    assert preview.status_code < 500

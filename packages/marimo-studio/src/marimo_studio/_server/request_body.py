@@ -102,7 +102,9 @@ async def read_json_body(request: Request, *, max_bytes: int) -> Any:
     try:
         source = payload.decode("utf-8")
         return json.loads(source)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (ValueError, RecursionError) as error:
+        # ValueError covers decode errors and decoder limits such as oversized
+        # integers. Deep nesting raises RecursionError.
         raise InvalidJSONBody from error
 
 

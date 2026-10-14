@@ -57,6 +57,7 @@ from marimo_studio._server.presentation.projection_routes import (
     values_response,
 )
 from marimo_studio._server.presentation.query_routes import query_response
+from marimo_studio._server.query import positive_safe_integer
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.request_path import request_path
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
@@ -232,15 +233,17 @@ async def support_response(
     if support_path == "/agent/connection":
         return agent_connection_response(request, context, workspace)
     if support_path.startswith("/activations/") and support_path.endswith("/ack"):
-        raw_generation = support_path.removeprefix("/activations/").removesuffix("/ack")
-        if not raw_generation.isdecimal():
+        generation = positive_safe_integer(
+            support_path.removeprefix("/activations/").removesuffix("/ack")
+        )
+        if generation is None:
             return Response(status_code=404)
         return await activation_ack_response(
             request,
             context,
             workspace,
             notebook_scope,
-            int(raw_generation),
+            generation,
         )
     if support_path.startswith("/active-view-handoffs/"):
         operation_id = support_path.removeprefix("/active-view-handoffs/")
@@ -639,13 +642,7 @@ def events_response(
         if client_id is not None
         else None
     )
-    stream_generation = (
-        int(stream_value)
-        if stream_value is not None
-        and re.fullmatch(r"[1-9][0-9]{0,15}", stream_value) is not None
-        and int(stream_value) <= 9_007_199_254_740_991
-        else None
-    )
+    stream_generation = positive_safe_integer(stream_value)
     if client_id is not None and stream_generation is None:
         return JSONResponse(
             {

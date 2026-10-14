@@ -8,8 +8,7 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_LIFECYCLE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
 )
-
-_MAX_SAFE_INTEGER = 9_007_199_254_740_991
+from marimo_studio._server.query import positive_safe_integer
 
 
 def studio_frame_identity(request: Request) -> tuple[str, int] | None:
@@ -18,13 +17,8 @@ def studio_frame_identity(request: Request) -> tuple[str, int] | None:
     lifecycles = request.query_params.getlist(DOCUMENT_LIFECYCLE_QUERY_PARAM)
     if len(client_ids) != 1 or not client_ids[0] or len(lifecycles) != 1:
         return None
-    lifecycle = lifecycles[0]
-    if not lifecycle.isdecimal():
-        return None
-    lifecycle_id = int(lifecycle)
-    return (
-        (client_ids[0], lifecycle_id) if 0 < lifecycle_id <= _MAX_SAFE_INTEGER else None
-    )
+    lifecycle_id = positive_safe_integer(lifecycles[0])
+    return (client_ids[0], lifecycle_id) if lifecycle_id is not None else None
 
 
 def studio_owned_request(request: Request) -> bool:
