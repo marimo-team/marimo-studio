@@ -76,6 +76,15 @@ def test_local_wheel_installs_the_recorded_file(
             },
             "marimo-studio @ git+https://github.com/marimo-team/marimo-studio@abc123",
         ),
+        (
+            {
+                "url": "https://github.com/marimo-team/marimo-studio.git",
+                "vcs_info": {"vcs": "git", "commit_id": "abc123"},
+                "subdirectory": "packages/marimo-studio",
+            },
+            "marimo-studio @ git+https://github.com/marimo-team/marimo-studio.git"
+            "@abc123#subdirectory=packages/marimo-studio",
+        ),
         (None, "marimo-studio==0.1.6"),
         (
             {"url": "file:///missing/marimo_studio.whl", "archive_info": {}},
@@ -87,6 +96,7 @@ def test_local_wheel_installs_the_recorded_file(
     ids=(
         "remote-archive",
         "vcs-commit",
+        "vcs-subdirectory",
         "index",
         "missing-local-file",
         "malformed",
