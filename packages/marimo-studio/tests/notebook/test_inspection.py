@@ -1196,3 +1196,75 @@ def test_cell_fingerprint_distinguishes_multiline_string_values() -> None:
     assert _cell_fingerprint(indented) != _cell_fingerprint(flush)
     assert _cell_fingerprint(leading_newline) != _cell_fingerprint(no_leading_newline)
     assert _layout_fingerprint(indented) != _layout_fingerprint(flush)
+
+
+def test_inspecting_a_markdown_notebook_names_the_file_and_the_conversion(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notes.md"
+    notebook.write_text(
+        "---\ntitle: Notes\n---\n\n```python {.marimo}\nx = 1\n```\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError) as raised:
+        inspect_notebook(notebook)
+
+    assert str(raised.value) == (
+        f"Expected a Python marimo notebook: {notebook.resolve()}. "
+        "Convert other notebook formats with `marimo convert`."
+    )
+
+
+@pytest.mark.parametrize(
+    ("tail", "expected"),
+    [
+        pytest.param("await _pending", True, id="awaited"),
+        pytest.param("_alias = _pending\nawait _alias", True, id="awaited-alias"),
+        pytest.param("await asyncio.gather(_pending)", True, id="gathered"),
+        pytest.param(
+            "await asyncio.wait_for(_pending, timeout=1)", True, id="wait-for"
+        ),
+        pytest.param(
+            "await asyncio.gather(_emit(mo.output))", True, id="gathered-call"
+        ),
+        pytest.param("_done = True", False, id="unawaited"),
+        pytest.param("_pending = None\n_done = True", False, id="rebound"),
+    ],
+)
+def test_starter_output_cells_follow_awaited_local_coroutines(
+    tmp_path: Path,
+    tail: str,
+    expected: bool,
+) -> None:
+    from marimo_studio.view_providers import StarterCellTarget, StarterContext
+
+    body = (
+        "async def _emit(output):\n"
+        "    output.append('visible output')\n"
+        "_pending = _emit(mo.output)\n"
+        f"{tail}\n"
+        "_done = True\n"
+        "return"
+    )
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        _APP
+        + _cell("import marimo as mo\nreturn (mo,)")
+        + f"\n@app.cell\nasync def summary(mo):\n{indent(body, '    ')}\n"
+        + _RUN_GUARD,
+        encoding="utf-8",
+    )
+    spec = inspect_notebook(notebook)
+    context = StarterContext(
+        "dashboard",
+        notebook.name,
+        spec,
+        {
+            cell.ref: StarterCellTarget(cell.ref, cell.name or f"cell_{cell.index}")
+            for cell in spec.cells
+        },
+    )
+    assert [cell.target for cell in context.output_cells] == (
+        ["summary"] if expected else []
+    )

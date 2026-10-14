@@ -2,6 +2,7 @@
 
 import asyncio
 import mimetypes
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
@@ -14,13 +15,15 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.errors._internal import ArtifactIntegrityError
 
 
-class _ArtifactCloseTask(BackgroundTask):
-    def __init__(self, opened: LeasedArtifactFile) -> None:
-        self._opened = opened
-        super().__init__(opened.close)
+class ResponseOwnerTask(BackgroundTask):
+    """Release a response's file owner after delivery or on any send exit."""
+
+    def __init__(self, release: Callable[[], None]) -> None:
+        self._release = release
+        super().__init__(release)
 
     def close(self) -> None:
-        self._opened.close()
+        self._release()
 
 
 def _file_response(root: Path, relative: str) -> Response:
@@ -84,20 +87,20 @@ def artifact_file_response(
             return Response(
                 status_code=304,
                 headers=headers,
-                background=_ArtifactCloseTask(opened),
+                background=ResponseOwnerTask(opened.close),
             )
         if head:
             return Response(
                 content=b"",
                 headers=headers,
                 media_type=media_type,
-                background=_ArtifactCloseTask(opened),
+                background=ResponseOwnerTask(opened.close),
             )
         return StreamingResponse(
             opened.iter_bytes(),
             headers=headers,
             media_type=media_type,
-            background=_ArtifactCloseTask(opened),
+            background=ResponseOwnerTask(opened.close),
         )
     except ArtifactIntegrityError as error:
         with suppress(OSError, ConfigurationError):
@@ -118,5 +121,5 @@ def artifact_file_response(
 def close_artifact_response(response: Response) -> None:
     """Release the artifact owner transferred into one response."""
     background = response.background
-    if isinstance(background, _ArtifactCloseTask):
+    if isinstance(background, ResponseOwnerTask):
         background.close()

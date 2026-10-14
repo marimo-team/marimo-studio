@@ -15,8 +15,10 @@ export const deferred = <T>() => {
 };
 
 export class EventSourceStub {
+  static readonly CLOSED = 2;
   static instances: EventSourceStub[] = [];
   readonly listeners = new Map<string, EventListener>();
+  readyState = 1;
   closed = false;
 
   constructor(readonly url: string) {
@@ -33,8 +35,15 @@ export class EventSourceStub {
     );
   }
 
+  /** Fail the connection the way a browser does for a non-200 or non-stream response. */
+  fail(): void {
+    this.readyState = EventSourceStub.CLOSED;
+    this.emit("error");
+  }
+
   close(): void {
     this.closed = true;
+    this.readyState = EventSourceStub.CLOSED;
   }
 }
 
@@ -108,6 +117,7 @@ export const setup = (
     presentationBuildCompleted: vi.fn(),
     presentationStreamAbandoned: vi.fn(),
     presentationChanged: vi.fn(),
+    serverRestarted: vi.fn(),
   };
   const source = { reconcile: vi.fn(), externalChanges: vi.fn() };
   const acknowledge = vi.fn(

@@ -171,7 +171,8 @@ def _site_for(
     if len(matches) != 1:
         raise ProjectionResolutionError(
             "projection-site-not-found",
-            f"Projection site {request.site_id!r} is unavailable.",
+            "This projection host belongs to an earlier build of the view. "
+            "Reload the page.",
         )
     site = matches[0]
     return site
@@ -191,17 +192,23 @@ def validate_artifact_site(site: ArtifactSite) -> None:
     targets = site.targets
     if targets is None:
         return
-    if not targets or len(set(targets)) != len(targets):
+    if (
+        not targets
+        or len(set(targets)) != len(targets)
+        or any(
+            not target or len(target.encode("utf-8")) > MAX_TARGET_BYTES
+            for target in targets
+        )
+    ):
         raise ProjectionResolutionError(
             "projection-site-invalid",
-            f"Projection site {site.id!r} has invalid targets.",
+            f"The {site.kind} projection host at "
+            f"{site.source.path}:{site.source.line}:{site.source.column} "
+            "has invalid targets. "
+            "Choose non-empty, distinct targets within the "
+            f"{MAX_TARGET_BYTES:,}-byte limit, "
+            "then rebuild the view.",
         )
-    for target in targets:
-        if not target or len(target.encode("utf-8")) > MAX_TARGET_BYTES:
-            raise ProjectionResolutionError(
-                "projection-site-invalid",
-                f"Projection site {site.id!r} contains an invalid target.",
-            )
 
 
 def _unique_ref(

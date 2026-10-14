@@ -1,4 +1,3 @@
-import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 import {
@@ -12,6 +11,8 @@ import {
   type ViewList,
 } from "@marimo-studio/protocol/views";
 
+import { responseErrorMessage } from "../../shared/errors.ts";
+
 export interface ViewRemote {
   list(signal?: AbortSignal): Promise<ViewList>;
   create(name: string, starter: string, catalogGeneration: string): Promise<CreatedView>;
@@ -20,22 +21,13 @@ export interface ViewRemote {
 
 const responseJson = async (response: Response) => jsonValueSchema.parse(await response.json());
 
-const errorMessage = async (response: Response, fallback: string): Promise<string> => {
-  const fallbackMessage = `${fallback} (${response.status})`;
-  try {
-    const error = parseErrorResponse(await responseJson(response));
-    const message = error.message ?? fallbackMessage;
-    return error.hint ? `${message} ${error.hint}` : message;
-  } catch {
-    return fallbackMessage;
-  }
-};
-
 export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRemote => ({
   async list(signal) {
     const response = await fetch(viewsUrl, { cache: "no-store", signal });
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Could not load views"));
+      throw new Error(
+        await responseErrorMessage(response, `Could not load views (${response.status})`),
+      );
     }
     return parseViewList(await responseJson(response));
   },
@@ -55,7 +47,9 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
       body: JSON.stringify(request),
     });
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Could not create view"));
+      throw new Error(
+        await responseErrorMessage(response, `Could not create view (${response.status})`),
+      );
     }
     return parseCreatedView(await responseJson(response));
   },
@@ -75,7 +69,9 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
       body: JSON.stringify(request),
     });
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Could not remove view"));
+      throw new Error(
+        await responseErrorMessage(response, `Could not remove view (${response.status})`),
+      );
     }
     return parseDeletedView(await responseJson(response));
   },

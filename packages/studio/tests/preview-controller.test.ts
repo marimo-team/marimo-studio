@@ -576,6 +576,64 @@ it("reports a query failure and clears it after the editor recovers", async () =
   server.dispose();
 });
 
+it("reports a query failure beside a preview that fills the diagnostic budget", async () => {
+  const syncEditorQuery = vi
+    .fn<ConstructorParameters<typeof PreviewController>[7]>()
+    .mockRejectedValue(new Error("editor query unavailable"));
+  const server = controller(
+    "wasm",
+    frame("loading"),
+    frame("complete"),
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    vi.fn(),
+    vi.fn(),
+    vi.fn(),
+    syncEditorQuery,
+  );
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-diagnostics",
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    diagnostics: Array.from({ length: 200 }, (_, index) => ({
+      code: `projection-warning-${index}`,
+      severity: "warning" as const,
+      message: "The projected value is stale.",
+      hint: "Wait for the notebook to finish running.",
+      view: "dashboard",
+      scope: "projection" as const,
+    })),
+  });
+
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:query-change",
+    runtime: "wasm",
+    lifecycleId: 1,
+    query: "?region=apac",
+  });
+
+  await vi.waitFor(() =>
+    expect(
+      server.runtimeStatus().current.diagnostics.some(({ code }) => code === "query-sync-failed"),
+    ).toBe(true),
+  );
+  const { diagnostics } = server.runtimeStatus().current;
+  expect(diagnostics).toHaveLength(200);
+  expect(diagnostics.at(-2)).toMatchObject({
+    code: "preview-diagnostics-truncated",
+    message: "2 additional preview diagnostics were omitted.",
+  });
+  server.dispose();
+});
+
 it("restores the committed query after an editor-session reload interrupts dispatch", async () => {
   let resolveDispatch!: (result: EditorQuerySyncResult) => void;
   const dispatched = new Promise<EditorQuerySyncResult>((resolve) => {

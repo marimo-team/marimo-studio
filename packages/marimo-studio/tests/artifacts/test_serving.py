@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from threading import Event
 from types import SimpleNamespace
@@ -10,6 +11,7 @@ from typing import Any, cast
 
 import pytest
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.types import Message, Scope
 
 import marimo_studio._server.presentation.service as presentation_module
@@ -18,7 +20,7 @@ import marimo_studio._views.revisions as revisions_module
 from marimo_studio._artifacts.paths import artifact_root
 from marimo_studio._artifacts.repository import read_build_state
 from marimo_studio._artifacts.retention import ArtifactLease
-from marimo_studio._server.files import artifact_file_response
+from marimo_studio._server.files import ResponseOwnerTask, artifact_file_response
 from marimo_studio._server.ports import ServerAdapters
 from marimo_studio._server.presentation.service import (
     NotebookPresentation,
@@ -184,7 +186,13 @@ def _artifact_route(
     )
     adapters = cast(
         ServerAdapters,
-        SimpleNamespace(peer_commands=SimpleNamespace(enable=lambda _location: None)),
+        SimpleNamespace(
+            peer_commands=SimpleNamespace(enable=lambda _location: None),
+            server=None,
+            session_state=None,
+            sessions=None,
+            projections=None,
+        ),
     )
     return (
         ReadyWorkspaceHandler(
@@ -324,6 +332,34 @@ def test_artifact_route_closes_response_owners_after_disconnect(
             asyncio.run(exercise_send())
         assert len(sent) == 1
         assert sent[0].closed
+    finally:
+        presentation.close()
+
+
+def test_support_route_releases_its_response_owner_after_disconnect(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    handler, route, presentation = _artifact_route(notebook_path)
+    released = Event()
+
+    async def owned_support(*_args: object, **_kwargs: object) -> Response:
+        return Response(b"value", background=ResponseOwnerTask(released.set))
+
+    async def disconnect(_message: Message) -> None:
+        raise OSError("peer disconnected")
+
+    monkeypatch.setattr(ready_handler_module, "support_response", owned_support)
+    try:
+        with pytest.raises(OSError, match="peer disconnected"):
+            asyncio.run(
+                handler.handle(
+                    replace(route, selected_asset=None),
+                    _request_body,
+                    disconnect,
+                )
+            )
+        assert released.is_set()
     finally:
         presentation.close()
 

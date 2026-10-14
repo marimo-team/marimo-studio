@@ -329,12 +329,42 @@ it("recovers after rejected acquisition even when cleanup reports no owner", asy
   const handoff = remote.stage("dashboard", "report");
 
   await expect(handoff.ready).rejects.toThrow(
-    "Active view ownership could not be handed off (409).",
+    "Studio could not take over the active view. " +
+      "Wait for any view switch in progress to finish, then try again.",
   );
   await expect(handoff.rollback()).resolves.toBeUndefined();
 
   expect(recover).toHaveBeenCalledOnce();
   expect(recover).toHaveBeenCalledWith("dashboard", expect.any(AbortSignal));
+  remote.dispose();
+});
+
+it("reports the server's reason for a refused handoff", async () => {
+  const fetch = vi.fn<JsonFetch>(async (_url, init) =>
+    init.method === "POST"
+      ? Response.json(
+          {
+            error: "active-view-handoff-busy",
+            message: "An agent is switching views.",
+            hint: "Wait for the agent to finish, then choose the view again.",
+          },
+          { status: 409 },
+        )
+      : new Response(null, { status: 204 }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const remote = createActiveViewHandoffRemote(
+    "http://localhost:3000/_marimo-studio",
+    "server-token",
+    "browser-client-1234",
+    vi.fn(async () => undefined),
+  );
+  const handoff = remote.stage("dashboard", "report");
+
+  await expect(handoff.ready).rejects.toThrow(
+    "An agent is switching views. Wait for the agent to finish, then choose the view again.",
+  );
+  await handoff.rollback();
   remote.dispose();
 });
 

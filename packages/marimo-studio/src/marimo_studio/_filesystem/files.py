@@ -31,6 +31,7 @@ from marimo_studio._filesystem._entry import (
     changed,
     is_link,
     open_directory,
+    open_directory_without_links,
     retry_while_shared,
 )
 from marimo_studio._filesystem._publish import move_aside, publish_entry
@@ -412,13 +413,16 @@ class FileTree:
     Paths are absolute and must stay under ``root``. A path that crosses a
     symlink or a Windows junction raises ``UnsafePathError``. The first verb
     that opens ``root`` binds the tree to that directory, and later verbs raise
-    ``ConcurrentChangeError`` once ``root`` names a different directory.
+    ``ConcurrentChangeError`` once ``root`` names a different directory. An
+    anchored tree also refuses a symlink above ``root`` on platforms with
+    descriptor-relative operations.
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, anchored: bool = False) -> None:
         if ".." in Path(root).parts:
             raise UnsafePathError(f"Root must not include parent segments: {root}")
         self.root = Path(os.path.abspath(root))
+        self._anchored = anchored
         self._identity: tuple[int, int] | None = None
 
     def _bind(self, state: os.stat_result) -> None:
@@ -431,7 +435,11 @@ class FileTree:
             )
 
     def _open_root(self) -> int:
-        descriptor = open_directory(self.root, path=self.root)
+        descriptor = (
+            open_directory_without_links(self.root)
+            if self._anchored
+            else open_directory(self.root, path=self.root)
+        )
         try:
             self._bind(os.fstat(descriptor))
         except BaseException:
@@ -459,6 +467,10 @@ class FileTree:
         """
         target = self._target(path, allow_root=allow_root)
         if target == self.root:
+            if self._anchored and DESCRIPTORS:
+                # An anchored root refuses a symlinked ancestor before lstat.
+                with suppress(FileNotFoundError):
+                    os.close(self._open_root())
             state = _lstat(Entry(target, None))
             if state is not None and stat.S_ISDIR(state.st_mode) and not is_link(state):
                 self._bind(state)

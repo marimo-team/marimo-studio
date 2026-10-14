@@ -19,11 +19,24 @@ from marimo_studio._views.publication_hold import (
 )
 
 
+def _hold_owner(
+    _context: click.Context,
+    _parameter: click.Parameter,
+    value: str,
+) -> str:
+    if not value.strip() or len(value) > 256:
+        raise click.BadParameter("must contain 1 to 256 characters")
+    return value
+
+
 @click.command("hold", cls=ColoredCommand)
 @view_name_argument
 @target_option
 @click.option(
-    "--owner", required=True, help="Identify the editor coordinating this hold."
+    "--owner",
+    required=True,
+    callback=_hold_owner,
+    help="Identify the editor coordinating this hold.",
 )
 @click.option(
     "--ttl",
@@ -71,5 +84,8 @@ def release(view_name: str, target: Path | None, token: str, json_output: bool) 
                 "hold": result.to_dict() if result else None,
             }
         )
+        return
+    if result is None:
+        click.echo(f"View {view_name} has no publication hold to release")
         return
     click.echo(f"Publication released for {view_name}")

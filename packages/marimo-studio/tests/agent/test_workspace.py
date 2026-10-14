@@ -37,7 +37,7 @@ from marimo_studio.errors import (
 )
 from marimo_studio.view_providers._host import provider_registry
 
-from ..helpers import write_marimohub_context
+from ..helpers import notebook_source, write_marimohub_context
 
 
 def _workspace(notebook: Path) -> studio_authoring.Workspace:
@@ -826,3 +826,67 @@ def test_view_show_rejects_a_name_created_after_the_handle_was_captured(
 
     with pytest.raises(ViewGenerationConflictError):
         asyncio.run(stale.show())
+
+
+def test_a_view_handle_taken_before_configuration_cannot_write_after_creation(
+    tmp_path: Path,
+) -> None:
+    from marimo_studio.errors import WorkspaceGenerationConflictError
+
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(notebook_source(tmp_path / "marker"), encoding="utf-8")
+
+    async def exercise() -> str:
+        workspace = studio_authoring.open_workspace(notebook)
+        early = workspace.view("dashboard")
+        created = await workspace.create_view("dashboard")
+        document = await created.read("index.html")
+        with pytest.raises(WorkspaceGenerationConflictError):
+            await early.write(
+                "index.html",
+                document.content + "\n<!-- stale handle -->\n",
+                expected_revision=document.revision,
+            )
+        return (await created.read("index.html")).content
+
+    assert "stale handle" not in asyncio.run(exercise())
+
+
+def test_project_configured_views_outside_the_notebook_folder_are_readable(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebooks" / "analysis.py"
+    notebook.parent.mkdir()
+    notebook.write_text(notebook_source(tmp_path / "marker"), encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.marimo-studio]\n"
+        'notebook = "notebooks/analysis.py"\n'
+        'default = "dashboard"\n'
+        'view_root = "views"\n',
+        encoding="utf-8",
+    )
+
+    async def exercise() -> list[str]:
+        view = await studio_authoring.open_workspace(notebook).create_view("dashboard")
+        return [
+            (await view.read(path)).path.as_posix()
+            for path in ("index.html", "view.toml")
+        ]
+
+    assert asyncio.run(exercise()) == ["index.html", "view.toml"]
+    assert (tmp_path / "views" / "dashboard" / "view.toml").is_file()
+    assert not (notebook.parent / "dashboard").exists()
+
+
+def test_view_captures_configuration_created_after_opening_the_workspace(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(notebook_source(tmp_path / "marker"), encoding="utf-8")
+
+    async def exercise() -> str:
+        workspace = studio_authoring.open_workspace(notebook)
+        await studio_authoring.open_workspace(notebook).create_view("dashboard")
+        return (await workspace.view("dashboard").read("index.html")).content
+
+    assert "Dashboard" in asyncio.run(exercise())

@@ -281,7 +281,11 @@ class PrivateEditorRuntimeBootstrap:
                 raise ProtocolError("Marimo omitted the editor response status")
             original = bytes(body)
             rewritten = original
-            if document and _is_html(start):
+            if start.get("status") != 200:
+                # A stale tab can request an asset hash Marimo no longer serves.
+                # Forward Marimo's own response, such as its 404, unchanged.
+                pass
+            elif document and _is_html(start):
                 rewritten = self.rewrite(
                     original,
                     eager_runtime=eager_runtime,

@@ -177,7 +177,8 @@ assert set(marimo_studio.errors.__all__) == {
     "PublicationHeldError", "PublicationLimitError", "PublicationUnavailableError",
     "RuntimeConfigTooLargeError", "RuntimeSelectionError", "RuntimeTimeoutError",
     "SourceConflictError", "SourceEncodingError", "SourceNotFoundError",
-    "SourceTooLargeError", "SourceValidationError", "StaticExportError",
+    "SourceTooLargeError", "SourceValidationError", "StarterNotFoundError",
+    "StaticExportError",
     "ViewDeletionError", "ViewExistsError", "ViewGenerationConflictError",
     "ViewInUseError", "ViewNotFoundError", "ViewProjectError", "ViewRenameError",
     "WorkspaceGenerationConflictError", "WorkspaceMutationError",
@@ -408,9 +409,9 @@ def main() -> None:
     installed_version = version(_DISTRIBUTION)
     marimo_export = distribution("marimo-export")
     marimo_export_version = marimo_export.version
-    if marimo_export_version not in SpecifierSet(">=0.1.6"):
+    if marimo_export_version not in SpecifierSet(">=0.2.0"):
         raise AssertionError(
-            f"Installed marimo-export version is {marimo_export_version}, expected >=0.1.6"
+            f"Installed marimo-export version is {marimo_export_version}, expected >=0.2.0"
         )
     if marimo_export.read_text("direct_url.json") is not None:
         raise AssertionError("Installed marimo-export came from a direct source")

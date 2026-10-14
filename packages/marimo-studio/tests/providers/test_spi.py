@@ -318,7 +318,7 @@ def test_source_documents_can_stay_outside_build_inputs(tmp_path: Path) -> None:
     )
 
 
-def test_provider_diagnostics_accept_the_manifest_but_reject_undeclared_sources(
+def test_provider_diagnostics_locate_manifest_and_input_errors(
     tmp_path: Path,
 ) -> None:
     provider = ProviderStub("example/html", "html")
@@ -372,8 +372,20 @@ def test_provider_diagnostics_accept_the_manifest_but_reject_undeclared_sources(
             ),
         ),
     )
-    with pytest.raises(ConfigurationError, match=r"source path.*absent"):
-        installed.inspect(inspection_request(project))
+    inspected = installed.inspect(inspection_request(project))
+    (diagnostic,) = inspected.diagnostics
+    assert diagnostic.source is None
+    assert diagnostic.message == "private.toml:1:1: The provider option is invalid."
+    provider.report = BuildResult(None, provider.inspection.diagnostics)
+    result = installed.build(
+        provider_build_request(
+            project,
+            inspected,
+            staging,
+            cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+        )
+    )
+    assert result.diagnostics == (diagnostic,)
 
 
 def test_studio_adds_view_toml_and_guidance_to_every_inspection(
@@ -438,10 +450,49 @@ def test_provider_site_targets_use_the_runtime_selector_grammar(
         {},
     )
 
-    with pytest.raises(
-        ConfigurationError,
-        match=r"target|selector",
-    ):
+    inspected = installed.inspect(inspection_request(project))
+    assert inspected.sites == ()
+    (diagnostic,) = inspected.diagnostics
+    assert diagnostic.code == "projection-target-invalid"
+    assert diagnostic.source == SourceLocation(PurePosixPath("index.html"), 1, 1)
+
+
+@pytest.mark.parametrize(
+    ("targets", "message"),
+    (
+        ((), "non-empty tuple"),
+        (("summary", "summary"), "unique"),
+        (tuple(f"value_{index}" for index in range(101)), "100-target limit"),
+    ),
+)
+def test_provider_site_target_lists_are_provider_contracts(
+    tmp_path: Path,
+    targets: tuple[str, ...],
+    message: str,
+) -> None:
+    provider = ProviderStub("example/html", "html")
+    provider.inspection = replace(
+        inspection(),
+        sites=(
+            ProjectionSite(
+                "value",
+                targets,
+                SourceLocation(PurePosixPath("index.html"), 1, 1),
+                0,
+            ),
+        ),
+    )
+    registry = ProviderRegistry((candidate("html", provider),))
+    installed = registry.get(registry.ids[0])
+    project = ViewProject(
+        "dashboard",
+        tmp_path,
+        tmp_path / "view.toml",
+        installed.key,
+        {},
+    )
+
+    with pytest.raises(ConfigurationError, match=message):
         installed.inspect(inspection_request(project))
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -978,3 +978,223 @@ default = "dashboard"
             None,
         ),
     ]
+
+
+def _configured_notebook(directory: Path, name: str, source: str) -> Path:
+    directory.mkdir(exist_ok=True)
+    notebook = directory / name
+    notebook.write_text(source, encoding="utf-8")
+    directory.joinpath("pyproject.toml").write_text(
+        f'[tool.marimo-studio]\nnotebook = "{name}"\ndefault = "dashboard"\n',
+        encoding="utf-8",
+    )
+    return notebook
+
+
+def _observed_kernel(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    events: list[str],
+    close_threads: list[int],
+    *,
+    release_fails: bool = False,
+) -> Any:
+    from threading import get_ident
+
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+    from marimo._session.model import SessionMode
+
+    notebook = _configured_notebook(tmp_path, "notebook.py", "import marimo\n")
+
+    class Ledger:
+        def __init__(self, filename: Path) -> None:
+            assert filename == notebook
+            events.append("open")
+
+        def close(self) -> None:
+            close_threads.append(get_ident())
+            events.append("close")
+
+    def install(_context: Any, _ledger: Any) -> Any:
+        events.append("install")
+
+        def release() -> None:
+            events.append("release")
+            if release_fails and events.count("release") == 1:
+                raise RuntimeError("hook release failed")
+
+        return release
+
+    current = _native_output_context()
+    current.filename = str(notebook)
+    current.session_mode = SessionMode.EDIT
+    current._kernel = SimpleNamespace(
+        app_metadata=SimpleNamespace(filename=str(notebook))
+    )
+    monkeypatch.setattr(runtime_context, "get_context", lambda: current)
+    monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", type(current))
+    monkeypatch.setattr(kernel_values_module, "ObservationLedger", Ledger)
+    monkeypatch.setattr(kernel_values_module, "install_observation_ledger", install)
+    monkeypatch.setattr(
+        kernel_values_module, "keep_cached_cells_compatible", lambda: lambda: None
+    )
+    return current
+
+
+@pytest.mark.parametrize("release_fails", [False, True])
+@pytest.mark.parametrize("close_on_rename", [False, True])
+def test_kernel_lifespan_releases_observation_owners(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    release_fails: bool,
+    close_on_rename: bool,
+) -> None:
+    from threading import get_ident
+
+    events: list[str] = []
+    close_threads: list[int] = []
+    current = _observed_kernel(
+        tmp_path, monkeypatch, events, close_threads, release_fails=release_fails
+    )
+    lifespan = _KernelBridgeLifespan()
+
+    async def exercise() -> None:
+        loop_thread = get_ident()
+        await lifespan.__aenter__()
+        assert events == ["open", "install"]
+        failed = pytest.raises(RuntimeError, match="hook release failed")
+        if close_on_rename:
+            renamed = tmp_path / "moved.py"
+            current._kernel.app_metadata.filename = str(renamed)
+            with failed if release_fails else nullcontext():
+                assert lifespan._activate(current, renamed, None)
+        with failed if release_fails and not close_on_rename else nullcontext():
+            await lifespan.__aexit__(None, None, None)
+        if release_fails and not close_on_rename:
+            # A failed detach keeps the ledger open until a retry detaches it.
+            assert events == ["open", "install", "release"]
+            await lifespan.__aexit__(None, None, None)
+        detached = ["release", "release"] if release_fails else ["release"]
+        assert events == ["open", "install", *detached, "close"]
+        assert close_threads[0] != loop_thread
+        await lifespan.__aexit__(None, None, None)
+        assert events == ["open", "install", *detached, "close"]
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+    assert current.function_registry.namespaces == {}
+
+
+def test_failed_kernel_setup_finishes_closing_its_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    current = _observed_kernel(tmp_path, monkeypatch, events, [])
+
+    def fail(_encoder: Any, _context: Any) -> None:
+        raise RuntimeError("value encoder failed")
+
+    monkeypatch.setattr(kernel_values_module.ValueEncoder, "__init__", fail)
+    lifespan = _KernelBridgeLifespan()
+
+    async def exercise() -> None:
+        with pytest.raises(RuntimeError, match="value encoder failed"):
+            await lifespan.__aenter__()
+        assert events == ["open", "install", "release", "close"]
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+
+
+def test_kernel_observations_follow_a_configured_notebook_rename(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo
+    from marimo._ast.compiler import compile_cell
+    from marimo._runtime.dataflow import DirectedGraph
+    from marimo._runtime.runner.hook_context import CancelledCells, OnFinishHookContext
+    from marimo._runtime.runner.hooks import NotebookCellHooks
+    from marimo._session.model import SessionMode
+    from marimo._types.ids import CellId_t
+    from marimo_export.repository import ExportRepository
+
+    from marimo_studio import inspect_notebook
+
+    monkeypatch.setenv("MARIMO_EXPORT_REPOSITORY", str(tmp_path / "repository"))
+    source = (
+        f'import marimo\n__generated_with = "{marimo.__version__}"\n'
+        "app = marimo.App()\n\n@app.cell\ndef _():\n"
+        "    import marimo as mo\n"
+        "    x = mo.ui.slider(1, 2, value=1)\n"
+        "    return (mo, x)\n\n"
+        'if __name__ == "__main__":\n    app.run()\n'
+    )
+    original = _configured_notebook(tmp_path / "original", "analysis.py", source)
+    renamed = _configured_notebook(tmp_path / "renamed", "analysis.py", source)
+    hooks = NotebookCellHooks()
+    graph = DirectedGraph()
+    for cell in inspect_notebook(original, include_code=True).cells:
+        cell_id = CellId_t(cell.runtime_id)
+        assert cell.code is not None
+        graph.register_cell(cell_id, compile_cell(cell.code, cell_id=cell_id))
+    native = _native_output_context()
+    with native.install(), native.with_cell_id(CellId_t("control")):
+        control = marimo.ui.slider(1, 2, value=1)
+    metadata = SimpleNamespace(filename=str(original))
+    context = SimpleNamespace(
+        filename=str(original),
+        session_mode=SessionMode.EDIT,
+        _kernel=SimpleNamespace(
+            app_metadata=metadata,
+            _hooks=hooks,
+            graph=graph,
+            globals={"mo": marimo, "x": control},
+        ),
+    )
+    finished = OnFinishHookContext(
+        cells_to_run=tuple(graph.cells),
+        interrupted=False,
+        exceptions={},
+        cancelled_cells=CancelledCells(),
+        graph=graph,
+    )
+    bridge = _KernelBridgeLifespan()
+
+    def flush(path: Path) -> Any:
+        assert bridge._activate(context, path, None)
+        ledger = bridge._observation_ledger
+        assert ledger is not None
+        for hook in hooks.on_finish_hooks:
+            hook(finished)
+        ledger.flush()
+        return ledger
+
+    try:
+        with ExportRepository.open() as repository:
+            flush(original)
+            assert repository.status().observations == 1
+
+            metadata.filename = context.filename = str(renamed)
+            with native.install(), native.with_cell_id(CellId_t("control")):
+                context._kernel.globals["x"] = marimo.ui.slider(1, 2, value=2)
+            current = flush(renamed)
+            assert repository.status().observations == 2
+
+            assert bridge._activate(context, renamed, None)
+            assert bridge._observation_ledger is current
+            asyncio.run(bridge.__aexit__(None, None, None))
+            for hook in hooks.on_finish_hooks:
+                hook(finished)
+            assert repository.status().observations == 2
+    finally:
+        bridge._close()
+        native.virtual_file_registry.shutdown()

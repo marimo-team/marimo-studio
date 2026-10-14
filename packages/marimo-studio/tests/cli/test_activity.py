@@ -52,19 +52,28 @@ Path(os.environ['MARIMO_STUDIO_RESULT_CHANNEL']).write_text('{"ok":true}')
     assert received == ["progress\n"]
 
 
-def test_heartbeat_reports_last_observed_state_and_stops_on_exit() -> None:
+@pytest.mark.parametrize("output_format", ("jsonl", "text"), ids=("json", "text"))
+def test_heartbeat_repeats_the_latest_progress_and_stops_on_exit(
+    output_format: str,
+) -> None:
     observed = Event()
+    jsonl = output_format == "jsonl"
 
     class Output(StringIO):
         def write(self, value: str) -> int:
             written = super().write(value)
-            if '"heartbeat"' in value and '"reviewed"' in value:
+            arrived = (
+                '"heartbeat"' in value and '"reviewed"' in value
+                if jsonl
+                else value.startswith("Still running")
+            )
+            if arrived:
                 observed.set()
             return written
 
     output = Output()
     stream = DiagnosticStream(
-        format="jsonl", command="view export", diagnostic_stream=output
+        format=output_format, command="view export", diagnostic_stream=output
     )
     with activity(stream, phase="prepare", view="report", interval=0.01) as progress:
         progress(
@@ -79,13 +88,22 @@ def test_heartbeat_reports_last_observed_state_and_stops_on_exit() -> None:
             )
         )
         assert observed.wait(2), "heartbeat did not arrive during active preparation"
+    if not jsonl:
+        heartbeat_line = next(
+            line for line in output.getvalue().splitlines() if line.startswith("Still")
+        )
+        assert heartbeat_line.split(" | ", 1)[1] == (
+            "State started: reviewed | authored 2 hit, 0 miss | "
+            "projections 0 hit, 0 miss"
+        )
+        return
     events = [json.loads(line) for line in output.getvalue().splitlines()]
     heartbeat = next(
         item for item in reversed(events) if item.get("code") == "heartbeat"
     )
     assert heartbeat["details"]["state"] == "reviewed"
     assert heartbeat["details"]["cache"]["authored_hits"] == 2
-    assert heartbeat["details"]["cell"] is None
+    assert "cell" not in heartbeat["details"]
     assert heartbeat["details"]["elapsed_seconds"] >= 0
 
 

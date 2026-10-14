@@ -13,8 +13,8 @@ from marimo_studio.authoring import open_workspace
 from marimo_studio.errors import (
     ConfigurationError,
     SourceConflictError,
+    ViewNotFoundError,
     ViewProjectError,
-    WorkspaceGenerationConflictError,
 )
 
 
@@ -149,5 +149,45 @@ def test_absent_view_handle_cannot_hold_a_later_view(notebook_path: Path) -> Non
     absent = open_workspace(notebook_path).view("later")
     prepare_view(notebook_path, "later")
 
-    with pytest.raises(WorkspaceGenerationConflictError):
+    with pytest.raises(ViewNotFoundError):
         asyncio.run(absent.hold_publication(owner="stale editor"))
+    with pytest.raises(ViewNotFoundError):
+        asyncio.run(absent.release_publication("token"))
+
+
+def _invoke(notebook: Path, *args: str):
+    return CliRunner().invoke(cli, ["view", *args, "--target", str(notebook)])
+
+
+def test_cli_hold_reports_a_missing_view(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+
+    result = _invoke(notebook_path, "hold", "dashbaord", "--owner", "editor")
+
+    assert isinstance(result.exception, ViewNotFoundError)
+    assert str(result.exception) == "View 'dashbaord' does not exist."
+
+
+@pytest.mark.parametrize(
+    "owner",
+    ("", " ", "x" * 257),
+    ids=("empty", "blank", "too-long"),
+)
+def test_cli_hold_rejects_an_unusable_owner(notebook_path: Path, owner: str) -> None:
+    prepare_view(notebook_path)
+
+    result = _invoke(notebook_path, "hold", "dashboard", "--owner", owner)
+
+    assert result.exit_code == 2
+    assert "must contain 1 to 256 characters" in result.output
+
+
+def test_cli_release_without_a_hold_says_nothing_was_held(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+
+    result = _invoke(notebook_path, "release", "dashboard", "--token", "unknown")
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "View dashboard has no publication hold to release\n"

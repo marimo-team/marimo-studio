@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import sys
+import threading
+import time
 from importlib.metadata import EntryPoint
 from pathlib import Path, PurePosixPath
 from typing import cast
 
 from marimo_studio._processes.cancellation import provider_cancellation
+from marimo_studio._processes.operation import ProviderCommandError
 from marimo_studio._processes.provider_runner import create_provider_runner
+from marimo_studio.errors import MarimoStudioError
 from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
@@ -33,6 +39,7 @@ from marimo_studio.view_providers._host.starters import (
 )
 
 from .codec import (
+    SERVER_PROCESS_ENV,
     availability_payload,
     build_result_payload,
     inspection_from_payload,
@@ -282,9 +289,30 @@ def _render(
     return conformance.render(cast(DocumentProvider, provider), request)
 
 
+def _stop_with_server() -> None:
+    # The server stops this worker's process group when it cancels or exits.
+    # A server killed without cleanup leaves the worker reparented, so the
+    # worker stops its own group, which holds every provider command.
+    if os.name != "posix" or os.getpgid(0) != os.getpid():
+        return
+    launcher = os.environ.get(SERVER_PROCESS_ENV, "")
+    server = int(launcher) if launcher.isdecimal() else os.getppid()
+    if os.getppid() != server:
+        # The server died before this watch started.
+        os.killpg(0, signal.SIGKILL)
+
+    def watch() -> None:
+        while os.getppid() == server:
+            time.sleep(0.2)
+        os.killpg(0, signal.SIGKILL)
+
+    threading.Thread(target=watch, name="studio-server-watch", daemon=True).start()
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         return 2
+    _stop_with_server()
     request_path = Path(sys.argv[1])
     response_path = Path(sys.argv[2])
     cancellation = ProviderCancellation()
@@ -297,11 +325,15 @@ def main() -> int:
             )
         response: dict[str, object] = {"schema": 1, "ok": True, "value": value}
     except BaseException as error:
-        response = {
-            "schema": 1,
-            "ok": False,
-            "value": f"{type(error).__name__}: {error}",
-        }
+        message = (
+            str(error)
+            or "Provider operation failed. Check its implementation and retry."
+        )
+        # Match in-process providers: a command limit or Studio error explains
+        # itself, and any other exception is a provider bug whose type helps.
+        if not isinstance(error, (ProviderCommandError, MarimoStudioError)):
+            message = f"{type(error).__name__}: {message}"
+        response = {"schema": 1, "ok": False, "value": message}
     response_path.write_text(
         json.dumps(response, ensure_ascii=True, separators=(",", ":")),
         encoding="utf-8",

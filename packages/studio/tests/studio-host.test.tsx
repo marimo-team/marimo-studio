@@ -87,6 +87,25 @@ class EventSourceStub {
   close(): void {}
 }
 
+class ClosingEventSource {
+  static readonly CLOSED = 2;
+  static streams: ClosingEventSource[] = [];
+  readonly listeners = new Map<string, (event: Event) => void>();
+  readyState = 1;
+
+  constructor() {
+    ClosingEventSource.streams.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: Event) => void): void {
+    this.listeners.set(type, listener);
+  }
+
+  close(): void {
+    this.readyState = ClosingEventSource.CLOSED;
+  }
+}
+
 const trustedEditorSource =
   "editor/?file=analysis.py&marimo_studio_client=browser-client-1234&marimo_studio_server=server-instance&session_id=s_editor1&marimo_studio_editor=editor-capability";
 const activationHost: StudioHostBootstrap = {
@@ -241,6 +260,55 @@ it("retries first-view authoring options after a transient inventory failure", a
   expect(editorFrame.parentElement).toBe(frameHost);
   editorFrame.remove();
 });
+
+it.each([
+  ["browser close", false],
+  ["server restart", true],
+] as const)(
+  "keeps the first view reachable after a %s closes its event stream",
+  async (_cause, serverRestarted) => {
+    ClosingEventSource.streams = [];
+    vi.stubGlobal("EventSource", ClosingEventSource);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        serverRestarted && input instanceof URL && input.pathname === "/_marimo-studio/dev/events"
+          ? new Response(null, { status: 204 })
+          : Response.json(viewList([], "dashboard", [starter])),
+      ),
+    );
+    const editorFrame = document.createElement("iframe");
+    document.body.append(editorFrame);
+    const { unmount } = render(
+      <StudioHost
+        host={host}
+        editorFrame={editorFrame}
+        editorSource={editorFrame.src}
+        publishBootstrap={vi.fn()}
+        brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+      />,
+    );
+    await vi.waitFor(() => expect(ClosingEventSource.streams).toHaveLength(1));
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
+    const closed = ClosingEventSource.streams[0]!;
+    closed.readyState = ClosingEventSource.CLOSED;
+    closed.listeners.get("error")?.(new Event("error"));
+
+    if (serverRestarted) {
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+      expect(ClosingEventSource.streams).toHaveLength(1);
+    } else {
+      await vi.waitFor(() => expect(ClosingEventSource.streams).toHaveLength(2), {
+        timeout: 3_000,
+      });
+      expect(ClosingEventSource.streams[1]?.listeners.has("activate")).toBe(true);
+      expect(reload).not.toHaveBeenCalled();
+    }
+    unmount();
+    editorFrame.remove();
+  },
+);
 
 it("refreshes first-view ownership after a create conflict", async () => {
   vi.stubGlobal("EventSource", EventSourceStub);
@@ -475,7 +543,11 @@ it("opens an already-created first view after a bootstrap retry", async () => {
         bootstraps += 1;
         return bootstraps === 1
           ? Response.json(
-              { error: "temporary", message: "Bootstrap is temporarily unavailable." },
+              {
+                error: "temporary",
+                message: "Bootstrap is temporarily unavailable.",
+                hint: "Open the view again.",
+              },
               { status: 503 },
             )
           : Response.json(configured);
@@ -506,7 +578,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
   await user.click(await screen.findByRole("button", { name: "Create view" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Bootstrap is temporarily unavailable.",
+    "Bootstrap is temporarily unavailable. Open the view again.",
   );
   await user.click(screen.getByRole("button", { name: "Open dashboard" }));
   await vi.waitFor(() => expect(publishBootstrap).toHaveBeenCalledWith(configured));

@@ -25,6 +25,7 @@ from marimo_studio._views.publication_hold import (
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio.errors import (
     ConfigurationError,
+    PublicationHeldError,
     ViewGenerationConflictError,
     ViewProjectError,
 )
@@ -43,8 +44,13 @@ def test_hold_token_owns_release_and_repeated_release_is_idempotent(
 
     with pytest.raises(ConfigurationError, match="held by 'layout agent'"):
         acquire_publication_hold(project.root, owner="another agent")
-    with pytest.raises(ConfigurationError, match="another owner"):
+    with pytest.raises(PublicationHeldError) as wrong_token:
         release_publication_hold(project.root, "wrong token")
+    assert str(wrong_token.value) == (
+        f"Publication of view 'dashboard' is held by 'layout agent' until "
+        f"{hold.expiry}. Release it with the token returned when it was "
+        "acquired, or wait for it to expire."
+    )
     assert read_publication_hold(project.root) == hold
 
     released = release_publication_hold(project.root, hold.token)
@@ -52,8 +58,15 @@ def test_hold_token_owns_release_and_repeated_release_is_idempotent(
     assert released.status == "released"
     assert release_publication_hold(project.root, hold.token) == released
 
+    with pytest.raises(ConfigurationError) as released_hold:
+        release_publication_hold(project.root, "wrong token")
+    assert str(released_hold.value) == (
+        "The token does not match the released publication hold on view "
+        "'dashboard'. Publication can proceed without a release."
+    )
+
     next_hold = acquire_publication_hold(project.root, owner="another agent")
-    with pytest.raises(ConfigurationError, match="another owner"):
+    with pytest.raises(PublicationHeldError, match="held by 'another agent'"):
         release_publication_hold(project.root, hold.token)
     assert read_publication_hold(project.root) == next_hold
 

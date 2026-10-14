@@ -233,7 +233,7 @@ def runtime_probe_from_dict(value: object) -> RuntimeProbe:
     return RuntimeProbe(
         cells={cell_id: _parse_cell(cell) for cell_id, cell in cells.items()},
         values=_parse_value_result(payload["values"]),
-        outputs=_parse_output_result(payload["outputs"]),
+        outputs=output_result_from_dict(payload["outputs"]),
     )
 
 
@@ -287,7 +287,8 @@ def _parse_value_error(value: object) -> ValueReadError:
     )
 
 
-def _parse_output_result(value: object) -> OutputRenderResult:
+def output_result_from_dict(value: object) -> OutputRenderResult:
+    """Decode rendered outputs and UI resets received from a kernel."""
     payload = _record(value)
     if set(payload) not in ({"outputs", "errors"}, {"outputs", "errors", "overlays"}):
         raise ValueError
@@ -327,12 +328,16 @@ def _parse_rendered_output(value: object) -> RenderedOutput:
         raise ValueError from None
     if not finite_timestamp:
         raise ValueError
+    owner_cell_id = _string(payload["ownerCellId"])
+    parsed_reset_ids = tuple(_string(value) for value in reset_ids)
+    if any(not value.startswith(f"{owner_cell_id}-") for value in parsed_reset_ids):
+        raise ValueError
     return RenderedOutput(
-        owner_cell_id=_string(payload["ownerCellId"]),
+        owner_cell_id=owner_cell_id,
         mimetype=_string(payload["mimetype"]),
         data=_string(payload["data"]),
         timestamp=float(timestamp),
-        reset_ui_object_ids=tuple(_string(value) for value in reset_ids),
+        reset_ui_object_ids=parsed_reset_ids,
     )
 
 

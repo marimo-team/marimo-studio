@@ -32,11 +32,12 @@ def activity(
         "phase": phase,
         "state": None,
         "cache": None,
-        "cell": None,
     }
+    latest: list[StaticExportProgress] = []
 
     def progress(event: StaticExportProgress) -> None:
         with lock:
+            latest[:] = [event]
             record = event.event.to_dict()
             status["phase"] = record["kind"]
             for key in ("state", "cache"):
@@ -50,11 +51,8 @@ def activity(
                 with lock:
                     elapsed = time.monotonic() - started
                     details = {**status, "elapsed_seconds": elapsed}
-                    message = (
-                        f"{status['phase']} | state {status['state'] or 'unavailable'}"
-                        f" | {elapsed:.1f}s | cache {status['cache'] or 'unavailable'}"
-                        " | cell unavailable"
-                    )
+                    current = latest[0].format_message() if latest else status["phase"]
+                    message = f"Still running after {elapsed:.1f}s | {current}"
                     if not stream.emit(
                         code="heartbeat",
                         severity="info",

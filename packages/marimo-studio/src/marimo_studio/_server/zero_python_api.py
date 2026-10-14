@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 import re
 from collections.abc import Callable
@@ -13,13 +14,14 @@ from marimo_export.manifest import (
     PreparedManifestLimitError,
     prepared_manifest_bytes,
 )
-from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
 from marimo_studio._delivery.urls import STUDIO_CLIENT_QUERY_PARAM
+from marimo_studio._processes.ownership import settle_ownership
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.client_identity import parse_studio_client_id
+from marimo_studio._server.files import ResponseOwnerTask
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.prepared_views import PreparedViewRegistry
 from marimo_studio.errors import PublicationError, PublicationLimitError
@@ -93,9 +95,12 @@ async def zero_python_response(
     if asset is None:
         return Response(status_code=404)
     try:
-        return _immutable_file(asset.path, asset.close)
+        # Reading the path verifies the whole file, so it runs off the event loop.
+        path = await asyncio.to_thread(lambda: asset.path)
+        return _immutable_file(path, asset.close)
     except BaseException:
-        asset.close()
+        # close() waits on the lock that a cancelled verification still holds.
+        await settle_ownership(asyncio.to_thread(asset.close))
         raise
 
 
@@ -109,7 +114,7 @@ def _immutable_file(candidate: Path, release: Callable[[], None]) -> Response:
             candidate,
             media_type=media_type,
             headers={"Cache-Control": "private, max-age=31536000, immutable"},
-            background=BackgroundTask(release),
+            background=ResponseOwnerTask(release),
         )
     except BaseException:
         release()

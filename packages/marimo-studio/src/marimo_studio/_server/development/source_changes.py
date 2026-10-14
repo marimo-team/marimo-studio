@@ -268,6 +268,23 @@ class SourceChangeProducer:
         self._publication_hold_stamp = _publication_hold_stamp(project)
         self._reinspect_project()
 
+    def _pre_inspection_tree(
+        self, project: CatalogProject
+    ) -> dict[_WatchKey, _TreeStamp]:
+        scope = (*self._scope_files, *self._roots)
+        if scope:
+            return _tree_stamps(scope, self._excluded_roots)
+        try:
+            return _tree_stamps((project.root,), (project_artifacts(project),))
+        except ConfigurationError:
+            # A root larger than the watch budget, such as one holding
+            # node_modules, still inspects. Only the edit-race check is skipped.
+            # A cancelled scan stops before the provider inspects.
+            cancellation = current_provider_cancellation()
+            if cancellation is not None and cancellation.cancelled:
+                raise
+            return {}
+
     def _reinspect_project(
         self,
         observed_tree: dict[_WatchKey, _TreeStamp] | None = None,
@@ -282,21 +299,24 @@ class SourceChangeProducer:
             project = registry.validate_project(project)
             self._project = project
             provider = registry.get(project.provider)
+            before = (
+                observed_tree
+                if observed_tree is not None
+                else self._pre_inspection_tree(project)
+            )
+            before_stamps = _catalog_stamps(
+                project,
+                (),
+                (*self._scope_files, *self._roots),
+                before,
+            )
             inspection = provider.inspect(inspection_request(project))
             input_files, roots = _validated_inputs(project, inspection)
             document_files = _validated_document_files(project, inspection)
             scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
             excluded_roots = (project_artifacts(project),)
-            if (
-                observed_tree is not None
-                and scope_files == self._scope_files
-                and roots == self._roots
-                and excluded_roots == self._excluded_roots
-            ):
-                tree = observed_tree
-            else:
-                tree = _tree_stamps((*scope_files, *roots), excluded_roots)
-            inputs = _input_paths_from_tree(project, input_files, roots, tree)
+            after = _tree_stamps((*scope_files, *roots), excluded_roots)
+            inputs = _input_paths_from_tree(project, input_files, roots, after)
             input_id = project_revision(
                 project,
                 inspection,
@@ -334,13 +354,22 @@ class SourceChangeProducer:
         self._scope_files = scope_files
         self._roots = roots
         self._excluded_roots = excluded_roots
-        self._tree = tree
-        self._catalog_stamps = _catalog_stamps(
-            project,
-            inputs,
-            (*scope_files, *roots),
-            self._tree,
+        catalog_stamps = _catalog_stamps(project, inputs, (*scope_files, *roots), after)
+        directories_changed = any(
+            stamp != "missing"
+            and stat.S_ISDIR(stamp[0])
+            and catalog_stamps[path] != stamp
+            for path, stamp in before_stamps.items()
+            if path in catalog_stamps
         )
+        if directories_changed or _changed_during_inspection(before, after):
+            # The provider may have read the earlier content. An empty tree and
+            # catalog make the next scan reinspect what is on disk now.
+            self._tree = {}
+            self._catalog_stamps = {}
+            return
+        self._tree = after
+        self._catalog_stamps = catalog_stamps
 
 
 def _publication_hold_stamp(project: ViewProject) -> tuple[str, str] | None:
@@ -640,6 +669,23 @@ def _tree_stamps(
             else:
                 result[("root", entry.path)] = entry.kind
     return result
+
+
+def _changed_during_inspection(
+    before: dict[_WatchKey, _TreeStamp],
+    after: dict[_WatchKey, _TreeStamp],
+) -> bool:
+    observed = {path: (kind, stamp) for (kind, path), stamp in before.items()}
+    current = {path: (kind, stamp) for (kind, path), stamp in after.items()}
+    shared = observed.keys() & current.keys()
+    if any(observed[path] != current[path] for path in shared):
+        return True
+    # A path that appeared or vanished counts only below a folder both scans
+    # walked, so files outside the inspected scope stay out of the check.
+    walked = {path for path in shared if current[path][1] == "directory"}
+    return any(
+        not walked.isdisjoint(path.parents) for path in observed.keys() ^ current.keys()
+    )
 
 
 def _changed_keys(

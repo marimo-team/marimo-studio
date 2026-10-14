@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TypeAlias
 
 from packaging.markers import UndefinedEnvironmentName, default_environment
@@ -334,13 +335,17 @@ def allows_source_checkout(
 def bootstrap_launch_requirements(
     *,
     studio_requirement: str,
-    provider_ids: Iterable[str],
+    providers: Mapping[str, tuple[Path, ...]],
     builtin_requirements: Mapping[str, str],
     notebook_metadata: Mapping[str, object],
     project_metadata: Mapping[str, object] | None,
     marker_environment: MarkerEnvironment | None,
 ) -> tuple[str, ...]:
-    """Resolve provider bootstrap requirements without loading providers."""
+    """Resolve provider bootstrap requirements without loading providers.
+
+    ``providers`` maps each provider identity to the view manifests that
+    select it, which name the file to repair in configuration errors.
+    """
     metadata = (
         (notebook_metadata,)
         if project_metadata is None
@@ -349,11 +354,10 @@ def bootstrap_launch_requirements(
             project_metadata,
         )
     )
-    provider_ids = tuple(sorted(set(provider_ids)))
     studio_base = Requirement(studio_requirement)
     studio_extras = set(studio_base.extras)
-    external: set[NormalizedName] = set()
-    for provider_id in provider_ids:
+    external: dict[NormalizedName, set[Path]] = {}
+    for provider_id in sorted(providers):
         distribution, separator, _registration = provider_id.partition("/")
         if not separator:
             raise ConfigurationError(f"Invalid view provider identity: {provider_id!r}")
@@ -368,8 +372,12 @@ def bootstrap_launch_requirements(
             continue
         name = canonicalize_name(distribution)
         if name == _STUDIO_DISTRIBUTION:
-            raise ConfigurationError(f"Unknown built-in view provider {provider_id!r}")
-        external.add(name)
+            raise ConfigurationError(
+                f"Unknown built-in view provider {provider_id!r}"
+                f"{_selected_in(providers[provider_id])}. Set provider to an "
+                "installed view provider, then retry."
+            )
+        external.setdefault(name, set()).update(providers[provider_id])
     studio_base = Requirement(_render_requirement(studio_base, studio_extras))
     studio_constraints = tuple(
         dependency_constraint(document, _STUDIO_DISTRIBUTION) for document in metadata
@@ -388,8 +396,9 @@ def bootstrap_launch_requirements(
         active = _active_requirements(constraints, marker_environment)
         if not active:
             raise ConfigurationError(
-                f"Configured provider requires {distribution!r}; add it to the "
-                "notebook or project dependencies"
+                f"The view provider{_selected_in(external[distribution])} "
+                f"requires {distribution!r}. Add it to the notebook or project "
+                "dependencies, then retry."
             )
         resolved.append(
             effective_dependency_requirement(
@@ -400,3 +409,8 @@ def bootstrap_launch_requirements(
             )
         )
     return tuple(resolved)
+
+
+def _selected_in(manifests: Iterable[Path]) -> str:
+    named = sorted(str(manifest) for manifest in manifests)
+    return f" selected in {', '.join(named)}" if named else ""

@@ -25,6 +25,7 @@ from marimo_studio._server.presentation.capability import (
 )
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session import PresentationSession
+from marimo_studio._server.query import positive_safe_integer
 from marimo_studio._server.records import ServerContext, ServerLocation
 from marimo_studio._server.request_path import request_path
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
@@ -201,12 +202,7 @@ def _accepts_json(request: Request) -> bool:
 
 
 def request_lifecycle_id(request: Request) -> int | None:
-    value = request.query_params.get("marimo_studio_lifecycle")
-    return (
-        int(value)
-        if value is not None and value.isdecimal() and int(value) > 0
-        else None
-    )
+    return positive_safe_integer(request.query_params.get("marimo_studio_lifecycle"))
 
 
 async def presentation_events_path(

@@ -581,3 +581,26 @@ it("keeps a failure attached to the revision its document reported", () => {
   });
   expect(owner.admission.snapshot.view).toBe("failed");
 });
+
+it("answers a change requested from a booting document with its first announcement", () => {
+  const { admission, effects } = createAdmission();
+
+  admission.receiverWaiting();
+  admission.viewError(
+    { ...diagnostic, code: "kernel-disconnected", severity: "error", scope: "runtime" },
+    "revision-1",
+    "active",
+  );
+  admission.buildCompleted("revision-2", "active");
+  expect(effects.postMessage).toHaveBeenCalledWith({
+    type: "marimo-studio:presentation-change",
+  });
+  admission.receiverReady("revision-2", "current", "active");
+
+  expect(effects.postMessage).toHaveBeenLastCalledWith({
+    type: "marimo-studio:receiver-admitted",
+    revision: "revision-2",
+  });
+  admission.viewReady("revision-2", "s_123456", "active");
+  expect(admission.isReady).toBe(true);
+});

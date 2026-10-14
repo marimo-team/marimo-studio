@@ -75,8 +75,13 @@ class ProviderCommandError(RuntimeError):
     """A supervised provider command could not complete safely.
 
     Runners raise it when a command exceeds its budget, its output limit, or
-    the operation's cancellation.
+    the operation's cancellation. ``timed_out`` identifies an exhausted time
+    budget independently of the message.
     """
+
+    def __init__(self, message: str, *, timed_out: bool = False) -> None:
+        super().__init__(message)
+        self.timed_out = timed_out
 
 
 @dataclass(frozen=True)

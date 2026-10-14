@@ -182,7 +182,7 @@ def _read_document_snapshot(
         )
     path = root.joinpath(*spec.path.parts)
     try:
-        snapshot = FileTree(studio.notebook.parent).read(
+        snapshot = FileTree(studio.view_root).read(
             path, max_bytes=SOURCE_DOCUMENT_MAX_BYTES
         )
         content = snapshot.content.decode("utf-8")
@@ -221,7 +221,7 @@ def _manifest_root(studio: StudioDefinition, view_name: str) -> Path:
     except ConfigurationError as error:
         raise SourceNotFoundError(f"Unknown view {view_name!r}.") from error
     root = studio.view_root / view_name
-    tree = FileTree(studio.notebook.parent)
+    tree = FileTree(studio.view_root)
     tree.stat(root / VIEW_MANIFEST_PATH.name)
     if not tree.is_directory(root):
         raise SourceNotFoundError(f"Unknown view {view_name!r}.")
@@ -276,15 +276,11 @@ def _manifest_owner_generations(
         workspace = materialize_studio_workspace(studio)
     except (MarimoStudioError, OSError):
         workspace = None
-    if workspace is not None:
-        if view_name in workspace.view_generations:
-            return (
-                workspace.catalog_generation,
-                workspace.view_generations[view_name],
-            )
-        target = studio.view_root / view_name
-        if not target.is_dir() or not (target / VIEW_MANIFEST_PATH.name).is_file():
-            raise ViewGenerationConflictError(view_name, None)
+    if workspace is not None and view_name in workspace.view_generations:
+        return (
+            workspace.catalog_generation,
+            workspace.view_generations[view_name],
+        )
     target = studio.view_root / view_name
     if not target.is_dir() or not (target / VIEW_MANIFEST_PATH.name).is_file():
         raise ViewGenerationConflictError(view_name, None)

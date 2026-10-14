@@ -30,8 +30,9 @@ import { ControlRequestError, fetchRuntimeControls } from "./control-remote.ts";
 import { releaseFrameBridge, resizeFrame } from "./frame-bridge.ts";
 import { PreviewMutationBarriers } from "./mutation-barriers.ts";
 import { PreviewQueryController, type QuerySyncStatus } from "./query-controller.ts";
+import { QuerySyncRejectedError } from "./query-remote.ts";
 import { RetrySchedule } from "./retry-schedule.ts";
-import { RuntimeDiagnostics } from "./runtime-diagnostics.ts";
+import { MAX_RUNTIME_DIAGNOSTICS, RuntimeDiagnostics } from "./runtime-diagnostics.ts";
 import { previewStatus, type PreviewStatus } from "./status.ts";
 
 export interface PreviewFrameState {
@@ -77,6 +78,7 @@ export class PreviewController {
   private diagnostics: ViewDiagnostic[] = [];
   private controlDiagnostic: BrowserDiagnostic | undefined;
   private queryDiagnostic: BrowserDiagnostic | undefined;
+  private saveDiagnostic: BrowserDiagnostic | undefined;
   private queryPhase: QuerySyncStatus["phase"] = "ready";
   private activationsInProgress = 0;
   private activationGeneration = 0;
@@ -408,6 +410,23 @@ export class PreviewController {
     );
   }
 
+  notebookSaveSkipped(skipped: boolean): void {
+    if ((this.saveDiagnostic !== undefined) === skipped) {
+      return;
+    }
+    this.saveDiagnostic = skipped
+      ? this.lifecycleDiagnostic(
+          "notebook-save-skipped",
+          "warning",
+          "Marimo does not save notebooks in a temporary folder, so this view shows the last saved notebook.",
+          "Save the notebook under a permanent path to update the view.",
+        )
+      : undefined;
+    if (this.admission.viewIsReady) {
+      this.showReadyStatus();
+    }
+  }
+
   notebookMutationTransactionFailed(active: boolean): void {
     if (!active) {
       return;
@@ -590,6 +609,7 @@ export class PreviewController {
       case "marimo-studio:receiver-waiting":
         this.waitingLifecycleId = message.lifecycleId;
         this.cancelRetry();
+        this.admission.receiverWaiting();
         return;
       case "marimo-studio:receiver-ready":
         this.waitingLifecycleId = undefined;
@@ -771,11 +791,27 @@ export class PreviewController {
   };
 
   private showReadyStatus(): void {
-    const diagnostics = [
-      ...this.diagnostics,
+    const synchronization = [
       ...(this.controlDiagnostic ? [this.controlDiagnostic] : []),
       ...(this.queryDiagnostic ? [this.queryDiagnostic] : []),
+      ...(this.saveDiagnostic ? [this.saveDiagnostic] : []),
     ];
+    // A preview may report as many diagnostics as a status holds, so its own
+    // list yields room to synchronization failures and a note of what it omits.
+    const room = MAX_RUNTIME_DIAGNOSTICS - synchronization.length;
+    const preview =
+      this.diagnostics.length > room
+        ? [
+            ...this.diagnostics.slice(0, room - 1),
+            this.lifecycleDiagnostic(
+              "preview-diagnostics-truncated",
+              "warning",
+              `${this.diagnostics.length - room + 1} additional preview diagnostics were omitted.`,
+              "Fix the reported preview diagnostics to see the rest.",
+            ),
+          ]
+        : this.diagnostics;
+    const diagnostics = [...preview, ...synchronization];
     let phase: RuntimeStatusPhase = "ready";
     if (this.queryPhase === "synchronizing") {
       phase = "synchronizing";
@@ -793,13 +829,18 @@ export class PreviewController {
       return;
     }
     this.queryPhase = status.phase;
+    const rejected = status.error instanceof QuerySyncRejectedError ? status.error : undefined;
     this.queryDiagnostic =
       status.phase === "degraded"
         ? this.lifecycleDiagnostic(
             "query-sync-failed",
             "warning",
-            "Query state could not be synchronized.",
-            status.error?.message ?? "Retry the current query.",
+            rejected
+              ? `Query state could not be synchronized. ${rejected.message}`
+              : "Query state could not be synchronized.",
+            rejected
+              ? (rejected.hint ?? "Change the query, then try again.")
+              : (status.error?.message ?? "Retry the current query."),
           )
         : undefined;
     if (this.admission.viewIsReady) {

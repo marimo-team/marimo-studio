@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -95,3 +96,46 @@ def test_wasm_export_publishes_the_document_without_its_template(
         encoding="utf-8"
     )
     assert not any(output.rglob("*.typ"))
+
+
+@pytest.mark.native_process
+@pytest.mark.xdist_group("managed-export")
+def test_zero_python_export_loads_document_viewer_with_no_reads(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    setup = prepare_view(notebook_path, "report", starter="marimo-studio/typst:default")
+    setup.root.joinpath("main.typ").write_text(
+        "= Quarterly report\nStatic text.\n", encoding="utf-8"
+    )
+    output = tmp_path / "site"
+
+    result = export_view(notebook_path, output, view="report")
+
+    document = output.joinpath("index.html").read_text(encoding="utf-8")
+    assert '<marimo-document src="main.pdf"' in document
+    assert 'type="module"' in document
+    config = json.loads(
+        output.joinpath("_marimo-studio/views/report/config").read_bytes()
+    )
+    assert config["runtime"]["id"] == "zero-python"
+    assert config["sites"] == []
+    assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
+    assert result.preflight.ok
+
+
+@pytest.mark.native_process
+@pytest.mark.xdist_group("managed-export")
+def test_export_renders_typst_prose_with_function_shaped_text(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    setup = prepare_view(notebook_path, "report", starter="marimo-studio/typst:default")
+    setup.root.joinpath("main.typ").write_text(
+        'Text: marimo_value("missing")\n', encoding="utf-8"
+    )
+
+    result = export_view(notebook_path, tmp_path / "site", view="report")
+
+    assert result.preflight.ok
+    assert result.output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")

@@ -21,6 +21,12 @@ from marimo_studio._server.development.task_ownership import run_owned_worker
 from marimo_studio.view_providers import BuildProfile
 
 _INACTIVE_PUBLICATION_LIMIT = 2
+
+
+class PublicationSuperseded(Exception):
+    """A newer request replaced this publication before it started."""
+
+
 _PublicationKey = tuple[str, int, BuildProfile]
 _BaselineKey = tuple[str, int]
 
@@ -29,7 +35,6 @@ _BaselineKey = tuple[str, int]
 class _PublicationAdmission:
     foreground: bool
     cancelled: bool = False
-    claimed: bool = False
 
 
 @dataclass
@@ -90,6 +95,9 @@ class PublicationRegistry:
         self._require_view = require_view
         self._inactive_condition = asyncio.Condition(lock)
         self._inactive_active = 0
+        # Foreground tasks stay here until they finish, including after a
+        # released publication leaves the registry and its worker drains.
+        self._foreground_tasks: set[asyncio.Task[Any]] = set()
         self._publications: dict[_PublicationKey, _Publication] = {}
         self._baselines: dict[_BaselineKey, _Baseline] = {}
 
@@ -126,9 +134,11 @@ class PublicationRegistry:
                     self._publications[key] = publication
                     self._prune_publications(view_name, generation)
                     if not warmup:
+                        self._track_foreground(task)
                         self._preempt_warmups(publication)
                 elif not warmup and not publication.admission.foreground:
                     publication.admission.foreground = True
+                    self._track_foreground(publication.task)
                     self._inactive_condition.notify_all()
                     self._preempt_warmups(publication)
                 if draining is None:
@@ -305,10 +315,36 @@ class PublicationRegistry:
 
         claimed = admission is not None and await self._claim_slot(admission)
         try:
-            return await run_owned_worker(control.cancellation, run)
+            result = await run_owned_worker(control.cancellation, run)
+        except Exception as error:
+            if self._preempted(admission) and not process_cleanup_errors((error,)):
+                raise PublicationSuperseded from error
+            raise
         finally:
             if claimed:
                 await self._release_slot()
+        if self._preempted(admission):
+            raise PublicationSuperseded
+        return result
+
+    @staticmethod
+    def _preempted(admission: _PublicationAdmission | None) -> bool:
+        # A foreground publication cancels running warmups. A cancelled build
+        # still returns its failed build state, so the waiters learn about the
+        # preemption here and warm the view again later. Process cleanup
+        # failures still surface unchanged.
+        return (
+            admission is not None and admission.cancelled and not admission.foreground
+        )
+
+    def _track_foreground(self, task: asyncio.Task[Any]) -> None:
+        self._foreground_tasks.add(task)
+        task.add_done_callback(self._foreground_tasks.discard)
+
+    async def foreground_settled(self) -> None:
+        """Wait until every foreground publication task has finished."""
+        while self._foreground_tasks:
+            await asyncio.wait(tuple(self._foreground_tasks))
 
     async def _claim_slot(self, admission: _PublicationAdmission) -> bool:
         async with self._inactive_condition:
@@ -319,12 +355,10 @@ class PublicationRegistry:
             ):
                 await self._inactive_condition.wait()
             if admission.cancelled:
-                raise asyncio.CancelledError
+                raise PublicationSuperseded
             if admission.foreground:
-                admission.claimed = True
                 return False
             self._inactive_active += 1
-            admission.claimed = True
             return True
 
     async def _release_slot(self) -> None:
@@ -389,10 +423,10 @@ class PublicationRegistry:
                 self._baselines.pop(key, None)
 
     def _cancel_publication(self, publication: _Publication) -> None:
+        # An unclaimed publication wakes in _claim_slot and reports the
+        # supersede to its waiters, so they never see a foreign cancellation.
         publication.control.cancel()
         publication.admission.cancelled = True
-        if not publication.admission.claimed:
-            publication.task.cancel()
         self._inactive_condition.notify_all()
 
     def _preempt_warmups(self, selected: _Publication) -> None:

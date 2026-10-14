@@ -95,12 +95,23 @@ export const createStudioServices = (
         owner === "agent" ? "document" : "rendered",
       );
       const fromView = views?.getSnapshot().current ?? bootstrap.selectedView;
-      return stageCommittedView(
+      // A view removed elsewhere has no agent target left to hand off.
+      const fromViewExists = views?.getSnapshot().views.includes(fromView) ?? true;
+      const committed = stageCommittedView(
         staged,
-        started && changed && owner === "browser"
+        started && changed && owner === "browser" && fromViewExists
           ? () => activeViewHandoff.stage(fromView, view, signal)
           : undefined,
       );
+      if (!changed) {
+        return committed;
+      }
+      // Source stays editable while the target stages, so commit waits for
+      // edits typed after `prepare` to save.
+      return {
+        ...committed,
+        ready: committed.ready.then(async (ready) => ready && (await source.prepareViewChange())),
+      };
     },
     commit: (view, landing, changed, navigation) => {
       if (navigation) {
@@ -238,6 +249,7 @@ export const createStudioServices = (
             workspaceEvents.reconcileNotebookMutation(generation);
           }
         },
+        saveSkipped: (generation) => preview.notebookMutationSaveSkipped(generation),
         transactionApplied: (generation, changed) =>
           preview.notebookMutationTransactionApplied(generation, changed),
         transactionFailed: (generation) => preview.notebookMutationTransactionFailed(generation),

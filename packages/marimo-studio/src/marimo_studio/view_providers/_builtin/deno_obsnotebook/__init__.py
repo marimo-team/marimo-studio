@@ -22,7 +22,6 @@ from marimo_studio.view_providers._builtin._deno.project import ProviderProjectS
 from marimo_studio.view_providers._builtin._deno.vite_project import build_vite_project
 from marimo_studio.view_providers._builtin.deno_obsnotebook.starters import STARTERS
 
-NOTEBOOK_KIT_VERSION = "2.6.4"
 VITE_VERSION = "8.2.1"
 _INPUTS = (
     BuildInput(PurePosixPath("src"), "directory"),

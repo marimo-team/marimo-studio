@@ -8,6 +8,7 @@ interface EditorDocumentMutationCallbacks {
   pending(generation: number, acknowledgement: MessagePort): void;
   reloaded(): void;
   saved(generation: number, succeeded: boolean): void;
+  saveSkipped(generation: number): void;
   transactionApplied(generation: number, changed: boolean): void;
   transactionFailed(generation: number): void;
 }
@@ -42,6 +43,8 @@ export const bindEditorDocumentMutations = (
       callbacks.transactionApplied(mutation.generation, mutation.changed);
     } else if (mutation.type === "marimo-studio:editor-document-transaction-failed") {
       callbacks.transactionFailed(mutation.generation);
+    } else if (mutation.type === "marimo-studio:editor-document-save-skipped") {
+      callbacks.saveSkipped(mutation.generation);
     } else if (mutation.type !== "marimo-studio:editor-document-mutation") {
       callbacks.saved(mutation.generation, mutation.type === "marimo-studio:editor-document-saved");
     } else {

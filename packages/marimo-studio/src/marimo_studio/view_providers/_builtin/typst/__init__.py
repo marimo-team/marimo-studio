@@ -104,7 +104,12 @@ def _compile_diagnostic(
             relative = None
         # A diagnostic inside a Typst package names a file outside the view
         # project, so its location stays in the message.
-        if relative and root.joinpath(*relative.parts).is_file():
+        if (
+            relative
+            and line > 0
+            and column > 0
+            and root.joinpath(*relative.parts).is_file()
+        ):
             source = SourceLocation(relative, line, column)
         else:
             message = f"{path}:{line}:{column}: {message}"
@@ -235,7 +240,15 @@ class TypstProvider:
         )
         if isinstance(report, ProjectDiagnostic):
             return BuildResult(None, (report,))
-        return BuildResult(entry, output_sizes=_output_sizes(report.get("sizes")))
+        sizes = _output_sizes(report.get("sizes"))
+        return BuildResult(
+            entry,
+            output_sizes={
+                output.target: sizes[output.target]
+                for output in request.inspection.render_outputs
+                if output.target in sizes
+            },
+        )
 
     def render(self, request: RenderRequest) -> BuildResult:
         root = request.template_root

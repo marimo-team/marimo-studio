@@ -241,7 +241,11 @@ class _WatchdogRegistry:
         self,
         registrations: list[tuple[Path, bool, Any]],
     ) -> None:
-        self._pending_removals.extend(registrations)
+        self._pending_removals.extend(
+            registration
+            for registration in registrations
+            if registration not in self._pending_removals
+        )
 
     def retry_cleanup(self) -> None:
         if self._cleanup_pending:
@@ -268,11 +272,9 @@ class _SharedWatchdogOwner:
         self,
         registrations: list[tuple[Path, bool, Any]],
         active: Event | None = None,
-        retain_registry_on_failure: bool = False,
     ) -> None:
         self._registrations = registrations
         self._active = active
-        self._retain_registry_on_failure = retain_registry_on_failure
 
     def stop(self) -> None:
         global _SHARED_WATCHDOG
@@ -293,7 +295,9 @@ class _SharedWatchdogOwner:
                     if _SHARED_WATCHDOG is registry:
                         _SHARED_WATCHDOG = None
             except BaseException:
-                if self._retain_registry_on_failure and _SHARED_WATCHDOG is registry:
+                # A later owner of the shared registry retries these removals
+                # even when this owner is discarded after the failure.
+                if _SHARED_WATCHDOG is registry:
                     registry.retain_removals(list(self._registrations))
                 raise
 
@@ -419,11 +423,7 @@ def _watchdog_owner(
     except BaseException as setup_error:
         if registry_ready:
             try:
-                _SharedWatchdogOwner(
-                    registrations,
-                    active,
-                    retain_registry_on_failure=True,
-                ).stop()
+                _SharedWatchdogOwner(registrations, active).stop()
             except BaseException as cleanup_error:
                 raise cleanup_error from setup_error
         raise
@@ -530,9 +530,15 @@ class PrivateProjectWatcher:
             cancellation = None
         if self._observer is not None:
             observer = self._observer
-            _result, owner_cancellation = await settle_ownership(
-                asyncio.to_thread(lambda: (observer.stop(), observer.join()))
-            )
+            try:
+                _result, owner_cancellation = await settle_ownership(
+                    asyncio.to_thread(lambda: (observer.stop(), observer.join()))
+                )
+            except BaseException:
+                # The observer stays for a retry. Forgetting the plan makes the
+                # next replace retry the stop instead of keeping a dead watch.
+                self._signature = ()
+                raise
             self._observer = None
             if cancellation is None:
                 cancellation = owner_cancellation

@@ -18,6 +18,7 @@ from marimo_studio.errors import (
     ConfigurationError,
     PublicationHeldError,
     ViewGenerationConflictError,
+    ViewNotFoundError,
 )
 
 DEFAULT_PUBLICATION_HOLD_SECONDS = 300.0
@@ -133,6 +134,8 @@ def _require_generation(root: Path, expected: str | None) -> str:
     try:
         current = view_name_generation(root.parent, root.name)
     except FileNotFoundError as error:
+        if expected is None:
+            raise ViewNotFoundError(root.name) from error
         raise ViewGenerationConflictError(root.name, None) from error
     if expected is not None and current != expected:
         raise ViewGenerationConflictError(root.name, current)
@@ -191,7 +194,19 @@ def release_publication_hold(
         if current is None:
             return None
         if not secrets.compare_digest(current.token.encode(), token.encode()):
-            raise ConfigurationError("Publication hold token belongs to another owner")
+            if current.status == "active":
+                raise PublicationHeldError(
+                    root.name,
+                    current.owner,
+                    current.expiry,
+                    "Release it with the token returned when it was acquired, "
+                    "or wait for it to expire.",
+                )
+            raise ConfigurationError(
+                f"The token does not match the {current.status} publication "
+                f"hold on view {root.name!r}. Publication can proceed without "
+                "a release."
+            )
         if current.released:
             return current
         released = replace(current, released=True)

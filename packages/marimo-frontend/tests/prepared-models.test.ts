@@ -16,9 +16,11 @@ import type {
 
 import { createPreparedModelLifecycle } from "../src/prepared-models.ts";
 
-// SAFETY: The test observes the browser global owned by the prepared model facade.
+// SAFETY: The test observes the browser global owned by the prepared model facade,
+// and an evaluating widget module publishes its release hook on the same object.
 const browser = globalThis as typeof globalThis & {
   __MARIMO_STATIC__?: { readonly files: Readonly<Record<string, string>> };
+  releasePreparedModule?: () => void;
 };
 
 let lifecycle: PreparedModelLifecycleHandle | undefined;
@@ -45,6 +47,9 @@ const openNotification = (
 });
 
 afterEach(async () => {
+  // A module that never finishes evaluating would hold disposal open.
+  browser.releasePreparedModule?.();
+  delete browser.releasePreparedModule;
   await lifecycle?.dispose();
   lifecycle = undefined;
   vi.restoreAllMocks();
@@ -148,6 +153,34 @@ test("native model replacement rejects malformed lifecycle and widget modules be
     /missing a default export/u,
   );
   assert.equal(WIDGET_REGISTRY.getModelSync(id), undefined);
+});
+
+test("cancelling a replacement settles it while a widget module still evaluates", async () => {
+  const source =
+    "await new Promise((resolve) => { globalThis.releasePreparedModule = resolve; });" +
+    "export default { render() {} };";
+  lifecycle = createPreparedModelLifecycle();
+  const selection = new AbortController();
+  const replacement = lifecycle.replace(
+    {
+      files: {},
+      modelNotifications: [
+        openNotification(
+          modelId("prepared-evaluating-model"),
+          {},
+          { url: `data:text/javascript,${encodeURIComponent(source)}`, hash: "evaluating-module" },
+        ),
+      ],
+    },
+    selection.signal,
+  );
+  await vi.waitFor(() => assert.ok(browser.releasePreparedModule));
+
+  selection.abort(new DOMException("A newer Prepared state was selected.", "AbortError"));
+
+  await assert.rejects(replacement, { name: "AbortError" });
+  await lifecycle.dispose();
+  lifecycle = undefined;
 });
 
 test("native model disposal restores prior page resources", async () => {

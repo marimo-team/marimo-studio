@@ -7,7 +7,7 @@ from contextvars import Context, copy_context
 from typing import Protocol
 
 from marimo_studio._views.records import Starter
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import StarterNotFoundError
 from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderStarter,
@@ -100,14 +100,15 @@ def get_starter(identity: str) -> Starter:
     return matches[0]
 
 
-def _unknown_starter(identity: str) -> ConfigurationError:
-    installed = sorted(
-        starter_id(provider.key, starter.key)
-        for provider, starter in provider_registry().starter_records()
-    )
-    return ConfigurationError(
-        f"Unknown view starter {identity!r}. "
-        f"Installed starters: {', '.join(installed) or 'none'}"
+def _unknown_starter(identity: str) -> StarterNotFoundError:
+    return StarterNotFoundError(
+        identity,
+        available=tuple(
+            sorted(
+                starter_id(provider.key, starter.key)
+                for provider, starter in provider_registry().starter_records()
+            )
+        ),
     )
 
 

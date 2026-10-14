@@ -16,7 +16,6 @@ import type { PresentationDiagnostic } from "./diagnostics.ts";
 import type {
   PresentationRevisionController,
   PresentationRevisionPolicy,
-  RevisionOperation,
 } from "./document/revision-controller.ts";
 
 import { DevelopmentViewTransition } from "./document/development-view-transition.ts";
@@ -35,6 +34,7 @@ import {
   BaselineReconciler,
   RefreshRetrySchedule,
   PresentationRefreshState,
+  refreshDiagnostic,
   StaleBindingRefresh,
 } from "./document/presentation-refresh.ts";
 import { ReceiverRefreshHandshake } from "./document/receiver-refresh.ts";
@@ -47,8 +47,6 @@ import {
   supportView,
 } from "./document/status.ts";
 import { studioOwned } from "./document/studio-ownership.ts";
-import { StylesheetRefreshError } from "./document/styles.ts";
-import { errorMessage } from "./errors.ts";
 import { projectionReadGate } from "./projections/read-gate.ts";
 import { bindProjectionBindingStale, projectionBindingIsStale } from "./projections/staleness.ts";
 import {
@@ -63,7 +61,6 @@ import {
   getRuntimeConfig,
   getSupportUrl,
   hasRuntimeConfig,
-  RuntimeConfigRequestError,
   subscribeRuntimeConfig,
 } from "./runtime-config/index.ts";
 
@@ -108,38 +105,6 @@ const scheduleRetry = (): void => {
     retryTimer = undefined;
     reload(false);
   }, retrySchedule.next());
-};
-
-const refreshFailureCode = (cause: unknown): string => {
-  if (cause instanceof RuntimeConfigRequestError || cause instanceof StylesheetRefreshError) {
-    return cause.code;
-  }
-  return "presentation-refresh-failed";
-};
-
-const refreshFailureHint = (cause: unknown, transient: boolean): string => {
-  if (cause instanceof RuntimeConfigRequestError && cause.hint) {
-    return cause.hint;
-  }
-  return transient
-    ? "Wait for Marimo to accept the notebook change."
-    : "Fix the view source, then save it again.";
-};
-
-const refreshDiagnostic = (
-  cause: unknown,
-  operation: RevisionOperation,
-): PresentationDiagnostic => {
-  const transient = cause instanceof RuntimeConfigRequestError && cause.transient;
-  return {
-    scope: "presentation",
-    code: refreshFailureCode(cause),
-    severity: transient ? "warning" : "error",
-    message: errorMessage(cause),
-    hint: refreshFailureHint(cause, transient),
-    view: supportView(operation.target.supportUrl) ?? "",
-    details: cause instanceof RuntimeConfigRequestError ? cause.details : undefined,
-  };
 };
 
 const observeBuild = (build: PresentationBuild): void => {
@@ -292,7 +257,7 @@ const presentationChanged = (): void => {
 
 const revisionPolicy: PresentationRevisionPolicy = {
   classifyFailure: (error, operation) => {
-    const diagnostic = refreshDiagnostic(error, operation);
+    const diagnostic = refreshDiagnostic(error, supportView(operation.target.supportUrl) ?? "");
     return {
       state: diagnostic.severity === "warning" ? "loading" : "error",
       diagnostic,

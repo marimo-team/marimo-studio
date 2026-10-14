@@ -295,33 +295,41 @@ class DevelopmentCoordinator:
                     "catalog_current",
                     lambda: True,
                 )
-                if monitor.error is None and await self._catalog_current(
-                    monitor,
-                    catalog_current,
-                ):
-                    break
-                generation = monitor.generation
-                await self._scan_monitor(view_name, monitor)
-                if monitor.error is not None or monitor.generation == generation:
-                    break
-            async with monitor.scan_lock:
-                if monitor.error is not None:
-                    raise ConfigurationError(
-                        "Source monitoring failed for view "
-                        f"{view_name!r}: {monitor.error}"
-                    ) from monitor.error
-                project, inspection, input_id = monitor.producer.catalog()
-                async with self._lock:
-                    if (
-                        view_name in self._retiring_views
-                        or not self._source_monitors.contains_locked(
-                            view_name,
-                            monitor,
-                        )
-                    ):
-                        raise ViewRetirementInProgress(view_name)
+                current = (
+                    monitor.error is None
+                    and not monitor.rebuild
+                    and await self._catalog_current(monitor, catalog_current)
+                )
+                if not current:
                     generation = monitor.generation
-            return ProjectCatalog(project, inspection, input_id, generation)
+                    await self._scan_monitor(view_name, monitor)
+                    current = (
+                        monitor.error is not None or monitor.generation == generation
+                    )
+                async with monitor.scan_lock:
+                    if monitor.rebuild or not current:
+                        continue
+                    if monitor.error is not None:
+                        raise ConfigurationError(
+                            "Source monitoring failed for view "
+                            f"{view_name!r}: {monitor.error}"
+                        ) from monitor.error
+                    project, inspection, input_id = monitor.producer.catalog()
+                    async with self._lock:
+                        if (
+                            view_name in self._retiring_views
+                            or not self._source_monitors.contains_locked(
+                                view_name,
+                                monitor,
+                            )
+                        ):
+                            raise ViewRetirementInProgress(view_name)
+                        generation = monitor.generation
+                    return ProjectCatalog(project, inspection, input_id, generation)
+            raise ConfigurationError(
+                f"Source kept changing while inspecting view {view_name!r}. "
+                "Wait for source edits to settle and retry."
+            )
         finally:
             await subscription.close()
 
@@ -387,7 +395,14 @@ class DevelopmentCoordinator:
                 return None
             monitor = self._source_monitors.monitor_locked(key)
             if monitor is None or monitor is not expected:
-                return None
+                return next(
+                    (
+                        event
+                        for event in expected.journal
+                        if expected.retired and event.generation > after
+                    ),
+                    None,
+                )
             if monitor.journal and after < monitor.journal[0].generation - 1:
                 return SourcePoll(
                     monitor.generation,
@@ -406,6 +421,7 @@ class DevelopmentCoordinator:
         catalog_current = getattr(monitor.producer, "catalog_current", lambda: True)
         if probe and (
             monitor.error is not None
+            or monitor.rebuild
             or not await self._catalog_current(monitor, catalog_current)
         ):
             await self._scan_monitor(key, monitor)
@@ -517,6 +533,11 @@ class DevelopmentCoordinator:
                     lambda path: self._watch_changed(key, monitor, path),
                     lambda: self._monitor_active(key, monitor),
                 )
+            except asyncio.CancelledError:
+                # A cancelled poll may have recorded part of its scan and lost
+                # its change. Rebuild the producer from disk on the next scan.
+                monitor.rebuild = True
+                raise
             except Exception as error:
                 raise_process_cleanup(error)
                 change = (
@@ -594,6 +615,10 @@ class DevelopmentCoordinator:
             profile=profile,
             warmup=warmup,
         )
+
+    async def foreground_settled(self) -> None:
+        """Wait until no foreground publication is running."""
+        await self._publications.foreground_settled()
 
     async def baseline(
         self,
@@ -687,6 +712,15 @@ class DevelopmentCoordinator:
                 monitor,
                 committed=retirement.committed,
             )
+            if close_monitor and monitor is not None:
+                # Streams on the retired view hold this monitor. One final views
+                # change tells each browser to refresh its inventory.
+                monitor.retired = True
+                monitor.generation += 1
+                monitor.journal.append(
+                    SourcePoll(monitor.generation, SourceChange("views", ()))
+                )
+                monitor.changed.set()
             if (
                 not retirement.committed
                 and not self._closed

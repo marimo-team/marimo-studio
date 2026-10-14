@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -748,6 +749,63 @@ def test_publication_acquires_its_lease_before_replacing_the_profile_pointer(
     assert {path.name for path in revisions.iterdir()} == {
         first.artifact_revision.removeprefix("sha256:")
     }
+
+
+@pytest.mark.parametrize(
+    "case",
+    ("count", "long-text", "embedded-control"),
+)
+def test_publication_receipt_bounds_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    project = _project(tmp_path)
+    if case == "count":
+        publish_artifact(project, "development")
+        _change_document(project, "warned generation")
+    provider = provider_registry().get(project.provider)
+    build = provider.build
+    payload = "x" * 65536 if case == "long-text" else "x\x01" * 32768
+
+    def wrapped(request: BuildRequest) -> BuildResult:
+        result = build(request)
+        if case == "count":
+            document_path = result.document
+            assert document_path is not None
+            document = request.staging_root / document_path
+            document.write_text(
+                re.sub(r' data-marimo-studio-site="[^"]*"', "", document.read_text())
+            )
+        return replace(
+            result,
+            diagnostics=tuple(
+                ProjectDiagnostic(
+                    "compiler-warning",
+                    "warning",
+                    f"Warning {index}" if case == "count" else payload,
+                )
+                for index in range(512 if case == "count" else 256)
+            ),
+        )
+
+    monkeypatch.setattr(provider, "build", wrapped)
+    published = publish_artifact(project, "development")
+
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == published.artifact_revision
+    diagnostics = read_build_state(project, "development").diagnostics
+    assert diagnostics[-1].code == "build-diagnostics-truncated"
+    if case == "count":
+        assert len(diagnostics) == 512
+        assert diagnostics[-1].message == (
+            "Studio kept the first 511 build diagnostics and omitted 2 more."
+        )
+        return
+    assert _profile_path(project).stat().st_size < 16 * 1024 * 1024
+    assert diagnostics[0].message == payload
+    assert len(diagnostics) < 256
 
 
 def test_corrupt_sibling_profile_does_not_fail_a_completed_publication(

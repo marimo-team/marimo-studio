@@ -33,6 +33,9 @@ from marimo_studio._server.development.coordinator import (
     DevelopmentCoordinator,
     SourceSubscription,
 )
+from marimo_studio._server.development.publication_registry import (
+    PublicationSuperseded,
+)
 from marimo_studio._server.development.source_changes import (
     SourceChange,
     SourceChangeProducer,
@@ -46,8 +49,10 @@ from marimo_studio._views.revisions import (
 )
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
+from marimo_studio.errors._internal import ViewRetirementInProgress
 
 _T = TypeVar("_T")
+_WARMUP_ATTEMPTS = 3
 _EVENT_POLL_INTERVAL = 0.05
 _STOP_POLL_INTERVAL = 0.25
 _HEARTBEAT_INTERVAL = 15.0
@@ -292,37 +297,42 @@ async def change_events(
     try:
         if browser is not None and not await browser.reserve():
             return
-        source_subscription = (
-            await development.subscribe(studio, selected_view)
-            if studio is not None and development is not None
-            else None
-        )
-        sources = (
-            await asyncio.to_thread(SourceChangeProducer, studio, selected_view)
-            if studio is not None and source_subscription is None
-            else None
-        )
-        baseline_operation = (
-            partial(_presentation_baseline, studio, selected_view)
-            if studio is not None
-            else None
-        )
-        baseline: dict[str, object]
-        if (
-            baseline_operation is not None
-            and development is not None
-            and source_subscription is not None
-            and selected_view is not None
-        ):
-            baseline = await development.baseline(
-                selected_view,
-                source_subscription.generation,
-                baseline_operation,
+        try:
+            source_subscription = (
+                await development.subscribe(studio, selected_view)
+                if studio is not None and development is not None
+                else None
             )
-        elif baseline_operation is not None:
-            baseline = await _publish_async(baseline_operation)
-        else:
-            baseline = {}
+            sources = (
+                await asyncio.to_thread(SourceChangeProducer, studio, selected_view)
+                if studio is not None and source_subscription is None
+                else None
+            )
+            baseline_operation = (
+                partial(_presentation_baseline, studio, selected_view)
+                if studio is not None
+                else None
+            )
+            baseline: dict[str, object]
+            if (
+                baseline_operation is not None
+                and development is not None
+                and source_subscription is not None
+                and selected_view is not None
+            ):
+                baseline = await development.baseline(
+                    selected_view,
+                    source_subscription.generation,
+                    baseline_operation,
+                )
+            elif baseline_operation is not None:
+                baseline = await _publish_async(baseline_operation)
+            else:
+                baseline = {}
+        except ViewRetirementInProgress:
+            # The response has already started. End it so the browser
+            # reconnects after the removal or rename settles.
+            return
 
         broker = _EventBroker()
         if browser is not None:
@@ -511,7 +521,6 @@ async def _produce_source_events(
                 "schema": 1,
                 "kind": change.kind,
                 "files": list(change.files),
-                **({"error": change.error} if change.error is not None else {}),
             },
         )
         resync = _encode(
@@ -520,7 +529,6 @@ async def _produce_source_events(
                 "schema": 1,
                 "kind": change.kind,
                 "files": [],
-                **({"error": change.error} if change.error is not None else {}),
             },
         )
         await broker.emit_source(
@@ -563,19 +571,22 @@ async def _produce_publication_events(
     first = True
     while True:
         request = await requests.get()
-        async for kind, event in _presentation_events(
-            studio,
-            selected_view,
-            request.generation,
-            development,
-            previous_revision=request.previous_revision,
-        ):
-            await broker.emit_publication(
+        try:
+            async for kind, event in _presentation_events(
+                studio,
                 selected_view,
-                kind,
                 request.generation,
-                event,
-            )
+                development,
+                previous_revision=request.previous_revision,
+            ):
+                await broker.emit_publication(
+                    selected_view,
+                    kind,
+                    request.generation,
+                    event,
+                )
+        except PublicationSuperseded:
+            continue
         if first:
             first = False
             initial_ready.set()
@@ -699,21 +710,27 @@ async def _prepare_inactive_presentations(
     development: DevelopmentCoordinator,
 ) -> None:
     async def prepare(view_name: str) -> None:
-        try:
-            await _prepare_presentation(
-                studio,
-                view_name,
-                None,
-                development,
-                warmup=True,
-            )
-        except asyncio.CancelledError:
-            raise
-        except ProcessCleanupError:
-            raise
-        except (MarimoStudioError, OSError) as error:
-            raise_process_cleanup(error)
-            return
+        # A foreground publication preempts warmups. Warm the view again once
+        # that publication finishes, so inactive views still become ready.
+        for _attempt in range(_WARMUP_ATTEMPTS):
+            try:
+                await _prepare_presentation(
+                    studio,
+                    view_name,
+                    None,
+                    development,
+                    warmup=True,
+                )
+                return
+            except asyncio.CancelledError:
+                raise
+            except ProcessCleanupError:
+                raise
+            except PublicationSuperseded:
+                await development.foreground_settled()
+            except (MarimoStudioError, OSError) as error:
+                raise_process_cleanup(error)
+                return
 
     tasks = [
         asyncio.create_task(prepare(view_name))

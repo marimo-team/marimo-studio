@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import sys
 from dataclasses import replace
 from pathlib import PurePosixPath
+from threading import Event
 from types import SimpleNamespace
 from typing import Any, Literal, cast
 
 import pytest
 from marimo_export.values import Size, ValueSelector
 
+from marimo_studio._compat.kernel_values import host as projection_host
 from marimo_studio._compat.kernel_values.authorization import (
     BoundProjection,
     ProjectionAuthorizationError,
@@ -20,7 +23,7 @@ from marimo_studio._compat.kernel_values.authorization import (
     authorized_output_arguments,
     authorized_value_arguments,
     verify_output_arguments,
-    verify_value_arguments,
+    verify_value_ownership_arguments,
 )
 from marimo_studio._compat.kernel_values.authorization_key import (
     initialize_projection_authorization_key,
@@ -28,7 +31,11 @@ from marimo_studio._compat.kernel_values.authorization_key import (
     sign_kernel_authorization,
     verify_kernel_authorization,
 )
-from marimo_studio._compat.kernel_values.host import _bind_live_projections
+from marimo_studio._compat.kernel_values.host import (
+    _bind_projections,
+    _build_live_projection_state,
+    _executed_signature,
+)
 from marimo_studio._compat.kernel_values.kernel import _current_selectors
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef
@@ -36,8 +43,22 @@ from marimo_studio._projections.resolution import (
     ProjectionRequest,
     ResolvedProjection,
 )
+from marimo_studio._projections.runtime_records import (
+    OutputRenderResult,
+    ValueReadResult,
+)
 from marimo_studio._server.presentation.ports import ProjectionUnavailable
 from marimo_studio.view_providers import SourceLocation
+
+from ..marimo_compat.values_test_support import (
+    _call_projection,
+    _install_projection_host,
+    _SummarySession,
+)
+
+
+def _live(host: Any, operation: str, session_id: str = "session") -> Any:
+    return _call_projection(host, operation, _projection(), session_id)
 
 
 def _projection() -> ResolvedProjection:
@@ -98,13 +119,14 @@ def _verify_bound_projection(
 ) -> Any:
     if kind == "value":
         arguments = authorized_value_arguments(revision, (bound,), "preview-a")
-        return verify_value_arguments(
+        authorized, _active = verify_value_ownership_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
             active_projections=arguments["active_projections"],
             consumer_id=arguments["consumer_id"],
             authorization=arguments["authorization"],
         )
+        return authorized
     arguments = authorized_output_arguments(
         revision,
         (bound,),
@@ -164,6 +186,14 @@ class _Graph:
         return found
 
 
+@pytest.fixture(autouse=True)
+def _projection_authorization_key() -> None:
+    # Studio creates the key at server composition. Tests here sign and verify
+    # without a server, so each one creates it instead of relying on whichever
+    # test ran first in its worker.
+    initialize_projection_authorization_key()
+
+
 def test_kernel_authorization_uses_canonical_json() -> None:
     initialize_projection_authorization_key()
     first = {"operation": "value", "arguments": {"target": "café", "index": 1}}
@@ -217,10 +247,12 @@ def test_parent_authorization_key_is_stable_and_inherited_by_spawned_kernels() -
             """
 import json
 import sys
-from marimo_studio._compat.kernel_values.authorization import verify_value_arguments
+from marimo_studio._compat.kernel_values.authorization import (
+    verify_value_ownership_arguments,
+)
 
 arguments = json.load(sys.stdin)
-authorized = verify_value_arguments(
+authorized, _active = verify_value_ownership_arguments(
     revision=arguments["revision"],
     projections=arguments["projections"],
     active_projections=arguments["active_projections"],
@@ -336,7 +368,9 @@ def test_records_read_values_as_json_and_size_only_accepting_outputs(
     for record in (*records, *active):
         record["accept"] = accept
         record["size"] = size
-    verify = verify_value_arguments if kind == "value" else verify_output_arguments
+    verify = (
+        verify_value_ownership_arguments if kind == "value" else verify_output_arguments
+    )
 
     with pytest.raises(ProjectionAuthorizationError, match=r"accept list|size"):
         verify(
@@ -356,7 +390,7 @@ def test_document_value_records_read_tables_as_json() -> None:
     )
     arguments = authorized_value_arguments("revision-1", (document,), "document")
 
-    authorized = verify_value_arguments(
+    authorized, _active = verify_value_ownership_arguments(
         revision=arguments["revision"],
         projections=arguments["projections"],
         active_projections=arguments["active_projections"],
@@ -379,7 +413,7 @@ def test_dependency_closure_is_covered_by_the_server_signature() -> None:
     )
 
     with pytest.raises(ProjectionAuthorizationError, match="authorization"):
-        verify_value_arguments(
+        verify_value_ownership_arguments(
             revision=tampered["revision"],
             projections=tampered["projections"],
             active_projections=tampered["active_projections"],
@@ -396,7 +430,7 @@ def test_value_consumer_is_covered_by_the_server_signature() -> None:
     )
 
     with pytest.raises(ProjectionAuthorizationError, match="authorization"):
-        verify_value_arguments(
+        verify_value_ownership_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
             active_projections=arguments["active_projections"],
@@ -414,7 +448,7 @@ def test_active_value_owners_are_covered_by_the_server_signature() -> None:
     arguments["active_projections"] = []
 
     with pytest.raises(ProjectionAuthorizationError, match="authorization"):
-        verify_value_arguments(
+        verify_value_ownership_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
             active_projections=arguments["active_projections"],
@@ -424,14 +458,25 @@ def test_active_value_owners_are_covered_by_the_server_signature() -> None:
 
 
 @pytest.mark.parametrize("kind", ["cell", "value", "output"])
+@pytest.mark.parametrize(
+    ("unrelated_id", "draft", "executed"),
+    [
+        ("runtime-unrelated", "unrelated = 1", "unrelated = 2"),
+        ("runtime-draft", "draft = (", "draft = ("),
+    ],
+    ids=["edited-cell", "syntax-error"],
+)
 def test_live_binding_accepts_code_changes_with_the_same_runtime_topology(
     kind: Literal["cell", "value", "output"],
+    unrelated_id: str,
+    draft: str,
+    executed: str,
 ) -> None:
     projection, cells = _projection_with_upstream(kind)
     rows = [
         SimpleNamespace(id=runtime_id, code=code) for _ref, runtime_id, code in cells
     ]
-    rows.append(SimpleNamespace(id="runtime-unrelated", code="unrelated = 1"))
+    rows.append(SimpleNamespace(id=unrelated_id, code=draft))
     executed_code = {row.id: row.code for row in rows}
     session = SimpleNamespace(
         document=SimpleNamespace(cells=rows),
@@ -439,9 +484,9 @@ def test_live_binding_accepts_code_changes_with_the_same_runtime_topology(
     )
     runtime_cell_refs = {ref: runtime_id for ref, runtime_id, _code in cells}
 
-    executed_code["runtime-unrelated"] = "unrelated = 2"
-    (bound,) = _bind_live_projections(
-        session,
+    executed_code[unrelated_id] = executed
+    (bound,) = _bind_projections(
+        _build_live_projection_state(_executed_signature(session)),
         (projection,),
         runtime_cell_refs,
     )
@@ -451,8 +496,8 @@ def test_live_binding_accepts_code_changes_with_the_same_runtime_topology(
         for binding in bound.dependency_bindings
     ) == tuple((ref, runtime_id) for ref, runtime_id, _code in cells)
     executed_code["runtime-upstream"] = "source = 2"
-    (edited,) = _bind_live_projections(
-        session,
+    (edited,) = _bind_projections(
+        _build_live_projection_state(_executed_signature(session)),
         (projection,),
         runtime_cell_refs,
     )
@@ -479,8 +524,8 @@ def test_live_binding_rejects_a_newly_resolved_upstream_producer(
     )
 
     with pytest.raises(ProjectionUnavailable, match="dependency closure"):
-        _bind_live_projections(
-            session,
+        _bind_projections(
+            _build_live_projection_state(_executed_signature(session)),
             (projection,),
             {projection.producer: "runtime-summary"},
         )
@@ -574,3 +619,184 @@ def test_kernel_rejects_a_new_producer_after_capability_binding(
     graph.parents["runtime-summary"] = {"runtime-missing"}
     with pytest.raises(ProjectionAuthorizationError, match="dependency closure"):
         _current_selectors(context, authorized)
+
+
+@pytest.mark.parametrize(
+    "changes_during_build",
+    [False, True],
+    ids=["after-read", "during-build"],
+)
+def test_projection_host_revalidates_changed_execution_before_invoking_the_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+    changes_during_build: bool,
+) -> None:
+    session = _SummarySession()
+    original = projection_host._build_live_projection_state
+    builds: list[Any] = []
+    reads: list[str] = []
+    pulse = Event()
+    loop: asyncio.AbstractEventLoop | None = None
+
+    def change() -> None:
+        session.session_view.last_executed_code["runtime-summary"] = "moved = 3"
+        pulse.set()
+
+    def build(signature: Any) -> Any:
+        builds.append(signature)
+        if changes_during_build and len(builds) == 1:
+            assert loop is not None
+            loop.call_soon_threadsafe(change)
+            assert pulse.wait(5)
+        return original(signature)
+
+    async def read(*_args: Any, **_kwargs: Any) -> ValueReadResult:
+        reads.append("read")
+        return ValueReadResult({}, {})
+
+    host = _install_projection_host(monkeypatch, session, build, read=read)
+
+    async def exercise() -> None:
+        nonlocal loop
+        loop = asyncio.get_running_loop()
+        if not changes_during_build:
+            await _live(host, "read_values")
+            await _live(host, "read_values")
+            assert len(builds) == 1
+            assert reads == ["read", "read"]
+            change()
+        with pytest.raises(ProjectionUnavailable) as raised:
+            await _live(host, "read_values")
+        assert raised.value.code == "stale-projection-binding"
+        assert len(builds) == 2
+        assert reads == ([] if changes_during_build else ["read", "read"])
+
+    asyncio.run(exercise())
+
+
+def test_value_ownership_keeps_requested_and_mounted_selectors_separate() -> None:
+    requested = _bound_with_upstream()
+    mounted = replace(
+        requested,
+        projection=replace(
+            requested.projection,
+            request=replace(requested.projection.request, target="summary"),
+            selector=ValueSelector("summary"),
+        ),
+    )
+    arguments = authorized_value_arguments(
+        "revision-1", (requested,), "preview-a", (requested, mounted)
+    )
+    authorized, active = verify_value_ownership_arguments(
+        revision=arguments["revision"],
+        projections=arguments["projections"],
+        active_projections=arguments["active_projections"],
+        consumer_id=arguments["consumer_id"],
+        authorization=arguments["authorization"],
+    )
+    assert set(authorized.selectors) == {"summary.total"}
+    assert set(active.selectors) == {"summary.total", "summary"}
+
+
+@pytest.mark.parametrize("transition", ["current", "edited", "cancelled", "failed"])
+def test_concurrent_projection_requests_share_session_graph_builds(
+    monkeypatch: pytest.MonkeyPatch,
+    transition: str,
+) -> None:
+    session = _SummarySession()
+    started, release = Event(), Event()
+    original = projection_host._build_live_projection_state
+    builds: list[Any] = []
+
+    def build(signature: Any) -> Any:
+        builds.append(signature)
+        if len(builds) == 1:
+            started.set()
+            assert release.wait(5)
+            if transition == "failed":
+                raise RuntimeError("graph compilation failed")
+        return original(signature)
+
+    host = _install_projection_host(monkeypatch, session, build)
+
+    async def exercise() -> None:
+        first = asyncio.create_task(_live(host, "read_values"))
+        second: asyncio.Task[Any] | None = None
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            second = asyncio.create_task(_live(host, "render_outputs"))
+            await asyncio.sleep(0)
+            if transition == "edited":
+                session.session_view.last_executed_code["runtime-summary"] = (
+                    "summary = {'total': 4}"
+                )
+            elif transition == "cancelled":
+                first.cancel()
+                await asyncio.sleep(0)
+                first.cancel()
+                await asyncio.sleep(0)
+                assert not first.done()
+            release.set()
+            if transition == "cancelled":
+                with pytest.raises(asyncio.CancelledError):
+                    await first
+            elif transition == "failed":
+                with pytest.raises(RuntimeError, match="graph compilation failed"):
+                    await first
+            else:
+                assert isinstance(await first, ValueReadResult)
+            assert isinstance(await second, OutputRenderResult)
+            assert isinstance(
+                await _live(host, "read_values"),
+                ValueReadResult,
+            )
+            assert len(builds) == (2 if transition in {"edited", "failed"} else 1)
+            if transition == "edited":
+                assert builds[1] == (("runtime-summary", "summary = {'total': 4}"),)
+        finally:
+            release.set()
+            pending = [first] if second is None else [first, second]
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+def test_a_projection_build_keeps_other_sessions_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sessions = {
+        "first": _SummarySession("summary = {'total': 3}"),
+        "second": _SummarySession("summary = {'total': 4}"),
+    }
+    started, release = Event(), Event()
+    original = projection_host._build_live_projection_state
+
+    def build(signature: Any) -> Any:
+        if signature == (("runtime-summary", "summary = {'total': 3}"),):
+            started.set()
+            assert release.wait(5)
+        return original(signature)
+
+    host = _install_projection_host(
+        monkeypatch,
+        sessions["first"],
+        build,
+        current_session=lambda _context, key: sessions[key],
+    )
+
+    async def exercise() -> None:
+        first = asyncio.create_task(_live(host, "read_values", "first"))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            second = await asyncio.wait_for(
+                _live(host, "read_values", "second"),
+                2,
+            )
+            assert isinstance(second, ValueReadResult)
+            assert not first.done()
+            release.set()
+            assert isinstance(await first, ValueReadResult)
+        finally:
+            release.set()
+            await asyncio.gather(first, return_exceptions=True)
+
+    asyncio.run(exercise())

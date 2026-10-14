@@ -317,6 +317,24 @@ def test_mutable_studio_errors_are_not_cached(notebook_path: Path) -> None:
     assert unsupported_source_method.headers["cache-control"] == "no-store"
 
 
+def test_view_routes_name_missing_views_and_wrong_methods(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        missing_view = client.get("/_marimo-studio/views/missing/project")
+        wrong_method = client.get("/_marimo-studio/views/dashboard/values")
+
+    assert missing_view.status_code == 404
+    assert missing_view.json()["error"] == "view-not-found"
+    assert missing_view.json()["message"] == (
+        "View 'missing' does not exist. Available views: dashboard, executive."
+    )
+    assert wrong_method.status_code == 405
+    assert wrong_method.headers["allow"] == "POST"
+
+
 def test_view_entry_changes_refresh_the_presentation(
     notebook_path: Path,
 ) -> None:

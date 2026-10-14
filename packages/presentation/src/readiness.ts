@@ -94,8 +94,6 @@ export class ReadinessController {
     this.connection = "connecting";
     this.runtimeDiagnostic = undefined;
     this.hostStates = [];
-    this.presentationOwners.clear();
-    this.updatePresentation();
     this.waiter = deferred();
     this.commit();
   }

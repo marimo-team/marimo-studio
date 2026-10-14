@@ -301,7 +301,21 @@ async def active_view_handoff_response(
         body["fromView"],
         body["toView"],
     )
-    return Response(status_code=204 if suspended else 409, headers=NO_STORE)
+    if suspended:
+        return Response(status_code=204, headers=NO_STORE)
+    return JSONResponse(
+        {
+            "error": "active-view-handoff-refused",
+            "message": (
+                "Studio could not hand off the active view for this browser client."
+            ),
+            "hint": (
+                "Reconnect the browser, confirm its active view, then retry the switch."
+            ),
+        },
+        status_code=409,
+        headers=NO_STORE,
+    )
 
 
 def _invalid_payload(code: str) -> JSONResponse:

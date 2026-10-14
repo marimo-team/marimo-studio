@@ -152,7 +152,6 @@ def test_server_runtime_instance_stays_stable_across_binding_generations(
                 generation="1" * 64,
                 ids={reference: "runtime-cell"},
                 names={},
-                dependency_closures={},
                 current_refs={"runtime-cell": reference},
             ),
             LiveCellSnapshot(
@@ -160,15 +159,13 @@ def test_server_runtime_instance_stays_stable_across_binding_generations(
                 generation="2" * 64,
                 ids={reference: "runtime-cell"},
                 names={},
-                dependency_closures={},
                 current_refs={"runtime-cell": reference},
             ),
         )
     )
 
     class Sessions:
-        async def live_cells(self, *_args: object, **kwargs: object):
-            assert kwargs["include_dependency_closures"] is False
+        async def live_cells(self, *_args: object):
             return next(captures)
 
     monkeypatch.setattr(
@@ -403,7 +400,6 @@ def test_server_runtime_waits_for_saved_cell_execution(
                 generation="1" * 64,
                 ids={reference: "runtime-cell"},
                 names={},
-                dependency_closures={},
                 current_refs={"runtime-cell": executed} if executed is not None else {},
             )
 
@@ -448,7 +444,6 @@ def test_server_runtime_distinguishes_required_execution_from_active_execution(
                 generation="1" * 64,
                 ids={reference: "runtime-cell"},
                 names={},
-                dependency_closures={},
                 current_refs=({"runtime-cell": reference} if execution_pending else {}),
                 execution_pending=execution_pending,
             )

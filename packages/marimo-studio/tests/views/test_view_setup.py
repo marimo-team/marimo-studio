@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import os
 import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
@@ -9,6 +10,7 @@ from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from threading import Barrier
+from types import SimpleNamespace
 from typing import Any
 
 import marimo
@@ -18,6 +20,7 @@ import marimo_studio._views.create as create_module
 import marimo_studio._views.creation_plan as creation_plan_module
 import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio import inspect_notebook
+from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import Expectation, FileTree, Version
 from marimo_studio._views.api import create_view, prepare_view
 from marimo_studio._views.inspection import inspect_view_project_sync
@@ -33,11 +36,14 @@ from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
 )
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
+from marimo_studio._workspace.mutation_lock import view_mutation_lock
 from marimo_studio._workspace.view_owners import load_view_owner, view_owner_path
 from marimo_studio.errors import (
     ConfigurationError,
+    InvalidViewNameError,
     NotebookSourceError,
     ViewExistsError,
+    ViewNotFoundError,
 )
 from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import StarterPlan
@@ -52,6 +58,17 @@ from .workspace_test_support import (
     _create_view_in_process,
     _reject_manifestless_view_in_process,
 )
+
+
+def _analysis_root(parent: Path) -> Path:
+    root = parent / "team" / "studio" / "analysis"
+    root.mkdir(parents=True)
+    return root
+
+
+def _refused_view_lock(root: Path) -> None:
+    with pytest.raises(UnsafePathError), view_mutation_lock(root, "dashboard"):
+        pass
 
 
 def test_view_setup_configures_the_notebook_and_creates_each_view(
@@ -90,6 +107,72 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     assert report.joinpath("index.html").is_file()
 
 
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="directory modes do not restrict listing on Windows or for root",
+)
+def test_view_setup_works_below_a_search_only_ancestor(tmp_path: Path) -> None:
+    shared = tmp_path / "shared"
+    notebook = shared / "team" / "analysis.py"
+    notebook.parent.mkdir(parents=True)
+    notebook.write_text(empty_notebook_source(), encoding="utf-8")
+    shared.chmod(0o311)
+    try:
+        result = prepare_view(notebook)
+    finally:
+        shared.chmod(0o755)
+
+    assert result.root == notebook.parent / "studio" / "analysis" / "dashboard"
+    assert result.root.joinpath("index.html").is_file()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_view_lock_refuses_an_ancestor_replaced_by_a_symlink(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    view_root = _analysis_root(real).resolve()
+    victim = tmp_path / "victim"
+    victim_view = _analysis_root(victim)
+    real.rename(tmp_path / "aside")
+    real.symlink_to(victim, target_is_directory=True)
+
+    _refused_view_lock(view_root)
+
+    assert not (victim_view / ".locks").exists()
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="directory modes do not restrict listing on Windows or for root",
+)
+def test_unreadable_view_folder_is_a_configuration_error(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    locked = prepare_view(notebook_path, "report").root
+    locked.chmod(0)
+    try:
+        with pytest.raises(ConfigurationError) as raised:
+            load_studio(notebook_path)
+    finally:
+        locked.chmod(0o755)
+
+    assert str(raised.value) == (
+        f"Studio cannot read view folder {locked}. Fix its permissions or move "
+        f"it out of {locked.parent}, then retry."
+    )
+
+
+def test_an_empty_view_name_never_selects_the_default_view(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+
+    with pytest.raises(InvalidViewNameError):
+        prepare_view(notebook_path, "")
+    with pytest.raises(ViewNotFoundError):
+        load_studio(notebook_path).view("")
+
+
 @pytest.mark.parametrize("name", ("con", "a" * 241))
 def test_view_names_are_portable_filesystem_components(name: str) -> None:
     with pytest.raises(ConfigurationError):
@@ -113,6 +196,29 @@ def test_notebook_stems_are_portable_filesystem_components(
 ) -> None:
     with pytest.raises(ConfigurationError):
         default_view_root(tmp_path / name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ("analysis .py", "analysis\n.py", "analysis\x1b[31m.py"),
+    ids=("trailing-space", "newline", "ansi-escape"),
+)
+def test_invalid_notebook_filename_is_escaped_in_the_diagnostic(
+    tmp_path: Path,
+    name: str,
+) -> None:
+    with pytest.raises(ConfigurationError) as raised:
+        default_view_root(tmp_path / name)
+
+    message = str(raised.value)
+    assert message.startswith(f"{name!r} cannot name a Studio view folder.")
+    assert "\n" not in message
+    assert "\x1b" not in message
+    if name == "analysis .py":
+        assert message == (
+            "'analysis .py' cannot name a Studio view folder. Notebook filename "
+            "stem must not end with a dot or space. Rename the notebook, then retry."
+        )
 
 
 def test_workspace_names_accept_their_maximum_portable_size(tmp_path: Path) -> None:
@@ -965,3 +1071,63 @@ default = "dashboard"
     updated = load_studio(pyproject)
     assert updated.default_view == "executive"
     assert list(updated.views) == ["executive"]
+
+
+def test_view_lock_refuses_an_ancestor_with_junction_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_studio._filesystem import _entry
+
+    ancestor = tmp_path / "shared"
+    root = _analysis_root(ancestor)
+    lstat = Path.lstat
+
+    def junction_metadata(path: Path) -> Any:
+        if path == ancestor:
+            return SimpleNamespace(
+                st_mode=lstat(path).st_mode,
+                st_file_attributes=0x400,
+                st_reparse_tag=0xA0000003,
+            )
+        return lstat(path)
+
+    # Exercise Windows junction metadata through the mutation boundary even
+    # on hosts where creating a junction requires another operating system.
+    monkeypatch.setattr(
+        _entry,
+        "os",
+        SimpleNamespace(name="nt", open=os.open, fstat=os.fstat, close=os.close),
+    )
+    monkeypatch.setattr(Path, "lstat", junction_metadata)
+
+    _refused_view_lock(root)
+    assert not (root / ".locks").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_view_lock_refuses_an_ancestor_swapped_after_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real = tmp_path / "real"
+    root = _analysis_root(real)
+    victim = tmp_path / "victim"
+    redirected = _analysis_root(victim)
+    lstat = Path.lstat
+    swapped = False
+
+    def swap_after_validation(path: Path) -> os.stat_result:
+        nonlocal swapped
+        state = lstat(path)
+        if path == root.parent and not swapped:
+            swapped = True
+            real.rename(tmp_path / "aside")
+            real.symlink_to(victim, target_is_directory=True)
+        return state
+
+    monkeypatch.setattr(Path, "lstat", swap_after_validation)
+
+    _refused_view_lock(root)
+    assert swapped
+    assert not (redirected / ".locks").exists()

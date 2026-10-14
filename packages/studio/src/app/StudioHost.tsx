@@ -4,7 +4,6 @@ import {
   parseActiveViewRequest,
   type ActiveViewRequest,
 } from "@marimo-studio/protocol/development-events";
-import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import {
   EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
   publicNotebookQuery,
@@ -18,17 +17,18 @@ import {
 } from "@marimo-studio/protocol/studio-bootstrap";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { RetrySchedule } from "../features/preview/retry-schedule.ts";
 import { StarterCatalogController } from "../features/views/catalog.ts";
 import { FirstViewToolbar } from "../features/views/FirstViewToolbar.tsx";
 import { createViewRemote } from "../features/views/remote.ts";
 import { preferredStarterId } from "../features/views/starters.ts";
 import { useEditorWorkspace } from "../shared/editor-workspace.ts";
-import { errorMessage } from "../shared/errors.ts";
+import { errorMessage, responseErrorMessage } from "../shared/errors.ts";
 import { StudioThemeProvider, useResolvedStudioTheme } from "../shared/theme.tsx";
 import { useControllerSnapshot } from "../shared/useControllerSnapshot.ts";
 import { StudioRoutes } from "./routes.ts";
 import { StudioApp, type StudioOptions } from "./StudioApp.tsx";
-import { workspaceEventsUrl } from "./workspace-event-coordinator.ts";
+import { watchWorkspaceStreamClosure, workspaceEventsUrl } from "./workspace-event-coordinator.ts";
 
 interface StudioHostProps extends StudioOptions {
   editorFrame: HTMLIFrameElement;
@@ -40,17 +40,6 @@ interface StudioHostProps extends StudioOptions {
 }
 
 const responseJson = async (response: Response) => jsonValueSchema.parse(await response.json());
-
-const responseError = async (response: Response): Promise<string> => {
-  try {
-    return (
-      parseErrorResponse(await responseJson(response)).message ??
-      `Studio workspace request failed (${response.status})`
-    );
-  } catch {
-    return `Studio workspace request failed (${response.status})`;
-  }
-};
 
 const EDITOR_AUTHORITY_QUERY_KEYS = new Set([
   "file",
@@ -222,7 +211,12 @@ export const StudioHost = ({
           url.searchParams.set("marimo_studio_view", view);
           const response = await fetch(url, { cache: "no-store" });
           if (!response.ok) {
-            throw new Error(await responseError(response));
+            throw new Error(
+              await responseErrorMessage(
+                response,
+                `Studio workspace request failed (${response.status})`,
+              ),
+            );
           }
           const candidate = parseStudioBootstrap(await responseJson(response), response.url || url);
           if (!activeEditor || !trustedEditor) {
@@ -274,16 +268,41 @@ export const StudioHost = ({
     if (bootstrap) {
       return;
     }
-    const events = new EventSource(workspaceEventsUrl(host.urls.events));
-    events.addEventListener("activate", (event) => {
-      const payload = parseActiveViewRequest(
-        event instanceof MessageEvent ? String(event.data) : "",
-      );
-      if (payload) {
-        void openWorkspace(payload.view, payload);
-      }
-    });
-    return () => events.close();
+    const reconnects = new RetrySchedule();
+    let events: EventSource;
+    let reconnect: ReturnType<typeof setTimeout> | undefined;
+    const connect = () => {
+      const streamUrl = workspaceEventsUrl(host.urls.events);
+      const stream = new EventSource(streamUrl);
+      events = stream;
+      stream.addEventListener("open", () => reconnects.reset());
+      watchWorkspaceStreamClosure(stream, streamUrl, (retired) => {
+        if (events !== stream || closed) {
+          return;
+        }
+        // A restarted server issues new URLs, and only the host page carries them.
+        if (retired) {
+          globalThis.location.reload();
+          return;
+        }
+        reconnect = setTimeout(connect, reconnects.next());
+      });
+      stream.addEventListener("activate", (event) => {
+        const payload = parseActiveViewRequest(
+          event instanceof MessageEvent ? String(event.data) : "",
+        );
+        if (payload) {
+          void openWorkspace(payload.view, payload);
+        }
+      });
+    };
+    let closed = false;
+    connect();
+    return () => {
+      closed = true;
+      clearTimeout(reconnect);
+      events.close();
+    };
   }, [bootstrap, host.urls.events, openWorkspace]);
 
   if (bootstrap) {

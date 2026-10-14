@@ -35,6 +35,7 @@ from marimo_studio._server.presentation.query_state import (
     query_fingerprint,
     valid_query_operation_id,
 )
+from marimo_studio._server.query import MAX_SAFE_INTEGER
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.request_body import (
     JSONBodyError,
@@ -77,7 +78,7 @@ async def query_response(
         or isinstance(query_generation, bool)
         or not isinstance(query_generation, int)
         or query_generation < 0
-        or query_generation > 9_007_199_254_740_991
+        or query_generation > MAX_SAFE_INTEGER
     ):
         return JSONResponse(
             {
@@ -86,6 +87,20 @@ async def query_response(
                     "clientId and operationId must be non-empty identifiers, "
                     "writeGeneration must be a non-negative safe integer, "
                     "and query must be a string of at most 16384 characters."
+                ),
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    try:
+        query.encode("utf-8")
+    except UnicodeEncodeError:
+        return JSONResponse(
+            {
+                "error": "invalid-query",
+                "message": (
+                    "query must be valid Unicode text. Remove unpaired surrogate "
+                    "escapes such as \\ud800."
                 ),
             },
             status_code=400,

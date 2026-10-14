@@ -334,6 +334,31 @@ it("replaces the active session when the same view gets a new owner", async () =
   source.dispose();
 });
 
+it("loads the replacement owner's source when the view is replaced during its first read", async () => {
+  const remote = new DeferredSourceRemote();
+  remote.setProject("react", [document("src/App.tsx", "typescriptreact")]);
+  const retiredRead = remote.deferRead("react", "src/App.tsx");
+  const source = controller(remote);
+
+  const starting = source.start();
+  await vi.waitFor(() => expect(remote.reads).toEqual(["react:src/App.tsx"]));
+  remote.files.set("react:src/App.tsx", {
+    content: "replacement source",
+    revision: "revision:react:replacement",
+  });
+  source.replaceView("react");
+  retiredRead.resolve({ content: "retired source", revision: "revision:react:retired" });
+  await starting;
+
+  await vi.waitFor(() =>
+    expect(source.getSnapshot().documents[0]).toMatchObject({
+      content: "replacement source",
+      loaded: true,
+    }),
+  );
+  source.dispose();
+});
+
 it("keeps unsaved source visible when the view owner is replaced", async () => {
   const remote = new MemorySourceRemote();
   remote.setProject("react", [document("src/App.tsx", "typescriptreact")]);

@@ -30,6 +30,11 @@ _DIRECTORY_FLAGS: Final = (
     | getattr(os, "O_CLOEXEC", 0)
     | getattr(os, "O_NONBLOCK", 0)
 )
+# A search handle needs only execute permission. macOS refuses a link in any
+# path component with O_NOFOLLOW_ANY, which it rejects next to O_NOFOLLOW.
+# Linux opens search handles with O_PATH.
+_SEARCH_FLAGS: Final = _DIRECTORY_FLAGS | getattr(os, "O_PATH", 0)
+_NOFOLLOW_ANY: Final = getattr(os, "O_NOFOLLOW_ANY", 0)
 _SHARING_ATTEMPTS: Final = 100
 _SHARING_INTERVAL_SECONDS: Final = 0.01
 _Result = TypeVar("_Result")
@@ -96,10 +101,16 @@ def retry_while_shared(operation: Callable[[], _Result]) -> _Result:
     raise AssertionError("unreachable")
 
 
-def open_directory(name: str | Path, *, path: Path, parent: int | None = None) -> int:
+def open_directory(
+    name: str | Path,
+    *,
+    path: Path,
+    parent: int | None = None,
+    flags: int = _DIRECTORY_FLAGS,
+) -> int:
     """Open one directory without following a symlink at its final component."""
     try:
-        descriptor = os.open(name, _DIRECTORY_FLAGS, dir_fd=parent)
+        descriptor = os.open(name, flags, dir_fd=parent)
     except OSError as error:
         if error.errno == errno.ELOOP:
             raise UnsafePathError(f"Path is a symlink: {path}") from error
@@ -111,6 +122,38 @@ def open_directory(name: str | Path, *, path: Path, parent: int | None = None) -
     try:
         if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
             raise UnsafePathError(f"Path is not a directory: {path}")
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def open_directory_without_links(path: Path) -> int:
+    """Open directory ``path`` without following a link in any component.
+
+    Ancestors need only search permission, so a directory below a folder that
+    can be traversed but not listed still opens.
+    """
+    if _NOFOLLOW_ANY:
+        flags = (_DIRECTORY_FLAGS & ~getattr(os, "O_NOFOLLOW", 0)) | _NOFOLLOW_ANY
+        return open_directory(path, path=path, flags=flags)
+    current = Path(path.anchor)
+    descriptor = open_directory(
+        current,
+        path=current,
+        flags=_DIRECTORY_FLAGS if current == path else _SEARCH_FLAGS,
+    )
+    try:
+        for component in path.parts[1:]:
+            current /= component
+            child = open_directory(
+                component,
+                path=current,
+                parent=descriptor,
+                flags=_DIRECTORY_FLAGS if current == path else _SEARCH_FLAGS,
+            )
+            os.close(descriptor)
+            descriptor = child
     except BaseException:
         os.close(descriptor)
         raise

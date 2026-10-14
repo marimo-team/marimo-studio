@@ -182,6 +182,13 @@ const editorDocumentMutationSchema = z.discriminatedUnion("type", [
   z
     .object({
       schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-save-skipped"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+  z
+    .object({
+      schema: z.literal(1),
       type: z.literal("marimo-studio:editor-document-transaction-failed"),
       generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
     })

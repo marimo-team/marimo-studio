@@ -191,11 +191,24 @@ const preflightModule = async (
   if (spec === undefined) {
     return;
   }
-  const module = await WIDGET_DEF_REGISTRY.getModule({
+  const loading = WIDGET_DEF_REGISTRY.getModule({
     jsUrl: spec.url,
     jsHash: spec.hash,
     kernelAuthored: true,
   });
+  // Module evaluation cannot be cancelled, so cancellation stops waiting for it.
+  let stopWaiting = () => {};
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    const abort = () => reject(signal?.reason);
+    signal?.addEventListener("abort", abort, { once: true });
+    stopWaiting = () => signal?.removeEventListener("abort", abort);
+  });
+  let module: Awaited<typeof loading>;
+  try {
+    module = await Promise.race([loading, cancelled]);
+  } finally {
+    stopWaiting();
+  }
   throwIfAborted(signal);
   if (resolveAnyWidget(module, spec.url) !== null) {
     return;

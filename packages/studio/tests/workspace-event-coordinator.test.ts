@@ -9,6 +9,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 it("reconnects the workspace stream after a committed view selection", async () => {
@@ -221,7 +222,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
 
   coordinator.reconcileNotebookMutation(7);
   const reconciliation = EventSourceStub.instances[1];
-  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard", 7);
+  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard");
   reconciliation?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "dashboard", revision: "presentation-v1" }),
@@ -244,7 +245,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
   coordinator.reconcileNotebookMutation(8);
   await model.views.choose("report", "preserve");
   const switched = EventSourceStub.instances.at(-1);
-  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("report", 8);
+  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("report");
   switched?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "report", revision: "presentation-report" }),
@@ -288,7 +289,7 @@ it("consumes a stream mutation tag after its first completed build", () => {
     }),
   );
 
-  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard", 7);
+  expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard");
   expect(preview.presentationBuildCompleted).toHaveBeenLastCalledWith("dashboard", "v1", 7);
   preview.presentationBuildStarted.mockClear();
   preview.presentationBuildCompleted.mockClear();
@@ -382,6 +383,67 @@ it("ignores callbacks from a replaced stream", async () => {
   await Promise.resolve();
 
   expect(model.refreshInventory).not.toHaveBeenCalled();
+  coordinator.dispose();
+});
+
+const closedStream = (status: number) => {
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status })),
+  );
+  return setup();
+};
+
+it("replaces a stream the browser closed and resumes its events", async () => {
+  const { coordinator, source } = closedStream(502);
+  const closed = EventSourceStub.instances[0]!;
+  closed.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
+
+  closed.fail();
+  expect(EventSourceStub.instances).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+
+  expect(EventSourceStub.instances).toHaveLength(2);
+  const replacement = EventSourceStub.instances[1]!;
+  expect(replacement.url).toContain("marimo_studio_view=dashboard");
+  replacement.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v2" }));
+  replacement.emit(
+    "change",
+    JSON.stringify({ kind: "project", files: [{ path: "index.html", revision: "sha256:next" }] }),
+  );
+  expect(source.externalChanges).toHaveBeenCalledWith([
+    { path: "index.html", revision: "sha256:next" },
+  ]);
+  coordinator.dispose();
+});
+
+it("backs off while a replacement stream keeps closing", async () => {
+  const { coordinator } = closedStream(502);
+
+  EventSourceStub.instances[0]!.fail();
+  await vi.advanceTimersByTimeAsync(1_000);
+  EventSourceStub.instances[1]!.fail();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(EventSourceStub.instances).toHaveLength(2);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(EventSourceStub.instances).toHaveLength(3);
+
+  coordinator.dispose();
+  EventSourceStub.instances[2]!.fail();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(EventSourceStub.instances).toHaveLength(3);
+});
+
+it("reports a server restart and stops reconnecting to the earlier process", async () => {
+  // The server answers a stream URL from an earlier process with 204.
+  const { coordinator, preview } = closedStream(204);
+
+  EventSourceStub.instances[0]!.fail();
+  await vi.advanceTimersByTimeAsync(60_000);
+
+  expect(preview.serverRestarted).toHaveBeenCalledOnce();
+  expect(EventSourceStub.instances).toHaveLength(1);
   coordinator.dispose();
 });
 

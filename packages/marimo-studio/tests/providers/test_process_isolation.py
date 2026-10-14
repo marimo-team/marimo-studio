@@ -808,10 +808,25 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
         _kill_reported_processes(marker, pids)
 
 
-def test_cli_sigint_drains_the_provider_process_tree(
+@pytest.mark.parametrize(
+    "stop",
+    [
+        "interrupt",
+        pytest.param(
+            "kill",
+            marks=pytest.mark.skipif(
+                os.name == "nt",
+                reason="a Windows job ends with its owner",
+            ),
+        ),
+    ],
+    ids=("sigint-drains", "killed"),
+)
+def test_stopped_cli_leaves_no_provider_process_tree(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    stop: str,
 ) -> None:
     studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
     script = (
@@ -828,17 +843,21 @@ def test_cli_sigint_drains_the_provider_process_tree(
     process = subprocess.Popen(
         [sys.executable, "-c", script],
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         env=environment,
     )
     pids: tuple[int, ...] = ()
     try:
         pids = _wait_for_pids(marker, 3)
-        os.kill(process.pid, signal.SIGINT)
+        if stop == "interrupt":
+            os.kill(process.pid, signal.SIGINT)
+        else:
+            process.kill()
         process.wait(timeout=5)
         _wait_until_dead(pids)
-        assert process.returncode != 0
+        if stop == "interrupt":
+            assert process.returncode != 0
     finally:
         if process.poll() is None:
             process.kill()
@@ -972,3 +991,160 @@ def _capture_error(
         operation(request)
     except BaseException as error:
         errors.append(error)
+
+
+class _FifoResponseProvider(ProviderStub):
+    def availability(self) -> ProviderAvailability:
+        os.mkfifo(sys.argv[2])
+        os._exit(0)
+
+
+fifo_response_provider = _FifoResponseProvider("test-process/fifo", "default")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs require POSIX")
+def test_isolated_provider_rejects_fifo_response_within_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    command = (
+        "from tests.providers.test_process_isolation import _registry; "
+        "registry = _registry('fifo', 'fifo_response_provider'); "
+        "provider = registry.get('test-process/fifo'); "
+        "result = provider.availability(); "
+        "assert not result.available; "
+        "assert 'response is invalid' in result.reason"
+    )
+    # The registry limit also covers the provider's cold start, so it keeps its
+    # default. A FIFO read that blocks runs into the subprocess limit instead.
+    completed = subprocess.run(
+        [sys.executable, "-c", command], capture_output=True, text=True, timeout=30
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+class _FifoStarterProvider(ProviderStub):
+    def create(self, starter: ProviderStarter, context: StarterContext) -> StarterPlan:
+        del starter, context
+        response = Path(sys.argv[2])
+        transfer = response.parent / "transfer"
+        transfer.mkdir()
+        os.mkfifo(transfer / "00000000.bin")
+        digest = "0" * 64
+        response.write_text(
+            '{"schema": 1, "ok": true, "value": {"cell_targets": [], "files": [{'
+            f'"path": "index.html", "blob": "00000000.bin", "size": 0, '
+            f'"sha256": "{digest}"}}]}}}}',
+            encoding="utf-8",
+        )
+        os._exit(0)
+
+
+fifo_starter_provider = _FifoStarterProvider("test-process/fifo-starter", "default")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs require POSIX")
+def test_isolated_provider_rejects_fifo_starter_blob_within_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    command = (
+        "from pathlib import Path; "
+        "from tests.providers.test_process_isolation import _registry; "
+        "from tests.provider_test_support import provider_starter_context; "
+        "from marimo_studio.errors import ViewProjectError; "
+        "registry = _registry('fifo-starter', 'fifo_starter_provider'); "
+        "provider = registry.get('test-process/fifo-starter'); "
+        f"context = provider_starter_context(Path({str(tmp_path)!r})); "
+        "\ntry:\n provider.create(provider.starters()[0], context)"
+        "\nexcept ViewProjectError as error:"
+        "\n assert 'blob size does not match' in str(error)"
+        "\nelse:\n raise AssertionError('Accepted a FIFO starter blob')"
+    )
+    # The registry limit also covers the provider's cold start, so it keeps its
+    # default. Studio decodes the blob in this process, and a FIFO read that
+    # blocks there runs into the subprocess limit and fails the test.
+    completed = subprocess.run(
+        [sys.executable, "-c", command], capture_output=True, text=True, timeout=30
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+class _BrokenResponseProvider(ProviderStub):
+    def inspect(self, request: InspectionRequest) -> ProjectInspection:
+        del request
+        mode = os.environ["MARIMO_STUDIO_PROVIDER_RESPONSE_MODE"]
+        if mode == "truncated":
+            Path(sys.argv[2]).write_text('{"schema":1,"ok":tr', encoding="utf-8")
+            os._exit(9)
+        if mode == "missing":
+            os._exit(0)
+        if mode == "import-error":
+            sys.stderr.write("ModuleNotFoundError: No module named 'analyzer'\n")
+            sys.stderr.flush()
+            os._exit(1)
+        raise ValueError("The custom analyzer failed.")
+
+
+broken_response_provider = _BrokenResponseProvider("test-process/broken", "default")
+
+
+@pytest.mark.parametrize(
+    ("mode", "status"),
+    [("missing", 0), ("truncated", 9), ("import-error", 1), ("raises", None)],
+    ids=("missing", "truncated", "import-error", "raised"),
+)
+def test_isolated_provider_reports_incomplete_results_and_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    status: int | None,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    monkeypatch.setenv("MARIMO_STUDIO_PROVIDER_RESPONSE_MODE", mode)
+    installed = _registry("broken", "broken_response_provider").get(
+        "test-process/broken"
+    )
+    with pytest.raises(ViewProjectError) as error:
+        installed.inspect(inspection_request(_project(tmp_path, installed.key)))
+
+    detail = (
+        f"Provider process exited with status {status} "
+        "before returning a complete result. "
+        "Check the provider installation and retry."
+        if status is not None
+        else "ValueError: The custom analyzer failed."
+    )
+    if mode == "import-error":
+        detail += "\nModuleNotFoundError: No module named 'analyzer'"
+    assert str(error.value) == (
+        "View provider 'test-process/broken' could not inspect view 'dashboard': "
+        + detail
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_worker_orphaned_before_its_watch_starts_stops_at_once(
+    tmp_path: Path,
+) -> None:
+    from marimo_studio.view_providers._host.operations.codec import (
+        SERVER_PROCESS_ENV,
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "marimo_studio.view_providers._host.operations.worker",
+            str(tmp_path / "request.json"),
+            str(tmp_path / "response.json"),
+        ],
+        env={**os.environ, SERVER_PROCESS_ENV: str(os.getpid() + 1_000_000)},
+        start_new_session=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == -signal.SIGKILL
+    assert not (tmp_path / "response.json").exists()

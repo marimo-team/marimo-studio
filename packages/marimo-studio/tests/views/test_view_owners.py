@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from collections.abc import Iterator
@@ -296,7 +297,6 @@ def test_view_owner_rejects_invalid_records(tmp_path: Path, source: str) -> None
         "api.toml",
         f"{'a' * 241}.toml",
         "notes.txt",
-        ".marimo-studio-aside-" + "a" * 32,
     ),
 )
 def test_owner_catalog_rejects_unowned_record_names(
@@ -312,6 +312,43 @@ def test_owner_catalog_rejects_unowned_record_names(
 
     with pytest.raises(ConfigurationError):
         load_studio(notebook_path)
+
+
+def test_owner_catalog_removes_a_write_left_by_an_interrupted_process(
+    notebook_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    interrupted = studio.view_root / ".owners" / (".marimo-studio-write-" + "a" * 32)
+    interrupted.write_text(encode_view_owner(present=True), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="marimo.studio"):
+        current = load_studio(notebook_path)
+
+    assert current.view_generations == studio.view_generations
+    assert not interrupted.exists()
+    assert "interrupted view owner write" in caplog.text
+
+
+def test_owner_catalog_asks_to_delete_a_preserved_previous_record(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    preserved = studio.view_root / ".owners" / (".marimo-studio-aside-" + "a" * 32)
+    preserved.write_text(encode_view_owner(present=True), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError) as raised:
+        load_studio(notebook_path)
+
+    assert str(raised.value) == (
+        f"Studio kept a previous view owner record at {preserved} after an "
+        "interrupted change. Delete that file, then retry. Studio recreates "
+        "any owner record it needs."
+    )
+    preserved.unlink()
+    assert load_studio(notebook_path).view_generations == studio.view_generations
 
 
 @pytest.mark.skipif(

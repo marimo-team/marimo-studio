@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -234,3 +235,123 @@ def test_browser_notebook_removes_equivalent_provider_requirement_spelling(
     )
 
     assert list(projected_metadata["dependencies"]) == []
+
+
+@pytest.mark.parametrize("separator", ["\x0c", "\u2028", "\x85"])
+def test_browser_notebook_places_its_bridge_after_cells_with_line_separators(
+    tmp_path: Path,
+    separator: str,
+) -> None:
+    import ast
+
+    source = (
+        "import marimo\n\n"
+        '__generated_with = "0.25.1"\n'
+        "app = marimo.App()\n\n\n"
+        "@app.cell\n"
+        "def _():\n"
+        f'    text = "a{separator * 4}b"\n'
+        "    return (text,)\n\n\n"
+        "@app.cell\n"
+        "def _(text):\n"
+        "    text\n"
+        "    return\n\n\n"
+        'if __name__ == "__main__":\n'
+        "    app.run()\n"
+    )
+
+    browser = browser_notebook_source(tmp_path / "notebook.py", source)
+
+    ast.parse(browser)
+    bridge = browser.index("def __marimo_studio_values():")
+    assert browser.index("def _(text):") < bridge < browser.index("if __name__")
+
+
+def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    from marimo._types.ids import CellId_t
+
+    from marimo_studio._compat.browser_notebook import _value_bridge
+    from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
+    from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
+
+    from .values_test_support import _native_output_context, _selectors
+
+    class _App:
+        function: Any
+
+        def cell(self, *_args: object, **_kwargs: object):
+            def register(function: object) -> object:
+                self.function = function
+                return function
+
+            return register
+
+    app = _App()
+    exec(_value_bridge(), {"app": app})
+    context = _native_output_context()
+    values = {"summary": "ready"}
+    monkeypatch.setattr(type(context), "globals", property(lambda _self: values))
+    context._kernel = SimpleNamespace(lock_globals=nullcontext)
+    monkeypatch.setattr(
+        "marimo._messaging.notification_utils.broadcast_notification",
+        lambda _: None,
+    )
+    renderer = KernelOutputRenderer(context)
+    site = {
+        "id": "site-summary",
+        "kind": "output",
+        "source": {"path": "index.html", "line": 1, "column": 1},
+        "targets": ["summary"],
+        "accept": [],
+        "size": None,
+    }
+    request = {
+        "siteId": "site-summary",
+        "instanceId": "summary-host",
+        "target": "summary",
+    }
+    try:
+        with context.install():
+            with context.with_cell_id(CellId_t("bridge")):
+                app.function()
+            functions = context.function_registry.namespaces[
+                "_marimo_studio_wasm"
+            ].functions
+            functions["configure_projections"](
+                {
+                    "revision": "revision-1",
+                    "generation": 0,
+                    "sites": [site],
+                    "variables": ["summary"],
+                }
+            )
+            rendered = functions["render_values"](
+                {
+                    "revision": "revision-1",
+                    "projections": [request],
+                    "active_projections": [request],
+                    "consumer_id": "preview-a",
+                }
+            )
+            kernel = renderer.render(
+                values,
+                _selectors("summary"),
+                ("summary",),
+                {},
+                consumer_id="preview-a",
+                max_output_bytes=10_000,
+            )
+            owner = kernel.outputs["summary"].owner_cell_id
+            assert rendered["errors"] == {}
+            assert rendered["outputs"]["summary"]["ownerCellId"] == owner
+            assert str(owner).startswith(OUTPUT_OWNER_PREFIX)
+    finally:
+        with context.install():
+            renderer.close()
+            context.cell_lifecycle_registry.dispose(CellId_t("bridge"), deletion=False)
+        context.virtual_file_registry.shutdown()

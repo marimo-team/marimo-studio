@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from time import monotonic
+from typing import cast
 from urllib.parse import quote
 
 from marimo_export.delivery import DeliveryResult, StagedDelivery, stage
@@ -333,10 +334,14 @@ def _zero_python_runtime_config(
     artifact: ViewArtifact,
     document: str,
     notebook_source: str,
-    publication: StaticPublication,
-) -> tuple[str, bytes, bytes, _assets.BrowserEntryClosure]:
+    publication: StaticPublication | None,
+) -> tuple[str, bytes, bytes | None, _assets.BrowserEntryClosure]:
     cell_refs = resolved.runtime_cell_refs(None)
     paths = _StaticViewPaths.of(view_name, artifact)
+    # A template view without projection sites has no prepared publication.
+    instance = (
+        artifact.artifact_revision if publication is None else publication.instance
+    )
     sites = tuple(site.to_dict() for site in artifact.sites)
     targets = projection_targets(resolved.symbols, artifact.sites)
     policy = projection_policy()
@@ -344,11 +349,11 @@ def _zero_python_runtime_config(
         source_revision=_digest(
             notebook_source,
             studio.config_path.read_text(encoding="utf-8"),
-            publication.state_space_source.digest,
+            "" if publication is None else publication.state_space_source.digest,
         ),
         view=view_name,
         runtime_id="zero-python",
-        runtime_instance=publication.instance,
+        runtime_instance=instance,
         sites=sites,
         projection_targets=targets,
         projection_policy=policy,
@@ -360,9 +365,13 @@ def _zero_python_runtime_config(
         view=view_name,
         views=(view_name,),
         runtime_id="zero-python",
-        runtime_instance=publication.instance,
-        runtime_data={"planDigest": publication.plan_digest},
-        runtime_paths={"manifest": f"{paths.support}/zero-python/current"},
+        runtime_instance=instance,
+        runtime_data={}
+        if publication is None
+        else {"planDigest": publication.plan_digest},
+        runtime_paths={}
+        if publication is None
+        else {"manifest": f"{paths.support}/zero-python/current"},
         public_root_path="/",
         document_root_path="/",
         support_path=paths.support,
@@ -385,7 +394,7 @@ def _zero_python_runtime_config(
         view_name,
         document,
         artifact.artifact_revision,
-        publication.instance,
+        instance,
         json.dumps(
             runtime_fields,
             ensure_ascii=False,
@@ -414,13 +423,12 @@ def _zero_python_runtime_config(
         runtime_entry=entry,
         runtime_styles=styles,
     )
-    manifest = publication.manifest(f"./{publication.instance}/")
-    return (
-        rendered,
-        encode_runtime_config(config),
-        prepared_manifest_bytes(manifest),
-        closure,
+    manifest = (
+        None
+        if publication is None
+        else prepared_manifest_bytes(publication.manifest(f"./{instance}/"))
     )
+    return rendered, encode_runtime_config(config), manifest, closure
 
 
 def _asset_files(
@@ -605,7 +613,7 @@ def _write_bundle(
     config_stamp: tuple[int, int, int, int],
     runtime: StaticRuntime,
     publication: StaticPublication | None,
-) -> int:
+) -> tuple[int, Callable[[], None]]:
     output = bundle.root
     artifact = lease.artifact
     manifest: bytes | None = None
@@ -619,7 +627,7 @@ def _write_bundle(
             document,
             notebook_source,
         )
-    elif publication is None:
+    elif publication is None and artifact.template is None:
         rendered, config, closure = document, None, None
     else:
         rendered, config, manifest, closure = _zero_python_runtime_config(
@@ -657,38 +665,45 @@ def _write_bundle(
         bundle.ensure_directory(manifest_path.parent)
         bundle.write(manifest_path, manifest, mode=0o644)
     bundle.write(output / ".nojekyll", b"", mode=0o644)
-    try:
-        lease.verify()
-        project = provider_registry().validate_project(studio.views[view_name])
-        inspection = inspect_view_project_sync(project)
-        stable = (
-            assets
-            == _asset_plan(
-                studio,
-                view_name,
-                lease,
-                closure=closure,
-                include_manifest=manifest is not None,
-                include_config=config is not None,
+
+    def require_current() -> None:
+        try:
+            lease.verify()
+            project = provider_registry().validate_project(studio.views[view_name])
+            inspection = inspect_view_project_sync(project)
+            stable = (
+                assets
+                == _asset_plan(
+                    studio,
+                    view_name,
+                    lease,
+                    closure=closure,
+                    include_manifest=manifest is not None,
+                    include_config=config is not None,
+                )
+                and artifact.project_revision
+                == project_revision(
+                    project,
+                    inspection,
+                    provider_registry().get(project.provider).provenance(),
+                )
+                and document == lease.read_text(artifact.document)
+                and notebook_source == _notebook_text(studio.notebook)
+                and notebook_stamp == _file_stamp(studio.notebook)
+                and config_stamp == _file_stamp(studio.config_path)
+                and (publication is None or _publication_inputs_current(publication))
             )
-            and artifact.project_revision
-            == project_revision(
-                project,
-                inspection,
-                provider_registry().get(project.provider).provenance(),
-            )
-            and document == lease.read_text(artifact.document)
-            and notebook_source == _notebook_text(studio.notebook)
-            and notebook_stamp == _file_stamp(studio.notebook)
-            and config_stamp == _file_stamp(studio.config_path)
-            and (publication is None or _publication_inputs_current(publication))
-        )
-    except (OSError, MarimoStudioError) as error:
-        raise_process_cleanup(error)
-        stable = False
-    if not stable:
-        raise _sources_changed()
-    return len(assets) + 2 + int(config is not None) + int(manifest is not None)
+        except (OSError, MarimoStudioError) as error:
+            raise_process_cleanup(error)
+            stable = False
+        if not stable:
+            raise _sources_changed()
+
+    require_current()
+    return (
+        len(assets) + 2 + int(config is not None) + int(manifest is not None),
+        require_current,
+    )
 
 
 def _sources_changed() -> StaticExportError:
@@ -817,7 +832,8 @@ def _export_to_delivery(
     expected_catalog_generation: str | None,
     expected_generation: str | None,
     progress: ExportProgressCallback | None,
-) -> StaticExportResult:
+    preflight_only: bool,
+) -> StaticExportResult | StaticPreflightReport:
     adapters = create_export_adapters()
     build_started = monotonic()
     _emit_progress(
@@ -948,7 +964,7 @@ def _export_to_delivery(
                 ),
             )
             bundle = FileTree(delivery.path)
-            files = _write_bundle(
+            files, require_bundle_current = _write_bundle(
                 bundle,
                 adapters,
                 studio,
@@ -1007,6 +1023,23 @@ def _export_to_delivery(
                     ),
                 ),
             )
+
+            def require_current() -> None:
+                require_bundle_current()
+                _require_export_current(
+                    target,
+                    studio,
+                    selected,
+                    notebook_stamp=notebook_stamp,
+                    config_stamp=config_stamp,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
+                    publication=publication,
+                )
+
+            if preflight_only:
+                require_current()
+                return preflight
             if not preflight.ok:
                 first = next(
                     issue for issue in preflight.issues if issue.severity == "error"
@@ -1025,18 +1058,6 @@ def _export_to_delivery(
                     runtime=runtime,
                 ),
             )
-
-            def require_current() -> None:
-                _require_export_current(
-                    target,
-                    studio,
-                    selected,
-                    notebook_stamp=notebook_stamp,
-                    config_stamp=config_stamp,
-                    expected_catalog_generation=expected_catalog_generation,
-                    expected_generation=expected_generation,
-                    publication=publication,
-                )
 
             try:
                 delivered = delivery.commit(guard=require_current)
@@ -1069,6 +1090,36 @@ def export_view(
     expected_generation: str | None = None,
     progress: ExportProgressCallback | None = None,
 ) -> StaticExportResult:
+    """Export one configured view through a selected static runtime."""
+    return cast(
+        StaticExportResult,
+        _generate_static_view(
+            target,
+            output,
+            view=view,
+            runtime=runtime,
+            force=force,
+            prepare_timeout=prepare_timeout,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+            progress=progress,
+        ),
+    )
+
+
+def _generate_static_view(
+    target: str | Path,
+    output: str | Path,
+    *,
+    view: str | None = None,
+    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
+    force: bool = False,
+    prepare_timeout: float | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+    progress: ExportProgressCallback | None = None,
+    preflight_only: bool = False,
+) -> StaticExportResult | StaticPreflightReport:
     """Export one configured view through a selected static runtime."""
     if runtime not in {"zero-python", "wasm"}:
         raise ValueError("runtime must be 'zero-python' or 'wasm'")
@@ -1108,6 +1159,7 @@ def export_view(
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
             progress=progress,
+            preflight_only=preflight_only,
         )
 
 
@@ -1122,17 +1174,8 @@ def preflight_view(
     progress: ExportProgressCallback | None = None,
 ) -> StaticPreflightReport:
     """Build, prepare, and inspect one static view without publishing it."""
-    finished = False
-
-    def relay(event: StaticExportProgress) -> None:
-        nonlocal finished
-        if finished:
-            return
-        _emit_progress(progress, event)
-        finished = event.event.kind == "preflight_finished"
-
     with TemporaryDirectory(prefix="marimo-studio-preflight-") as temporary:
-        result = export_view(
+        result = _generate_static_view(
             target,
             Path(temporary) / "bundle",
             view=view,
@@ -1140,6 +1183,7 @@ def preflight_view(
             prepare_timeout=prepare_timeout,
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
-            progress=relay,
+            progress=progress,
+            preflight_only=True,
         )
-        return result.preflight
+        return cast(StaticPreflightReport, result)

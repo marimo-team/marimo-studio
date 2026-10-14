@@ -41,10 +41,11 @@ from ..artifact_test_support import (
     change_document as _change_document,
 )
 from ..artifact_test_support import (
-    project as _project,
+    profile_path,
+    publish_artifact,
 )
 from ..artifact_test_support import (
-    publish_artifact,
+    project as _project,
 )
 from ..artifact_test_support import wait_for_file as _wait_for_file
 from ..helpers import load_standalone_project
@@ -54,6 +55,49 @@ def _publish_in_process(root: str, profile: BuildProfile) -> str:
     return publish_artifact(
         load_standalone_project(Path(root)), profile
     ).artifact_revision
+
+
+def test_development_rebuilds_prune_beside_a_receipt_from_another_format(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    profile_path(project, "production").write_text(
+        '{"schema": 1, "profile": "production"}', encoding="utf-8"
+    )
+
+    for index in range(2):
+        _change_document(project, f"edit {index}")
+        publish_artifact(project, "development")
+    _change_document(project, "latest edit")
+    latest = publish_artifact(project, "development")
+
+    revisions = artifact_root(project) / "revisions"
+    assert [path.name for path in revisions.iterdir()] == [
+        latest.artifact_revision.removeprefix("sha256:")
+    ]
+
+
+@pytest.mark.parametrize("folder", ["revisions", ".pins", ".quarantine"])
+def test_foreign_files_in_artifact_state_do_not_block_builds(
+    tmp_path: Path,
+    folder: str,
+) -> None:
+    project = _project(tmp_path)
+    first = publish_artifact(project, "development")
+    foreign = artifact_root(project) / folder / ".DS_Store"
+    foreign.parent.mkdir(exist_ok=True)
+    foreign.write_bytes(b"finder")
+
+    _change_document(project, "next")
+    latest = publish_artifact(project, "development")
+    lease = lease_published_artifact(project, "development")
+    assert lease is not None
+    with lease:
+        assert lease.artifact.artifact_revision == latest.artifact_revision
+
+    assert latest.artifact_revision != first.artifact_revision
+    assert foreign.read_bytes() == b"finder"
 
 
 def test_prune_settles_when_revisions_disappear_after_validation(

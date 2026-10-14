@@ -135,15 +135,16 @@ def _remove_profile_pointer(project: CatalogProject, profile: BuildProfile) -> N
     FileTree(artifact_base(project)).remove(profile_pointer(project, profile))
 
 
+BUILD_CANCELLED = ProjectDiagnostic(
+    code="build-cancelled",
+    severity="error",
+    message="The view build was cancelled before publication.",
+    hint="Build the view again.",
+)
+
+
 def _cancelled_commit() -> ArtifactCommitRejected:
-    return ArtifactCommitRejected(
-        ProjectDiagnostic(
-            code="build-cancelled",
-            severity="error",
-            message="The view build was cancelled before publication.",
-            hint="Build the view again.",
-        )
-    )
+    return ArtifactCommitRejected(BUILD_CANCELLED)
 
 
 def record_build_failure(

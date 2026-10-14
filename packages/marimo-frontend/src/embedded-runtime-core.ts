@@ -18,6 +18,16 @@ export interface InitializedTransport {
   readonly release: () => void;
 }
 
+/** A transport startup whose cleanup also failed. `release` retries that cleanup. */
+class TransportStartupError extends AggregateError {
+  constructor(
+    errors: readonly unknown[],
+    readonly release: () => void,
+  ) {
+    super(errors, "Embedded transport startup and cleanup failed");
+  }
+}
+
 export interface EmbeddedRuntimeRenderer {
   render(
     initialized: Promise<void>,
@@ -191,12 +201,9 @@ export const createTransportInitializer = (
       try {
         release();
       } catch (releaseError) {
-        return {
-          initialized: Promise.reject(new AggregateError([error, releaseError])),
-          release,
-        };
+        throw new TransportStartupError([error, releaseError], release);
       }
-      return { initialized: Promise.reject(error), release };
+      throw error;
     }
   };
 };
@@ -296,8 +303,16 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
         options.theme.current(),
       );
       sessionId = host.currentSessionId();
-      transport = host.initializeTransport(options.transport);
-      initialized = transport.initialized;
+      try {
+        transport = host.initializeTransport(options.transport);
+        initialized = transport.initialized;
+      } catch (error) {
+        // The renderer reports a failed transport like a failed startup.
+        initialized = Promise.reject(error);
+        if (error instanceof TransportStartupError) {
+          transport = { initialized, release: error.release };
+        }
+      }
       host.setConnecting();
       const syncTheme = () => host.configureTheme(presentation, options.theme.current());
       stopTheme = options.theme.subscribe(syncTheme);
@@ -305,6 +320,8 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
       stopExposingSession = exposeSession(sessionId, options.exposeSession);
       renderer.render(initialized, options.render, sessionId, options.autoInstantiate);
     } catch (error) {
+      // The mount error replaces the startup result, which no renderer will observe.
+      initialized?.catch(() => undefined);
       const cleanupErrors = runDisposers(disposers);
       if (disposers.size === 0) {
         releaseOwner();
@@ -336,6 +353,9 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
           transport = host.initializeTransport(next);
           activeTransport = next;
         } catch (error) {
+          if (error instanceof TransportStartupError) {
+            transport = { initialized: Promise.resolve(), release: error.release };
+          }
           try {
             transport = host.initializeTransport(previous);
           } catch (rollbackError) {

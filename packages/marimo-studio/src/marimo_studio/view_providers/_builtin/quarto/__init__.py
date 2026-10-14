@@ -206,6 +206,11 @@ class QuartoProvider:
                 ),
             )
         rendered, diagnostics = _rendered_documents(project, entry, files)
+        documents += tuple(
+            SourceDocument(path, "markdown", "edit")
+            for path in rendered
+            if path.suffix.lower() not in _LANGUAGES
+        )
         sites: list[ProjectionSite] = []
         for path in rendered:
             found, problems = quarto_sites(

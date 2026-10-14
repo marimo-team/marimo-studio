@@ -53,7 +53,7 @@ def finite_timeout(
 
 runtime_timeout_option = click.option(
     "--runtime-timeout",
-    type=click.FloatRange(min=0, max=MAX_RUNTIME_TIMEOUT),
+    type=click.FloatRange(min=0, min_open=True, max=MAX_RUNTIME_TIMEOUT),
     callback=finite_timeout,
     default=DEFAULT_RUNTIME_TIMEOUT,
     show_default=True,
@@ -90,4 +90,16 @@ target_option = click.option(
         "Defaults to the current Studio configuration."
     ),
 )
-view_name_argument = click.argument("view_name", metavar="VIEW")
+
+
+def _view_name(
+    _context: click.Context,
+    _parameter: click.Parameter,
+    value: str,
+) -> str:
+    if not value:
+        raise click.BadParameter("must name a view")
+    return value
+
+
+view_name_argument = click.argument("view_name", metavar="VIEW", callback=_view_name)

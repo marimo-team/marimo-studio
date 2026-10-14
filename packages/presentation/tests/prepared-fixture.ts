@@ -1,5 +1,7 @@
 import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 
+import { createHash } from "node:crypto";
+
 import type { PreparedProjectionResources } from "../src/prepared/index.ts";
 
 export const preparedRuntimeConfig = {
@@ -80,4 +82,40 @@ export const preparedTheme = {
 
 export const settlePreparedRender = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+const SITE_SOURCE = { path: "index.html", line: 1, column: 1 };
+
+export const withHostSites = (
+  config: RuntimeConfig,
+  root: ParentNode = document,
+): RuntimeConfig => {
+  const sites = [...config.sites];
+  const variables = { ...config.projectionTargets.variables };
+  const cells = { ...config.projectionTargets.cells };
+  const target = (producer: string) => ({
+    status: "ready" as const,
+    producer,
+    dependencyClosure: [producer],
+  });
+  root.querySelectorAll("marimo-output[value], marimo-cell[name]").forEach((host) => {
+    const kind = host.localName === "marimo-cell" ? "cell" : "output";
+    const name = host.getAttribute(kind === "cell" ? "name" : "value") ?? "";
+    const id = `site:${kind}:${name}`;
+    host.setAttribute("data-marimo-studio-site", id);
+    if (!sites.some((site) => site.id === id)) {
+      sites.push({ id, kind, source: SITE_SOURCE, targets: [name], accept: [], size: null });
+    }
+    if (kind === "cell") {
+      cells[name] ??= target(`cell:v1:${name}`);
+    } else {
+      const variable = name.split(/[.[]/u)[0] ?? name;
+      variables[variable] ??= target(`cell:v1:${variable}`);
+    }
+  });
+  // Site policy is keyed on the projection revision, so added sites need a new one.
+  const projectionRevision = createHash("sha256")
+    .update(sites.map(({ id }) => id).join("\0"))
+    .digest("hex");
+  return { ...config, projectionRevision, sites, projectionTargets: { cells, variables } };
 };

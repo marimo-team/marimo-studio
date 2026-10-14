@@ -409,9 +409,6 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
         generation="0" * 64,
         ids=live_ids,
         names={},
-        dependency_closures={
-            runtime_id: (runtime_id,) for runtime_id in live_ids.values()
-        },
         current_refs={
             runtime_id: reference for reference, runtime_id in live_ids.items()
         },
@@ -495,7 +492,6 @@ def test_projection_waits_while_notebook_execution_is_pending(
             generation="0" * 64,
             ids={},
             names={},
-            dependency_closures={},
             current_refs={},
             execution_pending=True,
         )
@@ -550,7 +546,6 @@ def test_projection_revalidates_live_generation_after_read(
         generation="0" * 64,
         ids={reference: f"live-{index}" for index, reference in enumerate(references)},
         names={},
-        dependency_closures={},
         current_refs={
             f"live-{index}": reference for index, reference in enumerate(references)
         },
@@ -686,7 +681,6 @@ def test_projection_reports_required_execution(
                 reference: f"live-{index}" for index, reference in enumerate(references)
             },
             names={},
-            dependency_closures={},
             current_refs={},
         )
 

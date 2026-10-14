@@ -2,6 +2,7 @@ import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
 
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vite-plus/test";
 
+import { DocumentBase } from "../src/document/base.ts";
 import { registerMarimoDocumentElement } from "../src/documents/viewer.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
@@ -45,6 +46,17 @@ const mount = () => {
   return { viewer, host };
 };
 
+const mountPublished = (
+  markup = `<marimo-document src="card.svg" type="image/svg+xml"></marimo-document>`,
+): HTMLElement => {
+  document.body.innerHTML = `<main id="app-shell">${markup}</main>`;
+  const viewer = document.querySelector<HTMLElement>("marimo-document");
+  if (!viewer) {
+    throw new Error("The document fixture did not mount");
+  }
+  return viewer;
+};
+
 const shadow = (viewer: HTMLElement): ShadowRoot => {
   if (!viewer.shadowRoot) {
     throw new Error("The document viewer has no shadow root");
@@ -78,6 +90,7 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.replaceChildren();
+  document.querySelector("base")?.remove();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -172,6 +185,46 @@ test("reports a render that stays unavailable after its retries", async () => {
     "card.svg",
   ]);
   expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe("Busy.");
+});
+
+test.each([
+  ["missing", 404, "Rebuild the view to publish its document, then reload the page."],
+  ["forbidden", 403, "Reload the page to open the view with current access."],
+  [
+    "unavailable",
+    503,
+    "Reload the page. If the document still fails, check the Studio server log.",
+  ],
+])("matches the recovery hint to a published document that is %s", async (_case, status, hint) => {
+  stubFetch([() => new Response("Unavailable", { status })]);
+  const viewer = mountPublished();
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("error"));
+  expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe(
+    `The published document could not be loaded.${hint}`,
+  );
+});
+
+test("keeps render diagnostics when the published document also fails to show", async () => {
+  stubFetch([
+    () => failure(422, { error: "render-failed", message: "unknown variable: totl" }),
+    () => svg(),
+  ]);
+  HTMLImageElement.prototype.decode = () => Promise.reject(new Error("The image is corrupt."));
+  const { viewer, host } = mount();
+
+  try {
+    settle(host, 1);
+
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(viewer.dataset.state).toBe("error");
+    expect(shadow(viewer).querySelector("[role=alert]")?.textContent).toBe(
+      "unknown variable: totl",
+    );
+  } finally {
+    HTMLImageElement.prototype.decode = () => Promise.resolve();
+  }
 });
 
 test("shows the published document with a note in a browser runtime's run mode", async () => {
@@ -394,6 +447,66 @@ test("shows the published document before the prepared state API is installed", 
 
   await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
   expect(calls.map(({ url }) => new URL(url).pathname)).toEqual(["/card.svg"]);
+});
+
+test("shows the rebuilt document when a new artifact revision keeps the same src", async () => {
+  const base = new DocumentBase();
+  base.set("/artifacts/first/");
+  commitRuntimeConfig(runtimeConfig({ revision: "first" }));
+  stubFetch([() => svg(), () => svg()]);
+  const viewer = mountPublished();
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+
+  base.set("/artifacts/second/");
+  commitRuntimeConfig(runtimeConfig({ revision: "second" }));
+
+  await vi.waitFor(() => expect(calls).toHaveLength(2));
+  expect(calls.map(({ url }) => new URL(url).pathname)).toEqual([
+    "/artifacts/first/card.svg",
+    "/artifacts/second/card.svg",
+  ]);
+  expect(viewer.dataset.state).toBe("ready");
+});
+
+test("returns to ready when a Prepared host settles on the state it already showed", async () => {
+  vi.stubGlobal("marimoStudio", undefined);
+  commitRuntimeConfig(
+    runtimeConfig({
+      runtime: { id: "zero-python", instance: "prepared", data: {}, urls: {} },
+      mode: "run",
+    }),
+  );
+  stubFetch([() => svg()]);
+  const { viewer, host } = mount();
+  settle(host, 1);
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+
+  host.dataset.state = "loading";
+  host.dispatchEvent(new CustomEvent("marimo-value-updated", { bubbles: true, composed: true }));
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("loading"));
+  settle(host, 2);
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+  expect(calls).toHaveLength(1);
+});
+
+test("returns to ready after the viewer moves within the page", async () => {
+  stubFetch([() => svg()]);
+  const viewer = mountPublished(`
+    <section><marimo-document src="card.svg" type="image/svg+xml"></marimo-document></section>
+    <section></section>
+  `);
+  const target = document.querySelectorAll("section")[1];
+  if (!target) {
+    throw new Error("The move fixture did not mount");
+  }
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+
+  target.append(viewer);
+  expect(viewer.dataset.state).toBe("loading");
+
+  await vi.waitFor(() => expect(viewer.dataset.state).toBe("ready"));
+  expect(calls).toHaveLength(1);
 });
 
 test("posts the output each cell host shows", async () => {

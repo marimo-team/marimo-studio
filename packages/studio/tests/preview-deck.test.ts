@@ -4,6 +4,7 @@ import { PreviewController } from "../src/features/preview/controller.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 import {
   acknowledgementPort,
+  attachedServerDeck,
   cachedFrames,
   cachedFramesWithWindows,
   dispatchPreviewMessage,
@@ -601,7 +602,7 @@ it("disposes an unresponsive active reader before acknowledging the editor", asy
   expect(deck.getSnapshot().states.server?.status.message).toBe("Updating preview");
   deck.notebookMutationTransactionFailed(9);
   expect(deck.getSnapshot().states.server?.status.message).toBe("Needs repair");
-  deck.presentationBuildStarted("dashboard", 9);
+  deck.presentationBuildStarted("dashboard");
   expect(frameElement.src).toContain("/dashboard?runtime=server");
   deck.dispose();
   acknowledgement.channel.port2.close();
@@ -702,4 +703,28 @@ it("addresses activated documents before rendering and rejects a retired selecti
   } finally {
     deck.dispose();
   }
+});
+
+it("asks for a page reload after the Studio server restarts", () => {
+  const { deck, preview } = attachedServerDeck({ postMessage: vi.fn() });
+  const source = preview.src;
+
+  deck.serverRestarted();
+
+  expect(deck.getSnapshot().states.server?.status).toMatchObject({
+    state: "error",
+    diagnostics: [
+      {
+        code: "server-restarted",
+        message: "The Studio server restarted, so this page lost its connection.",
+        hint: "Retry the preview to reload this page.",
+      },
+    ],
+  });
+  const reload = vi.fn();
+  vi.stubGlobal("location", { reload });
+  deck.reload();
+  expect(reload).toHaveBeenCalledOnce();
+  expect(preview.src).toBe(source);
+  deck.dispose();
 });

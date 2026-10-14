@@ -128,7 +128,7 @@ class PreparedViewRegistry:
         instance: str,
         relative: str,
     ) -> PreparedAsset | None:
-        return self._publications.asset(view, instance, relative)
+        return await self._publications.asset(view, instance, relative)
 
     async def close(self) -> None:
         await self._publications.close()

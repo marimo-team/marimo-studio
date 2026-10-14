@@ -20,7 +20,10 @@ from marimo_studio._projections.runtime_records import ValueLimits
 
 from .values_test_support import (
     _encoded_json,
+    _installed_value_encoder,
     _native_output_context,
+    _preview_value_read,
+    _sample_arrow_table,
     _selectors,
 )
 
@@ -554,3 +557,135 @@ def test_kernel_projection_retires_inactive_and_failed_arrow_resources() -> None
 
         encoder.close()
     context.virtual_file_registry.shutdown()
+
+
+@pytest.mark.parametrize(
+    ("selector", "code"),
+    [("broken", "not-json-serializable"), ("broken.leaf", "value-path-unavailable")],
+    ids=["json", "property"],
+)
+def test_kernel_projection_keeps_other_values_after_selector_encoding_failure(
+    selector: str,
+    code: str,
+) -> None:
+    class Broken:
+        def _mime_(self) -> tuple[str, str]:
+            return "application/json", "not json"
+
+        @property
+        def leaf(self) -> object:
+            raise ValueError("\ud800")
+
+    with _installed_value_encoder() as (context, encoder):
+        result = _preview_value_read(
+            encoder,
+            {"frame": _sample_arrow_table(), "broken": Broken()},
+            "frame",
+            selector,
+        )
+        assert (
+            cast(dict[str, object], result.values["frame"])["codec"] == "arrow-ipc-v1"
+        )
+        assert result.errors[selector].code == code
+        result.errors[selector].message.encode("utf-8")
+        encoder.close()
+        assert tuple(context.virtual_file_registry.filenames()) == ()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["interrupt", "response"],
+    ids=["interrupted-read", "response-encoding"],
+)
+def test_kernel_projection_discards_staged_arrow_when_the_read_aborts(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    class Interrupted:
+        @property
+        def leaf(self) -> object:
+            raise KeyboardInterrupt
+
+    if failure == "response":
+        from marimo_studio._compat.kernel_values import selectors
+
+        def fail(*_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError("response encoding failed")
+
+        monkeypatch.setattr(selectors.json, "dumps", fail)
+        values: dict[str, object] = {"frame": _sample_arrow_table()}
+        names = ("frame",)
+        caught = pytest.raises(RuntimeError, match="response encoding failed")
+    else:
+        values = {"frame": _sample_arrow_table(), "interrupted": Interrupted()}
+        names = ("frame", "interrupted.leaf")
+        caught = pytest.raises(KeyboardInterrupt)
+
+    with _installed_value_encoder() as (context, encoder):
+        with caught:
+            _preview_value_read(encoder, values, *names)
+        assert tuple(context.virtual_file_registry.filenames()) == ()
+        encoder.close()
+
+
+def test_kernel_projection_reports_arrow_allocation_failure_locally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError("storage full")
+
+    monkeypatch.setattr(representations.VirtualFile, "create_and_register", fail)
+    with _installed_value_encoder() as (context, encoder):
+        result = _preview_value_read(
+            encoder,
+            {"frame": _sample_arrow_table(), "count": 3},
+            "frame",
+            "count",
+        )
+        assert result.values == {"count": _encoded_json(3)}
+        assert result.errors["frame"].code == "arrow-serialization-error"
+        encoder.close()
+        assert tuple(context.virtual_file_registry.filenames()) == ()
+
+
+@pytest.mark.parametrize("display_method", ["_mime_", "_repr_json_"])
+def test_kernel_json_display_text_survives_server_fingerprint_validation(
+    display_method: str,
+) -> None:
+    from marimo_studio._compat.kernel_values.session import _parse_result
+
+    class Report:
+        pass
+
+    text = '{"papers": 3, "label": "\\u00e9"}'
+    setattr(
+        Report,
+        display_method,
+        lambda self: ("application/json", text) if display_method == "_mime_" else text,
+    )
+    result = _read_values(
+        {"report": Report(), "plain": {"papers": 3}},
+        _selectors("report", "plain"),
+    )
+    parsed = _parse_result(
+        result.to_dict(), expected_selectors=frozenset({"report", "plain"})
+    )
+    assert parsed.values == {
+        "report": _encoded_json({"papers": 3, "label": "é"}),
+        "plain": _encoded_json({"papers": 3}),
+    }
+    assert parsed.errors == {}
+
+
+def test_kernel_json_display_text_uses_encoded_value_for_byte_limits() -> None:
+    class Report:
+        def _mime_(self) -> tuple[str, str]:
+            return "application/json", '{   "papers" : 3   }'
+
+    result = _read_values(
+        {"report": Report()},
+        _selectors("report"),
+        limits=ValueLimits(json_value_bytes=12, json_read_bytes=12),
+    )
+    assert result.values == {"report": _encoded_json({"papers": 3})}
+    assert result.errors == {}

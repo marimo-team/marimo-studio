@@ -2,18 +2,59 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
-from click.testing import CliRunner
+from click import unstyle
+from click.testing import CliRunner, Result
 
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
 from marimo_studio._cli.environment import SANDBOX_ENV
+from marimo_studio._workspace import load_studio
 
+from ..artifact_test_support import add_provider_outputs
 from .export_test_support import configure_export_view
 
 _PREPARE_TIMEOUT = 120.0
+_MODULE_TAG = '<script type="module" src="./app.js"></script>'
+
+
+def _invoke_static_view(notebook: Path, command: str, *extra: str) -> Result:
+    return CliRunner().invoke(
+        cli,
+        [
+            "view",
+            command,
+            "dashboard",
+            "--target",
+            str(notebook),
+            "--runtime",
+            "wasm",
+            *extra,
+        ],
+    )
+
+
+def _install_app_module(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    script: bytes,
+) -> None:
+    root = configure_export_view(notebook_path)
+    root.joinpath("app.js").write_text("export {};\n", encoding="utf-8")
+    document = root / "index.html"
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            "</head>", f"{_MODULE_TAG}</head>"
+        ),
+        encoding="utf-8",
+    )
+    add_provider_outputs(
+        monkeypatch,
+        load_studio(notebook_path).view("dashboard"),
+        {PurePosixPath("app.js"): script},
+    )
 
 
 @pytest.mark.native_process
@@ -125,6 +166,31 @@ def test_preflight_command_verifies_static_delivery_without_an_output(
     assert payload["projections"]
     assert progress[0]["progress"]["event"]["kind"] == "build_started"
     assert progress[-1]["progress"]["event"]["kind"] == "preflight_finished"
+
+
+@pytest.mark.parametrize("command", ("preflight", "export"))
+def test_static_delivery_text_shows_each_issue_repair(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    _install_app_module(
+        notebook_path,
+        monkeypatch,
+        b"void import(globalThis.target);\n",
+    )
+    output = ("--output", str(tmp_path / "site")) if command == "export" else ()
+    result = _invoke_static_view(notebook_path, command, *output)
+
+    assert result.exit_code == 0, result.output
+    lines = unstyle(result.stdout).splitlines()
+    issue = next(
+        index for index, line in enumerate(lines) if "static-module-computed" in line
+    )
+    assert lines[issue + 1].strip() == (
+        "repair Verify the computed module target is available after publication."
+    )
 
 
 def test_export_help_explains_runtime_and_preparation_timeout() -> None:
@@ -249,3 +315,25 @@ def test_agent_view_preflights_without_publishing_a_destination(
     assert result.view == "dashboard"
     assert events[0].event.kind == "build_started"
     assert events[-1].event.kind == "preflight_finished"
+
+
+def test_preflight_reports_every_error_and_exits_unsuccessfully(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_app_module(
+        notebook_path,
+        monkeypatch,
+        b'import "./missing-first.js"; import "./missing-second.js";',
+    )
+
+    result = _invoke_static_view(notebook_path, "preflight", "--json")
+
+    assert result.exit_code == 1
+    assert result.stdout, (result.exception, result.output)
+    report = json.loads(result.stdout)
+    assert report["ok"] is False
+    assert [issue["reference"] for issue in report["issues"]] == [
+        "./missing-first.js",
+        "./missing-second.js",
+    ]

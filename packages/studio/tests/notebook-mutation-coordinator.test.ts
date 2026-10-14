@@ -35,6 +35,7 @@ const setup = () => {
     markCachedViewsStale: vi.fn(),
     resetActive: vi.fn(),
     saveFailed: vi.fn(),
+    saveSkipped: vi.fn(),
     transactionFailed: vi.fn(),
   };
   return { coordinator: new NotebookMutationCoordinator(effects), effects, owner, unchanged };
@@ -100,6 +101,7 @@ it.each([
       markCachedViewsStale: vi.fn(),
       resetActive: vi.fn(),
       saveFailed: vi.fn(),
+      saveSkipped: vi.fn(),
       transactionFailed: vi.fn(),
     };
     const coordinator = new NotebookMutationCoordinator(effects);
@@ -128,6 +130,7 @@ it("settles unchanged work for a new view after an older view build", async () =
     markCachedViewsStale: vi.fn(),
     resetActive: vi.fn(),
     saveFailed: vi.fn(),
+    saveSkipped: vi.fn(),
     transactionFailed: vi.fn(),
   };
   const coordinator = new NotebookMutationCoordinator(effects);
@@ -254,6 +257,7 @@ it("terminalizes the old admission when the editor reloads", async () => {
     markCachedViewsStale: vi.fn(),
     resetActive: vi.fn(),
     saveFailed: vi.fn(),
+    saveSkipped: vi.fn(),
     transactionFailed: vi.fn(),
   };
   const coordinator = new NotebookMutationCoordinator(effects);

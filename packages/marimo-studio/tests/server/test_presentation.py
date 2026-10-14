@@ -238,16 +238,33 @@ def test_display_snapshot_refreshes_an_immediate_notebook_edit(
     asyncio.run(exercise())
 
 
-def test_last_good_cache_observes_a_publication_completed_in_the_same_generation(
+@pytest.mark.parametrize(
+    "when",
+    ["after-capture", "during-capture"],
+    ids=["after-capture", "during-capture"],
+)
+def test_display_snapshot_keeps_its_revision_until_publication_is_visible(
     notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    when: str,
 ) -> None:
     studio = configured(notebook_path)
     project = studio.view("dashboard")
     coordinator = DevelopmentCoordinator()
-    presentation = NotebookPresentation(
-        studio.notebook,
-        development=coordinator,
-    )
+    presentation = NotebookPresentation(studio.notebook, development=coordinator)
+    publish_during_capture = Event()
+    if when == "during-capture":
+        native_resolve = presentation._resolve_snapshot
+
+        def resolve_then_publish(*args: Any, **kwargs: Any) -> Any:
+            snapshot = native_resolve(*args, **kwargs)
+            if publish_during_capture.is_set():
+                publish_during_capture.clear()
+                with publish_artifact(project, "development"):
+                    pass
+            return snapshot
+
+        monkeypatch.setattr(presentation, "_resolve_snapshot", resolve_then_publish)
 
     async def exercise() -> None:
         try:
@@ -261,14 +278,17 @@ def test_last_good_cache_observes_a_publication_completed_in_the_same_generation
                 encoding="utf-8",
             )
             await coordinator.refresh("dashboard")
+            if when == "during-capture":
+                publish_during_capture.set()
             retained = await presentation.display_snapshot_async("dashboard")
-            with await asyncio.to_thread(publish_artifact, project, "development"):
-                pass
-            repaired = await presentation.display_snapshot_async("dashboard")
+            if when == "after-capture":
+                with await asyncio.to_thread(publish_artifact, project, "development"):
+                    pass
+            current = await presentation.display_snapshot_async("dashboard")
 
             assert retained.revision == initial.revision
-            assert repaired.revision != retained.revision
-            assert "Published repair" in repaired.document
+            assert current.revision != retained.revision
+            assert "Published repair" in current.document
         finally:
             presentation.close()
             await coordinator.close()

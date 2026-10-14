@@ -147,6 +147,8 @@ def _masked(source: str) -> str:
                 index = _verbatim_end(source, href.end() - 1) + 1
                 continue
             # A control symbol such as \% or \\ is one token.
+            if index + 1 < len(source) and not source[index + 1].isalpha():
+                _blank(characters, index, index + 2)
             index += 2
         elif character == "%":
             end = source.find("\n", index)

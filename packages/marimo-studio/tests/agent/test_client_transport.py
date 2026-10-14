@@ -356,3 +356,67 @@ def test_cancelled_request_does_not_send_after_connection_finishes(
     asyncio.run(exercise())
 
     assert requested is False
+
+
+def test_timed_out_connection_close_responses_release_their_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import contextlib
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    # getresponse() keeps a Connection: close socket on the response. Bytes
+    # keep arriving so the socket timeout does not free the worker first.
+    slots = threading.BoundedSemaphore(2)
+    monkeypatch.setattr(browser_transport, "_HTTP_WORKER_SLOTS", slots)
+    stop = threading.Event()
+
+    class SlowBody(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+        def do_GET(self) -> None:
+            fast = self.path == "/fast"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "2" if fast else "1000000")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            with contextlib.suppress(OSError):
+                if fast:
+                    self.wfile.write(b"{}")
+                    return
+                self.wfile.write(b'{"value":"')
+                while not stop.wait(0.02):
+                    self.wfile.write(b"x")
+                    self.wfile.flush()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SlowBody)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = browser_transport.StudioServerConnection(
+        f"http://127.0.0.1:{server.server_port}"
+    )
+
+    async def slow() -> str:
+        with pytest.raises(browser_transport.AgentRequestError) as raised:
+            await browser_transport.request_json(connection, "/slow", timeout=0.2)
+        return raised.value.code
+
+    async def exercise() -> object:
+        assert await asyncio.gather(slow(), slow()) == ["request-timeout"] * 2
+        # Both workers must be free, so each timed-out request released its own.
+        acquired = [await asyncio.to_thread(slots.acquire, timeout=1) for _ in range(2)]
+        for _ in range(sum(acquired)):
+            slots.release()
+        assert all(acquired), "timed-out request kept its worker"
+        return await browser_transport.request_json(connection, "/fast", timeout=1)
+
+    try:
+        assert asyncio.run(exercise()) == {}
+    finally:
+        stop.set()
+        server.shutdown()
+        server.server_close()
+        thread.join()

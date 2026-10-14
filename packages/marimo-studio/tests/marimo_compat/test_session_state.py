@@ -53,7 +53,6 @@ def _live_capture() -> session_state_module._LiveCellCapture:
         document_generation=1,
         cells=(("first", "value = 1", "value"), ("second", "value", "_")),
         executed_cells=(("first", "value = 1"), ("second", "value")),
-        graph_parents=(("first", ()), ("second", ("first",))),
     )
 
 
@@ -258,7 +257,6 @@ def test_live_cell_capture_materializes_off_its_event_loop_owner(
         snapshot = await PrivateSessionState().live_cells(
             cast(Any, object()),
             "s_123456",
-            include_dependency_closures=True,
         )
         return owner, snapshot
 
@@ -269,10 +267,6 @@ def test_live_cell_capture_materializes_off_its_event_loop_owner(
     assert snapshot is not None
     assert snapshot.owner == "session:7"
     assert len(snapshot.generation) == 64
-    assert snapshot.dependency_closures == {
-        "first": ("first",),
-        "second": ("first", "second"),
-    }
 
 
 def test_live_cell_materialization_preserves_duplicate_cell_occurrences() -> None:
@@ -284,7 +278,6 @@ def test_live_cell_materialization_preserves_duplicate_cell_occurrences() -> Non
             ("second", "value = 1", "second"),
         ),
         executed_cells=(("second", "value = 1"),),
-        graph_parents=None,
     )
 
     snapshot = session_state_module._materialize_live_cells(capture)
@@ -331,7 +324,6 @@ def test_live_cell_capture_records_active_execution(
     capture = session_state_module._capture_live_cells(
         cast(Any, SimpleNamespace(mode="edit")),
         "s_123456",
-        include_dependency_closures=False,
         session_owner=lambda _session: 7,
     )
 
@@ -362,7 +354,6 @@ def test_live_cell_capture_reports_a_stopped_kernel_before_pending_work(
             PrivateSessionState().live_cells(
                 cast(Any, object()),
                 "s_123456",
-                include_dependency_closures=False,
             )
         )
 
@@ -565,7 +556,6 @@ def test_live_cell_capture_uses_the_native_barrier_for_connected_consumers(
                 PrivateSessionState().live_cells(
                     cast(Any, object()),
                     "s_123456",
-                    include_dependency_closures=False,
                 )
             )
         assert order == []
@@ -575,7 +565,6 @@ def test_live_cell_capture_uses_the_native_barrier_for_connected_consumers(
         PrivateSessionState().live_cells(
             cast(Any, object()),
             "s_123456",
-            include_dependency_closures=False,
         )
     )
 
@@ -625,7 +614,6 @@ def test_live_cell_capture_resolves_a_file_session_before_the_kernel_barrier(
         PrivateSessionState().live_cells(
             cast(Any, context),
             None,
-            include_dependency_closures=False,
         )
     )
 
@@ -1283,7 +1271,6 @@ def test_execution_tracker_waits_for_a_marked_unknown_model_update_completion() 
             replace(
                 _live_capture(),
                 executed_cells=(("first", "value = 2"),),
-                graph_parents=(("first", ()), ("second", ())),
             ),
         ),
     ),
@@ -1317,7 +1304,6 @@ def test_live_cell_capture_rejects_a_concurrent_generation_change(
             PrivateSessionState().live_cells(
                 cast(Any, object()),
                 "s_123456",
-                include_dependency_closures=True,
             )
         )
         assert await asyncio.to_thread(materializing.wait, 1), change
@@ -1373,7 +1359,6 @@ def test_live_cell_materialization_keeps_the_running_and_latest_generation(
         return await state.live_cells(
             cast(Any, object()),
             "s_123456",
-            include_dependency_closures=True,
         )
 
     async def exercise() -> list[object]:
@@ -1393,64 +1378,6 @@ def test_live_cell_materialization_keeps_the_running_and_latest_generation(
     assert materialized == [1, 4]
     assert all(isinstance(result, RuntimeSyncError) for result in results[:-1])
     assert isinstance(results[-1], session_state_module.LiveCellSnapshot)
-
-
-def test_runtime_config_and_evidence_capture_in_separate_owner_lanes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config_capture = replace(_live_capture(), graph_parents=None)
-    evidence_capture = _live_capture()
-    materialized: list[bool] = []
-    started = threading.Event()
-    release = threading.Event()
-    native_materialize = session_state_module._materialize_live_cells
-
-    def capture_cells(
-        *_args: object,
-        include_dependency_closures: bool,
-        **_kwargs: object,
-    ) -> session_state_module._LiveCellCapture:
-        return evidence_capture if include_dependency_closures else config_capture
-
-    def materialize(capture: session_state_module._LiveCellCapture):
-        materialized.append(capture.graph_parents is not None)
-        if len(materialized) == 1:
-            started.set()
-            assert release.wait(timeout=2)
-        return native_materialize(capture)
-
-    monkeypatch.setattr(session_state_module, "_capture_live_cells", capture_cells)
-    monkeypatch.setattr(session_state_module, "_materialize_live_cells", materialize)
-    state = PrivateSessionState()
-
-    async def exercise() -> tuple[object, object]:
-        config = asyncio.create_task(
-            state.live_cells(
-                cast(Any, object()),
-                "s_123456",
-                include_dependency_closures=False,
-            )
-        )
-        assert await asyncio.to_thread(started.wait, 1)
-        evidence = asyncio.create_task(
-            state.live_cells(
-                cast(Any, object()),
-                "s_123456",
-                include_dependency_closures=True,
-            )
-        )
-        await asyncio.sleep(0)
-        release.set()
-        return await config, await evidence
-
-    try:
-        config, evidence = asyncio.run(exercise())
-    finally:
-        release.set()
-
-    assert materialized == [False, True]
-    assert isinstance(config, session_state_module.LiveCellSnapshot)
-    assert isinstance(evidence, session_state_module.LiveCellSnapshot)
 
 
 def test_session_close_drains_live_cell_materialization(
@@ -1479,7 +1406,6 @@ def test_session_close_drains_live_cell_materialization(
             state.live_cells(
                 cast(Any, object()),
                 "s_123456",
-                include_dependency_closures=True,
             )
         )
         assert await asyncio.to_thread(started.wait, 1)
@@ -1494,7 +1420,6 @@ def test_session_close_drains_live_cell_materialization(
             await state.live_cells(
                 cast(Any, object()),
                 "s_123456",
-                include_dependency_closures=False,
             )
 
     try:

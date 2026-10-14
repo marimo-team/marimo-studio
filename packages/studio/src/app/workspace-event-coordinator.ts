@@ -19,6 +19,7 @@ import {
 
 import type { ViewLanding, ViewSelectionOwner } from "../features/views/transition.ts";
 
+import { RetrySchedule } from "../features/preview/retry-schedule.ts";
 import {
   type AcknowledgeViewActivation,
   ViewActivationAcknowledgementError,
@@ -44,7 +45,7 @@ interface WorkspacePreviewPort {
   reload(): void;
   automationTarget(view: string, reload: boolean, signal: AbortSignal): PreviewAutomationTarget;
   presentationBaseline(view: string, revision: string | null): void;
-  presentationBuildStarted(view: string, notebookMutationGeneration?: number): void;
+  presentationBuildStarted(view: string): void;
   presentationBuildCompleted(
     view: string,
     revision: string | null,
@@ -53,6 +54,7 @@ interface WorkspacePreviewPort {
   ): void;
   presentationStreamAbandoned(view: string): void;
   presentationChanged(view: string, revision: string): void;
+  serverRestarted(): void;
 }
 
 interface WorkspaceSourcePort {
@@ -82,6 +84,29 @@ export const workspaceEventsUrl = (eventsUrl: string, activeView?: string): stri
   return url.href;
 };
 
+// EventSource retries network errors itself, but a non-200 or non-stream
+// response closes it for good. The server answers a stream URL issued by an
+// earlier server process with 204. A proxy error or an expired sign-in closes
+// the stream the same way. A probe without a stream generation tells them
+// apart and opens no stream on a live server.
+export const watchWorkspaceStreamClosure = (
+  stream: EventSource,
+  streamUrl: string,
+  closed: (retired: boolean) => void,
+): void => {
+  stream.addEventListener("error", () => {
+    if (stream.readyState !== EventSource.CLOSED) {
+      return;
+    }
+    const probe = new URL(streamUrl);
+    probe.searchParams.delete(WORKSPACE_STREAM_QUERY_PARAM);
+    void fetch(probe, { cache: "no-store" }).then(
+      (response) => closed(response.status === 204),
+      () => closed(false),
+    );
+  });
+};
+
 export class WorkspaceEventCoordinator {
   private events: EventSource | undefined;
   private pendingEvents: EventSource | undefined;
@@ -93,6 +118,11 @@ export class WorkspaceEventCoordinator {
   private activationAbort: AbortController | undefined;
   private readonly activationInFlight = new Set<number>();
   private notebookMutationGeneration: number | undefined;
+  private readonly reconnects = new RetrySchedule();
+  // The server replays a pending activation on each new stream. A decline such
+  // as an unresolved Source conflict repeats, so replays back off.
+  private readonly activationReplays = new RetrySchedule([0, 1_000, 2_000, 5_000, 10_000, 30_000]);
+  private reconnect: ReturnType<typeof setTimeout> | undefined;
   private started = false;
   private disposed = false;
 
@@ -117,6 +147,7 @@ export class WorkspaceEventCoordinator {
       return;
     }
     this.disposed = true;
+    clearTimeout(this.reconnect);
     this.activationAbort?.abort();
     this.activationAbort = undefined;
     this.stopViews?.();
@@ -192,16 +223,14 @@ export class WorkspaceEventCoordinator {
       this.options.preview.presentationStreamAbandoned(abandonedView);
     }
     const generation = ++this.connectionGeneration;
+    clearTimeout(this.reconnect);
     const view = this.currentView;
     let streamMutationGeneration = notebookMutationGeneration;
     const previous = this.events;
     this.pendingEvents?.close();
-    if (notebookMutationGeneration === undefined) {
-      this.options.preview.presentationBuildStarted(view);
-    } else {
-      this.options.preview.presentationBuildStarted(view, notebookMutationGeneration);
-    }
-    const events = new EventSource(workspaceEventsUrl(this.options.eventsUrl, view));
+    this.options.preview.presentationBuildStarted(view);
+    const streamUrl = workspaceEventsUrl(this.options.eventsUrl, view);
+    const events = new EventSource(streamUrl);
     this.pendingEvents = previous === undefined ? undefined : events;
     if (previous === undefined) {
       this.events = events;
@@ -229,6 +258,7 @@ export class WorkspaceEventCoordinator {
           this.events = events;
           previous?.close();
         }
+        this.reconnects.reset();
         this.refreshInventory();
         this.options.source.reconcile();
         const baseline = parsePresentationBaseline(this.data(event));
@@ -237,6 +267,18 @@ export class WorkspaceEventCoordinator {
           baseline?.view === view ? baseline.revision : null,
         );
         connectionReady?.();
+      }),
+    );
+    watchWorkspaceStreamClosure(events, streamUrl, (retired) =>
+      pending(() => {
+        if (retired) {
+          this.options.preview.serverRestarted();
+          return;
+        }
+        this.reconnect = setTimeout(
+          () => this.connect(undefined, connectionReady, this.notebookMutationGeneration),
+          this.reconnects.next(),
+        );
       }),
     );
     events.addEventListener("change", (event) =>
@@ -293,11 +335,7 @@ export class WorkspaceEventCoordinator {
     if (kind === "build") {
       const build = parsePresentationBuild(data);
       if (build?.phase === "building") {
-        if (notebookMutationGeneration === undefined) {
-          this.options.preview.presentationBuildStarted(view);
-        } else {
-          this.options.preview.presentationBuildStarted(view, notebookMutationGeneration);
-        }
+        this.options.preview.presentationBuildStarted(view);
       } else if (build?.phase === "complete") {
         if (build.revision === null || build.build.phase === "failed") {
           const detail = build.build.diagnostics.find(({ severity }) => severity === "error");
@@ -354,6 +392,7 @@ export class WorkspaceEventCoordinator {
     }
     if (request.generation > this.latestActivation) {
       this.latestActivation = request.generation;
+      this.activationReplays.reset();
       this.activationAbort?.abort();
       this.options.views.cancelPendingSelection();
     }
@@ -389,8 +428,18 @@ export class WorkspaceEventCoordinator {
     }
     if (acknowledged) {
       this.acknowledgedActivation = Math.max(this.acknowledgedActivation, request.generation);
+      this.activationReplays.reset();
     } else if (this.connectionGeneration === connectionGeneration) {
-      this.connect(this.currentView);
+      clearTimeout(this.reconnect);
+      this.reconnect = setTimeout(() => {
+        if (
+          !this.disposed &&
+          this.connectionGeneration === connectionGeneration &&
+          request.generation === this.latestActivation
+        ) {
+          this.connect(this.currentView);
+        }
+      }, this.activationReplays.next());
     }
   }
 

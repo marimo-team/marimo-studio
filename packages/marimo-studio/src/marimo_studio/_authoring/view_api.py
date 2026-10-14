@@ -50,11 +50,7 @@ from marimo_studio._views.records import (
     ViewInspection,
 )
 from marimo_studio._workspace.ownership import ObservedViewOwner, PresentViewOwner
-from marimo_studio.errors import (
-    ProtocolError,
-    ViewNotFoundError,
-    WorkspaceGenerationConflictError,
-)
+from marimo_studio.errors import ProtocolError, ViewNotFoundError
 from marimo_studio.view_providers import BuildProfile
 
 _View = TypeVar("_View", bound="View")
@@ -204,8 +200,7 @@ class View:
         Source editing remains available through the filesystem and Studio.
         Keep the returned token for ``release_publication`` across executions.
         """
-        if not isinstance(self._owner, PresentViewOwner):
-            raise WorkspaceGenerationConflictError()
+        self._present_owner()
         return await hold_publication(
             self.workspace.notebook,
             self.name,
@@ -216,8 +211,7 @@ class View:
 
     async def release_publication(self, token: str) -> PublicationHold | None:
         """Release the matching hold. Source edits remain on disk."""
-        if not isinstance(self._owner, PresentViewOwner):
-            raise WorkspaceGenerationConflictError()
+        self._present_owner()
         return await release_publication(
             self.workspace.notebook,
             self.name,

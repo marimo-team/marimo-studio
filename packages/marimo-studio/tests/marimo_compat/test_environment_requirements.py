@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -169,7 +170,7 @@ def test_marker_resolution_requires_a_complete_target_environment() -> None:
 def test_bootstrap_requirements_follow_saved_provider_identities() -> None:
     requirements = bootstrap_launch_requirements(
         studio_requirement="marimo-studio==1.2.3",
-        provider_ids=("marimo-studio/react", "example-suite/report"),
+        providers={"marimo-studio/react": (), "example-suite/report": ()},
         builtin_requirements={
             "marimo-studio/react": "marimo-studio[deno]",
         },
@@ -190,10 +191,11 @@ def test_bootstrap_requirements_follow_saved_provider_identities() -> None:
 
 
 def test_external_provider_requires_an_active_durable_dependency() -> None:
-    with pytest.raises(ConfigurationError, match="add it to the notebook or project"):
+    manifest = Path("studio/analysis/report/view.toml")
+    with pytest.raises(ConfigurationError) as raised:
         bootstrap_launch_requirements(
             studio_requirement="marimo-studio==1.2.3",
-            provider_ids=("example-suite/report",),
+            providers={"example-suite/report": (manifest,)},
             builtin_requirements={},
             notebook_metadata={
                 "dependencies": ['example-suite==4.5.6 ; sys_platform == "win32"'],
@@ -201,3 +203,8 @@ def test_external_provider_requires_an_active_durable_dependency() -> None:
             project_metadata=None,
             marker_environment=_environment(platform="linux"),
         )
+
+    assert str(raised.value) == (
+        f"The view provider selected in {manifest} requires 'example-suite'. "
+        "Add it to the notebook or project dependencies, then retry."
+    )

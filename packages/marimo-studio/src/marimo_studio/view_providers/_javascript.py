@@ -9,6 +9,8 @@ from typing import Literal
 import tree_sitter_javascript
 from tree_sitter import Language, Node, Parser
 
+from marimo_studio.view_providers._targets import normalize_utf16_surrogate_pairs
+
 MAX_SPECIFIER_CHARACTERS = 4_096
 TRUNCATED_SPECIFIER = "\0marimo-studio:truncated-module-specifier"
 _LANGUAGE = Language(tree_sitter_javascript.language())
@@ -143,7 +145,10 @@ def _literal(node: Node, source: bytes) -> str | None:
         if characters > MAX_SPECIFIER_CHARACTERS:
             return TRUNCATED_SPECIFIER
         value.append(segment)
-    return "".join(value)
+    try:
+        return normalize_utf16_surrogate_pairs("".join(value))
+    except ValueError:
+        return None
 
 
 def _dynamic_dependency(node: Node, source: bytes) -> _ByteDependency | None:

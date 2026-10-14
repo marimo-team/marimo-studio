@@ -16,6 +16,7 @@ after the final lease closes.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import tempfile
@@ -28,7 +29,7 @@ from threading import Lock
 from types import TracebackType
 from typing import BinaryIO
 
-from marimo_studio._artifacts.codec import profile_state
+from marimo_studio._artifacts.codec import ArtifactFormatError, profile_state
 from marimo_studio._artifacts.lock import artifact_lock
 from marimo_studio._artifacts.paths import (
     artifact_base,
@@ -59,6 +60,7 @@ from marimo_studio.view_providers import (
     ProjectDiagnostic,
 )
 
+_LOGGER = logging.getLogger("marimo.studio")
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _PIN = re.compile(r"([1-9][0-9]*)-([0-9a-f]{32})")
 _QUARANTINE = re.compile(r"([0-9a-f]{64})-([0-9a-f]{32})")
@@ -170,11 +172,13 @@ def _live_pin_revisions(
     live: dict[str, set[int]] = {}
     for directory in tree.children(root):
         if _DIGEST.fullmatch(directory.name) is None:
-            raise ConfigurationError(f"Artifact pin revision is invalid: {directory}")
+            _skip_foreign_entry(directory)
+            continue
         for pin in tree.children(directory):
             holder = _PIN.fullmatch(pin.name)
             if holder is None:
-                raise ConfigurationError(f"Artifact pin name is invalid: {pin}")
+                _skip_foreign_entry(pin)
+                continue
             # A pin whose holder exited unlocks, so a lock attempt that
             # succeeds identifies a stale pin.
             with tree.lock(pin, blocking=False, create=False) as stale:
@@ -190,6 +194,12 @@ def _live_pin_revisions(
     return live
 
 
+def _skip_foreign_entry(path: Path) -> None:
+    # Finder and sync clients drop files such as .DS_Store into any folder.
+    # Studio leaves entries it never creates in place and prunes around them.
+    _LOGGER.debug("Ignored an entry Studio did not create: %s", path)
+
+
 def _prune_quarantine_locked(project: CatalogProject) -> None:
     root = _quarantine_root(project)
     if not root.exists() and not root.is_symlink():
@@ -203,7 +213,8 @@ def _prune_quarantine_locked(project: CatalogProject) -> None:
     tree = FileTree(artifact_base(project))
     for path in tree.children(root):
         if _QUARANTINE.fullmatch(path.name) is None:
-            raise ConfigurationError(f"Artifact quarantine name is invalid: {path}")
+            _skip_foreign_entry(path)
+            continue
         try:
             tree.remove(path)
         except OSError:
@@ -257,9 +268,21 @@ def prune_artifacts_locked(project: CatalogProject) -> None:
         for profile in ("development", "production"):
             try:
                 state = read_profile_state(project, profile)
-            except (OSError, ConfigurationError):
-                # A damaged sibling receipt has unknown ownership. Leave every
-                # revision in place until that profile repairs its own state.
+            except ArtifactFormatError:
+                # Readers treat another format's receipt as unbuilt, so its
+                # revision is unreachable until the next build replaces it.
+                continue
+            except (OSError, ConfigurationError) as error:
+                # A damaged receipt has unknown ownership. Keep every revision
+                # until that profile builds again and repairs its own state.
+                _LOGGER.warning(
+                    "Kept every revision of %s because its %s receipt is "
+                    "unreadable: %s. Build the view with that profile to repair "
+                    "it.",
+                    project.root,
+                    profile,
+                    error,
+                )
                 return
             if state is not None and state.published is not None:
                 protected.add(state.published.artifact_revision)
@@ -276,7 +299,8 @@ def prune_artifacts_locked(project: CatalogProject) -> None:
         tree = FileTree(artifact_base(project))
         for path in tree.children(revisions):
             if _DIGEST.fullmatch(path.name) is None:
-                raise ConfigurationError(f"Artifact revision name is invalid: {path}")
+                _skip_foreign_entry(path)
+                continue
             if f"sha256:{path.name}" not in protected:
                 tree.remove(path)
     except FileNotFoundError:

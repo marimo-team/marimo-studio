@@ -76,6 +76,15 @@ def test_local_wheel_installs_the_recorded_file(
             },
             "marimo-studio @ git+https://github.com/marimo-team/marimo-studio@abc123",
         ),
+        (
+            {
+                "url": "https://github.com/marimo-team/marimo-studio.git",
+                "vcs_info": {"vcs": "git", "commit_id": "abc123"},
+                "subdirectory": "packages/marimo-studio",
+            },
+            "marimo-studio @ git+https://github.com/marimo-team/marimo-studio.git"
+            "@abc123#subdirectory=packages/marimo-studio",
+        ),
         (None, "marimo-studio==0.1.6"),
         (
             {"url": "file:///missing/marimo_studio.whl", "archive_info": {}},
@@ -87,6 +96,7 @@ def test_local_wheel_installs_the_recorded_file(
     ids=(
         "remote-archive",
         "vcs-commit",
+        "vcs-subdirectory",
         "index",
         "missing-local-file",
         "malformed",
@@ -113,3 +123,32 @@ def test_uninstalled_studio_has_no_source(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(installation, "distribution", missing)
 
     assert invoking_studio() is None
+
+
+@pytest.mark.parametrize("available", ("directory", "missing", "file"))
+def test_editable_subdirectory_must_be_an_existing_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    available: str,
+) -> None:
+    source = tmp_path / "packages" / "marimo-studio"
+    if available == "directory":
+        source.mkdir(parents=True)
+    elif available == "file":
+        source.parent.mkdir()
+        source.write_text("file", encoding="utf-8")
+    _installed(
+        monkeypatch,
+        {
+            "url": tmp_path.as_uri(),
+            "dir_info": {"editable": True},
+            "subdirectory": "packages/marimo-studio",
+        },
+    )
+
+    studio = invoking_studio()
+
+    assert studio is not None
+    assert studio.requirement == (
+        f"-e {source}" if available == "directory" else "marimo-studio==0.1.6"
+    )

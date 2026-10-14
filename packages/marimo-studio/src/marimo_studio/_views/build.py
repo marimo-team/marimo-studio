@@ -23,6 +23,7 @@ from functools import partial
 from pathlib import Path
 from typing import Protocol
 
+from marimo_studio._artifacts.codec import receipt_diagnostics
 from marimo_studio._artifacts.inputs import (
     BuildInputState,
     build_input_state,
@@ -31,6 +32,7 @@ from marimo_studio._artifacts.inputs import (
 )
 from marimo_studio._artifacts.lock import build_lock
 from marimo_studio._artifacts.publication import (
+    BUILD_CANCELLED,
     ArtifactCommitRejected,
     capture_artifact_candidate,
     prepare_artifact_build,
@@ -88,6 +90,7 @@ from marimo_studio.view_providers import (
     ProjectDiagnostic,
     ProjectInspection,
     ProviderAvailability,
+    ProviderCancellation,
     ViewProject,
 )
 from marimo_studio.view_providers._artifact_sites import render_sites
@@ -139,6 +142,7 @@ def _inspect_provider(
     profile: BuildProfile,
     provider: BuildProvider,
     started: float,
+    cancellation: ProviderCancellation,
 ) -> ProjectInspection:
     availability = provider.availability()
     if not availability.available:
@@ -168,7 +172,9 @@ def _inspect_provider(
             project,
             profile,
             (
-                ProjectDiagnostic(
+                BUILD_CANCELLED
+                if cancellation.cancelled
+                else ProjectDiagnostic(
                     code="provider-inspection-failed",
                     severity="error",
                     message=f"View provider inspection failed: {error}",
@@ -192,6 +198,7 @@ def _inspect_snapshot(
     provider: BuildProvider,
     started: float,
     cache_root: Path,
+    cancellation: ProviderCancellation,
 ) -> ProjectInspection:
     try:
         inspection = provider.inspect(
@@ -203,7 +210,9 @@ def _inspect_snapshot(
             project,
             profile,
             (
-                ProjectDiagnostic(
+                BUILD_CANCELLED
+                if cancellation.cancelled
+                else ProjectDiagnostic(
                     code="provider-snapshot-inspection-failed",
                     severity="error",
                     message=f"View input snapshot inspection failed: {error}",
@@ -461,7 +470,7 @@ def _publish_locked(
     discovered = (
         inspection
         if inspection is not None
-        else _inspect_provider(project, profile, provider, started)
+        else _inspect_provider(project, profile, provider, started, cancellation)
     )
     if (
         input_id is not None
@@ -509,6 +518,7 @@ def _publish_locked(
                 provider,
                 started,
                 candidate.cache_root,
+                cancellation,
             )
             provenance = provider.provenance()
             revision = snapshot_revision(
@@ -629,7 +639,9 @@ def _publish_locked(
                     project,
                     profile,
                     (
-                        ProjectDiagnostic(
+                        BUILD_CANCELLED
+                        if cancellation.cancelled
+                        else ProjectDiagnostic(
                             code="provider-build-failed",
                             severity="error",
                             message=f"View provider build failed: {error}",
@@ -723,12 +735,14 @@ def _publish_locked(
             )
             report = replace(
                 report,
-                diagnostics=(
-                    *report.diagnostics,
-                    *missing_site_diagnostics(
-                        prepared.publication_root / "files",
-                        prepared.manifest.sites,
-                    ),
+                diagnostics=receipt_diagnostics(
+                    (
+                        *report.diagnostics,
+                        *missing_site_diagnostics(
+                            prepared.publication_root / "files",
+                            prepared.manifest.sites,
+                        ),
+                    )
                 ),
             )
             commit_state = _capture_commit_state(

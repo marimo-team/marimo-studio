@@ -56,66 +56,68 @@ def _read_values(
         )
         errors[selector] = error
 
-    for selector, parsed in selectors.items():
-        if selector not in active_selectors:
-            fail(
-                selector,
-                ValueReadError(
-                    "inactive-selector",
-                    f"Selector {selector!r} is not mounted in the presentation.",
-                ),
-            )
-            continue
-        if parsed.root not in namespace:
-            fail(
-                selector,
-                ValueReadError(
-                    "missing-variable",
-                    f"Variable {parsed.root!r} is not defined",
-                ),
-            )
-            continue
-        try:
-            value = parsed.resolve(namespace)
-        except Exception as error:
-            fail(
-                selector,
-                ValueReadError(
-                    "value-path-unavailable",
-                    f"Selector {selector!r} could not be resolved: {error}",
-                ),
-            )
-            continue
-        encoded, error = encoder.prepare(
-            value,
-            consumer_id=consumer_id,
-            revision=revision,
-            selector=selector,
-            limits=limits,
-            json_read=json_read,
-            arrow_read=arrow_read,
-            rows=selector in rows,
-        )
-        if error is not None:
-            fail(selector, error)
-            continue
-        assert encoded is not None
-        if encoded.payload["codec"] == JSON_CODEC:
-            json_read += encoded.byte_length
-        else:
-            arrow_read += encoded.byte_length
-        values[selector] = encoded.payload
-        prepared.append((selector, encoded))
-    result = ValueReadResult(values, errors)
-    payload = json.dumps(
-        result.to_dict(),
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    if len(payload.encode("utf-8")) <= limits.response_bytes:
-        for index, (selector, encoded) in enumerate(prepared):
+    committed = 0
+    try:
+        for selector, parsed in selectors.items():
+            if selector not in active_selectors:
+                fail(
+                    selector,
+                    ValueReadError(
+                        "inactive-selector",
+                        f"Selector {selector!r} is not mounted in the presentation.",
+                    ),
+                )
+                continue
+            if parsed.root not in namespace:
+                fail(
+                    selector,
+                    ValueReadError(
+                        "missing-variable",
+                        f"Variable {parsed.root!r} is not defined",
+                    ),
+                )
+                continue
             try:
+                value = parsed.resolve(namespace)
+            except Exception:
+                fail(
+                    selector,
+                    ValueReadError(
+                        "value-path-unavailable",
+                        f"Selector {selector!r} could not be resolved. "
+                        "Check that its property or key can be read in the notebook.",
+                    ),
+                )
+                continue
+            encoded, error = encoder.prepare(
+                value,
+                consumer_id=consumer_id,
+                revision=revision,
+                selector=selector,
+                limits=limits,
+                json_read=json_read,
+                arrow_read=arrow_read,
+                rows=selector in rows,
+            )
+            if error is not None:
+                fail(selector, error)
+                continue
+            assert encoded is not None
+            if encoded.payload["codec"] == JSON_CODEC:
+                json_read += encoded.byte_length
+            else:
+                arrow_read += encoded.byte_length
+            values[selector] = encoded.payload
+            prepared.append((selector, encoded))
+        result = ValueReadResult(values, errors)
+        payload = json.dumps(
+            result.to_dict(),
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        if len(payload.encode("utf-8")) <= limits.response_bytes:
+            for selector, encoded in prepared:
                 if encoded.resource is None:
                     encoder.release_selector(
                         consumer_id=consumer_id,
@@ -124,40 +126,42 @@ def _read_values(
                     )
                 else:
                     encoder.commit(encoded)
-            except BaseException as error:
-                cleanup_errors: list[BaseException] = []
-                for _pending_selector, pending in prepared[index:]:
-                    try:
-                        encoder.discard(pending)
-                    except BaseException as cleanup_error:
-                        cleanup_errors.append(cleanup_error)
-                if owned_encoder:
-                    try:
-                        encoder.close()
-                    except BaseException as cleanup_error:
-                        cleanup_errors.append(cleanup_error)
-                if cleanup_errors:
-                    raise cleanup_errors[0] from error
-                raise
+                committed += 1
+            if owned_encoder:
+                encoder.close()
+            return result
+        for _selector, encoded in prepared:
+            encoder.discard(encoded)
+        prepared.clear()
+        for selector in selectors:
+            encoder.release_selector(
+                consumer_id=consumer_id,
+                revision=revision,
+                selector=selector,
+            )
         if owned_encoder:
             encoder.close()
-        return result
-    for _selector, encoded in prepared:
-        encoder.discard(encoded)
-    for selector in selectors:
-        encoder.release_selector(
-            consumer_id=consumer_id,
-            revision=revision,
-            selector=selector,
+        return ValueReadResult(
+            {},
+            {
+                "*": ValueReadError(
+                    "response-too-large",
+                    "The value response exceeds the aggregate byte limit.",
+                )
+            },
         )
-    if owned_encoder:
-        encoder.close()
-    return ValueReadResult(
-        {},
-        {
-            "*": ValueReadError(
-                "response-too-large",
-                "The value response exceeds the aggregate byte limit.",
-            )
-        },
-    )
+    except BaseException as error:
+        cleanup_errors: list[BaseException] = []
+        for _selector, pending in prepared[committed:]:
+            try:
+                encoder.discard(pending)
+            except BaseException as cleanup_error:
+                cleanup_errors.append(cleanup_error)
+        if owned_encoder:
+            try:
+                encoder.close()
+            except BaseException as cleanup_error:
+                cleanup_errors.append(cleanup_error)
+        if cleanup_errors:
+            raise cleanup_errors[0] from error
+        raise

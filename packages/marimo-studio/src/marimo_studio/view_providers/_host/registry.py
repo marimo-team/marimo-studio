@@ -65,6 +65,7 @@ from marimo_studio.view_providers._host.identity import starter_id
 from marimo_studio.view_providers._host.operations.process import (
     DEFAULT_PROVIDER_EXTENSION_TIMEOUT,
     ProviderOperationCancelled,
+    ProviderOperationError,
     ProviderProcessSpec,
     availability_in_provider_process,
     build_in_provider_process,
@@ -203,7 +204,7 @@ class _RegisteredProvider:
             # provider bugs, so their type helps the provider's author.
             detail = (
                 str(failure)
-                if isinstance(failure, ProviderCommandError)
+                if isinstance(failure, (ProviderCommandError, ProviderOperationError))
                 else f"{type(failure).__name__}: {failure}"
             )
             raise ViewProjectError(

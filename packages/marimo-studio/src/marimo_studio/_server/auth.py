@@ -17,7 +17,12 @@ from marimo_studio.errors import MarimoStudioError
 def server_token_matches(scope: Scope, expected: str) -> bool:
     """Validate Marimo's server token for a Studio mutation route."""
     supplied = Headers(scope=scope).get("Marimo-Server-Token")
-    return supplied is not None and hmac.compare_digest(supplied, expected)
+    # Starlette decodes headers as latin-1. Comparing bytes keeps a non-ASCII
+    # header a mismatch instead of a TypeError from compare_digest.
+    return supplied is not None and hmac.compare_digest(
+        supplied.encode("latin-1"),
+        expected.encode(),
+    )
 
 
 def has_read_access(scope: Scope) -> bool:

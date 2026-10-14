@@ -23,7 +23,7 @@ from marimo_studio._artifacts.repository import (
 from marimo_studio._artifacts.retention import lease_published_artifact
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._workspace.project_manifest import CatalogProject
-from marimo_studio.errors import ViewProjectError
+from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers._host import provider_registry
 
 from ..artifact_test_support import (
@@ -232,6 +232,29 @@ def test_provider_upgrade_preserves_last_good_until_the_next_build(
     assert rebuilt.build.diagnostics == ()
 
 
+def test_a_save_in_the_view_folder_during_a_read_keeps_the_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    published = publish_artifact(project, "development")
+    native_lock = repository_module.artifact_lock
+
+    @contextmanager
+    def save_then_lock(*args: Any, **kwargs: Any) -> Any:
+        (project.root / "notes.txt").write_text("saved", encoding="utf-8")
+        with native_lock(*args, **kwargs) as acquired:
+            yield acquired
+
+    monkeypatch.setattr(repository_module, "artifact_lock", save_then_lock)
+
+    state = read_artifact_state(project, "development")
+
+    assert state.build.phase == "published"
+    assert state.artifact is not None
+    assert state.artifact.artifact_revision == published.artifact_revision
+
+
 def test_artifact_state_settles_when_its_view_is_removed_during_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -368,3 +391,55 @@ def test_state_recovery_rejects_recreated_project_after_old_build_lock(
     assert state["build"]["phase"] == "building"
     assert state["build"]["project_revision"] == revision
     assert sentinel.read_text(encoding="utf-8") == "active\n"
+
+
+def test_damaged_build_state_errors_name_the_view_and_the_next_step(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    _profile_path(project, "development").write_text("{", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError) as raised:
+        read_artifact_state(project, "development")
+
+    message = str(raised.value)
+    assert message.startswith("Could not read artifact profile receipt")
+    assert message.endswith(
+        f"Build view {project.name!r} again to replace its damaged development "
+        "build state."
+    )
+
+
+def test_a_missing_published_revision_asks_for_a_rebuild(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    shutil.rmtree(artifact_root(project) / "revisions")
+
+    with pytest.raises(ConfigurationError) as raised:
+        read_artifact_state(project, "development")
+
+    assert str(raised.value) == (
+        f"The published development build of view {project.name!r} is missing. "
+        "Build the view again."
+    )
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["[" * 1500 + "]" * 1500, '{"schema": ' + "9" * 5000 + "}"],
+    ids=("deep-nesting", "oversized-integer"),
+)
+def test_a_build_replaces_a_receipt_beyond_the_json_decoder_limits(
+    tmp_path: Path,
+    damage: str,
+) -> None:
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    _profile_path(project, "development").write_text(damage, encoding="utf-8")
+
+    rebuilt = publish_artifact(project, "development")
+
+    assert read_build_state(project, "development").artifact_revision == (
+        rebuilt.artifact_revision
+    )

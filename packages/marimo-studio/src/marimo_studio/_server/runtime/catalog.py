@@ -126,7 +126,6 @@ async def revalidate_runtime_cells(
     current = await sessions.live_cells(
         context,
         session_id,
-        include_dependency_closures=False,
     )
     if current != expected:
         raise RuntimeSyncError(
@@ -188,7 +187,6 @@ class ServerRuntime:
         cells = await self._sessions.live_cells(
             context,
             session_id,
-            include_dependency_closures=False,
         )
         return runtime_cell_bindings(snapshot, cells)
 
@@ -475,7 +473,6 @@ class RuntimeRegistry:
         cells = await provider._sessions.live_cells(
             context,
             session_id,
-            include_dependency_closures=False,
         )
         if expected_snapshot is not None and (
             cells is None

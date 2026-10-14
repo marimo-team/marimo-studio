@@ -126,6 +126,16 @@ const loadImage = async (blob: Blob, name: string): Promise<DocumentPages> => {
   return { pages: [image], resize: () => {}, destroy: () => URL.revokeObjectURL(url) };
 };
 
+const documentRecoveryHint = (status: number): string => {
+  if (status === 404) {
+    return "Rebuild the view to publish its document, then reload the page.";
+  }
+  if (status === 401 || status === 403) {
+    return "Reload the page to open the view with current access.";
+  }
+  return "Reload the page. If the document still fails, check the Studio server log.";
+};
+
 /**
  * Show the document a Studio document view publishes, and render it again
  * when one of the `mo-value`, `marimo-output`, or `marimo-cell` hosts inside
@@ -140,7 +150,7 @@ export class MarimoDocumentElement extends HTMLElement {
   private request?: AbortController;
   private shown?: DocumentPages;
   private shownBytes?: Uint8Array;
-  private shownPath?: string;
+  private shownSource?: string;
   private queued = false;
   private loop?: Promise<void>;
   private revision?: string;
@@ -198,7 +208,7 @@ export class MarimoDocumentElement extends HTMLElement {
       this.shown?.destroy();
       this.shown = undefined;
       this.shownBytes = undefined;
-      this.shownPath = undefined;
+      this.shownSource = undefined;
       if (this.documentUrl) {
         URL.revokeObjectURL(this.documentUrl);
         this.documentUrl = undefined;
@@ -329,7 +339,7 @@ export class MarimoDocumentElement extends HTMLElement {
     }
     if (response.ok) {
       await this.show(await response.blob(), signal, unavailableNote(hosts));
-      this.shownPath = undefined;
+      this.shownSource = undefined;
       return false;
     }
     const detail = parseErrorResponse(await responseJsonOrNull(response));
@@ -435,7 +445,15 @@ export class MarimoDocumentElement extends HTMLElement {
    * toolbar says so.
    */
   private async showSource(signal: AbortSignal, rendition?: string): Promise<void> {
-    if (this.shown && this.shownPath === (rendition ?? this.getAttribute("src"))) {
+    const src = this.getAttribute("src") ?? "";
+    // A new artifact revision can keep the same relative `src` while its base
+    // moves, so the shown document is keyed on the revision and resolved URL.
+    const source = (path: string) => `${this.revision} ${new URL(path, document.baseURI).href}`;
+    const unrendered =
+      this.hasAttribute("render") &&
+      this.valueHosts().length + this.outputHosts().length + this.cellHosts().length > 0;
+    if (this.shown && this.shownSource === source(rendition ?? src)) {
+      this.settle(signal, unrendered && rendition === undefined ? UNRENDERED_NOTE : "");
       return;
     }
     const fetchDocument = (path: string) => fetch(new URL(path, document.baseURI), { signal });
@@ -450,24 +468,33 @@ export class MarimoDocumentElement extends HTMLElement {
     }
     const rendered = response?.ok === true;
     if (!response?.ok) {
-      response = await fetchDocument(this.getAttribute("src") ?? "");
+      response = await fetchDocument(src);
     }
     if (!response.ok) {
-      throw new Error(`The document is unavailable (${response.status}).`);
+      if (!signal.aborted) {
+        this.showProblems([
+          problem(
+            "document-unavailable",
+            "The published document could not be loaded.",
+            documentRecoveryHint(response.status),
+          ),
+        ]);
+      }
+      return;
     }
-    const unrendered =
-      this.hasAttribute("render") &&
-      this.valueHosts().length + this.outputHosts().length + this.cellHosts().length > 0 &&
-      !rendered;
-    await this.show(await response.blob(), signal, unrendered ? UNRENDERED_NOTE : "");
+    await this.show(await response.blob(), signal, unrendered && !rendered ? UNRENDERED_NOTE : "");
     if (!signal.aborted) {
-      this.shownPath = rendered ? rendition : (this.getAttribute("src") ?? undefined);
+      this.shownSource = source(rendered && rendition !== undefined ? rendition : src);
     }
   }
 
   /** Swap in a document and mark the viewer ready unless `signal` aborted. */
   private async show(blob: Blob, signal: AbortSignal, note: string): Promise<void> {
     await this.display(blob, signal);
+    this.settle(signal, note);
+  }
+
+  private settle(signal: AbortSignal, note: string): void {
     if (signal.aborted) {
       return;
     }
@@ -514,11 +541,17 @@ export class MarimoDocumentElement extends HTMLElement {
     if (this.shown) {
       return;
     }
-    const response = await fetch(new URL(this.getAttribute("src") ?? "", document.baseURI), {
-      signal,
-    }).catch(() => undefined);
-    if (response?.ok) {
-      await this.display(await response.blob(), signal);
+    // The published document is a backdrop for the diagnostics, so its own
+    // failure leaves them in place.
+    try {
+      const response = await fetch(new URL(this.getAttribute("src") ?? "", document.baseURI), {
+        signal,
+      });
+      if (response.ok) {
+        await this.display(await response.blob(), signal);
+      }
+    } catch {
+      // The diagnostics above already explain the failure.
     }
   }
 

@@ -56,14 +56,19 @@ def test_server_commands_keep_access_tokens_out_of_arguments() -> None:
     assert "--runtime-timeout" in CliRunner().invoke(cli, ["validate", "--help"]).output
 
 
-def test_runtime_timeout_must_be_finite() -> None:
+@pytest.mark.parametrize(
+    ("timeout", "message"),
+    (("nan", "finite number"), ("0", "0<x<=")),
+    ids=("non-finite", "zero"),
+)
+def test_runtime_timeout_must_be_usable(timeout: str, message: str) -> None:
     result = CliRunner().invoke(
         cli,
-        ["validate", "--level", "runtime", "--runtime-timeout", "nan"],
+        ["validate", "--level", "runtime", "--runtime-timeout", timeout],
     )
 
     assert result.exit_code == 2
-    assert "finite number" in result.output
+    assert message in result.output
 
 
 @pytest.mark.native_process

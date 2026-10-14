@@ -123,6 +123,7 @@ def test_expected_errors_are_public() -> None:
         "SourceNotFoundError",
         "SourceTooLargeError",
         "SourceValidationError",
+        "StarterNotFoundError",
         "StaticExportError",
         "ViewDeletionError",
         "ViewExistsError",

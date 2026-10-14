@@ -26,4 +26,11 @@ def parse_toml(source: str, path: Path) -> dict[str, Any]:
 def read_toml(path: Path) -> dict[str, Any]:
     if path.is_symlink():
         raise ConfigurationError(f"Configuration is a symlink: {path}")
-    return parse_toml(FileTree(path.parent).read(path).content.decode("utf-8"), path)
+    content = FileTree(path.parent).read(path).content
+    try:
+        source = content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ConfigurationError(
+            f"{path} is not UTF-8 text. Save it as UTF-8, then retry."
+        ) from error
+    return parse_toml(source, path)

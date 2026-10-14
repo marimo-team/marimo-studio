@@ -394,10 +394,16 @@ def discover_views(locations: CatalogLocations) -> dict[str, CatalogProject]:
         # Staged view projects publish under their name with one rename.
         if is_temporary_name(directory.name):
             continue
-        if not tree.is_directory(directory) or not tree.is_file(
-            directory / "view.toml"
-        ):
-            continue
+        try:
+            if not tree.is_directory(directory) or not tree.is_file(
+                directory / "view.toml"
+            ):
+                continue
+        except PermissionError as error:
+            raise ConfigurationError(
+                f"Studio cannot read view folder {directory}. Fix its "
+                f"permissions or move it out of {view_root}, then retry."
+            ) from error
         try:
             validate_view_name(directory.name)
         except InvalidViewNameError as error:

@@ -588,7 +588,15 @@ def test_a_build_compiles_once_within_the_build_budget(
 def test_a_build_reports_the_widest_size_the_document_places_each_figure_at(
     tmp_path: Path, stand_in: None
 ) -> None:
-    project = _project(tmp_path)
+    project = _project(
+        tmp_path,
+        _document(
+            r"\marimographics{occupancy_heatmap}"
+            r"\marimographics{teaser_figure}"
+            r'\marimographics{rows[0]["a long selector '
+            r'that TeX breaks across log lines"]}'
+        ),
+    )
     log = _tex_log(
         "marimo-size:250.38007::occupancy_heatmap:",
         "marimo-size:465.47974:120:teaser_figure:",
@@ -609,7 +617,7 @@ def test_a_build_reports_the_widest_size_the_document_places_each_figure_at(
 def test_sizes_after_a_log_line_broken_at_its_limit_are_read(
     tmp_path: Path, stand_in: None
 ) -> None:
-    project = _project(tmp_path)
+    project = _project(tmp_path, _document(r"\marimographics{occupancy_heatmap}"))
     log = "x" * 79 + "\nmarimo-size:250.38::occupancy_heatmap:\n"
 
     result = _build(project, tmp_path / "staging", _Tectonic(0, "", log))
@@ -635,13 +643,19 @@ def test_marimo_warnings_in_the_log_appear_beside_the_document(
     ]
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Provider commands exceeded their 120 second aggregate budget",
+        "The compiler reached its time limit",
+    ],
+    ids=("aggregate-budget", "command-timeout"),
+)
 def test_a_build_that_outlasts_its_budget_explains_the_first_compile(
-    tmp_path: Path, stand_in: None
+    tmp_path: Path, stand_in: None, message: str
 ) -> None:
     project = _project(tmp_path)
-    error = ProviderCommandError(
-        "Provider commands exceeded their 120 second aggregate budget"
-    )
+    error = ProviderCommandError(message, timed_out=True)
 
     result = _build(project, tmp_path / "staging", _Raising(error))
 
@@ -1358,3 +1372,35 @@ def test_render_stops_at_its_deadline(tmp_path: Path) -> None:
 
     with pytest.raises(ProviderCommandError, match="budget"):
         _render(project, {}, timeout=3.0)
+
+
+def test_build_uses_default_for_computed_output_targets(
+    tmp_path: Path, stand_in: None
+) -> None:
+    project = _project(
+        tmp_path,
+        _document(r"\fig{plot}", r"\newcommand\fig[1]{\marimographics[width=5cm]{#1}}"),
+    )
+    log = _tex_log("marimo-size:141.73::plot:")
+
+    result = _build(project, tmp_path / "staging", _Tectonic(0, "", log))
+
+    assert result.document == MAIN
+    assert result.output_sizes == {}
+
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        (r"Text\\marimovalue{missing}", []),
+        (r"Text\\\marimovalue{actual}", ["actual"]),
+        (r"Text\% \marimovalue{actual}", ["actual"]),
+    ],
+)
+def test_inspection_distinguishes_control_symbols_and_projection_macros(
+    tmp_path: Path,
+    body: str,
+    expected: list[str],
+) -> None:
+    inspection = inspect_view_project_sync(_project(tmp_path, _document(body)))
+    assert [read.target for read in inspection.render_values] == expected

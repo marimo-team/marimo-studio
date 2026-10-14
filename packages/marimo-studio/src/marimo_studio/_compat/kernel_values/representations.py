@@ -102,6 +102,13 @@ class ValueEncoder:
         )
         try:
             ipc = None if rows else _dataframe_ipc(value, arrow_limit)
+            if ipc is not None:
+                return self._prepare_arrow(
+                    ipc,
+                    consumer_id=consumer_id,
+                    revision=revision,
+                    selector=selector,
+                ), None
         except _ArrowMaterializationRequired:
             return None, ValueReadError(
                 "arrow-materialization-required",
@@ -116,23 +123,19 @@ class ValueEncoder:
                 "of Arrow IPC. Filter or aggregate the table in the notebook, "
                 "or split it into per-item values.",
             )
-        except (ImportError, ModuleNotFoundError) as error:
+        except (ImportError, ModuleNotFoundError):
             return None, ValueReadError(
                 "arrow-codec-unavailable",
-                f"Selector {selector!r} requires PyArrow for Arrow IPC: {error}",
+                f"Selector {selector!r} requires PyArrow for Arrow IPC. "
+                "Install PyArrow in the notebook environment.",
             )
-        except Exception as error:
+        except Exception:
             return None, ValueReadError(
                 "arrow-serialization-error",
-                f"Selector {selector!r} could not be serialized as Arrow IPC: {error}",
+                f"Selector {selector!r} could not be serialized as Arrow IPC. "
+                "Check that the table can be converted and kernel storage "
+                "has free space.",
             )
-        if ipc is not None:
-            return self._prepare_arrow(
-                ipc,
-                consumer_id=consumer_id,
-                revision=revision,
-                selector=selector,
-            ), None
         return self._prepare_json(
             value,
             selector=selector,
@@ -150,6 +153,10 @@ class ValueEncoder:
     ) -> tuple[EncodedValue | None, ValueReadError | None]:
         try:
             encoded = represent(value, JSON_ACCEPT).data
+            parsed = json.loads(encoded)
+            encoded = json.dumps(
+                parsed, allow_nan=False, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
         except RepresentationTooLarge as error:
             return None, ValueReadError(
                 "value-too-large",
@@ -161,6 +168,12 @@ class ValueEncoder:
             return None, ValueReadError(
                 "not-json-serializable",
                 " ".join((f"Selector {selector!r} has no JSON form.", *error.reasons)),
+            )
+        except Exception:
+            return None, ValueReadError(
+                "not-json-serializable",
+                f"Selector {selector!r} could not be encoded as JSON. "
+                "Return valid JSON from its display method or select a JSON value.",
             )
         if len(encoded) > limits.json_value_bytes:
             return None, ValueReadError(
@@ -176,7 +189,7 @@ class ValueEncoder:
                 payload={
                     "codec": JSON_CODEC,
                     "fingerprint": _fingerprint(encoded),
-                    "value": json.loads(encoded),
+                    "value": parsed,
                 },
                 byte_length=len(encoded),
             ),

@@ -20,11 +20,6 @@ export class ZeroPythonRuntimeError extends Error {
   }
 }
 
-export const isZeroPythonQueryUnavailable = (error: UnparsedRuntimeFailure): boolean =>
-  (isPreparedExportError(error) &&
-    (error.code === "query_miss" || error.code === "query_ambiguous")) ||
-  (isNotebookExportError(error) && error.code === "state_unavailable");
-
 export const zeroPythonFailure = (error: UnparsedRuntimeFailure): ZeroPythonRuntimeError => {
   if (error instanceof ZeroPythonRuntimeError) {
     return error;

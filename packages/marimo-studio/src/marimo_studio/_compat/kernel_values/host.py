@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -23,6 +24,10 @@ from marimo_studio._compat.kernel_values.session import (
 from marimo_studio._compat.server.session_state import current_session
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef
+from marimo_studio._processes.ownership import (
+    propagate_cancellation,
+    settle_ownership,
+)
 from marimo_studio._projections.resolution import ResolvedProjection
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
@@ -68,21 +73,15 @@ def _build_live_projection_state(
         )
     )
     graph = DirectedGraph()
-    try:
-        for runtime_id, code in signature:
-            cell_id = CellId_t(runtime_id)
-            graph.register_cell(
-                cell_id,
-                compile_cell(code, cell_id=cell_id),
-            )
-    except Exception as error:
-        raise ProjectionUnavailable(
-            "stale-projection-binding",
-            "The projection dependency closure changed after this "
-            "presentation was published.",
-            transient=False,
-            status_code=409,
-        ) from error
+    for runtime_id, code in signature:
+        cell_id = CellId_t(runtime_id)
+        try:
+            cell = compile_cell(code, cell_id=cell_id)
+        except Exception:
+            # The kernel leaves a cell that fails to compile out of its graph,
+            # so only projections whose closure needs that cell go stale.
+            continue
+        graph.register_cell(cell_id, cell)
     return _LiveProjectionState(signature, graph, current_cells)
 
 
@@ -139,34 +138,34 @@ def _bind_projections(
     return tuple(bound)
 
 
-def _bind_live_projections(
-    session: Any,
-    projections: tuple[ResolvedProjection, ...],
-    runtime_cell_refs: Mapping[CellRef, str],
-) -> tuple[BoundProjection, ...]:
-    return _bind_projections(
-        _build_live_projection_state(_executed_signature(session)),
-        projections,
-        runtime_cell_refs,
-    )
-
-
 class PrivateKernelProjectionHost:
     """Read, render, and update one live kernel through its session queue."""
 
     def __init__(self) -> None:
+        self._live_locks: WeakKeyDictionary[Any, asyncio.Lock] = WeakKeyDictionary()
         self._live_states: WeakKeyDictionary[Any, _LiveProjectionState] = (
             WeakKeyDictionary()
         )
 
-    def _live_state(self, session: Any) -> _LiveProjectionState:
-        signature = _executed_signature(session)
-        current = self._live_states.get(session)
-        if current is not None and current.signature == signature:
-            return current
-        current = _build_live_projection_state(signature)
-        self._live_states[session] = current
-        return current
+    async def _live_state(self, session: Any) -> _LiveProjectionState:
+        lock = self._live_locks.setdefault(session, asyncio.Lock())
+        async with lock:
+            while True:
+                signature = _executed_signature(session)
+                current = self._live_states.get(session)
+                if current is not None and current.signature == signature:
+                    return current
+                # Retain the session lock until compilation drains, including
+                # when its requesting browser disconnects.
+                current, cancellation = await settle_ownership(
+                    asyncio.to_thread(_build_live_projection_state, signature)
+                )
+                if _executed_signature(session) != signature:
+                    propagate_cancellation(cancellation)
+                    continue
+                self._live_states[session] = current
+                propagate_cancellation(cancellation)
+                return current
 
     async def read_values(
         self,
@@ -187,7 +186,7 @@ class PrivateKernelProjectionHost:
                 transient=True,
                 status_code=409,
             )
-        state = self._live_state(session)
+        state = await self._live_state(session)
         return await read_session_values(
             session,
             revision,
@@ -215,7 +214,7 @@ class PrivateKernelProjectionHost:
                 transient=True,
                 status_code=409,
             )
-        state = self._live_state(session)
+        state = await self._live_state(session)
         return await render_session_outputs(
             session,
             revision,

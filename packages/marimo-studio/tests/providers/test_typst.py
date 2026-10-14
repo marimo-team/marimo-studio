@@ -345,7 +345,7 @@ def test_typst_errors_fail_the_build_at_their_source_line(tmp_path: Path) -> Non
     state = read_profile_state(project, "development")
     assert state is not None
     (diagnostic,) = state.build.diagnostics
-    assert diagnostic.code == "typst-compile-error"
+    assert diagnostic.code == "typst-compile-error", diagnostic
     assert diagnostic.source is not None
     assert (diagnostic.source.path, diagnostic.source.line) == (MAIN, 4)
 
@@ -462,3 +462,76 @@ def test_static_validation_checks_the_values_a_document_reads(
     assert {issue.target for issue in run.report.issues if issue.view == "report"} == {
         "missing_total"
     }
+
+
+def test_build_uses_default_for_computed_output_targets(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        '#import "marimo.typ": marimo_output\n'
+        "#let chart(name) = figure(marimo_output(name, width: 80%))\n"
+        '#chart("plot")\n',
+    )
+    assert inspect_view_project_sync(project).render_outputs == ()
+
+    with build_view_project_sync(project, profile="production") as lease:
+        assert lease.read_bytes(PurePosixPath("main.pdf")).startswith(b"%PDF-")
+
+
+def test_build_retains_errors_from_data_inputs(tmp_path: Path) -> None:
+    project = _project(tmp_path, '#let d = xml("data.xml")\nHello\n')
+    project.root.joinpath("data.xml").write_text(
+        "<root>\n<item>\n</root>\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ViewProjectError):
+        build_view_project_sync(project, profile="production")
+
+    state = read_profile_state(project, "production")
+    assert state is not None
+    (diagnostic,) = state.build.diagnostics
+    assert diagnostic.code == "typst-compile-error", diagnostic
+    assert "data.xml" in diagnostic.message
+    assert "XML" in diagnostic.message
+    assert diagnostic.source is None
+
+
+@pytest.mark.parametrize(
+    "main,targets",
+    [
+        ('Text: marimo_value("missing")\n', []),
+        ('#marimo_value("real") marimo_value("missing")\n', ["real"]),
+        (
+            '#let f(name) = marimo_value("real")\nPlain marimo_value("missing")',
+            ["real"],
+        ),
+        (
+            '#{ let x = marimo_value("first");\n marimo_value("second") }',
+            ["first", "second"],
+        ),
+        ('#let f = [marimo_value("missing") #marimo_value("real")]\n', ["real"]),
+        ('#(marimo_value("real"))\n', ["real"]),
+        ('#box(width: 1em)marimo_value("missing")\n', []),
+        ('#strong[Total]marimo_value("missing")\n', []),
+        ('#"label"marimo_value("missing")\n', []),
+        ('#{ 1 }marimo_value("missing")\n', []),
+        ('#marimo_value("real").at(0)marimo_value("missing")\n', ["real"]),
+        (
+            '#figure(marimo_value("first"))[#marimo_value("second")]\n',
+            ["first", "second"],
+        ),
+    ],
+)
+def test_inspection_reads_typst_code_expressions(
+    tmp_path: Path, main: str, targets: list[str]
+) -> None:
+    inspection = inspect_view_project_sync(_project(tmp_path, main))
+    assert [read.target for read in inspection.render_values] == targets
+
+
+def test_inspection_handles_oversized_unicode_escape(tmp_path: Path) -> None:
+    inspection = inspect_view_project_sync(
+        _project(tmp_path, r'#marimo_value("\u{FFFFFFFFFFFFFFFFFFFFFF}", default: 1)')
+    )
+
+    assert inspection.render_values == ()
+    assert MAIN in {document.path for document in inspection.documents}

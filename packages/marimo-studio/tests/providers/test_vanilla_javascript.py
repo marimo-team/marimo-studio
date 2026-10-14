@@ -106,3 +106,19 @@ def test_javascript_dependencies_fails_closed_on_reexport_import_attributes(
     source: str,
 ) -> None:
     assert {item.kind for item in javascript_dependencies(source)} == {"parse error"}
+
+
+@pytest.mark.parametrize(
+    ("specifier", "expected"),
+    [
+        (r"./chart-\uD83D\uDCC8.js", "./chart-📈.js"),
+        (r"./chart-\uD83D.js", None),
+        (r"./chart-\uDCC8.js", None),
+    ],
+    ids=("paired-surrogate", "lone-high-surrogate", "lone-low-surrogate"),
+)
+def test_javascript_dependencies_decode_utf16_escapes(
+    specifier: str, expected: str | None
+) -> None:
+    (dependency,) = javascript_dependencies(f'import "{specifier}";')
+    assert (dependency.kind, dependency.specifier) == ("import", expected)

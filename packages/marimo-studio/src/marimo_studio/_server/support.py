@@ -57,6 +57,7 @@ from marimo_studio._server.presentation.projection_routes import (
     values_response,
 )
 from marimo_studio._server.presentation.query_routes import query_response
+from marimo_studio._server.query import positive_safe_integer
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.request_path import request_path
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
@@ -94,7 +95,7 @@ from marimo_studio._server.workspace_lifecycle import (
 from marimo_studio._server.zero_python_api import zero_python_response
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import MarimoStudioError
+from marimo_studio.errors import MarimoStudioError, ViewNotFoundError
 
 
 def _manifest_source_view(support_path: str) -> str | None:
@@ -232,15 +233,17 @@ async def support_response(
     if support_path == "/agent/connection":
         return agent_connection_response(request, context, workspace)
     if support_path.startswith("/activations/") and support_path.endswith("/ack"):
-        raw_generation = support_path.removeprefix("/activations/").removesuffix("/ack")
-        if not raw_generation.isdecimal():
+        generation = positive_safe_integer(
+            support_path.removeprefix("/activations/").removesuffix("/ack")
+        )
+        if generation is None:
             return Response(status_code=404)
         return await activation_ack_response(
             request,
             context,
             workspace,
             notebook_scope,
-            int(raw_generation),
+            generation,
         )
     if support_path.startswith("/active-view-handoffs/"):
         operation_id = support_path.removeprefix("/active-view-handoffs/")
@@ -392,6 +395,15 @@ async def _bootstrap_response(
     )
 
 
+_VIEW_ROUTE_METHODS = {
+    "runtimes": "GET",
+    "config": "GET",
+    "values": "POST",
+    "render": "POST",
+    "outputs": "POST",
+}
+
+
 async def _view_response(
     request: Request,
     context: ServerContext,
@@ -436,7 +448,14 @@ async def _view_response(
             session_state,
         )
     if view_name not in studio.views:
-        return Response(status_code=404)
+        return auth_error_response(
+            ViewNotFoundError(
+                view_name,
+                available=(
+                    () if presentation_capability is not None else tuple(studio.views)
+                ),
+            )
+        )
     if route == "preview":
         return await preview_url_response(
             request,
@@ -561,6 +580,9 @@ async def _view_response(
                 else None
             ),
         )
+    allowed = _VIEW_ROUTE_METHODS.get(route)
+    if allowed is not None:
+        return Response(status_code=405, headers={"Allow": allowed})
     return Response(status_code=404)
 
 
@@ -620,13 +642,7 @@ def events_response(
         if client_id is not None
         else None
     )
-    stream_generation = (
-        int(stream_value)
-        if stream_value is not None
-        and re.fullmatch(r"[1-9][0-9]{0,15}", stream_value) is not None
-        and int(stream_value) <= 9_007_199_254_740_991
-        else None
-    )
+    stream_generation = positive_safe_integer(stream_value)
     if client_id is not None and stream_generation is None:
         return JSONResponse(
             {

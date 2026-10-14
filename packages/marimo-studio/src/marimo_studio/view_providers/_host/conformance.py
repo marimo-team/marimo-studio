@@ -32,6 +32,7 @@ from marimo_studio.view_providers import (
     JsonValue,
     ProjectDiagnostic,
     ProjectInspection,
+    ProjectionSite,
     ProviderAvailability,
     ProviderCancellation,
     ProviderError,
@@ -333,8 +334,11 @@ class ProviderConformance:
             )
         document_set = set(document_paths)
         diagnostic_sources = {*document_set, manifest}
-        self._diagnostics(value.diagnostics, "diagnostics", diagnostic_sources)
+        diagnostics = self._diagnostics(
+            value.diagnostics, "diagnostics", diagnostic_sources
+        )
         sites = []
+        invalid_sites: list[ProjectDiagnostic] = []
         site_bytes = 0
         for site in checked_tuple(
             value.sites,
@@ -347,6 +351,19 @@ class ProviderConformance:
                     site,
                     documents=document_set,
                 )
+            except InvalidTargetError as error:
+                invalid_sites.append(
+                    ProjectDiagnostic(
+                        "projection-target-invalid",
+                        "error",
+                        str(error),
+                        'Set the projection target to a cell name such as "summary".'
+                        if cast(ProjectionSite, site).kind == "cell"
+                        else 'Use a selector such as "summary.total".',
+                        error.source,
+                    )
+                )
+                continue
             except ValueError as error:
                 raise conformance_error(self.key, str(error)) from error
             require_input(validated_site.source.path, "a projection site")
@@ -415,11 +432,13 @@ class ProviderConformance:
             value,
             documents=(*accepted, *guidance),
             inputs=tuple(scope),
+            sites=tuple(sites),
             render_values=render_values,
             render_outputs=render_outputs,
             render_cells=render_cells,
             diagnostics=(
-                *value.diagnostics,
+                *diagnostics,
+                *invalid_sites,
                 *invalid_reads,
                 *accept_diagnostics(sites, (*render_outputs, *render_cells)),
             ),
@@ -455,7 +474,10 @@ class ProviderConformance:
         encoded = 0
         for item in checked_tuple(value, self.key, label, maximum=_MAX_DIAGNOSTICS):
             try:
-                diagnostic = validate_project_diagnostic(item, documents=documents)
+                diagnostic = validate_project_diagnostic(item)
+                if documents is not None:
+                    diagnostic = _located(diagnostic, documents)
+                    validate_project_diagnostic(diagnostic, documents=documents)
             except ValueError as error:
                 raise conformance_error(self.key, str(error)) from error
             encoded += len(

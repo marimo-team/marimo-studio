@@ -103,6 +103,12 @@ const endpoint = (
   );
 };
 
+const holdSend = (registry: FakeRegistry) => {
+  const sent = Promise.withResolvers<null>();
+  const send = vi.fn<SendControlValues>(() => sent.promise);
+  return { controls: endpoint(registry, send), send, sent };
+};
+
 describe("Control endpoint", () => {
   test("connects iframe globals and publishes real ready events", () => {
     const frame = document.createElement("iframe");
@@ -364,6 +370,60 @@ describe("Control endpoint", () => {
 
     second.dispose();
     expect(registry.registerInstance).toBe(original);
+  });
+
+  test("a closed endpoint dispatches no queued update", async () => {
+    const registry = new FakeRegistry();
+    registry.set("slider-0", 0);
+    const { controls, send, sent } = holdSend(registry);
+    const closed = "The control endpoint closed before the update applied.";
+    const first = controls.apply([{ objectId: "slider-0", value: 1 }]);
+    const queued = controls.apply([{ objectId: "slider-0", value: 2 }]);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    controls.dispose();
+    sent.resolve(null);
+
+    await expect(first).rejects.toThrow(closed);
+    await expect(queued).rejects.toThrow(closed);
+    await expect(controls.apply([{ objectId: "slider-0", value: 3 }])).rejects.toThrow(closed);
+    expect(send).toHaveBeenCalledOnce();
+    expect(registry.lookupValue("slider-0")).toBe(0);
+  });
+
+  test("a closed endpoint's late acknowledgement leaves its successor's value", async () => {
+    const registry = new FakeRegistry();
+    registry.set("slider-0", 0);
+    const { controls: retired, send, sent } = holdSend(registry);
+    const late = retired.apply([{ objectId: "slider-0", value: 1 }]);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    retired.dispose();
+
+    const successor = endpoint(registry, async () => null);
+    await successor.apply([{ objectId: "slider-0", value: 2 }]);
+    sent.resolve(null);
+    await late.catch(() => undefined);
+
+    expect(registry.lookupValue("slider-0")).toBe(2);
+    successor.dispose();
+  });
+
+  test("a closed endpoint's rejected update withdraws only the controls it staged", async () => {
+    const registry = new FakeRegistry();
+    const { controls: retired, sent } = holdSend(registry);
+    const late = retired.apply([
+      { objectId: "pending-0", value: 1 },
+      { objectId: "replaced-0", value: 1 },
+    ]);
+    await vi.waitFor(() => expect(registry.has("pending-0")).toBe(true));
+    retired.dispose();
+
+    const successor = endpoint(registry, async () => null);
+    registry.set("replaced-0", 2);
+    sent.reject(new Error("kernel connection closed"));
+    await expect(late).rejects.toThrow("kernel connection closed");
+
+    expect(successor.snapshot()).toEqual([{ objectId: "replaced-0", value: 2 }]);
+    successor.dispose();
   });
 
   test("retries broker disposal after another registry owner unwinds", () => {

@@ -227,7 +227,7 @@ const importedValue = (
       const module = modules.resolve(document.path, local);
       if (module === null) return dynamic();
       const binding = modules.exportedBinding(module.source, imported);
-      return binding === null
+      return binding === null || binding.expression === null
         ? dynamic()
         : evaluateTypeScript(binding.expression, binding.source, modules);
     }
@@ -244,6 +244,21 @@ const combine = (results: readonly StaticResult[]): StaticResult => {
       result,
     ) => (result.status === "bounded" ? result.values : [])),
   );
+};
+
+/** Resolve a computed `[key]` to one string, or null when it is not static. */
+const computedPropertyName = (
+  key: AstNode | undefined,
+  document: SvelteDocument,
+  scope: Scope,
+  seen: ReadonlySet<object>,
+): string | null => {
+  if (key === undefined) return null;
+  const value = evaluate(key, document, scope, seen);
+  return value.status === "bounded" && value.values.length === 1 &&
+      value.values[0].kind === "string"
+    ? value.values[0].value
+    : null;
 };
 
 const propertyName = (node: AstNode | undefined): string | null => {
@@ -308,8 +323,18 @@ const evaluate = (
       if (property.type !== "Property" || property.value === undefined) {
         return dynamic();
       }
-      const name = propertyName(property.key);
+      const name = property.computed === true
+        ? computedPropertyName(property.key, document, scope, nextSeen)
+        : propertyName(property.key);
       if (name === null) return dynamic();
+      // A literal `__proto__: value` entry sets the prototype and creates no
+      // own property.
+      if (
+        name === "__proto__" && property.computed !== true &&
+        property.shorthand !== true
+      ) {
+        continue;
+      }
       const value = evaluate(
         property.value as AstNode,
         document,
@@ -336,12 +361,19 @@ const evaluate = (
   if (
     expression.type === "MemberExpression" && expression.object !== undefined
   ) {
+    const object = evaluate(expression.object, document, scope, nextSeen);
+    if (expression.computed) {
+      if (expression.property === undefined) return dynamic();
+      const keys = evaluate(expression.property, document, scope, nextSeen);
+      if (keys.status !== "bounded") return keys;
+      return combine(
+        keys.values.map((key) =>
+          key.kind === "string" ? propertyValues(object, key.value) : dynamic()
+        ),
+      );
+    }
     const property = propertyName(expression.property);
-    if (property === null) return dynamic();
-    return propertyValues(
-      evaluate(expression.object, document, scope, nextSeen),
-      property,
-    );
+    return property === null ? dynamic() : propertyValues(object, property);
   }
   if (expression.type === "ConditionalExpression") {
     return expression.consequent === undefined ||

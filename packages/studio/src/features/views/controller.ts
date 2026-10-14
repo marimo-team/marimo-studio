@@ -414,6 +414,12 @@ export class ViewController {
     });
   }
 
+  clearCreateError(): void {
+    if (this.snapshot.createMessage?.state === "error") {
+      this.update({ createMessage: undefined });
+    }
+  }
+
   dismissPanels(): void {
     this.update({
       removing: undefined,
@@ -609,8 +615,14 @@ export class ViewController {
 
   private async applyInventorySelection(inventory: ViewList): Promise<void> {
     const views = inventory.views.map((view) => view.name);
-    if (!views.includes(this.snapshot.current)) {
-      await this.choose(inventory.default_view);
+    const removed = this.snapshot.current;
+    if (!views.includes(removed) && (await this.choose(inventory.default_view))) {
+      this.update({
+        selectionMessage: {
+          text: `View ${removed} was removed. Showing ${inventory.default_view}.`,
+          state: "warning",
+        },
+      });
     }
   }
 }

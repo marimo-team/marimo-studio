@@ -141,10 +141,6 @@ const evaluate = (): void => {
   readiness.setHosts(projectionHosts.states());
 };
 
-export const refreshRenderedView = (): void => {
-  evaluate();
-};
-
 export const announceRenderedViewReady = (): void => {
   if (readiness.snapshot().page === "ready") {
     publishReady();

@@ -365,6 +365,24 @@ class ProviderNotFoundError(ConfigurationError):
         return {"provider": self.key, "available_providers": list(self.available)}
 
 
+class StarterNotFoundError(ConfigurationError):
+    """A requested view starter is not installed."""
+
+    code = "starter-not-found"
+    status_code = 404
+
+    def __init__(self, key: str, *, available: tuple[str, ...] = ()) -> None:
+        super().__init__(
+            f"Unknown view starter {key!r}. "
+            f"Installed starters: {', '.join(available) or 'none'}"
+        )
+        self.key = key
+        self.available = available
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"starter": self.key, "available_starters": list(self.available)}
+
+
 class InvalidViewNameError(ConfigurationError):
     """A requested view name breaks the view name rules."""
 
@@ -591,6 +609,7 @@ __all__ = [
     "SourceNotFoundError",
     "SourceTooLargeError",
     "SourceValidationError",
+    "StarterNotFoundError",
     "StaticExportError",
     "ViewDeletionError",
     "ViewExistsError",

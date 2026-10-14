@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 import stat
@@ -14,7 +15,7 @@ import tomlkit
 
 from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree, Version
-from marimo_studio._filesystem.names import is_temporary_name
+from marimo_studio._filesystem.names import is_temporary_name, temporary_kind
 from marimo_studio._filesystem.paths import validate_portable_path_component
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_NAMES,
@@ -33,6 +34,7 @@ VIEW_OWNER_DIRECTORY = ".owners"
 _VIEW_OWNER_SCHEMA = 1
 _VIEW_OWNER_SUFFIX = ".toml"
 _VIEW_OWNER_GENERATION = re.compile(r"[0-9a-f]{64}")
+_LOGGER = logging.getLogger("marimo.studio")
 
 
 class _ViewOwnerTransactionInProgress(Exception):
@@ -229,12 +231,34 @@ def view_owner_writes(
     owner outside ``names`` becomes a fresh tombstone. Run it under the
     workspace catalog lock.
     """
+    _remove_interrupted_writes(view_root)
     try:
         return _view_owner_writes(view_root, names)
     except _ViewOwnerTransactionInProgress as error:
         raise ConfigurationError(
             f"Unexpected view owner record: {error.path}"
         ) from error
+
+
+def _remove_interrupted_writes(view_root: Path) -> None:
+    # Every owner writer holds the catalog lock, so a temporary record seen
+    # under it was left by a process that stopped before it committed.
+    owners_root = view_root / VIEW_OWNER_DIRECTORY
+    tree = FileTree(view_root.parent)
+    if not tree.is_directory(owners_root):
+        return
+    for path in tree.children(owners_root):
+        kind = temporary_kind(path.name)
+        if kind is None:
+            continue
+        if kind == "aside":
+            raise ConfigurationError(
+                f"Studio kept a previous view owner record at {path} after an "
+                "interrupted change. Delete that file, then retry. Studio "
+                "recreates any owner record it needs."
+            )
+        tree.remove(path)
+        _LOGGER.warning("Removed an interrupted view owner write: %s", path)
 
 
 def _view_owner_writes(

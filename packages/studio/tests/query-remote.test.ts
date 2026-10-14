@@ -199,6 +199,29 @@ describe("editor query synchronization", () => {
 
     await expect(
       syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
-    ).rejects.toThrow("failed with 409");
+    ).rejects.toThrow("The Studio server refused the query state.");
+  });
+
+  it("keeps the server's reason and next step for a refused query", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: "edit-access-required",
+            message: "Open Studio from an editable Marimo session.",
+            hint: "Reopen the notebook with marimo edit.",
+          },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    const refused = syncEditorQuery("/query", "token", "browser-client-1234", "a=1", "query-1", 7);
+
+    await expect(refused).rejects.toMatchObject({
+      message: "Open Studio from an editable Marimo session.",
+      hint: "Reopen the notebook with marimo edit.",
+    });
   });
 });

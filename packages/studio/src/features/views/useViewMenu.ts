@@ -219,6 +219,13 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
       creationCatalogGeneration.current ??= controller.getSnapshot().catalogGeneration;
     });
   }, [controller, snapshot.catalogGeneration]);
+  const changeName = useCallback(
+    (next: string) => {
+      setName(next);
+      controller.clearCreateError();
+    },
+    [controller],
+  );
   const retryStarters = useCallback(() => {
     void controller.ensureStarterCatalog().then(() => {
       creationCatalogGeneration.current ??= controller.getSnapshot().catalogGeneration;
@@ -310,7 +317,7 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
       closeMenu: close,
       remove,
       retryStarters,
-      setName,
+      setName: changeName,
       setStarter,
       submitCreate,
       toggled,

@@ -65,6 +65,7 @@ from marimo_studio._server.presentation.session import (
     valid_presentation_replay,
 )
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
+from marimo_studio._server.query import positive_safe_integer
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.request_path import request_path, request_reference
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
@@ -670,7 +671,7 @@ def _waiting_response(
                 ),
             ),
             icon_url=request_reference(request, "/favicon.ico"),
-            lifecycle_id=_positive_int(
+            lifecycle_id=positive_safe_integer(
                 request.query_params.get(DOCUMENT_LIFECYCLE_QUERY_PARAM)
             ),
             runtime=request.query_params.get("runtime", "server"),
@@ -710,12 +711,4 @@ def _presentation_document_path(
             ),
             ("session_id", presentation_session.runtime_session_id),
         ),
-    )
-
-
-def _positive_int(value: str | None) -> int | None:
-    return (
-        int(value)
-        if value is not None and value.isdecimal() and int(value) > 0
-        else None
     )

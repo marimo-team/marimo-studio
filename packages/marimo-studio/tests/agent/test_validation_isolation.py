@@ -423,3 +423,50 @@ def test_invalid_static_source_matches_python_and_cli_validation(
         for report in (python_report, cli_report)
     ]
     assert source_issues[0] == source_issues[1]
+
+
+def test_static_validation_reports_a_failed_rebuild_beside_a_retained_publication(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_studio.view_providers import BuildResult, ProjectDiagnostic
+
+    async def exercise() -> Any:
+        view = await studio_authoring.open_workspace(notebook_path).create_view(
+            "dashboard"
+        )
+        await view.build()
+        document = await view.read("index.html")
+        await view.write(
+            "index.html",
+            document.content + "\n<!-- edited -->\n",
+            expected_revision=document.revision,
+        )
+        provider = provider_registry().get(
+            load_studio(notebook_path).view("dashboard").provider
+        )
+        monkeypatch.setattr(
+            provider,
+            "build",
+            lambda _request: BuildResult(
+                None,
+                (
+                    ProjectDiagnostic(
+                        "compile-failed",
+                        "error",
+                        "The compiler rejected the edited source.",
+                        "Fix the source, then build again.",
+                    ),
+                ),
+            ),
+        )
+        return await view.validate(level="static")
+
+    report = asyncio.run(exercise())
+
+    assert report.ok is False
+    (issue,) = [
+        item for item in report.issues if item.code == "validation-page-unavailable"
+    ]
+    assert "dashboard" in issue.message
+    assert "The compiler rejected the edited source." in issue.message

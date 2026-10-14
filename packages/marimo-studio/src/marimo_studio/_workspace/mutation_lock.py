@@ -9,6 +9,8 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from weakref import WeakValueDictionary
 
+from marimo_studio._filesystem._entry import is_link
+from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.ignore import ignore_generated_directory
 from marimo_studio._workspace.models import VIEW_PATTERN
@@ -50,9 +52,16 @@ def _mutation_lock(
 ) -> Generator[bool, None, None]:
     root = view_root.absolute()
     lock_path = root / ".locks" / filename
-    # The lock tree starts at the filesystem anchor so a link anywhere above
-    # the view root is refused before the lock file is created.
-    tree = FileTree(Path(root.anchor))
+    # The anchored tree starts at the nearest existing ancestor and refuses a
+    # link above it. Windows addresses paths directly, so its ancestors' reparse
+    # metadata is checked here.
+    boundary = root.parent
+    while not boundary.is_dir() and boundary != boundary.parent:
+        boundary = boundary.parent
+    for ancestor in (*reversed(boundary.parents), boundary):
+        if is_link(ancestor.lstat()):
+            raise UnsafePathError(f"Path is a symlink: {ancestor}")
+    tree = FileTree(boundary, anchored=True)
     thread_lock = _thread_lock(lock_path)
     if not thread_lock.acquire(blocking=blocking):
         yield False

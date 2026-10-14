@@ -95,6 +95,11 @@ def _notebook_snapshot(
     source: str | None = None,
 ) -> tuple[NotebookSpec, StaticNotebook]:
     notebook_path = Path(path).expanduser().resolve()
+    if notebook_path.suffix != ".py":
+        raise ConfigurationError(
+            f"Expected a Python marimo notebook: {notebook_path}. "
+            "Convert other notebook formats with `marimo convert`."
+        )
     load = create_static_notebook_loader()
     static = (
         while_unchanged(

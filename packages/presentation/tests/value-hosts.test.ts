@@ -828,6 +828,29 @@ test("changing a value source site reconnects the same projection instance", asy
   assert.equal(host.dataset.state, "connecting");
 });
 
+test("a host its site rejects keeps its diagnostic while an allowed host receives the value", async () => {
+  const next = configWithValues(["total", "other"]);
+  await installConfig(next);
+  document.body.innerHTML = `
+    <span id="allowed" mo-value="total" data-marimo-studio-site="site:value:total"></span>
+    <span id="rejected" mo-value="total" data-marimo-studio-site="site:value:other"></span>
+  `;
+  startValueHosts();
+  const allowed = document.querySelector<MarimoValueHost>("#allowed")!;
+  const rejected = document.querySelector<MarimoValueHost>("#rejected")!;
+  assert.equal(rejected.dataset.marimoDiagnosticCode, "projection-target-not-allowed");
+
+  markValuePending("total", next.projectionRevision);
+  applyValues(jsonValues({ total: 42 }), next.projectionRevision);
+
+  assert.equal(allowed.dataset.state, "ready");
+  assert.equal(allowed.textContent, "42");
+  assert.equal(rejected.dataset.state, "error");
+  assert.equal(rejected.dataset.marimoDiagnosticCode, "projection-target-not-allowed");
+  assert.equal(rejected.marimoValue, undefined);
+  assert.notEqual(rejected.textContent, "42");
+});
+
 test("an empty dynamic value target recovers through the same host instance", async () => {
   const dynamicSite = "site:value:dynamic-recovery";
   const dynamicConfig = configWithValues(["metric"], dynamicSite);

@@ -4,6 +4,7 @@ import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { applyFrameQuery } from "./frame-bridge.ts";
+import { QuerySyncRejectedError } from "./query-remote.ts";
 import { nextQueryWriteGeneration } from "./query-write-generation.ts";
 import { RetrySchedule } from "./retry-schedule.ts";
 
@@ -363,7 +364,7 @@ export class PreviewQueryController {
           this.requestAbandonedNavigationRepair({
             navigationIntent: pending.navigationIntent ?? this.navigationIntent,
           });
-        } else if (this.pending === undefined) {
+        } else if (this.pending === undefined && !(error instanceof QuerySyncRejectedError)) {
           this.setPending(pendingQuery(this.query));
           this.scheduleRetry();
         }

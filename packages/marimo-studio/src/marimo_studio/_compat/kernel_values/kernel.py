@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 import time
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from threading import Lock
 from types import TracebackType
@@ -26,12 +28,8 @@ from marimo_studio._compat.kernel_values.authorization import (
     STALE_PROJECTION_BINDING_MESSAGE,
     AuthorizedProjections,
     ProjectionAuthorizationError,
-    RuntimeCellBinding,
     verify_output_arguments,
     verify_value_ownership_arguments,
-)
-from marimo_studio._compat.kernel_values.dependencies import (
-    current_dependency_closure,
 )
 from marimo_studio._compat.kernel_values.lens import lens_overlay
 from marimo_studio._compat.kernel_values.models import (
@@ -54,7 +52,6 @@ from marimo_studio._compat.kernel_values.selectors import (
     _read_values,
 )
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS, QUERY_OPERATION_QUERY_PARAM
-from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._projections.resolution import MAX_UNIQUE_OUTPUT_TARGETS
 from marimo_studio._projections.runtime_records import (
     MAX_OUTPUT_BYTES,
@@ -133,47 +130,21 @@ def _install_execution_markers(context: Any) -> None:
 def _current_selectors(
     context: Any,
     authorized: AuthorizedProjections,
+    *,
+    cells: Mapping[str, Any] | None = None,
 ) -> dict[str, ValueSelector]:
     graph = context._kernel.graph
-    current_cells = tuple(
-        RuntimeCellBinding(reference, str(cell_id))
-        for (cell_id, cell), reference in zip(
-            graph.cells.items(),
-            cell_refs(cell.code for cell in graph.cells.values()),
-            strict=True,
-        )
-    )
-    current_by_runtime_id = {
-        binding.runtime_cell_id: binding for binding in current_cells
-    }
+    if cells is None:
+        cells = {str(cell_id): cell for cell_id, cell in graph.cells.items()}
     for target, binding in authorized.bindings.items():
-        # Marimo re-inserts an edited cell at the end of its graph mapping.
-        # Restore notebook order from the signed runtime IDs before comparing
-        # the live CellRefs and exact ancestor set.
-        ordered_current = tuple(
-            current
-            for expected in binding.dependency_closure
-            if (current := current_by_runtime_id.get(expected.runtime_cell_id))
-            is not None
-        )
-        current_closure = current_dependency_closure(
-            graph,
-            ordered_current,
-            binding.runtime_cell_id,
-        )
-        if tuple(item.runtime_cell_id for item in current_closure) != tuple(
-            item.runtime_cell_id for item in binding.dependency_closure
-        ):
-            raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
-        cell = next(
-            (
-                candidate
-                for cell_id, candidate in graph.cells.items()
-                if str(cell_id) == binding.runtime_cell_id
-            ),
-            None,
-        )
+        cell = cells.get(binding.runtime_cell_id)
         if cell is None or authorized.selectors[target].root not in cell.defs:
+            raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
+        # Code edits retain authorization when runtime IDs, ancestors, and
+        # the selector root's definition stay bound to the same cells.
+        current = {str(cell_id) for cell_id in graph.ancestors(binding.runtime_cell_id)}
+        current.add(binding.runtime_cell_id)
+        if current != {item.runtime_cell_id for item in binding.dependency_closure}:
             raise ProjectionAuthorizationError(STALE_PROJECTION_BINDING_MESSAGE)
     return authorized.selectors
 
@@ -211,7 +182,7 @@ class _EnteredKernelLifespan:
     def __init__(
         self,
         lifespan: AbstractAsyncContextManager[None],
-        resume: Callable[[], None] | None = None,
+        resume: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._lifespan = lifespan
         self._resume = resume
@@ -231,7 +202,7 @@ class _EnteredKernelLifespan:
         if self._closed:
             raise RuntimeError("The Marimo kernel lifespan has already exited.")
         if self._resume is not None:
-            self._resume()
+            await self._resume()
         return None
 
     async def __aexit__(
@@ -260,7 +231,7 @@ class _EnteredKernelLifespan:
 
 def _guard_entered_lifespan(
     context: Any,
-    resume: Callable[[], None] | None = None,
+    resume: Callable[[], Awaitable[None]] | None = None,
 ) -> _EnteredKernelLifespan | None:
     kernel = context._kernel
     lifespan = getattr(kernel, "_lifespan", None)
@@ -346,6 +317,8 @@ class _KernelBridgeLifespan:
         self._query_operations: dict[tuple[str, str], tuple[str, tuple[int, int]]] = {}
         self._cached_cells = _CachedCellCompatibility()
         self._entered_lifespan: _EnteredKernelLifespan | None = None
+        self._observation_closes: list[asyncio.Task[None]] = []
+        self._observation_filename: Path | None = None
         self._observation_ledger: ObservationLedger | None = None
         self._observation_ledger_release: Callable[[], None] | None = None
 
@@ -355,9 +328,11 @@ class _KernelBridgeLifespan:
         filename: Path | None,
         inspection: _ProbeSelectorLease | None,
     ) -> bool:
-        if self._output_renderer is not None:
-            return True
         filename = _kernel_filename(context) or filename
+        if self._output_renderer is not None:
+            if filename != self._observation_filename:
+                self._bind_observations(context, filename, inspection)
+            return True
         if is_owned_session() or filename is None:
             return False
         configured = _is_studio_notebook(filename)
@@ -374,57 +349,30 @@ class _KernelBridgeLifespan:
         output_renderer = KernelOutputRenderer(
             context, overlays=lens_overlay if edit_preview else None
         )
-        observation_ledger: ObservationLedger | None = None
-        observation_ledger_release: Callable[[], None] | None = None
         try:
-            records_observations = (
-                configured
-                and inspection is None
-                and getattr(context, "session_mode", None) == SessionMode.EDIT
-                and not is_owned_session()
-            )
-            if records_observations:
-                observation_ledger = ObservationLedger(filename)
             self._cached_cells.activate()
-            if observation_ledger is not None:
-                observation_ledger_release = install_observation_ledger(
-                    context,
-                    observation_ledger,
-                )
+            self._bind_observations(context, filename, inspection)
         except BaseException as error:
-            cleanup_error: BaseException | None = None
-            if observation_ledger_release is not None:
-                try:
-                    observation_ledger_release()
-                except BaseException as cleanup:
-                    cleanup_error = cleanup
-            if observation_ledger is not None:
-                try:
-                    observation_ledger.close()
-                except BaseException as cleanup:
-                    if cleanup_error is None:
-                        cleanup_error = cleanup
             try:
-                self._cached_cells.close()
+                _attempt_all(self._cached_cells.close, output_renderer.close)
             except BaseException as cleanup:
-                if cleanup_error is None:
-                    cleanup_error = cleanup
-            try:
-                output_renderer.close()
-            except BaseException as cleanup:
-                if cleanup_error is None:
-                    cleanup_error = cleanup
-            if cleanup_error is not None:
-                raise error from cleanup_error
+                raise error from cleanup
             raise
-        self._observation_ledger = observation_ledger
-        self._observation_ledger_release = observation_ledger_release
         self._output_renderer = output_renderer
         self._value_encoder = ValueEncoder(context)
         return True
 
     async def __aenter__(self) -> None:
-        self._resume()
+        await self._enter_lifespan()
+
+    async def _enter_lifespan(self) -> None:
+        try:
+            self._resume()
+        except BaseException:
+            # A failed setup gets no __aexit__, so it joins the ledger closes
+            # its rollback scheduled. The setup failure stays primary.
+            await self._join_observation_closes()
+            raise
 
     def _resume(self) -> None:
         from marimo._runtime.context import get_context
@@ -443,7 +391,7 @@ class _KernelBridgeLifespan:
         )
         if _is_studio_notebook(_kernel_filename(context)) and not is_probe:
             _install_execution_markers(context)
-        self._entered_lifespan = _guard_entered_lifespan(context, self._resume)
+        self._entered_lifespan = _guard_entered_lifespan(context, self._enter_lifespan)
         try:
             self._enter(
                 context,
@@ -504,8 +452,14 @@ class _KernelBridgeLifespan:
                     selectors = authorized.selectors
                     active_selectors = active_authorized.selectors
                 else:
-                    selectors = _current_selectors(context, authorized)
-                    active_selectors = _current_selectors(context, active_authorized)
+                    cells = {
+                        str(cell_id): cell
+                        for cell_id, cell in context._kernel.graph.cells.items()
+                    }
+                    selectors = _current_selectors(context, authorized, cells=cells)
+                    active_selectors = _current_selectors(
+                        context, active_authorized, cells=cells
+                    )
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return ValueReadResult(
@@ -596,8 +550,14 @@ class _KernelBridgeLifespan:
                     selectors = authorized.selectors
                     active_selectors = active_authorized.selectors
                 else:
-                    selectors = _current_selectors(context, authorized)
-                    active_selectors = _current_selectors(context, active_authorized)
+                    cells = {
+                        str(cell_id): cell
+                        for cell_id, cell in context._kernel.graph.cells.items()
+                    }
+                    selectors = _current_selectors(context, authorized, cells=cells)
+                    active_selectors = _current_selectors(
+                        context, active_authorized, cells=cells
+                    )
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return OutputRenderResult(
@@ -783,41 +743,101 @@ class _KernelBridgeLifespan:
                 if exc_value is not None
                 else RuntimeError("The Marimo kernel lifespan setup failed.")
             )
-        self._close()
+        failure: BaseException | None = None
+        try:
+            self._close()
+        except BaseException as error:
+            failure = error
+        closed = await self._join_observation_closes()
+        failure = failure or closed
+        if failure is not None:
+            raise failure
         return False
 
-    def _close(self) -> None:
-        failure: BaseException | None = None
-        if self._value_encoder is not None:
-            try:
-                self._value_encoder.close()
-            except BaseException as error:
-                failure = error
-            else:
-                self._value_encoder = None
-        if self._output_renderer is not None:
-            try:
-                self._output_renderer.close()
-            except BaseException as error:
-                if failure is None:
-                    failure = error
-            else:
-                self._output_renderer = None
-        if self._registry is not None:
-            try:
-                self._registry.delete(NAMESPACE)
-            except BaseException as error:
-                if failure is None:
-                    failure = error
-            else:
-                self._registry = None
+    async def _join_observation_closes(self) -> BaseException | None:
+        """Wait for scheduled ledger closes and return the first failure."""
+        pending, self._observation_closes = self._observation_closes, []
+        results = await asyncio.gather(*pending, return_exceptions=True)
+        return next(
+            (result for result in results if isinstance(result, BaseException)),
+            None,
+        )
+
+    def _close_observation_ledger(self, ledger: ObservationLedger) -> None:
         try:
-            self._cached_cells.close()
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            ledger.close()
+        else:
+            # Marimo activates synchronously on its control queue. The lifespan
+            # owns pending joins so rebinding can release the hook immediately.
+            self._observation_closes.append(
+                loop.create_task(asyncio.to_thread(ledger.close))
+            )
+
+    def _bind_observations(
+        self,
+        context: Any,
+        filename: Path | None,
+        inspection: _ProbeSelectorLease | None,
+    ) -> None:
+        """Record notebook observations for the current file of an edit session."""
+        from marimo._session.model import SessionMode
+
+        self._close_observations()
+        if (
+            filename is not None
+            and inspection is None
+            and not is_owned_session()
+            and getattr(context, "session_mode", None) == SessionMode.EDIT
+            and _is_studio_notebook(filename)
+        ):
+            ledger = ObservationLedger(filename)
+            try:
+                release = install_observation_ledger(context, ledger)
+            except BaseException:
+                self._close_observation_ledger(ledger)
+                raise
+            self._observation_ledger = ledger
+            self._observation_ledger_release = release
+        self._observation_filename = filename
+
+    def _close_observations(self) -> None:
+        # The ledger closes only after its hook detaches. A failed detach keeps
+        # both owners so the next teardown retries it.
+        self._release("_observation_ledger_release", lambda release: release())
+        self._release("_observation_ledger", self._close_observation_ledger)
+
+    def _release(self, owner: str, close: Callable[[Any], object]) -> None:
+        # A failed close keeps its owner so the next teardown retries it.
+        value = getattr(self, owner)
+        if value is not None:
+            close(value)
+            setattr(self, owner, None)
+
+    def _close(self) -> None:
+        _attempt_all(
+            self._close_observations,
+            partial(self._release, "_value_encoder", ValueEncoder.close),
+            partial(self._release, "_output_renderer", KernelOutputRenderer.close),
+            partial(
+                self._release, "_registry", lambda registry: registry.delete(NAMESPACE)
+            ),
+            self._cached_cells.close,
+        )
+
+
+def _attempt_all(*steps: Callable[[], object]) -> None:
+    """Run every cleanup step and raise the first failure afterwards."""
+    failure: BaseException | None = None
+    for step in steps:
+        try:
+            step()
         except BaseException as error:
             if failure is None:
                 failure = error
-        if failure is not None:
-            raise failure
+    if failure is not None:
+        raise failure
 
 
 def kernel_lifespan(_: None) -> _KernelBridgeLifespan:

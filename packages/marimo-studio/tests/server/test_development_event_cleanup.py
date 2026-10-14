@@ -15,6 +15,7 @@ from marimo_studio._server.agent.clients import (
 from marimo_studio._server.agent.coordinator import AgentCoordinator
 from marimo_studio._server.development import routes as dev
 from marimo_studio._server.development.client_events import WorkspaceClientEventProducer
+from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio.errors import AgentRequestError
 
 from ..app_helpers import configured
@@ -561,5 +562,85 @@ def test_cancellation_while_a_producer_stops_still_disconnects_browser(
             await clients.select_target(client_id="browser-client-1234")
         assert raised.value.code == "browser-client-unavailable"
         await agents.close()
+
+    asyncio.run(exercise())
+
+
+def test_a_stream_for_a_retiring_view_ends_without_an_error(
+    notebook_path: Path,
+) -> None:
+    studio = configured(notebook_path)
+
+    async def exercise() -> list[bytes]:
+        development = DevelopmentCoordinator()
+        try:
+            async with development.retiring_view("dashboard"):
+                return [
+                    event
+                    async for event in dev.change_events(
+                        studio,
+                        view_name="dashboard",
+                        development=development,
+                    )
+                ]
+        finally:
+            await development.close()
+
+    assert asyncio.run(asyncio.wait_for(exercise(), timeout=5)) == []
+
+
+def test_retirement_after_subscribe_closes_the_stream_and_releases_its_client(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = configured(notebook_path)
+
+    async def exercise() -> None:
+        development = DevelopmentCoordinator()
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        baseline_started = asyncio.Event()
+        release_baseline = asyncio.Event()
+        baseline = development.baseline
+        release_stream = clients.release_stream
+        released: list[WorkspaceStreamLease] = []
+
+        async def record_release(lease: WorkspaceStreamLease) -> None:
+            await release_stream(lease)
+            released.append(lease)
+
+        monkeypatch.setattr(clients, "release_stream", record_release)
+
+        async def delayed_baseline(*args: Any, **kwargs: Any) -> Any:
+            baseline_started.set()
+            await release_baseline.wait()
+            return await baseline(*args, **kwargs)
+
+        monkeypatch.setattr(development, "baseline", delayed_baseline)
+        stream = dev.change_events(
+            studio,
+            active_view="dashboard",
+            development=development,
+            clients=clients,
+            agents=agents,
+            client_id="browser-client-1234",
+            stream_generation=1,
+        )
+        ready = asyncio.create_task(anext(stream))
+        try:
+            await wait_for_event(baseline_started, timeout=2)
+            async with development.retiring_view("dashboard"):
+                release_baseline.set()
+                with pytest.raises(StopAsyncIteration):
+                    await asyncio.wait_for(ready, timeout=2)
+            assert len(released) == 1
+            assert not await clients.promote_stream(released[0])
+        finally:
+            release_baseline.set()
+            await asyncio.gather(ready, return_exceptions=True)
+            await stream.aclose()
+            await development.close()
+            await agents.close()
+            await clients.close()
 
     asyncio.run(exercise())

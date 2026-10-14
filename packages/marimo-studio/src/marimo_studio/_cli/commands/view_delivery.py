@@ -353,3 +353,5 @@ def preflight(
         echo_json(result.to_dict())
     else:
         render_static_preflight(result)
+    if not result.ok:
+        raise click.exceptions.Exit(1)

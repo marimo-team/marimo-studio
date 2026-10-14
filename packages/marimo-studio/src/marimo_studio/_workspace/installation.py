@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 from urllib.error import URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import url2pathname
 
 STUDIO_DISTRIBUTION = "marimo-studio"
@@ -55,18 +55,24 @@ def invoking_studio() -> InvokingStudio | None:
         url = str(direct_url["url"])
         vcs = direct_url.get("vcs_info")
         editable = bool(direct_url.get("dir_info", {}).get("editable"))
+        subdirectory = str(direct_url.get("subdirectory") or "")
     except (AttributeError, KeyError, TypeError, ValueError):
         _LOGGER.warning("Ignoring unreadable marimo-studio direct_url.json")
         return InvokingStudio(version)
+    # The project sits in this folder of the recorded source, as in a
+    # monorepo, and the direct reference keeps it as a URL fragment.
+    fragment = f"#subdirectory={quote(subdirectory)}" if subdirectory else ""
     if isinstance(vcs, dict):
         kind, commit = vcs.get("vcs"), vcs.get("commit_id")
         if kind and commit:
-            return InvokingStudio(version, url=f"{kind}+{url}@{commit}")
+            return InvokingStudio(version, url=f"{kind}+{url}@{commit}{fragment}")
         return InvokingStudio(version)
     parsed = urlparse(url)
     if parsed.scheme != "file":
-        return InvokingStudio(version, url=url)
+        return InvokingStudio(version, url=url + fragment)
     path = _local_path(parsed.netloc, parsed.path)
+    if path is not None and editable:
+        path /= subdirectory
     if path is None or not (path.is_dir() if editable else path.exists()):
         _LOGGER.warning(
             "marimo-studio was installed from %s, which is no longer available. "
@@ -77,7 +83,7 @@ def invoking_studio() -> InvokingStudio | None:
         return InvokingStudio(version)
     if editable:
         return InvokingStudio(version, editable=path)
-    return InvokingStudio(version, url=url)
+    return InvokingStudio(version, url=url + fragment)
 
 
 def _local_path(authority: str, path: str) -> Path | None:

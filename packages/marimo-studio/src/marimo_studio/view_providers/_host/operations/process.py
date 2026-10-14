@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import math
 import os
-import stat
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -13,6 +12,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TypeVar, cast
 
+from marimo_studio._filesystem.errors import (
+    ConcurrentChangeError,
+    FileTooLargeError,
+    UnsafePathError,
+)
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessSupervisor
 from marimo_studio.view_providers import (
     BuildRequest,
@@ -29,6 +34,7 @@ from marimo_studio.view_providers import (
 )
 
 from .codec import (
+    SERVER_PROCESS_ENV,
     availability_from_payload,
     build_result_from_payload,
     inspection_from_payload,
@@ -248,6 +254,7 @@ def _operation_timeout(command_timeout: float) -> float:
 def _provider_environment() -> dict[str, str]:
     environment = os.environ.copy()
     environment.pop(_PROJECTION_AUTHORIZATION_ENV, None)
+    environment[SERVER_PROCESS_ENV] = str(os.getpid())
     return environment
 
 
@@ -314,13 +321,17 @@ def _run_provider_process(
                 raise ProviderOperationError(
                     "Provider operation produced too much output"
                 )
-            if completed.returncode != 0 and not response_path.exists():
-                detail = completed.stderr.decode(errors="replace").strip()
+            try:
+                response = json.loads(_read_response(response_path))
+            except (OSError, ValueError) as error:
+                stderr = completed.stderr.decode(errors="replace").strip()
+                output = "\n".join(stderr.splitlines()[-20:])
                 raise ProviderOperationError(
-                    detail
-                    or f"Provider process exited with status {completed.returncode}"
-                )
-            response = json.loads(_read_response(response_path))
+                    f"Provider process exited with status {completed.returncode} "
+                    "before returning a complete result. "
+                    "Check the provider installation and retry."
+                    + (f"\n{output}" if output else "")
+                ) from error
             if not isinstance(response, dict) or set(response) != {
                 "schema",
                 "ok",
@@ -350,19 +361,13 @@ def _run_provider_process(
 
 
 def _read_response(path: Path) -> bytes:
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    descriptor = os.open(path, flags)
     try:
-        state = os.fstat(descriptor)
-        if not stat.S_ISREG(state.st_mode) or state.st_size > _RESULT_LIMIT:
-            raise ProviderOperationError("Provider operation response is invalid")
-        payload = os.read(descriptor, state.st_size + 1)
-        if len(payload) != state.st_size:
-            raise ProviderOperationError(
-                "Provider operation response changed while read"
-            )
-        return payload
-    finally:
-        os.close(descriptor)
+        return FileTree(path.parent).read(path, max_bytes=_RESULT_LIMIT).content
+    except ConcurrentChangeError as error:
+        raise ProviderOperationError(
+            "Provider operation response changed while read"
+        ) from error
+    except (UnsafePathError, FileTooLargeError) as error:
+        raise ProviderOperationError(
+            "Provider operation response is invalid"
+        ) from error

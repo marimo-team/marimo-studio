@@ -29,7 +29,9 @@ import type {
   EmbeddedRuntimeView,
   EmbeddedServerTransport,
   EmbeddedThemeSource,
+  EmbeddedTransport,
   EmbeddedWasmTransport,
+  MountEmbeddedRuntimeOptions,
 } from "../src/embedded-runtime.tsx";
 import type { SessionId } from "../src/session-bootstrap.ts";
 
@@ -313,6 +315,42 @@ const wasmTransport = (
   waitForReady,
 });
 
+interface ReadRuntimeOptions {
+  readonly autoInstantiate?: boolean;
+  readonly ignoreInitialization?: boolean;
+}
+
+const readMount = (
+  transport: EmbeddedTransport,
+  options?: ReadRuntimeOptions,
+): MountEmbeddedRuntimeOptions => ({
+  autoInstantiate: options?.autoInstantiate ?? false,
+  exposeSession: false,
+  initialMode: "read",
+  presentation: presentation(),
+  render: () => null,
+  root: root(),
+  theme: createThemeSource().source,
+  transport,
+  viewMode: "read",
+});
+
+const mountReadRuntime = async (
+  host: RuntimeHostDouble,
+  transport: EmbeddedTransport,
+  options?: ReadRuntimeOptions,
+): Promise<EmbeddedRuntimeHandle> => {
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  let handle!: EmbeddedRuntimeHandle;
+  await act(async () => {
+    handle = mountEmbeddedRuntime(readMount(transport, options));
+    await (options?.ignoreInitialization
+      ? handle.initialized.catch(() => undefined)
+      : handle.initialized);
+  });
+  return handle;
+};
+
 beforeEach(() => {
   document.body.replaceChildren();
   delete globalThis.__MARIMO_STUDIO_SESSION_ID__;
@@ -522,6 +560,47 @@ test("retries only failed disposal work", async () => {
   expect(host.renderer?.disposeCalls).toBe(1);
 });
 
+test("disposal retries the cleanup of a transport that failed to start", async () => {
+  const host = new RuntimeHostDouble();
+  let releaseAttempts = 0;
+  host.transport.prepareWasm = () => {
+    throw new Error("worker failed to start");
+  };
+  host.transport.releaseWasm = () => {
+    releaseAttempts += 1;
+    if (releaseAttempts === 1) {
+      throw new Error("worker release failed");
+    }
+  };
+  const handle = await mountReadRuntime(host, wasmTransport(), { ignoreInitialization: true });
+  await expect(handle.initialized).rejects.toBeInstanceOf(AggregateError);
+
+  await act(async () => handle.dispose());
+
+  expect(releaseAttempts).toBe(2);
+});
+
+test("disposal retries the cleanup of a server transport update that failed to start", async () => {
+  const host = new RuntimeHostDouble();
+  const { runtime } = host.transport;
+  const originalGetWsURL = runtime.getWsURL;
+  const handle = await mountReadRuntime(host, serverTransport(), { autoInstantiate: true });
+  let patchedGetWsURL = runtime.getWsURL;
+  // Another owner wraps the URL method while request activation fails, so
+  // the update cannot restore the URL patch it applied.
+  host.transport.activateServerRequests = () => {
+    patchedGetWsURL = runtime.getWsURL;
+    runtime.getWsURL = (sessionId) => patchedGetWsURL(sessionId);
+    throw new Error("request client failed to start");
+  };
+
+  expect(() => handle.updateServerTransport(serverTransport())).toThrow(AggregateError);
+
+  runtime.getWsURL = patchedGetWsURL;
+  await act(async () => handle.dispose());
+  expect(runtime.getWsURL).toBe(originalGetWsURL);
+});
+
 test("waits for WebAssembly readiness before reporting initialization", async () => {
   const target = root();
   const theme = createThemeSource();
@@ -585,6 +664,41 @@ test("reports synchronous transport failures through the handle", async () => {
   });
 
   await act(async () => handle.dispose());
+});
+
+test("restores the previous server transport when an update fails", async () => {
+  const host = new RuntimeHostDouble();
+  const handle = await mountReadRuntime(
+    host,
+    serverTransport((url) => {
+      url.searchParams.set("revision", "first");
+      return url;
+    }),
+  );
+  const activate = host.transport.activateServerRequests.bind(host.transport);
+  vi.spyOn(host.transport, "activateServerRequests")
+    .mockImplementationOnce(() => {
+      throw new Error("request client rejected the next transport");
+    })
+    .mockImplementation(activate);
+
+  expect(() =>
+    handle.updateServerTransport(
+      serverTransport((url) => {
+        url.searchParams.set("revision", "next");
+        return url;
+      }),
+    ),
+  ).toThrow("request client rejected the next transport");
+
+  expect(host.transport.runtime.getWsURL(testSessionId()).searchParams.get("revision")).toBe(
+    "first",
+  );
+  expect(host.transport.runtime.headers()["Marimo-Session-Id"]).toBe("s_view01");
+  expect(host.transport.serverRequestActivations).toBe(2);
+  expect(host.transport.serverRequestReleases).toBe(1);
+  await act(async () => handle.dispose());
+  expect(host.transport.serverRequestReleases).toBe(2);
 });
 
 test("allows one embedded runtime owner per mount boundary", async () => {
@@ -689,6 +803,27 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
       viewMode: "read",
     }),
   ).toThrow("already mounted");
+});
+
+test("a mount rollback leaves no unhandled transport startup failure", async () => {
+  const host = new RuntimeHostDouble();
+  host.transport.prepareWasm = () => {
+    throw new Error("worker failed to start");
+  };
+  host.renderError = new Error("runtime render failed");
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  const unhandled = vi.fn();
+  process.on("unhandledRejection", unhandled);
+
+  try {
+    expect(() => mountEmbeddedRuntime(readMount(wasmTransport()))).toThrow("runtime render failed");
+    // Node reports unhandled rejections after the microtask queue drains.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    process.off("unhandledRejection", unhandled);
+  }
+
+  expect(unhandled).not.toHaveBeenCalled();
 });
 
 test("accepts JSON function results and rejects runtime-only values", () => {

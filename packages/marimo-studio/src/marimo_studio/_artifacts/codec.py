@@ -41,6 +41,40 @@ _PHASES = frozenset({"unbuilt", "building", "failed", "published", "stale"})
 _CONTROL_FILE_MAX_BYTES = 16 * 1024 * 1024
 
 
+MAX_RECEIPT_DIAGNOSTICS = 512
+# Receipts may carry distinct build and publication arrays. Reserve space
+# for both copies, their truncation warnings, and the receipt metadata.
+_RECEIPT_DIAGNOSTICS_MAX_BYTES = _CONTROL_FILE_MAX_BYTES // 4
+
+
+def receipt_diagnostics(
+    diagnostics: tuple[ProjectDiagnostic, ...],
+) -> tuple[ProjectDiagnostic, ...]:
+    """Fit build diagnostics into one receipt and report what was omitted."""
+    size = 2
+    kept = 0
+    for diagnostic in diagnostics[:MAX_RECEIPT_DIAGNOSTICS]:
+        size += len(encode_json(diagnostic.to_dict()).encode("utf-8"))
+        if size > _RECEIPT_DIAGNOSTICS_MAX_BYTES:
+            break
+        kept += 1
+    if kept == len(diagnostics):
+        return diagnostics
+    kept = min(kept, MAX_RECEIPT_DIAGNOSTICS - 1)
+    return (
+        *diagnostics[:kept],
+        ProjectDiagnostic(
+            code="build-diagnostics-truncated",
+            severity="warning",
+            message=(
+                f"Studio kept the first {kept} build diagnostics and omitted "
+                f"{len(diagnostics) - kept} more."
+            ),
+            hint="Fix the reported diagnostics, then build the view again.",
+        ),
+    )
+
+
 class ArtifactFormatError(ConfigurationError):
     """Stored artifact state was written in another Studio format."""
 
@@ -389,7 +423,7 @@ def _publication(value: object) -> ArtifactPublication:
             for item in _array(
                 data["diagnostics"],
                 "Published build diagnostics",
-                maximum=512,
+                maximum=MAX_RECEIPT_DIAGNOSTICS,
             )
         ),
         _integer(data["duration_ms"], "Published build duration"),
@@ -421,7 +455,7 @@ def profile_state(
 
 
 def profile_state_dict(state: ArtifactProfileState) -> dict[str, object]:
-    return {
+    value: dict[str, object] = {
         "schema": 2,
         "profile": state.profile,
         "published": (
@@ -443,6 +477,9 @@ def profile_state_dict(state: ArtifactProfileState) -> dict[str, object]:
             "duration_ms": state.build.duration_ms,
         },
     }
+    if len(encode_json(value).encode("utf-8")) >= _CONTROL_FILE_MAX_BYTES:
+        _invalid("Artifact profile receipt exceeds the serialized size limit")
+    return value
 
 
 def decode_profile_state(
@@ -489,7 +526,7 @@ def decode_profile_state(
             for item in _array(
                 raw_build["diagnostics"],
                 "Artifact build diagnostics",
-                maximum=512,
+                maximum=MAX_RECEIPT_DIAGNOSTICS,
             )
         ),
         duration_ms=(
@@ -525,7 +562,9 @@ def read_json(root: Path, path: Path, label: str) -> object:
             parse_constant=reject_constant,
             object_pairs_hook=unique_object,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, RecursionError) as error:
+        # ValueError covers JSONDecodeError, UnicodeError, and decoder limits such
+        # as oversized integers. Deep nesting raises RecursionError.
         raise ConfigurationError(f"Could not read {label}: {path}: {error}") from error
 
 

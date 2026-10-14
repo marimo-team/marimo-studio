@@ -1,6 +1,17 @@
-import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+import { type ErrorResponse, parseErrorResponse } from "@marimo-studio/protocol/errors";
 
 export type EditorQuerySyncResult = "accepted" | "retry";
+
+/** The server refused this query, so sending it again fails the same way. */
+export class QuerySyncRejectedError extends Error {
+  constructor(
+    message: string,
+    readonly hint: string | undefined,
+  ) {
+    super(message);
+    this.name = "QuerySyncRejectedError";
+  }
+}
 
 const ATTEMPT_TIMEOUT_MS = 3_000;
 
@@ -40,15 +51,16 @@ export const syncEditorQuery = async (
     if (response.status === 408 || response.status === 429 || response.status >= 500) {
       return "retry";
     }
-    if (response.status === 409) {
-      const transient = await isTransient(response);
-      signal?.throwIfAborted();
-      request.signal.throwIfAborted();
-      if (transient) {
-        return "retry";
-      }
+    const detail = await errorDetail(response);
+    signal?.throwIfAborted();
+    request.signal.throwIfAborted();
+    if (response.status === 409 && detail.transient === true) {
+      return "retry";
     }
-    throw new Error(`Query synchronization failed with ${response.status}`);
+    throw new QuerySyncRejectedError(
+      detail.message ?? "The Studio server refused the query state.",
+      detail.hint,
+    );
   } catch (error) {
     if (signal?.aborted) {
       throw error;
@@ -63,10 +75,10 @@ export const syncEditorQuery = async (
   }
 };
 
-const isTransient = async (response: Response): Promise<boolean> => {
+const errorDetail = async (response: Response): Promise<ErrorResponse> => {
   try {
-    return parseErrorResponse(await response.json()).transient === true;
+    return parseErrorResponse(await response.json());
   } catch {
-    return false;
+    return {};
   }
 };

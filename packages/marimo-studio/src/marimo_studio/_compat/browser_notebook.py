@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import io
 import textwrap
 from importlib.metadata import packages_distributions
 from pathlib import Path
@@ -134,6 +135,8 @@ def browser_notebook_source(
     if guard is None:
         separator = "" if not sanitized or sanitized.endswith("\n") else "\n"
         return sanitized + separator + "\n" + bridge
-    lines = sanitized.splitlines(keepends=True)
+    # The guard line counts only newlines, as the tokenizer does. splitlines()
+    # also breaks on form feeds and Unicode separators inside string literals.
+    lines = io.StringIO(sanitized).readlines()
     offset = sum(len(line) for line in lines[: guard - 1])
     return sanitized[:offset] + bridge + sanitized[offset:]

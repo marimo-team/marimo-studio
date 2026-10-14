@@ -277,3 +277,55 @@ def test_deno_cache_refuses_a_directory_replaced_after_resolution(
 
     monkeypatch.undo()
     assert list(outside.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="Windows creates the cache through path operations"
+)
+def test_deno_cache_refuses_an_ancestor_swapped_while_opening(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path.resolve() / "view"
+    cache_root = project / ".artifacts" / ".cache"
+    cache_root.parent.mkdir(parents=True)
+    outside = tmp_path.resolve() / "outside"
+    (outside / ".artifacts").mkdir(parents=True)
+    native_open = os.open
+    swapped = False
+
+    # Another process swaps the project for a symlink as Studio opens the path.
+    def swap_then_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            project.rename(tmp_path / "previous-view")
+            project.symlink_to(outside, target_is_directory=True)
+        return native_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap_then_open)
+    monkeypatch.setattr(os, "supports_dir_fd", os.supports_dir_fd | {swap_then_open})
+
+    with pytest.raises(ValueError, match="regular directories"):
+        _deno_cache.ensure_cache_directory(cache_root, PurePosixPath("deno"))
+
+    monkeypatch.undo()
+    assert list((outside / ".artifacts").iterdir()) == []
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="directory modes do not restrict listing on Windows or for root",
+)
+def test_deno_cache_works_below_a_search_only_ancestor(tmp_path: Path) -> None:
+    shared = tmp_path.resolve() / "shared"
+    cache_root = shared / "team" / "view" / ".artifacts" / ".cache"
+    cache_root.parent.mkdir(parents=True)
+    shared.chmod(0o311)
+    try:
+        created = _deno_cache.ensure_cache_directory(cache_root, PurePosixPath("deno"))
+    finally:
+        shared.chmod(0o755)
+
+    assert created == cache_root / "deno"
+    assert created.is_dir()

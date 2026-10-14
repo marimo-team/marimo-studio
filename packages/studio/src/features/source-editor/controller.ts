@@ -122,6 +122,8 @@ export class SourceController {
     }
     this.transition += 1;
     this.refreshQueue = undefined;
+    // The pending load belongs to the retired owner and discards its session.
+    this.sessionLoad = undefined;
     this.session?.dispose();
     this.session = undefined;
     this.inspection = { phase: "checking" };

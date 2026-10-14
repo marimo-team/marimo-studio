@@ -239,3 +239,64 @@ assert.deepEqual(ports.map((port) => port.closed), [true, true]);
 assert.equal(requests, 0);
 """
     )
+
+
+@pytest.mark.parametrize(
+    ("filename", "skipped"),
+    [("/tmp/scratch/nb.py", True), ("/home/user/nb.py", False)],
+)
+def test_changed_transaction_reports_a_save_marimo_skips(
+    tmp_path: Path, filename: str, skipped: bool
+) -> None:
+    cells = tmp_path / "cells-test.js"
+    cells.write_bytes(_cells_module())
+    expected = (
+        "[{ schema: 1, type: 'marimo-studio:editor-document-save-skipped', "
+        "generation: 1 }]"
+        if skipped
+        else "[]"
+    )
+    _run_node(
+        f"""
+import assert from "node:assert/strict";
+import {{ pathToFileURL }} from "node:url";
+import {{ MessageChannel }} from "node:worker_threads";
+globalThis.MessageChannel = MessageChannel;
+globalThis.frameElement = {{ hasAttribute: () => true }};
+globalThis.location = {{ origin: "https://studio.test" }};
+globalThis.addEventListener = () => {{}};
+globalThis.removeEventListener = () => {{}};
+globalThis.document = {{
+  querySelector: (selector) =>
+    selector === "marimo-filename" ? {{ textContent: {filename!r} }} : null,
+}};
+Object.defineProperty(globalThis, "crypto", {{
+  configurable: true,
+  value: {{ getRandomValues: (values) => values.fill(0) }},
+}});
+const messages = [];
+globalThis.parent = {{
+  postMessage(message, _origin, ports = []) {{
+    messages.push(message);
+    if (message.type === "marimo-studio:editor-document-mutation") {{
+      ports[0].postMessage({{
+        schema: 1,
+        type: "marimo-studio:editor-document-mutation-ready",
+        generation: message.generation,
+      }});
+      ports[0].close();
+    }}
+  }},
+}};
+globalThis.__documentClient = {{ sendDocumentTransaction: async () => true }};
+const module = await import(pathToFileURL({str(cells)!r}).href);
+module.queueChange({{ id: "edit" }});
+await module.studioFlushDocumentChanges();
+assert.deepEqual(
+  messages.filter(
+    (message) => message.type === "marimo-studio:editor-document-save-skipped",
+  ),
+  {expected},
+);
+"""
+    )
