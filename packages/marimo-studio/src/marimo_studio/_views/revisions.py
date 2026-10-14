@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import TracebackType
 
 from marimo_studio._artifacts.inputs import project_revision_snapshot
@@ -186,6 +186,7 @@ class PresentationSourceSnapshot:
     leases: dict[str, ArtifactLease]
     notebook_source: str
     base_identity: tuple[object, ...]
+    build_failures: dict[str, MarimoStudioError] = field(default_factory=dict)
 
     @property
     def source_revision(self) -> str:
@@ -255,6 +256,7 @@ def capture_presentations(
     selected = _selected_views(studio, view_names)
     notebook_source, base_identity = _presentation_source(studio)
     leases: dict[str, ArtifactLease] = {}
+    build_failures: dict[str, MarimoStudioError] = {}
     try:
         for name in selected:
             project = studio.views[name]
@@ -291,10 +293,12 @@ def capture_presentations(
                 if retained is None:
                     raise
                 leases[name] = retained
+                build_failures[name] = error
         return PresentationSourceSnapshot(
             leases=leases,
             notebook_source=notebook_source,
             base_identity=base_identity,
+            build_failures=build_failures,
         )
     except BaseException as error:
         retained = tuple(leases.values())

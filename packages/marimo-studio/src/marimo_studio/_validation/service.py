@@ -45,7 +45,6 @@ class ValidationPreparation:
 
     views: tuple[str, ...]
     view_name: str | None
-    revisions: dict[str, str]
     source_revisions: dict[str, str]
     static: CheckReport
 
@@ -67,20 +66,35 @@ def _views(studio: StudioWorkspace, view_name: str | None) -> tuple[str, ...]:
     return (view_name,)
 
 
-def _presentation_revisions(
+def _presentation_build_failures(
     studio: StudioWorkspace,
     views: tuple[str, ...],
     expected_generations: Mapping[str, str] | None = None,
     *,
     prepared: Mapping[str, PreparedViewProject] | None = None,
-) -> dict[str, str]:
+) -> dict[str, MarimoStudioError]:
     with capture_presentations(
         studio,
         views,
         prepared=prepared,
         expected_generations=expected_generations,
     ) as snapshot:
-        return {view: snapshot.revisions[view] for view in views}
+        return dict(snapshot.build_failures)
+
+
+def _page_unavailable(studio: StudioWorkspace, message: str) -> CheckResult:
+    return CheckResult(
+        "validation-page-revision",
+        "fail",
+        message,
+        code="validation-page-unavailable",
+        details={
+            "source": {"path": str(studio.notebook)},
+            "hint": (
+                "Fix the view build diagnostics, publish it, then rerun validation."
+            ),
+        },
+    )
 
 
 def _try_source_revisions(
@@ -153,7 +167,7 @@ def _prepare_validation(
         _published_sites=sites,
     )
     try:
-        revisions = _presentation_revisions(
+        build_failures = _presentation_build_failures(
             studio,
             selected,
             expected_generations,
@@ -161,25 +175,26 @@ def _prepare_validation(
         )
     except (KeyError, OSError, MarimoStudioError) as error:
         raise_process_cleanup(error)
-        revisions = {view: "unavailable" for view in selected}
         if static.ok:
             static = static.extend(
                 (
-                    CheckResult(
-                        "validation-page-revision",
-                        "fail",
+                    _page_unavailable(
+                        studio,
                         f"Studio presentations could not be captured: {error}",
-                        code="validation-page-unavailable",
-                        details={
-                            "source": {"path": str(studio.notebook)},
-                            "hint": (
-                                "Fix the view build diagnostics, publish it, then "
-                                "rerun validation."
-                            ),
-                        },
                     ),
                 )
             )
+    else:
+        static = static.extend(
+            tuple(
+                _page_unavailable(
+                    studio,
+                    f"View {name!r} failed to build, so only its last successful "
+                    f"publication is available: {error}",
+                )
+                for name, error in build_failures.items()
+            )
+        )
     after, after_error = _try_source_revisions(studio, selected)
     source_error = before_error or after_error
     source_stable = source_error is None and before is not None and before == after
@@ -207,7 +222,6 @@ def _prepare_validation(
     return ValidationPreparation(
         views=selected,
         view_name=view_name,
-        revisions=revisions,
         source_revisions=source_revisions,
         static=static,
     )
