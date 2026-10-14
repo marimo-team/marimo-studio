@@ -234,3 +234,32 @@ def test_browser_notebook_removes_equivalent_provider_requirement_spelling(
     )
 
     assert list(projected_metadata["dependencies"]) == []
+
+
+@pytest.mark.parametrize("separator", ["\x0c", "\u2028", "\x85"])
+def test_browser_notebook_places_its_bridge_after_cells_with_line_separators(
+    tmp_path: Path,
+    separator: str,
+) -> None:
+    import ast
+
+    source = (
+        "import marimo\n\n"
+        '__generated_with = "0.25.1"\n'
+        "app = marimo.App()\n\n\n"
+        "@app.cell\n"
+        "def _():\n"
+        f'    text = "a{separator * 4}b"\n'
+        "    return (text,)\n\n\n"
+        "@app.cell\n"
+        "def _(text):\n"
+        "    text\n"
+        "    return\n\n\n"
+        'if __name__ == "__main__":\n'
+        "    app.run()\n"
+    )
+
+    browser = browser_notebook_source(tmp_path / "notebook.py", source)
+
+    ast.parse(browser)
+    assert browser.index("if __name__") > browser.index("def _(text):")
