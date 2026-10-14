@@ -8,7 +8,13 @@ import { activeDocumentLifecycleId } from "../src/document/document-lifecycle-id
 import { startPresentationObservers, stopPresentationObservers } from "../src/observers.ts";
 import { projectionHosts } from "../src/projections/host-runtime.ts";
 import { toBrowserDiagnostics } from "../src/readiness-diagnostics.ts";
-import { pageReadinessState, ReadinessController } from "../src/readiness.ts";
+import {
+  beginPresentationRefresh,
+  pageReadinessState,
+  readiness,
+  ReadinessController,
+  setPresentationRefreshState,
+} from "../src/readiness.ts";
 import {
   announceRenderedViewReady,
   setRuntimeConnectionState,
@@ -304,4 +310,24 @@ test("an unrelated loading owner does not erase an unresolved disconnect diagnos
   assert.equal(controller.snapshot().presentationDiagnostic, undefined);
   controller.setPresentation(document, "ready");
   assert.equal(controller.snapshot().page, "ready");
+});
+
+test("a build refresh begun before the observers start reports its failure", () => {
+  const build = beginPresentationRefresh("build");
+
+  startPresentationObservers(async () => {});
+  assert.equal(readiness.snapshot().presentation, "loading");
+  const diagnostic = {
+    scope: "presentation" as const,
+    severity: "error" as const,
+    code: "view-build-failed",
+    message: "Latest build failed.",
+    hint: "Fix the view source, then build it again.",
+    view: "dashboard",
+  };
+  setPresentationRefreshState(build, "error", diagnostic);
+
+  assert.equal(readiness.snapshot().presentation, "error");
+  assert.deepEqual(readiness.snapshot().presentationDiagnostic, diagnostic);
+  setPresentationRefreshState(beginPresentationRefresh("build"), "ready");
 });
