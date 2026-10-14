@@ -66,6 +66,16 @@ def test_runtime_timeout_must_be_finite() -> None:
     assert "finite number" in result.output
 
 
+def test_runtime_timeout_must_be_positive() -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["validate", "--level", "runtime", "--runtime-timeout", "0"],
+    )
+
+    assert result.exit_code == 2
+    assert "0<x<=" in result.output
+
+
 @pytest.mark.native_process
 def test_runtime_timeout_bounds_projected_output_rendering(
     tmp_path: Path,

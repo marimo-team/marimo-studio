@@ -53,7 +53,7 @@ def finite_timeout(
 
 runtime_timeout_option = click.option(
     "--runtime-timeout",
-    type=click.FloatRange(min=0, max=MAX_RUNTIME_TIMEOUT),
+    type=click.FloatRange(min=0, min_open=True, max=MAX_RUNTIME_TIMEOUT),
     callback=finite_timeout,
     default=DEFAULT_RUNTIME_TIMEOUT,
     show_default=True,
