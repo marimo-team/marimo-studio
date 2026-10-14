@@ -705,6 +705,10 @@ def test_react_entry_normalization_rewrites_only_the_script_source(
     assert f"SRC='./{normalized.name}?mode=dev#entry'" in rewritten
 
 
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 @pytest.mark.parametrize(
     "binding",
     [
@@ -735,6 +739,10 @@ def test_react_shadowed_bindings_keep_dynamic_target_allowance(
     assert site.targets == "*"
 
 
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 @pytest.mark.parametrize(
     ("catch", "targets"),
     [
