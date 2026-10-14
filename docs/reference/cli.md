@@ -380,8 +380,8 @@ missing fetched assets, and unresolved local module paths. It warns when a
 computed module import, URL constructor target, bare module specifier, parser
 limitation, or size bound prevents complete static inspection. A warning
 preserves a successful result and gives the caller the remaining review
-boundary. Preflight prints the complete report and exits with status `1` when
-any error remains.
+boundary. Preflight prints a summary. Use `--json` for the complete report.
+The command exits with status `1` when any error remains.
 
 Use `--runtime zero-python` to discover projected outputs that retain Python
 callbacks or fail during prepared-state capture. The diagnostic preserves the
