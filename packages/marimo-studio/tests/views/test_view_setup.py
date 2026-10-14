@@ -112,6 +112,25 @@ def test_view_setup_works_below_a_search_only_ancestor(tmp_path: Path) -> None:
     assert result.root.joinpath("index.html").is_file()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_view_lock_refuses_an_ancestor_replaced_by_a_symlink(tmp_path: Path) -> None:
+    from marimo_studio._filesystem.errors import UnsafePathError
+    from marimo_studio._workspace.mutation_lock import view_mutation_lock
+
+    real = tmp_path / "real"
+    view_root = (real / "team" / "studio" / "analysis").resolve()
+    view_root.mkdir(parents=True)
+    victim = tmp_path / "victim"
+    (victim / "team" / "studio" / "analysis").mkdir(parents=True)
+    real.rename(tmp_path / "aside")
+    real.symlink_to(victim, target_is_directory=True)
+
+    with pytest.raises(UnsafePathError), view_mutation_lock(view_root, "dashboard"):
+        pass
+
+    assert not (victim / "team" / "studio" / "analysis" / ".locks").exists()
+
+
 @pytest.mark.skipif(
     os.name == "nt" or os.geteuid() == 0,
     reason="directory modes do not restrict listing on Windows or for root",

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import stat
 import threading
 from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from weakref import WeakValueDictionary
 
+from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.ignore import ignore_generated_directory
 from marimo_studio._workspace.models import VIEW_PATTERN
@@ -51,12 +53,15 @@ def _mutation_lock(
     root = view_root.absolute()
     lock_path = root / ".locks" / filename
     # The lock tree starts at the nearest existing ancestor of the view root,
-    # which callers resolve, so a link at or below it is refused. Opening
-    # ancestors above it would need read permission on folders a notebook
-    # reaches with search permission alone.
+    # because opening the ancestors above it would need read permission on
+    # folders a notebook reaches with search permission alone. lstat needs
+    # only search permission, so it refuses a link swapped in above that root.
     boundary = root.parent
     while not boundary.is_dir() and boundary != boundary.parent:
         boundary = boundary.parent
+    for ancestor in (*reversed(boundary.parents), boundary):
+        if stat.S_ISLNK(ancestor.lstat().st_mode):
+            raise UnsafePathError(f"Path is a symlink: {ancestor}")
     tree = FileTree(boundary)
     thread_lock = _thread_lock(lock_path)
     if not thread_lock.acquire(blocking=blocking):
