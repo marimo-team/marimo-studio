@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/agent/test_workspace.py
+  s_44b9639489bcb6::t_5150988233c384 877-890
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "96a40d705815cd226e4a4eafc079036af45caaa9",
+  "prompts": {},
+  "sessions": {
+    "s_44b9639489bcb6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13a1b-d74a-7390-a341-eedbeffbc372",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
