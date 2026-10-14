@@ -71,6 +71,8 @@ def invoking_studio() -> InvokingStudio | None:
     if parsed.scheme != "file":
         return InvokingStudio(version, url=url + fragment)
     path = _local_path(parsed.netloc, parsed.path)
+    if path is not None and editable:
+        path /= subdirectory
     if path is None or not (path.is_dir() if editable else path.exists()):
         _LOGGER.warning(
             "marimo-studio was installed from %s, which is no longer available. "
@@ -80,7 +82,7 @@ def invoking_studio() -> InvokingStudio | None:
         )
         return InvokingStudio(version)
     if editable:
-        return InvokingStudio(version, editable=path / subdirectory)
+        return InvokingStudio(version, editable=path)
     return InvokingStudio(version, url=url + fragment)
 
 
