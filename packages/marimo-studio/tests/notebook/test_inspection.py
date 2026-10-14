@@ -1221,10 +1221,21 @@ def test_inspecting_a_markdown_notebook_names_the_file_and_the_conversion(
     [
         ("await _pending", True),
         ("_alias = _pending\nawait _alias", True),
+        ("await asyncio.gather(_pending)", True),
+        ("await asyncio.wait_for(_pending, timeout=1)", True),
+        ("await asyncio.gather(_emit(mo.output))", True),
         ("_done = True", False),
         ("_pending = None\n_done = True", False),
     ],
-    ids=["awaited", "awaited-alias", "unawaited", "rebound"],
+    ids=[
+        "awaited",
+        "awaited-alias",
+        "gathered",
+        "wait-for",
+        "gathered-call",
+        "unawaited",
+        "rebound",
+    ],
 )
 def test_starter_output_cells_follow_awaited_local_coroutines(
     tmp_path: Path,

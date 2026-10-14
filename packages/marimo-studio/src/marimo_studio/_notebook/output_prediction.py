@@ -746,6 +746,12 @@ class _PossibleOutputVisitor(ast.NodeVisitor):
                 self.visit(argument)
         for keyword in node.keywords:
             self.visit(keyword.value)
+        if await_async:
+            # An awaited wrapper such as asyncio.gather runs the coroutines it
+            # receives.
+            for argument in (*node.args, *(item.value for item in node.keywords)):
+                if not isinstance(argument, ast.Starred):
+                    self._run_coroutines(argument)
         operations = self._marimo_operations(function)
         if any(
             operation.name != "sql" or not self._output_is_false(node)
@@ -793,7 +799,10 @@ class _PossibleOutputVisitor(ast.NodeVisitor):
             self._visit_call(node.value, await_async=True)
             return
         self.visit(node.value)
-        for value in self._binding_values(self._binding(node.value)):
+        self._run_coroutines(node.value)
+
+    def _run_coroutines(self, node: ast.expr) -> None:
+        for value in self._binding_values(self._binding(node)):
             if (
                 isinstance(value, _DeferredCall)
                 and isinstance(value.function, ast.AsyncFunctionDef)
