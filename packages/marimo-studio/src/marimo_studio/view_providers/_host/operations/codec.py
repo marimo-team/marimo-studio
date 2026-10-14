@@ -5,12 +5,17 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
-import stat
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
 
 from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET, FileBudgetTracker
+from marimo_studio._filesystem.errors import (
+    ConcurrentChangeError,
+    FileTooLargeError,
+    UnsafePathError,
+)
+from marimo_studio._filesystem.files import FileTree
 from marimo_studio.view_providers import (
     BuildInput,
     BuildResult,
@@ -644,24 +649,12 @@ def _text(value: object, label: str, *, empty: bool = False) -> str:
 
 
 def _read_blob(path: Path, expected_size: int) -> bytes:
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0)
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    descriptor = os.open(path, flags)
     try:
-        state = os.fstat(descriptor)
-        if not stat.S_ISREG(state.st_mode) or state.st_size != expected_size:
-            raise ValueError("Provider starter blob size does not match")
-        chunks: list[bytes] = []
-        remaining = expected_size
-        while remaining:
-            chunk = os.read(descriptor, min(64 * 1024, remaining))
-            if not chunk:
-                raise ValueError("Provider starter blob changed while read")
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        if os.read(descriptor, 1):
-            raise ValueError("Provider starter blob changed while read")
-        return b"".join(chunks)
-    finally:
-        os.close(descriptor)
+        content = FileTree(path.parent).read(path, max_bytes=expected_size).content
+    except ConcurrentChangeError as error:
+        raise ValueError("Provider starter blob changed while read") from error
+    except (UnsafePathError, FileTooLargeError) as error:
+        raise ValueError("Provider starter blob size does not match") from error
+    if len(content) != expected_size:
+        raise ValueError("Provider starter blob size does not match")
+    return content
