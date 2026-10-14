@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from click.testing import CliRunner
@@ -10,7 +10,9 @@ from click.testing import CliRunner
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
 from marimo_studio._cli.environment import SANDBOX_ENV
+from marimo_studio._workspace import load_studio
 
+from ..artifact_test_support import add_provider_outputs
 from .export_test_support import configure_export_view
 
 _PREPARE_TIMEOUT = 120.0
@@ -249,3 +251,50 @@ def test_agent_view_preflights_without_publishing_a_destination(
     assert result.view == "dashboard"
     assert events[0].event.kind == "build_started"
     assert events[-1].event.kind == "preflight_finished"
+
+
+def test_preflight_reports_every_error_and_exits_unsuccessfully(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = configure_export_view(notebook_path)
+    root.joinpath("app.js").write_text("export {};\n", encoding="utf-8")
+    document = root / "index.html"
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            "</head>", '<script type="module" src="./app.js"></script></head>'
+        ),
+        encoding="utf-8",
+    )
+    add_provider_outputs(
+        monkeypatch,
+        load_studio(notebook_path).view("dashboard"),
+        {
+            PurePosixPath(
+                "app.js"
+            ): b'import "./missing-first.js"; import "./missing-second.js";'
+        },
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "preflight",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--runtime",
+            "wasm",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.stdout, (result.exception, result.output)
+    report = json.loads(result.stdout)
+    assert report["ok"] is False
+    assert [issue["reference"] for issue in report["issues"]] == [
+        "./missing-first.js",
+        "./missing-second.js",
+    ]

@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from time import monotonic
+from typing import cast
 from urllib.parse import quote
 
 from marimo_export.delivery import DeliveryResult, StagedDelivery, stage
@@ -836,7 +837,8 @@ def _export_to_delivery(
     expected_catalog_generation: str | None,
     expected_generation: str | None,
     progress: ExportProgressCallback | None,
-) -> StaticExportResult:
+    preflight_only: bool,
+) -> StaticExportResult | StaticPreflightReport:
     adapters = create_export_adapters()
     build_started = monotonic()
     _emit_progress(
@@ -1026,6 +1028,8 @@ def _export_to_delivery(
                     ),
                 ),
             )
+            if preflight_only:
+                return preflight
             if not preflight.ok:
                 first = next(
                     issue for issue in preflight.issues if issue.severity == "error"
@@ -1090,6 +1094,36 @@ def export_view(
     progress: ExportProgressCallback | None = None,
 ) -> StaticExportResult:
     """Export one configured view through a selected static runtime."""
+    return cast(
+        StaticExportResult,
+        _generate_static_view(
+            target,
+            output,
+            view=view,
+            runtime=runtime,
+            force=force,
+            prepare_timeout=prepare_timeout,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+            progress=progress,
+        ),
+    )
+
+
+def _generate_static_view(
+    target: str | Path,
+    output: str | Path,
+    *,
+    view: str | None = None,
+    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
+    force: bool = False,
+    prepare_timeout: float | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+    progress: ExportProgressCallback | None = None,
+    preflight_only: bool = False,
+) -> StaticExportResult | StaticPreflightReport:
+    """Export one configured view through a selected static runtime."""
     if runtime not in {"zero-python", "wasm"}:
         raise ValueError("runtime must be 'zero-python' or 'wasm'")
     resolved_prepare_timeout = _resolve_prepare_timeout(runtime, prepare_timeout)
@@ -1128,6 +1162,7 @@ def export_view(
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
             progress=progress,
+            preflight_only=preflight_only,
         )
 
 
@@ -1142,17 +1177,8 @@ def preflight_view(
     progress: ExportProgressCallback | None = None,
 ) -> StaticPreflightReport:
     """Build, prepare, and inspect one static view without publishing it."""
-    finished = False
-
-    def relay(event: StaticExportProgress) -> None:
-        nonlocal finished
-        if finished:
-            return
-        _emit_progress(progress, event)
-        finished = event.event.kind == "preflight_finished"
-
     with TemporaryDirectory(prefix="marimo-studio-preflight-") as temporary:
-        result = export_view(
+        result = _generate_static_view(
             target,
             Path(temporary) / "bundle",
             view=view,
@@ -1160,6 +1186,7 @@ def preflight_view(
             prepare_timeout=prepare_timeout,
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
-            progress=relay,
+            progress=progress,
+            preflight_only=True,
         )
-        return result.preflight
+        return cast(StaticPreflightReport, result)
