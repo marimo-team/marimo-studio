@@ -560,6 +560,10 @@ def test_svelte_revalidates_tsconfig_before_installation(
     assert raised.value.diagnostic.code == "provider-options-invalid"
 
 
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 @pytest.mark.parametrize(
     "key,expected",
     [
