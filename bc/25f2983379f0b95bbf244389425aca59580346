@@ -1,0 +1,9 @@
+packages/marimo-studio/tests/views/test_view_setup.py
+  ai_agent 13,23,39,63-73,132,134,138,140,201-206,208,211,213-221,1083,1104,1114,1116,1131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bc25f2983379f0b95bbf244389425aca59580346",
+  "prompts": {}
+}
