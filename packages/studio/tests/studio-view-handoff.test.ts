@@ -260,6 +260,47 @@ describe("Studio view handoff lifecycle", () => {
     },
   );
 
+  it("saves Source edits typed while the target view stages before it commits", async () => {
+    class EventSourceStub {
+      addEventListener(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+        if (url.pathname === "/_marimo-studio/views") {
+          return Response.json(viewList(["dashboard", "report"]));
+        }
+        return new Response(null, { status: 204 });
+      }),
+    );
+    const services = createStudioServices(bootstrap);
+    vi.spyOn(services.source, "start").mockResolvedValue();
+    const staged = deferred<boolean>();
+    const rollback = vi.fn(async () => undefined);
+    vi.spyOn(services.preview, "stageNavigation").mockReturnValue({
+      ready: staged.promise,
+      rollback,
+    });
+    const flushes: boolean[] = [true, false];
+    const flush = vi
+      .spyOn(services.source, "prepareViewChange")
+      .mockImplementation(async () => flushes.shift() ?? true);
+    await services.start(document.createElement("iframe"), studioFrames());
+
+    const selecting = services.views.choose("report");
+    await vi.waitFor(() => expect(flush).toHaveBeenCalledTimes(1));
+    staged.resolve(true);
+
+    expect(await selecting).toBe(false);
+    expect(flush).toHaveBeenCalledTimes(2);
+    expect(rollback).toHaveBeenCalledOnce();
+    expect(services.views.getSnapshot().current).toBe("dashboard");
+    await services.close();
+  });
+
   it("drains a staged handoff before same-client remount", async () => {
     const events: string[] = [];
     const previewCanSettle = deferred<void>();

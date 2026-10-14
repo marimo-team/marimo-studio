@@ -95,12 +95,21 @@ export const createStudioServices = (
         owner === "agent" ? "document" : "rendered",
       );
       const fromView = views?.getSnapshot().current ?? bootstrap.selectedView;
-      return stageCommittedView(
+      const committed = stageCommittedView(
         staged,
         started && changed && owner === "browser"
           ? () => activeViewHandoff.stage(fromView, view, signal)
           : undefined,
       );
+      if (!changed) {
+        return committed;
+      }
+      // Source stays editable while the target stages, so commit waits for
+      // edits typed after `prepare` to save.
+      return {
+        ...committed,
+        ready: committed.ready.then(async (ready) => ready && (await source.prepareViewChange())),
+      };
     },
     commit: (view, landing, changed, navigation) => {
       if (navigation) {
