@@ -104,7 +104,12 @@ def _compile_diagnostic(
             relative = None
         # A diagnostic inside a Typst package names a file outside the view
         # project, so its location stays in the message.
-        if relative and root.joinpath(*relative.parts).is_file():
+        if (
+            relative
+            and line > 0
+            and column > 0
+            and root.joinpath(*relative.parts).is_file()
+        ):
             source = SourceLocation(relative, line, column)
         else:
             message = f"{path}:{line}:{column}: {message}"

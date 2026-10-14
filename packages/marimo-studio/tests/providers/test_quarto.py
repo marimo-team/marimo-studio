@@ -496,3 +496,22 @@ def test_inspection_locates_invalid_shortcode_targets(
     assert diagnostic.source is not None
     assert diagnostic.source.path == INDEX
     assert (diagnostic.source.line, diagnostic.source.column) == (3, 1)
+
+
+def test_inspection_exposes_included_text_as_editable_markdown(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        "{{< include _summary.txt >}}\n",
+        files={"_summary.txt": 'Total: {{< marimo value="total" >}}\n'},
+    )
+
+    inspection = inspect_view_project_sync(project)
+
+    assert inspection.diagnostics == ()
+    document = next(
+        doc for doc in inspection.documents if doc.path == PurePosixPath("_summary.txt")
+    )
+    assert (document.language, document.access) == ("markdown", "edit")
+    (site,) = inspection.sites
+    assert site.targets == ("total",)
+    assert site.source.path == document.path

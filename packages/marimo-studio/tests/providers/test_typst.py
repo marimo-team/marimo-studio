@@ -345,7 +345,7 @@ def test_typst_errors_fail_the_build_at_their_source_line(tmp_path: Path) -> Non
     state = read_profile_state(project, "development")
     assert state is not None
     (diagnostic,) = state.build.diagnostics
-    assert diagnostic.code == "typst-compile-error"
+    assert diagnostic.code == "typst-compile-error", diagnostic
     assert diagnostic.source is not None
     assert (diagnostic.source.path, diagnostic.source.line) == (MAIN, 4)
 
@@ -475,3 +475,21 @@ def test_build_uses_default_for_computed_output_targets(tmp_path: Path) -> None:
 
     with build_view_project_sync(project, profile="production") as lease:
         assert lease.read_bytes(PurePosixPath("main.pdf")).startswith(b"%PDF-")
+
+
+def test_build_retains_errors_from_data_inputs(tmp_path: Path) -> None:
+    project = _project(tmp_path, '#let d = xml("data.xml")\nHello\n')
+    project.root.joinpath("data.xml").write_text(
+        "<root>\n<item>\n</root>\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ViewProjectError):
+        build_view_project_sync(project, profile="production")
+
+    state = read_profile_state(project, "production")
+    assert state is not None
+    (diagnostic,) = state.build.diagnostics
+    assert diagnostic.code == "typst-compile-error", diagnostic
+    assert "data.xml" in diagnostic.message
+    assert "XML" in diagnostic.message
+    assert diagnostic.source is None
