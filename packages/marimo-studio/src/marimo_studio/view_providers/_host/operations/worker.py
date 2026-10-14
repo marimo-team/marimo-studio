@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import sys
+import threading
+import time
 from importlib.metadata import EntryPoint
 from pathlib import Path, PurePosixPath
 from typing import cast
@@ -282,9 +286,26 @@ def _render(
     return conformance.render(cast(DocumentProvider, provider), request)
 
 
+def _stop_with_server() -> None:
+    # The server stops this worker's process group when it cancels or exits.
+    # A server killed without cleanup leaves the worker reparented, so the
+    # worker stops its own group, which holds every provider command.
+    if os.name != "posix" or os.getpgid(0) != os.getpid():
+        return
+    server = os.getppid()
+
+    def watch() -> None:
+        while os.getppid() == server:
+            time.sleep(0.2)
+        os.killpg(0, signal.SIGKILL)
+
+    threading.Thread(target=watch, name="studio-server-watch", daemon=True).start()
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         return 2
+    _stop_with_server()
     request_path = Path(sys.argv[1])
     response_path = Path(sys.argv[2])
     cancellation = ProviderCancellation()

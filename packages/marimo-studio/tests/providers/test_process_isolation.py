@@ -846,6 +846,44 @@ def test_cli_sigint_drains_the_provider_process_tree(
         _kill_reported_processes(marker, pids)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="a Windows job ends with its owner")
+def test_killed_cli_leaves_no_provider_process_tree(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
+    script = (
+        "import marimo_studio.view_providers._host as providers; "
+        "from tests.providers.test_process_isolation import _registry; "
+        "providers._REGISTRY = _registry('build-tree', 'build_tree_provider'); "
+        "from marimo_studio._cli.main import cli; "
+        f"cli.main(args=['validate', 'dashboard', '--target', "
+        f"{str(studio.notebook)!r}])"
+    )
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(Path(__file__).parents[2])
+    environment[SANDBOX_ENV] = "1"
+    process = subprocess.Popen(
+        [sys.executable, "-c", script],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=environment,
+    )
+    pids: tuple[int, ...] = ()
+    try:
+        pids = _wait_for_pids(marker, 3)
+        process.kill()
+        process.wait(timeout=5)
+        _wait_until_dead(pids)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        _kill_reported_processes(marker, pids)
+
+
 @pytest.mark.parametrize("finish", ("cancel", "timeout"))
 def test_external_provider_runtime_validation_owns_the_complete_runtime_tree(
     notebook_path: Path,
