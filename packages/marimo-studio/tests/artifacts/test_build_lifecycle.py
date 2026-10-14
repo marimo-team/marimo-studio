@@ -966,3 +966,35 @@ def test_stale_prepared_build_preserves_newer_publication_receipt(
     assert state.phase == "published"
     assert state.project_revision == current_revision
     assert _profile_path(project).read_bytes() == accepted
+
+
+@pytest.mark.parametrize("message", ("x" * 65536, "x\x01" * 32768))
+def test_publication_receipt_bounds_serialized_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    message: str,
+) -> None:
+    project = _project(tmp_path)
+    provider = provider_registry().get(project.provider)
+    build = provider.build
+
+    def verbose_build(request: BuildRequest) -> BuildResult:
+        return replace(
+            build(request),
+            diagnostics=tuple(
+                ProjectDiagnostic("compiler-warning", "warning", message)
+                for _ in range(256)
+            ),
+        )
+
+    monkeypatch.setattr(provider, "build", verbose_build)
+    published = publish_artifact(project, "development")
+
+    assert _profile_path(project).stat().st_size < 16 * 1024 * 1024
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == published.artifact_revision
+    diagnostics = read_build_state(project, "development").diagnostics
+    assert diagnostics[0].message == message
+    assert diagnostics[-1].code == "build-diagnostics-truncated"
+    assert len(diagnostics) < 256

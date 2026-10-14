@@ -42,15 +42,25 @@ _CONTROL_FILE_MAX_BYTES = 16 * 1024 * 1024
 
 
 MAX_RECEIPT_DIAGNOSTICS = 512
+# Receipts may carry distinct build and publication arrays. Reserve space
+# for both copies, their truncation warnings, and the receipt metadata.
+_RECEIPT_DIAGNOSTICS_MAX_BYTES = _CONTROL_FILE_MAX_BYTES // 4
 
 
 def receipt_diagnostics(
     diagnostics: tuple[ProjectDiagnostic, ...],
 ) -> tuple[ProjectDiagnostic, ...]:
     """Fit build diagnostics into one receipt and report what was omitted."""
-    if len(diagnostics) <= MAX_RECEIPT_DIAGNOSTICS:
+    size = 2
+    kept = 0
+    for diagnostic in diagnostics[:MAX_RECEIPT_DIAGNOSTICS]:
+        size += len(encode_json(diagnostic.to_dict()).encode("utf-8"))
+        if size > _RECEIPT_DIAGNOSTICS_MAX_BYTES:
+            break
+        kept += 1
+    if kept == len(diagnostics):
         return diagnostics
-    kept = MAX_RECEIPT_DIAGNOSTICS - 1
+    kept = min(kept, MAX_RECEIPT_DIAGNOSTICS - 1)
     return (
         *diagnostics[:kept],
         ProjectDiagnostic(
@@ -445,7 +455,7 @@ def profile_state(
 
 
 def profile_state_dict(state: ArtifactProfileState) -> dict[str, object]:
-    return {
+    value: dict[str, object] = {
         "schema": 2,
         "profile": state.profile,
         "published": (
@@ -467,6 +477,9 @@ def profile_state_dict(state: ArtifactProfileState) -> dict[str, object]:
             "duration_ms": state.build.duration_ms,
         },
     }
+    if len(encode_json(value).encode("utf-8")) >= _CONTROL_FILE_MAX_BYTES:
+        _invalid("Artifact profile receipt exceeds the serialized size limit")
+    return value
 
 
 def decode_profile_state(
