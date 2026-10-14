@@ -1,0 +1,9 @@
+packages/marimo-studio/tests/agent/test_browser_activation.py
+  ai_agent 158-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "26c4daa51091a59cf2264420b2c629e6df5f9740",
+  "prompts": {}
+}
