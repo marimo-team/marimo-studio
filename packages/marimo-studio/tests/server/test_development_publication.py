@@ -8,6 +8,9 @@ import pytest
 
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
+from marimo_studio._server.development.publication_registry import (
+    PublicationSuperseded,
+)
 
 from ..async_test_support import wait_for_event
 
@@ -240,10 +243,6 @@ def test_repeated_cancellation_drains_a_baseline_waiter_blocked_on_the_lock(
 
 
 def test_a_warmup_preempted_before_its_slot_reports_supersede() -> None:
-    from marimo_studio._server.development.publication_registry import (
-        PublicationSuperseded,
-    )
-
     held_started = threading.Barrier(3)
     release_held = threading.Event()
 
@@ -281,16 +280,16 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
     from types import SimpleNamespace
 
     from marimo_studio._server.development import routes
-    from marimo_studio._server.development.publication_registry import (
-        PublicationSuperseded,
-    )
     from marimo_studio.errors import ConfigurationError
+
+    superseded = asyncio.Event()
 
     async def unavailable_catalog(*_args: object) -> object:
         raise ConfigurationError("Provider inspection is unavailable.")
 
     async def publish(_view: str, generation: int, *_args: object, **_kwargs: object):
         if generation == 1:
+            superseded.set()
             raise PublicationSuperseded
         return {"schema": 1, "phase": "published"}, "rev-2", "art-2"
 
@@ -313,12 +312,11 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
             broker,
         )
         try:
-            while requests.qsize():
-                await asyncio.sleep(0.01)
+            await wait_for_event(superseded, timeout=2)
             routes._request_presentation(requests, routes._PresentationRequest(2))
             while True:
                 event = await broker.receive()
-                assert isinstance(event, bytes), event
+                assert isinstance(event, bytes)
                 if b'"kind":"presentation"' in event:
                     return event
         finally:
@@ -333,10 +331,6 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
 def test_a_running_warmup_preempted_by_a_foreground_publication_reports_supersede() -> (
     None
 ):
-    from marimo_studio._server.development.publication_registry import (
-        PublicationSuperseded,
-    )
-
     started = threading.Event()
     cancelled = threading.Event()
 
@@ -383,11 +377,12 @@ def test_foreground_settled_waits_for_a_released_foreground_worker() -> None:
         try:
             assert await asyncio.to_thread(started.wait, 1)
             foreground.cancel()
-            for _ in range(200):
-                if not registry._publications:
-                    break
-                await asyncio.sleep(0.005)
-            assert not registry._publications
+
+            async def publication_released() -> None:
+                while registry._publications:
+                    await asyncio.sleep(0)
+
+            await asyncio.wait_for(publication_released(), timeout=1)
             settled = asyncio.create_task(coordinator.foreground_settled())
             with pytest.raises(TimeoutError):
                 await asyncio.wait_for(asyncio.shield(settled), timeout=0.1)

@@ -15,6 +15,7 @@ from marimo_studio._server.agent.clients import (
 from marimo_studio._server.agent.coordinator import AgentCoordinator
 from marimo_studio._server.development import routes as dev
 from marimo_studio._server.development.client_events import WorkspaceClientEventProducer
+from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio.errors import AgentRequestError
 
 from ..app_helpers import configured
@@ -568,8 +569,6 @@ def test_cancellation_while_a_producer_stops_still_disconnects_browser(
 def test_a_stream_for_a_retiring_view_ends_without_an_error(
     notebook_path: Path,
 ) -> None:
-    from marimo_studio._server.development.coordinator import DevelopmentCoordinator
-
     studio = configured(notebook_path)
 
     async def exercise() -> list[bytes]:
@@ -594,8 +593,6 @@ def test_retirement_after_subscribe_closes_the_stream_and_releases_its_client(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from marimo_studio._server.development.coordinator import DevelopmentCoordinator
-
     studio = configured(notebook_path)
 
     async def exercise() -> None:
@@ -631,7 +628,7 @@ def test_retirement_after_subscribe_closes_the_stream_and_releases_its_client(
         )
         ready = asyncio.create_task(anext(stream))
         try:
-            await asyncio.wait_for(baseline_started.wait(), timeout=2)
+            await wait_for_event(baseline_started, timeout=2)
             async with development.retiring_view("dashboard"):
                 release_baseline.set()
                 with pytest.raises(StopAsyncIteration):
