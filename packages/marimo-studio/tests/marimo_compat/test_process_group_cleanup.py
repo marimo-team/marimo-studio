@@ -504,19 +504,18 @@ def test_process_supervisor_stops_a_group_member_with_a_cleared_environment(
     pid = int(marker.read_text())
     try:
         assert result.returncode == 0
-        deadline = time.monotonic() + 2
-        while _running(pid) and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert not _running(pid)
+        _assert_stopped(pid)
     finally:
         with suppress(ProcessLookupError):
             os.kill(pid, signal.SIGKILL)
 
 
-def _running(pid: int) -> bool:
+def _assert_stopped(pid: int) -> None:
     import psutil
 
     try:
-        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+        process = psutil.Process(pid)
     except psutil.NoSuchProcess:
-        return False
+        return
+    _gone, alive = psutil.wait_procs([process], timeout=2)
+    assert alive == []

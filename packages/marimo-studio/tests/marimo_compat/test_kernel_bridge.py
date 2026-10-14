@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -980,6 +980,17 @@ default = "dashboard"
     ]
 
 
+def _configured_notebook(directory: Path, name: str, source: str) -> Path:
+    directory.mkdir(exist_ok=True)
+    notebook = directory / name
+    notebook.write_text(source, encoding="utf-8")
+    directory.joinpath("pyproject.toml").write_text(
+        f'[tool.marimo-studio]\nnotebook = "{name}"\ndefault = "dashboard"\n',
+        encoding="utf-8",
+    )
+    return notebook
+
+
 @pytest.mark.parametrize("release_fails", [False, True])
 @pytest.mark.parametrize("close_on_rename", [False, True])
 def test_kernel_lifespan_releases_observation_owners(
@@ -994,12 +1005,7 @@ def test_kernel_lifespan_releases_observation_owners(
     from marimo._runtime.context import kernel_context as kernel_context_module
     from marimo._session.model import SessionMode
 
-    notebook = tmp_path / "notebook.py"
-    notebook.write_text("import marimo\n", encoding="utf-8")
-    tmp_path.joinpath("pyproject.toml").write_text(
-        '[tool.marimo-studio]\nnotebook = "notebook.py"\ndefault = "dashboard"\n',
-        encoding="utf-8",
-    )
+    notebook = _configured_notebook(tmp_path, "notebook.py", "import marimo\n")
     events: list[str] = []
     close_threads: list[int] = []
 
@@ -1041,18 +1047,13 @@ def test_kernel_lifespan_releases_observation_owners(
         loop_thread = get_ident()
         await lifespan.__aenter__()
         assert events == ["open", "install"]
+        failed = pytest.raises(RuntimeError, match="hook release failed")
         if close_on_rename:
             renamed = tmp_path / "moved.py"
             current._kernel.app_metadata.filename = str(renamed)
-            if release_fails:
-                with pytest.raises(RuntimeError, match="hook release failed"):
-                    lifespan._activate(current, renamed, None)
-            else:
+            with failed if release_fails else nullcontext():
                 assert lifespan._activate(current, renamed, None)
-        if release_fails and not close_on_rename:
-            with pytest.raises(RuntimeError, match="hook release failed"):
-                await lifespan.__aexit__(None, None, None)
-        else:
+        with failed if release_fails and not close_on_rename else nullcontext():
             await lifespan.__aexit__(None, None, None)
         assert events == ["open", "install", "release", "close"]
         assert close_threads[0] != loop_thread
@@ -1083,30 +1084,16 @@ def test_kernel_observations_follow_a_configured_notebook_rename(
     from marimo_studio import inspect_notebook
 
     monkeypatch.setenv("MARIMO_EXPORT_REPOSITORY", str(tmp_path / "repository"))
-    source = f'''import marimo
-__generated_with = "{marimo.__version__}"
-app = marimo.App()
-
-@app.cell
-def _():
-    import marimo as mo
-    x = mo.ui.slider(1, 2, value=1)
-    return (mo, x)
-
-if __name__ == "__main__":
-    app.run()
-'''
-    paths: list[Path] = []
-    for directory in (tmp_path / "original", tmp_path / "renamed"):
-        directory.mkdir()
-        notebook = directory / "analysis.py"
-        notebook.write_text(source, encoding="utf-8")
-        directory.joinpath("pyproject.toml").write_text(
-            '[tool.marimo-studio]\nnotebook = "analysis.py"\ndefault = "dashboard"\n',
-            encoding="utf-8",
-        )
-        paths.append(notebook)
-    original, renamed = paths
+    source = (
+        f'import marimo\n__generated_with = "{marimo.__version__}"\n'
+        "app = marimo.App()\n\n@app.cell\ndef _():\n"
+        "    import marimo as mo\n"
+        "    x = mo.ui.slider(1, 2, value=1)\n"
+        "    return (mo, x)\n\n"
+        'if __name__ == "__main__":\n    app.run()\n'
+    )
+    original = _configured_notebook(tmp_path / "original", "analysis.py", source)
+    renamed = _configured_notebook(tmp_path / "renamed", "analysis.py", source)
     hooks = NotebookCellHooks()
     graph = DirectedGraph()
     for cell in inspect_notebook(original, include_code=True).cells:
@@ -1135,25 +1122,25 @@ if __name__ == "__main__":
         graph=graph,
     )
     bridge = _KernelBridgeLifespan()
+
+    def flush(path: Path) -> Any:
+        assert bridge._activate(context, path, None)
+        ledger = bridge._observation_ledger
+        assert ledger is not None
+        for hook in hooks.on_finish_hooks:
+            hook(finished)
+        ledger.flush()
+        return ledger
+
     try:
         with ExportRepository.open() as repository:
-            assert bridge._activate(context, original, None)
-            ledger = bridge._observation_ledger
-            assert ledger is not None
-            for hook in hooks.on_finish_hooks:
-                hook(finished)
-            ledger.flush()
+            flush(original)
             assert repository.status().observations == 1
 
             metadata.filename = context.filename = str(renamed)
             with native.install(), native.with_cell_id(CellId_t("control")):
                 context._kernel.globals["x"] = marimo.ui.slider(1, 2, value=2)
-            assert bridge._activate(context, renamed, None)
-            current = bridge._observation_ledger
-            assert current is not None
-            for hook in hooks.on_finish_hooks:
-                hook(finished)
-            current.flush()
+            current = flush(renamed)
             assert repository.status().observations == 2
 
             assert bridge._activate(context, renamed, None)
