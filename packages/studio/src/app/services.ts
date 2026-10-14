@@ -95,9 +95,11 @@ export const createStudioServices = (
         owner === "agent" ? "document" : "rendered",
       );
       const fromView = views?.getSnapshot().current ?? bootstrap.selectedView;
+      // A view removed elsewhere has no agent target left to hand off.
+      const fromViewExists = views?.getSnapshot().views.includes(fromView) ?? true;
       const committed = stageCommittedView(
         staged,
-        started && changed && owner === "browser"
+        started && changed && owner === "browser" && fromViewExists
           ? () => activeViewHandoff.stage(fromView, view, signal)
           : undefined,
       );

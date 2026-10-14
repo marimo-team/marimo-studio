@@ -95,6 +95,58 @@ describe("Studio view handoff lifecycle", () => {
     await services.close();
   });
 
+  it("leaves a view removed elsewhere for the default view and says why", async () => {
+    class EventSourceStub {
+      static instances: EventSourceStub[] = [];
+      readonly listeners = new Map<string, EventListener>();
+
+      constructor(readonly url: string) {
+        EventSourceStub.instances.push(this);
+      }
+
+      addEventListener(type: string, listener: EventListener): void {
+        this.listeners.set(type, listener);
+      }
+
+      emit(type: string, data: string): void {
+        this.listeners.get(type)?.(new MessageEvent(type, { data }));
+      }
+
+      close(): void {}
+    }
+
+    vi.stubGlobal("EventSource", EventSourceStub);
+    const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+      if (url.pathname === "/_marimo-studio/views") {
+        return Response.json(viewList(["report"], "report"));
+      }
+      // The server validates both handoff views against the current inventory.
+      if (url.pathname.includes("/active-view-handoffs/")) {
+        return Response.json({ error: "invalid-active-view-handoff" }, { status: 400 });
+      }
+      throw new Error(`Unexpected request ${init?.method ?? "GET"} ${url}`);
+    });
+    vi.stubGlobal("fetch", request);
+    const services = createStudioServices(bootstrap);
+    vi.spyOn(services.source, "start").mockResolvedValue();
+    await services.start(document.createElement("iframe"), studioFrames());
+    vi.spyOn(services.preview, "stageNavigation").mockReturnValue({
+      ready: Promise.resolve(true),
+      commit: vi.fn(),
+      rollback: vi.fn(async () => undefined),
+    });
+
+    EventSourceStub.instances[0]?.emit("change", JSON.stringify({ kind: "views" }));
+
+    await vi.waitFor(() => expect(services.views.getSnapshot().current).toBe("report"));
+    expect(services.views.getSnapshot().selectionMessage).toEqual({
+      text: "View dashboard was removed. Showing report.",
+      state: "warning",
+    });
+    await services.close();
+  });
+
   it("recovers the committed view after the finite release budget", async () => {
     vi.useFakeTimers();
     let handoffActive = false;
