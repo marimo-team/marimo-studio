@@ -386,13 +386,17 @@ it("ignores callbacks from a replaced stream", async () => {
   coordinator.dispose();
 });
 
-it("replaces a stream the browser closed and resumes its events", async () => {
+const closedStream = (status: number) => {
   vi.useFakeTimers();
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(null, { status: 502 })),
+    vi.fn(async () => new Response(null, { status })),
   );
-  const { coordinator, source } = setup();
+  return setup();
+};
+
+it("replaces a stream the browser closed and resumes its events", async () => {
+  const { coordinator, source } = closedStream(502);
   const closed = EventSourceStub.instances[0]!;
   closed.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
 
@@ -415,12 +419,7 @@ it("replaces a stream the browser closed and resumes its events", async () => {
 });
 
 it("backs off while a replacement stream keeps closing", async () => {
-  vi.useFakeTimers();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(null, { status: 502 })),
-  );
-  const { coordinator } = setup();
+  const { coordinator } = closedStream(502);
 
   EventSourceStub.instances[0]!.fail();
   await vi.advanceTimersByTimeAsync(1_000);
@@ -437,13 +436,8 @@ it("backs off while a replacement stream keeps closing", async () => {
 });
 
 it("reports a server restart and stops reconnecting to the earlier process", async () => {
-  vi.useFakeTimers();
   // The server answers a stream URL from an earlier process with 204.
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(null, { status: 204 })),
-  );
-  const { coordinator, preview } = setup();
+  const { coordinator, preview } = closedStream(204);
 
   EventSourceStub.instances[0]!.fail();
   await vi.advanceTimersByTimeAsync(60_000);

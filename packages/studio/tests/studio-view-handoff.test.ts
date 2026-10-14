@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createStudioServices } from "../src/app/services.ts";
 import { viewList } from "./fixtures.ts";
 import { deferred, studioBootstrap as bootstrap, studioFrames } from "./studio-test-support.ts";
+import { EventSourceStub as WorkspaceEventSource } from "./workspace-event-test-support.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -96,32 +97,13 @@ describe("Studio view handoff lifecycle", () => {
   });
 
   it("leaves a view removed elsewhere for the default view and says why", async () => {
-    class EventSourceStub {
-      static instances: EventSourceStub[] = [];
-      readonly listeners = new Map<string, EventListener>();
-
-      constructor(readonly url: string) {
-        EventSourceStub.instances.push(this);
-      }
-
-      addEventListener(type: string, listener: EventListener): void {
-        this.listeners.set(type, listener);
-      }
-
-      emit(type: string, data: string): void {
-        this.listeners.get(type)?.(new MessageEvent(type, { data }));
-      }
-
-      close(): void {}
-    }
-
-    vi.stubGlobal("EventSource", EventSourceStub);
+    WorkspaceEventSource.instances = [];
+    vi.stubGlobal("EventSource", WorkspaceEventSource);
     const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
       if (url.pathname === "/_marimo-studio/views") {
         return Response.json(viewList(["report"], "report"));
       }
-      // The server validates both handoff views against the current inventory.
       if (url.pathname.includes("/active-view-handoffs/")) {
         return Response.json({ error: "invalid-active-view-handoff" }, { status: 400 });
       }
@@ -137,7 +119,7 @@ describe("Studio view handoff lifecycle", () => {
       rollback: vi.fn(async () => undefined),
     });
 
-    EventSourceStub.instances[0]?.emit("change", JSON.stringify({ kind: "views" }));
+    WorkspaceEventSource.instances[0]?.emit("change", JSON.stringify({ kind: "views" }));
 
     await vi.waitFor(() => expect(services.views.getSnapshot().current).toBe("report"));
     expect(services.views.getSnapshot().selectionMessage).toEqual({
@@ -313,11 +295,7 @@ describe("Studio view handoff lifecycle", () => {
   );
 
   it("saves Source edits typed while the target view stages before it commits", async () => {
-    class EventSourceStub {
-      addEventListener(): void {}
-      close(): void {}
-    }
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("EventSource", WorkspaceEventSource);
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
