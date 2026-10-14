@@ -336,12 +336,19 @@ const evaluate = (
   if (
     expression.type === "MemberExpression" && expression.object !== undefined
   ) {
+    const object = evaluate(expression.object, document, scope, nextSeen);
+    if (expression.computed) {
+      if (expression.property === undefined) return dynamic();
+      const keys = evaluate(expression.property, document, scope, nextSeen);
+      if (keys.status !== "bounded") return keys;
+      return combine(
+        keys.values.map((key) =>
+          key.kind === "string" ? propertyValues(object, key.value) : dynamic()
+        ),
+      );
+    }
     const property = propertyName(expression.property);
-    if (property === null) return dynamic();
-    return propertyValues(
-      evaluate(expression.object, document, scope, nextSeen),
-      property,
-    );
+    return property === null ? dynamic() : propertyValues(object, property);
   }
   if (expression.type === "ConditionalExpression") {
     return expression.consequent === undefined ||

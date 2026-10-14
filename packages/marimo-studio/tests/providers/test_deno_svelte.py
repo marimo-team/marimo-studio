@@ -558,3 +558,31 @@ def test_svelte_revalidates_tsconfig_before_installation(
         _build(svelte_provider, provider_build_request(project, inspection, files))
 
     assert raised.value.diagnostic.code == "provider-options-invalid"
+
+
+@pytest.mark.parametrize(
+    "key,expected",
+    [
+        ('const selected = "other";', ("second",)),
+        ('const selected = unknown ? "selected" : "other";', ("first", "second")),
+        ("const selected = getKey();", "*"),
+    ],
+)
+def test_svelte_computed_member_keys_resolve_their_values(
+    tmp_path: Path, key: str, expected: object
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    root.joinpath("src/App.svelte").write_text(
+        '<script lang="ts">\nconst choices = { selected: "first", other: "second" };\n'
+        + key
+        + "\n</script>\n"
+        '<main id="app-shell"><output mo-value={choices[selected]} '
+        'data-marimo-allow="*" /></main>',
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert inspection.diagnostics == ()
+    (site,) = inspection.sites
+    assert site.targets == expected
