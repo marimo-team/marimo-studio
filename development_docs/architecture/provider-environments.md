@@ -94,11 +94,15 @@ distribution from that key without importing it.
 
 Built-in providers map to these launch requirements:
 
-| Provider                | Bootstrap requirement |
-| ----------------------- | --------------------- |
-| `marimo-studio/vanilla` | `marimo-studio`       |
-| `marimo-studio/react`   | `marimo-studio[deno]` |
-| `marimo-studio/svelte`  | `marimo-studio[deno]` |
+| Provider                     | Bootstrap requirement  |
+| ---------------------------- | ---------------------- |
+| `marimo-studio/latex`        | `marimo-studio`        |
+| `marimo-studio/notebook-kit` | `marimo-studio[deno]`  |
+| `marimo-studio/quarto`       | `marimo-studio`        |
+| `marimo-studio/react`        | `marimo-studio[deno]`  |
+| `marimo-studio/svelte`       | `marimo-studio[deno]`  |
+| `marimo-studio/typst`        | `marimo-studio[typst]` |
+| `marimo-studio/vanilla`      | `marimo-studio`        |
 
 An external provider must appear in PEP 723 or project dependencies. Missing
 metadata raises `dependency-error` with the distribution name.
