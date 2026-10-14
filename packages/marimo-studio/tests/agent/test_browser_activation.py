@@ -119,7 +119,7 @@ def test_browser_mutation_http_rejects_noncanonical_records(
                 assert response.json()["field"] == field, path
 
 
-def test_a_refused_active_view_handoff_explains_the_conflict(
+def test_an_unregistered_client_handoff_explains_how_to_recover(
     notebook_path: Path,
 ) -> None:
     server = agent_edit_server(notebook_path)
@@ -140,10 +140,11 @@ def test_a_refused_active_view_handoff_explains_the_conflict(
     assert response.json() == {
         "error": "active-view-handoff-refused",
         "message": (
-            "Studio could not hand off the active view because this browser "
-            "is already switching views or handling an agent request."
+            "Studio could not hand off the active view for this browser client."
         ),
-        "hint": "Wait for that to finish, then switch views again.",
+        "hint": (
+            "Reconnect the browser, confirm its active view, then retry the switch."
+        ),
     }
 
 

@@ -307,10 +307,11 @@ async def active_view_handoff_response(
         {
             "error": "active-view-handoff-refused",
             "message": (
-                "Studio could not hand off the active view because this browser "
-                "is already switching views or handling an agent request."
+                "Studio could not hand off the active view for this browser client."
             ),
-            "hint": "Wait for that to finish, then switch views again.",
+            "hint": (
+                "Reconnect the browser, confirm its active view, then retry the switch."
+            ),
         },
         status_code=409,
         headers=NO_STORE,
