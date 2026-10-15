@@ -14,8 +14,9 @@ interactions that need private services or native Python packages. The editor
 can preview all three runtimes. A live `marimo run` serves the Python or Browser runtime.
 
 A view with a `<marimo-output render>` host, such as a Typst or LaTeX view,
-renders its files with the Python runtime or in a Prepared export, which renders
-each prepared state once. Browser run mode and a `wasm` export show
+renders its files in the Studio editor with any runtime, with the Python
+runtime in `marimo run`, and in a Prepared export, which renders each prepared
+state once. Browser run mode and a `wasm` export show
 `render-results-unavailable` in the host.
 
 ## Prepare the delivery
