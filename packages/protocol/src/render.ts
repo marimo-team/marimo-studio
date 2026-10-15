@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { renderSourceSchema } from "./projections.ts";
+import { isRenderSource, renderSourceSchema } from "./projections.ts";
 import { ownRecordSchema } from "./records.ts";
 import { jsonValueSchema } from "./runtime-config.ts";
 import { projectDiagnosticSchema } from "./view-project.ts";
@@ -41,13 +41,7 @@ const bundleIdSchema = z.string().regex(/^[a-f0-9]{64}$/);
 // A normalized relative POSIX path inside one bundle.
 const bundlePathSchema = z
   .string()
-  .min(1)
-  .refine(
-    (path) =>
-      !path.startsWith("/") &&
-      path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."),
-    { message: "Bundle paths are normalized relative paths" },
-  );
+  .refine(isRenderSource, { message: "Bundle paths are normalized relative paths" });
 
 export const renderFileSchema = z
   .object({
@@ -84,6 +78,13 @@ export const renderResultSchema = z
     }
     if (!paths.has(result.main)) {
       context.addIssue({ code: "custom", path: ["main"], message: "main names a bundle file" });
+    }
+    if (result.preview === result.main) {
+      context.addIssue({
+        code: "custom",
+        path: ["preview"],
+        message: "preview names a file other than main",
+      });
     }
     if (result.preview !== null && !paths.has(result.preview)) {
       context.addIssue({

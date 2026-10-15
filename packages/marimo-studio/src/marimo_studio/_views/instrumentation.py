@@ -17,7 +17,7 @@ from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.records import DiagnosticsError
-from marimo_studio.errors import ViewProjectError
+from marimo_studio.errors import MarimoStudioError
 from marimo_studio.view_providers._artifact_sites import (
     SITE_ATTRIBUTE,
     ArtifactSite,
@@ -213,7 +213,7 @@ def unknown_render_diagnostics(
             )
             .content.decode("utf-8")
         )
-    except (UnicodeDecodeError, ViewProjectError):
+    except (UnicodeDecodeError, OSError, MarimoStudioError):
         # Publication validates the page and reports these problems itself.
         return ()
     declared = ", ".join(sorted(source.as_posix() for source in renders)) or "none"

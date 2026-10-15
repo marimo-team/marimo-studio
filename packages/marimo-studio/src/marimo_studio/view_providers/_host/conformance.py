@@ -741,6 +741,10 @@ class ProviderConformance:
             raise conformance_error(
                 self.key, "requires separate template and output roots"
             )
+        if not template.joinpath(*source.parts).is_file():
+            raise conformance_error(
+                self.key, f"requires {source} as a file in the render template"
+            )
         if not isinstance(value.values, Mapping):
             raise conformance_error(self.key, "requires render values to be a mapping")
         for target in value.values:

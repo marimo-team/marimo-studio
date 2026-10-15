@@ -251,6 +251,7 @@ export const mountWasmRuntime = (
             ),
             (response) => response,
           ),
+        revision: () => getRuntimeConfig().revision,
         prepareCells: (request, signal) => prepareOutputs(runtime.invoke, request, signal),
       }),
   });

@@ -58,6 +58,7 @@ const notebook = () => {
         createWasmOutputRequest(consumerId, invoke, async () => {}),
         (response) => response,
       ),
+    revision: () => "presentation-revision",
     prepareCells: async ({ projections }) => {
       steps.push(`cells:${projections.map(({ target }) => target).join(",")}`);
     },
@@ -121,6 +122,7 @@ test("a value without a JSON form fails the render as the Python runtime reports
       },
     }),
     readOutputs: () => async () => ({ outputs: {}, errors: {} }),
+    revision: () => "presentation-revision",
     prepareCells: async () => {},
   });
 

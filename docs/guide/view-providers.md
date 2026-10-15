@@ -716,8 +716,8 @@ provider = CardProvider()
 names the notebook values it reads, at the place it reads them. Each value arrives in its JSON form, so a
 dataframe arrives as a list of row objects and a date as ISO 8601 text.
 
-`build()` copies the project into `request.template_root`, which Studio keeps
-private, and writes a page with one `<marimo-output render="card.svg">` host
+`build()` copies the declared build inputs into `request.template_root`, which
+Studio keeps private, and writes a page with one `<marimo-output render="card.svg">` host
 with `render_page()`. A provider that builds its own page places the host beside
 its other content and projection hosts.
 

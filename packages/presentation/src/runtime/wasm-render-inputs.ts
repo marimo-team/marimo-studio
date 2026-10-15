@@ -12,6 +12,8 @@ interface WasmRenderReaderOptions {
   readonly readValues: ValueReader;
   /** Return an output reader for `consumerId`. */
   readonly readOutputs: (consumerId: string) => OutputReader;
+  /** The active presentation revision, which a release read must name. */
+  readonly revision: () => string;
   /** Authorize `request` and run the cells its projections depend on. */
   readonly prepareCells: (request: OutputReadRequest, signal: AbortSignal) => Promise<void>;
 }
@@ -31,6 +33,7 @@ export const createWasmRenderReader = ({
   sessionId,
   readValues,
   readOutputs,
+  revision,
   prepareCells,
 }: WasmRenderReaderOptions): RuntimeRenderReader => {
   const outputReaders = new Map<string, OutputReader>();
@@ -87,8 +90,9 @@ export const createWasmRenderReader = ({
           outputs[target] = { mimetype: output.mimetype, data: output.data };
         }
       } finally {
+        // The runtime may have moved to another revision during the read.
         await reader(
-          { revision: reads.revision, projections: [], activeProjections: [] },
+          { revision: revision(), projections: [], activeProjections: [] },
           new AbortController().signal,
         ).catch(() => undefined);
       }

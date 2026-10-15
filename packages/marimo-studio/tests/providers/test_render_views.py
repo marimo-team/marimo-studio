@@ -206,7 +206,7 @@ def test_the_artifact_manifest_rejects_a_read_of_an_unpublished_render(
     manifest["sites"][0]["render"] = "summary.txt"
     write_json(path, manifest)
 
-    with pytest.raises(ConfigurationError):
+    with pytest.raises(ConfigurationError, match="names a render the artifact"):
         read_artifact_revision(project, artifact.artifact_revision)
 
 
@@ -312,3 +312,22 @@ def test_a_renderer_upgrade_changes_the_artifact_revision(
     assert first.template is not None and second.template is not None
     assert first.template.files == second.template.files
     assert first.artifact_revision != second.artifact_revision
+
+
+def test_the_artifact_manifest_rejects_a_template_without_its_render_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path, monkeypatch, CardProvider())
+    with build_view_project_sync(project) as lease:
+        artifact = lease.artifact
+    path = manifest_path(artifact)
+    manifest = read_json(path)
+    (source,) = manifest["template"]["renders"]
+    manifest["template"]["files"] = [
+        item for item in manifest["template"]["files"] if item["path"] != source
+    ]
+    write_json(path, manifest)
+
+    with pytest.raises(ConfigurationError, match="contain each render source"):
+        read_artifact_revision(project, artifact.artifact_revision)

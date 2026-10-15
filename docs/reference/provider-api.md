@@ -935,12 +935,13 @@ raises
 
 `copy_inputs()` copies each path in `request.inputs` except `view.toml` to the
 same relative path beneath `destination`. `include` selects the paths to copy,
-so a build that serves a page beside a render copies page files into
-`request.staging_root` and render sources into `request.template_root`:
+so a build that serves a page beside a render copies page files and `public/`
+assets into `request.staging_root` and render sources into
+`request.template_root`:
 
 ```python
 def page(path):
-    return path.suffix in {".html", ".css", ".js"}
+    return path.parts[0] == "public" or path.suffix in {".html", ".css", ".js"}
 
 
 copy_inputs(request, request.staging_root, include=page)

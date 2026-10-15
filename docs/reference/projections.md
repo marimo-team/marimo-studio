@@ -197,6 +197,10 @@ Value hosts keep their previous `marimoValue` while entering `loading` or
 
 ### Output events
 
+Value hosts, `<marimo-output value>`, dispatch these details. Render hosts
+dispatch the same event names with a
+[render record](#render-records).
+
 | Event                   | Dispatch                                        | Detail fields                                                       |
 | ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
 | `marimo-output-ready`   | First transition to `ready`                     | `selector`, `cellId`, `mimetype`, or diagnostic fields when present |

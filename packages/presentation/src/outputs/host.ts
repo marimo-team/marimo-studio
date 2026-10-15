@@ -114,7 +114,9 @@ export class MarimoOutputElement extends HTMLElement {
       releaseOutputHost(this);
       return;
     }
-    if (this.renderHost) {
+    if (this.hasAttribute("render")) {
+      // A move out of the page stopped the render, and a move back starts it.
+      this.startRender();
       return;
     }
     if (!hosts.has(this)) {

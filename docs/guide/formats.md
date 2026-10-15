@@ -216,7 +216,7 @@ journal template with the notebook's figures and tables.
 | Studio editor, in any runtime                             | A PDF compiled again when a result it reads changes |
 | `marimo run` with the Python runtime                      | A PDF compiled again when a result it reads changes |
 | Prepared export                                           | One PDF for each prepared input state               |
-| `marimo run` with the Browser runtime, or a `wasm` export | A note that the PDF renders on a Studio server      |
+| `marimo run` with the Browser runtime, or a `wasm` export | A `render-results-unavailable` error                |
 
 A page can also draw a PDF in the browser from `mo-value` data with a
 JavaScript PDF library, which works in every runtime. The **Field report** view

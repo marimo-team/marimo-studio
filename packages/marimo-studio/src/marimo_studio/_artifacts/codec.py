@@ -338,6 +338,8 @@ def artifact_manifest(
     renders = set(template.renders) if template is not None else set()
     if template is not None and (len(renders) != len(template.renders) or not renders):
         _invalid("Artifact template must name each render source once")
+    if template is not None and not renders <= {item.path for item in template.files}:
+        _invalid("Artifact template must contain each render source")
     if any(site.render is not None and site.render not in renders for site in sites):
         _invalid("Artifact render read names a render the artifact does not publish")
     revision = artifact_revision(path.as_posix(), files, sites, template)

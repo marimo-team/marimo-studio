@@ -80,9 +80,13 @@ export class ZeroPythonRuntimeController {
   async replace(config: RuntimeConfig, data: ZeroPythonRuntimeData, signal: AbortSignal) {
     const previous = this.#refresh;
     const refresh = this.#refreshFor(data, config);
+    const modeChanged = this.#config.mode !== config.mode;
     this.#config = config;
     this.#data = data;
     this.#refresh = refresh;
+    if (modeChanged && this.#releaseRenderInputs) {
+      this.#publishRenderInputs();
+    }
     await previous.dispose();
     // A newer replacement can take over while the previous refresh settles.
     // Refreshing this call's own revision is a no-op once that newer one disposes it.
@@ -95,12 +99,7 @@ export class ZeroPythonRuntimeController {
       await this.#refresh.start(signal);
       await this.#interactions.updateQuery(globalThis.location.search, signal);
       this.#stateApi.install();
-      // Studio renders posted inputs only in edit mode. Elsewhere a static
-      // export looks up the bundle rendered for the state the page shows.
-      this.#releaseRenderInputs =
-        this.#config.mode === "edit"
-          ? publishRenderInputReader(this.#readRender)
-          : publishPreparedState(this.#shownState);
+      this.#publishRenderInputs();
       this.dependencies.setConnectionState("ready");
     } catch (error) {
       if (!signal.aborted) {
@@ -121,6 +120,16 @@ export class ZeroPythonRuntimeController {
       }
       throw error;
     }
+  }
+
+  // Studio renders posted inputs only in edit mode. Elsewhere a static export
+  // looks up the bundle rendered for the state the page shows.
+  #publishRenderInputs(): void {
+    this.#releaseRenderInputs?.();
+    this.#releaseRenderInputs =
+      this.#config.mode === "edit"
+        ? publishRenderInputReader(this.#readRender)
+        : publishPreparedState(this.#shownState);
   }
 
   async updateQuery(query: string, signal: AbortSignal): Promise<void> {

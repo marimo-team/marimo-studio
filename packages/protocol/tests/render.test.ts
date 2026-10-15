@@ -75,3 +75,18 @@ test("a render source is a relative POSIX path to a project file", () => {
     assert.equal(renderSourceSchema.safeParse(source).success, false, source);
   }
 });
+
+test("a render result previews a file other than its main file", () => {
+  assert.equal(renderResultSchema.safeParse({ ...result, preview: "report.docx" }).success, false);
+});
+
+test("render bundle paths use forward slashes", () => {
+  assert.equal(
+    renderResultSchema.safeParse({
+      ...result,
+      files: [result.files[0], { ...result.files[1], path: "pages\\1.png" }],
+      preview: "pages\\1.png",
+    }).success,
+    false,
+  );
+});

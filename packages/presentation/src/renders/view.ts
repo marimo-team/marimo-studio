@@ -324,6 +324,9 @@ export class RenderView {
   }
 
   private width(): number {
-    return this.content.clientWidth > 0 ? this.content.clientWidth - 2 * PAGE_GUTTER : PAGE_WIDTH;
+    // Pages draw at most PAGE_WIDTH wide, inside the gutters.
+    return this.content.clientWidth > 0
+      ? Math.min(PAGE_WIDTH, this.content.clientWidth - 2 * PAGE_GUTTER)
+      : PAGE_WIDTH;
   }
 }

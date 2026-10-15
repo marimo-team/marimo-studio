@@ -262,7 +262,9 @@ bundles on `NotebookScope`. Two worker threads run renders in fresh template
 copies with a 300 second command budget. Requests for one render with the same
 artifact revision and inputs share one job. A request that leaves stops
 waiting, and the job is cancelled when its last waiter leaves. Bundles live on
-disk, stored once by content and keyed by view. The reader's session holds the
+disk, stored once by content ID, and each bundle records the views that
+rendered it, so a file route answers only for those views. Each input set maps
+to its bundle and its own warnings. The reader's session holds the
 bundle it last adopted for each render, and eviction beyond the 2 GiB budget
 skips bundles that a live session holds. Closing the scope cancels active
 renders, waits for the workers, and removes the bundles.

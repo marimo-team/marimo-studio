@@ -552,7 +552,7 @@ class HTMLDocumentParser(HTMLParser):
         column: int,
     ) -> None:
         """Record a render host, which shows the render of a project file."""
-        for attribute in ("value", "accept", "data-marimo-allow"):
+        for attribute in ("value", "mo-value", "accept", "data-marimo-allow"):
             if attribute in attributes:
                 raise ViewProjectError(
                     f"<marimo-output render> cannot also set {attribute}.",

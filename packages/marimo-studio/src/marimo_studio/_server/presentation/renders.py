@@ -380,10 +380,12 @@ class RenderStore:
         Each evicted bundle moves aside under the lock, so a render of identical
         files stores a fresh copy while the old one is removed.
         """
-        if self._bytes <= self._max_bytes:
-            return []
+        # Holds of ended sessions go first, so holds stay bounded by live
+        # sessions even while the store stays under its budget.
         for hold in [hold for hold in self._holds if not alive(hold[0])]:
             del self._holds[hold]
+        if self._bytes <= self._max_bytes:
+            return []
         held = set(self._holds.values())
         evicted: list[Path] = []
         for bundle_id in list(self._bundles):
