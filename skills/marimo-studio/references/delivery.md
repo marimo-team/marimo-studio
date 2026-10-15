@@ -13,6 +13,11 @@ need unprepared states and the notebook supports Pyodide. Use Python for
 interactions that need private services or native Python packages. The editor
 can preview all three runtimes. A live `marimo run` serves the Python or Browser runtime.
 
+A view with a `<marimo-output render>` host, such as a Typst or LaTeX view,
+renders its files with the Python runtime or in a Prepared export, which renders
+each prepared state once. Browser run mode and a `wasm` export show
+`render-results-unavailable` in the host.
+
 ## Prepare the delivery
 
 Run through marimo when the notebook needs Python packages, local files,

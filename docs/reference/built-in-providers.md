@@ -429,7 +429,7 @@ container, `marimo_output()` places a block.
 
 An output that is unavailable, fails in the notebook, has no image form, or
 exceeds the 5,000,000-byte output limit leaves `marimo_output()` at its default,
-and the view names it beside the document.
+and the view notes `Showing the default for <selector>.` above the PDF.
 
 `marimo_cell(name, default: none, ..args)` places the output of the notebook
 cell called `name` as marimo shows it, when that output is a PDF, SVG, PNG,
@@ -592,7 +592,7 @@ finishes compiling, such as one with a recursive macro, reports the same code.
 A compile error fails the build at its source line and names the text where TeX
 stopped. Undefined references and citations, duplicate labels, missing
 characters, overfull boxes wider than a point, and BibTeX errors appear as
-warnings beside the document.
+warnings above the PDF.
 
 `tectonic -X compile main.tex` or [latexmk](https://ctan.org/pkg/latexmk), a
 LaTeX build driver, compiles the project outside Studio, where every read
