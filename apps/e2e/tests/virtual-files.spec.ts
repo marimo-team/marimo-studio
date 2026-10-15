@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 
 import {
   expect,
+  recoverRequestAbort,
+  studioOrigin,
   test,
   waitForPreview,
   workspaceCreatedViewHtmlPath,
@@ -45,7 +47,11 @@ const page = `<!doctype html>
 </html>
 `;
 
-test("loads notebook virtual files in a view", async ({ page: browser, studioCli }) => {
+test("loads notebook virtual files in a view", async ({
+  browserDiagnostics,
+  page: browser,
+  studioCli,
+}) => {
   test.setTimeout(300_000);
   const notebook = await readFile(workspaceNotebookPath, "utf8");
   await writeWorkspaceFile(
@@ -66,8 +72,19 @@ test("loads notebook virtual files in a view", async ({ page: browser, studioCli
   await expectResources(await waitForPreview(browser));
 
   await browser.getByLabel(/preview runtime$/).click();
+  // Switching to Prepared can retire the zero-python manifest read that the
+  // runtime frame started before the Prepared presentation replaced it.
+  const retiredManifest = browserDiagnostics.expectRequestAbort({
+    origin: studioOrigin(),
+    method: "GET",
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/resources\/zero-python\/current$/,
+    count: 1,
+    required: false,
+    status: 200,
+  });
   await browser.getByRole("button", { name: /^Prepared/ }).click();
   await expectResources(await waitForPreview(browser, "zero-python"));
+  await recoverRequestAbort(retiredManifest);
 });
 
 const expectResources = async (preview: FrameLocator) => {
