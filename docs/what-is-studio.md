@@ -94,6 +94,13 @@ with $q$ pointing at \marimovalue{pull_direction.value} degrees.
 
 :::
 
+Studio renders the HTML and Typst sources into a live page and a PDF:
+
+<StudioFigure
+  name="cell-output-value"
+  alt="The three notebook cells in marimo beside the HTML page and the Typst PDF. The page shows the live slider at 210 degrees, the level curves, and the optimal value. The PDF shows the same level curves and states the optimal value with q pointing at 210 degrees."
+/>
+
 What's going on here:
 
 - `pull_direction` names a cell. A page shows the live slider. Moving it makes
@@ -114,9 +121,9 @@ notebook no longer defines.
 
 ## Pages and documents
 
-A **page** is HTML that stays live in the browser. HTML, React, Svelte,
-Reveal.js, Observable Notebook Kit, and [Quarto](https://quarto.org/) views
-are pages. Controls work, and results update as soon as marimo recomputes
+A **page** is HTML that stays live in the browser. The HTML, React, Svelte,
+Reveal.js, Observable Notebook Kit, and [Quarto](https://quarto.org/) starters
+create pages. Controls work, and results update as soon as marimo recomputes
 them.
 
 A **document** is a file that Studio renders from the notebook's results.
@@ -125,9 +132,19 @@ compile a PDF. In the editor and in apps served with Python, Studio compiles
 the document again whenever a result it reads changes. A Prepared export
 renders one PDF for each input state it prepares.
 
-[Choose a format](guide/formats.md) compares the built-in formats. A
-[view provider](guide/view-providers.md) adds another, such as a different
-framework, template, or typesetting tool.
+## Any framework or tool
+
+[Choose a format](guide/formats.md) compares the built-in starters. Two
+extension points cover other libraries and toolchains:
+
+- Page code reads a value from its `mo-value` host and draws it with any
+  JavaScript library the page loads. The examples draw notebook values with
+  D3, Mosaic, Three.js, MapLibre, Observable Plot, and Recharts.
+- A [view provider](guide/view-providers.md) is a Python package that adds
+  starters for another framework, template, or build tool, such as a Lit or
+  Preact app, a static site generator, or another typesetting tool. Its
+  starters appear in **Add view**, and its views build, preview, and export
+  like the built-in ones.
 
 ## Views live beside the notebook
 

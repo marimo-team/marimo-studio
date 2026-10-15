@@ -27,8 +27,11 @@ pages, slide decks, and typeset PDF documents that place the notebook's
 results by name. A view can place a cell with its controls, a rendered output
 such as a chart, or a value such as a number or a table. The notebook keeps the
 data and the computation. Each view keeps its own source in a folder beside the
-notebook, in the format its audience needs: an HTML page, a React or Svelte
-app, a Reveal.js deck, a Quarto article, or a Typst or LaTeX PDF.
+notebook, in the format its audience needs. Studio's starters create HTML
+pages, React or Svelte apps, Reveal.js decks, Observable notebooks, Quarto
+articles, and Typst or LaTeX PDFs. A
+[view provider](https://marimo-team.github.io/marimo-studio/guide/view-providers),
+a Python package, adds any other framework, template, or build tool.
 
 Pages stay live, so changing a control updates every result that depends on
 it. Documents typeset again with the new values. Every result traces back to
@@ -71,6 +74,18 @@ A Typst report places the same two results in a PDF:
 #marimo_output("problem_figure", width: 100%)
 The optimal value is #marimo_value("solution.value", default: 0).
 ```
+
+The notebook computes both results, and each view shows them in its own format:
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/figures/output-value-wide-dark.webp">
+    <img alt="The solution and level_curves cells in marimo, with the level-curve figure under level_curves, beside the HTML page and the Typst PDF. The page and the PDF show the same figure and state the optimal value." src="apps/docs/public/figures/output-value-wide-light.webp" width="100%">
+  </picture>
+</p>
+
+The page shows the figure as marimo renders it. The PDF draws it as a vector
+graphic at the width the Typst source places it.
 
 [What is Studio?](https://marimo-team.github.io/marimo-studio/what-is-studio) explains the model, and the
 [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs) example shows both
@@ -118,6 +133,10 @@ Each example notebook backs four views:
   a MapLibre operations map, a Reveal.js briefing, and a Quarto bulletin.
 - [Building occupancy](https://marimo-team.github.io/marimo-studio/examples/occupancy): a Notebook Kit monitor, a
   PDF field report, a LaTeX journal paper, and a Recharts model review.
+
+D3, Mosaic, Three.js, MapLibre, Observable Plot, and Recharts run in the
+views' own code and draw the values those views read from the notebook. A
+page can load any JavaScript library the same way.
 
 ## Run or export a view
 

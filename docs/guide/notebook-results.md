@@ -18,10 +18,13 @@ kinds of result:
 
 :::
 
-A page is HTML, React, Svelte, Reveal.js, or Notebook Kit source. Write its
-hosts inside `#app-shell`, in HTML, JSX, or Svelte markup. Quarto renders a
-page too, and Studio supplies `#app-shell` for it. Typst and LaTeX render a
-PDF, which cannot hold controls, so a document places images and values.
+A page is HTML that the view's provider builds. The built-in starters write
+it as plain HTML, React, Svelte, Reveal.js, or Notebook Kit source, and a
+[view provider](view-providers.md) can build it from any other framework. Write
+the hosts inside `#app-shell`, in the markup of the view's framework. Quarto
+renders a page too, and Studio supplies `#app-shell` for it. Typst and LaTeX
+render a PDF, which cannot hold controls, so a document places images and
+values.
 
 ## Name results in the notebook
 

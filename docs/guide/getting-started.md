@@ -93,4 +93,6 @@ The default view opens at `/`. A second view named `report` would open at
   outputs, and values in pages and documents.
 - [Choose a format](formats.md) creates React, Svelte, Reveal.js, Quarto,
   Typst, and LaTeX views.
+- [Add a view provider](view-providers.md) brings another framework or build
+  tool to **Add view**.
 - [Run or export a view](run-and-share.md) publishes the view.
