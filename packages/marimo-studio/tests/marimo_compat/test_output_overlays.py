@@ -26,7 +26,7 @@ from .values_test_support import (
 def test_lens_overlay_shows_the_notebooks_open_lens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    marimo_lens = pytest.importorskip("marimo_lens")
+    import marimo_lens
     from marimo._types.ids import CellId_t
 
     context = _native_output_context()
