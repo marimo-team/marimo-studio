@@ -28,7 +28,11 @@ components, imported assets, or npm packages make the view easier to
 maintain. Choose Typst or LaTeX when the result is a paper or a report to
 print or send.
 
-To use a tool that is not listed, install or write a
+A starter writes a view's first files, and you edit the view project from
+there. A page can draw notebook values with any JavaScript library: reference a
+script from an HTML page, or add an npm package to a React, Svelte, or Notebook
+Kit view.
+For a framework, template, or build tool outside this table, install or write a
 [view provider](view-providers.md). Its starters appear in **Add view** next to
 these.
 
