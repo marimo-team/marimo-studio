@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from types import MappingProxyType
 
@@ -61,7 +61,7 @@ class ViewBindings:
     cells: Mapping[str, str]
     outputs: Mapping[str, str]
     values: Mapping[str, str]
-    renders: Mapping[str, TargetBindings] = MappingProxyType({})
+    renders: Mapping[str, TargetBindings] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "cells", _immutable_bindings(self.cells))
