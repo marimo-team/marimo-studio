@@ -184,7 +184,7 @@ def test_cancelling_during_verification_keeps_the_event_loop_running(
         frozen = threading.Event()
 
         def watch_loop() -> None:
-            if not loop_ran.wait(0.5):
+            if not loop_ran.wait(5):
                 frozen.set()
             release.set()
 

@@ -358,13 +358,14 @@ def test_view_entry_changes_refresh_the_presentation(
             ),
             encoding="utf-8",
         )
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + 10
         while True:
             after_wrapper = client.get("/")
             after = client.get(_presentation_fallback_url(after_wrapper))
             after_entry = f"{_artifact_base(after)}index.html"
-            if after_entry != before_entry or time.monotonic() >= deadline:
+            if after_entry != before_entry:
                 break
+            assert time.monotonic() < deadline, "the edited view was never republished"
             time.sleep(0.05)
         retained = client.get(before_entry)
         current_artifact_revision = re.search(
@@ -400,13 +401,14 @@ def test_view_entry_changes_refresh_the_presentation(
             ),
             encoding="utf-8",
         )
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + 10
         while True:
             newest_wrapper = client.get("/")
             newest = client.get(_presentation_fallback_url(newest_wrapper))
             newest_entry = f"{_artifact_base(newest)}index.html"
-            if newest_entry != after_entry or time.monotonic() >= deadline:
+            if newest_entry != after_entry:
                 break
+            assert time.monotonic() < deadline, "the edited view was never republished"
             time.sleep(0.05)
         evicted = client.get(before_entry)
 

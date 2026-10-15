@@ -14,7 +14,9 @@ from marimo_studio.view_providers._host import provider_registry
 
 
 async def next_source(subscription: SourceSubscription) -> SourcePoll:
-    for _ in range(2_000):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 10
+    while loop.time() < deadline:
         event = await subscription.poll()
         if event is not None:
             return event

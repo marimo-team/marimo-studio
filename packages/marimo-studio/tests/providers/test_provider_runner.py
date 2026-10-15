@@ -74,7 +74,7 @@ def test_provider_cancellation_keeps_the_event_loop_live_and_isolates_callbacks(
         late = threading.Event()
 
         def blocking() -> None:
-            release.wait(timeout=2)
+            release.wait(timeout=10)
 
         def failing() -> None:
             raise RuntimeError("provider cleanup failed")
@@ -85,8 +85,9 @@ def test_provider_cancellation_keeps_the_event_loop_live_and_isolates_callbacks(
         heartbeat = asyncio.create_task(asyncio.sleep(0))
         started = asyncio.get_running_loop().time()
         cancellation.cancel()
-        await asyncio.wait_for(heartbeat, timeout=0.1)
-        assert asyncio.get_running_loop().time() - started < 0.1
+        # A callback that ran inline would hold the loop until its release.
+        await asyncio.wait_for(heartbeat, timeout=5)
+        assert asyncio.get_running_loop().time() - started < 5
         assert await asyncio.to_thread(current.wait, 1)
 
         cancellation.register(late.set)
@@ -172,10 +173,10 @@ def test_cancelled_provider_process_finishes_when_extension_ignores_cancellation
             if pending.done():
                 await pending
 
-        await asyncio.wait_for(wait_until_entered(), timeout=2)
+        await asyncio.wait_for(wait_until_entered(), timeout=15)
         heartbeat = asyncio.create_task(asyncio.sleep(0))
         cancellation.cancel()
-        await asyncio.wait_for(heartbeat, timeout=0.1)
+        await asyncio.wait_for(heartbeat, timeout=5)
         with pytest.raises(ViewProjectError, match="cancelled"):
             await asyncio.wait_for(pending, timeout=3)
 

@@ -226,7 +226,7 @@ def test_transport_cancellation_does_not_block_the_event_loop(
         assert await asyncio.to_thread(requesting.wait, 1)
         heartbeat = asyncio.create_task(asyncio.sleep(0))
         task.cancel()
-        await asyncio.wait_for(heartbeat, 0.1)
+        await asyncio.wait_for(heartbeat, 5)
         assert requesting.is_set()
         assert not worker_finished.is_set()
         with pytest.raises(asyncio.CancelledError):

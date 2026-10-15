@@ -531,16 +531,14 @@ def test_presentation_revision_tracks_view_and_entry_identity(
             shared.replace("color: black", "color: navy"),
             encoding="utf-8",
         )
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + 10
         while True:
             edited_config = _runtime_config(
                 client.get("/_marimo-studio/views/dashboard/config")
             )
-            if (
-                edited_config["revision"] != dashboard_config["revision"]
-                or time.monotonic() >= deadline
-            ):
+            if edited_config["revision"] != dashboard_config["revision"]:
                 break
+            assert time.monotonic() < deadline, "the edited view was never republished"
             time.sleep(0.05)
         edited = client.get("/")
         adjacent.write_text("not a declared Vanilla input", encoding="utf-8")
