@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import time
 from pathlib import Path
 
 import marimo
@@ -45,11 +44,20 @@ if __name__ == "__main__":
     )
 
 
-def _read_marker_pid(marker: Path) -> int:
-    deadline = time.monotonic() + 5
-    while not marker.is_file() and time.monotonic() < deadline:
-        time.sleep(0.01)
-    return int(marker.read_text(encoding="utf-8"))
+async def _notebook_child_pid(marker: Path, runtime: asyncio.Task[object]) -> int:
+    """Wait until the running notebook records its child, or surface why it stopped."""
+
+    async def wait() -> int:
+        while not marker.is_file():
+            if runtime.done():
+                await runtime
+                raise AssertionError(
+                    "The runtime finished before the notebook child started."
+                )
+            await asyncio.sleep(0.01)
+        return int(marker.read_text(encoding="utf-8"))
+
+    return await asyncio.wait_for(wait(), timeout=60)
 
 
 @pytest.mark.supported_python
@@ -98,9 +106,9 @@ def test_runtime_timeout_removes_notebook_descendants(tmp_path: Path) -> None:
 
     async def exercise() -> int:
         task = asyncio.create_task(
-            inspect_runtime(notebook, selectors=(0,), runtime_timeout=5)
+            inspect_runtime(notebook, selectors=(0,), runtime_timeout=15)
         )
-        pid = await asyncio.to_thread(_read_marker_pid, marker)
+        pid = await _notebook_child_pid(marker, task)
         with pytest.raises(RuntimeTimeoutError):
             await task
         return pid
@@ -119,7 +127,7 @@ def test_runtime_cancellation_removes_notebook_descendants(tmp_path: Path) -> No
         task = asyncio.create_task(
             inspect_runtime(notebook, selectors=(0,), runtime_timeout=60)
         )
-        pid = await asyncio.to_thread(_read_marker_pid, marker)
+        pid = await _notebook_child_pid(marker, task)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task

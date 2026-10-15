@@ -649,7 +649,8 @@ def test_isolated_provider_owns_its_complete_command_tree(
     marker = tmp_path / "pids"
     project = _project(tmp_path, installed.key, marker=str(marker))
     cancellation = ProviderCancellation()
-    timeout = 0.25 if finish == "timeout" else 30.0
+    # The budget starts at launch, so it must outlast two interpreter starts.
+    timeout = 5.0 if finish == "timeout" else 30.0
     request = inspection_request(
         project,
         cancellation=cancellation,

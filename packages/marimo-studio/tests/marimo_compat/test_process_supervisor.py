@@ -756,12 +756,13 @@ def test_process_supervisor_terminates_detached_process_on_early_finish(
                     "time.sleep(30)"
                 ),
             ],
-            0.2 if finish == "timeout" else 30,
+            # The budget starts at launch, so it must outlast two interpreter starts.
+            5 if finish == "timeout" else 30,
         )
-        child_pid = _wait_for_pid(marker)
+        child_pid = _wait_for_pid(marker, timeout=15)
         if finish == "cancel":
             supervisor.cancel()
-        result = future.result(timeout=5)
+        result = future.result(timeout=30)
 
         assert result.timed_out is (finish == "timeout")
         deadline = time.monotonic() + 2

@@ -407,14 +407,17 @@ paths = [root / f"shared-{round_}.txt" for round_ in range(rounds)]
 expected = [tree.read(path).version for path in paths]
 print("ready", flush=True)
 for round_ in range(rounds):
-    go = root / f"go-{round_}"
-    while not go.exists():
-        pass
+    # A blocking read releases the writers together without taking the CPU
+    # that the contended rename needs.
+    if not sys.stdin.readline():
+        break
     try:
         tree.write(paths[round_], worker.encode(), expect=expected[round_])
         print("won", flush=True)
     except ConditionalWriteError:
         print("lost", flush=True)
+    except OSError as error:
+        print(f"error {type(error).__name__}: {error}", flush=True)
 """
 
 
@@ -461,6 +464,7 @@ def test_concurrent_versioned_writes_admit_one_writer(
     workers = [
         subprocess.Popen(
             [sys.executable, "-c", _CONTEND, str(root), str(index), str(rounds), shape],
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -470,7 +474,10 @@ def test_concurrent_versioned_writes_admit_one_writer(
     try:
         assert all(_line(worker) == "ready" for worker in workers)
         for round_ in range(rounds):
-            (root / f"go-{round_}").write_bytes(b"")
+            for worker in workers:
+                assert worker.stdin is not None
+                worker.stdin.write("go\n")
+                worker.stdin.flush()
             outcomes = [_line(worker) for worker in workers]
             assert sorted(outcomes) == ["lost"] * (writers - 1) + ["won"], (
                 round_,
@@ -480,9 +487,7 @@ def test_concurrent_versioned_writes_admit_one_writer(
             assert (root / f"shared-{round_}.txt").read_bytes() == str(winner).encode()
             assert [path.name for path in root.glob(".marimo-studio-*")] == []
     finally:
-        # Release writers still waiting on later rounds after a failed round.
-        for round_ in range(rounds):
-            (root / f"go-{round_}").write_bytes(b"")
+        # Closing stdin releases writers still waiting on later rounds.
         results = [_finish(worker) for worker in workers]
     assert all(worker.returncode == 0 for worker in workers), [
         stderr for _stdout, stderr in results
