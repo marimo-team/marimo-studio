@@ -25,7 +25,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._artifact_sites import (
     ArtifactSite,
-    media_accept,
+    output_accept,
 )
 from marimo_studio.view_providers._targets import (
     MAX_CELL_TARGETS,
@@ -244,7 +244,7 @@ def _accept(
     if site.render is not None or site.kind == "value":
         return site.accept
     if site.kind == "output":
-        return media_accept(sites, "output").get(target, ())
+        return output_accept(sites).get(target, ())
     return ()
 
 

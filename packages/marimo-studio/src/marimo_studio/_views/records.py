@@ -32,7 +32,7 @@ dependencies, and ``none`` saves nothing.
 
 
 class DiagnosticsError(Exception):
-    """Diagnostics that stop a build or a document render."""
+    """Diagnostics that stop a build or a render."""
 
     def __init__(self, diagnostics: tuple[ProjectDiagnostic, ...]) -> None:
         super().__init__(diagnostics[0].message)

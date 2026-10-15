@@ -166,19 +166,16 @@ def read_sites(
     return tuple(site for site in sites if site.render == render)
 
 
-def media_accept(
-    sites: Iterable[ArtifactSite],
-    kind: ProjectionKind,
-) -> dict[str, tuple[str, ...]]:
-    """Return the media types a page reads each literal output or cell target in.
+def output_accept(sites: Iterable[ArtifactSite]) -> dict[str, tuple[str, ...]]:
+    """Return the image types a page reads each literal output target in.
 
-    Inspection gives every literal page host of a target the same list, and a
-    host that selects its target at runtime declares none. An empty output list
+    Inspection gives every literal page output host of a target the same list,
+    and a host that selects its target at runtime declares none. An empty list
     reads marimo's native output. Render reads keep their own lists.
     """
     accept: dict[str, tuple[str, ...]] = {}
     for site in page_sites(sites):
-        if site.kind == kind:
+        if site.kind == "output":
             for target in site.targets or ():
                 accept.setdefault(target, site.accept)
     return accept

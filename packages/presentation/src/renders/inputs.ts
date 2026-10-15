@@ -3,8 +3,6 @@ import type { RenderedMedia } from "@marimo-studio/protocol/render";
 import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
 import type { ProjectDiagnostic } from "@marimo-studio/protocol/view-project";
 
-export type { RenderedMedia };
-
 /** The targets one render reads, as projection requests of its read sites. */
 export interface RenderReads {
   readonly revision: string;

@@ -64,7 +64,7 @@ async def values_response(
         body = await read_json_body(request, max_bytes=_PROJECTION_JSON_MAX_BYTES)
     except JSONBodyError as error:
         return json_body_error_response(error)
-    read = await read_kernel_values(
+    read = await _read_values(
         request,
         body,
         context,
@@ -76,10 +76,10 @@ async def values_response(
     )
     if isinstance(read, Response):
         return read
-    return JSONResponse(read[1].to_dict(), headers=NO_STORE)
+    return JSONResponse(read.to_dict(), headers=NO_STORE)
 
 
-async def read_kernel_values(
+async def _read_values(
     request: Request,
     body: object,
     context: ServerContext,
@@ -88,7 +88,7 @@ async def read_kernel_values(
     projections: KernelProjectionHost,
     sessions: SessionState,
     authorized_revision: str | None,
-) -> tuple[PresentationSnapshot, ValueReadResult] | JSONResponse:
+) -> ValueReadResult | JSONResponse:
     """Authorize one value request and read its values from the session kernel."""
     revision = body.get("revision") if isinstance(body, dict) else None
     projections_value = body.get("projections") if isinstance(body, dict) else None
@@ -182,7 +182,7 @@ async def read_kernel_values(
         return _value_error(error)
     if stale := _stale_binding_error(result.errors):
         return stale
-    return snapshot, result
+    return result
 
 
 async def outputs_response(
@@ -198,7 +198,7 @@ async def outputs_response(
         body = await read_json_body(request, max_bytes=_PROJECTION_JSON_MAX_BYTES)
     except JSONBodyError as error:
         return json_body_error_response(error)
-    read = await read_kernel_outputs(
+    read = await _read_outputs(
         request,
         body,
         context,
@@ -210,10 +210,10 @@ async def outputs_response(
     )
     if isinstance(read, Response):
         return read
-    return JSONResponse(read[1].to_dict(), headers=NO_STORE)
+    return JSONResponse(read.to_dict(), headers=NO_STORE)
 
 
-async def read_kernel_outputs(
+async def _read_outputs(
     request: Request,
     body: object,
     context: ServerContext,
@@ -222,7 +222,7 @@ async def read_kernel_outputs(
     projections: KernelProjectionHost,
     sessions: SessionState,
     authorized_revision: str | None,
-) -> tuple[PresentationSnapshot, OutputRenderResult] | JSONResponse:
+) -> OutputRenderResult | JSONResponse:
     """Authorize one output request and render its outputs in the session kernel."""
     revision = body.get("revision") if isinstance(body, dict) else None
     projections_value = body.get("projections") if isinstance(body, dict) else None
@@ -304,57 +304,7 @@ async def read_kernel_outputs(
         return _value_error(error)
     if stale := _stale_binding_error(result.errors):
         return stale
-    return snapshot, result
-
-
-async def read_session_cells(
-    request: Request,
-    revision: str,
-    cell_projections: list[object],
-    context: ServerContext,
-    presentation: NotebookPresentation,
-    view_name: str,
-    sessions: SessionState,
-    authorized_revision: str | None,
-) -> dict[str, tuple[str, object]] | JSONResponse:
-    """Authorize cell projections and return each named cell's current output."""
-    snapshot = await projection_snapshot(
-        presentation,
-        context,
-        view_name,
-        revision,
-        authorized_revision,
-    )
-    if isinstance(snapshot, JSONResponse):
-        return snapshot
-    try:
-        requested = _resolve_requests(snapshot, cell_projections, kind="cell")
-    except ProjectionResolutionError as error:
-        return _resolution_error(error)
-    session_id = request.headers.get("Marimo-Session-Id")
-    if not session_id or sessions.ownership(context, session_id) == "foreign":
-        return _session_unavailable(session_id)
-    try:
-        runtime_ids, live_cells = await _runtime_cell_refs(
-            snapshot,
-            context,
-            session_id,
-            sessions,
-        )
-        cells = {
-            item.request.target: runtime_ids[item.producer]
-            for item in requested
-            if item.producer in runtime_ids
-        }
-        outputs = sessions.cell_outputs(context, session_id, cells.values())
-        await revalidate_runtime_cells(sessions, context, session_id, live_cells)
-    except RuntimeSyncError as error:
-        return _runtime_sync_response(error)
-    return {
-        target: outputs[cell_id]
-        for target, cell_id in cells.items()
-        if cell_id in outputs
-    }
+    return result
 
 
 def _resolve_requests(
