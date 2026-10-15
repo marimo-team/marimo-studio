@@ -164,10 +164,10 @@ class _RegisteredProvider:
         info: object,
         extension_timeout: float,
         *,
-        renders: bool,
+        can_render: bool,
     ) -> None:
         self.key = candidate.key
-        self.renders = renders
+        self.can_render = can_render
         self.distribution = canonicalize_name(candidate.distribution)
         self.version = candidate.version
         self.registration = candidate.registration
@@ -305,7 +305,7 @@ class _RegisteredProvider:
             return self._conformance.build(self._local_provider(), request)
 
     def render(self, request: RenderRequest) -> RenderResult:
-        if not self.renders:
+        if not self.can_render:
             raise ConfigurationError(f"View provider {self.key!r} has no render()")
         request = self._conformance.validate_render_request(request)
         with self._guard(f"render {request.source.as_posix()!r}"):
@@ -514,7 +514,7 @@ class ProviderRegistry:
                     for future in as_completed(futures):
                         index, process = futures[future]
                         try:
-                            info, renders = future.result()
+                            info, can_render = future.result()
                         except Exception as error:
                             cleanup = find_process_cleanup_error(error)
                             if cleanup is not None:
@@ -525,7 +525,7 @@ class ProviderRegistry:
                             else:
                                 description_errors[index] = error
                         else:
-                            descriptions[index] = (None, process, info, renders)
+                            descriptions[index] = (None, process, info, can_render)
                 finally:
                     executor.shutdown(
                         wait=True,
@@ -559,7 +559,7 @@ class ProviderRegistry:
                         starters=(),
                     )
                     continue
-                implementation, process, info, renders = descriptions[index]
+                implementation, process, info, can_render = descriptions[index]
                 try:
                     registered = _RegisteredProvider(
                         implementation,
@@ -573,7 +573,7 @@ class ProviderRegistry:
                         process,
                         info,
                         self._extension_timeout,
-                        renders=renders,
+                        can_render=can_render,
                     )
                 except Exception as error:
                     raise_process_cleanup(error)

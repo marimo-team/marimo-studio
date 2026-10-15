@@ -223,7 +223,7 @@ def test_kernel_projection_encodes_empty_eager_dataframes() -> None:
     assert decoded.num_rows == 0
 
 
-def test_document_reads_receive_tables_as_rows_and_dates_as_text() -> None:
+def test_render_reads_receive_tables_as_rows_and_dates_as_text() -> None:
     import polars as pl
 
     frame = pl.DataFrame(

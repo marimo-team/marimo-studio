@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import { renderSourceSchema } from "../src/projections.ts";
-import { renderIndexSchema, renderRequestSchema, renderResultSchema } from "../src/render.ts";
+import { renderIndexSchema, renderRequestSchema, renderBundleSchema } from "../src/render.ts";
 
 const result = {
   render: "report.md",
@@ -18,11 +18,11 @@ const result = {
 };
 
 test("render results name their main and preview files from the bundle", () => {
-  assert.deepEqual(renderResultSchema.parse(result), result);
-  assert.equal(renderResultSchema.safeParse({ ...result, main: "missing.pdf" }).success, false);
-  assert.equal(renderResultSchema.safeParse({ ...result, preview: "../1.png" }).success, false);
+  assert.deepEqual(renderBundleSchema.parse(result), result);
+  assert.equal(renderBundleSchema.safeParse({ ...result, main: "missing.pdf" }).success, false);
+  assert.equal(renderBundleSchema.safeParse({ ...result, preview: "../1.png" }).success, false);
   assert.equal(
-    renderResultSchema.safeParse({
+    renderBundleSchema.safeParse({
       ...result,
       files: [{ ...result.files[0], path: "/etc/passwd" }],
       main: "/etc/passwd",
@@ -77,12 +77,12 @@ test("a render source is a relative POSIX path to a project file", () => {
 });
 
 test("a render result previews a file other than its main file", () => {
-  assert.equal(renderResultSchema.safeParse({ ...result, preview: "report.docx" }).success, false);
+  assert.equal(renderBundleSchema.safeParse({ ...result, preview: "report.docx" }).success, false);
 });
 
 test("render bundle paths use forward slashes", () => {
   assert.equal(
-    renderResultSchema.safeParse({
+    renderBundleSchema.safeParse({
       ...result,
       files: [result.files[0], { ...result.files[1], path: "pages\\1.png" }],
       preview: "pages\\1.png",

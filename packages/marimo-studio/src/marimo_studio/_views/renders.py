@@ -54,7 +54,7 @@ _JSON_HINT = (
 
 
 class Renderer(Protocol):
-    renders: bool
+    can_render: bool
 
     def render(self, request: RenderRequest) -> RenderResult: ...
 

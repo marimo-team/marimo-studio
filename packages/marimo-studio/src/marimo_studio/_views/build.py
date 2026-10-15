@@ -580,7 +580,7 @@ def _publish_locked(
             held = _publication_hold_diagnostic(project)
             if held is not None:
                 record_build_failure(project, profile, (held,), started, revision)
-            if snapshot_inspection.renders and not provider.renders:
+            if snapshot_inspection.renders and not provider.can_render:
                 record_build_failure(
                     project,
                     profile,
