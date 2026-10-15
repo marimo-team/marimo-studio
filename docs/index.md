@@ -37,7 +37,7 @@ features:
       width: "24"
       height: "24"
     title: Pages and documents
-    details: Start from an HTML, React, Svelte, Reveal.js, Notebook Kit, Quarto, Typst, or LaTeX starter, or add a provider for any other framework or build tool.
+    details: Start from an HTML, React, Svelte, Reveal.js, Notebook Kit, Quarto, Typst, or LaTeX starter, or add a provider for any other framework, template, or build tool.
     link: ./guide/formats
   - icon:
       src: /icons/code-xml.svg

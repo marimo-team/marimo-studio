@@ -79,7 +79,7 @@ The notebook computes both results, and each view shows them in its own format:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-studio/figures/output-value-wide-dark.webp">
-    <img alt="The two notebook cells in marimo, the HTML page, and the Typst PDF, each showing the same level curves. The page and the PDF state the optimal value." src="https://marimo-team.github.io/marimo-studio/figures/output-value-wide-light.webp" width="100%">
+    <img alt="The solution and level_curves cells in marimo, with the level-curve figure under level_curves, beside the HTML page and the Typst PDF. The page and the PDF show the same figure and state the optimal value." src="https://marimo-team.github.io/marimo-studio/figures/output-value-wide-light.webp" width="100%">
   </picture>
 </p>
 

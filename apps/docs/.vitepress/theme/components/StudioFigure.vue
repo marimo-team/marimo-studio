@@ -36,6 +36,12 @@ const source = (layout: "narrow" | "wide", theme: (typeof themes)[number]): stri
 </style>
 
 <style>
+/* A figure spans the content column. Zero specificity lets page rules, such as
+   the overview breakout, set its inline margins. */
+:where(.studio-figure) {
+  margin-inline: 0;
+}
+
 /* VitePress marks its dark theme with a class on <html>, so the picture for
    the other theme leaves the layout. Scoped :global() would compile these
    selectors to the bare <html> condition. */
