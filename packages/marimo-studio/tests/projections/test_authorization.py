@@ -382,13 +382,15 @@ def test_records_read_values_as_json_and_size_only_accepting_outputs(
         )
 
 
-def test_document_value_records_read_tables_as_json() -> None:
+def test_render_value_reads_take_tables_as_json() -> None:
     bound = _bound_with_upstream()
-    document = BoundProjection(
+    read = BoundProjection(
         replace(bound.projection, accept=("application/json",)),
         bound.dependency_bindings,
     )
-    arguments = authorized_value_arguments("revision-1", (document,), "document")
+    arguments = authorized_value_arguments(
+        "revision-1", (read,), "preview-a:render:report"
+    )
 
     authorized, _active = verify_value_ownership_arguments(
         revision=arguments["revision"],

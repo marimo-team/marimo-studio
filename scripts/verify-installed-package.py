@@ -155,20 +155,21 @@ assert set(get_args(marimo_studio.authoring.StaticRuntime)) == {"zero-python", "
 assert set(marimo_studio.view_providers.__all__) == {
     "BuildInput", "BuildInputKind", "BuildProfile", "BuildRequest", "BuildResult",
     "CellConfigSpec", "CellKind", "CellRef", "CellSpec", "DocumentAccess",
-    "DocumentProvider", "InspectionRequest", "JsonValue", "NotebookSpec",
+    "InspectionRequest", "JsonValue", "NotebookSpec",
     "PackagedStarter", "ProjectDiagnostic", "ProjectInspection", "ProjectionKind",
     "ProjectionSite", "ProviderAvailability", "ProviderCancellation",
     "ProviderCommandError", "ProviderCommandResult", "ProviderError",
-    "ProviderInfo", "ProviderRunner", "ProviderStarter", "RenderCell",
-    "RenderOutput", "RenderRequest", "RenderValue", "Representation", "Size",
+    "ProviderInfo", "ProviderRunner", "ProviderStarter", "Render", "RenderCell",
+    "RenderFile", "RenderOutput", "RenderProvider", "RenderRequest", "RenderResult",
+    "RenderValue", "Representation", "Size",
     "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
     "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
     "create_starter", "html_sites", "parse_accept", "probe_tool", "project_files",
-    "project_path", "script_json",
+    "project_path", "render_page", "script_json",
 }
 assert set(marimo_studio.view_providers.testing.__all__) == {
-    "CheckedView", "ProviderCheckError", "check_provider",
+    "CheckedRender", "CheckedView", "ProviderCheckError", "check_provider",
 }
 assert set(marimo_studio.errors.__all__) == {
     "AgentRequestError", "BindingError", "CapabilityInputError", "ConfigurationError",
@@ -187,7 +188,7 @@ providers = marimo_studio.view_providers
 assert tuple(signature(providers.ViewProvider.create).parameters) == (
     "self", "starter", "context",
 )
-assert tuple(signature(providers.DocumentProvider.render).parameters) == (
+assert tuple(signature(providers.RenderProvider.render).parameters) == (
     "self", "request",
 )
 assert tuple(signature(providers.html_sites).parameters) == ("path", "source")
@@ -204,23 +205,28 @@ assert tuple(field.name for field in fields(providers.RenderCell)) == (
     "target", "source", "accept",
 )
 assert tuple(field.name for field in fields(providers.ProjectInspection)) == (
-    "documents", "inputs", "sites", "diagnostics", "render_values",
-    "render_outputs", "render_cells",
+    "documents", "inputs", "sites", "diagnostics", "renders",
+)
+assert tuple(field.name for field in fields(providers.Render)) == (
+    "source", "values", "outputs", "cells",
 )
 assert tuple(field.name for field in fields(providers.ProviderInfo)) == (
     "title", "summary", "options",
 )
 assert tuple(field.name for field in fields(providers.BuildRequest)) == (
     "project", "inspection", "inputs", "project_revision", "profile",
-    "staging_root", "work_root", "cache_root", "cancellation", "runner",
-    "command_timeout",
+    "staging_root", "template_root", "work_root", "cache_root", "cancellation",
+    "runner", "command_timeout",
 )
 assert tuple(field.name for field in fields(providers.RenderRequest)) == (
-    "template_root", "document", "values", "outputs", "cells", "output_root",
+    "source", "template_root", "values", "outputs", "cells", "output_root",
     "cancellation", "runner", "command_timeout",
 )
 assert tuple(field.name for field in fields(providers.BuildResult)) == (
     "document", "diagnostics", "output_sizes",
+)
+assert tuple(field.name for field in fields(providers.RenderResult)) == (
+    "files", "main", "preview", "diagnostics",
 )
 assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",

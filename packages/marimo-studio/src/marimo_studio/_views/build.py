@@ -34,6 +34,7 @@ from marimo_studio._artifacts.lock import build_lock
 from marimo_studio._artifacts.publication import (
     BUILD_CANCELLED,
     ArtifactCommitRejected,
+    TemplateCandidate,
     capture_artifact_candidate,
     prepare_artifact_build,
     prepare_artifact_publication,
@@ -58,19 +59,16 @@ from marimo_studio._processes.provider_runner import (
     create_provider_runner,
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError
-from marimo_studio._views.documents import (
-    DocumentRenderer,
-    compose_view,
-    renderer_missing,
-)
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._views.instrumentation import (
     authored_diagnostics,
     instrument_sites,
     missing_site_diagnostics,
+    unknown_render_diagnostics,
 )
 from marimo_studio._views.publication_hold import read_publication_hold
 from marimo_studio._views.records import DiagnosticsError, ViewBuild
+from marimo_studio._views.renders import Renderer, renderer_missing
 from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.mutation_lock import view_build_lock, view_mutation_lock
 from marimo_studio._workspace.project_manifest import (
@@ -98,7 +96,7 @@ from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.records import ProviderProvenance
 
 
-class BuildProvider(DocumentRenderer, Protocol):
+class BuildProvider(Renderer, Protocol):
     def availability(self) -> ProviderAvailability: ...
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
@@ -582,12 +580,7 @@ def _publish_locked(
             held = _publication_hold_diagnostic(project)
             if held is not None:
                 record_build_failure(project, profile, (held,), started, revision)
-            reads_notebook = (
-                snapshot_inspection.render_values
-                or snapshot_inspection.render_outputs
-                or snapshot_inspection.render_cells
-            )
-            if reads_notebook and not provider.renders:
+            if snapshot_inspection.renders and not provider.renders:
                 record_build_failure(
                     project,
                     profile,
@@ -621,6 +614,7 @@ def _publish_locked(
                 project_revision=revision,
                 profile=profile,
                 staging_root=candidate.files_root,
+                template_root=candidate.template_root,
                 work_root=candidate.work_root,
                 cache_root=candidate.cache_root,
                 cancellation=cancellation,
@@ -677,61 +671,35 @@ def _publish_locked(
                     started,
                     revision,
                 )
-            try:
-                output = compose_view(
-                    generation_root=candidate.generation_root,
-                    files_root=candidate.files_root,
-                    document=report.document,
-                    sites=sites,
-                    document_sites=render_sites(
-                        snapshot_inspection.render_values,
-                        snapshot_inspection.render_outputs,
-                        snapshot_inspection.render_cells,
-                        report.output_sizes,
-                    ),
-                    title=project.name,
-                    renderer=provider,
-                    renderer_fingerprint=provenance.build_fingerprint,
-                    cancellation=cancellation,
+            unknown = unknown_render_diagnostics(
+                candidate.files_root,
+                report.document,
+                {render.source for render in snapshot_inspection.renders},
+            )
+            if unknown:
+                record_build_failure(project, profile, unknown, started, revision)
+            template = (
+                TemplateCandidate(
+                    candidate.template_root,
+                    tuple(render.source for render in snapshot_inspection.renders),
+                    provenance.build_fingerprint,
                 )
-            except DiagnosticsError as error:
-                record_build_failure(
-                    project,
-                    profile,
-                    error.diagnostics,
-                    started,
-                    revision,
-                )
-            except ViewProjectError:
-                raise
-            except (OSError, ConfigurationError) as error:
-                record_build_failure(
-                    project,
-                    profile,
-                    (
-                        ProjectDiagnostic(
-                            code="artifact-validation-failed",
-                            severity="error",
-                            message=str(error),
-                            hint="Fix the provider output and build the view again.",
-                        ),
-                    ),
-                    started,
-                    revision,
-                )
-            report = replace(
-                report,
-                diagnostics=(*report.diagnostics, *output.diagnostics),
+                if snapshot_inspection.renders
+                else None
+            )
+            sites = (
+                *sites,
+                *render_sites(snapshot_inspection.renders, report.output_sizes),
             )
             prepared = prepare_artifact_publication(
                 project,
                 profile,
                 candidate,
-                output.sites,
-                output.document,
+                sites,
+                report.document,
                 revision,
                 started,
-                template=output.template,
+                template=template,
             )
             report = replace(
                 report,

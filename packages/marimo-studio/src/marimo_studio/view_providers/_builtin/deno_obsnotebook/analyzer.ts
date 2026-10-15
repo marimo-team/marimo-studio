@@ -7,6 +7,7 @@ import {
   projectionKindConflict,
   projectionTargetUnbounded,
   projectionWildcardInvalid,
+  RENDER_HOST_UNAVAILABLE,
 } from "../_deno/analyzers/projection-diagnostics.ts";
 import {
   bounded,
@@ -145,6 +146,11 @@ for (const path of paths) {
       if (!native && !attrs.has("mo-value")) continue;
       if (native && attrs.has("mo-value")) {
         report(offset, "projection-kind-conflict", projectionKindConflict(tag));
+        continue;
+      }
+      if (tag === "marimo-output" && attrs.has("render")) {
+        const { code, ...copy } = RENDER_HOST_UNAVAILABLE;
+        report(offset, code, copy);
         continue;
       }
       const kind = tag === "marimo-cell"

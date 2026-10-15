@@ -69,6 +69,7 @@ const mountedConfig = (kind: Extract<ProjectionKind, "cell" | "output">): Runtim
         targets: null,
         accept: [],
         size: null,
+        render: null,
       },
     ],
     runtimeBindings: {

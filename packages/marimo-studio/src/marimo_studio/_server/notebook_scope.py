@@ -17,7 +17,7 @@ from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.agent.coordinator import AgentCoordinator
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.prepared_views import PreparedViewRegistry
-from marimo_studio._server.presentation.document_renders import DocumentRenders
+from marimo_studio._server.presentation.renders import RenderStore
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.workspace_lifecycle import WorkspaceLifecycleResolver
@@ -50,8 +50,8 @@ class NotebookScope:
         compare=False,
         repr=False,
     )
-    renders: DocumentRenders = field(
-        default_factory=DocumentRenders,
+    renders: RenderStore = field(
+        default_factory=RenderStore,
         compare=False,
         repr=False,
     )

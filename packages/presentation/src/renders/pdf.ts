@@ -10,8 +10,8 @@ interface PendingPage {
   readonly scale: number;
 }
 
-/** Laid-out pages of one document, released together when it is replaced. */
-export interface DocumentPages {
+/** Laid-out pages of one PDF, released together when it is replaced. */
+export interface PdfPages {
   readonly pages: readonly HTMLElement[];
   /** Keep the text layers aligned when the pages are laid out at `width`. */
   resize(width: number): void;
@@ -23,7 +23,7 @@ const MAX_PIXEL_RATIO = 2;
 let engine: Promise<PdfEngine> | undefined;
 
 // Presentation frames have an opaque origin, so the pdf.js engine runs from a
-// data URL in the same way as the WebAssembly notebook worker. Every document
+// data URL in the same way as the WebAssembly notebook worker. Every PDF
 // shares this one worker. Passing it to getDocument keeps a destroyed loading
 // task from terminating it.
 const loadEngine = (): Promise<PdfEngine> => {
@@ -45,7 +45,7 @@ const loadEngine = (): Promise<PdfEngine> => {
       }),
     }),
   );
-  // A failed chunk load leaves the next document free to retry.
+  // A failed chunk load leaves the next PDF free to retry.
   loading.catch(() => {
     if (engine === loading) {
       engine = undefined;
@@ -86,12 +86,12 @@ export const openPdf = async (
   data: Uint8Array,
   width: number,
   signal: AbortSignal,
-): Promise<DocumentPages> => {
+): Promise<PdfPages> => {
   const { pdfjs, worker } = await loadEngine();
   signal.throwIfAborted();
-  // PDF.js transfers the buffer it receives to its worker. Pass a copy so the
-  // caller can still compare these bytes with the next render.
-  const task = pdfjs.getDocument({ data: data.slice(), worker });
+  // PDF.js transfers the buffer it receives to its worker, so `data` is
+  // unusable once this returns.
+  const task = pdfjs.getDocument({ data, worker });
   const abort = () => void task.destroy();
   signal.addEventListener("abort", abort, { once: true });
   try {

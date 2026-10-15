@@ -84,8 +84,8 @@ _ARTIFACT_PATTERN = re.compile(
 )
 _VIEW_SUPPORT_PATTERN = re.compile(
     rf"{re.escape(SUPPORT_PATH)}/views/(?P<view>{_VIEW_PATTERN})/"
-    r"(?P<route>config|values|outputs|render|dev/events|zero-python/(?:current|"
-    r"[0-9a-f]{64}/(?:index\.json|assets/.+)))"
+    r"(?P<route>config|values|outputs|render|renders/[0-9a-f]{64}/.+|dev/events|"
+    r"zero-python/(?:current|[0-9a-f]{64}/(?:index\.json|assets/.+)))"
 )
 _SESSION_POST_ROUTES = frozenset({"outputs", "render", "values"})
 _RUNTIME_ASSET_PATTERN = re.compile(rf"{re.escape(SUPPORT_PATH)}/assets/.+")
@@ -349,7 +349,7 @@ def presentation_target_allowed(
                 (match := _VIEW_SUPPORT_PATTERN.fullmatch(route.target)) is not None
                 and (
                     match.group("route") in {"config", "dev/events"}
-                    or match.group("route").startswith("zero-python/")
+                    or match.group("route").startswith(("zero-python/", "renders/"))
                 )
             )
         )

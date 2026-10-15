@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -13,7 +13,11 @@ from marimo_export.progress import ProgressEvent
 from marimo_export.wire import canonical_json_sha256
 
 from marimo_studio._prepared.cleanup import attempt_cleanup
-from marimo_studio._prepared.compiler import CompiledExportView, compile_export_view
+from marimo_studio._prepared.compiler import (
+    CompiledExportView,
+    ViewBindings,
+    compile_export_view,
+)
 from marimo_studio._prepared.errors import publication_error
 from marimo_studio._prepared.manifest import prepared_view_manifest
 from marimo_studio._prepared.state_space import (
@@ -29,7 +33,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, slots=True)
 class StaticPublication:
     prepared: PreparedExport
-    projections: Mapping[str, Mapping[str, str]]
+    bindings: ViewBindings
     view: str
     plan_digest: str
     state_space_source: StateSpaceSource
@@ -48,7 +52,7 @@ class StaticPublication:
                 export_url,
                 refresh_interval_ms=0,
             ),
-            projections=self.projections,
+            projections=self.bindings.to_dict(),
             document_sha256=self.document_sha256,
             view=self.view,
             plan_digest=self.plan_digest,
@@ -96,16 +100,15 @@ class _PreparedPublicationSource:
                 progress=progress,
             )
             state_space_source.require_current()
-            projections = _projections(compiled)
             publication = StaticPublication(
                 prepared=prepared,
-                projections=projections,
+                bindings=compiled.bindings,
                 view=snapshot.view_name,
                 plan_digest=canonical_json_sha256(
                     {
                         "inputs": list(prepared.plan.inputs),
                         "state_space": state_space_source.digest,
-                        "projections": projections,
+                        "projections": compiled.bindings.to_dict(),
                     }
                 ),
                 state_space_source=state_space_source,
@@ -135,14 +138,6 @@ def _compiled_export_view(
         snapshot.sites,
         state_space=state_space,
     )
-
-
-def _projections(compiled: CompiledExportView) -> dict[str, dict[str, str]]:
-    return {
-        "cells": dict(compiled.bindings.cells),
-        "outputs": dict(compiled.bindings.outputs),
-        "values": dict(compiled.bindings.values),
-    }
 
 
 def publication_source() -> StaticPublicationSource:

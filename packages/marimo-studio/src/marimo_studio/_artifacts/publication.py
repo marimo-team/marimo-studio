@@ -103,6 +103,7 @@ class ArtifactCandidate:
     generation_root: Path
     snapshot: ProjectSnapshot
     files_root: Path
+    template_root: Path
     work_root: Path
     cache_root: Path
 
@@ -112,7 +113,7 @@ class TemplateCandidate:
     """Private provider output that Studio renders after publication."""
 
     root: Path
-    document: PurePosixPath
+    renders: tuple[PurePosixPath, ...]
     renderer: str
 
 
@@ -308,8 +309,10 @@ def capture_artifact_candidate(
     try:
         captured = snapshot_project(project, inspection, generation_root / "project")
         files_root = project_artifacts(captured.project) / "build" / "files"
+        template_root = files_root.parent / "template"
         work_root = files_root.parent / "work"
         tree.ensure_directory(files_root)
+        tree.ensure_directory(template_root)
         tree.ensure_directory(work_root)
         cache_root = artifact_root(project) / ".cache"
         ensure_secure_directory(
@@ -326,6 +329,7 @@ def capture_artifact_candidate(
             generation_root,
             captured,
             files_root,
+            template_root,
             work_root,
             cache_root,
         )
@@ -453,16 +457,18 @@ def prepare_artifact_publication(
         template_record = None
         if template is not None:
             template_record = ArtifactTemplate(
-                normalized_artifact_path(
-                    template.document.as_posix(),
-                    "Artifact template document",
-                ),
                 ingest_publication_files(
                     project,
                     template.root,
                     publication_root / "template",
                 ),
                 template.renderer,
+                tuple(
+                    normalized_artifact_path(
+                        source.as_posix(), "Artifact render source"
+                    )
+                    for source in template.renders
+                ),
             )
         manifest = artifact_manifest(
             document.as_posix(),

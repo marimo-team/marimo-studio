@@ -128,6 +128,7 @@ export const projectionRuntimeConfig = (
       targets: [request.target],
       accept: [],
       size: null,
+      render: null,
     })),
     runtimeBindings: {
       cellRefs: Object.fromEntries(

@@ -44,14 +44,15 @@ from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
     BuildResult,
-    DocumentProvider,
     InspectionRequest,
     ProjectInspection,
     ProviderAvailability,
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
+    RenderProvider,
     RenderRequest,
+    RenderResult,
     StarterContext,
     StarterPlan,
     ViewProject,
@@ -303,16 +304,16 @@ class _RegisteredProvider:
                 return self._conformance.validate_build_result(request, result)
             return self._conformance.build(self._local_provider(), request)
 
-    def render(self, request: RenderRequest) -> BuildResult:
+    def render(self, request: RenderRequest) -> RenderResult:
         if not self.renders:
             raise ConfigurationError(f"View provider {self.key!r} has no render()")
         request = self._conformance.validate_render_request(request)
-        with self._guard(f"render {request.document.as_posix()!r}"):
+        with self._guard(f"render {request.source.as_posix()!r}"):
             if self._process is not None:
                 result = render_in_provider_process(self._process, request)
                 return self._conformance.validate_render_result(request, result)
             return self._conformance.render(
-                cast(DocumentProvider, self._local_provider()),
+                cast(RenderProvider, self._local_provider()),
                 request,
             )
 

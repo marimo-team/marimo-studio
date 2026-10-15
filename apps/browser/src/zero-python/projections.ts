@@ -2,6 +2,7 @@ import type {
   PreparedProjectionSnapshot,
   PreparedValueSnapshot,
 } from "@marimo-studio/presentation/prepared-projections";
+import type { RenderInputs } from "@marimo-studio/presentation/render-inputs";
 import type {
   BlobAssetLoader,
   ExportOutput,
@@ -30,7 +31,7 @@ import { marimoCellLoader } from "@marimo-team/marimo-export/loader/marimo-cell"
 import { marimoOutputLoader } from "@marimo-team/marimo-export/loader/marimo-output";
 import { z } from "zod";
 
-import type { StudioProjectionBindings } from "./metadata.ts";
+import type { StudioTargetBindings } from "./metadata.ts";
 
 export interface ZeroPythonProjectionLoaders {
   readonly scalar: ReturnType<typeof scalarLoader>;
@@ -160,7 +161,7 @@ const preparedValue = (
 
 export const loadPreparedProjectionSnapshot = async (
   state: ExportState,
-  projections: StudioProjectionBindings,
+  projections: StudioTargetBindings,
   loaders: ZeroPythonProjectionLoaders,
   ownerCell: (selector: string) => string,
   signal: AbortSignal,
@@ -194,5 +195,54 @@ export const loadPreparedProjectionSnapshot = async (
       // SAFETY: This output name was paired with the complete-cell snapshot loader.
       ...(loaded[name] as MarimoCellSnapshot),
     })),
+  };
+};
+
+/**
+ * Load the values, outputs, and cell outputs one render reads in `state`, as
+ * a browser runtime posts them for rendering. A cell without output is left
+ * out, so the render shows its default for it.
+ */
+export const loadPreparedRenderInputs = async (
+  state: ExportState,
+  bindings: StudioTargetBindings,
+  loaders: ZeroPythonProjectionLoaders,
+  ownerCell: (selector: string) => string,
+  signal: AbortSignal,
+): Promise<RenderInputs> => {
+  const selected: Record<string, ProjectionLoader> = Object.fromEntries([
+    ...Object.values(bindings.values).map((name) => [
+      name,
+      valueLoader(state.output(name), loaders),
+    ]),
+    ...Object.entries(bindings.outputs).map(([selector, name]) => [
+      name,
+      outputLoader(state.output(name), loaders, () => ownerCell(selector)),
+    ]),
+    ...Object.values(bindings.cells).map((name) => [name, loaders.cell]),
+  ]);
+  const loaded = await loadOutputs(state, selected, { signal });
+  const media = (output: MarimoCellOutput | null) =>
+    output === null ? [] : [{ mimetype: output.mimetype, data: output.data }];
+  return {
+    // Render value reads export as JSON, with tables as rows.
+    values: Object.fromEntries(
+      Object.entries(bindings.values).map(([target, name]) => [
+        target,
+        parseJsonValue(loaded[name]),
+      ]),
+    ),
+    outputs: Object.fromEntries(
+      Object.entries(bindings.outputs).flatMap(([target, name]) =>
+        // SAFETY: outputLoader pairs every output with a loader that returns a marimo output snapshot.
+        media((loaded[name] as MarimoOutputSnapshot).output).map((output) => [target, output]),
+      ),
+    ),
+    cells: Object.fromEntries(
+      Object.entries(bindings.cells).flatMap(([target, name]) =>
+        // SAFETY: This output name was paired with the complete-cell snapshot loader.
+        media((loaded[name] as MarimoCellSnapshot).output).map((output) => [target, output]),
+      ),
+    ),
   };
 };

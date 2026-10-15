@@ -150,6 +150,7 @@ test("view projects require unique sites tied to declared source documents", () 
     targets: ["chart"],
     accept: [],
     size: null,
+    render: null,
   };
   assert.equal(parseViewProject({ ...projectPayload(), sites: [site] }).sites.length, 1);
   assert.throws(() => parseViewProject({ ...projectPayload(), sites: [site, site] }));

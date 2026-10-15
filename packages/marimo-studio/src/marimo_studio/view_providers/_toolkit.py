@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import html
 import os
 import re
 import shutil
 import threading
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
 from packaging.version import InvalidVersion, Version
@@ -119,12 +120,23 @@ def project_files(
     )
 
 
-def copy_inputs(request: BuildRequest, destination: Path) -> None:
-    """Copy the build's input files, except ``view.toml``, into ``destination``."""
+def copy_inputs(
+    request: BuildRequest,
+    destination: Path,
+    *,
+    include: Callable[[PurePosixPath], bool] | None = None,
+) -> None:
+    """Copy the build's input files, except ``view.toml``, into ``destination``.
+
+    ``include`` selects the paths to copy, so a build can copy page files into
+    ``staging_root`` and render sources into ``template_root``.
+    """
     destination.mkdir(parents=True, exist_ok=True)
     for path in request.inputs:
         request.cancellation.raise_if_cancelled("Copying the build inputs")
-        if path == PurePosixPath("view.toml"):
+        if path == PurePosixPath("view.toml") or (
+            include is not None and not include(path)
+        ):
             continue
         source = request.project.root.joinpath(*path.parts)
         if source.is_symlink() or not source.is_file():
@@ -132,6 +144,36 @@ def copy_inputs(request: BuildRequest, destination: Path) -> None:
         target = destination.joinpath(*path.parts)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+
+
+RENDER_PAGE = PurePosixPath("index.html")
+
+
+def render_page(
+    request: BuildRequest,
+    source: PurePosixPath,
+    *,
+    title: str | None = None,
+) -> PurePosixPath:
+    """Write a page that shows the render of ``source``, and return ``index.html``.
+
+    The page holds one ``<marimo-output render="...">`` host that fills the
+    view, so a provider that renders one document, such as a PDF, publishes it
+    without browser code of its own. ``title`` defaults to the view's name.
+    """
+    heading = html.escape(title if title is not None else request.project.name)
+    name = html.escape(source.as_posix(), quote=True)
+    request.staging_root.joinpath(*RENDER_PAGE.parts).write_text(
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"<title>{heading}</title>\n"
+        "<style>html,body{margin:0;min-height:100%}</style>\n"
+        '</head>\n<body>\n<main id="app-shell">\n'
+        f'<marimo-output render="{name}"></marimo-output>\n'
+        "</main>\n</body>\n</html>\n",
+        encoding="utf-8",
+    )
+    return RENDER_PAGE
 
 
 def probe_tool(

@@ -78,12 +78,15 @@ def provider_build_request(
     profile: BuildProfile = "development",
     cache_root: Path | None = None,
     work_root: Path | None = None,
+    template_root: Path | None = None,
     revision: str = "sha256:test",
     command_timeout: float = 120.0,
 ) -> BuildRequest:
     cancellation = ProviderCancellation()
     work = work_root or staging_root.parent / "work"
     work.mkdir(parents=True, exist_ok=True)
+    template = template_root or staging_root.parent / "template"
+    template.mkdir(parents=True, exist_ok=True)
     return BuildRequest(
         project=project,
         inspection=inspection,
@@ -91,6 +94,7 @@ def provider_build_request(
         project_revision=revision,
         profile=profile,
         staging_root=staging_root,
+        template_root=template,
         work_root=work,
         cache_root=cache_root or project_artifacts(project) / ".cache",
         cancellation=cancellation,

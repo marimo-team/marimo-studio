@@ -3,9 +3,11 @@
 Typst and LaTeX views share one shape: a project of text sources with one entry
 document, whose sources read notebook values, outputs, and cells through calls
 that a language scanner finds. ``inspect_typeset()`` lists the project's Source
-documents and build inputs and collects those reads. A render finds the same
-reads in its template with ``template_reads()``, writes each output and cell it
-receives with ``write_media()``, and compiles the entry.
+documents and build inputs and declares one render of the entry document, such
+as ``main.typ``, with those reads. A build copies the project into the template
+and writes a page that shows the render. A render finds the same reads in its
+template with ``template_reads()``, writes each output and cell it receives
+with ``write_media()``, and compiles the entry to PDF.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from marimo_studio.view_providers import (
     BuildInput,
     ProjectDiagnostic,
     ProjectInspection,
+    Render,
     RenderCell,
     RenderOutput,
     RenderValue,
@@ -67,10 +70,11 @@ class TypesetLanguage:
 def inspect_typeset(
     project: ViewProject, language: TypesetLanguage
 ) -> ProjectInspection:
-    """Describe a typeset project: its documents, inputs, and notebook reads.
+    """Describe a typeset project: its documents, inputs, and its render.
 
     Every project file is a build input. Source shows the files whose suffix
-    the language edits, and every source file is scanned for reads.
+    the language edits, and every source file is scanned for the reads of the
+    entry document's render.
     """
     entry = language.entrypoint(project)
     files = project_files(project)
@@ -120,9 +124,7 @@ def inspect_typeset(
         documents,
         inputs,
         diagnostics=tuple(diagnostics),
-        render_values=tuple(values),
-        render_outputs=tuple(outputs),
-        render_cells=tuple(cells),
+        renders=(Render(entry, tuple(values), tuple(outputs), tuple(cells)),),
     )
 
 

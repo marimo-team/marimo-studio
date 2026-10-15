@@ -37,7 +37,7 @@ test("renders a Typst document again when a notebook value changes", async ({
 
   await page.goto("/studio/report/?file=notebook.py");
   const preview = await waitForPreview(page);
-  const viewer = preview.locator("marimo-document");
+  const viewer = preview.locator('marimo-output[render="main.typ"]');
   await expect(viewer).toHaveAttribute("data-state", "ready");
   await expect(viewer.locator(".textLayer")).toContainText("Metric is 42");
   await expect(viewer.getByRole("link", { name: "Download" })).toHaveAttribute(
@@ -95,7 +95,7 @@ test("embeds a notebook figure in a Typst document and renders it again when it 
 
   await page.goto("/studio/report/?file=notebook.py");
   const preview = await waitForPreview(page);
-  const viewer = preview.locator("marimo-document");
+  const viewer = preview.locator('marimo-output[render="main.typ"]');
   await expect(viewer).toHaveAttribute("data-state", "ready");
   // Studio renders the figure as a PDF with real text, so pdf.js extracts its
   // title only when the document embeds a vector figure. The notebook keeps
@@ -122,7 +122,7 @@ test("embeds a notebook figure in a Typst document in the browser runtime", asyn
   await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const preview = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
-  const viewer = preview.locator("marimo-document");
+  const viewer = preview.locator('marimo-output[render="main.typ"]');
   await expect(viewer.locator(".textLayer")).toContainText("Chart 42", {
     timeout: WASM_PREVIEW_TIMEOUT,
   });
@@ -169,7 +169,7 @@ test("places a notebook cell's figure in a Typst document", async ({ page, studi
 
   await page.goto("/studio/report/?file=notebook.py");
   const preview = await waitForPreview(page);
-  const viewer = preview.locator("marimo-document");
+  const viewer = preview.locator('marimo-output[render="main.typ"]');
   await expect(viewer.locator(".textLayer")).toContainText("Cell placed");
   await expect(viewer).toHaveAttribute("data-state", "ready");
 });
@@ -198,7 +198,7 @@ test("places a notebook cell's figure in a Typst document in the browser runtime
   await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const preview = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
-  const viewer = preview.locator("marimo-document");
+  const viewer = preview.locator('marimo-output[render="main.typ"]');
   await expect(viewer.locator(".textLayer")).toContainText("Cell placed", {
     timeout: WASM_PREVIEW_TIMEOUT,
   });
@@ -224,10 +224,8 @@ test("shows the template default for an output without an image form", async ({
   await studioCli.buildWorkspaceView("report");
 
   await page.goto("/studio/report/?file=notebook.py");
-  const viewer = previewFrame(page).locator("marimo-document");
+  const viewer = previewFrame(page).locator('marimo-output[render="main.typ"]');
   await expect(viewer).toHaveAttribute("data-state", "ready", { timeout: 60_000 });
   await expect(viewer.locator(".textLayer")).toContainText("Figure pending");
-  await expect(viewer.getByRole("status")).toContainText(
-    /Showing the default for metric \(.*no representation as application\/pdf/,
-  );
+  await expect(viewer.getByRole("status")).toContainText("Showing the default for metric.");
 });

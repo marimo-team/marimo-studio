@@ -16,6 +16,7 @@ import {
   projectionTargetUnbounded,
   projectionUsageHint,
   projectionWildcardInvalid,
+  RENDER_HOST_UNAVAILABLE,
 } from "../_deno/analyzers/projection-diagnostics.ts";
 import { TypeScriptModules } from "../_deno/analyzers/typescript-modules.ts";
 import {
@@ -366,6 +367,19 @@ const reportTarget = (
   });
 };
 
+const reportRender = (
+  path: string,
+  source: ts.SourceFile,
+  opening: ts.JsxOpeningLikeElement,
+): void => {
+  diagnostics.push({
+    severity: "error",
+    ...RENDER_HOST_UNAVAILABLE,
+    path,
+    ...sourcePoint(source, opening),
+  });
+};
+
 for (const { path, source } of modules.values()) {
   const visit = (node: ts.Node): void => {
     const targetNode = moduleNode(node);
@@ -412,6 +426,10 @@ for (const { path, source } of modules.values()) {
         });
       } else if (tag === "marimo-cell") {
         reportTarget(path, source, node, "cell", "name");
+      } else if (
+        tag === "marimo-output" && attributes(node, "render").length > 0
+      ) {
+        reportRender(path, source, node);
       } else if (tag === "marimo-output") {
         reportTarget(path, source, node, "output", "value");
       }

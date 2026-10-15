@@ -26,8 +26,11 @@ from marimo_studio._workspace.project_manifest import (
 from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers import (
     JsonValue,
+    ProjectInspection,
     ProviderCancellation,
     ProviderCommandResult,
+    Render,
+    RenderFile,
     RenderRequest,
     Representation,
     Size,
@@ -97,8 +100,8 @@ def _render(
     cancellation = ProviderCancellation()
     return output, provider.render(
         RenderRequest(
+            source=MAIN,
             template_root=template,
-            document=MAIN,
             values=values,
             outputs=outputs or {},
             cells=cells or {},
@@ -108,6 +111,13 @@ def _render(
             command_timeout=timeout,
         )
     )
+
+
+def _main_render(inspection: ProjectInspection) -> Render:
+    """Return the one render a Typst view declares."""
+    (render,) = inspection.renders
+    assert render.source == MAIN
+    return render
 
 
 def test_typst_values_are_read_from_literal_value_calls(tmp_path: Path) -> None:
@@ -130,7 +140,7 @@ Call value("prose") in running text.
 
     assert inspection.diagnostics == ()
     assert inspection.sites == ()
-    assert [(item.target, item.source) for item in inspection.render_values] == [
+    assert [(item.target, item.source) for item in _main_render(inspection).values] == [
         ("title", SourceLocation(MAIN, 5, 11)),
         ('lookup["north"]', SourceLocation(MAIN, 7, 8)),
     ]
@@ -156,7 +166,7 @@ def test_typst_outputs_accept_pdf_then_vector_then_raster_images(
     inspection = inspect_view_project_sync(project)
 
     assert inspection.diagnostics == ()
-    (output,) = inspection.render_outputs
+    (output,) = _main_render(inspection).outputs
     assert (output.target, output.source) == (
         "charts.sweep",
         SourceLocation(MAIN, 2, 9),
@@ -169,7 +179,7 @@ def test_typst_outputs_accept_pdf_then_vector_then_raster_images(
         "image/webp",
         "image/gif",
     )
-    assert [(item.target, item.source) for item in inspection.render_values] == [
+    assert [(item.target, item.source) for item in _main_render(inspection).values] == [
         ("caption", SourceLocation(MAIN, 2, 61)),
     ]
 
@@ -184,7 +194,7 @@ def test_typst_cells_are_read_by_name(tmp_path: Path) -> None:
     inspection = inspect_view_project_sync(project)
 
     assert inspection.diagnostics == ()
-    (cell,) = inspection.render_cells
+    (cell,) = _main_render(inspection).cells
     assert (cell.target, cell.source) == ("revenue_plot", SourceLocation(MAIN, 2, 9))
     assert cell.accept == (
         "application/pdf",
@@ -226,8 +236,8 @@ def test_render_places_images_at_their_size(tmp_path: Path, kind: str) -> None:
     )
 
     assert result.diagnostics == ()
-    assert result.document is not None
-    assert output.joinpath("document.pdf").read_bytes().startswith(b"%PDF-")
+    assert result.main == PurePosixPath("main.pdf")
+    assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
 
 
 def test_render_places_a_matplotlib_figure_as_pdf(tmp_path: Path) -> None:
@@ -241,14 +251,14 @@ def test_render_places_a_matplotlib_figure_as_pdf(tmp_path: Path) -> None:
         '#assert(chart != none, message: "the figure is missing")\n'
         "#chart\n",
     )
-    (read,) = inspect_view_project_sync(project).render_outputs
+    (read,) = _main_render(inspect_view_project_sync(project)).outputs
 
     figure_pdf = represent(figure, read.accept)
     output, result = _render(project, {}, outputs={"chart": figure_pdf})
 
     assert figure_pdf.media_type == "application/pdf"
     assert result.diagnostics == ()
-    assert output.joinpath("document.pdf").read_bytes().startswith(b"%PDF-")
+    assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
 
 
 def test_outputs_and_none_values_place_their_default(tmp_path: Path) -> None:
@@ -263,10 +273,10 @@ def test_outputs_and_none_values_place_their_default(tmp_path: Path) -> None:
     _output, result = _render(project, {"peak.label": None})
 
     assert result.diagnostics == ()
-    assert result.document is not None
+    assert result.main == PurePosixPath("main.pdf")
 
 
-def test_a_build_publishes_where_the_document_places_each_figure(
+def test_a_build_records_where_the_document_places_each_figure(
     tmp_path: Path,
 ) -> None:
     project = _project(
@@ -282,7 +292,7 @@ def test_a_build_publishes_where_the_document_places_each_figure(
         sizes = {
             site.targets: site.size
             for site in published.artifact.sites
-            if site.kind == "output"
+            if site.kind == "output" and site.render == MAIN
         }
 
     assert sizes == {
@@ -306,7 +316,7 @@ def test_invalid_value_selectors_are_reported_at_their_call(tmp_path: Path) -> N
     ("notebook", "targets"),
     ((REPORT_NOTEBOOK, [("report",)]), (None, [])),
 )
-def test_typst_starter_publishes_a_pdf_reading_report_when_defined(
+def test_typst_starter_publishes_a_page_showing_the_render_of_its_entry(
     tmp_path: Path,
     notebook: str | None,
     targets: list[tuple[str, ...]],
@@ -315,12 +325,31 @@ def test_typst_starter_publishes_a_pdf_reading_report_when_defined(
 
     published = publish(project)
 
-    assert set(published.files) == {
-        PurePosixPath("index.html"),
-        PurePosixPath("main.pdf"),
-    }
-    assert published.files[PurePosixPath("main.pdf")].startswith(b"%PDF-")
+    assert set(published.files) == {PurePosixPath("index.html")}
+    page = published.files[PurePosixPath("index.html")].decode()
+    assert '<marimo-output render="main.typ"></marimo-output>' in page
     assert [site.targets for site in published.sites] == targets
+    assert {site.render for site in published.sites} <= {MAIN}
+
+
+def test_typst_build_keeps_the_sources_as_the_private_render_template(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path, notebook=REPORT_NOTEBOOK)
+
+    with build_view_project_sync(project) as lease:
+        template = lease.artifact.template
+        public = {item.path for item in lease.artifact.files}
+        copy = tmp_path / "template-copy"
+        lease.copy_template(copy)
+
+    assert template is not None
+    assert template.renders == (MAIN,)
+    assert MAIN in {item.path for item in template.files}
+    assert MAIN not in public
+    assert copy.joinpath(MAIN).read_text(encoding="utf-8") == (
+        project.root.joinpath(MAIN).read_text(encoding="utf-8")
+    )
 
 
 def test_typst_builds_share_one_revision_across_profiles(tmp_path: Path) -> None:
@@ -379,8 +408,8 @@ def test_render_keeps_package_locations_in_the_message(tmp_path: Path) -> None:
 
     result = provider.render(
         RenderRequest(
+            source=MAIN,
             template_root=project.root,
-            document=MAIN,
             values={},
             outputs={},
             cells={},
@@ -391,7 +420,7 @@ def test_render_keeps_package_locations_in_the_message(tmp_path: Path) -> None:
         )
     )
 
-    assert result.document == PurePosixPath("document.pdf")
+    assert result.main == PurePosixPath("main.pdf")
     (warning,) = result.diagnostics
     assert warning.source is None
     assert warning.message == (
@@ -414,9 +443,12 @@ def test_render_binds_notebook_values(
 
     output, result = _render(project, {"n": value})
 
-    assert (result.document is not None) is succeeds
+    assert (result.main is not None) is succeeds
     if succeeds:
-        assert output.joinpath("document.pdf").read_bytes().startswith(b"%PDF-")
+        assert result.files == (
+            RenderFile(PurePosixPath("main.pdf"), "application/pdf"),
+        )
+        assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
     else:
         (diagnostic,) = result.diagnostics
         assert diagnostic.message == "assertion failed: n is not seven"
@@ -437,7 +469,7 @@ def test_render_stops_at_its_deadline(tmp_path: Path) -> None:
         _render(project, {"n": 1_000_000_000}, timeout=1.0)
 
 
-def test_static_validation_checks_the_values_a_document_reads(
+def test_static_validation_checks_the_values_a_render_reads(
     notebook_path: Path,
 ) -> None:
     setup = prepare_view(notebook_path, "report", starter="marimo-studio/typst:default")
@@ -464,17 +496,21 @@ def test_static_validation_checks_the_values_a_document_reads(
     }
 
 
-def test_build_uses_default_for_computed_output_targets(tmp_path: Path) -> None:
+def test_computed_output_targets_render_their_default(tmp_path: Path) -> None:
     project = _project(
         tmp_path,
         '#import "marimo.typ": marimo_output\n'
         "#let chart(name) = figure(marimo_output(name, width: 80%))\n"
         '#chart("plot")\n',
     )
-    assert inspect_view_project_sync(project).render_outputs == ()
+    assert _main_render(inspect_view_project_sync(project)).outputs == ()
 
-    with build_view_project_sync(project, profile="production") as lease:
-        assert lease.read_bytes(PurePosixPath("main.pdf")).startswith(b"%PDF-")
+    with build_view_project_sync(project, profile="production"):
+        pass
+    output, result = _render(project, {})
+
+    assert result.diagnostics == ()
+    assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
 
 
 def test_build_retains_errors_from_data_inputs(tmp_path: Path) -> None:
@@ -525,7 +561,7 @@ def test_inspection_reads_typst_code_expressions(
     tmp_path: Path, main: str, targets: list[str]
 ) -> None:
     inspection = inspect_view_project_sync(_project(tmp_path, main))
-    assert [read.target for read in inspection.render_values] == targets
+    assert [read.target for read in _main_render(inspection).values] == targets
 
 
 def test_inspection_handles_oversized_unicode_escape(tmp_path: Path) -> None:
@@ -533,5 +569,5 @@ def test_inspection_handles_oversized_unicode_escape(tmp_path: Path) -> None:
         _project(tmp_path, r'#marimo_value("\u{FFFFFFFFFFFFFFFFFFFFFF}", default: 1)')
     )
 
-    assert inspection.render_values == ()
+    assert _main_render(inspection).values == ()
     assert MAIN in {document.path for document in inspection.documents}

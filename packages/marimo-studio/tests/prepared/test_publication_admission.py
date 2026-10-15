@@ -70,7 +70,7 @@ def test_state_space_admission_rejects_candidate_before_replacing_current(
     candidates = iter((first, rejected))
     metadata = PreparedViewMetadata(
         request=request,
-        projections={"cells": {}, "outputs": {}, "values": {}},
+        projections={"cells": {}, "outputs": {}, "values": {}, "renders": {}},
         selected_inputs=None,
         plan_digest="3" * 64,
     )

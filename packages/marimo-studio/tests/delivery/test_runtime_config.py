@@ -75,6 +75,7 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
                 "targets": ["result"],
                 "accept": [],
                 "size": None,
+                "render": None,
             },
         ),
         projection_policy=projection_policy(),

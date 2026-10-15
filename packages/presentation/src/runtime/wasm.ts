@@ -1,4 +1,5 @@
 import type { EmbeddedCellExecutor } from "@marimo-studio/marimo-frontend/embedded-runtime";
+import type { OutputReadRequest } from "@marimo-studio/protocol/output-read";
 import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import type { ValueReadRequest } from "@marimo-studio/protocol/value-read";
 import type { RuntimeContext, RuntimeSession } from "@marimo-studio/runtime";
@@ -6,7 +7,7 @@ import type { RuntimeContext, RuntimeSession } from "@marimo-studio/runtime";
 import { terminatePresentationWasmWorker } from "@marimo-studio/marimo-frontend/embedded-runtime";
 import { z } from "zod";
 
-import type { RuntimeInvoke } from "./runtime";
+import type { ValueReader } from "../values/reader";
 
 import { reconcileOutputReadResponse } from "../outputs/reconcile";
 import { createWasmOutputReader, createWasmOutputRequest } from "../outputs/wasm";
@@ -20,11 +21,12 @@ import {
 import { awaitWasmStartup, retryWasmRpc, WASM_PROJECTION_NAMESPACE } from "../wasm-rpc";
 import { createWasmInitialization } from "./initialization";
 import { createObservedDeferred } from "./observed-deferred";
-import { mountSharedRuntime } from "./runtime";
+import { mountSharedRuntime, type RuntimeInvoke, type RuntimeReaderContext } from "./runtime";
 import { type WasmRuntimeData, wasmRuntimeDataSchema } from "./wasm-config";
 import { createWasmMountedProjectionPreparation } from "./wasm-mounted-projections";
 import { createWasmProjectionExecutor } from "./wasm-projection-execution";
 import { createWasmQueryWriter } from "./wasm-query";
+import { createWasmRenderReader } from "./wasm-render-inputs";
 import { prepareWasmProjectionRuntime } from "./wasm-startup";
 
 const configureProjections = async (
@@ -156,6 +158,33 @@ export const mountWasmRuntime = (
     }
     return waitForWasmCaller(current.promise, signal);
   };
+  const prepareOutputs = async (
+    invoke: RuntimeInvoke,
+    request: OutputReadRequest,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    await waitForWasmCaller(projectionRuntime.promise, signal);
+    const config = getRuntimeConfig();
+    if (request.revision !== config.revision) {
+      throw new Error("The output request revision is not active.");
+    }
+    await authorizeProjections(invoke, config, signal);
+    await projectionExecutor.prepareRequests(config, data, request.projections, signal);
+  };
+  const valueReader = ({ initialized, invoke }: RuntimeReaderContext): ValueReader =>
+    createWasmValueReader(
+      async () => await initialized,
+      async (request, signal) => {
+        await waitForWasmCaller(projectionRuntime.promise, signal);
+        const config = getRuntimeConfig();
+        if (request.revision !== config.revision) {
+          throw new Error("The value request revision is not active.");
+        }
+        await authorizeProjections(invoke, config, signal);
+        await projectionExecutor.prepareRequests(config, data, request.projections, signal);
+        return requestValues(invoke, request, signal);
+      },
+    );
   const runtime = mountSharedRuntime(context.presentation, context.root, {
     autoInstantiate: false,
     id: "wasm",
@@ -199,34 +228,32 @@ export const mountWasmRuntime = (
       },
     },
     updateQuery: (invoke, query) => queryWriter.write(invoke, query),
-    valueReader: ({ initialized, invoke }) =>
-      createWasmValueReader(
-        async () => await initialized,
-        async (request, signal) => {
-          await waitForWasmCaller(projectionRuntime.promise, signal);
-          const config = getRuntimeConfig();
-          if (request.revision !== config.revision) {
-            throw new Error("The value request revision is not active.");
-          }
-          await authorizeProjections(invoke, config, signal);
-          await projectionExecutor.prepareRequests(config, data, request.projections, signal);
-          return requestValues(invoke, request, signal);
-        },
-      ),
+    valueReader,
     outputReader: ({ initialized, invoke, sessionId }) =>
       createWasmOutputReader(
         async () => await initialized,
-        createWasmOutputRequest(sessionId, invoke, async (request, signal) => {
-          await waitForWasmCaller(projectionRuntime.promise, signal);
-          const config = getRuntimeConfig();
-          if (request.revision !== config.revision) {
-            throw new Error("The output request revision is not active.");
-          }
-          await authorizeProjections(invoke, config, signal);
-          await projectionExecutor.prepareRequests(config, data, request.projections, signal);
-        }),
+        createWasmOutputRequest(sessionId, invoke, (request, signal) =>
+          prepareOutputs(invoke, request, signal),
+        ),
         reconcileOutputReadResponse,
       ),
+    renderReader: (runtime) =>
+      createWasmRenderReader({
+        sessionId: runtime.sessionId,
+        // A render reads values through its own reader, so its active
+        // selectors never evict the Arrow tables the page's hosts decoded.
+        readValues: valueReader(runtime),
+        readOutputs: (consumerId) =>
+          createWasmOutputReader(
+            async () => await runtime.initialized,
+            createWasmOutputRequest(consumerId, runtime.invoke, (request, signal) =>
+              prepareOutputs(runtime.invoke, request, signal),
+            ),
+            (response) => response,
+          ),
+        revision: () => getRuntimeConfig().revision,
+        prepareCells: (request, signal) => prepareOutputs(runtime.invoke, request, signal),
+      }),
   });
   const mountedProjections = createWasmMountedProjectionPreparation(
     presentation,

@@ -21,6 +21,7 @@ import {
   projectionTargetUnbounded,
   projectionUsageHint,
   projectionWildcardInvalid,
+  RENDER_HOST_UNAVAILABLE,
 } from "../_deno/analyzers/projection-diagnostics.ts";
 import { TypeScriptModules } from "../_deno/analyzers/typescript-modules.ts";
 import { evaluateTypeScript } from "../_deno/analyzers/typescript-values.ts";
@@ -656,6 +657,15 @@ const reportTarget = (
   });
 };
 
+const reportRender = (document: SvelteDocument, node: AstNode): void => {
+  diagnostics.push({
+    severity: "error",
+    ...RENDER_HOST_UNAVAILABLE,
+    path: document.path,
+    ...pointAt(document.source, node.start ?? 0),
+  });
+};
+
 const inspectElement = (
   document: SvelteDocument,
   node: AstNode,
@@ -687,6 +697,8 @@ const inspectElement = (
     });
   } else if (tag === "marimo-cell") {
     reportTarget(document, node, "cell", "name", scope);
+  } else if (tag === "marimo-output" && attributes(node, "render").length > 0) {
+    reportRender(document, node);
   } else if (tag === "marimo-output") {
     reportTarget(document, node, "output", "value", scope);
   }

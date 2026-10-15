@@ -329,15 +329,15 @@ try {
       await page.locator("#app-shell").screenshot({ path: join(shotsDir, `${view}.png`) });
       await page.context().close();
     } else {
-      // Studio's document viewer paints the PDF with pdf.js. The capture keeps
-      // the painted page at its own resolution, without the viewer around it.
-      // The viewer is ready once it shows the document rendered with notebook
-      // values, which leaves its status empty. pdf.js fills the text layer
-      // after it paints the canvas.
+      // The render host paints the PDF with pdf.js. The capture keeps the
+      // painted page at its own resolution, without the host around it. The
+      // host is ready once it shows the PDF rendered with notebook values,
+      // which leaves its status empty. pdf.js fills the text layer after it
+      // paints the canvas.
       const page = await open(url, reportViewport);
       await page.waitForFunction(
         () => {
-          const viewer = document.querySelector<HTMLElement>("marimo-document");
+          const viewer = document.querySelector<HTMLElement>("marimo-output[render]");
           const root = viewer?.shadowRoot;
           return (
             viewer?.dataset.state === "ready" &&
@@ -351,7 +351,7 @@ try {
       await page.waitForTimeout(settleMs);
       const png = await page.evaluate(() => {
         const canvas = document
-          .querySelector("marimo-document")
+          .querySelector("marimo-output[render]")
           ?.shadowRoot?.querySelector(".page canvas");
         return canvas instanceof HTMLCanvasElement ? canvas.toDataURL("image/png") : "";
       });

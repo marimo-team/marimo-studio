@@ -5,14 +5,15 @@ typeset a notebook value with ``\\marimovalue{selector}``, format numbers and
 dates with ``\\marimonum`` and ``\\marimodate``, branch with ``\\IfMarimoTF``,
 and repeat a table row for each item of a list or table with ``\\marimorows``.
 ``\\marimographics[width=...]{selector}`` places a figure, and
-``\\marimocell{name}`` places a named cell's output. The build compiles the
-project once, which measures the size the document places each figure at, and
-publishes it as a private template. Studio renders it to PDF with ``render()``
-once without values, then again whenever a reader's values change.
+``\\marimocell{name}`` places a named cell's output. The view renders its entry
+document, ``main.tex`` by default. The build copies the project into the render
+template and compiles it once, which measures the size the document places each
+figure at, then writes a page that shows the render. Studio renders the PDF
+whenever a reader's values change.
 
 Studio delivers each output as an image in the first of ``IMAGE_TYPES`` the
-value supports, drawn at its measured size, so a matplotlib figure arrives as
-a PDF whose text keeps its point size. A render writes the images and an
+value supports, drawn at its measured size, so a matplotlib figure arrives as a
+PDF whose text keeps its point size. A render writes the images and an
 ``inputs.tex`` file that defines every read beneath ``.marimo-studio`` beside
 the entry document, and ``marimo.sty`` loads that file when it exists. The
 project therefore also compiles with Tectonic, latexmk, or an editor preview,
@@ -33,12 +34,15 @@ from marimo_studio.view_providers import (
     ProviderCommandError,
     ProviderInfo,
     ProviderStarter,
+    RenderFile,
     RenderRequest,
+    RenderResult,
     SourceLocation,
     StarterContext,
     StarterPlan,
     copy_inputs,
     create_starter,
+    render_page,
 )
 from marimo_studio.view_providers._builtin._typeset import (
     TypesetLanguage,
@@ -95,14 +99,14 @@ class LatexProvider:
 
     def build(self, request: BuildRequest) -> BuildResult:
         entry = LATEX.entrypoint(request.project)
-        copy_inputs(request, request.staging_root)
+        copy_inputs(request, request.template_root)
         # Compile once under the build's command budget, which outlasts a
         # render's. Tectonic downloads the packages a document uses on its
         # first compile, so later renders find them cached.
         try:
             compiled = compile_latex(
                 request.runner,
-                request.staging_root,
+                request.template_root,
                 entry,
                 request.work_root,
                 request.command_timeout,
@@ -128,19 +132,22 @@ class LatexProvider:
                     ),
                 ),
             )
-        if compiled.document is None:
-            return compiled
+        if compiled.pdf is None:
+            return BuildResult(None, compiled.diagnostics)
         return BuildResult(
-            entry,
+            render_page(request, entry),
             output_sizes={
-                output.target: compiled.output_sizes[output.target]
-                for output in request.inspection.render_outputs
-                if output.target in compiled.output_sizes
+                render.source: {
+                    output.target: compiled.output_sizes[output.target]
+                    for output in render.outputs
+                    if output.target in compiled.output_sizes
+                }
+                for render in request.inspection.renders
             },
         )
 
-    def render(self, request: RenderRequest) -> BuildResult:
-        base = request.template_root.joinpath(*request.document.parent.parts)
+    def render(self, request: RenderRequest) -> RenderResult:
+        base = request.template_root.joinpath(*request.source.parent.parts)
         inputs = base.joinpath(*_INPUTS.parts)
         outputs = inputs / "outputs"
 
@@ -158,9 +165,8 @@ class LatexProvider:
                 template_reads(request.template_root, LATEX),
             )
         except InputsTooLarge:
-            return BuildResult(
-                None,
-                (
+            return RenderResult(
+                diagnostics=(
                     ProjectDiagnostic(
                         "latex-values-too-large",
                         "error",
@@ -173,14 +179,22 @@ class LatexProvider:
             )
         inputs.mkdir(parents=True, exist_ok=True)
         inputs.joinpath("inputs.tex").write_text(text, encoding="utf-8")
+        # Tectonic writes its logs beside the PDF, and the render publishes the
+        # PDF alone.
         compiled = compile_latex(
             request.runner,
             request.template_root,
-            request.document,
+            request.source,
             request.output_root,
             request.command_timeout,
         )
-        return BuildResult(compiled.document, compiled.diagnostics)
+        if compiled.pdf is None:
+            return RenderResult(diagnostics=compiled.diagnostics)
+        return RenderResult(
+            (RenderFile(compiled.pdf, "application/pdf"),),
+            compiled.pdf,
+            diagnostics=compiled.diagnostics,
+        )
 
 
 provider = LatexProvider()

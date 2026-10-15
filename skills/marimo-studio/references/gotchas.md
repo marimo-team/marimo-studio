@@ -32,16 +32,16 @@ Studio runs inside the workspace environment and never re-enters it. Run the
 command the error prints, which starts `marimo-studio` through `pixi run`.
 
 **A Typst or LaTeX view shows `render-value-not-json`.**
-The document reads a value without a JSON form, such as a model object or a
+The render reads a value without a JSON form, such as a model object or a
 figure. Read one of its fields, or a table, dictionary, list, text, number, or
-date that the notebook computes. Documents read dataframes as lists of rows and
-dates as ISO 8601 text, so project nothing for the document.
+date that the notebook computes. Renders read dataframes as lists of rows and
+dates as ISO 8601 text, so project nothing for the render.
 
-**A Typst or LaTeX view names an output that has no image form.**
+**A Typst or LaTeX view shows `Showing the default for <target>`.**
 A `marimo_output()` or `\marimographics` read targets a value without an
-image form the document places, such as a table, and the view shows it beside
-the document with `output-media-unavailable`. Typst places PDF, SVG, PNG, JPEG,
-WebP, and GIF, and LaTeX places PDF, PNG, and JPEG. Read a figure, such as a
+image form the render places, such as a table, so the render uses the
+template's default. Typst places PDF, SVG, PNG, JPEG, WebP, and GIF, and LaTeX
+places PDF, PNG, and JPEG. Read a figure, such as a
 matplotlib figure or an Altair chart, and install `vl-convert-python` for
 Altair. Studio renders matplotlib figures and Altair charts as PDF with
 embedded fonts, at the width the document places them at, so the notebook

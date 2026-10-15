@@ -20,12 +20,13 @@ from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
     BuildResult,
-    DocumentProvider,
     InspectionRequest,
     JsonValue,
     ProjectInspection,
     ProviderCancellation,
+    RenderProvider,
     RenderRequest,
+    RenderResult,
     ViewProvider,
 )
 from marimo_studio.view_providers._host.conformance import (
@@ -47,6 +48,7 @@ from .codec import (
     media_from_payload,
     project_from_payload,
     provider_description_payload,
+    render_result_payload,
     starter_context_from_payload,
     starter_from_payload,
     starter_plan_payload,
@@ -161,7 +163,7 @@ def _invoke(
             _build(implementation, conformance, request_data, cancellation)
         )
     if operation == "render":
-        return build_result_payload(
+        return render_result_payload(
             _render(implementation, conformance, request_data, cancellation)
         )
     raise ValueError("Provider operation is unsupported")
@@ -208,6 +210,7 @@ def _build(
             "project_revision",
             "profile",
             "staging_root",
+            "template_root",
             "work_root",
             "cache_root",
             "command_timeout",
@@ -227,6 +230,7 @@ def _build(
             _text(data["project_revision"], "Project revision"),
             cast(BuildProfile, data["profile"]),
             Path(_text(data["staging_root"], "Build staging root")),
+            Path(_text(data["template_root"], "Build template root")),
             Path(_text(data["work_root"], "Build work root")),
             Path(_text(data["cache_root"], "Build cache root")),
             cancellation,
@@ -247,12 +251,12 @@ def _render(
     conformance: ProviderConformance,
     value: object,
     cancellation: ProviderCancellation,
-) -> BuildResult:
+) -> RenderResult:
     data = _record(
         value,
         {
+            "source",
             "template_root",
-            "document",
             "values",
             "outputs",
             "cells",
@@ -268,8 +272,8 @@ def _render(
     timeout = _number(data["command_timeout"], "Render command timeout")
     request = conformance.validate_render_request(
         RenderRequest(
+            PurePosixPath(_text(data["source"], "Render source")),
             template_root,
-            PurePosixPath(_text(data["document"], "Render document")),
             cast(dict[str, JsonValue], values),
             media_from_payload(data["outputs"], "render outputs"),
             media_from_payload(data["cells"], "render cells"),
@@ -286,7 +290,7 @@ def _render(
     )
     if not provider_methods(provider):
         raise ValueError("provider has no render()")
-    return conformance.render(cast(DocumentProvider, provider), request)
+    return conformance.render(cast(RenderProvider, provider), request)
 
 
 def _stop_with_server() -> None:

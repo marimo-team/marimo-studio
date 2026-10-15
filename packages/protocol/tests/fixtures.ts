@@ -73,6 +73,7 @@ export const symbolicRuntimeFields: Pick<
       targets: ["plot"],
       accept: [],
       size: null,
+      render: null,
     },
   ],
   projectionPolicy: {

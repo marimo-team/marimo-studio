@@ -16,6 +16,7 @@ from marimo_studio.view_providers._records import (
     ProjectDiagnostic,
     ProjectionKind,
     ProjectionSite,
+    Render,
     RenderCell,
     RenderOutput,
     RenderValue,
@@ -199,7 +200,7 @@ def validate_render_value(
     *,
     documents: Collection[PurePosixPath] | None = None,
 ) -> RenderValue | RenderOutput | RenderCell:
-    """Validate a document's value, output, or cell read and its target."""
+    """Validate a render's value, output, or cell read and its target."""
     if not isinstance(value, (RenderValue, RenderOutput, RenderCell)):
         raise ValueError(
             "Render reads must be RenderValue, RenderOutput, or RenderCell records"
@@ -219,13 +220,14 @@ def validate_render_value(
 
 def accept_diagnostics(
     sites: Collection[ProjectionSite],
-    reads: Iterable[RenderOutput | RenderCell],
+    renders: Iterable[Render],
 ) -> tuple[ProjectDiagnostic, ...]:
     """Report output and cell reads whose media types the view cannot resolve.
 
-    A view reads each output or cell target once, so every host and document
-    read of one target accepts the same media types. A host that selects its
-    target at runtime reads it in the media types its literal reads declare.
+    A page reads each output target once, so every page host of one target
+    accepts the same media types, and a host that selects its target at
+    runtime reads it in the types its literal hosts declare. Each render reads
+    its targets on its own, so its reads of one target agree with each other.
     """
     conflicts = [
         ProjectDiagnostic(
@@ -238,9 +240,12 @@ def accept_diagnostics(
         for site in sites
         if site.kind == "output" and site.targets == "*" and site.accept
     ]
-    first: dict[tuple[str, str], tuple[tuple[str, ...], SourceLocation]] = {}
+    first: dict[
+        tuple[PurePosixPath | None, str, str], tuple[tuple[str, ...], SourceLocation]
+    ] = {}
 
     def check(
+        scope: PurePosixPath | None,
         kind: str,
         targets: Iterable[str],
         accept: tuple[str, ...],
@@ -249,7 +254,9 @@ def accept_diagnostics(
         # One conflict per host or read keeps the diagnostics within the
         # site and read counts.
         for target in targets:
-            expected, location = first.setdefault((kind, target), (accept, source))
+            expected, location = first.setdefault(
+                (scope, kind, target), (accept, source)
+            )
             if accept != expected:
                 conflicts.append(
                     ProjectDiagnostic(
@@ -257,7 +264,10 @@ def accept_diagnostics(
                         "error",
                         f"{target} is read as {_media(accept)} here and as "
                         f"{_media(expected)} at {location.path}:{location.line}.",
-                        f"Give every read of one {kind} the same accept list.",
+                        f"Give every read of one {kind} the same accept list."
+                        if scope is None
+                        else f"Give every read of one {kind} in the render of "
+                        f"{scope} the same accept list.",
                         source,
                     )
                 )
@@ -265,9 +275,16 @@ def accept_diagnostics(
 
     for site in sites:
         if site.kind == "output" and site.targets != "*":
-            check("output", site.targets, site.accept, site.source)
-    for read in reads:
-        check(render_read_kind(read), (read.target,), read.accept, read.source)
+            check(None, "output", site.targets, site.accept, site.source)
+    for render in renders:
+        for read in (*render.outputs, *render.cells):
+            check(
+                render.source,
+                render_read_kind(read),
+                (read.target,),
+                read.accept,
+                read.source,
+            )
     return tuple(conflicts)
 
 
@@ -287,15 +304,29 @@ def validate_artifact_site(value: object) -> ArtifactSite:
         "*" if value.targets is None else value.targets,
         value.source,
     )
+    if value.render is None:
+        if value.kind == "value" and value.accept:
+            raise ValueError("A page value site reads its target as JSON or Arrow")
+        _validate_accept(value.kind, value.accept, optional=True)
+        _validate_page_media(value.accept)
+        if value.size is not None:
+            raise ValueError("Only render output reads draw at a size")
+        return value
+    if validate_relative_path(value.render, field="Projection site render") != (
+        value.render
+    ):
+        raise ValueError("Projection site render must be a canonical project path")
+    if value.targets is None or len(value.targets) != 1:
+        raise ValueError("A render read names exactly one target")
     if value.kind == "value":
-        if value.accept not in {(), ("application/json",)}:
-            raise ValueError("A value site reads its target as JSON or as Arrow")
+        if value.accept != ("application/json",):
+            raise ValueError("A render reads each value as JSON")
     else:
         _validate_accept(
-            value.kind, value.accept, optional=True, kinds=("output", "cell")
+            value.kind, value.accept, optional=False, kinds=("output", "cell")
         )
-    if value.size is not None and (value.kind != "output" or not value.accept):
-        raise ValueError("Only output sites with an accept list read at a size")
+    if value.size is not None and value.kind != "output":
+        raise ValueError("Only render output reads draw at a size")
     return value
 
 

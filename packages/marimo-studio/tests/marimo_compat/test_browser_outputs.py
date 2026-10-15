@@ -415,7 +415,7 @@ def test_generated_bridge_renders_an_accepted_output_for_every_host_of_its_targe
     )
 
 
-def test_generated_bridge_reads_document_tables_as_rows_and_draws_figures_at_size(
+def test_generated_bridge_reads_render_tables_as_rows_and_draws_figures_at_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     figure_module = pytest.importorskip("matplotlib.figure")
@@ -430,10 +430,21 @@ def test_generated_bridge_reads_document_tables_as_rows_and_draws_figures_at_siz
     )
     here = SourceLocation(PurePosixPath("main.tex"), 1, 1)
     chart_site = ArtifactSite(
-        "site:read:chart", "output", here, ("chart",), ("application/pdf",), Size(200)
+        "site:read:chart",
+        "output",
+        here,
+        ("chart",),
+        ("application/pdf",),
+        Size(200),
+        render=PurePosixPath("main.tex"),
     )
     days_site = ArtifactSite(
-        "site:read:days", "value", here, ("days",), ("application/json",)
+        "site:read:days",
+        "value",
+        here,
+        ("days",),
+        ("application/json",),
+        render=PurePosixPath("main.tex"),
     )
     _call_bridge(
         context,
@@ -467,7 +478,7 @@ def test_generated_bridge_reads_document_tables_as_rows_and_draws_figures_at_siz
             "revision": _REVISION,
             "projections": request(chart_site),
             "active_projections": request(chart_site),
-            "consumer_id": "document",
+            "consumer_id": "report",
             "max_output_bytes": 1_000_000,
         },
     )
@@ -477,6 +488,58 @@ def test_generated_bridge_reads_document_tables_as_rows_and_draws_figures_at_siz
     media = output_representation(output["mimetype"], output["data"])
     assert media is not None and media.media_type == "application/pdf"
     assert b"/MediaBox [ 0 0 200 66.6666666667 ]" in media.data
+
+
+def test_generated_bridge_draws_a_page_host_and_a_render_read_in_their_own_forms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().plot([1, 3, 2])
+    context.globals["chart"] = figure
+    here = SourceLocation(PurePosixPath("index.html"), 1, 1)
+    page_site = ArtifactSite("site:chart", "output", here, ("chart",), ("image/png",))
+    read_site = ArtifactSite(
+        "site:read:chart",
+        "output",
+        here,
+        ("chart",),
+        ("application/pdf",),
+        Size(200),
+        render=PurePosixPath("main.typ"),
+    )
+    _call_bridge(
+        context,
+        "configure_projections",
+        {
+            "revision": _REVISION,
+            "generation": 2,
+            "sites": [page_site.to_dict(), read_site.to_dict()],
+            "variables": ["chart"],
+        },
+    )
+
+    def media_type(site: ArtifactSite, consumer_id: str) -> str:
+        request = [{"siteId": site.id, "instanceId": f"{site.id}-0", "target": "chart"}]
+        output = _call_bridge(
+            context,
+            "render_values",
+            {
+                "revision": _REVISION,
+                "projections": request,
+                "active_projections": request,
+                "consumer_id": consumer_id,
+                "max_output_bytes": 1_000_000,
+            },
+        )["outputs"]["chart"]
+        media = output_representation(output["mimetype"], output["data"])
+        assert media is not None
+        return media.media_type
+
+    assert media_type(page_site, "page") == "image/png"
+    assert media_type(read_site, "report") == "application/pdf"
 
 
 @pytest.mark.parametrize("function_name", ["read_values", "render_values"])

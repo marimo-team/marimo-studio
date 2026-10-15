@@ -2,6 +2,7 @@ import type {
   MountPreparedProjectionsOptions,
   PreparedProjectionHandle,
 } from "@marimo-studio/presentation/prepared-projections";
+import type { RenderInputReader } from "@marimo-studio/presentation/render-inputs";
 import type { RuntimeContext } from "@marimo-studio/runtime";
 import type { NotebookExport, OpenExportOptions } from "@marimo-team/marimo-export";
 import type { PreparedPublicationRefreshOptions } from "@marimo-team/marimo-export/prepared";
@@ -19,6 +20,7 @@ import type { ZeroPythonProjectionLoaders } from "./projections.ts";
 import { StudioPreparedInteractions } from "./interactions.ts";
 import { StalePreparedBindingError } from "./metadata-source.ts";
 import { StudioPreparedManifestSource } from "./metadata.ts";
+import { loadPreparedRenderInputs } from "./projections.ts";
 import { StudioPreparedRenderer } from "./renderer.ts";
 import { StudioPreparedStateApi } from "./state-api.ts";
 
@@ -47,6 +49,10 @@ export interface StudioPreparedComposition {
   readonly state: PreparedStateController;
   readonly stateApi: StudioPreparedStateApi;
   readonly interactions: StudioPreparedInteractions;
+  /** Read a render's inputs from the prepared state the reader is viewing. */
+  readonly readRender: RenderInputReader;
+  /** Return the fingerprint of the prepared state the page shows. */
+  readonly shownState: () => string | undefined;
   readonly createRefresh: (
     data: ZeroPythonRuntimeData,
     expectedInstance: string,
@@ -103,11 +109,33 @@ export const createStudioPreparedComposition = (options: {
       return interactions.updateInputs(patch);
     },
   });
+  const readRender: RenderInputReader = async (render, _reads, signal) => {
+    // Render hosts read the state the page shows, which the renderer records
+    // before it notifies them.
+    const publication = renderer.publication;
+    if (publication === undefined) {
+      throw new Error("The prepared publication is still starting.");
+    }
+    const bindings = source.validate(publication).projections.renders[render] ?? {
+      cells: {},
+      outputs: {},
+      values: {},
+    };
+    return loadPreparedRenderInputs(
+      publication.state,
+      bindings,
+      options.dependencies.loaders,
+      (selector) => selectorOwner(options.context().config, selector),
+      signal,
+    );
+  };
   return {
     renderer,
     state,
     stateApi,
     interactions,
+    readRender,
+    shownState: () => renderer.publication?.state.fingerprint,
     createRefresh: (data, expectedInstance, onStale) =>
       new PreparedPublicationRefresh(
         new URL(data.manifestUrl),

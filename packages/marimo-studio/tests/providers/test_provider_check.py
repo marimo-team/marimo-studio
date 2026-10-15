@@ -77,23 +77,32 @@ class PageProvider:
         return BuildResult(PurePosixPath("index.html"))
 """
 
-# Keep page.md as a template and render it as an SVG with the notebook's metric.
-DOCUMENT = """
-from marimo_studio.view_providers import ProjectDiagnostic, RenderValue
+# Render page.md into an SVG card that draws the notebook's metric.
+RENDERED = """
+from marimo_studio.view_providers import (
+    ProjectDiagnostic,
+    Render,
+    RenderFile,
+    RenderResult,
+    RenderValue,
+    copy_inputs,
+    render_page,
+)
 
 
 def inspect(self, request):
     return ProjectInspection(
         documents=(SourceDocument(PAGE, "markdown", "edit"),),
         inputs=(BuildInput(PAGE, "file"),),
-        render_values=(RenderValue("metric", SourceLocation(PAGE, 1, 1)),),
+        renders=(
+            Render(PAGE, values=(RenderValue("metric", SourceLocation(PAGE, 1, 1)),)),
+        ),
     )
 
 
 def build(self, request):
-    template = (request.project.root / PAGE).read_bytes()
-    (request.staging_root / PAGE).write_bytes(template)
-    return BuildResult(PAGE)
+    copy_inputs(request, request.template_root)
+    return BuildResult(render_page(request, PAGE))
 
 
 def render(self, request):
@@ -105,11 +114,12 @@ def render(self, request):
             "page.md cannot show this metric.",
             source=SourceLocation(PAGE, 1, 1),
         )
-        return BuildResult(None, (problem,))
-    (request.output_root / "page.svg").write_text(
+        return RenderResult(diagnostics=(problem,))
+    card = PurePosixPath("card.svg")
+    (request.output_root / card).write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg"><text>{metric!r}</text></svg>'
     )
-    return BuildResult(PurePosixPath("page.svg"))
+    return RenderResult((RenderFile(card, "image/svg+xml"),), main=card)
 
 
 PageProvider.inspect = inspect
@@ -236,10 +246,11 @@ def test_inspect_that_writes_to_the_project_fails_the_check(
 def test_render_receives_values_as_studio_supplies_them(
     install: Callable[[str], ViewProvider],
 ) -> None:
-    (view,) = check_provider(install(DOCUMENT), values={"metric": 2.0})
+    (view,) = check_provider(install(RENDERED), values={"metric": 2.0})
 
-    assert view.rendered is not None
-    assert b"<text>2</text>" in view.rendered
+    card = view.renders[PurePosixPath("page.md")]
+    assert card.main == PurePosixPath("card.svg")
+    assert b"<text>2</text>" in card.files[card.main]
 
 
 def test_render_errors_fail_the_check_at_their_location(
@@ -249,7 +260,7 @@ def test_render_errors_fail_the_check_at_their_location(
         ProviderCheckError,
         match=r"page\.md:1:1: page\.md cannot show this metric\.",
     ):
-        check_provider(install(DOCUMENT), values={"metric": "broken"})
+        check_provider(install(RENDERED), values={"metric": "broken"})
 
 
 @pytest.mark.parametrize(

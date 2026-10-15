@@ -483,6 +483,60 @@ def test_output_timeout_is_terminal_after_one_kernel_dispatch() -> None:
     assert raised.value.transient is False
 
 
+@pytest.mark.parametrize("operation", ("values", "outputs"))
+def test_render_reads_run_under_their_own_kernel_owner(operation: str) -> None:
+    from marimo._runtime.commands import InvokeFunctionCommand
+
+    consumer = object()
+
+    class Session:
+        def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, "editor")
+            self.requests: list[tuple[InvokeFunctionCommand, object]] = []
+
+        @staticmethod
+        @contextmanager
+        def scoped(_: object):
+            yield
+
+        def put_control_request(
+            self, request: InvokeFunctionCommand, **kwargs: object
+        ) -> None:
+            self.requests.append((request, kwargs.get("from_consumer_id")))
+
+    session = Session()
+    kind = "value" if operation == "values" else "output"
+    projections = (_bound_projection("summary", kind),)
+    read = (
+        read_session_values(
+            session,
+            "revision-1",
+            projections,
+            projections,
+            consumer_id="editor",
+            timeout=0,
+            reader="editor:render:report",
+        )
+        if operation == "values"
+        else render_session_outputs(
+            session,
+            "revision-1",
+            projections,
+            projections,
+            consumer_id="editor",
+            timeout=0,
+            reader="editor:render:report",
+        )
+    )
+
+    with pytest.raises(ProjectionUnavailable):
+        asyncio.run(read)
+
+    ((request, origin),) = session.requests
+    assert request.args["consumer_id"] == "editor:render:report"
+    assert origin == "editor"
+
+
 def test_timed_out_session_barriers_retain_capacity_until_kernel_completion() -> None:
     from marimo._messaging.notification import (
         FunctionCallResultNotification,

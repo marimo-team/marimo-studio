@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import cast
 
 from marimo_export.publication import PreparedPublication
 
@@ -45,17 +46,20 @@ class PreparedViewMetadata:
         self,
         *,
         request: PreparedViewRequest,
-        projections: Mapping[str, Mapping[str, str]],
+        projections: Mapping[str, object],
         selected_inputs: Mapping[str, object] | None,
         plan_digest: str,
     ) -> None:
         if _DIGEST.fullmatch(plan_digest) is None:
             raise ValueError("plan_digest must be a lowercase SHA-256 digest")
-        if set(projections) != {"cells", "outputs", "values"}:
-            raise ValueError("projections must contain cells, outputs, and values")
+        if set(projections) != {"cells", "outputs", "values", "renders"}:
+            raise ValueError(
+                "projections must contain cells, outputs, values, and renders"
+            )
         self.request = request
         self.projections = {
-            name: dict(sorted(values.items())) for name, values in projections.items()
+            name: dict(sorted(cast(Mapping[str, object], values).items()))
+            for name, values in projections.items()
         }
         self.selected_inputs = (
             None if selected_inputs is None else dict(selected_inputs)
@@ -80,7 +84,7 @@ class PreparedView:
         return self.prepared.metadata.request
 
     @property
-    def projections(self) -> Mapping[str, Mapping[str, str]]:
+    def projections(self) -> Mapping[str, Mapping[str, object]]:
         return self.prepared.metadata.projections
 
     @property

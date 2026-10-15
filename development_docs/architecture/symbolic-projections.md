@@ -21,22 +21,20 @@ source path, line, column, kind, targets, and the byte offset inside its start
 tag. Core derives the trusted site ID and inserts it at that offset
 in the disposable build snapshot, not authored source.
 
-A rendered document declares `RenderValue`, `RenderOutput`, and `RenderCell`
-records in place of sites. Core turns each distinct value target into one value
-site on a hidden `mo-value` host in the generated viewer page, each output
-target into one output artifact site with the read's accept list and a hidden
-`marimo-output` host, and each cell target into one cell artifact site with its
-accept list and a hidden `marimo-cell` host. Render reads travel the ordinary
-projection paths and authorization, and the hosts' update events trigger the
-next render. Read sites use their own ID namespace, so a page host and a read
-of one target never share an ID.
+A render declares `RenderValue`, `RenderOutput`, and `RenderCell` reads in
+place of sites. Core turns each distinct target of one render into one artifact
+site that names the render: value sites read JSON, and output and cell sites
+carry the read's accept list, plus the measured size for outputs. Render reads
+have no host in the page. Studio resolves them through the ordinary projection
+authorization when it captures a render's inputs. Read sites use a per-render
+ID namespace, so a page host and a read of one target never share an ID.
 
-Accept lists belong to output targets. Inspection gives every literal read of a
-target the same list and rejects one on a `"*"` site, so resolution, kernel
-authorization records, the Pyodide bridge, and the Prepared compiler look up a
-target's list from its literal sites. Page sites accept images marimo's
-renderer shows. Hosts render nothing for other media, such as the PDF a hidden
-document host carries for the renderer.
+A page's accept lists belong to output targets. Inspection gives every literal
+page host of a target the same list and rejects one on a `"*"` site, so
+resolution, kernel authorization records, the Pyodide bridge, and the Prepared
+compiler look up a page target's list from its literal page sites. Page sites
+accept images marimo's renderer shows. A render read keeps its own list, such
+as PDF for a Typst figure, and its own size.
 
 An output with an accept list renders through marimo-export's
 `values.represent()` in every runtime: the kernel output renderer, the Pyodide

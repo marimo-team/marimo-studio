@@ -8,7 +8,7 @@ read notebook state from a newer presentation.
 
 Output permissions also follow the browser's current mounted set, and each
 output record carries the media types its site accepts and the size it draws
-at. A document's value records accept JSON, so tables read as rows. Isolated
+at. A render's value records accept JSON, so tables read as rows. Isolated
 runtime probes use a separate short-lived lease for the exact selectors being
 validated.
 """

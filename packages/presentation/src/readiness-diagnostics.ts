@@ -32,6 +32,8 @@ export const collectStudioDiagnostics = ({
     let target = host.getAttribute("mo-value") ?? "";
     if (host.matches("marimo-cell")) {
       target = host.getAttribute("name") ?? "";
+    } else if (host.matches("marimo-output[render]")) {
+      target = host.getAttribute("render") ?? "";
     } else if (host.matches("marimo-output")) {
       target = host.getAttribute("value") ?? "";
     }

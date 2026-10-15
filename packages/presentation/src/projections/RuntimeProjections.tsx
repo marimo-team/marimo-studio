@@ -1,26 +1,31 @@
 import { Fragment, type ReactNode } from "react";
 
 import type { OutputReader } from "../outputs/reader";
+import type { RuntimeRenderReader } from "../runtime/render-inputs";
 import type { RuntimeCellSource } from "../runtime/session/use-runtime-cells";
 import type { ValueReader } from "../values/reader";
 
 import { RuntimeCellPortals } from "../runtime/cells/RuntimeCellPortals";
 import { RuntimeOutputs } from "../runtime/outputs/RuntimeOutputs";
+import { useRenderInputs } from "../runtime/render-inputs";
 import { useRuntimeCells } from "../runtime/session/use-runtime-cells";
 import { RuntimeValues } from "../runtime/values/RuntimeValues";
 
 interface RuntimeProjectionProps {
   readValues: ValueReader;
   readOutputs: OutputReader;
+  readRender?: RuntimeRenderReader;
   runtime: RuntimeCellSource;
 }
 
 export const RuntimeProjections = ({
   readValues,
   readOutputs,
+  readRender,
   runtime: source,
 }: RuntimeProjectionProps) => {
   const runtime = useRuntimeCells(source);
+  useRenderInputs(source.cells, runtime.runtimeReady, readRender);
   const projections: readonly { kind: string; view: ReactNode }[] = [
     {
       kind: "output",

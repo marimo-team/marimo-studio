@@ -17,6 +17,7 @@ import { expect, it } from "vite-plus/test";
 import {
   createZeroPythonProjectionLoaders,
   loadPreparedProjectionSnapshot,
+  loadPreparedRenderInputs,
 } from "../src/zero-python/projections.ts";
 import { notebookExportFixture, projectionNames } from "./zero-python-fixture.ts";
 
@@ -183,6 +184,50 @@ it("shows accepted media outputs as marimo output data owned by their producer",
   expect(JSON.parse(preview as string)).toEqual({
     "image/png": `data:image/png;base64,${btoa("PNG pixels")}`,
     __metadata__: { "image/png": { width: 300, height: 200 } },
+  });
+});
+
+it("loads a render's values, media outputs, and cell outputs as posted render inputs", async () => {
+  const png = new TextEncoder().encode("PNG pixels");
+  const notebookExport = notebookExportFixture({ inputs: [{ mode: "baseline" }] });
+  const base = notebookExport.defaultState;
+  const cell = (data: string | null) => ({
+    schema: "marimo.cell.v1" as const,
+    projectionSha256: "7".repeat(64),
+    cell: { id: "cell-1", name: "summary", codeSha256: "6".repeat(64), config: {} },
+    outcome: "completed" as const,
+    output: data === null ? null : { channel: "output" as const, mimetype: "text/markdown", data },
+    console: [],
+    resources: { files: {}, modelNotifications: [], functions: {}, uiValues: {} },
+  });
+  const state = {
+    ...base,
+    output: (name: string): ExportOutput => {
+      if (name === "output@report:chart") return mediaOutput(base, name, "image/png", png);
+      if (name === "cell:summary") return output(base, name, async () => cell("# Summary"));
+      if (name === "cell:empty") return output(base, name, async () => cell(null));
+      return output(base, name, async () => [{ sport: "Rowing", athletes: 51 }]);
+    },
+  } satisfies ExportState;
+
+  const inputs = await loadPreparedRenderInputs(
+    state,
+    {
+      values: { athletes: "value:athletes" },
+      outputs: { chart: "output@report:chart" },
+      cells: { summary: "cell:summary", empty: "cell:empty" },
+    },
+    createZeroPythonProjectionLoaders(),
+    (selector) => `cell-${selector}`,
+    new AbortController().signal,
+  );
+
+  expect(inputs).toEqual({
+    values: { athletes: [{ sport: "Rowing", athletes: 51 }] },
+    outputs: {
+      chart: { mimetype: "image/png", data: `data:image/png;base64,${btoa("PNG pixels")}` },
+    },
+    cells: { summary: { mimetype: "text/markdown", data: "# Summary" } },
   });
 });
 

@@ -26,6 +26,7 @@ from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildInput,
+    BuildRequest,
     BuildResult,
     InspectionRequest,
     JsonValue,
@@ -36,16 +37,22 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
+    Render,
     RenderCell,
+    RenderFile,
     RenderOutput,
     RenderRequest,
+    RenderResult,
     RenderValue,
     Representation,
+    Size,
     SourceDocument,
     SourceLocation,
     StarterContext,
     StarterPlan,
     ViewProject,
+    copy_inputs,
+    render_page,
 )
 from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
@@ -55,6 +62,7 @@ from marimo_studio.view_providers._host.registry import (
 from ..provider_test_support import (
     ProviderStub,
     inspection,
+    provider_build_request,
     provider_starter_context,
 )
 
@@ -302,16 +310,32 @@ class _RenderingProvider(ProviderStub):
                 ProjectionSite("cell", "*", SourceLocation(card, 2, 1), 9),
             ),
             diagnostics=(),
-            render_values=(RenderValue('rows["north"]', SourceLocation(card, 3, 4)),),
-            render_outputs=(
-                RenderOutput("chart", SourceLocation(card, 3, 20), ("image/svg+xml",)),
-            ),
-            render_cells=(
-                RenderCell("plot", SourceLocation(card, 4, 1), ("image/svg+xml",)),
+            renders=(
+                Render(
+                    card,
+                    values=(RenderValue('rows["north"]', SourceLocation(card, 3, 4)),),
+                    outputs=(
+                        RenderOutput(
+                            "chart", SourceLocation(card, 3, 20), ("image/svg+xml",)
+                        ),
+                    ),
+                    cells=(
+                        RenderCell(
+                            "plot", SourceLocation(card, 4, 1), ("image/svg+xml",)
+                        ),
+                    ),
+                ),
             ),
         )
 
-    def render(self, request: RenderRequest) -> BuildResult:
+    def build(self, request: BuildRequest) -> BuildResult:
+        copy_inputs(request, request.template_root)
+        return BuildResult(
+            render_page(request, PurePosixPath("card.txt")),
+            output_sizes={PurePosixPath("card.txt"): {"chart": Size(120.5, 80)}},
+        )
+
+    def render(self, request: RenderRequest) -> RenderResult:
         values = json.dumps(dict(request.values), sort_keys=True)
         reads = (("output", request.outputs), ("cell", request.cells))
         media = json.dumps(
@@ -328,17 +352,24 @@ class _RenderingProvider(ProviderStub):
         )
         request.output_root.joinpath("card.svg").write_text(
             '<svg xmlns="http://www.w3.org/2000/svg">'
-            f"<text>{values}</text><text>{media}</text></svg>",
+            f"<text>{request.source}</text><text>{values}</text><text>{media}</text>"
+            "</svg>",
             encoding="utf-8",
         )
-        return BuildResult(
-            PurePosixPath("card.svg"),
+        request.output_root.joinpath("poster.png").write_bytes(b"poster")
+        return RenderResult(
             (
+                RenderFile(PurePosixPath("card.svg"), "image/svg+xml"),
+                RenderFile(PurePosixPath("poster.png"), "image/png"),
+            ),
+            main=PurePosixPath("card.svg"),
+            preview=PurePosixPath("poster.png"),
+            diagnostics=(
                 ProjectDiagnostic(
                     "card-rendered",
                     "warning",
                     "Rendered with defaults",
-                    source=SourceLocation(request.document, 1, 1),
+                    source=SourceLocation(request.source, 1, 1),
                 ),
             ),
         )
@@ -451,7 +482,7 @@ if __name__ == "__main__":
     assert plan.cell_targets == tuple(context.cell_targets.values())
 
 
-def test_isolated_provider_round_trips_sites_render_values_and_renders(
+def test_isolated_provider_round_trips_renders_sizes_and_render_results(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -461,16 +492,25 @@ def test_isolated_provider_round_trips_sites_render_values_and_renders(
     )
     project = _project(tmp_path, "test-process/rendering")
     project.root.joinpath("card.txt").write_text("Total\n\n", encoding="utf-8")
+    staging = tmp_path / "staging"
+    staging.mkdir()
     output = tmp_path / "output"
     output.mkdir()
     cancellation = ProviderCancellation()
     values: dict[str, JsonValue] = {'rows["north"]': [1, 2.5, None]}
 
     inspected = installed.inspect(inspection_request(project))
+    request = provider_build_request(
+        project,
+        inspected,
+        staging,
+        cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+    )
+    built = installed.build(request)
     rendered = installed.render(
         RenderRequest(
-            template_root=project.root,
-            document=PurePosixPath("card.txt"),
+            source=PurePosixPath("card.txt"),
+            template_root=request.template_root,
             values=values,
             outputs={"chart": Representation("image/svg+xml", b"<svg/>", 40, 20)},
             cells={"plot": Representation("image/svg+xml", b"<svg/>")},
@@ -483,9 +523,16 @@ def test_isolated_provider_round_trips_sites_render_values_and_renders(
 
     assert installed.renders
     assert inspected == rendering_provider.inspect(inspection_request(project))
-    assert rendered == BuildResult(
-        PurePosixPath("card.svg"),
+    assert built.output_sizes == {PurePosixPath("card.txt"): {"chart": Size(120.5, 80)}}
+    assert request.template_root.joinpath("card.txt").read_text() == "Total\n\n"
+    assert rendered == RenderResult(
         (
+            RenderFile(PurePosixPath("card.svg"), "image/svg+xml"),
+            RenderFile(PurePosixPath("poster.png"), "image/png"),
+        ),
+        main=PurePosixPath("card.svg"),
+        preview=PurePosixPath("poster.png"),
+        diagnostics=(
             ProjectDiagnostic(
                 "card-rendered",
                 "warning",
@@ -495,6 +542,7 @@ def test_isolated_provider_round_trips_sites_render_values_and_renders(
         ),
     )
     card = output.joinpath("card.svg").read_text(encoding="utf-8")
+    assert "<text>card.txt</text>" in card
     assert json.dumps(values, sort_keys=True) in card
     assert (
         json.dumps(

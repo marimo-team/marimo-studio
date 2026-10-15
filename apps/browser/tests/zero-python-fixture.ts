@@ -166,8 +166,9 @@ export const studioManifest = (
           values: { metric: projectionNames.value },
           outputs: { chart: projectionNames.output },
           cells: { summary: projectionNames.cell },
+          renders: {},
         }
-      : { values: {}, outputs: {}, cells: {} },
+      : { values: {}, outputs: {}, cells: {}, renders: {} },
     document_sha256: notebookExport.notebook.documentSha256,
     view: "dashboard",
     plan_digest: "3".repeat(64),

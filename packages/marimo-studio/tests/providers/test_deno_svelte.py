@@ -54,6 +54,38 @@ def test_svelte_output_hosts_read_string_literal_accept_expressions(
     ]
 
 
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_svelte_render_hosts_are_unavailable_and_yield_no_site(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    (root / "src" / "App.svelte").write_text(
+        """<script lang="ts">
+  const report = "main.typ";
+</script>
+<marimo-output render="main.typ"></marimo-output>
+<marimo-output render={report}></marimo-output>
+<marimo-output render="main.typ" value="chart"></marimo-output>
+""",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert inspection.sites == ()
+    assert [
+        (diagnostic.code, diagnostic.source and diagnostic.source.line)
+        for diagnostic in inspection.diagnostics
+    ] == [
+        ("projection-render-unavailable", 4),
+        ("projection-render-unavailable", 5),
+        ("projection-render-unavailable", 6),
+    ]
+
+
 def test_svelte_inspection_tracks_literal_site_identity_and_kind(
     tmp_path: Path,
 ) -> None:

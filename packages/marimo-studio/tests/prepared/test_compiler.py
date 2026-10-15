@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import cast
 
 import pytest
@@ -11,6 +11,7 @@ from marimo_export.values import Size
 from marimo_studio._prepared.compiler import compile_export_view
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio.errors import PublicationError
+from marimo_studio.view_providers._artifact_sites import ArtifactSite
 
 from ..delivery.export_test_support import configure_export_view
 
@@ -65,26 +66,52 @@ def test_compiler_exports_accepting_outputs_as_media(notebook_path: Path) -> Non
     }
 
 
-def test_compiler_exports_document_reads_as_json_and_sized_media(
-    notebook_path: Path,
-) -> None:
-    snapshot = _snapshot(notebook_path)
-    sites = tuple(
-        replace(site, accept=("application/pdf",), size=Size(250.38))
-        if site.kind == "output"
-        else replace(site, accept=("application/json",))
-        if site.kind == "value"
-        else site
+def _render_reads(
+    snapshot,
+    render: str,
+    *,
+    output_accept: tuple[str, ...],
+    size: Size | None = None,
+) -> tuple[ArtifactSite, ...]:
+    """Return one read per page target, as the render of ``render`` reads it."""
+    return tuple(
+        replace(
+            site,
+            id=f"read-{render}-{site.kind}",
+            render=PurePosixPath(render),
+            accept=(
+                output_accept
+                if site.kind == "output"
+                else ("application/json",)
+                if site.kind == "value"
+                else ("image/png",)
+            ),
+            size=size if site.kind == "output" else None,
+        )
         for site in snapshot.sites
     )
 
-    compiled = compile_export_view(snapshot.resolved, snapshot.view_name, sites)
+
+def test_compiler_exports_render_reads_as_json_and_sized_media(
+    notebook_path: Path,
+) -> None:
+    snapshot = _snapshot(notebook_path)
+    reads = _render_reads(
+        snapshot, "main.typ", output_accept=("application/pdf",), size=Size(250.38)
+    )
+
+    compiled = compile_export_view(
+        snapshot.resolved, snapshot.view_name, (*snapshot.sites, *reads)
+    )
 
     outputs = cast(dict[str, object], compiled.spec.to_value()["outputs"])
-    assert outputs["value:doubled"] == {
+    report = compiled.bindings.renders["main.typ"]
+    assert report.values == {"doubled": "value@0d17b34b:doubled"}
+    assert report.outputs == {"doubled": "output@0d17b34b:doubled"}
+    assert outputs["value@0d17b34b:doubled"] == {
         "source": {"kind": "json", "selector": "doubled"}
     }
-    assert outputs["output:doubled"] == {
+    assert outputs["output@0d17b34b:doubled"] == {
         "source": {"kind": "export", "selector": "doubled"},
         "exporter": {
             "name": "media",
@@ -95,6 +122,82 @@ def test_compiler_exports_document_reads_as_json_and_sized_media(
             },
             "dependencies": [],
         },
+    }
+    assert compiled.bindings.values == {"doubled": "value:doubled"}
+    assert compiled.bindings.outputs == {"doubled": "output:doubled"}
+
+
+def test_render_reads_in_the_page_form_share_the_page_output(
+    notebook_path: Path,
+) -> None:
+    snapshot = _snapshot(notebook_path)
+    page = tuple(
+        replace(site, accept=("image/png",)) if site.kind == "output" else site
+        for site in snapshot.sites
+    )
+    reads = _render_reads(snapshot, "main.typ", output_accept=("image/png",))
+
+    compiled = compile_export_view(
+        snapshot.resolved, snapshot.view_name, (*page, *reads)
+    )
+
+    report = compiled.bindings.renders["main.typ"]
+    assert report.outputs == {"doubled": "output:doubled"}
+    assert report.cells == {"cell-2": "cell:cell-2"}
+    assert set(cast(dict[str, object], compiled.spec.to_value()["outputs"])) == {
+        "cell:cell-2",
+        "output:doubled",
+        "value:doubled",
+        "value@0d17b34b:doubled",
+    }
+
+
+def test_two_renders_reading_one_target_in_different_forms_get_distinct_outputs(
+    notebook_path: Path,
+) -> None:
+    snapshot = _snapshot(notebook_path)
+    reads = (
+        *_render_reads(snapshot, "main.typ", output_accept=("application/pdf",)),
+        *_render_reads(snapshot, "slides.typ", output_accept=("image/svg+xml",)),
+    )
+
+    compiled = compile_export_view(
+        snapshot.resolved, snapshot.view_name, (*snapshot.sites, *reads)
+    )
+
+    report = compiled.bindings.renders["main.typ"].outputs["doubled"]
+    slides = compiled.bindings.renders["slides.typ"].outputs["doubled"]
+    assert len({report, slides, compiled.bindings.outputs["doubled"]}) == 3
+    assert compiled.bindings.renders["main.typ"].values == (
+        compiled.bindings.renders["slides.typ"].values
+    )
+
+
+def test_view_bindings_record_the_reads_of_each_render(
+    notebook_path: Path,
+) -> None:
+    snapshot = _snapshot(notebook_path)
+    reads = _render_reads(snapshot, "main.typ", output_accept=("application/pdf",))
+
+    page_only = compile_export_view(
+        snapshot.resolved, snapshot.view_name, snapshot.sites
+    )
+    with_render = compile_export_view(
+        snapshot.resolved, snapshot.view_name, (*snapshot.sites, *reads)
+    )
+
+    assert page_only.bindings.to_dict() == {
+        "cells": {"cell-2": "cell:cell-2"},
+        "outputs": {"doubled": "output:doubled"},
+        "values": {"doubled": "value:doubled"},
+        "renders": {},
+    }
+    assert with_render.bindings.to_dict()["renders"] == {
+        "main.typ": {
+            "cells": {"cell-2": "cell:cell-2"},
+            "outputs": {"doubled": "output@0d17b34b:doubled"},
+            "values": {"doubled": "value@0d17b34b:doubled"},
+        }
     }
 
 

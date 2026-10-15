@@ -4,13 +4,13 @@ import {
   registerMarimoCellElement,
   syncPreservedCellHosts,
 } from "../cells/host.ts";
-import { getDocumentHosts, registerMarimoDocumentElement } from "../documents/viewer.ts";
 import {
   getOutputHosts,
   prepareOutputHosts,
   registerMarimoOutputElement,
   syncPreservedOutputHosts,
 } from "../outputs/host.ts";
+import { getRenderHosts } from "../renders/host.ts";
 import {
   getValueHosts,
   prepareValueHosts,
@@ -97,14 +97,6 @@ const adapters: readonly ProjectionHostAdapter[] = [
     disconnect: stopValueHosts,
     prepare: prepareValueHosts,
     preserve: syncPreservedValueHosts,
-  },
-  {
-    selector: "marimo-document",
-    register: registerMarimoDocumentElement,
-    connect: passive,
-    disconnect: passive,
-    prepare: passive,
-    preserve: passive,
   },
 ];
 
@@ -256,7 +248,7 @@ export class ProjectionHostRuntime {
       ...getCellHosts(),
       ...getOutputHosts(),
       ...getValueHosts(),
-      ...getDocumentHosts(),
+      ...getRenderHosts(),
     ]);
   }
 }

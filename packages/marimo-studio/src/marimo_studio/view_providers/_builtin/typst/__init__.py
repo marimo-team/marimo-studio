@@ -4,20 +4,21 @@ Authors read notebook values in Typst with
 ``marimo_value("selector", default: ...)``, place rendered outputs such as
 figures with ``marimo_output("selector", width: ...)``, and place a named
 cell's output with ``marimo_cell("name")``, all from the project's
-``marimo.typ``. The build measures the size the document places each output
-at and publishes the project as a private template. Studio renders it to PDF
-with ``render()`` once without values, then again whenever a reader's values
-change. The compile runs in a child process with embedded and project fonts
-only, so a document renders the same way on every machine and a stuck compile
-can be stopped.
+``marimo.typ``. The view renders its entry document,
+``main.typ`` by default. The build copies the project into the render template,
+measures the size the document places each output at, and writes a page that
+shows the render. Studio renders the PDF whenever a reader's values change. The
+compile runs in a child process with embedded and project fonts only, so a
+document renders the same way on every machine and a stuck compile can be
+stopped.
 
 Studio delivers each output as an image in the first of ``IMAGE_TYPES`` the
 value supports, drawn at its measured size, so a matplotlib figure arrives as a
-PDF whose text keeps its point size. A cell arrives as marimo shows it,
-when that is one of those images. The render writes images beneath
-``/.marimo-studio`` in its copy of the template. ``marimo.typ`` reads the values
-and image paths from ``sys.inputs``, so the project also compiles with the
-Typst CLI or an editor preview, where every call returns its default.
+PDF whose text keeps its point size. A cell arrives as marimo shows it, when
+that is one of those images. The render writes images beneath
+``/.marimo-studio`` in its copy of the template. ``marimo.typ`` reads the
+values and image paths from ``sys.inputs``, so the project also compiles with
+the Typst CLI or an editor preview, where every call returns its default.
 """
 
 from __future__ import annotations
@@ -42,7 +43,9 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderRunner,
     ProviderStarter,
+    RenderFile,
     RenderRequest,
+    RenderResult,
     Representation,
     Size,
     SourceLocation,
@@ -51,6 +54,7 @@ from marimo_studio.view_providers import (
     copy_inputs,
     create_starter,
     project_path,
+    render_page,
 )
 from marimo_studio.view_providers._builtin._typeset import (
     TypesetLanguage,
@@ -67,7 +71,6 @@ TYPST_MIN_VERSION = "0.15"
 INSTALL_ACTION = (
     "Install marimo-studio[typst] in the Python environment that runs Studio."
 )
-_RENDERED = PurePosixPath("document.pdf")
 _OUTPUTS = PurePosixPath(".marimo-studio/outputs")
 TYPST = TypesetLanguage(
     name="Typst",
@@ -227,12 +230,12 @@ class TypstProvider:
 
     def build(self, request: BuildRequest) -> BuildResult:
         entry = TYPST.entrypoint(request.project)
-        copy_inputs(request, request.staging_root)
+        copy_inputs(request, request.template_root)
         inputs = request.work_root / "inputs.json"
         inputs.write_text("{}", encoding="utf-8")
         report = _run_typst(
             request.runner,
-            request.staging_root,
+            request.template_root,
             entry,
             inputs,
             "--sizes",
@@ -242,15 +245,18 @@ class TypstProvider:
             return BuildResult(None, (report,))
         sizes = _output_sizes(report.get("sizes"))
         return BuildResult(
-            entry,
+            render_page(request, entry),
             output_sizes={
-                output.target: sizes[output.target]
-                for output in request.inspection.render_outputs
-                if output.target in sizes
+                render.source: {
+                    output.target: sizes[output.target]
+                    for output in render.outputs
+                    if output.target in sizes
+                }
+                for render in request.inspection.renders
             },
         )
 
-    def render(self, request: RenderRequest) -> BuildResult:
+    def render(self, request: RenderRequest) -> RenderResult:
         root = request.template_root
 
         def place(media: Mapping[str, Representation]) -> str:
@@ -262,7 +268,8 @@ class TypstProvider:
                 }
             )
 
-        inputs = request.output_root / "inputs.json"
+        inputs = root.joinpath(*_OUTPUTS.parent.parts, "inputs.json")
+        inputs.parent.mkdir(parents=True, exist_ok=True)
         inputs.write_text(
             json.dumps(
                 {
@@ -275,21 +282,23 @@ class TypstProvider:
             ),
             encoding="utf-8",
         )
+        rendered = PurePosixPath(f"{request.source.stem}.pdf")
         report = _run_typst(
             request.runner,
             root,
-            request.document,
+            request.source,
             inputs,
-            str(request.output_root.joinpath(*_RENDERED.parts)),
+            str(request.output_root.joinpath(*rendered.parts)),
             request.command_timeout,
         )
         if isinstance(report, ProjectDiagnostic):
-            return BuildResult(None, (report,))
+            return RenderResult(diagnostics=(report,))
         warnings = report.get("warnings")
-        return BuildResult(
-            _RENDERED,
-            tuple(
-                _compile_diagnostic(item, "warning", root, request.document)
+        return RenderResult(
+            (RenderFile(rendered, "application/pdf"),),
+            rendered,
+            diagnostics=tuple(
+                _compile_diagnostic(item, "warning", root, request.source)
                 for item in (warnings if isinstance(warnings, list) else ())
             ),
         )

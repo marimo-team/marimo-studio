@@ -16,6 +16,7 @@ import hashlib
 import inspect
 import json
 import math
+import re
 from collections.abc import Collection, Mapping
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
@@ -27,7 +28,6 @@ from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
     BuildResult,
-    DocumentProvider,
     InspectionRequest,
     JsonValue,
     ProjectDiagnostic,
@@ -37,9 +37,13 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     ProviderError,
     ProviderInfo,
+    Render,
     RenderCell,
+    RenderFile,
     RenderOutput,
+    RenderProvider,
     RenderRequest,
+    RenderResult,
     RenderValue,
     Representation,
     Size,
@@ -67,9 +71,10 @@ from marimo_studio.view_providers._host._shapes import (
     require_unique,
 )
 from marimo_studio.view_providers._host.records import ProviderProvenance
-from marimo_studio.view_providers._records import DOCUMENT_MEDIA_TYPES
 from marimo_studio.view_providers._targets import (
     MAX_CELL_TARGETS,
+    MAX_RENDER_FILES,
+    MAX_RENDERS,
     MAX_VALUE_TARGETS,
     validate_projection_target,
 )
@@ -82,11 +87,14 @@ from marimo_studio.view_providers._validation import (
 )
 
 _PROFILES = frozenset({"development", "production"})
-_BUILD_CONTRACT_VERSION = 3
+_BUILD_CONTRACT_VERSION = 4
 _GUIDANCE_DOCUMENTS = (PurePosixPath("AGENTS.md"), PurePosixPath("DESIGN.md"))
 _MAX_OPTIONS = 256
 _MAX_BUILD_INPUTS = BUILD_INPUT_BUDGET.max_files
 _MAX_SITES = 512
+_MEDIA_TYPE = re.compile(
+    r"[a-z0-9][a-z0-9!#$&^_.+-]{0,126}/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}"
+)
 _Read = TypeVar("_Read", RenderValue, RenderOutput, RenderCell)
 _MAX_SITE_BYTES = 1024 * 1024
 _MAX_DIAGNOSTICS = 512
@@ -96,7 +104,7 @@ _UNAVAILABLE_ACTION = "Repair the provider installation or choose another provid
 
 
 def provider_methods(provider: object) -> bool:
-    """Check a provider's synchronous methods and return whether it renders."""
+    """Check a provider's synchronous methods and return whether it has render()."""
     for method in ("availability", "starters", "create", "inspect", "build"):
         operation = getattr(provider, method, None)
         if not callable(operation):
@@ -386,6 +394,7 @@ class ProviderConformance:
             "projection site offsets",
         )
         invalid_reads: list[ProjectDiagnostic] = []
+        read_counts = {"value": 0, "output": 0, "cell": 0}
 
         def reads(items: object, record: type[_Read], kind: str) -> tuple[_Read, ...]:
             label = f"render {kind}s"
@@ -394,6 +403,11 @@ class ProviderConformance:
                 if not isinstance(item, record):
                     raise conformance_error(
                         self.key, f"requires {label} to be {record.__name__} records"
+                    )
+                read_counts[kind] += 1
+                if read_counts[kind] > _MAX_SITES:
+                    raise conformance_error(
+                        self.key, f"limits {label} to {_MAX_SITES} entries"
                     )
                 try:
                     validate_render_value(item, documents=document_set)
@@ -425,22 +439,36 @@ class ProviderConformance:
                 )
             return tuple(validated)
 
-        render_values = reads(value.render_values, RenderValue, "value")
-        render_outputs = reads(value.render_outputs, RenderOutput, "output")
-        render_cells = reads(value.render_cells, RenderCell, "cell")
+        renders: list[Render] = []
+        for render in checked_tuple(
+            value.renders, self.key, "renders", maximum=MAX_RENDERS
+        ):
+            if not isinstance(render, Render):
+                raise conformance_error(self.key, "requires Render records")
+            source = provider_path(render.source, self.key, "render source")
+            require_input(source, "a render")
+            renders.append(
+                Render(
+                    source,
+                    reads(render.values, RenderValue, "value"),
+                    reads(render.outputs, RenderOutput, "output"),
+                    reads(render.cells, RenderCell, "cell"),
+                )
+            )
+        require_unique(
+            tuple(render.source for render in renders), self.key, "render sources"
+        )
         return replace(
             value,
             documents=(*accepted, *guidance),
             inputs=tuple(scope),
             sites=tuple(sites),
-            render_values=render_values,
-            render_outputs=render_outputs,
-            render_cells=render_cells,
+            renders=tuple(renders),
             diagnostics=(
                 *diagnostics,
                 *invalid_sites,
                 *invalid_reads,
-                *accept_diagnostics(sites, (*render_outputs, *render_cells)),
+                *accept_diagnostics(sites, renders),
             ),
         )
 
@@ -542,12 +570,12 @@ class ProviderConformance:
             result = BuildResult(None, (_located(error.diagnostic, documents),))
         return self.validate_build_result(request, result)
 
-    def render(self, provider: DocumentProvider, request: RenderRequest) -> BuildResult:
+    def render(self, provider: RenderProvider, request: RenderRequest) -> RenderResult:
         """Render with ``provider``. A raised ``ProviderError`` fails the render."""
         try:
             result = provider.render(request)
         except ProviderError as error:
-            result = BuildResult(None, (error.diagnostic,))
+            result = RenderResult(diagnostics=(error.diagnostic,))
         return self.validate_render_result(request, result)
 
     def validate_inspection_request(self, value: object) -> InspectionRequest:
@@ -587,23 +615,34 @@ class ProviderConformance:
             raise conformance_error(self.key, "requires enumerated build inputs")
         snapshot = core_path(project.root, self.key, "snapshot root")
         staging = core_path(value.staging_root, self.key, "staging root")
+        template = core_path(value.template_root, self.key, "template root")
         cache = core_path(value.cache_root, self.key, "cache root")
         work = core_path(value.work_root, self.key, "work root")
-        if not staging.is_dir() or not work.is_dir():
+        if not staging.is_dir() or not template.is_dir() or not work.is_dir():
             raise conformance_error(
-                self.key, "requires existing staging and work directories"
+                self.key, "requires existing staging, template, and work directories"
             )
-        if overlaps(work, staging):
-            raise conformance_error(self.key, "requires a work root outside staging")
+        if overlaps(work, staging) or overlaps(work, template):
+            raise conformance_error(
+                self.key, "requires a work root outside staging and template"
+            )
+        if overlaps(template, staging):
+            raise conformance_error(
+                self.key, "requires separate staging and template roots"
+            )
         if cache.name != ".cache" or cache.parent.name != ".artifacts":
             raise conformance_error(
                 self.key, "requires cache root to end with .artifacts/.cache"
             )
         if cache.exists() and not cache.is_dir():
             raise conformance_error(self.key, "requires cache root to be a directory")
-        if overlaps(cache, snapshot) or overlaps(cache, staging):
+        if (
+            overlaps(cache, snapshot)
+            or overlaps(cache, staging)
+            or overlaps(cache, template)
+        ):
             raise conformance_error(
-                self.key, "requires cache outside snapshot and staging roots"
+                self.key, "requires cache outside snapshot, staging, and template roots"
             )
         self._operation_owners(value, "build")
         checked_text(value.project_revision, self.key, "project revision")
@@ -612,6 +651,7 @@ class ProviderConformance:
             project=project,
             inspection=inspection,
             inputs=inputs,
+            template_root=template,
             work_root=work,
         )
 
@@ -631,33 +671,65 @@ class ProviderConformance:
             "build diagnostics",
             documents,
         )
-        outputs = {item.target for item in request.inspection.render_outputs}
-        if not isinstance(value.output_sizes, Mapping):
-            raise conformance_error(self.key, "requires output_sizes as a mapping")
-        for target, size in value.output_sizes.items():
-            if target not in outputs or not isinstance(size, Size):
-                raise conformance_error(
-                    self.key,
-                    f"measured {target!r}, which is not an output the document "
-                    "reads, or gave it no Size",
-                )
         if value.document is None:
             if not any(item.severity == "error" for item in normalized_diagnostics):
                 raise conformance_error(
                     self.key, "returned no document or error diagnostic"
                 )
-            return replace(value, diagnostics=normalized_diagnostics)
+            return replace(value, diagnostics=normalized_diagnostics, output_sizes={})
         document = provider_path(value.document, self.key, "build document")
         if not request.staging_root.joinpath(*document.parts).is_file():
             raise conformance_error(
                 self.key,
                 f"returned missing build document {document.as_posix()!r}",
             )
-        return replace(value, document=document, diagnostics=normalized_diagnostics)
+        if document.suffix.lower() != ".html":
+            raise conformance_error(
+                self.key,
+                f"returned {document.as_posix()!r}. A build returns an HTML page",
+            )
+        return replace(
+            value,
+            document=document,
+            diagnostics=normalized_diagnostics,
+            output_sizes=self._output_sizes(request, value.output_sizes),
+        )
+
+    def _output_sizes(
+        self,
+        request: BuildRequest,
+        value: object,
+    ) -> dict[PurePosixPath, dict[str, Size]]:
+        """Check that each measured size belongs to an output its render reads."""
+        if not isinstance(value, Mapping):
+            raise conformance_error(self.key, "requires output_sizes as a mapping")
+        renders = {render.source: render for render in request.inspection.renders}
+        measured: dict[PurePosixPath, dict[str, Size]] = {}
+        for source, sizes in value.items():
+            render = renders.get(source) if isinstance(source, PurePosixPath) else None
+            if render is None or not isinstance(sizes, Mapping):
+                raise conformance_error(
+                    self.key,
+                    f"measured outputs for {source!r}, which is not a render source "
+                    "its inspection declared",
+                )
+            outputs = {item.target for item in render.outputs}
+            checked: dict[str, Size] = {}
+            for target, size in sizes.items():
+                if target not in outputs or not isinstance(size, Size):
+                    raise conformance_error(
+                        self.key,
+                        f"measured {target!r}, which is not an output the render of "
+                        f"{source} reads, or gave it no Size",
+                    )
+                checked[target] = size
+            measured[source] = checked
+        return measured
 
     def validate_render_request(self, value: object) -> RenderRequest:
         if not isinstance(value, RenderRequest):
             raise conformance_error(self.key, "requires a RenderRequest record")
+        source = provider_path(value.source, self.key, "render source")
         template = core_path(value.template_root, self.key, "render template root")
         output = core_path(value.output_root, self.key, "render output root")
         if not template.is_dir() or not output.is_dir() or any(output.iterdir()):
@@ -669,10 +741,9 @@ class ProviderConformance:
             raise conformance_error(
                 self.key, "requires separate template and output roots"
             )
-        document = provider_path(value.document, self.key, "render document")
-        if not template.joinpath(*document.parts).is_file():
+        if not template.joinpath(*source.parts).is_file():
             raise conformance_error(
-                self.key, f"has no render document {document.as_posix()!r}"
+                self.key, f"requires {source} as a file in the render template"
             )
         if not isinstance(value.values, Mapping):
             raise conformance_error(self.key, "requires render values to be a mapping")
@@ -703,39 +774,68 @@ class ProviderConformance:
                         f"requires a Representation for render {kind} {target!r}",
                     )
         self._operation_owners(value, "render")
-        return replace(value, template_root=template, output_root=output)
+        return replace(value, source=source, template_root=template, output_root=output)
 
     def validate_render_result(
         self,
         request: RenderRequest,
         value: object,
-    ) -> BuildResult:
-        if not isinstance(value, BuildResult):
-            raise conformance_error(self.key, "requires a BuildResult record")
+    ) -> RenderResult:
+        if not isinstance(value, RenderResult):
+            raise conformance_error(self.key, "requires a RenderResult record")
         diagnostics = self._diagnostics(value.diagnostics, "render diagnostics", None)
-        if value.document is None:
+        if value.main is None or any(item.severity == "error" for item in diagnostics):
             if not any(item.severity == "error" for item in diagnostics):
                 raise conformance_error(
-                    self.key, "rendered no document or error diagnostic"
+                    self.key, "rendered no main file or error diagnostic"
                 )
-            return replace(value, diagnostics=diagnostics)
-        document = provider_path(value.document, self.key, "rendered document")
-        if document.suffix.lower() not in DOCUMENT_MEDIA_TYPES:
-            raise conformance_error(
-                self.key,
-                f"rendered {document.as_posix()!r}. Studio displays "
-                f"{', '.join(sorted(DOCUMENT_MEDIA_TYPES))} documents",
-            )
-        output = request.output_root.joinpath(*document.parts)
-        if (
-            not output.is_file()
-            or output.resolve()
-            != request.output_root.resolve().joinpath(*document.parts)
+            return RenderResult(diagnostics=diagnostics)
+        root = request.output_root.resolve()
+        files: list[RenderFile] = []
+        for item in checked_tuple(
+            value.files, self.key, "rendered files", maximum=MAX_RENDER_FILES
         ):
-            raise conformance_error(
-                self.key, f"rendered no file at {document.as_posix()!r}"
-            )
-        return replace(value, document=document, diagnostics=diagnostics)
+            if not isinstance(item, RenderFile):
+                raise conformance_error(self.key, "requires RenderFile records")
+            path = provider_path(item.path, self.key, "rendered file")
+            file = request.output_root.joinpath(*path.parts)
+            if (
+                not file.is_file()
+                or file.is_symlink()
+                or file.resolve() != root.joinpath(*path.parts)
+            ):
+                raise conformance_error(
+                    self.key, f"rendered no file at {path.as_posix()!r}"
+                )
+            if (
+                not isinstance(item.media_type, str)
+                or _MEDIA_TYPE.fullmatch(item.media_type) is None
+            ):
+                raise conformance_error(
+                    self.key,
+                    f"gave {path.as_posix()!r} the media type {item.media_type!r}. "
+                    "Use a lowercase type/subtype such as 'application/pdf'",
+                )
+            files.append(RenderFile(path, item.media_type))
+        paths = tuple(item.path for item in files)
+        require_unique(paths, self.key, "rendered file paths")
+        require_casefold_unique(paths, self.key, "rendered file paths")
+        main = provider_path(value.main, self.key, "rendered main file")
+        preview = (
+            None
+            if value.preview is None
+            else provider_path(value.preview, self.key, "rendered preview file")
+        )
+        for label, path in (("main", main), ("preview", preview)):
+            if path is not None and path not in paths:
+                raise conformance_error(
+                    self.key,
+                    f"names {label} file {path.as_posix()!r}, which it did not "
+                    "list in files",
+                )
+        if preview == main:
+            raise conformance_error(self.key, "names the main file as its own preview")
+        return RenderResult(tuple(files), main, preview, diagnostics)
 
     def validate_profile(self, value: object) -> BuildProfile:
         if not isinstance(value, str) or value not in _PROFILES:

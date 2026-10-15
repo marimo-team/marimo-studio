@@ -1,4 +1,4 @@
-import type { RenderedMedia } from "@marimo-studio/protocol/document-render";
+import type { RenderedMedia } from "@marimo-studio/protocol/render";
 
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";

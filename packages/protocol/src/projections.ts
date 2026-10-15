@@ -44,19 +44,39 @@ const acceptedMediaTypeSchema = z
 // A length in points, 1/72 inch, from 1 to 50 inches.
 const pointsSchema = z.number().min(1).max(3_600);
 
+/**
+ * The project file a render starts from, such as `main.typ`, which names the
+ * render: a relative POSIX path without empty, `.`, or `..` segments.
+ */
+export const renderSourceSchema = z
+  .string()
+  .max(4_096)
+  .refine((path) => isRenderSource(path));
+
+export function isRenderSource(path: string): boolean {
+  return (
+    path.length > 0 &&
+    !path.includes("\\") &&
+    path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..")
+  );
+}
+
 export const artifactSiteSchema = z
   .object({
     id: projectionSiteIdSchema,
     kind: projectionKindSchema,
     source: sourceLocationSchema,
     targets: z.array(projectionTargetNameSchema).nonempty().nullable(),
-    // Media types an output or document cell site accepts, in preference
-    // order. An empty output list shows marimo's native output. A document's
-    // value site accepts application/json, which reads tables as rows.
+    // Media types a site reads its target in, in preference order. An empty
+    // page output list shows marimo's native output. A render's value read
+    // accepts application/json, which reads tables as rows.
     accept: z.array(acceptedMediaTypeSchema).max(32),
-    // The size a document places an output at, which the runtime draws a
+    // The size a render places an output at, which the runtime draws a
     // figure at.
     size: z.object({ width: pointsSchema, height: pointsSchema.nullable() }).strict().nullable(),
+    // The source of the render that reads this target, or null for a host on
+    // the page.
+    render: renderSourceSchema.nullable(),
   })
   .strict()
   .superRefine((site, context) => {
@@ -67,25 +87,53 @@ export const artifactSiteSchema = z
         message: "Artifact sites require unique targets",
       });
     }
-    if (
-      site.kind === "value" &&
-      !(
-        site.accept.length === 0 ||
-        (site.accept.length === 1 && site.accept[0] === "application/json")
-      )
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["accept"],
-        message: "Value sites read JSON or Arrow",
-      });
-    }
-    if (site.size !== null && (site.kind !== "output" || site.accept.length === 0)) {
-      context.addIssue({
-        code: "custom",
-        path: ["size"],
-        message: "Only output sites with an accept list read at a size",
-      });
+    if (site.render === null) {
+      if (site.kind === "value" && site.accept.length > 0) {
+        context.addIssue({
+          code: "custom",
+          path: ["accept"],
+          message: "Page value sites read JSON or Arrow",
+        });
+      }
+      if (site.size !== null) {
+        context.addIssue({
+          code: "custom",
+          path: ["size"],
+          message: "Only render output reads draw at a size",
+        });
+      }
+    } else {
+      if (site.targets?.length !== 1) {
+        context.addIssue({
+          code: "custom",
+          path: ["targets"],
+          message: "A render read names exactly one target",
+        });
+      }
+      if (
+        site.kind === "value" &&
+        !(site.accept.length === 1 && site.accept[0] === "application/json")
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["accept"],
+          message: "A render reads each value as JSON",
+        });
+      }
+      if (site.kind !== "value" && site.accept.length === 0) {
+        context.addIssue({
+          code: "custom",
+          path: ["accept"],
+          message: "A render reads outputs and cells in the media types it accepts",
+        });
+      }
+      if (site.size !== null && site.kind !== "output") {
+        context.addIssue({
+          code: "custom",
+          path: ["size"],
+          message: "Only render output reads draw at a size",
+        });
+      }
     }
     if (new Set(site.accept).size !== site.accept.length) {
       context.addIssue({
