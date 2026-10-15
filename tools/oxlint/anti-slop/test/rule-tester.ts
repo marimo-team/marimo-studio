@@ -1,5 +1,3 @@
-import type { Rule } from "@oxlint/plugins";
-
 import { describe, test } from "node:test";
 import { RuleTester } from "oxlint/plugins-dev";
 
@@ -12,8 +10,3 @@ export const ruleTester = new RuleTester({
     sourceType: "module",
   },
 });
-
-/** Register focused TypeScript accept and reject cases for an anti-slop rule. */
-export function testRule(name: string, rule: Rule, cases: RuleTester.TestCases): void {
-  ruleTester.run(name, rule, cases);
-}

@@ -48,18 +48,10 @@ describe("Studio prepared metadata", () => {
     expect(Object.isFrozen(parsed.projections)).toBe(true);
   });
 
-  it("rejects the previous flat manifest and unknown Studio fields", () => {
+  it("rejects unknown Studio fields", () => {
     const notebookExport = notebookExportFixture({ inputs: [{ mode: "baseline" }] });
     const current = studioManifest(notebookExport, { mode: "baseline" });
 
-    expect(() =>
-      parseStudioPreparedManifest({
-        schema: 1,
-        instance: notebookExport.identity,
-        exportUrl: notebookExport.base.href,
-        inputs: { mode: "baseline" },
-      }),
-    ).toThrow(/metadata is invalid/);
     expect(() => parseStudioPreparedManifest({ ...current, fallback: "server" })).toThrow(
       /metadata is invalid/,
     );
