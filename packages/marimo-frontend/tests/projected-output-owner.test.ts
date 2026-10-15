@@ -99,3 +99,32 @@ test("projected function callers carry active and rendered revisions", async () 
 
   await act(async () => root.unmount());
 });
+
+test("a projected output in a type marimo cannot display names its type", async () => {
+  const target = document.createElement("div");
+  document.body.append(target);
+  const root = createRoot(target);
+
+  await act(async () => {
+    root.render(
+      createElement(
+        Provider,
+        { store },
+        createElement(ProjectedOutputArea, {
+          output: {
+            ownerCellId: "custom-mime",
+            channel: "output",
+            mimetype: "application/pdf",
+            data: "data:application/pdf;base64,JVBERi0=",
+            timestamp: 1,
+            resetUiObjectIds: [],
+          },
+          stale: false,
+        }),
+      ),
+    );
+  });
+
+  expect(target.textContent).toBe("marimo cannot show application/pdf output.");
+  await act(async () => root.unmount());
+});
