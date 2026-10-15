@@ -94,6 +94,13 @@ with $q$ pointing at \marimovalue{pull_direction.value} degrees.
 
 :::
 
+Studio renders the HTML and Typst sources into a live page and a PDF:
+
+<StudioFigure
+  name="cell-output-value"
+  alt="The three notebook cells in marimo beside the HTML page and the Typst PDF. The page shows the live slider at 210 degrees, the level curves, and the optimal value. The PDF shows the same level curves and states the optimal value with q pointing at 210 degrees."
+/>
+
 What's going on here:
 
 - `pull_direction` names a cell. A page shows the live slider. Moving it makes

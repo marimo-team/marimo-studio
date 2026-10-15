@@ -179,7 +179,7 @@
 }
 
 /* The overview page drops the sidebar. Prose keeps its reading width while
-   the notebook-and-view stack widens into the freed space. */
+   the notebook-and-view stack and the figures widen into the freed space. */
 @media (min-width: 60rem) {
   .studio-overview-page .VPDoc:not(.has-sidebar) .container {
     max-width: 80rem;
@@ -190,7 +190,7 @@
     margin-inline: auto;
   }
 
-  .studio-overview-page .studio-view-stack {
+  .studio-overview-page :is(.studio-view-stack, .studio-figure) {
     --stack-width: min(76rem, 100vw - 6rem);
     width: var(--stack-width);
     margin-inline: calc((100% - var(--stack-width)) / 2);

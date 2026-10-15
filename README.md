@@ -72,6 +72,18 @@ A Typst report places the same two results in a PDF:
 The optimal value is #marimo_value("solution.value", default: 0).
 ```
 
+The notebook computes both results, and each view shows them in its own format:
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/figures/output-value-wide-dark.webp">
+    <img alt="The two notebook cells in marimo, the HTML page, and the Typst PDF, each showing the same level curves. The page and the PDF state the optimal value." src="apps/docs/public/figures/output-value-wide-light.webp" width="100%">
+  </picture>
+</p>
+
+The page shows the figure as marimo renders it. The PDF draws it as a vector
+graphic at the width the Typst source places it.
+
 [What is Studio?](https://marimo-team.github.io/marimo-studio/what-is-studio) explains the model, and the
 [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs) example shows both
 views next to the notebook.

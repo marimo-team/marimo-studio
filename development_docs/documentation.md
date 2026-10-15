@@ -18,7 +18,8 @@ examples, and site configuration into the
 | `apps/docs/scripts/source-integrity.test.ts` | Page metadata, route inventory, and heading fragments                          |
 | `apps/docs/scripts/verify-build.ts`          | Built routes, assets, base paths, examples, and sibling links                  |
 | `tools/example-showcase/`                    | README showcase images composed from captured example views                    |
-| `apps/docs/public/`                          | Brand, icon, screenshot, thumbnail, and showcase files plus generated examples |
+| `scripts/example-figure/`                    | README and overview figures of one notebook rendered as a page and a PDF       |
+| `apps/docs/public/`                          | Brand, icon, screenshot, thumbnail, showcase, figure files, generated examples |
 | `development_docs/`                          | Contributor decisions, ownership, lifecycle, validation, and release workflow  |
 
 Every public Markdown page must appear in `siteRoutes`. A new page also belongs
@@ -164,6 +165,54 @@ missing:
 node tools/example-showcase/capture.ts quadratic-programs/lab
 node tools/example-showcase/render.ts marimo-studio-fan-quadratic-programs
 ```
+
+## Example figures
+
+The README example and `docs/what-is-studio.md` each show a figure of the same
+results in three places: the notebook cells in the marimo editor, the HTML page,
+and the Typst PDF. `<StudioFigure>` places a figure on a docs page:
+
+```md
+<StudioFigure name="cell-output-value" alt="..." />
+```
+
+| Figure              | Shows                                                          | Used by                                         |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| `output-value`      | `solution` and `level_curves`, the figure, the optimal value   | `README.md`, `packages/marimo-studio/README.md` |
+| `cell-output-value` | The same results and the `pull_direction` slider and its value | `docs/what-is-studio.md`                        |
+
+Each figure's views place results with the same markup as the snippets its
+page prints, plus page size and type settings. The sources live in
+`scripts/example-figure/views/FIGURE/page/` and `.../report/`, so edit them
+together with the snippets in the README or `docs/what-is-studio.md`. Render
+the figures again after changing those snippets, the quadratic program
+notebook, or the Studio rendering they show:
+
+```console
+make docs-figures
+```
+
+`capture.ts` copies `examples/quadratic_program.py` into a temporary
+workspace, adds each figure's views, and exports them with
+`marimo-studio view export --runtime zero-python`. It runs
+`marimo edit --sandbox` through `uvx` at the marimo version in `uv.lock`, so
+the notebook opens in marimo without Studio. A `.marimo.toml` in the workspace
+overrides the user's marimo settings. The script screenshots each named cell
+in a 720px viewport and each exported page in a 420px viewport, at device
+scale 3. It copies the PDF page that Studio's document viewer paints with
+pdf.js at twice its CSS size, once the viewer shows the document rendered with
+notebook values. Shots land in the ignored `scripts/example-figure/shots/`
+directory, and a page error fails the capture.
+
+`render.ts` composes the shots through `compose.html` in `light` and `dark`
+themes and two layouts. `wide` sets the three cards in a row on a 1200px canvas
+for READMEs and desktop pages. `narrow` stacks them on a 440px canvas, which
+`<StudioFigure>` serves to screens up to 640px wide. Each image is rasterized at
+4x, resampled to 2x with Chromium's high-quality filter, and written as
+`apps/docs/public/figures/FIGURE-LAYOUT-THEME.webp` with a transparent
+background. `compose.html` loads Inter and JetBrains Mono from jsDelivr, and
+the exported pages load Geist, so both steps need network access. Inspect
+both themes and both layouts before committing the images.
 
 ## Build and serve
 
