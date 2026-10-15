@@ -123,7 +123,7 @@ def test_nested_no_tree_process_keeps_its_parent_group_ownership(
         "import sys, time; "
         "from marimo_studio._processes.supervisor import ProcessSupervisor; "
         "ProcessSupervisor(owns_process_tree=False).run("
-        f"[sys.executable, '-c', {child!r}], timeout=5); "
+        f"[sys.executable, '-c', {child!r}], timeout=30); "
         "time.sleep(30)"
     )
     environment = {

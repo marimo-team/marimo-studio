@@ -206,8 +206,8 @@ def test_transport_cancellation_does_not_block_the_event_loop(
 
         def request(self, *_args: object, **_kwargs: object) -> None:
             requesting.set()
-            closed.wait(timeout=2)
-            release_worker.wait(timeout=2)
+            closed.wait(timeout=10)
+            release_worker.wait(timeout=10)
             worker_finished.set()
             raise OSError("closed")
 
@@ -226,7 +226,8 @@ def test_transport_cancellation_does_not_block_the_event_loop(
         assert await asyncio.to_thread(requesting.wait, 1)
         heartbeat = asyncio.create_task(asyncio.sleep(0))
         task.cancel()
-        await asyncio.wait_for(heartbeat, 5)
+        # Joining the worker would hold the loop until its 10 s release gate.
+        await asyncio.wait_for(heartbeat, 1)
         assert requesting.is_set()
         assert not worker_finished.is_set()
         with pytest.raises(asyncio.CancelledError):

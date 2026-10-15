@@ -14,14 +14,17 @@ from marimo_studio.view_providers._host import provider_registry
 
 
 async def next_source(subscription: SourceSubscription) -> SourcePoll:
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + 10
-    while loop.time() < deadline:
-        event = await subscription.poll()
-        if event is not None:
-            return event
-        await asyncio.sleep(0.001)
-    raise AssertionError("Shared source monitor did not publish an event")
+    async def published() -> SourcePoll:
+        while (event := await subscription.poll()) is None:
+            await asyncio.sleep(0.001)
+        return event
+
+    try:
+        return await asyncio.wait_for(published(), timeout=10)
+    except asyncio.TimeoutError as error:
+        raise AssertionError(
+            "Shared source monitor did not publish an event"
+        ) from error
 
 
 class CountingProvider:
