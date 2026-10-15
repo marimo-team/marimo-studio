@@ -1,4 +1,4 @@
-"""Derive artifact sites from provider projection sites and document reads."""
+"""Derive artifact sites from provider projection sites and render reads."""
 
 from __future__ import annotations
 
@@ -12,15 +12,13 @@ from marimo_studio.view_providers._records import (
     ProjectInspection,
     ProjectionKind,
     ProjectionSite,
-    RenderCell,
-    RenderOutput,
-    RenderValue,
+    Render,
     Size,
     SourceLocation,
 )
 
 SITE_ATTRIBUTE = "data-marimo-studio-site"
-# A document reads each value as JSON, with tables as rows and dates as text.
+# A render reads each value as JSON, with tables as rows and dates as text.
 JSON_ACCEPT = ("application/json",)
 
 
@@ -28,10 +26,12 @@ JSON_ACCEPT = ("application/json",)
 class ArtifactSite:
     """One artifact-local projection site with its Studio-assigned identity.
 
-    An output site with ``accept`` reads its target in the first of those media
-    types the value supports, drawn at ``size`` when the build measured one.
-    Without ``accept``, the site reads marimo's native output. A value site
-    that accepts ``JSON_ACCEPT`` reads tables as rows, and otherwise as Arrow.
+    A page host's site has no ``render``. A render read's site names the source
+    of its render, such as ``main.typ``, and reads its one target on its own
+    terms: an output in the first of ``accept`` the value supports, drawn at
+    ``size`` when the build measured one, and a value as ``JSON_ACCEPT``, with
+    tables as rows. A page output site with ``accept`` reads an image, and
+    without it marimo's native output.
     """
 
     id: str
@@ -40,6 +40,7 @@ class ArtifactSite:
     targets: tuple[str, ...] | None
     accept: tuple[str, ...] = ()
     size: Size | None = None
+    render: PurePosixPath | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -53,6 +54,7 @@ class ArtifactSite:
                 if self.size is not None
                 else None
             ),
+            "render": self.render.as_posix() if self.render is not None else None,
         }
 
 
@@ -103,86 +105,85 @@ def artifact_sites(
 
 
 def render_sites(
-    values: tuple[RenderValue, ...],
-    outputs: tuple[RenderOutput, ...],
-    cells: tuple[RenderCell, ...],
-    output_sizes: Mapping[str, Size] | None = None,
+    renders: tuple[Render, ...],
+    output_sizes: Mapping[PurePosixPath, Mapping[str, Size]] | None = None,
 ) -> tuple[ArtifactSite, ...]:
-    """Return one site per document value, output, and cell, at its first read.
+    """Return one site per target each render reads, at its first read.
 
-    Values read as JSON, and each output reads at the size in ``output_sizes``.
-    Read IDs use their own namespace, so they never match a projection site's.
+    Values read as JSON, and each output reads at the size the build measured
+    for its render. Read IDs use their own namespace per render, so they
+    never match a projection site's or another render's.
     """
-    sizes = output_sizes or {}
-    sites: dict[tuple[ProjectionKind, str], ArtifactSite] = {}
+    sites: dict[tuple[PurePosixPath, ProjectionKind, str], ArtifactSite] = {}
 
     def add(
+        render: PurePosixPath,
         kind: ProjectionKind,
         target: str,
         source: SourceLocation,
         accept: tuple[str, ...],
         size: Size | None = None,
     ) -> None:
-        if (kind, target) not in sites:
-            sites[kind, target] = ArtifactSite(
-                id=_site_id("read", kind, target),
+        if (render, kind, target) not in sites:
+            sites[render, kind, target] = ArtifactSite(
+                id=_site_id("read", render.as_posix(), kind, target),
                 kind=kind,
                 source=source,
                 targets=(target,),
                 accept=accept,
                 size=size,
+                render=render,
             )
 
-    for value in values:
-        add("value", value.target, value.source, JSON_ACCEPT)
-    for output in outputs:
-        add(
-            "output",
-            output.target,
-            output.source,
-            output.accept,
-            sizes.get(output.target),
-        )
-    for cell in cells:
-        add("cell", cell.target, cell.source, cell.accept)
+    for render in renders:
+        name = render.source
+        sizes = (output_sizes or {}).get(name, {})
+        for value in render.values:
+            add(name, "value", value.target, value.source, JSON_ACCEPT)
+        for output in render.outputs:
+            add(
+                name,
+                "output",
+                output.target,
+                output.source,
+                output.accept,
+                sizes.get(output.target),
+            )
+        for cell in render.cells:
+            add(name, "cell", cell.target, cell.source, cell.accept)
     return tuple(sites.values())
+
+
+def page_sites(sites: Iterable[ArtifactSite]) -> tuple[ArtifactSite, ...]:
+    """Return the sites of the page's own hosts, without render reads."""
+    return tuple(site for site in sites if site.render is None)
+
+
+def read_sites(
+    sites: Iterable[ArtifactSite], render: PurePosixPath
+) -> tuple[ArtifactSite, ...]:
+    """Return the sites the render of ``render`` reads, in declaration order."""
+    return tuple(site for site in sites if site.render == render)
 
 
 def media_accept(
     sites: Iterable[ArtifactSite],
     kind: ProjectionKind,
 ) -> dict[str, tuple[str, ...]]:
-    """Return the media types a view reads each literal output or cell target in.
+    """Return the media types a page reads each literal output or cell target in.
 
-    Inspection gives every literal read of a target the same list, and a host
-    that selects its target at runtime declares none. An empty output list
-    reads marimo's native output.
+    Inspection gives every literal page host of a target the same list, and a
+    host that selects its target at runtime declares none. An empty output list
+    reads marimo's native output. Render reads keep their own lists.
     """
     accept: dict[str, tuple[str, ...]] = {}
-    for site in sites:
+    for site in page_sites(sites):
         if site.kind == kind:
             for target in site.targets or ():
                 accept.setdefault(target, site.accept)
     return accept
 
 
-def media_sizes(sites: Iterable[ArtifactSite]) -> dict[str, Size]:
-    """Return the size a view draws each output target at, when it has one."""
-    return {
-        target: site.size
-        for site in sites
-        if site.kind == "output" and site.size is not None
-        for target in site.targets or ()
-    }
-
-
 def inspection_sites(inspection: ProjectInspection) -> tuple[ArtifactSite, ...]:
     """Return the sites a view built from this inspection publishes."""
-    return (
-        *artifact_sites(inspection.sites),
-        *render_sites(
-            inspection.render_values,
-            inspection.render_outputs,
-            inspection.render_cells,
-        ),
-    )
+    return (*artifact_sites(inspection.sites), *render_sites(inspection.renders))

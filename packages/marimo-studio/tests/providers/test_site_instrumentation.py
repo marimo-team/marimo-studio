@@ -24,6 +24,7 @@ from marimo_studio.view_providers import (
     ProjectionSite,
     ProviderAvailability,
     ProviderInfo,
+    Render,
     RenderValue,
     SourceDocument,
     SourceLocation,
@@ -267,16 +268,20 @@ def test_site_ids_survive_layout_edits_and_number_repeated_targets() -> None:
 
 def test_projection_hosts_and_render_reads_of_one_target_get_distinct_ids() -> None:
     (site,), _ = html_sites(ENTRY, _page('<span mo-value="summary"></span>'))
+    read = RenderValue("summary", SourceLocation(ENTRY, 1, 1))
     inspection = ProjectInspection(
         documents=(SourceDocument(ENTRY, "html", "edit"),),
         inputs=(BuildInput(ENTRY, "file"),),
         sites=(site,),
-        render_values=(RenderValue("summary", SourceLocation(ENTRY, 1, 1)),),
+        renders=(
+            Render(PurePosixPath("report.typ"), values=(read,)),
+            Render(PurePosixPath("slides.typ"), values=(read,)),
+        ),
     )
 
     ids = [item.id for item in inspection_sites(inspection)]
 
-    assert len(ids) == len(set(ids)) == 2
+    assert len(ids) == len(set(ids)) == 3
 
 
 @pytest.mark.parametrize("problem", ("outside-inputs", "duplicate-offset"))

@@ -14,11 +14,15 @@ import "./style.css";
 
 import type { OutputReader } from "../outputs/reader";
 import type { ValueReader } from "../values/reader";
+import type { RuntimeRenderReader } from "./render-inputs";
 
 import { RuntimeProjections } from "../projections/RuntimeProjections";
 import { type InitialMode, pageThemeSource, type ViewMode } from "./runtime-configuration";
 
-type RuntimeReaderContext = Pick<EmbeddedRuntimeView, "initialized" | "invoke" | "sessionId">;
+export type RuntimeReaderContext = Pick<
+  EmbeddedRuntimeView,
+  "initialized" | "invoke" | "sessionId"
+>;
 
 export type RuntimeInvoke = EmbeddedFunction;
 
@@ -34,6 +38,7 @@ export interface RuntimeMountOptions {
   updateQuery: (invoke: RuntimeInvoke, query: string) => Promise<void>;
   valueReader: (runtime: RuntimeReaderContext) => ValueReader;
   outputReader: (runtime: RuntimeReaderContext) => OutputReader;
+  renderReader?: (runtime: RuntimeReaderContext) => RuntimeRenderReader;
 }
 
 const embeddedPresentation = (config: RuntimeConfig): EmbeddedPresentationConfig => ({
@@ -52,6 +57,7 @@ export const mountSharedRuntime = (
 ): RuntimeSession => {
   let readValues: ValueReader | undefined;
   let readOutputs: OutputReader | undefined;
+  let readRender: RuntimeRenderReader | undefined;
   let presentation = embeddedPresentation(config);
   let fingerprint = presentationFingerprint(presentation);
   let serverTransportFingerprint =
@@ -70,8 +76,14 @@ export const mountSharedRuntime = (
     render(embedded) {
       readValues ??= options.valueReader(embedded);
       readOutputs ??= options.outputReader(embedded);
+      readRender ??= options.renderReader?.(embedded);
       return (
-        <RuntimeProjections readOutputs={readOutputs} readValues={readValues} runtime={embedded} />
+        <RuntimeProjections
+          readOutputs={readOutputs}
+          readRender={readRender}
+          readValues={readValues}
+          runtime={embedded}
+        />
       );
     },
   });

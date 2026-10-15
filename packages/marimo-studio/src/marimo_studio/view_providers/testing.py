@@ -1,10 +1,9 @@
 """Check a view provider through the same paths Studio uses.
 
 ``check_provider`` creates a view from each of the provider's starters in a
-temporary workspace, then inspects, builds, and publishes it. A
-``DocumentProvider`` also renders its published template with ``values``,
-``outputs``, and ``cells``. Any problem raises ``ProviderCheckError`` with the
-message Studio would show.
+temporary workspace, then inspects, builds, and publishes it, and runs every
+render the view declares with ``values``, ``outputs``, and ``cells``. Any
+problem raises ``ProviderCheckError`` with the message Studio would show.
 
 ```python
 from marimo_studio.view_providers.testing import check_provider
@@ -29,7 +28,7 @@ import tempfile
 from collections.abc import Coroutine, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.metadata import EntryPoint
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
@@ -40,17 +39,16 @@ from marimo_studio._artifacts.retention import ArtifactLease, lease_published_ar
 from marimo_studio._authoring.view_api import View
 from marimo_studio._authoring.workspace_api import open_workspace
 from marimo_studio._processes.operation import ProviderCancellation
-from marimo_studio._views.documents import (
-    RenderInputError,
-    admit_render_inputs,
-    canonical_values,
-    document_targets,
-    render_document,
-)
 from marimo_studio._views.records import (
     DiagnosticsError,
     StudioDiagnostic,
     ViewInspection,
+)
+from marimo_studio._views.renders import (
+    RenderInputError,
+    admit_render_inputs,
+    canonical_values,
+    run_render,
 )
 from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.project_manifest import (
@@ -65,6 +63,7 @@ from marimo_studio.view_providers import (
     ViewProvider,
 )
 from marimo_studio.view_providers import __all__ as sdk
+from marimo_studio.view_providers._artifact_sites import read_sites
 from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
     ProviderRegistry,
@@ -95,14 +94,24 @@ class ProviderCheckError(AssertionError):
 
 
 @dataclass(frozen=True)
+class CheckedRender:
+    """The files one render produced from the check's notebook results."""
+
+    main: PurePosixPath
+    preview: PurePosixPath | None
+    files: Mapping[PurePosixPath, bytes]
+    media_types: Mapping[PurePosixPath, str]
+
+
+@dataclass(frozen=True)
 class CheckedView:
-    """One starter that Studio created, inspected, built, and published."""
+    """One starter that Studio created, inspected, built, published, and rendered."""
 
     starter: str
     documents: tuple[PurePosixPath, ...]
     published: Mapping[PurePosixPath, bytes]
     warnings: tuple[str, ...]
-    rendered: bytes | None = None
+    renders: Mapping[PurePosixPath, CheckedRender] = field(default_factory=dict)
 
 
 def _describe(item: StudioDiagnostic | ProjectDiagnostic) -> str:
@@ -261,11 +270,10 @@ async def _check(
                 item.path: lease.read_bytes(item.path) for item in lease.artifact.files
             }
             template = lease.artifact.template
-            rendered = (
-                _render(key, lease, template.document, values, outputs, cells)
-                if template is not None
-                else None
-            )
+            renders = {
+                source: _render(key, lease, source, values, outputs, cells)
+                for source in (template.renders if template is not None else ())
+            }
         checked.append(
             CheckedView(
                 starter=starter.id,
@@ -276,7 +284,7 @@ async def _check(
                     for item in build.issues
                     if item.severity == "warning"
                 ),
-                rendered=rendered,
+                renders=renders,
             )
         )
     return tuple(checked)
@@ -321,39 +329,54 @@ def _run(
 def _render(
     key: str,
     lease: ArtifactLease,
-    document: PurePosixPath,
+    source: PurePosixPath,
     values: Mapping[str, JsonValue],
     outputs: Mapping[str, Representation],
     cells: Mapping[str, Representation],
-) -> bytes:
-    sites = lease.artifact.sites
+) -> CheckedRender:
+    sites = read_sites(lease.artifact.sites, source)
 
-    # The check's sample notebook supplies more values than one template reads.
+    # The check's sample notebook supplies more values than one render reads.
     def read(supplied: Mapping[str, _Input], kind: ProjectionKind) -> dict[str, _Input]:
-        targets = document_targets(sites, kind)
+        targets = {
+            target
+            for site in sites
+            if site.kind == kind
+            for target in site.targets or ()
+        }
         return {target: item for target, item in supplied.items() if target in targets}
 
     read_values = read(values, "value")
     read_outputs = read(outputs, "output")
     read_cells = read(cells, "cell")
-    try:
-        admit_render_inputs(sites, read_values, read_outputs, read_cells)
-        rendition = render_document(
-            host.provider_registry().get(key),
-            lease.copy_template,
-            document,
-            canonical_values(read_values)[0],
-            read_outputs,
-            read_cells,
-            ProviderCancellation(),
+    with tempfile.TemporaryDirectory(prefix="marimo-studio-check-render-") as scratch:
+        try:
+            admit_render_inputs(sites, read_values, read_outputs, read_cells)
+            bundle = run_render(
+                host.provider_registry().get(key),
+                lease.copy_template,
+                source,
+                canonical_values(read_values)[0],
+                read_outputs,
+                read_cells,
+                ProviderCancellation(),
+                Path(scratch, "bundle"),
+            )
+        except RenderInputError as error:
+            raise ProviderCheckError(str(error)) from error
+        except DiagnosticsError as error:
+            raise ProviderCheckError(
+                "\n".join(_describe(item) for item in error.diagnostics)
+            ) from error
+        return CheckedRender(
+            bundle.main,
+            bundle.preview,
+            {
+                item.path: bundle.root.joinpath(*item.path.parts).read_bytes()
+                for item in bundle.files
+            },
+            {item.path: item.media_type for item in bundle.files},
         )
-    except RenderInputError as error:
-        raise ProviderCheckError(str(error)) from error
-    except DiagnosticsError as error:
-        raise ProviderCheckError(
-            "\n".join(_describe(item) for item in error.diagnostics)
-        ) from error
-    return rendition.content
 
 
 def check_provider(
@@ -372,9 +395,9 @@ def check_provider(
     ``key``. ``notebook`` defaults to a small notebook that defines ``metric`` and
     ``report``. ``options`` become the ``[options]`` table of each view's
     ``view.toml``. ``values``, plus ``outputs`` and ``cells`` as
-    ``Representation`` records in an accepted media type, feed a
-    ``DocumentProvider``'s render. Raises ``ProviderCheckError`` for the first
-    problem found.
+    ``Representation`` records in an accepted media type, feed every render the
+    view declares, and ``CheckedView.renders`` holds the files each produced.
+    Raises ``ProviderCheckError`` for the first problem found.
     """
     private = _private_imports(_provider_module(provider))
     if private:
@@ -408,4 +431,4 @@ def check_provider(
                 raise ProviderCheckError(f"{error}{hint}") from error
 
 
-__all__ = ["CheckedView", "ProviderCheckError", "check_provider"]
+__all__ = ["CheckedRender", "CheckedView", "ProviderCheckError", "check_provider"]

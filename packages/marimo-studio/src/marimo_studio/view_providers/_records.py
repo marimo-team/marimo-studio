@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from types import MappingProxyType
 from typing import Literal, Protocol
 
 from marimo_export.values import Representation, Size
@@ -204,7 +203,7 @@ class ProjectionSite:
 
 @dataclass(frozen=True)
 class RenderValue:
-    """Locate one notebook value that a rendered document reads as JSON."""
+    """Locate one notebook value that a render reads as JSON."""
 
     target: str
     source: SourceLocation
@@ -215,11 +214,11 @@ class RenderValue:
 
 @dataclass(frozen=True)
 class RenderOutput:
-    """Locate one notebook value that a rendered document places as media.
+    """Locate one notebook value that a render places as media.
 
-    ``accept`` lists the media types the document can place, in order of
+    ``accept`` lists the media types the render can place, in order of
     preference, such as ``("application/pdf", "image/svg+xml", "image/png")``.
-    Studio renders the value in the first type it supports, so a matplotlib
+    Studio represents the value in the first type it supports, so a matplotlib
     figure arrives as a vector image with the notebook's settings unchanged.
     """
 
@@ -237,9 +236,9 @@ class RenderOutput:
 
 @dataclass(frozen=True)
 class RenderCell:
-    """Locate one notebook cell whose rendered output a document places as media.
+    """Locate one notebook cell whose rendered output a render places as media.
 
-    ``target`` is the cell's name. ``accept`` lists the media types the document
+    ``target`` is the cell's name. ``accept`` lists the media types the render
     can place, in order of preference. Studio passes the cell's output as marimo
     rendered it, in the first listed type the output carries, so a cell that
     shows a matplotlib figure arrives as a PNG image.
@@ -254,6 +253,32 @@ class RenderCell:
             "target": self.target,
             "source": self.source.to_dict(),
             "accept": list(self.accept),
+        }
+
+
+@dataclass(frozen=True)
+class Render:
+    """Declare that the provider renders ``source`` into files.
+
+    ``source`` is the project file the render starts from, such as
+    ``main.typ``, and a page shows the render with
+    ``<marimo-output render="main.typ">``. ``values``, ``outputs``, and
+    ``cells`` name the notebook results the render reads. Each render reads its
+    targets on its own, so two renders, or a render and a page host, can read
+    one figure in different media types and sizes.
+    """
+
+    source: PurePosixPath
+    values: tuple[RenderValue, ...] = ()
+    outputs: tuple[RenderOutput, ...] = ()
+    cells: tuple[RenderCell, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "source": self.source.as_posix(),
+            "values": [item.to_dict() for item in self.values],
+            "outputs": [item.to_dict() for item in self.outputs],
+            "cells": [item.to_dict() for item in self.cells],
         }
 
 
@@ -277,7 +302,7 @@ class ProjectDiagnostic:
 
 @dataclass(frozen=True)
 class ProjectInspection:
-    """Describe a view project's Source documents, build inputs, and sites.
+    """Describe a view project's Source documents, build inputs, sites, and renders.
 
     Studio adds ``view.toml`` to the inputs, and shows ``AGENTS.md`` and
     ``DESIGN.md`` in Source when they exist.
@@ -287,20 +312,16 @@ class ProjectInspection:
     inputs: tuple[BuildInput, ...]
     sites: tuple[ProjectionSite, ...] = ()
     diagnostics: tuple[ProjectDiagnostic, ...] = ()
-    render_values: tuple[RenderValue, ...] = ()
-    render_outputs: tuple[RenderOutput, ...] = ()
-    render_cells: tuple[RenderCell, ...] = ()
+    renders: tuple[Render, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schema": 3,
+            "schema": 4,
             "documents": [item.to_dict() for item in self.documents],
             "inputs": [item.to_dict() for item in self.inputs],
             "sites": [item.to_dict() for item in self.sites],
             "diagnostics": [item.to_dict() for item in self.diagnostics],
-            "render_values": [item.to_dict() for item in self.render_values],
-            "render_outputs": [item.to_dict() for item in self.render_outputs],
-            "render_cells": [item.to_dict() for item in self.render_cells],
+            "renders": [item.to_dict() for item in self.renders],
         }
 
 
@@ -384,12 +405,20 @@ class InspectionRequest:
 
 @dataclass(frozen=True)
 class BuildRequest:
+    """Build one view project snapshot.
+
+    ``staging_root`` receives the public page and its assets. ``template_root``
+    receives the private files renders start from, such as a copy of the
+    project. Studio stores them with the artifact and never serves them.
+    """
+
     project: ViewProject
     inspection: ProjectInspection
     inputs: tuple[PurePosixPath, ...]
     project_revision: str
     profile: BuildProfile
     staging_root: Path
+    template_root: Path
     work_root: Path
     cache_root: Path
     cancellation: ProviderCancellation
@@ -399,35 +428,41 @@ class BuildRequest:
 
 @dataclass(frozen=True)
 class BuildResult:
-    """The document a build publishes and what the build measured in it.
+    """The page a build publishes and what the build measured for its renders.
 
-    ``output_sizes`` gives the size in points at which the document places
-    each output target, such as a column width. Studio then draws each figure
-    or chart at that size, so its text keeps its point size on the page.
+    ``document`` is the HTML entry beneath ``staging_root``. ``output_sizes``
+    maps a render's source to the size in points at which it places each of its
+    output targets, such as a column width. Studio then draws each figure or
+    chart at that size, so its text keeps its point size in the rendered file.
     """
 
     document: PurePosixPath | None
     diagnostics: tuple[ProjectDiagnostic, ...] = ()
-    output_sizes: Mapping[str, Size] = field(default_factory=dict)
+    output_sizes: Mapping[PurePosixPath, Mapping[str, Size]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)
 class RenderRequest:
-    """Render one published document template with current notebook values.
+    """Render one declared render with the notebook results a reader sees.
 
-    ``values`` holds the JSON form of each available value target, so a table
-    arrives as a list of row objects and a date as ISO 8601 text. ``outputs``
-    holds each available output target in the first media type of its
-    ``RenderOutput.accept`` that the value supports, drawn at the size
-    ``BuildResult.output_sizes`` gave it. ``cells`` holds the rendered output
-    of each available cell in the first media type of its
-    ``RenderCell.accept`` that the output carries. A target that is absent has
-    no current value, and the template applies its default. All three come
-    from the notebook a reader is viewing and are untrusted data.
+    ``source`` is the ``Render.source`` to render, and ``template_root`` is a
+    private, writable copy of everything the build wrote beneath
+    ``BuildRequest.template_root``. ``values``
+    holds the JSON form of each available value target, so a table arrives as
+    a list of row objects and a date as ISO 8601 text. ``outputs`` holds each
+    available output target in the first media type of its
+    ``RenderOutput.accept`` that the value supports, drawn at the render's
+    measured size. ``cells`` holds the rendered output of each available cell
+    in the first media type of its ``RenderCell.accept`` that the output
+    carries. A target that is absent has no current value, and the template
+    applies its default. All three come from the notebook a reader is viewing
+    and are untrusted data.
     """
 
+    source: PurePosixPath
     template_root: Path
-    document: PurePosixPath
     values: Mapping[str, JsonValue]
     outputs: Mapping[str, Representation]
     cells: Mapping[str, Representation]
@@ -437,14 +472,31 @@ class RenderRequest:
     command_timeout: float
 
 
-# Rendered documents a viewer page can display, by file suffix.
-DOCUMENT_MEDIA_TYPES = MappingProxyType(
-    {
-        ".pdf": "application/pdf",
-        ".png": "image/png",
-        ".svg": "image/svg+xml",
-    }
-)
+@dataclass(frozen=True)
+class RenderFile:
+    """One rendered file beneath ``RenderRequest.output_root`` and its media type."""
+
+    path: PurePosixPath
+    media_type: str
+
+
+@dataclass(frozen=True)
+class RenderResult:
+    """The files one render publishes.
+
+    ``files`` lists every file Studio publishes, with its media type, such as
+    ``RenderFile(PurePosixPath("report.pdf"), "application/pdf")``. Studio
+    keeps their relative paths, so an HTML file can load its images and
+    stylesheets. ``main`` names the file a reader opens and downloads.
+    ``preview`` optionally names a file a page shows in its place, such as a
+    video's poster image or a PDF of a Word document. An error diagnostic fails
+    the render, and Studio publishes none of its files.
+    """
+
+    files: tuple[RenderFile, ...] = ()
+    main: PurePosixPath | None = None
+    preview: PurePosixPath | None = None
+    diagnostics: tuple[ProjectDiagnostic, ...] = ()
 
 
 class ViewProvider(Protocol):
@@ -467,13 +519,12 @@ class ViewProvider(Protocol):
     def build(self, request: BuildRequest) -> BuildResult: ...
 
 
-class DocumentProvider(ViewProvider, Protocol):
-    """Build a document template and render it with notebook values.
+class RenderProvider(ViewProvider, Protocol):
+    """Build a page and render the renders its inspection declares.
 
-    ``build()`` returns the template entry. Studio renders it with ``render()``
-    once without values when it builds the view, then again whenever a reader's
-    values change. ``render()`` returns the rendered file beneath
-    ``output_root``, or no document with an error diagnostic.
+    ``render()`` runs whenever the notebook results a render reads change for a
+    reader. It writes files beneath ``output_root`` and returns them in a
+    ``RenderResult``.
     """
 
-    def render(self, request: RenderRequest) -> BuildResult: ...
+    def render(self, request: RenderRequest) -> RenderResult: ...

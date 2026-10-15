@@ -20,10 +20,11 @@ provider = "marimo-studio/vanilla"
 
 The HTML, React, Svelte, Notebook Kit, and Quarto providers publish web pages
 that place notebook results with `<marimo-cell>`, `<marimo-output>`, and
-`mo-value` hosts. The Typst and LaTeX providers publish PDF documents that read
-the same cells, outputs, and values through document functions.
-[Rendered documents](projections.md#rendered-documents) lists how each runtime
-supplies those values.
+`mo-value` hosts. The Typst and LaTeX providers render their entry document,
+such as `main.typ`, to a PDF from the same cells, outputs, and values read
+through document functions, and publish a page that shows it.
+[Rendered files](projections.md#rendered-files) lists how each runtime supplies
+those values.
 
 Source writes preserve the provider key. To change frontend stacks, create
 another view with the desired starter. Starter identity is creation input and
@@ -373,9 +374,8 @@ shorter directory, such as `C:\work\analysis`.
 
 The Typst provider renders a [Typst](https://typst.app/docs/) document, a
 markup-based typesetting format for papers, reports, and slides, to PDF.
-Studio renders `main.typ` at build time and again whenever a notebook value or
-output it reads changes. The view page shows the PDF with selectable text and a
-download link.
+Studio renders `main.typ` whenever a notebook value or output it reads changes.
+The view page shows the PDF with selectable text and a download link.
 
 ```typst
 #import "marimo.typ": marimo_output, marimo_value
@@ -403,7 +403,7 @@ literal so Studio can find what the document reads.
 `marimo_value(selector, default: none)` returns the current notebook value for
 `selector`, or `default` before the notebook has a value and while the value is
 `none`. Values arrive in their
-[JSON form](../guide/notebook-results.md#documents-read-json): a pandas,
+[JSON form](../guide/notebook-results.md#renders-read-json): a pandas,
 Polars, or PyArrow table as an array of row dictionaries, and a date or
 datetime as ISO 8601 text.
 
@@ -438,10 +438,11 @@ a PNG. Name the cell in the notebook, for example `def revenue_plot():`. A cell
 that has not run, or that shows text or a table, leaves `marimo_cell()` at its
 default. Use `marimo_output()` with the figure's variable for a vector PDF.
 
-Studio checks the document by rendering it with every `marimo_value()`,
-`marimo_output()`, and `marimo_cell()` call at its default. A compile error
-fails the build at its source line and keeps the last published view. Each
-render runs in a child process with a 60 second deadline.
+The build compiles the document with every `marimo_value()`,
+`marimo_output()`, and `marimo_cell()` call at its default to measure figure
+placements. A compile error fails the build at its source line and keeps the
+last published view. Each render runs in a child process with a 300 second
+deadline.
 
 Renders use Typst's embedded fonts, the font files in the project's `fonts/`
 directory, and a compile clock fixed at 1970-01-01, so the same template and
@@ -518,7 +519,7 @@ steps, written as literal text so Studio can find it:
 `\marimoforeach`, `#1` is the item's selector and `#2` its position from 1, so
 `\marimovalue{#1.name}` reads a column of the current row, and `count` limits
 the items. Values arrive in their
-[JSON form](../guide/notebook-results.md#documents-read-json), so a pandas,
+[JSON form](../guide/notebook-results.md#renders-read-json), so a pandas,
 Polars, or PyArrow table repeats one row per table row and a date arrives as
 ISO 8601 text that `\marimodate` formats.
 
@@ -581,7 +582,7 @@ template and values produce the same PDF on every machine with that version.
 Read dates from the notebook with `\marimodate` in place of `\today`.
 
 The build compiles the document within its 120 second budget, so Tectonic
-downloads the packages it uses there, and each later render has a 60 second
+downloads the packages it uses there, and each later render has a 300 second
 deadline. The first compile on a machine needs network access and can take a
 few minutes. When it outlasts the build, the build reports
 `latex-compile-unfinished`, and the next build continues from the packages

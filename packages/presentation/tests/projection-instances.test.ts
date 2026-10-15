@@ -46,6 +46,7 @@ const dynamicConfig = () =>
         targets: null,
         accept: [],
         size: null,
+        render: null,
       },
       {
         id: "site:dynamic-value",
@@ -54,6 +55,7 @@ const dynamicConfig = () =>
         targets: ["metric"],
         accept: [],
         size: null,
+        render: null,
       },
     ],
     runtimeBindings: {
@@ -224,6 +226,34 @@ test("unresolved hosts do not consume the unique target quota", () => {
   expect(inventory.resolve(inventory.hosts[1]!).resolution).toMatchObject({
     ok: true,
     value: { request: { target: "metric" }, runtimeCellId: "runtime-overview" },
+  });
+});
+
+test("a page host that names a render's read site does not mount", () => {
+  const config = dynamicConfig();
+  commitRuntimeConfig({
+    ...config,
+    sites: [
+      ...config.sites,
+      {
+        id: "site:report-metric",
+        kind: "value",
+        source: { path: "src/App.tsx", line: 30, column: 7 },
+        targets: ["metric"],
+        accept: ["application/json"],
+        size: null,
+        render: "main.typ",
+      },
+    ],
+  });
+  document.body.innerHTML = `
+    <span data-marimo-studio-site="site:report-metric" mo-value="metric"></span>
+  `;
+
+  const inventory = createProjectionInventory(getRuntimeConfig(), document);
+  expect(inventory.resolve(inventory.hosts[0]!).resolution).toMatchObject({
+    ok: false,
+    error: { code: "projection-site-not-found" },
   });
 });
 

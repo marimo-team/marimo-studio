@@ -15,12 +15,12 @@ runtime, and mounts the result in the host element.
 | `<marimo-output value="chart">` | Notebook value selector         | One value rendered by marimo's output renderer           |
 | `mo-value="metrics.total"`      | Notebook value selector         | JSON value or Arrow-backed table exposed to browser code |
 
-A view is a web page or a rendered document, and both name the same cells,
-outputs, and values. Pages use the hosts above, which Quarto's `marimo`
-shortcode also writes. Typst reads targets with `marimo_value()`,
-`marimo_output()`, and `marimo_cell()`, and LaTeX with `\marimovalue`,
-`\marimographics`, and `\marimocell`, as
-[Rendered documents](#rendered-documents) describes.
+Pages use the hosts above, which Quarto's `marimo` shortcode also writes. A
+render reads the same cells, outputs, and values on the server: Typst reads
+targets with `marimo_value()`, `marimo_output()`, and `marimo_cell()`, and
+LaTeX with `\marimovalue`, `\marimographics`, and `\marimocell`. A page shows
+a render's files with `<marimo-output render="...">`, as
+[Rendered files](#rendered-files) describes.
 
 The Python (`server`) and Browser (`wasm`) runtimes use the same authored
 hosts.
@@ -248,13 +248,89 @@ Changing `name`, `value`, or `mo-value` releases the prior target and resolves
 the same DOM instance against the new one. Removing the host releases its
 projection ownership.
 
-## Rendered documents
+## Rendered files
 
-A rendered document, such as the PDF that the Typst or LaTeX provider compiles,
-reads notebook values and outputs when Studio renders it. The view page shows
-it in a `<marimo-document>` viewer, and Studio renders it again when a value or
-output it reads changes. The viewer keeps the last document on screen while a
-new one renders and shows render errors beside it.
+A render host shows the files a view provider renders from notebook results,
+such as the PDF the Typst or LaTeX provider compiles or a video a scene
+provider encodes:
+
+```html
+<marimo-output render="main.typ"></marimo-output>
+```
+
+`render` names the project file the render starts from, as Source shows its
+path. A host for a file the view does not render enters `error` with code
+`render-unknown`, and the build fails with the same code when the built
+page's HTML holds one. A host with both `render` and
+`value` enters `error` with code `render-host-invalid`. A render
+host is part of the page and needs no projection site.
+
+Studio renders again whenever a result the render reads changes. The host
+keeps the last files on screen while new ones render, and shows render errors
+beside them. It shows the main file by its media type:
+
+| Main file          | The host shows                                                   |
+| ------------------ | ---------------------------------------------------------------- |
+| `application/pdf`  | The pages, with selectable text                                  |
+| `image/*`          | The image                                                        |
+| `video/*`          | A video player with seeking, and the preview image as its poster |
+| `audio/*`          | An audio player                                                  |
+| `text/html`        | The page in a sandboxed frame with no access to the view         |
+| Another media type | The preview when it has one of the types above, otherwise a note |
+
+Every host also shows a **Download** link for the main file. Studio serves
+rendered files with byte ranges, so media seeks without loading the whole
+file. Style the host's parts from page CSS with `::part(toolbar)`,
+`::part(download)`, `::part(problems)`, and `::part(content)`.
+
+### Present files yourself
+
+Markup inside a render host replaces the stock presentation, and the page fills
+it from the host's render record. The toolbar and problems stay. A script that
+runs after the first files are ready starts from `host.marimoRender`:
+
+```html
+<marimo-output render="scene.py">
+  <video id="player" controls loop></video>
+</marimo-output>
+<script>
+  const host = document.querySelector('marimo-output[render="scene.py"]');
+  const player = document.querySelector("#player");
+  const show = (record) => {
+    const file = (path) => record.files.find((item) => item.path === path)?.url;
+    player.src = file(record.main);
+    player.poster = file(record.preview) ?? "";
+  };
+  if (host.marimoRender) show(host.marimoRender);
+  host.addEventListener("marimo-output-ready", ({ detail }) => show(detail));
+  host.addEventListener("marimo-output-updated", ({ detail }) => show(detail));
+</script>
+```
+
+### Render records
+
+`host.marimoRender` holds the files a render host shows, and the
+`marimo-output-ready` and `marimo-output-updated` events carry the same record
+as `detail`.
+
+| Field      | Value                                                              |
+| ---------- | ------------------------------------------------------------------ |
+| `render`   | The render's source file                                           |
+| `bundle`   | The content identity of the files                                  |
+| `main`     | Path of the main file                                              |
+| `preview`  | Path of the preview file, or `null`                                |
+| `files`    | `{ path, mediaType, size, url }` for every file                    |
+| `warnings` | Render warnings as diagnostics                                     |
+| `absent`   | Targets the render read without a current result, shown as default |
+
+`marimo-output-ready` fires for the first files, `marimo-output-updated` when
+the files change, and `marimo-output-error` on the first transition into
+`error`, with `{ render, code, message, hint, diagnostics }`. Studio serves
+rendered HTML, SVG, and XML files with a sandbox policy, so such a file opened
+on its own runs in an opaque origin. A static export's web server sets its own
+headers.
+
+### Render values and runtimes
 
 ```typst
 #import "marimo.typ": marimo_output, marimo_value
@@ -266,37 +342,39 @@ Rooms in use: #marimo_value("summary.rooms", default: 0)
 ```
 
 Values arrive in their
-[JSON form](../guide/notebook-results.md#documents-read-json): a dataframe as a
-list of row objects and a date as ISO 8601 text. A value without a JSON form
-fails with `render-value-not-json`. An output arrives in the first media type
-the document accepts and the value supports, such as PDF for a matplotlib
-figure in a Typst report, drawn at the size the build measured at its
-placement. A cell read receives the cell's output as marimo shows it, in the
-first accepted type it carries, such as PNG for a matplotlib figure. An output
-or cell without an accepted type, such as text or a table, renders with the
-template's default, and the viewer names a missing output. A `zero-python`
-export renders every output in every prepared state and stops when one state's
-value has no accepted type.
+[JSON form](../guide/notebook-results.md#renders-read-json): a dataframe as a
+list of row objects and a date as ISO 8601 text. A value the notebook has not
+computed renders with the template's default. A value without a JSON form
+fails with `render-value-not-json`, and a value too large to read fails with
+`render-values-too-large`. An output arrives in the first media type
+the render accepts and the value supports, such as PDF for a matplotlib figure
+in a Typst report, drawn at the size the build measured at its placement. A
+cell read receives the cell's output as marimo shows it, in the first accepted
+type it carries, such as PNG for a matplotlib figure. An output or cell without
+an accepted type, such as text or a table, renders with the template's
+default, and the host notes `Showing the default for <target>.` A
+`zero-python` export renders every output in every prepared state and stops
+when one state's value has no accepted type.
 
-Each runtime supplies values from a different place:
+A render reads its targets on its own, so a page can show a chart natively
+while a render places the same chart as a PDF.
 
-| Runtime                      | Values come from                            | Document                                   |
-| ---------------------------- | ------------------------------------------- | ------------------------------------------ |
-| Python, edit and run mode    | The reader's kernel session, read by Studio | Rendered by Studio for each value change   |
-| Browser, edit mode           | The notebook state in the editor tab        | Rendered by Studio for each value change   |
-| Prepared, edit mode          | The prepared state the preview shows        | Rendered by Studio for each state change   |
-| Browser, run mode            | Unavailable                                 | The document rendered at build time        |
-| Static export, `zero-python` | Each prepared notebook state                | One document per state, rendered at export |
-| Static export, `wasm`        | Unavailable                                 | The document rendered at build time        |
+Each runtime supplies results from a different place:
 
-Outputs and cells follow the same rows, from the reader's kernel session, the
-preview's `marimo-output` and `marimo-cell` hosts, or each prepared state.
+| Runtime                      | Results come from                           | Files                                    |
+| ---------------------------- | ------------------------------------------- | ---------------------------------------- |
+| Python, edit and run mode    | The reader's kernel session, read by Studio | Rendered by Studio when a result changes |
+| Browser, edit mode           | The notebook state in the editor tab        | Rendered by Studio when a result changes |
+| Prepared, edit mode          | The prepared state the preview shows        | Rendered by Studio for each state change |
+| Static export, `zero-python` | Each prepared notebook state                | One bundle per state, rendered at export |
+| Browser, run mode            | Unavailable                                 | `render-results-unavailable` error       |
+| Static export, `wasm`        | Unavailable                                 | `render-results-unavailable` error       |
 
-For published views, Studio renders documents from session values and refuses
-values posted in run mode with `render-values-unverified`. Where no current
-values reach the document, including a `wasm` export and a `zero-python` export
-state without a rendition, the viewer shows the build-time document with the
-note `Showing the document without current notebook values.`
+In every runtime, a render reads its results between two notebook runs, so one
+render never mixes results from different runs. A Prepared state holds one run
+by construction. For published
+views, Studio renders from session values and refuses values posted in run
+mode with `render-values-unverified`.
 
 ## Presentation readiness
 

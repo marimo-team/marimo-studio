@@ -47,9 +47,6 @@ from marimo_studio._server.ports import (
 from marimo_studio._server.presentation.capability import (
     PresentationCapability,
 )
-from marimo_studio._server.presentation.documents import (
-    render_response,
-)
 from marimo_studio._server.presentation.ports import KernelProjectionHost
 from marimo_studio._server.presentation.preview import preview_url_response
 from marimo_studio._server.presentation.projection_routes import (
@@ -57,6 +54,10 @@ from marimo_studio._server.presentation.projection_routes import (
     values_response,
 )
 from marimo_studio._server.presentation.query_routes import query_response
+from marimo_studio._server.presentation.render_routes import (
+    render_file_response,
+    render_response,
+)
 from marimo_studio._server.query import positive_safe_integer
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.request_path import request_path
@@ -550,6 +551,12 @@ async def _view_response(
                 if presentation_capability is not None
                 else None
             ),
+        )
+    if route.startswith("renders/") and request.method in {"GET", "HEAD"}:
+        return render_file_response(
+            notebook_scope.renders,
+            view_name,
+            route.removeprefix("renders/"),
         )
     if route == "render" and request.method == "POST":
         return await render_response(

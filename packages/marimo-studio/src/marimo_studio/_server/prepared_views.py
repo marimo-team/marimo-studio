@@ -212,11 +212,7 @@ def _prepared_view_metadata(
     compiled: CompiledExportView,
     selected_inputs: Mapping[str, object] | None,
 ) -> PreparedViewMetadata:
-    projections = {
-        "cells": dict(compiled.bindings.cells),
-        "outputs": dict(compiled.bindings.outputs),
-        "values": dict(compiled.bindings.values),
-    }
+    projections = compiled.bindings.to_dict()
     digest = canonical_json_sha256(
         {
             "inputs": list(prepared.plan.inputs),

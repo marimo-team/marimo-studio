@@ -20,6 +20,7 @@ from marimo_studio._projections.resolution import (
 from marimo_studio._projections.symbol_graph import build_notebook_symbol_graph
 from marimo_studio.view_providers import (
     ProjectionKind,
+    Size,
     SourceLocation,
 )
 from marimo_studio.view_providers._artifact_sites import ArtifactSite
@@ -100,6 +101,27 @@ def test_an_output_target_resolves_in_the_media_types_its_literal_hosts_accept(
         "image/svg+xml",
     )
     assert resolve_projection(graph, sites, _request(dynamic, "doubled")).accept == ()
+
+
+def test_a_render_read_resolves_in_its_own_media_types_and_size(
+    notebook_path: Path,
+) -> None:
+    notebook = inspect_notebook(notebook_path)
+    graph = build_notebook_symbol_graph(notebook, {})
+    host = replace(_site("site-host", "output", ("x",)), accept=("image/svg+xml",))
+    read = replace(
+        _site("site-read", "output", ("x",)),
+        accept=("application/pdf",),
+        size=Size(250.38),
+        render=PurePosixPath("main.typ"),
+    )
+    sites = (host, read)
+
+    page = resolve_projection(graph, sites, _request(host, "x"))
+    report = resolve_projection(graph, sites, _request(read, "x"))
+
+    assert (page.accept, page.size) == (("image/svg+xml",), None)
+    assert (report.accept, report.size) == (("application/pdf",), Size(250.38))
 
 
 def test_repeated_literal_sites_resolve_without_static_owner_rejection(

@@ -26,7 +26,6 @@ from marimo_studio.view_providers import (
 from marimo_studio.view_providers._artifact_sites import (
     ArtifactSite,
     media_accept,
-    media_sizes,
 )
 from marimo_studio.view_providers._targets import (
     MAX_CELL_TARGETS,
@@ -232,6 +231,23 @@ def _unique_ref(
     return candidates[0]
 
 
+def _accept(
+    sites: tuple[ArtifactSite, ...],
+    site: ArtifactSite,
+    target: str,
+) -> tuple[str, ...]:
+    """Return the media types one site reads ``target`` in.
+
+    A render read and a value site keep their own list. A page output host
+    reads its target in the form the page's literal output hosts declare.
+    """
+    if site.render is not None or site.kind == "value":
+        return site.accept
+    if site.kind == "output":
+        return media_accept(sites, "output").get(target, ())
+    return ()
+
+
 def resolve_projection(
     graph: NotebookSymbolGraph,
     sites: tuple[ArtifactSite, ...],
@@ -284,14 +300,8 @@ def resolve_projection(
         producer=producer,
         selector=selector,
         dependency_closure=graph.dependency_closure(producer),
-        accept=(
-            media_accept(sites, "output").get(request.target, ())
-            if site.kind == "output"
-            else site.accept
-            if site.kind == "value"
-            else ()
-        ),
-        size=media_sizes(sites).get(request.target) if site.kind == "output" else None,
+        accept=_accept(sites, site, request.target),
+        size=site.size,
     )
 
 

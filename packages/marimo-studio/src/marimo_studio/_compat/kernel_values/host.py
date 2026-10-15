@@ -177,6 +177,7 @@ class PrivateKernelProjectionHost:
         *,
         consumer_id: str,
         runtime_cell_refs: Mapping[CellRef, str],
+        reader: str | None = None,
     ) -> ValueReadResult:
         session = current_session(context, session_id)
         if session is None:
@@ -193,6 +194,7 @@ class PrivateKernelProjectionHost:
             _bind_projections(state, projections, runtime_cell_refs),
             _bind_projections(state, active_projections, runtime_cell_refs),
             consumer_id=consumer_id,
+            reader=reader,
         )
 
     async def render_outputs(
@@ -205,6 +207,7 @@ class PrivateKernelProjectionHost:
         *,
         consumer_id: str,
         runtime_cell_refs: Mapping[CellRef, str],
+        reader: str | None = None,
     ) -> OutputRenderResult:
         session = current_session(context, session_id)
         if session is None:
@@ -221,6 +224,7 @@ class PrivateKernelProjectionHost:
             _bind_projections(state, projections, runtime_cell_refs),
             _bind_projections(state, active_projections, runtime_cell_refs),
             consumer_id=consumer_id,
+            reader=reader,
         )
 
     async def sync_query(

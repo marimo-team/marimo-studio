@@ -125,6 +125,7 @@ def install_browser_bridge(
         "sites": {},
         "variables": frozenset(),
         "accept": {},
+        "read_accept": {},
         "rows": frozenset(),
         "sizes": {},
     }
@@ -269,7 +270,9 @@ def install_browser_bridge(
         for site in args.sites:
             if (
                 not isinstance(site, dict)
-                or set(site) != {"id", "kind", "source", "targets", "accept", "size"}
+                or set(site)
+                != {"id", "kind", "source", "targets", "accept", "size", "render"}
+                or not (site["render"] is None or isinstance(site["render"], str))
                 or not isinstance(site["id"], str)
                 or not site["id"]
                 or site["id"] in sites
@@ -313,6 +316,7 @@ def install_browser_bridge(
             if size is not None:
                 if (
                     site["kind"] != "output"
+                    or site["render"] is None
                     or not accept
                     or not isinstance(size, dict)
                     or set(size) != {"width", "height"}
@@ -351,28 +355,35 @@ def install_browser_bridge(
                 "generation": generation,
                 "applied": True,
             }
-        # The same maps as Studio's media_accept() and media_sizes(): each
-        # literal output target's media types and size, and each value target
-        # a document reads as JSON rows.
+        # The same rules as Studio's projection resolution: a page output
+        # target reads in the media types its literal page hosts declare, and
+        # a render read keeps its own media types and size, and reads values
+        # as JSON rows.
         accept = {}
+        read_accept = {}
         rows = set()
         sizes = {}
         for site in sites.values():
-            for target in site["targets"] or ():
+            if site["render"] is not None:
                 if site["kind"] == "output":
-                    accept.setdefault(target, tuple(site["accept"]))
+                    read_accept[site["id"]] = tuple(site["accept"])
                     if site["size"] is not None:
-                        sizes[target] = _studio_values.Size(
+                        sizes[site["id"]] = _studio_values.Size(
                             site["size"]["width"], site["size"]["height"]
                         )
-                elif site["kind"] == "value" and site["accept"]:
-                    rows.add(target)
+                elif site["kind"] == "value":
+                    rows.add(site["id"])
+                continue
+            if site["kind"] == "output":
+                for target in site["targets"] or ():
+                    accept.setdefault(target, tuple(site["accept"]))
         _studio_projection_authorization.update(
             generation=generation,
             revision=revision,
             sites=sites,
             variables=variables,
             accept=accept,
+            read_accept=read_accept,
             rows=frozenset(rows),
             sizes=sizes,
         )
@@ -382,8 +393,11 @@ def install_browser_bridge(
             "applied": True,
         }
 
-    def _studio_projection_selectors(revision, projections, kind):
-        """Return the selector of each requested target."""
+    def _studio_projection_selectors(revision, projections, kind, site_ids=None):
+        """Return the selector of each requested target.
+
+        ``site_ids``, when given, receives the site ID of each requested target.
+        """
         if revision != _studio_projection_authorization["revision"]:
             raise ValueError("The projection request revision is not active.")
         if not isinstance(projections, list):
@@ -426,14 +440,17 @@ def install_browser_bridge(
                     "The projection variable has no unique notebook producer."
                 )
             selectors[request["target"]] = selector
+            if site_ids is not None:
+                site_ids[request["target"]] = request["siteId"]
         return selectors
 
     def _studio_read(args):
         values = {}
         errors = {}
+        site_ids = {}
         try:
             requested = _studio_projection_selectors(
-                args.revision, args.projections, "value"
+                args.revision, args.projections, "value", site_ids
             )
             active_selectors = _studio_projection_selectors(
                 args.revision, args.active_projections, "value"
@@ -494,7 +511,8 @@ def install_browser_bridge(
                         value,
                         json_read,
                         arrow_read,
-                        selector in _studio_projection_authorization["rows"],
+                        site_ids.get(selector)
+                        in _studio_projection_authorization["rows"],
                     )
                 except _StudioProjectionError as error:
                     errors[selector] = _studio_error(error.code, error)
@@ -721,9 +739,10 @@ def install_browser_bridge(
     def _studio_render(args):
         outputs = {}
         errors = {}
+        site_ids = {}
         try:
             requested = _studio_projection_selectors(
-                args.revision, args.projections, "output"
+                args.revision, args.projections, "output", site_ids
             )
             active_selectors = _studio_projection_selectors(
                 args.revision, args.active_projections, "output"
@@ -795,8 +814,14 @@ def install_browser_bridge(
                     )
                     continue
                 owner = _studio_owner(consumer_id, selector)
-                accept = _studio_projection_authorization["accept"].get(selector, ())
-                drawn = _studio_projection_authorization["sizes"].get(selector)
+                site_id = site_ids.get(selector)
+                read_accept = _studio_projection_authorization["read_accept"]
+                accept = (
+                    read_accept[site_id]
+                    if site_id in read_accept
+                    else _studio_projection_authorization["accept"].get(selector, ())
+                )
+                drawn = _studio_projection_authorization["sizes"].get(site_id)
                 try:
                     mimetype, data = _studio_format(owner, value, accept, drawn)
                 except _studio_values.RepresentationError as error:

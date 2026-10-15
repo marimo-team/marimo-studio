@@ -30,7 +30,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._artifact_sites import ArtifactSite
 from marimo_studio.view_providers._host.records import ProviderProvenance
-from marimo_studio.view_providers._targets import MAX_CELL_TARGETS
+from marimo_studio.view_providers._targets import MAX_CELL_TARGETS, MAX_RENDERS
 from marimo_studio.view_providers._validation import (
     validate_artifact_site,
     validate_project_diagnostic,
@@ -188,7 +188,9 @@ def _size(value: object, label: str) -> Size | None:
 
 
 def _artifact_site(value: object, label: str) -> ArtifactSite:
-    data = _object(value, {"id", "kind", "source", "targets", "accept", "size"}, label)
+    data = _object(
+        value, {"id", "kind", "source", "targets", "accept", "size", "render"}, label
+    )
     kind = _string(data["kind"], f"{label} kind")
     raw_targets = data["targets"]
     targets = (
@@ -209,6 +211,11 @@ def _artifact_site(value: object, label: str) -> ArtifactSite:
             data["accept"], f"{label} accept", maximum=MAX_ACCEPTED_MEDIA_TYPES
         ),
         size=_size(data["size"], f"{label} size"),
+        render=(
+            None
+            if data["render"] is None
+            else normalized_artifact_path(data["render"], f"{label} render")
+        ),
     )
     try:
         return validate_artifact_site(site)
@@ -276,16 +283,16 @@ def _artifact_identity(
     template: ArtifactTemplate | None = None,
 ) -> dict[str, object]:
     identity: dict[str, object] = {
-        "schema": 3,
+        "schema": 4,
         "document": document,
         "files": _file_records(files),
         "sites": [item.to_dict() for item in sites],
     }
     if template is not None:
         identity["template"] = {
-            "document": template.document.as_posix(),
             "files": _file_records(template.files),
             "renderer": template.renderer,
+            "renders": [source.as_posix() for source in template.renders],
         }
     return identity
 
@@ -328,10 +335,11 @@ def artifact_manifest(
         _invalid("Artifact file manifest contains case-equivalent paths")
     if len({site.id for site in sites}) != len(sites):
         _invalid("Artifact projection sites must have unique IDs")
-    if template is not None and template.document not in {
-        item.path for item in template.files
-    }:
-        _invalid("Artifact template document is not present in its file manifest")
+    renders = set(template.renders) if template is not None else set()
+    if template is not None and (len(renders) != len(template.renders) or not renders):
+        _invalid("Artifact template must name each render source once")
+    if any(site.render is not None and site.render not in renders for site in sites):
+        _invalid("Artifact render read names a render the artifact does not publish")
     revision = artifact_revision(path.as_posix(), files, sites, template)
     return ArtifactManifest(revision, path, files, sites, template)
 
@@ -361,7 +369,7 @@ def _artifact_files(value: object, label: str) -> tuple[ArtifactFile, ...]:
 
 
 def decode_artifact_manifest(value: object) -> ArtifactManifest:
-    _require_schema(value, 3, "Artifact manifest")
+    _require_schema(value, 4, "Artifact manifest")
     fields = {"schema", "artifact_revision", "document", "files", "sites"}
     if isinstance(value, dict) and "template" in value:
         fields.add("template")
@@ -377,16 +385,18 @@ def decode_artifact_manifest(value: object) -> ArtifactManifest:
     if "template" in data:
         template_data = _object(
             data["template"],
-            {"document", "files", "renderer"},
+            {"files", "renderer", "renders"},
             "Artifact template",
         )
         template = ArtifactTemplate(
-            normalized_artifact_path(
-                template_data["document"],
-                "Artifact template document",
-            ),
             _artifact_files(template_data["files"], "Artifact template files"),
             _string(template_data["renderer"], "Artifact template renderer"),
+            tuple(
+                normalized_artifact_path(item, "Artifact render source")
+                for item in _array(
+                    template_data["renders"], "Artifact renders", maximum=MAX_RENDERS
+                )
+            ),
         )
     manifest = artifact_manifest(
         data["document"],

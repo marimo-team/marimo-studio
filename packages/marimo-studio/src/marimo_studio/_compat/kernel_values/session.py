@@ -598,12 +598,18 @@ async def read_session_values(
     *,
     consumer_id: str,
     timeout: float | None = 5.0,
+    reader: str | None = None,
 ) -> ValueReadResult:
-    """Read exact selectors through a Marimo session's command queue."""
+    """Read exact selectors through a Marimo session's command queue.
+
+    ``reader`` names the kernel-side owner of the read, so a render's reads
+    keep their own active selectors beside the browser connection's.
+    """
     from marimo._types.ids import ConsumerId
 
+    owner = reader or consumer_id
     consumer = session.room.get_consumer(ConsumerId(consumer_id))
-    if consumer is not None and hasattr(consumer, "on_detach"):
+    if consumer is not None and hasattr(consumer, "on_detach") and reader is None:
         _attach_value_cleanup(session, consumer, consumer_id, revision)
     expected_selectors = frozenset(
         projection.projection.request.target for projection in projections
@@ -614,7 +620,7 @@ async def read_session_values(
         args=authorized_value_arguments(
             revision,
             projections,
-            consumer_id,
+            owner,
             active_projections,
         ),
         consumer_id=consumer_id,
@@ -656,12 +662,17 @@ async def render_session_outputs(
     consumer_id: str,
     timeout: float = 5.0,
     max_output_bytes: int = MAX_OUTPUT_BYTES,
+    reader: str | None = None,
 ) -> OutputRenderResult:
-    """Render exact selectors through a Marimo session's command queue."""
+    """Render exact selectors through a Marimo session's command queue.
+
+    ``reader`` names the kernel-side owner of the outputs, as for values.
+    """
     from marimo._types.ids import ConsumerId
 
+    owner = reader or consumer_id
     consumer = session.room.get_consumer(ConsumerId(consumer_id))
-    if consumer is not None and hasattr(consumer, "on_detach"):
+    if consumer is not None and hasattr(consumer, "on_detach") and reader is None:
         _attach_output_cleanup(session, consumer, consumer_id, revision)
     result = await _invoke_session_function(
         session,
@@ -671,7 +682,7 @@ async def render_session_outputs(
                 revision,
                 projections,
                 active_projections,
-                consumer_id,
+                owner,
             ),
             "max_output_bytes": max_output_bytes,
         },

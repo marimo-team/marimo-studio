@@ -24,11 +24,14 @@ from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers import (
     BuildResult,
     JsonValue,
+    ProjectInspection,
     ProviderCancellation,
     ProviderCommandResult,
     ProviderError,
     ProviderRunner,
+    Render,
     RenderCell,
+    RenderFile,
     RenderOutput,
     RenderRequest,
     RenderValue,
@@ -100,15 +103,15 @@ def _render(
     cells: Mapping[str, Representation] | None = None,
     runner: ProviderRunner | None = None,
     timeout: float = 60.0,
-    document: PurePosixPath = MAIN,
+    source: PurePosixPath = MAIN,
 ):
     output = project.root.parent / f"output-{time.monotonic_ns()}"
     output.mkdir()
     cancellation = ProviderCancellation()
     return output, provider.render(
         RenderRequest(
+            source=source,
             template_root=project.root,
-            document=document,
             values=values,
             outputs=outputs or {},
             cells=cells or {},
@@ -119,6 +122,13 @@ def _render(
             command_timeout=timeout,
         )
     )
+
+
+def _reads(inspection: ProjectInspection) -> Render:
+    """Return the one render a LaTeX view declares."""
+    (render,) = inspection.renders
+    assert render.source == MAIN
+    return render
 
 
 def test_latex_reads_literal_selectors_outside_comments_and_verbatim(
@@ -148,7 +158,7 @@ def test_latex_reads_literal_selectors_outside_comments_and_verbatim(
     inspection = inspect_view_project_sync(project)
 
     assert inspection.diagnostics == ()
-    assert [(item.target, item.source) for item in inspection.render_values] == [
+    assert [(item.target, item.source) for item in _reads(inspection).values] == [
         ("summary.rooms", SourceLocation(MAIN, 5, 8)),
         ('rows[0]["name"]', SourceLocation(MAIN, 5, 49)),
         ("flag", SourceLocation(MAIN, 6, 27)),
@@ -158,13 +168,13 @@ def test_latex_reads_literal_selectors_outside_comments_and_verbatim(
         ("days", SourceLocation(MAIN, 17, 1)),
         ("peak", SourceLocation(MAIN, 17, 45)),
     ]
-    (output,) = inspection.render_outputs
+    (output,) = _reads(inspection).outputs
     assert (output.target, output.source) == (
         "charts.sweep",
         SourceLocation(MAIN, 14, 1),
     )
     assert output.accept == ("application/pdf", "image/png", "image/jpeg")
-    (cell,) = inspection.render_cells
+    (cell,) = _reads(inspection).cells
     assert (cell.target, cell.source) == ("revenue_plot", SourceLocation(MAIN, 15, 1))
     assert {item.path.as_posix() for item in inspection.documents} == {
         "AGENTS.md",
@@ -190,7 +200,7 @@ def test_verbatim_arguments_neither_hide_nor_add_reads(tmp_path: Path) -> None:
 
     inspection = inspect_view_project_sync(project)
 
-    assert [item.target for item in inspection.render_values] == [
+    assert [item.target for item in _reads(inspection).values] == [
         "after.code",
         "after.listing",
         "after.url",
@@ -209,7 +219,7 @@ def test_a_comment_inside_a_selector_joins_its_lines_as_tex_does(
     inspection = inspect_view_project_sync(project)
 
     assert inspection.diagnostics == ()
-    assert [item.target for item in inspection.render_values] == [
+    assert [item.target for item in _reads(inspection).values] == [
         "summary.rooms",
         "share",
     ]
@@ -358,7 +368,7 @@ def test_values_that_need_too_many_definitions_fail_before_tex_runs(
 
     _output, result = _render(project, {"readings": readings, "notes": notes})
 
-    assert result.document is None
+    assert result.main is None
     (diagnostic,) = result.diagnostics
     assert diagnostic.code == "latex-values-too-large"
     assert diagnostic.message == (
@@ -431,7 +441,7 @@ def test_errors_in_included_files_name_the_file_and_where_tex_stopped(
 
     _output, result = _render(project, {}, runner=_Tectonic(1, stderr))
 
-    assert result.document is None
+    assert result.main is None
     (diagnostic,) = result.diagnostics
     assert diagnostic.code == "latex-compile-error"
     assert diagnostic.message == (
@@ -560,6 +570,7 @@ def _build(
     *,
     cancelled: bool = False,
 ) -> BuildResult:
+    staging.mkdir(exist_ok=True)
     request = provider_build_request(
         project, inspect_view_project_sync(project), staging
     )
@@ -581,7 +592,7 @@ def test_a_build_compiles_once_within_the_build_budget(
 
     result = _build(project, tmp_path / "staging", Recording(0, ""))
 
-    assert result.document == MAIN
+    assert result.document == PurePosixPath("index.html")
     assert compiles == [120.0]
 
 
@@ -608,9 +619,11 @@ def test_a_build_reports_the_widest_size_the_document_places_each_figure_at(
     result = _build(project, tmp_path / "staging", _Tectonic(0, "", log))
 
     assert result.output_sizes == {
-        "occupancy_heatmap": Size(513),
-        "teaser_figure": Size(465.47974, 120),
-        'rows[0]["a long selector that TeX breaks across log lines"]': Size(216),
+        MAIN: {
+            "occupancy_heatmap": Size(513),
+            "teaser_figure": Size(465.47974, 120),
+            'rows[0]["a long selector that TeX breaks across log lines"]': Size(216),
+        }
     }
 
 
@@ -622,7 +635,7 @@ def test_sizes_after_a_log_line_broken_at_its_limit_are_read(
 
     result = _build(project, tmp_path / "staging", _Tectonic(0, "", log))
 
-    assert result.output_sizes == {"occupancy_heatmap": Size(250.38)}
+    assert result.output_sizes == {MAIN: {"occupancy_heatmap": Size(250.38)}}
 
 
 def test_marimo_warnings_in_the_log_appear_beside_the_document(
@@ -758,7 +771,7 @@ def test_warnings_locate_undefined_references_and_bibliography_errors(
 
     _output, result = _render(project, {}, runner=_Tectonic(0, stderr, log, bibtex))
 
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
     assert [(item.message, item.source) for item in result.diagnostics] == [
         (
             "Overfull \\hbox (17.66pt too wide) in alignment at lines 5--5",
@@ -788,16 +801,16 @@ def test_warnings_locate_undefined_references_and_bibliography_errors(
 
 @pytest.mark.pixi
 @tectonic
-def test_latex_starter_publishes_a_pdf(tmp_path: Path) -> None:
+def test_latex_starter_publishes_a_page_showing_the_render_of_its_entry(
+    tmp_path: Path,
+) -> None:
     project = _project(tmp_path)
 
     published = publish(project)
 
-    assert set(published.files) == {
-        PurePosixPath("index.html"),
-        PurePosixPath("main.pdf"),
-    }
-    assert published.files[PurePosixPath("main.pdf")].startswith(b"%PDF-")
+    assert set(published.files) == {PurePosixPath("index.html")}
+    page = published.files[PurePosixPath("index.html")].decode()
+    assert '<marimo-output render="main.tex"></marimo-output>' in page
 
 
 @pytest.mark.pixi
@@ -815,8 +828,11 @@ def test_render_binds_notebook_values(
 
     output, result = _render(project, {"n": value})
 
-    assert (result.document is not None) is succeeds
+    assert (result.main is not None) is succeeds
     if succeeds:
+        assert result.files == (
+            RenderFile(PurePosixPath("main.pdf"), "application/pdf"),
+        )
         assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
     else:
         (diagnostic,) = result.diagnostics
@@ -836,7 +852,7 @@ def test_notebook_text_longer_than_a_tex_line_still_renders(tmp_path: Path) -> N
     )
 
     assert result.diagnostics == ()
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
 
 
 @pytest.mark.pixi
@@ -878,7 +894,7 @@ def test_rows_repeat_for_each_item_with_its_selector_and_position(
     )
 
     assert result.diagnostics == ()
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
 
 
 @pytest.mark.pixi
@@ -934,7 +950,7 @@ def test_reads_typeset_their_values_in_the_document_s_formats(tmp_path: Path) ->
     )
 
     assert result.diagnostics == ()
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
 
 
 @pytest.mark.pixi
@@ -968,7 +984,7 @@ def test_formats_loops_and_null_compose(tmp_path: Path) -> None:
     )
 
     assert result.diagnostics == ()
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
 
 
 @pytest.mark.pixi
@@ -995,13 +1011,13 @@ def test_reads_studio_did_not_supply_name_their_cause(
 
     _output, result = _render(project, {"n": 7})
 
-    assert result.document is None
+    assert result.main is None
     assert result.diagnostics[0].message.startswith(f"Package marimo Error: {message}")
 
 
 @pytest.mark.pixi
 @tectonic
-def test_a_build_publishes_where_the_document_places_each_figure(
+def test_a_build_records_where_the_document_places_each_figure(
     tmp_path: Path,
 ) -> None:
     project = _project(
@@ -1019,7 +1035,7 @@ def test_a_build_publishes_where_the_document_places_each_figure(
         sizes = {
             site.targets: site.size
             for site in published.artifact.sites
-            if site.kind == "output"
+            if site.kind == "output" and site.render == MAIN
         }
 
     # TeX measures in scaled points, so the lengths land within a hair of bp.
@@ -1159,7 +1175,7 @@ def test_a_matplotlib_figure_is_placed_as_pdf(tmp_path: Path) -> None:
             "\\expect{\\ifdim\\wd0=8cm }{the figure lost its width}\\usebox0"
         ),
     )
-    (read,) = inspect_view_project_sync(project).render_outputs
+    (read,) = _reads(inspect_view_project_sync(project)).outputs
 
     chart = represent(figure, read.accept)
     output, result = _render(project, {}, outputs={"chart": chart})
@@ -1190,7 +1206,7 @@ def test_a_frame_of_the_placed_size_stands_in_for_a_pending_figure(
     _output, result = _render(project, {})
 
     assert result.diagnostics == ()
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
 
 
 @pytest.mark.pixi
@@ -1255,7 +1271,7 @@ def test_documents_compile_without_shell_escape(tmp_path: Path) -> None:
 
     _output, result = _render(project, {})
 
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
     assert not marker.exists()
 
 
@@ -1272,12 +1288,10 @@ def test_an_entry_in_a_folder_reads_values_beside_it(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    _output, result = _render(
-        project, {"n": 7}, document=PurePosixPath("paper/main.tex")
-    )
+    _output, result = _render(project, {"n": 7}, source=PurePosixPath("paper/main.tex"))
 
     assert result.diagnostics == ()
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
 
 
 @pytest.mark.pixi
@@ -1310,7 +1324,7 @@ def test_escaped_text_has_every_glyph_in_t1_fonts(tmp_path: Path) -> None:
     _output, result = _render(project, {"text": f"{''.join(_SYMBOLS)} {latin}"})
 
     assert result.diagnostics == ()
-    assert result.document == PurePosixPath("main.pdf")
+    assert result.main == PurePosixPath("main.pdf")
 
 
 @pytest.mark.pixi
@@ -1385,8 +1399,7 @@ def test_build_uses_default_for_computed_output_targets(
 
     result = _build(project, tmp_path / "staging", _Tectonic(0, "", log))
 
-    assert result.document == MAIN
-    assert result.output_sizes == {}
+    assert result.output_sizes == {MAIN: {}}
 
 
 @pytest.mark.parametrize(
@@ -1403,4 +1416,4 @@ def test_inspection_distinguishes_control_symbols_and_projection_macros(
     expected: list[str],
 ) -> None:
     inspection = inspect_view_project_sync(_project(tmp_path, _document(body)))
-    assert [read.target for read in inspection.render_values] == expected
+    assert [read.target for read in _reads(inspection).values] == expected

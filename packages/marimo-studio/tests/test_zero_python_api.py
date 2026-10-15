@@ -59,7 +59,7 @@ class _PreparedView:
                 "state_fingerprint": "c" * 64,
                 "refresh_interval_ms": refresh_interval_ms,
             },
-            "projections": {"cells": {}, "outputs": {}, "values": {}},
+            "projections": {"cells": {}, "outputs": {}, "values": {}, "renders": {}},
             "document_sha256": "d" * 64,
             "view": "dashboard",
             "plan_digest": self.plan_digest,

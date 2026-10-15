@@ -214,7 +214,7 @@ view.toml
 ```
 
 Provider inspection returns Source documents, build inputs, projection sites,
-diagnostics, and the values and outputs a rendered document reads. Core
+diagnostics, and the renders a view declares with the results each reads. Core
 enumerates the build inputs for revisions, snapshots, and watching. A document
 can be visible in Source while remaining read-only. A binary asset can affect a
 build while staying outside the text editor.

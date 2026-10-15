@@ -6,5 +6,6 @@ export type {
   StudioPreparedContext,
   StudioPreparedManifest,
   StudioProjectionBindings,
+  StudioTargetBindings,
   ZeroPythonRuntimeData,
 } from "./metadata-records.ts";

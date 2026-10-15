@@ -10,7 +10,7 @@ from marimo_export.manifest import prepared_manifest_bytes
 def prepared_view_manifest(
     prepared: Mapping[str, object],
     *,
-    projections: Mapping[str, Mapping[str, str]],
+    projections: Mapping[str, object],
     document_sha256: str,
     view: str,
     plan_digest: str,
@@ -19,7 +19,7 @@ def prepared_view_manifest(
     manifest: dict[str, object] = {
         "schema": "marimo-studio.prepared.v1",
         "prepared": dict(prepared),
-        "projections": {name: dict(values) for name, values in projections.items()},
+        "projections": dict(projections),
         "document_sha256": document_sha256,
         "view": view,
         "plan_digest": plan_digest,

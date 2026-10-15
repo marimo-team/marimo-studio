@@ -9,6 +9,7 @@ import {
   PROJECTION_SITE_ATTRIBUTE,
 } from "../projections/identity.ts";
 import { resetProjectionHostMetadata } from "../projections/instances.ts";
+import { RenderHost, type RenderRecord } from "../renders/host.ts";
 
 export type OutputHostState = "connecting" | "loading" | "stale" | "ready" | "error";
 
@@ -61,11 +62,31 @@ const releaseOutputHost = (host: MarimoOutputElement) => {
   notifyProjectionChanged();
 };
 
+/**
+ * `<marimo-output value="...">` shows a notebook output, and
+ * `<marimo-output render="...">` shows one of the view's renders. A render
+ * host is no projection site: Studio authorizes it by the render sources the
+ * artifact declares.
+ */
 export class MarimoOutputElement extends HTMLElement {
-  static observedAttributes = ["value", PROJECTION_SITE_ATTRIBUTE];
-  /** The output this host shows, as marimo rendered it. */
-  marimoOutput: RenderedOutput | undefined;
+  static observedAttributes = ["value", "render", PROJECTION_SITE_ATTRIBUTE];
   private hasRendered = false;
+  private output?: RenderedOutput;
+  private renderHost?: RenderHost;
+
+  /** The output a value host shows, as marimo rendered it. */
+  get marimoOutput(): RenderedOutput | undefined {
+    return this.output;
+  }
+
+  set marimoOutput(output: RenderedOutput | undefined) {
+    this.output = output;
+  }
+
+  /** The rendered files a render host shows. */
+  get marimoRender(): RenderRecord | undefined {
+    return this.renderHost?.current;
+  }
 
   get valueSelector(): string {
     return this.getAttribute("value")?.trim() ?? "";
@@ -73,6 +94,10 @@ export class MarimoOutputElement extends HTMLElement {
 
   connectedCallback() {
     if (!isArtifactProjectionHost(this)) {
+      return;
+    }
+    if (this.hasAttribute("render")) {
+      this.startRender();
       return;
     }
     prepareOutputHost(this);
@@ -85,7 +110,11 @@ export class MarimoOutputElement extends HTMLElement {
 
   connectedMoveCallback() {
     if (!isArtifactProjectionHost(this)) {
+      this.stopRender();
       releaseOutputHost(this);
+      return;
+    }
+    if (this.renderHost) {
       return;
     }
     if (!hosts.has(this)) {
@@ -104,12 +133,22 @@ export class MarimoOutputElement extends HTMLElement {
       if (this.isConnected && isArtifactProjectionHost(this)) {
         return;
       }
+      this.stopRender();
       releaseOutputHost(this);
     });
   }
 
-  attributeChangedCallback(_name: string, previous: string | null, current: string | null) {
-    if (!this.isConnected || previous === current || !isArtifactProjectionHost(this)) {
+  attributeChangedCallback(name: string, previous: string | null, current: string | null) {
+    if (!this.isConnected || previous === current) {
+      return;
+    }
+    if (name === "render" || (this.renderHost && name === "value")) {
+      this.stopRender();
+      releaseOutputHost(this);
+      this.connectedCallback();
+      return;
+    }
+    if (this.renderHost || !isArtifactProjectionHost(this)) {
       return;
     }
     resetProjectionHostMetadata(this);
@@ -123,10 +162,31 @@ export class MarimoOutputElement extends HTMLElement {
     this.hasRendered = true;
     return updated;
   }
+
+  private startRender(): void {
+    // Upgrading a parsed host reports its attributes before connecting it.
+    if (this.renderHost) {
+      return;
+    }
+    // A render host presents in its own shadow root. A value host keeps its
+    // light DOM for native output, so the root falls back to a slot.
+    const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
+    this.renderHost = new RenderHost(this, this.getAttribute("render")?.trim() ?? "", root);
+    this.renderHost.connect();
+  }
+
+  private stopRender(): void {
+    if (!this.renderHost) {
+      return;
+    }
+    this.renderHost.disconnect();
+    this.renderHost = undefined;
+    this.shadowRoot?.replaceChildren(document.createElement("slot"));
+  }
 }
 
 export const prepareOutputHost = (host: Element) => {
-  if (!isArtifactProjectionHost(host)) {
+  if (host.hasAttribute("render") || !isArtifactProjectionHost(host)) {
     return;
   }
   const selector = host.getAttribute("value")?.trim();

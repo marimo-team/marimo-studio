@@ -95,7 +95,7 @@ test("cell sites accept native names and configured aliases", () => {
   assert.deepEqual(parsed.sites[0]?.targets, targets);
 });
 
-test("document cell reads list the media types they accept", () => {
+test("page cell sites list the media types they accept", () => {
   const parsed = parseRuntimeConfig(
     runtimeConfig({ sites: [{ ...symbolicRuntimeFields.sites[0], accept: ["image/png"] }] }),
     configUrl,
@@ -104,23 +104,33 @@ test("document cell reads list the media types they accept", () => {
   assert.deepEqual(parsed.sites[0]?.accept, ["image/png"]);
 });
 
-test("document reads carry their JSON value accept list and measured output size", () => {
+test("render reads name their render, JSON value accept list, and measured output size", () => {
   const parsed = parseRuntimeConfig(
     runtimeConfig({
       sites: [
-        { ...symbolicRuntimeFields.sites[0], kind: "value", accept: ["application/json"] },
+        {
+          ...symbolicRuntimeFields.sites[0],
+          kind: "value",
+          accept: ["application/json"],
+          render: "main.typ",
+        },
         {
           ...symbolicRuntimeFields.sites[0],
           id: "site-output",
           kind: "output",
           accept: ["application/pdf"],
           size: { width: 250.38, height: null },
+          render: "main.typ",
         },
       ],
     }),
     configUrl,
   );
 
+  assert.deepEqual(
+    parsed.sites.map((site) => site.render),
+    ["main.typ", "main.typ"],
+  );
   assert.deepEqual(parsed.sites[0]?.accept, ["application/json"]);
   assert.deepEqual(parsed.sites[1]?.size, { width: 250.38, height: null });
 });
@@ -218,6 +228,9 @@ test("runtime configuration rejects malformed contracts", () => {
       sites: [{ ...symbolicRuntimeFields.sites[0], kind: "value", accept: ["image/png"] }],
     }),
     runtimeConfig({
+      sites: [{ ...symbolicRuntimeFields.sites[0], kind: "value", accept: ["application/json"] }],
+    }),
+    runtimeConfig({
       sites: [{ ...symbolicRuntimeFields.sites[0], size: { width: 200, height: null } }],
     }),
     runtimeConfig({
@@ -226,9 +239,32 @@ test("runtime configuration rejects malformed contracts", () => {
           ...symbolicRuntimeFields.sites[0],
           kind: "output",
           accept: ["application/pdf"],
-          size: { width: 0, height: null },
+          size: { width: 200, height: null },
         },
       ],
+    }),
+    runtimeConfig({
+      sites: [
+        {
+          ...symbolicRuntimeFields.sites[0],
+          kind: "output",
+          accept: ["application/pdf"],
+          size: { width: 0, height: null },
+          render: "main.typ",
+        },
+      ],
+    }),
+    runtimeConfig({
+      sites: [{ ...symbolicRuntimeFields.sites[0], accept: ["image/png"], render: "../main.typ" }],
+    }),
+    runtimeConfig({
+      sites: [{ ...symbolicRuntimeFields.sites[0], accept: [], render: "main.typ" }],
+    }),
+    runtimeConfig({
+      sites: [{ ...symbolicRuntimeFields.sites[0], targets: null, render: "main.typ" }],
+    }),
+    runtimeConfig({
+      sites: [{ ...symbolicRuntimeFields.sites[0], kind: "value", accept: [], render: "main.typ" }],
     }),
     runtimeConfig({
       sites: [

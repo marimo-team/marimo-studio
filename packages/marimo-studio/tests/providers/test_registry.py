@@ -15,9 +15,14 @@ from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
+    BuildInput,
+    BuildRequest,
     BuildResult,
     ProviderAvailability,
+    Render,
+    RenderOutput,
     Size,
+    SourceLocation,
     ViewProject,
 )
 from marimo_studio.view_providers._host.registry import (
@@ -427,16 +432,14 @@ def test_public_build_surfaces_provider_process_cleanup_failure(
         build_view_project_sync(project)
 
 
-@pytest.mark.parametrize(
-    ("output_sizes", "error"),
-    (
-        ({"chart": Size(250.38)}, "measured 'chart'"),
-        (None, "output_sizes as a mapping"),
-    ),
+_FIGURE = RenderOutput(
+    "figure", SourceLocation(PurePosixPath("index.html"), 1, 1), ("image/png",)
 )
-def test_a_build_measures_only_the_outputs_its_document_reads(
-    tmp_path: Path, output_sizes: object, error: str
-) -> None:
+_REPORT = PurePosixPath("report.typ")
+
+
+def _render_build(tmp_path: Path, output_sizes: object) -> tuple[Any, BuildRequest]:
+    """Return an installed provider whose build measures ``output_sizes``."""
     provider = ProviderStub("example/project", "default")
     registry = ProviderRegistry((candidate("project", provider),))
     installed = registry.get(registry.ids[0])
@@ -447,18 +450,69 @@ def test_a_build_measures_only_the_outputs_its_document_reads(
     project.root.joinpath("index.html").write_text(
         "<!doctype html><html></html>", encoding="utf-8"
     )
+    project.root.joinpath(_REPORT).write_text("Report", encoding="utf-8")
     staging = tmp_path / "staging"
     staging.mkdir()
     staging.joinpath("index.html").write_text("<!doctype html><html></html>")
-    cast(Any, provider).build = lambda _request: BuildResult(
-        PurePosixPath("index.html"), output_sizes=cast(Any, output_sizes)
-    )
     request = provider_build_request(
         project,
-        inspection(),
+        replace(
+            inspection(),
+            inputs=(
+                *inspection().inputs,
+                BuildInput(_REPORT, "file"),
+            ),
+            renders=(Render(_REPORT, outputs=(_FIGURE,)),),
+        ),
         staging,
         cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
     )
+    cast(Any, provider).build = lambda _request: BuildResult(
+        PurePosixPath("index.html"), output_sizes=cast(Any, output_sizes)
+    )
+    return installed, request
+
+
+def test_a_build_returns_the_sizes_each_render_measured(tmp_path: Path) -> None:
+    sizes = {_REPORT: {"figure": Size(250.38)}}
+    installed, request = _render_build(tmp_path, sizes)
+
+    result = installed.build(request)
+
+    assert result.output_sizes == sizes
+
+
+@pytest.mark.parametrize(
+    ("output_sizes", "error"),
+    (
+        (
+            {PurePosixPath("slides.typ"): {}},
+            "measured outputs for PurePosixPath\\('slides.typ'\\), which is not "
+            "a render source its inspection declared",
+        ),
+        (
+            {"report.typ": {"figure": Size(250.38)}},
+            "measured outputs for 'report.typ', which is not a render source",
+        ),
+        (
+            {_REPORT: {"chart": Size(250.38)}},
+            "measured 'chart', which is not an output the render of report.typ reads",
+        ),
+        ({_REPORT: {"figure": 250.38}}, "or gave it no Size"),
+        (None, "output_sizes as a mapping"),
+    ),
+    ids=(
+        "undeclared-source",
+        "text-source",
+        "unread-output",
+        "not-size",
+        "not-mapping",
+    ),
+)
+def test_a_build_measures_only_outputs_its_renders_read(
+    tmp_path: Path, output_sizes: object, error: str
+) -> None:
+    installed, request = _render_build(tmp_path, output_sizes)
 
     with pytest.raises(ConfigurationError, match=error):
         installed.build(request)

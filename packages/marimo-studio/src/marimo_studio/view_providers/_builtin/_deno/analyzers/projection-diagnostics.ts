@@ -7,8 +7,8 @@ type ProjectionCopy = {
 
 const PROJECTION_USAGE_HINT =
   'Use <marimo-cell name="..."> for a complete cell display, ' +
-  '<marimo-output value="..."> for one Python object, or mo-value="..." ' +
-  "when browser code needs JSON-compatible data.";
+  '<marimo-output value="..."> for one Python object, ' +
+  'or mo-value="..." when browser code needs JSON-compatible data.';
 
 const projection = {
   cell: { subject: "<marimo-cell>", attribute: "name" },
@@ -69,3 +69,16 @@ export const projectionKindConflict = (
   message: `<${tag}> cannot also declare mo-value.`,
   hint: PROJECTION_USAGE_HINT,
 });
+
+/**
+ * A `<marimo-output render>` host shows a file the view provider renders. This
+ * provider renders none, so the host would never show anything.
+ */
+export const RENDER_HOST_UNAVAILABLE = {
+  code: "projection-render-unavailable",
+  message:
+    "<marimo-output render> shows a rendered file, and this view renders none.",
+  hint:
+    'Show a notebook value with <marimo-output value="chart">, or create a ' +
+    "view with a provider that renders files, such as Typst.",
+} as const;

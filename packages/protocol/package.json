@@ -6,7 +6,6 @@
   "exports": {
     "./runtime-status": "./src/runtime-status.ts",
     "./development-events": "./src/development-events.ts",
-    "./document-render": "./src/document-render.ts",
     "./errors": "./src/errors.ts",
     "./frame-bridge": "./src/frame-bridge.ts",
     "./host-session": "./src/host-session.ts",
@@ -16,6 +15,7 @@
     "./projections": "./src/projections.ts",
     "./provider-catalog": "./src/provider-catalog.ts",
     "./query": "./src/query.ts",
+    "./render": "./src/render.ts",
     "./runtime-config": "./src/runtime-config.ts",
     "./runtime-config-stream": "./src/runtime-config-stream.ts",
     "./runtime-progress": "./src/runtime-progress.ts",

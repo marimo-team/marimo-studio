@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from importlib.metadata import EntryPoint, entry_points
+from pathlib import PurePosixPath
 
 import pytest
 
@@ -66,6 +67,12 @@ def test_every_builtin_provider_declares_its_requirement() -> None:
     }
 
 
+_DOCUMENT_ENTRIES = {
+    "latex": PurePosixPath("main.tex"),
+    "typst": PurePosixPath("main.typ"),
+}
+
+
 @pytest.mark.parametrize(("name", "placement"), _cases())
 def test_builtin_provider_passes_the_provider_check(name: str, placement: str) -> None:
     availability = provider_registry().get(f"marimo-studio/{name}").availability()
@@ -83,5 +90,9 @@ def test_builtin_provider_passes_the_provider_check(name: str, placement: str) -
     for view in views:
         assert view.published, view.starter
         assert view.warnings == (), view.starter
-        if view.rendered is not None:
-            assert view.rendered[:5] in {b"%PDF-", b"<svg ", b"\x89PNG\r"}
+        for render in view.renders.values():
+            assert render.files[render.main][:5] in {b"%PDF-", b"<svg ", b"\x89PNG\r"}
+        if name in _DOCUMENT_ENTRIES:
+            document = view.renders[_DOCUMENT_ENTRIES[name]]
+            assert document.main == PurePosixPath("main.pdf")
+            assert document.media_types[document.main] == "application/pdf"

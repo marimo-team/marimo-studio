@@ -177,11 +177,11 @@ it to a column-oriented library, and call `toArray()` where a consumer needs
 row objects. Materialize lazy or remote queries in the notebook before a view
 reads them.
 
-### Documents read JSON
+### Renders read JSON
 
-Typst and LaTeX documents read each value in its JSON form:
+Typst and LaTeX renders read each value in its JSON form:
 
-| Notebook value                              | Document reads                               |
+| Notebook value                              | Render reads                                 |
 | ------------------------------------------- | -------------------------------------------- |
 | pandas, Polars, or PyArrow table            | A list of row objects keyed by column name   |
 | `date`, `datetime`, `time`                  | ISO 8601 text, such as `2015-02-04T09:41:00` |
@@ -190,9 +190,9 @@ Typst and LaTeX documents read each value in its JSON form:
 | A step through `None`, such as `peak.label` | `null`, while `peak` is `None`               |
 | Dictionary, list, text, number, boolean     | The same value                               |
 
-The document formats what it reads. LaTeX has `\marimonum`, `\marimodate`, and
+The render source formats what it reads. LaTeX has `\marimonum`, `\marimodate`, and
 `\marimorows`, which repeats a table row for each row of a dataframe. Typst
-uses its own functions. A null value falls back to the document's default.
+uses its own functions. A null value falls back to the render source's default.
 
 A value whose JSON form holds more than 100,000 values or 1,000,000 bytes fails
 with `value-too-large`. Filter or aggregate large tables in the notebook first.

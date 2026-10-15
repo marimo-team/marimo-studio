@@ -15,7 +15,7 @@ test("renders a LaTeX document again when a notebook value changes", async ({ pa
   const diagnostics = observeBrowserContext(page.context());
   try {
     await page.goto(`${endpoint.publicUrl}/studio/paper/`);
-    const viewer = (await waitForPreview(page)).locator("marimo-document");
+    const viewer = (await waitForPreview(page)).locator('marimo-output[render="main.tex"]');
     await expect(viewer.locator(".textLayer")).toContainText("Metric is 42");
     await expect(viewer).toHaveAttribute("data-state", "ready");
 

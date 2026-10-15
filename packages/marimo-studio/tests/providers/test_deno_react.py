@@ -70,6 +70,43 @@ export const App = () => (
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_react_render_hosts_are_unavailable_and_yield_no_site(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    (root / "src" / "App.tsx").write_text(
+        """const report = "main.typ";
+export const App = () => (
+  <main>
+    <marimo-output render="main.typ" />
+    <marimo-output render={report} />
+    <marimo-output render="main.typ" value="chart" />
+  </main>
+);
+""",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert inspection.sites == ()
+    assert [
+        (diagnostic.code, diagnostic.source and diagnostic.source.line)
+        for diagnostic in inspection.diagnostics
+    ] == [
+        ("projection-render-unavailable", 4),
+        ("projection-render-unavailable", 5),
+        ("projection-render-unavailable", 6),
+    ]
+    assert inspection.diagnostics[0].message == (
+        "<marimo-output render> shows a rendered file, and this view renders none."
+    )
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_react_inspection_tracks_literal_site_identity_and_kind(
     tmp_path: Path,
 ) -> None:

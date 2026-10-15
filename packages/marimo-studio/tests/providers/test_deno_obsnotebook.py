@@ -118,6 +118,14 @@ def test_notebook_html_cells_and_template_declare_source_located_mounts(
             '<marimo-cell name="controls" data-marimo-allow="maybe"></marimo-cell>',
             "projection-wildcard-invalid",
         ),
+        (
+            '<marimo-output render="main.typ"></marimo-output>',
+            "projection-render-unavailable",
+        ),
+        (
+            '<marimo-output render="${selected}"></marimo-output>',
+            "projection-render-unavailable",
+        ),
     ],
 )
 def test_notebook_invalid_projections_fail_closed(

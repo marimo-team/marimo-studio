@@ -32,8 +32,11 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
+    Render,
     RenderCell,
+    RenderFile,
     RenderOutput,
+    RenderResult,
     RenderValue,
     Representation,
     Size,
@@ -405,9 +408,24 @@ def build_result_payload(result: BuildResult) -> dict[str, object]:
         "document": result.document.as_posix() if result.document is not None else None,
         "diagnostics": [item.to_dict() for item in result.diagnostics],
         "output_sizes": {
-            target: {"width": size.width, "height": size.height}
-            for target, size in result.output_sizes.items()
+            source.as_posix(): {
+                target: {"width": size.width, "height": size.height}
+                for target, size in sizes.items()
+            }
+            for source, sizes in result.output_sizes.items()
         },
+    }
+
+
+def render_result_payload(result: RenderResult) -> dict[str, object]:
+    return {
+        "files": [
+            {"path": item.path.as_posix(), "media_type": item.media_type}
+            for item in result.files
+        ],
+        "main": result.main.as_posix() if result.main is not None else None,
+        "preview": result.preview.as_posix() if result.preview is not None else None,
+        "diagnostics": [item.to_dict() for item in result.diagnostics],
     }
 
 
@@ -434,28 +452,17 @@ def project_from_payload(value: object) -> ViewProject:
 def inspection_from_payload(value: object) -> ProjectInspection:
     data = _record(
         value,
-        {
-            "schema",
-            "documents",
-            "inputs",
-            "sites",
-            "diagnostics",
-            "render_values",
-            "render_outputs",
-            "render_cells",
-        },
+        {"schema", "documents", "inputs", "sites", "diagnostics", "renders"},
         "provider inspection",
     )
-    if data["schema"] != 3:
+    if data["schema"] != 4:
         raise ValueError("Provider inspection schema is unsupported")
     return ProjectInspection(
         tuple(_source_document(item) for item in _items(data["documents"])),
         tuple(_build_input(item) for item in _items(data["inputs"])),
         tuple(_site(item) for item in _items(data["sites"])),
         tuple(_diagnostic(item) for item in _items(data["diagnostics"])),
-        tuple(_render_value(item) for item in _items(data["render_values"])),
-        tuple(_render_output(item) for item in _items(data["render_outputs"])),
-        tuple(_render_cell(item) for item in _items(data["render_cells"])),
+        tuple(_render(item) for item in _items(data["renders"])),
     )
 
 
@@ -469,16 +476,50 @@ def build_result_from_payload(value: object) -> BuildResult:
         if raw_document is None
         else PurePosixPath(_text(raw_document, "provider build document"))
     )
-    sizes = data["output_sizes"]
-    if not isinstance(sizes, dict):
+    measured = data["output_sizes"]
+    if not isinstance(measured, dict):
         raise ValueError("Provider output sizes must be a JSON object")
     return BuildResult(
         document,
         tuple(_diagnostic(item) for item in _items(data["diagnostics"])),
         {
-            _text(target, "provider output size target"): _size(item)
-            for target, item in sizes.items()
+            PurePosixPath(_text(source, "provider render source")): _sizes(sizes)
+            for source, sizes in measured.items()
         },
+    )
+
+
+def _sizes(value: object) -> dict[str, Size]:
+    if not isinstance(value, dict):
+        raise ValueError("Provider output sizes must be a JSON object")
+    return {
+        _text(target, "provider output size target"): _size(item)
+        for target, item in value.items()
+    }
+
+
+def render_result_from_payload(value: object) -> RenderResult:
+    data = _record(
+        value, {"files", "main", "preview", "diagnostics"}, "provider render result"
+    )
+
+    def path(item: object, label: str) -> PurePosixPath | None:
+        return None if item is None else PurePosixPath(_text(item, label))
+
+    files = []
+    for item in _items(data["files"]):
+        record = _record(item, {"path", "media_type"}, "provider rendered file")
+        files.append(
+            RenderFile(
+                PurePosixPath(_text(record["path"], "provider rendered file path")),
+                _text(record["media_type"], "provider rendered file media type"),
+            )
+        )
+    return RenderResult(
+        tuple(files),
+        path(data["main"], "provider rendered main file"),
+        path(data["preview"], "provider rendered preview file"),
+        tuple(_diagnostic(item) for item in _items(data["diagnostics"])),
     )
 
 
@@ -576,6 +617,16 @@ def _render_cell(value: object) -> RenderCell:
         _text(data["target"], "render cell target"),
         _source_location(data["source"]),
         _accept(data["accept"], "render cell media type"),
+    )
+
+
+def _render(value: object) -> Render:
+    data = _record(value, {"source", "values", "outputs", "cells"}, "render")
+    return Render(
+        PurePosixPath(_text(data["source"], "render source")),
+        tuple(_render_value(item) for item in _items(data["values"])),
+        tuple(_render_output(item) for item in _items(data["outputs"])),
+        tuple(_render_cell(item) for item in _items(data["cells"])),
     )
 
 

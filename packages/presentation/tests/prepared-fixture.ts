@@ -38,6 +38,7 @@ export const preparedRuntimeConfig = {
       targets: ["report"],
       accept: [],
       size: null,
+      render: null,
     },
   ],
   projectionPolicy: {
@@ -104,7 +105,15 @@ export const withHostSites = (
     const id = `site:${kind}:${name}`;
     host.setAttribute("data-marimo-studio-site", id);
     if (!sites.some((site) => site.id === id)) {
-      sites.push({ id, kind, source: SITE_SOURCE, targets: [name], accept: [], size: null });
+      sites.push({
+        id,
+        kind,
+        source: SITE_SOURCE,
+        targets: [name],
+        accept: [],
+        size: null,
+        render: null,
+      });
     }
     if (kind === "cell") {
       cells[name] ??= target(`cell:v1:${name}`);

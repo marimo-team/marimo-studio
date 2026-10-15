@@ -4,6 +4,7 @@ import type {
   StudioPreparedContext,
   StudioPreparedManifest,
   StudioProjectionBindings,
+  StudioTargetBindings,
 } from "./metadata-records.ts";
 
 import { ZeroPythonRuntimeError } from "./errors.ts";
@@ -40,14 +41,20 @@ export const validateStudioPreparedManifest = (
   }
 };
 
-const projectionEntries = (projections: StudioProjectionBindings) => [
-  ...Object.entries(projections.values).map(([host, output]) => ({ host, output, kind: "value" })),
-  ...Object.entries(projections.outputs).map(([host, output]) => ({
+const targetEntries = (bindings: StudioTargetBindings) => [
+  ...Object.entries(bindings.values).map(([host, output]) => ({ host, output, kind: "value" })),
+  ...Object.entries(bindings.outputs).map(([host, output]) => ({
     host,
     output,
     kind: "output",
   })),
-  ...Object.entries(projections.cells).map(([host, output]) => ({ host, output, kind: "cell" })),
+  ...Object.entries(bindings.cells).map(([host, output]) => ({ host, output, kind: "cell" })),
+];
+
+// The page's hosts and every render's reads together cover the export.
+const projectionEntries = (projections: StudioProjectionBindings) => [
+  ...targetEntries(projections),
+  ...Object.values(projections.renders).flatMap(targetEntries),
 ];
 
 const invalid = (message: string): never => {

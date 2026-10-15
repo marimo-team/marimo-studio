@@ -12,6 +12,8 @@ from marimo_studio._filesystem.budgets import FileBudget
 from marimo_studio._processes.cancellation import provider_cancellation
 from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessResult
 from marimo_studio.view_providers import (
+    BuildInput,
+    ProjectInspection,
     ProviderCancellation,
     ProviderCommandError,
     ProviderError,
@@ -122,6 +124,29 @@ def test_copy_inputs_copies_build_inputs_until_cancelled(tmp_path: Path) -> None
     assert sorted(path.name for path in (tmp_path / "copy").iterdir()) == ["index.html"]
     with pytest.raises(ProviderCommandError, match="cancelled"):
         copy_inputs(request, tmp_path / "again")
+
+
+def test_copy_inputs_copies_the_paths_include_selects(tmp_path: Path) -> None:
+    project = _project(tmp_path / "view")
+    project.root.joinpath("index.html").write_text("page", encoding="utf-8")
+    project.root.joinpath("scene.py").write_text("scene", encoding="utf-8")
+    staging = tmp_path / "build" / "files"
+    staging.mkdir(parents=True)
+    request = provider_build_request(
+        project,
+        ProjectInspection(
+            documents=(),
+            inputs=(
+                BuildInput(PurePosixPath("index.html"), "file"),
+                BuildInput(PurePosixPath("scene.py"), "file"),
+            ),
+        ),
+        staging,
+    )
+
+    copy_inputs(request, tmp_path / "page", include=lambda path: path.suffix == ".html")
+
+    assert sorted(path.name for path in (tmp_path / "page").iterdir()) == ["index.html"]
 
 
 @pytest.mark.parametrize(

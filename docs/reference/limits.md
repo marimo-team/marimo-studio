@@ -61,15 +61,18 @@ site, so inspection skips enumerating its targets. Runtime policy still applies
 to active instances and unique targets. Prepared export requires finite targets
 on every site.
 
-## Rendered documents
+## Renders
 
-| Boundary                                      |  Limit | Failure                           |
-| --------------------------------------------- | -----: | --------------------------------- |
-| Encoded render values for one render          |  8 MiB | `document-values-too-large`       |
-| Rendered outputs for one render               | 16 MiB | `document-outputs-too-large`      |
-| Rendered document                             | 64 MiB | `document-render-too-large`       |
-| Provider commands during one render           |   60 s | `document-render-failed`          |
-| Prepared states rendered by one static export |    256 | `document-render-states-exceeded` |
+| Boundary                                  |   Limit | Failure                    |
+| ----------------------------------------- | ------: | -------------------------- |
+| Renders declared by one view              |      32 | Provider conformance error |
+| Encoded render values for one render      |   8 MiB | `render-values-too-large`  |
+| Outputs and cells read by one render      |  16 MiB | `render-outputs-too-large` |
+| Files returned by one render              |   1,024 | Provider conformance error |
+| One rendered file                         | 512 MiB | `render-too-large`         |
+| All files returned by one render          |   1 GiB | `render-too-large`         |
+| Provider commands during one render       |   300 s | `render-failed`            |
+| Renders across one static export's states |     256 | `render-states-exceeded`   |
 
 ## Active presentation projections
 

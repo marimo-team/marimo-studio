@@ -29,6 +29,7 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     RenderRequest,
+    RenderResult,
     StarterContext,
     StarterPlan,
 )
@@ -42,6 +43,7 @@ from .codec import (
     media_payload,
     project_payload,
     provider_description_from_payload,
+    render_result_from_payload,
     starter_context_payload,
     starter_payload,
     starter_plan_from_payload,
@@ -120,6 +122,7 @@ def build_in_provider_process(
             "project_revision": request.project_revision,
             "profile": request.profile,
             "staging_root": str(request.staging_root),
+            "template_root": str(request.template_root),
             "work_root": str(request.work_root),
             "cache_root": str(request.cache_root),
             "command_timeout": request.command_timeout,
@@ -137,14 +140,14 @@ def build_in_provider_process(
 def render_in_provider_process(
     spec: ProviderProcessSpec,
     request: RenderRequest,
-) -> BuildResult:
+) -> RenderResult:
     payload: dict[str, object] = {
         "schema": 1,
         "operation": "render",
         "provider": spec.to_dict(),
         "request": {
+            "source": request.source.as_posix(),
             "template_root": str(request.template_root),
-            "document": request.document.as_posix(),
             "values": dict(request.values),
             "outputs": media_payload(request.outputs),
             "cells": media_payload(request.cells),
@@ -152,7 +155,7 @@ def render_in_provider_process(
             "command_timeout": request.command_timeout,
         },
     }
-    return build_result_from_payload(
+    return render_result_from_payload(
         _run_provider_process(
             payload,
             request.cancellation,

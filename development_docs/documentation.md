@@ -199,9 +199,9 @@ workspace, adds each figure's views, and exports them with
 the notebook opens in marimo without Studio. A `.marimo.toml` in the workspace
 overrides the user's marimo settings. The script screenshots each named cell
 in a 720px viewport and each exported page in a 420px viewport, at device
-scale 3. It copies the PDF page that Studio's document viewer paints with
-pdf.js at twice its CSS size, once the viewer shows the document rendered with
-notebook values. Shots land in the ignored `scripts/example-figure/shots/`
+scale 3. It copies the PDF page that Studio's render host paints with pdf.js
+at twice its CSS size, once the host shows the PDF rendered with notebook
+values. Shots land in the ignored `scripts/example-figure/shots/`
 directory, and a page error fails the capture.
 
 `render.ts` composes the shots through `compose.html` in `light` and `dark`

@@ -152,6 +152,47 @@ def test_vanilla_projection_diagnostics_locate_authored_sources(
 
 
 @pytest.mark.parametrize(
+    ("host", "message"),
+    (
+        (
+            '<marimo-output render="main.typ" value="chart"></marimo-output>',
+            "<marimo-output render> cannot also set value.",
+        ),
+        *(
+            (
+                f'<marimo-output render="{source}"></marimo-output>',
+                "<marimo-output> render must be a normalized project-relative "
+                "POSIX path",
+            )
+            for source in ("../main.typ", "/main.typ", "", "chapters\\intro.typ")
+        ),
+        (
+            '<marimo-cell name="summary"><marimo-output render="main.typ">'
+            "</marimo-output></marimo-cell>",
+            "Projection hosts cannot contain other projection hosts",
+        ),
+    ),
+    ids=("with-value", "parent", "absolute", "empty", "backslash", "nested"),
+)
+def test_vanilla_render_hosts_show_one_project_file(
+    tmp_path: Path, host: str, message: str
+) -> None:
+    project = _project(tmp_path)
+    (project.root / "index.html").write_text(
+        "<!doctype html><html><head><title>Report</title></head><body>"
+        f'<main id="app-shell">\n{host}\n</main></body></html>',
+        encoding="utf-8",
+    )
+
+    diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
+
+    assert diagnostic.code == "source-document-invalid"
+    assert message in diagnostic.message
+    assert diagnostic.source is not None
+    assert diagnostic.source.line == 2
+
+
+@pytest.mark.parametrize(
     "markup",
     [
         '<h1 mo-value="a"/>',

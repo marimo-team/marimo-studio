@@ -3,13 +3,13 @@
 Providers report where each projection host starts. Studio inserts the runtime
 site attribute into its private snapshot copy before ``build()``, maps build
 diagnostics back to authored columns, and checks that the built files still
-carry every site.
+carry every site and that each render host names a declared render.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
@@ -17,11 +17,14 @@ from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._views.records import DiagnosticsError
+from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers._artifact_sites import (
     SITE_ATTRIBUTE,
     ArtifactSite,
     artifact_sites,
+    page_sites,
 )
+from marimo_studio.view_providers._document import HTMLDocumentParser
 from marimo_studio.view_providers._records import (
     ProjectDiagnostic,
     ProjectionSite,
@@ -163,7 +166,11 @@ def missing_site_diagnostics(
     files_root: Path,
     sites: tuple[ArtifactSite, ...],
 ) -> tuple[ProjectDiagnostic, ...]:
-    """Warn about sites whose site ID appears in none of the published files."""
+    """Warn about page sites whose site ID appears in none of the published files.
+
+    Render reads have no host in the page, so they are never missing.
+    """
+    sites = page_sites(sites)
     expected = {site.id.encode() for site in sites}
     found: set[bytes] = set()
     tree = FileTree(files_root)
@@ -187,4 +194,37 @@ def missing_site_diagnostics(
         )
         for site in sites
         if site.id.encode() not in found
+    )
+
+
+def unknown_render_diagnostics(
+    files_root: Path,
+    document: PurePosixPath,
+    renders: Collection[PurePosixPath],
+) -> tuple[ProjectDiagnostic, ...]:
+    """Report render hosts in the built page that name no declared render."""
+    parser = HTMLDocumentParser(resources=False)
+    try:
+        parser.feed(
+            FileTree(files_root)
+            .read(
+                files_root.joinpath(*document.parts),
+                max_bytes=ARTIFACT_OUTPUT_BUDGET.max_file_bytes,
+            )
+            .content.decode("utf-8")
+        )
+    except (UnicodeDecodeError, ViewProjectError):
+        # Publication validates the page and reports these problems itself.
+        return ()
+    declared = ", ".join(sorted(source.as_posix() for source in renders)) or "none"
+    return tuple(
+        ProjectDiagnostic(
+            "render-unknown",
+            "error",
+            f"{document}:{host.position[0]}:{host.position[1]}: the page shows "
+            f"the render of {host.source}, which the view does not render.",
+            f"Show a file the view renders: {declared}.",
+        )
+        for host in parser.render_hosts
+        if host.source not in renders
     )

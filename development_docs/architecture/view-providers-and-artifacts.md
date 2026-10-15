@@ -31,8 +31,8 @@ class ViewProvider(Protocol):
     def create(self, starter, context) -> StarterPlan: ...
     def inspect(self, request) -> ProjectInspection: ...
     def build(self, request) -> BuildResult: ...
-    # optional, for rendered documents
-    def render(self, request) -> BuildResult: ...
+    # optional, for providers that declare renders
+    def render(self, request) -> RenderResult: ...
 ```
 
 Provider methods are synchronous. Built-in providers run in process. Server
@@ -89,7 +89,7 @@ project configuration.
 - projection sites, each with a source location and a UTF-8 byte offset inside
   the host start tag
 - diagnostics
-- render values read by a rendered document
+- renders, each with its name and the values, outputs, and cells it reads
 
 Conformance adds Studio-owned `view.toml` to the build inputs, and adds
 `AGENTS.md` and `DESIGN.md` to the Source documents when they exist. Core
@@ -223,68 +223,78 @@ run before the mutation and publication locks.
 Providers never receive artifact receipts, pins, presentations, sessions,
 browser clients, or agent requests.
 
-## Document views
+## Renders
 
-A provider with `render()` publishes rendered documents, and its build document
-is a template entry of any type. For other providers, an `.html` build document
-is a live page, and a PDF, SVG, or PNG publishes behind a generated viewer
-page.
+A render turns one project file and notebook results into files. The provider
+declares it in `ProjectInspection.renders` by its source path, such as
+`main.typ`, which must be a build input and names the render everywhere: in
+`<marimo-output render="main.typ">`, artifact sites, render requests, the
+render store, and static export indexes. Declared renders decide whether
+anything renders, and conformance requires `render()` when a view declares one
+(`renderer-missing`). Every build entry is an HTML page.
 
-`_views/documents.py` composes document views, and its `render_document()`
-renders a fresh template copy for builds, live renders, and static exports. For
-a document, `compose_view()` ingests the staging tree into a directory only
-Studio writes. A template becomes the revision's private `template/` directory,
-and Studio renders it once with empty values to validate it and publish the
-first document, and writes a viewer `index.html` whose `<marimo-document>`
-holds one hidden `mo-value` host per value target, one hidden
-`marimo-output` host per output target, and one hidden `marimo-cell` host per
-cell target. The manifest records the template files
-and the renderer fingerprint, and both belong to the artifact revision
-identity. Asset routes and static exports read the public file catalog, so
-template files stay private.
+`build()` writes the page into `staging_root` and the files renders start from
+into `template_root`, a sibling directory in the candidate, and returns the
+output sizes it measured per render source. `_views/build.py` publishes the
+template as the revision's private `template/` directory. `ArtifactTemplate`
+records the template files, the renderer fingerprint, and the render sources,
+and all of them belong to the artifact revision identity. Asset routes and
+static exports read the public file catalog, so template files stay private.
+The build fails with `render-unknown` when the built page holds a
+`<marimo-output render>` host for a file the view does not render.
 
-`render_sites()` gives each document value site the accept list
-`("application/json",)`, so every runtime reads that value through
-marimo-export's `represent()` as JSON: a table becomes row objects and a date
-ISO 8601 text, where a browser view's value site reads a table as Arrow. A
-build that compiles its template returns `BuildResult.output_sizes`, the size
-the template places each output at, and `_views/build.py` passes it to
-`render_sites()`, which records it on the output site. The size travels with the accept list through the signed
-projection records to the kernel, the Pyodide bridge, and the prepared export's
-`media` exporter, which all draw the figure at that size. Both belong to the
-artifact revision identity, because a site's `to_dict()` holds them.
+`render_sites()` turns each render's reads into artifact sites that carry the
+render's source, with IDs in a per-render namespace. A value read accepts
+`("application/json",)`, so every runtime reads it through marimo-export's
+`represent()` as JSON. An output read records its accept list and the size
+the build measured for its render. Projection resolution, the signed kernel records,
+the Pyodide bridge, and the prepared compiler use a render read's own accept
+list and size, so a page host and a render read of one target never conflict.
+Page output hosts resolve their media types from page sites alone.
 
-`_server/presentation/document_renders.py::DocumentRenders` owns live render
-workers and cached renditions on `NotebookScope`, and
-`_server/presentation/documents.py` serves the render route. The Python runtime reads render values and outputs through
-`read_kernel_values()` and `read_kernel_outputs()`, the same authorized reads
-as the value and output routes, and cell outputs from the marimo session
-through `read_session_cells()`. Edit mode also accepts the values, outputs, and
-cell outputs that a browser runtime's hosts show, as `marimoValue` and
-`marimoOutput`. `_projections/runtime_records.py::output_representation()`
-turns each marimo output into bytes by media type for the provider. For a cell
-it picks the first accepted type in marimo's mimebundle. An output it cannot
-decode leaves the template's default. Each render belongs to its HTTP request: a
-client disconnect cancels the provider commands and waits for them to stop
-before the route returns. Renders run on two owned worker threads in a fresh
-copy of the template, with a 60 second command budget. A template copy that
-fails integrity verification marks the publication stale, so the next build
-repairs it. A 64 MiB LRU cache keyed by artifact revision and the digest of
-canonical values, output bytes, and cell bytes serves repeated renders. A
-worker stores each rendition before it takes the next request, so identical
-requests queued behind it reuse the rendition. Closing the scope
-cancels active renders, waits for the workers, and drops the cache.
+`_views/renders.py::run_render()` renders a fresh template copy for live
+renders, static exports, and `check_provider()`. It copies exactly the files
+`RenderResult.files` lists into a destination Studio owns and returns a
+`RenderBundle` whose ID digests the files, media types, and roles.
 
-The `<marimo-document>` viewer keeps one render request in flight. Values that
-change meanwhile queue one more render after it settles, so the document
-catches up with the latest values.
+`_server/presentation/renders.py::RenderStore` owns live render workers and
+bundles on `NotebookScope`. Two worker threads run renders in fresh template
+copies with a 300 second command budget. Requests for one render with the same
+artifact revision and inputs share one job. A request that leaves stops
+waiting, and the job is cancelled when its last waiter leaves. Bundles live on
+disk, stored once by content and keyed by view. The reader's session holds the
+bundle it last adopted for each render, and eviction beyond the 2 GiB budget
+skips bundles that a live session holds. Closing the scope cancels active
+renders, waits for the workers, and removes the bundles.
 
-Zero-python static export renders the template once per prepared state into
-`renditions/<state fingerprint><ext>` through `_delivery/documents.py`, from
-each state's exported values, outputs, and cell snapshots. The browser viewer selects the
-rendition for the current state. WASM static export publishes the build-time
-document, which the viewer shows with a note that current values are
-unavailable.
+`_server/presentation/render_routes.py` serves `POST render` and
+`GET renders/<bundle>/<path>`. With the Python runtime, the route resolves the
+render's read sites and reads values and outputs from the reader's kernel
+under a separate kernel-side reader identity, so render reads never release
+the page's output hosts. Cell outputs come from the marimo session. The
+capture records the session's execution generation before and after the reads
+and starts again when a run happened in between, so one render never mixes
+results from two runs. Edit mode also accepts results that a browser runtime
+posts. File responses support byte ranges, so media seeks without loading the
+whole file, and a bundle answers only for the views that rendered it.
+
+Zero-python static export renders each render once per distinct capture
+through `_delivery/renders.py`, from each state's exported values, outputs, and
+cell snapshots bound in `ViewBindings.renders`. It stores each bundle once
+beneath `_marimo-studio/views/<view>/renders/<bundle>/` and writes
+`renders/index.json`, which maps each state fingerprint to the bundle of each
+render. The browser resolves the current state's bundle from that index.
+
+In the browser, `<marimo-output render>` hosts a `RenderHost`
+(`packages/presentation/src/renders/host.ts`). It requests its render after
+the runtime connects and after each notebook run settles, keeps one request in
+flight, and keeps the last bundle on screen as `stale` until the next one is
+ready. Browser runtimes in edit mode read the render's inputs through their
+own value and output readers, so render reads never evict or release what the
+page's hosts show. A static export resolves the bundle for the prepared state
+the page shows. The stock presentation is the fallback content of the host's
+shadow slot, so markup the page places inside the host replaces it and reads
+`marimoRender`.
 
 ## Publication
 

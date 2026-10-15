@@ -38,7 +38,8 @@
       },
       "targets": ["result"],
       "accept": [],
-      "size": null
+      "size": null,
+      "render": null
     }
   ],
   "projectionPolicy": {

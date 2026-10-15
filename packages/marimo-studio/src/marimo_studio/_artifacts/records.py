@@ -55,12 +55,13 @@ class ArtifactTemplate:
 
     Template files stay beside the public files of a revision. Studio never
     serves or exports them. ``renderer`` fingerprints the provider build that
-    produced and renders them.
+    produced and renders them. ``renders`` lists the source of each render, and
+    the sites of a render's reads carry its source.
     """
 
-    document: PurePosixPath
     files: tuple[ArtifactFile, ...]
     renderer: str
+    renders: tuple[PurePosixPath, ...]
 
 
 @dataclass(frozen=True)
@@ -79,7 +80,7 @@ class ViewArtifact:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema": 3,
+            "schema": 4,
             "root": str(self.root),
             "profile": self.profile,
             "document": self.document.as_posix(),

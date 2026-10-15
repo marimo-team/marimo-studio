@@ -27,10 +27,10 @@ from __future__ import annotations
 import os
 import re
 import shutil
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from marimo_studio.view_providers import (
-    BuildResult,
     ProjectDiagnostic,
     ProviderAvailability,
     ProviderError,
@@ -398,13 +398,22 @@ def _read(path: Path) -> str:
         return ""
 
 
+@dataclass(frozen=True)
+class CompiledLatex:
+    """The PDF one compile wrote, its diagnostics, and the sizes it measured."""
+
+    pdf: PurePosixPath | None
+    diagnostics: tuple[ProjectDiagnostic, ...]
+    output_sizes: dict[str, Size]
+
+
 def compile_latex(
     runner: ProviderRunner,
     root: Path,
     entry: PurePosixPath,
     output: Path,
     timeout: float,
-) -> BuildResult:
+) -> CompiledLatex:
     """Compile ``entry`` beneath ``root`` into ``output`` and return the PDF.
 
     Tectonic writes the PDF and its logs into ``output``. Relative paths in the
@@ -436,8 +445,10 @@ def compile_latex(
     pdf = output / f"{entry.stem}.pdf"
     log = _read(output / f"{entry.stem}.log")
     if completed.returncode != 0 or not pdf.is_file():
-        return BuildResult(None, (_failure(completed.stderr, log, sources, entry),))
-    return BuildResult(
+        return CompiledLatex(
+            None, (_failure(completed.stderr, log, sources, entry),), {}
+        )
+    return CompiledLatex(
         PurePosixPath(pdf.name),
         _warnings(
             completed.stderr,

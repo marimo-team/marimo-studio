@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 
+import type { StudioTargetBindings } from "../src/zero-python/metadata.ts";
+
 import { StalePreparedBindingError } from "../src/zero-python/metadata-source.ts";
 import {
   parseStudioPreparedManifest,
@@ -57,6 +59,18 @@ describe("Studio prepared metadata", () => {
     );
   });
 
+  it("requires the render bindings of the view", () => {
+    const notebookExport = notebookExportFixture({ inputs: [{ mode: "baseline" }] });
+    const current = studioManifest(notebookExport, { mode: "baseline" });
+
+    expect(() =>
+      parseStudioPreparedManifest({
+        ...current,
+        projections: { values: {}, outputs: {}, cells: {} },
+      }),
+    ).toThrow(/metadata is invalid/);
+  });
+
   it("bounds authored host selectors and exported output names", () => {
     const notebookExport = notebookExportFixture({ inputs: [{ mode: "baseline" }] });
     const current = studioManifest(notebookExport, { mode: "baseline" });
@@ -66,7 +80,7 @@ describe("Studio prepared metadata", () => {
     expect(
       parseStudioPreparedManifest({
         ...current,
-        projections: { values: { [host]: "value:doubled" }, outputs: {}, cells: {} },
+        projections: { values: { [host]: "value:doubled" }, outputs: {}, cells: {}, renders: {} },
       }),
     ).toBeDefined();
     expect(new TextEncoder().encode(host)).toHaveLength(hostBoundary.maximum_utf8_bytes);
@@ -77,6 +91,7 @@ describe("Studio prepared metadata", () => {
           values: { [invalidHost]: "value:doubled" },
           outputs: {},
           cells: {},
+          renders: {},
         },
       }),
     ).toThrow(/metadata is invalid/);
@@ -87,6 +102,7 @@ describe("Studio prepared metadata", () => {
           values: { metric: `value:${"x".repeat(250)}` },
           outputs: {},
           cells: {},
+          renders: {},
         },
       }),
     ).toThrow(/metadata is invalid/);
@@ -149,6 +165,7 @@ describe("Studio prepared metadata", () => {
         values: { metric: projectionNames.value },
         outputs: {},
         cells: {},
+        renders: {},
       },
     });
     const renamed = parseStudioPreparedManifest({
@@ -157,6 +174,7 @@ describe("Studio prepared metadata", () => {
         values: { headline: projectionNames.value },
         outputs: {},
         cells: {},
+        renders: {},
       },
     });
 
@@ -196,6 +214,7 @@ describe("Studio prepared metadata", () => {
         values: {},
         outputs: {},
         cells: { headline: projectionNames.cell, summary: projectionNames.cell },
+        renders: {},
       },
     });
 
@@ -210,6 +229,55 @@ describe("Studio prepared metadata", () => {
         notebookExport.identity,
       ),
     ).not.toThrow();
+  });
+
+  it("covers the export output set with the page's hosts and every render's reads", () => {
+    const notebookExport = notebookExportFixture({
+      inputs: [{ mode: "baseline" }],
+      outputNames: [projectionNames.value, "output@0d17b34b:chart"],
+    });
+    const manifest = (renders: Record<string, StudioTargetBindings>) =>
+      parseStudioPreparedManifest({
+        ...studioManifest(notebookExport, { mode: "baseline" }),
+        projections: {
+          values: { metric: projectionNames.value },
+          outputs: {},
+          cells: {},
+          renders,
+        },
+      });
+    const context = { view: "dashboard", planDigest: "3".repeat(64) };
+    const metadata = manifest({
+      "main.typ": {
+        values: { metric: projectionNames.value },
+        outputs: { chart: "output@0d17b34b:chart" },
+        cells: {},
+      },
+    });
+
+    expect(metadata.projections.renders["main.typ"]?.outputs).toEqual({
+      chart: "output@0d17b34b:chart",
+    });
+    expect(Object.isFrozen(metadata.projections.renders["main.typ"])).toBe(true);
+    expect(() =>
+      validateStudioPreparedManifest(metadata, context, notebookExport, notebookExport.identity),
+    ).not.toThrow();
+    expect(() =>
+      validateStudioPreparedManifest(
+        manifest({}),
+        context,
+        notebookExport,
+        notebookExport.identity,
+      ),
+    ).toThrow(/do not cover/);
+    expect(() =>
+      manifest({
+        "main.typ": { values: {}, outputs: { chart: "output@main:chart" }, cells: {} },
+      }),
+    ).toThrow(/metadata is invalid/);
+    expect(() =>
+      manifest({ "main.typ": { values: { metric: "output:chart" }, outputs: {}, cells: {} } }),
+    ).toThrow(/metadata is invalid/);
   });
 
   it("fetches without caching and associates metadata with its prepared record", async () => {

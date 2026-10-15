@@ -25,12 +25,12 @@ the minor line you test, such as `marimo-studio>=0.4,<0.5`.
 Every provider imports one module, `marimo_studio.view_providers`. Pick the
 pattern closest to your tool:
 
-| Pattern                                                                | The build                                       | SDK pieces                                                  | Example                                                                                                                                            |
-| ---------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [HTML page](#write-the-provider)                                       | copies or templates HTML                        | `html_sites`, `copy_inputs`                                 | this guide's `ReportProvider`                                                                                                                      |
-| [Framework build](#add-a-framework-build)                              | bundles JavaScript with a pinned toolchain      | `request.runner`, `request.work_root`, `request.cache_root` | [`deno_react`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react) |
-| [Command-line tool](../reference/provider-api.md#check-external-tools) | runs an installed tool that writes HTML         | `probe_tool`, `copy_inputs`, `ProviderError`                | [`quarto`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/quarto)         |
-| [Rendered document](#publish-a-document)                               | renders a PDF, SVG, or PNG with notebook values | `RenderValue`, `RenderOutput`, `RenderCell`, `render()`     | [`typst`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/typst)           |
+| Pattern                                                                | The build                                           | SDK pieces                                                  | Example                                                                                                                                            |
+| ---------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [HTML page](#write-the-provider)                                       | copies or templates HTML                            | `html_sites`, `copy_inputs`                                 | this guide's `ReportProvider`                                                                                                                      |
+| [Framework build](#add-a-framework-build)                              | bundles JavaScript with a pinned toolchain          | `request.runner`, `request.work_root`, `request.cache_root` | [`deno_react`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/deno_react) |
+| [Command-line tool](../reference/provider-api.md#check-external-tools) | runs an installed tool that writes HTML             | `probe_tool`, `copy_inputs`, `ProviderError`                | [`quarto`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/quarto)         |
+| [Rendered file](#publish-a-rendered-file)                              | renders files, such as a PDF, from notebook results | `Render`, `render_page`, `render()`                         | [`typst`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin/typst)           |
 
 When no pattern fits, start from the HTML page provider and replace `build()`
 with your tool's steps. The built-in Quarto provider also imports private
@@ -95,7 +95,7 @@ Studio calls the provider at these moments:
 | Someone creates a view                          | `create()`                     |
 | Source opens, or a watched file changes         | `inspect()`                    |
 | Preview, run mode, or export needs a fresh page | `build()`                      |
-| A rendered document's notebook results change   | `render()`                     |
+| The notebook results a render reads change      | `render()`                     |
 
 ## How Studio finds the provider
 
@@ -619,12 +619,13 @@ in
 [`view_providers/_builtin`](https://github.com/marimo-team/marimo-studio/tree/main/packages/marimo-studio/src/marimo_studio/view_providers/_builtin)
 do for JSX and Svelte.
 
-## Publish a document
+## Publish a rendered file
 
-A provider can publish a PDF, SVG, or PNG in place of a page. Its `build()`
-returns a template, and Studio renders it again whenever a notebook value it
-reads changes. Studio shows the rendered document in a viewer page with a
-download link.
+A provider can declare a render: files it makes from one project file and
+notebook results with its own tools. Its page shows the render with
+`<marimo-output render="card.svg">`, named by that project file, and Studio
+renders it again whenever a notebook result it reads changes. The host shows the main file, such as a PDF,
+an image, or a video, with a download link.
 
 Register `card = "acme_views.card:provider"`, then create
 `src/acme_views/card.py`:
@@ -634,21 +635,25 @@ from pathlib import PurePosixPath
 from xml.sax.saxutils import escape
 
 from marimo_studio.view_providers import (
+    BuildInput,
     BuildRequest,
     BuildResult,
     InspectionRequest,
-    BuildInput,
     ProjectInspection,
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
+    Render,
+    RenderFile,
     RenderRequest,
+    RenderResult,
     RenderValue,
     SourceDocument,
     SourceLocation,
     StarterContext,
     StarterPlan,
     copy_inputs,
+    render_page,
 )
 
 CARD = PurePosixPath("card.svg")
@@ -683,35 +688,48 @@ class CardProvider:
         return ProjectInspection(
             documents=(SourceDocument(CARD, "xml", "edit"),),
             inputs=(BuildInput(CARD, "file"),),
-            render_values=(RenderValue("report.total", SourceLocation(CARD, 2, 30)),),
+            renders=(
+                Render(
+                    CARD,
+                    values=(RenderValue("report.total", SourceLocation(CARD, 2, 30)),),
+                ),
+            ),
         )
 
     def build(self, request: BuildRequest) -> BuildResult:
-        copy_inputs(request, request.staging_root)
-        return BuildResult(CARD)
+        copy_inputs(request, request.template_root)
+        return BuildResult(render_page(request, CARD))
 
-    def render(self, request: RenderRequest) -> BuildResult:
-        template = (request.template_root / request.document).read_text("utf-8")
+    def render(self, request: RenderRequest) -> RenderResult:
+        template = (request.template_root / request.source).read_text("utf-8")
         total = request.values.get("report.total")
         text = "pending" if total is None else str(total)
         card = template.replace("{{ total }}", escape(text))
         (request.output_root / CARD).write_text(card, encoding="utf-8")
-        return BuildResult(CARD)
+        return RenderResult((RenderFile(CARD, "image/svg+xml"),), main=CARD)
 
 
 provider = CardProvider()
 ```
 
-`render_values` names the notebook values the document reads, at the place it
-reads them. Each arrives in its JSON form, so a dataframe arrives as a list of
-row objects and a date as ISO 8601 text. Studio calls `render()` with a
-writable copy of the built template in `request.template_root`, an empty
+`Render(CARD, values=...)` declares that the provider renders `card.svg` and
+names the notebook values it reads, at the place it reads them. Each value arrives in its JSON form, so a
+dataframe arrives as a list of row objects and a date as ISO 8601 text.
+
+`build()` copies the project into `request.template_root`, which Studio keeps
+private, and writes a page with one `<marimo-output render="card.svg">` host
+with `render_page()`. A provider that builds its own page places the host beside
+its other content and projection hosts.
+
+Studio calls `render()` with a writable copy of the template in
+`request.template_root`, the file to render in `request.source`, an empty
 `request.output_root`, and the reader's current results. A result without a
-current value is absent and a null result is `None`, so the template shows its
-default for both. Templates that place figures or named cell outputs report
-`render_outputs` or `render_cells`.
-[Render documents with notebook values](../reference/provider-api.md#render-documents-with-notebook-values)
-defines the contract, including figure sizes.
+current value is absent and a null result is `None`, so the template shows
+its default for both. `RenderResult` lists the files to publish with their
+media types and names the main file. A render that places figures or named
+cell outputs reads them with `RenderOutput` or `RenderCell`.
+[Render files from notebook results](../reference/provider-api.md#render-files-from-notebook-results)
+defines the contract, including figure sizes and preview files.
 
 ## Provider rules
 
@@ -730,11 +748,14 @@ Studio checks each result against these rules and reports the one it breaks.
   element with `mo-value`.
 - Build from the snapshot in `request.project.root` and keep the
   `data-marimo-studio-site` attribute on each host in the built files.
-- Write the build output inside `request.staging_root`. An HTML entry document
-  needs one `head`, one `body`, and one element with `id="app-shell"`.
+- Write the page inside `request.staging_root` and render templates inside
+  `request.template_root`. The page needs one `head`, one `body`, and one
+  element with `id="app-shell"`.
+- Declare each render by its source file, a build input, and show only those
+  files in `<marimo-output render="...">` hosts.
 - Run `build()` commands with `cwd` inside `request.project.root`, which holds
-  `request.work_root` and `request.staging_root`. Run `render()` commands
-  inside `request.template_root`.
+  `request.work_root`, `request.staging_root`, and `request.template_root`. Run
+  `render()` commands inside `request.template_root`.
 - Pass `environment={**os.environ, ...}` to add variables. A mapping replaces
   the command's whole environment.
 - Pin npm packages in a lockfile that ships with the starter, and install them

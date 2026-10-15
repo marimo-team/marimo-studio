@@ -78,7 +78,7 @@ type ProducerResolution =
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*/;
 const INDEX = /^(?:0|[1-9][0-9]*)/;
-const HOST_SELECTOR = "marimo-cell, marimo-output, [mo-value]";
+const HOST_SELECTOR = "marimo-cell, marimo-output:not([render]), [mo-value]";
 
 const failure = (
   request: RuntimeProjectionRequest,
@@ -364,7 +364,11 @@ const createProjectionResolutionContext = (
   root: ParentNode,
 ): ProjectionResolutionContext => {
   const sites = new Map<string, ArtifactSite[]>();
+  // A render's reads are no page host sites, so a host that names one never mounts.
   config.sites.forEach((site) => {
+    if (site.render !== null) {
+      return;
+    }
     const matches = sites.get(site.id) ?? [];
     matches.push(site);
     sites.set(site.id, matches);

@@ -304,6 +304,7 @@ await view.build()
 | Complete displayed cell, including controls and errors   | `<marimo-cell name="summary"></marimo-cell>`    |
 | One Python object rendered by marimo                     | `<marimo-output value="chart"></marimo-output>` |
 | JSON-compatible data or eager dataframe for browser code | `<strong mo-value="metrics.total"></strong>`    |
+| Files a provider renders, such as a Typst PDF            | `<marimo-output render="main.typ">`             |
 
 Read a cell's `name`, `definitions`, and `has_output_expression` before choosing
 its projection. Prefer the exact existing cell name. Bind an alias with

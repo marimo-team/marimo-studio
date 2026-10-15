@@ -129,6 +129,7 @@ const configWithValues = (selectors: readonly string[], namespaceSite?: string):
           targets: [selector],
           accept: [],
           size: null,
+          render: null,
         }))
       : [
           {
@@ -138,6 +139,7 @@ const configWithValues = (selectors: readonly string[], namespaceSite?: string):
             targets: null,
             accept: [],
             size: null,
+            render: null,
           },
         ],
   runtimeBindings: {
@@ -801,6 +803,7 @@ test("changing a value source site reconnects the same projection instance", asy
         targets: ["report"],
         accept: [],
         size: null,
+        render: null,
       },
       {
         id: "site:value:second",
@@ -809,6 +812,7 @@ test("changing a value source site reconnects the same projection instance", asy
         targets: ["report"],
         accept: [],
         size: null,
+        render: null,
       },
     ],
   });

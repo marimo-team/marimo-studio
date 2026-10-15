@@ -170,7 +170,7 @@ test("renders a Typst document beneath a stripped proxy prefix", async ({ page, 
   await studioCli.buildWorkspaceView("report", proxiedNotebookPath);
 
   await page.goto(`${proxiedUrl()}studio/report/`);
-  const viewer = (await waitForPreview(page)).locator("marimo-document");
+  const viewer = (await waitForPreview(page)).locator('marimo-output[render="main.typ"]');
   await expect(viewer.locator(".textLayer")).toContainText("Metric is 42");
   await editorSlider(page, /^Proxied scale/).press("End");
   await expect(viewer.locator(".textLayer")).toContainText("Metric is 63");

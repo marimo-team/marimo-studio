@@ -60,6 +60,7 @@ class KernelProjectionHost(Protocol):
         *,
         consumer_id: str,
         runtime_cell_refs: Mapping[CellRef, str],
+        reader: str | None = None,
     ) -> ValueReadResult: ...
 
     async def render_outputs(
@@ -72,6 +73,7 @@ class KernelProjectionHost(Protocol):
         *,
         consumer_id: str,
         runtime_cell_refs: Mapping[CellRef, str],
+        reader: str | None = None,
     ) -> OutputRenderResult: ...
 
     async def sync_query(

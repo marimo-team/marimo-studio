@@ -344,7 +344,7 @@ test("prepared projections render values, native outputs, and a complete cell", 
   await Promise.all([handle.dispose(), handle.dispose()]);
 });
 
-test("prepared hosts keep media marimo cannot show for the document that reads it", async () => {
+test("prepared hosts keep media marimo cannot show for the render that reads it", async () => {
   commitRuntimeConfig(config);
   document.body.innerHTML = `
     <div id="runtime"></div>

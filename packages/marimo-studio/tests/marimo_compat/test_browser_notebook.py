@@ -309,6 +309,7 @@ def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
         "targets": ["summary"],
         "accept": [],
         "size": None,
+        "render": None,
     }
     request = {
         "siteId": "site-summary",

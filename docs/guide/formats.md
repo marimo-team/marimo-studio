@@ -20,8 +20,9 @@ Pick one in **Add view**, or pass `--starter` to `marimo-studio view create`.
 | `marimo-studio/latex:default`        | A PDF typeset with [LaTeX](https://www.latex-project.org/) | Tectonic 0.15 or newer |
 
 The first six are pages, so their controls stay live in the browser. Typst
-and LaTeX views are documents: Studio compiles a PDF from the notebook's
-results and compiles it again when a result it reads changes.
+and LaTeX views render a PDF: Studio compiles it from the notebook's results
+on the server and compiles it again when a result it reads changes. Their page
+shows the PDF with a download link.
 
 Start with the HTML page when you are unsure. Move to React or Svelte when
 components, imported assets, or npm packages make the view easier to
@@ -215,7 +216,7 @@ journal template with the notebook's figures and tables.
 | Studio editor, in any runtime                             | A PDF compiled again when a result it reads changes |
 | `marimo run` with the Python runtime                      | A PDF compiled again when a result it reads changes |
 | Prepared export                                           | One PDF for each prepared input state               |
-| `marimo run` with the Browser runtime, or a `wasm` export | The PDF compiled when the view was built            |
+| `marimo run` with the Browser runtime, or a `wasm` export | A note that the PDF renders on a Studio server      |
 
 A page can also draw a PDF in the browser from `mo-value` data with a
 JavaScript PDF library, which works in every runtime. The **Field report** view

@@ -16,12 +16,27 @@ const boundedOutputName = (kind: "cell" | "output" | "value") =>
       (value) =>
         value.startsWith(`${kind}:`) && value.length > kind.length + 1 && bounded(value, 255),
     );
+// A render reuses the page's export output when it reads a target in the
+// same form, and otherwise names its own output with a digest of its source.
+const boundedRenderOutputName = (kind: "cell" | "output" | "value") =>
+  z
+    .string()
+    .refine(
+      (value) => new RegExp(`^${kind}(?:@[\\da-f]{8})?:.`, "u").test(value) && bounded(value, 255),
+    );
 const zeroPythonRuntimeSchema = z.object({
   data: z.strictObject({ planDigest: digestSchema }),
   urls: z.strictObject({ manifest: z.string().min(1) }),
 });
 const projectionMapSchema = (kind: "cell" | "output" | "value") =>
   losslessRecordSchema(boundedHostSelector, boundedOutputName(kind));
+const renderMapSchema = (kind: "cell" | "output" | "value") =>
+  losslessRecordSchema(boundedHostSelector, boundedRenderOutputName(kind));
+const renderBindingsSchema = z.strictObject({
+  cells: renderMapSchema("cell"),
+  outputs: renderMapSchema("output"),
+  values: renderMapSchema("value"),
+});
 const studioManifestSchema = z.strictObject({
   schema: z.literal("marimo-studio.prepared.v1"),
   prepared: z.unknown(),
@@ -29,6 +44,7 @@ const studioManifestSchema = z.strictObject({
     cells: projectionMapSchema("cell"),
     outputs: projectionMapSchema("output"),
     values: projectionMapSchema("value"),
+    renders: losslessRecordSchema(boundedHostSelector, renderBindingsSchema),
   }),
   document_sha256: digestSchema,
   view: z.string().min(1),
@@ -43,10 +59,15 @@ export interface ZeroPythonRuntimeData {
   readonly planDigest: string;
 }
 
-export interface StudioProjectionBindings {
+/** Export output names by target, for the page's hosts or one render's reads. */
+export interface StudioTargetBindings {
   readonly cells: Readonly<Record<string, string>>;
   readonly outputs: Readonly<Record<string, string>>;
   readonly values: Readonly<Record<string, string>>;
+}
+
+export interface StudioProjectionBindings extends StudioTargetBindings {
+  readonly renders: Readonly<Record<string, StudioTargetBindings>>;
 }
 
 export interface StudioPreparedManifest {
@@ -92,15 +113,28 @@ export const parseStudioPreparedManifest = (
     schema: value.schema,
     prepared: parsePreparedExportManifest(value.prepared),
     projections: Object.freeze({
-      cells: Object.freeze({ ...value.projections.cells }),
-      outputs: Object.freeze({ ...value.projections.outputs }),
-      values: Object.freeze({ ...value.projections.values }),
+      ...frozenBindings(value.projections),
+      renders: Object.freeze(
+        Object.fromEntries(
+          Object.entries(value.projections.renders).map(([render, bindings]) => [
+            render,
+            frozenBindings(bindings),
+          ]),
+        ),
+      ),
     }),
     documentSha256: value.document_sha256,
     view: value.view,
     planDigest: value.plan_digest,
   });
 };
+
+const frozenBindings = (bindings: StudioTargetBindings): StudioTargetBindings =>
+  Object.freeze({
+    cells: Object.freeze({ ...bindings.cells }),
+    outputs: Object.freeze({ ...bindings.outputs }),
+    values: Object.freeze({ ...bindings.values }),
+  });
 
 const bounded = (value: string, maximumBytes: number): boolean =>
   value.length > 0 &&

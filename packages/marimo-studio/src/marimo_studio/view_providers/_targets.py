@@ -15,6 +15,9 @@ _CELL_ALIAS = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
 
 MAX_CELL_TARGETS = 256
 MAX_VALUE_TARGETS = 100
+# Renders one view declares, and files one render publishes.
+MAX_RENDERS = 32
+MAX_RENDER_FILES = 1_024
 # A projection target holds at most one selector, and cell names are shorter.
 MAX_TARGET_BYTES = MAX_SELECTOR_BYTES
 

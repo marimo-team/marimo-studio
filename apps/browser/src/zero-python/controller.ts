@@ -4,6 +4,11 @@ import type {
   PreparedStateController,
 } from "@marimo-team/marimo-export/prepared";
 
+import {
+  publishPreparedState,
+  publishRenderInputReader,
+} from "@marimo-studio/presentation/render-inputs";
+
 import type { StudioPreparedInteractions } from "./interactions.ts";
 import type { ZeroPythonRuntimeData } from "./metadata.ts";
 import type { StudioPreparedStateApi } from "./state-api.ts";
@@ -23,6 +28,9 @@ export class ZeroPythonRuntimeController {
   readonly #stateApi: StudioPreparedStateApi;
   readonly #interactions: StudioPreparedInteractions;
   readonly #createRefresh: StudioPreparedComposition["createRefresh"];
+  readonly #readRender: StudioPreparedComposition["readRender"];
+  readonly #shownState: StudioPreparedComposition["shownState"];
+  #releaseRenderInputs: (() => void) | undefined;
   #config: RuntimeConfig;
   #data: ZeroPythonRuntimeData;
   #refresh: PreparedPublicationRefresh;
@@ -47,6 +55,8 @@ export class ZeroPythonRuntimeController {
     this.#interactions = composition.interactions;
     this.#stateApi = composition.stateApi;
     this.#createRefresh = composition.createRefresh;
+    this.#readRender = composition.readRender;
+    this.#shownState = composition.shownState;
     this.#refresh = this.#refreshFor(data, config);
   }
 
@@ -85,6 +95,12 @@ export class ZeroPythonRuntimeController {
       await this.#refresh.start(signal);
       await this.#interactions.updateQuery(globalThis.location.search, signal);
       this.#stateApi.install();
+      // Studio renders posted inputs only in edit mode. Elsewhere a static
+      // export looks up the bundle rendered for the state the page shows.
+      this.#releaseRenderInputs =
+        this.#config.mode === "edit"
+          ? publishRenderInputReader(this.#readRender)
+          : publishPreparedState(this.#shownState);
       this.dependencies.setConnectionState("ready");
     } catch (error) {
       if (!signal.aborted) {
@@ -118,6 +134,8 @@ export class ZeroPythonRuntimeController {
 
   async #dispose(): Promise<void> {
     this.#disposed = true;
+    this.#releaseRenderInputs?.();
+    this.#releaseRenderInputs = undefined;
     await disposeStudioPreparedRuntime({
       refresh: this.#refresh,
       state: this.#state,

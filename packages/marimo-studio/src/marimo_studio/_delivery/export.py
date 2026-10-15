@@ -43,7 +43,6 @@ from marimo_studio._artifacts.limits import (
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._composition import create_export_adapters
-from marimo_studio._delivery.documents import write_static_renditions
 from marimo_studio._delivery.export_output import (
     ensure_output_parent as _ensure_output_parent,
 )
@@ -60,6 +59,7 @@ from marimo_studio._delivery.preflight import (
     preflight_static_bundle,
 )
 from marimo_studio._delivery.progress import StaticExportProgress
+from marimo_studio._delivery.renders import write_static_renders
 from marimo_studio._delivery.runtime_config import (
     RuntimeConfigInputs,
     encode_runtime_config,
@@ -978,8 +978,8 @@ def _export_to_delivery(
                 runtime,
                 publication,
             )
-            if publication is not None:
-                files += write_static_renditions(lease, publication, bundle)
+            if runtime != "wasm":
+                files += write_static_renders(lease, publication, bundle, selected)
             files += _materialize_publication(delivery, selected, publication)
             _emit_progress(
                 progress,

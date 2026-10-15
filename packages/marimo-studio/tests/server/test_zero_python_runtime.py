@@ -173,7 +173,12 @@ def test_prepared_manifest_follows_the_browser_editor_binding(
                     "inputs": {},
                     "state_fingerprint": "c" * 64,
                 },
-                "projections": {"cells": {}, "outputs": {}, "values": {}},
+                "projections": {
+                    "cells": {},
+                    "outputs": {},
+                    "values": {},
+                    "renders": {},
+                },
                 "document_sha256": "d" * 64,
                 "view": "dashboard",
                 "plan_digest": "b" * 64,

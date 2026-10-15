@@ -7,6 +7,7 @@
     "./dev-reload": "./src/dev-reload.ts",
     "./json": "./src/json.ts",
     "./prepared-projections": "./src/prepared/index.ts",
+    "./render-inputs": "./src/renders/inputs.ts",
     "./runtime": "./src/main.ts",
     "./runtime-state": "./src/runtime-state.ts",
     "./runtimes": "./src/runtime/catalog.ts",
