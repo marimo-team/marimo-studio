@@ -95,13 +95,15 @@ test("cell sites accept native names and configured aliases", () => {
   assert.deepEqual(parsed.sites[0]?.targets, targets);
 });
 
-test("page cell sites list the media types they accept", () => {
+test("render cell reads list the media types they accept, and page cell sites none", () => {
+  const cell = { ...symbolicRuntimeFields.sites[0], accept: ["image/png"] };
   const parsed = parseRuntimeConfig(
-    runtimeConfig({ sites: [{ ...symbolicRuntimeFields.sites[0], accept: ["image/png"] }] }),
+    runtimeConfig({ sites: [{ ...cell, render: "main.typ" }] }),
     configUrl,
   );
 
   assert.deepEqual(parsed.sites[0]?.accept, ["image/png"]);
+  assert.throws(() => parseRuntimeConfig(runtimeConfig({ sites: [cell] }), configUrl));
 });
 
 test("render reads name their render, JSON value accept list, and measured output size", () => {

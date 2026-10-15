@@ -306,8 +306,16 @@ def install_browser_bridge(
             ):
                 raise ValueError("A projection site is invalid.")
             accept = site["accept"]
+            # A page output host may read an image, and a render reads values
+            # as JSON and outputs and cells in the types it places.
             if not isinstance(accept, list) or (
-                site["kind"] == "value" and accept not in ([], ["application/json"])
+                (site["kind"] != "output" and bool(accept))
+                if site["render"] is None
+                else (
+                    accept != ["application/json"]
+                    if site["kind"] == "value"
+                    else not accept
+                )
             ):
                 raise ValueError("A projection site is invalid.")
             if accept and list(_studio_values.normalize_accept(accept)) != accept:

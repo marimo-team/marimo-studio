@@ -88,11 +88,11 @@ export const artifactSiteSchema = z
       });
     }
     if (site.render === null) {
-      if (site.kind === "value" && site.accept.length > 0) {
+      if (site.kind !== "output" && site.accept.length > 0) {
         context.addIssue({
           code: "custom",
           path: ["accept"],
-          message: "Page value sites read JSON or Arrow",
+          message: "Only page output sites declare media types",
         });
       }
       if (site.size !== null) {
