@@ -23,6 +23,7 @@ apps/e2e/.cache/
 apps/e2e/playwright-report/
 apps/e2e/test-results/
 tools/example-showcase/shots/
+scripts/example-figure/shots/
 
 # Default view build state and catalog locks of Studio 0.3.0 fixtures
 **/__marimo__/studio/*/*/.artifacts/

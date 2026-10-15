@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quadratic program</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5/index.css"
+    />
+    <style>
+      body {
+        margin: 0;
+        background: #fff;
+        color: #171717;
+        font:
+          400 17px/1.6 "Geist Variable",
+          system-ui,
+          sans-serif;
+      }
+
+      #app-shell {
+        box-sizing: border-box;
+        max-width: 36rem;
+        margin: 0 auto;
+        padding: 2rem 2rem 2.5rem;
+      }
+
+      marimo-output {
+        display: block;
+      }
+
+      p {
+        margin: 1rem 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app-shell">
+      <marimo-output value="problem_figure"></marimo-output>
+      <p>The optimal value is <strong mo-value="solution.value"></strong>.</p>
+    </main>
+  </body>
+</html>

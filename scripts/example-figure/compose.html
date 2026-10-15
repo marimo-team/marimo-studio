@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>marimo-studio example figure</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/400.css"
+    />
+    <style>
+      :root {
+        --card-bg: #fff;
+        --card-border: rgb(20 30 25 / 12%);
+        --chrome: #fbfbfa;
+        --chrome-rule: rgb(20 30 25 / 8%);
+        --label: #3c4043;
+        --muted: #8a8f94;
+        --notebook-chrome: #eef5f2;
+        --notebook-label: #1d7363;
+        --viewer: #ecedea;
+        --shadow:
+          0 0 0 1px rgb(20 30 25 / 4%), 0 2px 4px rgb(20 30 25 / 5%),
+          0 16px 32px -12px rgb(20 30 25 / 16%), 0 28px 56px -28px rgb(20 30 25 / 22%);
+      }
+
+      body[data-theme="dark"] {
+        --card-border: rgb(255 255 255 / 12%);
+        --chrome: #1b1d1f;
+        --chrome-rule: rgb(255 255 255 / 8%);
+        --label: #e3e5e8;
+        --muted: #8f959b;
+        --notebook-chrome: #1f2a26;
+        --notebook-label: #cad996;
+        --viewer: #2b2d30;
+        --shadow:
+          0 0 0 1px rgb(0 0 0 / 40%), 0 2px 4px rgb(0 0 0 / 30%),
+          0 16px 32px -12px rgb(0 0 0 / 50%), 0 28px 56px -28px rgb(0 0 0 / 65%);
+      }
+
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+      }
+
+      #canvas {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        align-items: start;
+        gap: 28px;
+        box-sizing: border-box;
+        width: var(--width);
+        /* The padding holds the card shadows, which reach 56px below a card. */
+        padding: 24px 32px 64px;
+        font-family: "Inter Variable", system-ui, sans-serif;
+      }
+
+      /* The narrow layout stacks the cards for phone-width pages. */
+      body[data-layout="narrow"] #canvas {
+        grid-template-columns: 1fr;
+        gap: 24px;
+        padding: 16px 32px 64px;
+      }
+
+      .card {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--card-bg);
+        box-shadow: var(--shadow);
+      }
+
+      .card header {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 34px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--chrome-rule);
+        background: var(--chrome);
+        color: var(--label);
+        font-size: 13px;
+        font-weight: 550;
+        letter-spacing: -0.005em;
+      }
+
+      .card header span:last-child {
+        color: var(--muted);
+        font:
+          400 12px "JetBrains Mono",
+          ui-monospace,
+          monospace;
+      }
+
+      .card.is-notebook header {
+        background: var(--notebook-chrome);
+        color: var(--notebook-label);
+      }
+
+      .card img {
+        display: block;
+        width: 100%;
+      }
+
+      .notebook {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 12px 16px;
+      }
+
+      /* Cells the figure leaves out collapse into one labeled rule. */
+      .skipped {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #8a8f94;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .skipped::before,
+      .skipped::after {
+        flex: 1;
+        border-top: 1px dashed rgb(20 30 25 / 18%);
+        content: "";
+      }
+
+      .page {
+        flex: 1 1 auto;
+      }
+
+      .document {
+        flex: 1 1 auto;
+        padding: 18px;
+        background: var(--viewer);
+      }
+
+      .document img {
+        box-shadow:
+          0 1px 3px rgb(0 0 0 / 16%),
+          0 0 0 1px rgb(0 0 0 / 5%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas"></div>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      document.body.dataset.theme = params.get("theme") ?? "light";
+      document.body.dataset.layout = params.get("layout") ?? "wide";
+      const { figure, notebook, order } = window.composition;
+      document.documentElement.style.setProperty("--width", `${params.get("width") ?? 1200}px`);
+
+      const card = (label, detail, body, className = "") => {
+        const element = document.createElement("section");
+        element.className = `card ${className}`;
+        const header = document.createElement("header");
+        for (const text of [label, detail]) {
+          const span = document.createElement("span");
+          span.textContent = text;
+          header.append(span);
+        }
+        element.append(header, body);
+        document.getElementById("canvas").append(element);
+      };
+
+      const image = (src) => {
+        const element = document.createElement("img");
+        element.src = src;
+        element.alt = "";
+        return element;
+      };
+
+      const cells = document.createElement("div");
+      cells.className = "notebook";
+      figure.cells.forEach((name, index) => {
+        if (index > 0) {
+          const skipped = order.indexOf(name) - order.indexOf(figure.cells[index - 1]) - 1;
+          if (skipped > 0) {
+            const rule = document.createElement("div");
+            rule.className = "skipped";
+            rule.textContent = `${skipped} more ${skipped === 1 ? "cell" : "cells"}`;
+            cells.append(rule);
+          }
+        }
+        cells.append(image(`shots/cell--${name}.png`));
+      });
+      card("Notebook", notebook, cells, "is-notebook");
+
+      const page = document.createElement("div");
+      page.className = "page";
+      page.append(image(`shots/${figure.name}-page.png`));
+      card("HTML page", "index.html", page);
+
+      const report = document.createElement("div");
+      report.className = "document";
+      report.append(image(`shots/${figure.name}-report.png`));
+      card("Typst PDF", "main.typ", report);
+
+      await Promise.all([...document.images].map((element) => element.decode()));
+      await document.fonts.ready;
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>

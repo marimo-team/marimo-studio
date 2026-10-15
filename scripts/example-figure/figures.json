@@ -1,0 +1,12 @@
+{
+  "figures": [
+    {
+      "name": "output-value",
+      "cells": ["solution", "level_curves"]
+    },
+    {
+      "name": "cell-output-value",
+      "cells": ["pull_direction", "solution", "level_curves"]
+    }
+  ]
+}
