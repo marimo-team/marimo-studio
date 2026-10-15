@@ -362,6 +362,7 @@ def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
     ("kind", "accept", "render", "valid"),
     (
         ("output", ["image/png"], None, True),
+        ("output", ["application/pdf"], None, False),
         ("cell", ["image/png"], None, False),
         ("value", ["application/json"], None, False),
         ("value", ["application/json"], "main.typ", True),
@@ -370,6 +371,7 @@ def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
     ),
     ids=(
         "page-output-image",
+        "page-output-pdf",
         "page-cell-media",
         "page-value-json",
         "render-value-json",

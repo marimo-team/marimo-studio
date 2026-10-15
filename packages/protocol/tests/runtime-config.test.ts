@@ -106,6 +106,22 @@ test("render cell reads list the media types they accept, and page cell sites no
   assert.throws(() => parseRuntimeConfig(runtimeConfig({ sites: [cell] }), configUrl));
 });
 
+test("page output sites read only the image types a page shows", () => {
+  const output = { ...symbolicRuntimeFields.sites[0], kind: "output" as const };
+  const parsed = parseRuntimeConfig(
+    runtimeConfig({ sites: [{ ...output, accept: ["image/svg+xml", "image/png"] }] }),
+    configUrl,
+  );
+
+  assert.deepEqual(parsed.sites[0]?.accept, ["image/svg+xml", "image/png"]);
+  assert.throws(() =>
+    parseRuntimeConfig(
+      runtimeConfig({ sites: [{ ...output, accept: ["application/pdf"] }] }),
+      configUrl,
+    ),
+  );
+});
+
 test("render reads name their render, JSON value accept list, and measured output size", () => {
   const parsed = parseRuntimeConfig(
     runtimeConfig({

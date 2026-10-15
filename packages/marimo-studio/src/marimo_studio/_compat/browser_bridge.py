@@ -39,6 +39,7 @@ def install_browser_bridge(
     _studio_config_max_error_message_length: int,
     _studio_config_max_output_selectors: int,
     _studio_config_media_scale: float,
+    _studio_config_page_media_types: frozenset[str],
     _studio_config_values_source: str,
     _studio_config_media_source: str,
 ) -> None:
@@ -309,7 +310,13 @@ def install_browser_bridge(
             # A page output host may read an image, and a render reads values
             # as JSON and outputs and cells in the types it places.
             if not isinstance(accept, list) or (
-                (site["kind"] != "output" and bool(accept))
+                (
+                    bool(accept)
+                    and (
+                        site["kind"] != "output"
+                        or not set(accept) <= _studio_config_page_media_types
+                    )
+                )
                 if site["render"] is None
                 else (
                     accept != ["application/json"]

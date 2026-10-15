@@ -32,6 +32,7 @@ from marimo_studio._projections.runtime_records import (
     MEDIA_SCALE,
 )
 from marimo_studio._workspace.metadata import browser_notebook_metadata_source
+from marimo_studio.view_providers._validation import PAGE_MEDIA_TYPES
 
 MAX_ERROR_MESSAGE_LENGTH = 1_024
 WASM_PROJECTION_NAMESPACE = "_marimo_studio_wasm"
@@ -113,6 +114,7 @@ def {BROWSER_BRIDGE_CELL_NAME}():
     _studio_config_max_error_message_length = {MAX_ERROR_MESSAGE_LENGTH}
     _studio_config_max_output_selectors = {MAX_UNIQUE_OUTPUT_TARGETS}
     _studio_config_media_scale = {MEDIA_SCALE!r}
+    _studio_config_page_media_types = frozenset({PAGE_MEDIA_TYPES!r})
     _studio_config_values_source = {inspect.getsource(marimo_export.values)!r}
     _studio_config_media_source = {inspect.getsource(media_output)!r}
 
