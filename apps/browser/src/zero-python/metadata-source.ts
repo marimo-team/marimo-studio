@@ -40,6 +40,13 @@ const bindingAwareFetch =
       await response.body?.cancel();
       throw new StalePreparedBindingError();
     }
+    // marimo-export drains the no-store manifest through a stream reader, and
+    // Chromium can report that read as aborted at EOF. A native Response clone
+    // preserves completion. Close its unused branch immediately.
+    void response
+      .clone()
+      .body?.cancel()
+      .catch(() => {});
     return response;
   };
 
