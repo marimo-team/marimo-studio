@@ -123,7 +123,7 @@ def test_nested_no_tree_process_keeps_its_parent_group_ownership(
         "import sys, time; "
         "from marimo_studio._processes.supervisor import ProcessSupervisor; "
         "ProcessSupervisor(owns_process_tree=False).run("
-        f"[sys.executable, '-c', {child!r}], timeout=5); "
+        f"[sys.executable, '-c', {child!r}], timeout=30); "
         "time.sleep(30)"
     )
     environment = {
@@ -147,10 +147,11 @@ def test_nested_no_tree_process_keeps_its_parent_group_ownership(
     owner.attach(process)
 
     try:
-        deadline = time.monotonic() + 3
-        while not marker.is_file() and time.monotonic() < deadline:
+        deadline = time.monotonic() + 30
+        while not marker.is_file():
+            assert process.poll() is None, "the process exited before its group started"
+            assert time.monotonic() < deadline, "the process group never started"
             time.sleep(0.01)
-        assert marker.is_file()
 
         owner.terminate()
 

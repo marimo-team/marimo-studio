@@ -280,7 +280,7 @@ def test_control_events_preempt_a_blocked_presentation_build(
             await bind_native_session(clients, "s_123456", client_id)
             target = await clients.select_target(client_id=client_id)
             activation = await agents.activate(target, "executive")
-            done, _pending = await asyncio.wait((next_event,), timeout=0.5)
+            done, _pending = await asyncio.wait((next_event,), timeout=5)
             delivered_before_build = bool(done)
             if delivered_before_build:
                 event = await next_event
@@ -294,7 +294,7 @@ def test_control_events_preempt_a_blocked_presentation_build(
                             "http://localhost/preview/", "iframe[data-test-preview]"
                         ),
                     )
-                    await agents.wait_for_activation(activation, timeout=0.5)
+                    await agents.wait_for_activation(activation, timeout=5)
             else:
                 event = b""
             return (

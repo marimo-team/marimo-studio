@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import {
+  captureRetiringPreviewReads,
   expect,
   expectEditorModelReplayRecovery,
   retireWorkspacePage,
@@ -102,6 +103,8 @@ test("retargets a wildcard Vanilla value host from page JavaScript", async ({
   const preview = await waitForViewPreview(page, "vanilla-local", "server", 120_000);
   await editorModelRecovery.ready(page);
 
+  // The new value host changes the view's notebook bindings.
+  const retiringReads = await captureRetiringPreviewReads(page, browserDiagnostics);
   await writeViewSource(
     page,
     "vanilla-local",
@@ -128,6 +131,7 @@ test("retargets a wildcard Vanilla value host from page JavaScript", async ({
   );
   const host = preview.locator("#selected-metric");
   await expect(host).toHaveText("42", { timeout: 120_000 });
+  retiringReads.recovered();
 
   await preview.getByRole("button", { name: "Show slow metric" }).click();
   await expect(host).toHaveText("7");

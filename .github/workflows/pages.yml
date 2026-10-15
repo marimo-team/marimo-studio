@@ -294,7 +294,7 @@ jobs:
       queue: max
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.redeployment.outputs.page_url }}
     permissions:
       contents: read
       pages: write
@@ -327,6 +327,17 @@ jobs:
       - name: Deploy to GitHub Pages
         if: steps.latest.outputs.deploy == 'true'
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      # Pages can answer a deployment request with a transient server error.
+      - name: Wait before retrying the deployment
+        if: steps.latest.outputs.deploy == 'true' && steps.deployment.outcome == 'failure'
+        run: sleep 60
+
+      - name: Retry the GitHub Pages deployment
+        if: steps.latest.outputs.deploy == 'true' && steps.deployment.outcome == 'failure'
+        id: redeployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
   gate:

@@ -81,7 +81,9 @@ async def _activate_connected(
         )
     )
     browser = await notebook_scope.clients.select_target(client_id=target.client_id)
-    for _attempt in range(100):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 10
+    while loop.time() < deadline:
         pending = await notebook_scope.agents.pending_operations(browser, None)
         if pending.activation is not None:
             await notebook_scope.agents.acknowledge_activation(
@@ -217,7 +219,9 @@ def test_first_view_activation_replays_across_host_promotion(notebook_path) -> N
     async def next_activation(
         producer: WorkspaceClientEventProducer,
     ) -> tuple[int, str]:
-        for _attempt in range(100):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 10
+        while loop.time() < deadline:
             events = await producer.poll()
             activation = next(
                 (event for event in events if event.kind == "activate"), None

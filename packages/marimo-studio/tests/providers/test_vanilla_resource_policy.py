@@ -336,34 +336,22 @@ def test_vanilla_allows_document_navigation_and_remote_resources(
     assert inspection.diagnostics == ()
 
 
+@pytest.mark.parametrize(
+    "resource",
+    (
+        '<style>body { background: url("http://[") }</style>',
+        '<script src="https:app.js"></script>',
+    ),
+    ids=("malformed-url", "http-url-without-host"),
+)
 def test_vanilla_reports_malformed_resource_urls_as_project_diagnostics(
     tmp_path: Path,
+    resource: str,
 ) -> None:
     project = _project(tmp_path)
     source = project.root / "index.html"
     source.write_text(
-        source.read_text(encoding="utf-8").replace(
-            "</head>",
-            '<style>body { background: url("http://[") }</style></head>',
-        ),
-        encoding="utf-8",
-    )
-
-    inspection = provider.inspect(inspection_request(project))
-
-    assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
-
-
-def test_vanilla_requires_http_resource_urls_to_name_a_host(
-    tmp_path: Path,
-) -> None:
-    project = _project(tmp_path)
-    source = project.root / "index.html"
-    source.write_text(
-        source.read_text(encoding="utf-8").replace(
-            "</head>",
-            '<script src="https:app.js"></script></head>',
-        ),
+        source.read_text(encoding="utf-8").replace("</head>", f"{resource}</head>"),
         encoding="utf-8",
     )
 

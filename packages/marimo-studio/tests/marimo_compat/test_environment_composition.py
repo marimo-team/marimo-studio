@@ -147,7 +147,9 @@ build-backend = "uv_build"
         check=False,
         capture_output=True,
         text=True,
-        timeout=120,
+        # Fresh resolution downloads from the package index. uv retries a stalled
+        # download three times with a 30 s read timeout, so the guard outlasts that.
+        timeout=300,
     )
 
     assert result.returncode == 0, result.stderr

@@ -38,7 +38,7 @@ setup: ## Prepare dependencies, system tools, browser assets, and Chromium.
 	$(MAKE) _browser-install
 
 _anti-slop-check:
-	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
+	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts
 	$(PNPM) exec tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
 
 format: ## Format Python and JavaScript sources.

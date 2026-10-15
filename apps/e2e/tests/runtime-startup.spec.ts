@@ -24,28 +24,7 @@ import {
 
 test.describe.configure({ timeout: 150_000 });
 
-const allowRuntimePendingProjectionReads = (browserDiagnostics: {
-  expectResponse: (expectation: {
-    status: number;
-    path: RegExp;
-    error: string;
-    count: number;
-    required: boolean;
-  }) => { recovered: () => void };
-}) =>
-  browserDiagnostics.expectResponse({
-    status: 409,
-    path: /\/(?:values|outputs)$/,
-    error: "runtime-sync-pending",
-    count: 128,
-    required: false,
-  });
-
-test("keeps the startup document while runtime configuration is pending", async ({
-  browserDiagnostics,
-  page,
-}) => {
-  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
+test("keeps the startup document while runtime configuration is pending", async ({ page }) => {
   let release!: () => void;
   const released = new Promise<void>((resolve) => {
     release = resolve;
@@ -85,14 +64,12 @@ test("keeps the startup document while runtime configuration is pending", async 
   } finally {
     release();
   }
-  pendingProjectionReads.recovered();
 });
 
 test("shows a startup failure and retries configuration on request", async ({
   browserDiagnostics,
   page,
 }) => {
-  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
   const failedConfig = browserDiagnostics.expectResponse({
     status: 409,
     path: /\/_marimo-studio\/views\/dashboard\/config$/,
@@ -131,7 +108,6 @@ test("shows a startup failure and retries configuration on request", async ({
   await waitForPreview(page);
   await expectPreviewInteractive(page, "server");
   await expect(failure).toHaveCount(0);
-  pendingProjectionReads.recovered();
   failedConfig.recovered();
   failedStartup.recovered();
 });
@@ -140,7 +116,6 @@ test("keeps the runtime request pending while a notebook cell runs", async ({
   browserDiagnostics,
   page,
 }) => {
-  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
   const abortedEvents = browserDiagnostics.expectRequestFailure({
     origin: studioOrigin(),
     method: "GET",
@@ -192,7 +167,6 @@ metric`);
   await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
   await waitForPreview(page);
   await expectPreviewInteractive(page, "server");
-  pendingProjectionReads.recovered();
   abortedEvents.recovered();
 });
 
@@ -271,7 +245,6 @@ test("keeps streamed progress with its runtime while switching previews", async 
   browserDiagnostics,
   page,
 }) => {
-  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
   const pendingControls = browserDiagnostics.expectResponse({
     status: 409,
     path: /^\/_marimo-studio\/views\/dashboard\/controls(?:\?|$)/,
@@ -315,17 +288,12 @@ test("keeps streamed progress with its runtime while switching previews", async 
   await waitForPreview(page);
   await expect(progress).toHaveCount(0);
   await expectPreviewInteractive(page, "server");
-  pendingProjectionReads.recovered();
   pendingControls.recovered();
   abortedControls.recovered();
 });
 
 for (const width of [1280, 390]) {
-  test(`keeps preparation layout stable between stages at ${width}px`, async ({
-    browserDiagnostics,
-    page,
-  }) => {
-    const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
+  test(`keeps preparation layout stable between stages at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await installRuntimeProgress(page);
     await page.goto(studioEntryUrl);
@@ -354,15 +322,12 @@ for (const width of [1280, 390]) {
       .evaluate(() => document.dispatchEvent(new Event("test:runtime-complete")));
     await waitForPreview(page);
     await expect(panel).toHaveCount(0);
-    pendingProjectionReads.recovered();
   });
 }
 
 test("keeps rendered content visible while replacement preparation reports progress", async ({
-  browserDiagnostics,
   page,
 }) => {
-  const pendingProjectionReads = allowRuntimePendingProjectionReads(browserDiagnostics);
   await installRuntimeProgress(page, false);
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
@@ -390,5 +355,4 @@ test("keeps rendered content visible while replacement preparation reports progr
     await writeDashboardSource(page, original);
     await waitForPreview(page);
   }
-  pendingProjectionReads.recovered();
 });

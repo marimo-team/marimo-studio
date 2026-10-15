@@ -14,7 +14,7 @@
     "site:build": "pnpm test && pnpm examples:check && vitepress build && pnpm verify",
     "preview": "portless run --name preview.docs.marimo-studio pnpm run preview:server",
     "preview:server": "node scripts/serve-docs.ts preview",
-    "test": "vp test scripts/source-integrity.test.ts scripts/example-publication.test.ts scripts/example-selection.test.ts scripts/server-arguments.test.ts",
+    "test": "vp test scripts",
     "thumbnails": "node scripts/capture-thumbnails.ts",
     "verify": "node scripts/verify-build.ts"
   },
