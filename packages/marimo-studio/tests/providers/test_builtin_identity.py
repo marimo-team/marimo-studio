@@ -1,39 +1,46 @@
-"""Validate built-in provider catalog and Vanilla projection identity."""
+"""Validate built-in provider identities and their install requirements."""
 
 from __future__ import annotations
 
+from importlib.metadata import distribution, metadata
+
 import pytest
+from packaging.requirements import Requirement
 
 from marimo_studio.view_providers._host import provider_registry
+from marimo_studio.view_providers._host.registry import ENTRY_POINT_GROUP
 
 pytestmark = pytest.mark.supported_python
 
 
 def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
-    registry = provider_registry()
     diagnostics = tuple(
-        item for item in registry.diagnostics() if item.distribution == "marimo-studio"
+        item
+        for item in provider_registry().diagnostics()
+        if item.distribution == "marimo-studio"
     )
 
-    assert {item.registration: item.provider_key for item in diagnostics} == {
-        "latex": "marimo-studio/latex",
-        "notebook-kit": "marimo-studio/notebook-kit",
-        "quarto": "marimo-studio/quarto",
-        "react": "marimo-studio/react",
-        "svelte": "marimo-studio/svelte",
-        "typst": "marimo-studio/typst",
-        "vanilla": "marimo-studio/vanilla",
+    declared = {
+        entry_point.name
+        for entry_point in distribution("marimo-studio").entry_points.select(
+            group=ENTRY_POINT_GROUP
+        )
     }
-    assert {
-        provider.key: provider.requirement
-        for provider, _starter in registry.starter_records()
+    assert declared
+    assert {item.registration for item in diagnostics} == declared
+    for item in diagnostics:
+        assert item.provider_key == f"marimo-studio/{item.registration}"
+
+
+def test_built_in_provider_requirements_name_declared_studio_extras() -> None:
+    extras = set(metadata("marimo-studio").get_all("Provides-Extra") or ())
+    requirements = [
+        Requirement(provider.requirement)
+        for provider, _starter in provider_registry().starter_records()
         if provider.distribution == "marimo-studio"
-    } == {
-        "marimo-studio/latex": "marimo-studio",
-        "marimo-studio/notebook-kit": "marimo-studio[deno]",
-        "marimo-studio/quarto": "marimo-studio",
-        "marimo-studio/react": "marimo-studio[deno]",
-        "marimo-studio/svelte": "marimo-studio[deno]",
-        "marimo-studio/typst": "marimo-studio[typst]",
-        "marimo-studio/vanilla": "marimo-studio",
-    }
+    ]
+
+    assert requirements
+    for requirement in requirements:
+        assert requirement.name == "marimo-studio"
+        assert requirement.extras <= extras, requirement

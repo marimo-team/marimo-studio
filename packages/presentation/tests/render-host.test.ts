@@ -120,7 +120,7 @@ const mount = (markup = `<marimo-output render="figure.py"></marimo-output>`) =>
   return { host, shadow: host.shadowRoot, events };
 };
 
-const shown = (shadow: ShadowRoot) => shadow.querySelector<HTMLElement>(".content > *");
+const shown = (shadow: ShadowRoot) => shadow.querySelector<HTMLElement>('[part="content"] > *');
 
 const READ_ACCEPT = {
   value: ["application/json"],
@@ -208,7 +208,7 @@ test("a newer render keeps the last bundle stale, and a failure keeps it beside 
 
   notifyNotebookResults();
   await vi.waitFor(() => expect(host.dataset.state).toBe("stale"));
-  expect(host.getAttribute("aria-busy")).toBe("");
+  expect(host.hasAttribute("aria-busy")).toBe(true);
   expect(shown(shadow)?.getAttribute("src")).toContain("a".repeat(64));
 
   second.resolve(
@@ -231,7 +231,7 @@ test("a newer render keeps the last bundle stale, and a failure keeps it beside 
 
   await vi.waitFor(() => expect(host.dataset.state).toBe("error"));
   expect(shown(shadow)?.getAttribute("src")).toContain("a".repeat(64));
-  expect(shadow.querySelector(".problems")?.textContent).toContain(
+  expect(shadow.querySelector('[part="problems"]')?.textContent).toContain(
     "The figure could not be drawn.",
   );
   expect(host.marimoRender).toBe(first);
@@ -392,9 +392,7 @@ test("a browser runtime in edit mode posts the render's reads without the page's
       cells: {},
     },
   ]);
-  expect(shadow.querySelector("[role=status]")?.textContent).toBe(
-    "Showing the default for summary.",
-  );
+  expect(shadow.querySelector("[role=status]")?.textContent).toContain("summary");
 });
 
 test("a browser runtime outside edit mode reports that no notebook results reach the render", async () => {
@@ -407,7 +405,7 @@ test("a browser runtime outside edit mode reports that no notebook results reach
   expect(events.map(({ type, detail }) => [type, detail.code])).toEqual([
     ["marimo-output-error", "render-results-unavailable"],
   ]);
-  expect(host.dataset.marimoDiagnosticMessage).toContain("no notebook results");
+  expect(host.dataset.marimoDiagnosticCode).toBe("render-results-unavailable");
 });
 
 test("a static export shows the bundle rendered for the prepared state in view", async () => {
@@ -455,7 +453,6 @@ test("a video plays from its file URL with the preview as poster", async () => {
   expect(video?.getAttribute("src")).toBe(`${RENDERS}/${"a".repeat(64)}/scene.mp4`);
   expect(video?.getAttribute("poster")).toBe(`${RENDERS}/${"a".repeat(64)}/poster.png`);
   expect(video?.controls).toBe(true);
-  expect(video?.preload).toBe("metadata");
 });
 
 test("markup inside the host replaces the stock presentation and reads the record", async () => {

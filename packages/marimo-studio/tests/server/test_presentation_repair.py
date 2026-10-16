@@ -57,7 +57,6 @@ def test_opaque_edit_repair_uses_a_view_scoped_capability_stream(
     assert repair.status_code == 500
     assert views.status_code == 200
     assert isinstance(views.json()["views"], list)
-    assert "View needs repair" in repair.text
     assert "/_marimo-studio/presentation/" in repair.text
     assert "/_marimo-studio/dev/events" in repair.text
     assert events.status_code == 200

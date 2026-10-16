@@ -34,6 +34,7 @@ from marimo_studio.view_providers._host import starters as starters_module
 from marimo_studio.view_providers._host.registry import (
     ProviderRegistry,
 )
+from marimo_studio.view_providers._targets import MAX_VALUE_TARGETS
 
 from ..provider_test_support import (
     ProviderStub,
@@ -89,29 +90,16 @@ def test_provider_info_contains_only_discovery_contracts() -> None:
 
 
 @pytest.mark.parametrize(
-    ("reported", "expected_reason", "expected_action"),
+    "reported",
     (
-        (
-            ProviderAvailability(False),
-            "The provider reported that it is unavailable.",
-            "Repair the provider installation or choose another provider.",
-        ),
-        (
-            ProviderAvailability(False, reason="The executable is missing."),
-            "The executable is missing.",
-            "Repair the provider installation or choose another provider.",
-        ),
-        (
-            ProviderAvailability(False, action="Install the provider executable."),
-            "The provider reported that it is unavailable.",
-            "Install the provider executable.",
-        ),
+        ProviderAvailability(False),
+        ProviderAvailability(False, reason="The executable is missing."),
+        ProviderAvailability(False, action="Install the provider executable."),
     ),
+    ids=("bare", "reason", "action"),
 )
 def test_unavailable_provider_records_have_actionable_recovery(
     reported: ProviderAvailability,
-    expected_reason: str,
-    expected_action: str,
 ) -> None:
     provider = ProviderStub("example/html", "html")
     cast(Any, provider).availability = lambda: reported
@@ -119,8 +107,12 @@ def test_unavailable_provider_records_have_actionable_recovery(
 
     availability = installed.availability()
 
-    assert availability.reason == expected_reason
-    assert availability.action == expected_action
+    assert availability.reason
+    assert availability.action
+    if reported.reason is not None:
+        assert availability.reason == reported.reason
+    if reported.action is not None:
+        assert availability.action == reported.action
 
 
 def test_build_inputs_exclude_undeclared_dependency_directories(
@@ -486,7 +478,10 @@ def test_provider_site_targets_use_the_runtime_selector_grammar(
     (
         ((), "non-empty tuple"),
         (("summary", "summary"), "unique"),
-        (tuple(f"value_{index}" for index in range(101)), "100-target limit"),
+        (
+            tuple(f"value_{index}" for index in range(MAX_VALUE_TARGETS + 1)),
+            "target limit",
+        ),
     ),
 )
 def test_provider_site_target_lists_are_provider_contracts(

@@ -140,10 +140,9 @@ test("reloads a cached sibling after notebook state changes", async ({
   await studioCli.addWorkspaceView(workspaceNotebookPath, "report");
   const reportPath = resolve(workspaceDirectory, "studio/notebook/report/index.html");
   const reportSource = await readWorkspaceFile(reportPath);
-  const resultsSection = '<section class="grid gap-6" aria-label="Notebook results">';
   const projectedReport = reportSource.replace(
-    resultsSection,
-    `${resultsSection}<strong mo-value="metric"></strong>`,
+    /<section[^>]*aria-label="Notebook results"[^>]*>/,
+    '$&<strong mo-value="metric"></strong>',
   );
   if (projectedReport === reportSource) {
     throw new Error("Could not find the report notebook-results section");

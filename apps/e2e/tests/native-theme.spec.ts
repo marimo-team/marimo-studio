@@ -1,4 +1,4 @@
-import { expect, studioEntryUrl, test, waitForPreview } from "./fixture.ts";
+import { editorFrame, expect, studioEntryUrl, test, waitForPreview } from "./fixture.ts";
 
 for (const theme of ["light", "dark"] as const) {
   test(`keeps the native ${theme} theme when the system preference differs`, async ({ page }) => {
@@ -6,13 +6,13 @@ for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: system });
     await page.goto(studioEntryUrl);
     await waitForPreview(page);
-    const editorBody = page.frameLocator("#marimo-studio-editor").locator("body");
+    const editorBody = editorFrame(page).locator("body");
     await editorBody.evaluate((body, resolved) => {
       body.dataset.theme = resolved;
     }, system);
     const studio = page.locator(".studio[data-theme]");
     await expect(studio).toHaveAttribute("data-theme", system);
-    const toolbar = page.locator(".studio-toolbar");
+    const toolbar = page.getByRole("banner", { name: "Studio" });
     const background = await toolbar.evaluate(
       (element) => getComputedStyle(element).backgroundColor,
     );

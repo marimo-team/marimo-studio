@@ -8,7 +8,7 @@ import importlib.util
 import json
 import os
 import subprocess
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError, distribution, version
 from pathlib import Path
 
 import marimo_studio.authoring as studio_authoring
@@ -90,7 +90,9 @@ async def _prepare(root: Path) -> None:
     project = tomlkit.table()
     project["name"] = "provider-bootstrap-acceptance"
     project["version"] = "0.0.0"
-    project["requires-python"] = ">=3.10,<3.15"
+    project["requires-python"] = distribution("marimo-studio").metadata[
+        "Requires-Python"
+    ]
     project["dependencies"] = [str(studio), str(external)]
     document["project"] = project
     tool = tomlkit.table()
@@ -154,10 +156,8 @@ def _run(
 def _verify(root: Path) -> None:
     notebook = root / "analysis.py"
     _assert_optional_providers_absent()
-    expected = {
-        f"marimo-studio[deno]=={version('marimo-studio')}",
-        f"{_EXTERNAL_DISTRIBUTION}==1.0.0",
-    }
+    external = _requirements(notebook)[canonicalize_name(_EXTERNAL_DISTRIBUTION)]
+    expected = {f"marimo-studio[deno]=={version('marimo-studio')}", str(external)}
     created = _run(
         "view",
         "create",

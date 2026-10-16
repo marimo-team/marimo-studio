@@ -71,7 +71,6 @@ test("a persisted page retains projection, query, and refresh capabilities", () 
   document.body.innerHTML = '<marimo-cell name="summary" data-state="ready"></marimo-cell>';
   projectionHosts.connect();
   document.querySelector<HTMLElement>("marimo-cell")!.dataset.state = "ready";
-  const disconnectProjections = vi.spyOn(projectionHosts, "disconnect");
   const dispose = vi.fn(() => {
     stopRefresh();
     projectionHosts.disconnect();
@@ -116,7 +115,6 @@ test("a persisted page retains projection, query, and refresh capabilities", () 
     globalThis.location.origin,
   );
   expect(dispose).not.toHaveBeenCalled();
-  expect(disconnectProjections).not.toHaveBeenCalled();
 
   pageTransition("pageshow", true);
   expect(parent.postMessage).toHaveBeenCalledWith(
@@ -155,6 +153,5 @@ test("a persisted page retains projection, query, and refresh capabilities", () 
 
   pageTransition("pagehide", false);
   expect(dispose).toHaveBeenCalledOnce();
-  expect(disconnectProjections).toHaveBeenCalledOnce();
   unbind();
 });

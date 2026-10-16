@@ -19,7 +19,6 @@ from .workspace_test_support import (
 
 def test_symbolic_projections_include_each_valid_view(notebook_path: Path) -> None:
     prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     _shell(

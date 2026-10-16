@@ -19,6 +19,7 @@ from marimo_studio._workspace.project_manifest import (
 from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers import JsonValue, ProviderError, SourceLocation
 from marimo_studio.view_providers._builtin.quarto import provider
+from marimo_studio.view_providers._builtin.quarto._render import QUARTO_MIN_VERSION
 
 from ..helpers import load_standalone_project
 from ..provider_test_support import provider_starter_context, publish
@@ -434,9 +435,8 @@ def test_quarto_errors_carry_quarto_output_and_name_the_file_to_fix(
     assert state is not None
     (diagnostic,) = state.build.diagnostics
     assert diagnostic.code == "quarto-render-failed"
-    assert diagnostic.message.startswith("YAMLException")
     assert "title: [unclosed" in diagnostic.message
-    assert diagnostic.hint == "Fix index.qmd, then save it to render again."
+    assert "index.qmd" in diagnostic.hint
 
 
 @pytest.mark.parametrize("activated", (False, True))
@@ -447,16 +447,17 @@ def test_quarto_from_a_conda_environment_requires_activation(
 ) -> None:
     prefix = tmp_path / "env"
     (prefix / "conda-meta").mkdir(parents=True)
-    (prefix / "conda-meta" / "quarto-1.9.38-h0_0.json").write_text("{}")
+    version = QUARTO_MIN_VERSION
+    (prefix / "conda-meta" / f"quarto-{version}-h0_0.json").write_text("{}")
     if os.name == "nt":
         bin_dir = prefix / "Library" / "bin"
         bin_dir.mkdir(parents=True)
-        (bin_dir / "quarto.cmd").write_text("@echo 1.9.38\r\n", encoding="utf-8")
+        (bin_dir / "quarto.cmd").write_text(f"@echo {version}\r\n", encoding="utf-8")
     else:
         bin_dir = prefix / "bin"
         bin_dir.mkdir()
         quarto = bin_dir / "quarto"
-        quarto.write_text("#!/bin/sh\necho 1.9.38\n", encoding="utf-8")
+        quarto.write_text(f"#!/bin/sh\necho {version}\n", encoding="utf-8")
         quarto.chmod(0o755)
     monkeypatch.setenv("PATH", str(bin_dir))
     if activated:
@@ -467,7 +468,7 @@ def test_quarto_from_a_conda_environment_requires_activation(
     availability = provider.availability()
 
     if activated:
-        assert (availability.available, availability.version) == (True, "1.9.38")
+        assert (availability.available, availability.version) == (True, version)
     else:
         assert not availability.available
         assert "not activated" in (availability.reason or "")

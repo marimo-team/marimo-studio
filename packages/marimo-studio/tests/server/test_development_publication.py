@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from typing import Any, cast
 
@@ -293,7 +294,7 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
             raise PublicationSuperseded
         return {"schema": 1, "phase": "published"}, "rev-2", "art-2"
 
-    async def exercise() -> bytes:
+    async def exercise() -> dict[str, Any]:
         coordinator = DevelopmentCoordinator()
         monkeypatch.setattr(coordinator, "project_catalog", unavailable_catalog)
         monkeypatch.setattr(coordinator, "publish", publish)
@@ -317,15 +318,16 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
             while True:
                 event = await broker.receive()
                 assert isinstance(event, bytes)
-                if b'"kind":"presentation"' in event:
-                    return event
+                payload = json.loads(event.split(b"data: ", 1)[1])
+                if payload["kind"] == "presentation":
+                    return payload
         finally:
             producer.cancel()
             await asyncio.gather(producer, return_exceptions=True)
             await coordinator.close()
 
     presentation = asyncio.run(asyncio.wait_for(exercise(), timeout=5))
-    assert b'"revision":"rev-2"' in presentation
+    assert presentation["revision"] == "rev-2"
 
 
 def test_a_running_warmup_preempted_by_a_foreground_publication_reports_supersede() -> (

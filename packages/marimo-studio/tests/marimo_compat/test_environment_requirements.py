@@ -204,7 +204,6 @@ def test_external_provider_requires_an_active_durable_dependency() -> None:
             marker_environment=_environment(platform="linux"),
         )
 
-    assert str(raised.value) == (
-        f"The view provider selected in {manifest} requires 'example-suite'. "
-        "Add it to the notebook or project dependencies, then retry."
-    )
+    message = str(raised.value)
+    assert str(manifest) in message
+    assert "'example-suite'" in message

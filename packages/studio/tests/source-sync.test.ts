@@ -307,7 +307,7 @@ test("a clean external edit replaces the loaded source", async () => {
 
   await source.externalChange("r2");
 
-  assert.deepEqual(result.documents, ["", "initial", "agent edit"]);
+  assert.equal(result.documents.at(-1), "agent edit");
   assert.deepEqual(result.states.at(-1)?.phase, "external");
 });
 
@@ -419,15 +419,11 @@ test("an edit made during the initial read is preserved as a conflict", async ()
 
   assert.equal(await loading, false);
   assert.equal(source.hasPendingChanges, true);
-  assert.deepEqual(result.states.at(-1), {
-    path: "src/App.tsx",
-    phase: "conflict",
-    conflict: {
-      kind: "revision",
-      local: "local draft",
-      remote: { content: "disk source", revision: "r1" },
-    },
-    message: undefined,
+  assert.equal(result.states.at(-1)?.phase, "conflict");
+  assert.deepEqual(result.states.at(-1)?.conflict, {
+    kind: "revision",
+    local: "local draft",
+    remote: { content: "disk source", revision: "r1" },
   });
 });
 
@@ -752,17 +748,12 @@ test("an external deletion survives a cancelled staged load", async () => {
 
   assert.deepEqual(result.documents.at(-1), "");
   assert.deepEqual(result.states.at(-1)?.phase, "error");
-  assert.deepEqual(
-    result.states.at(-1)?.message,
-    "src/app.css was deleted on disk. Restore it before saving in Studio.",
-  );
+  const deletion = result.states.at(-1)?.message;
+  assert.match(deletion ?? "", /src\/app\.css/u);
 
   source.beginLoad();
   source.cancelLoad();
 
   assert.deepEqual(result.states.at(-1)?.phase, "error");
-  assert.deepEqual(
-    result.states.at(-1)?.message,
-    "src/app.css was deleted on disk. Restore it before saving in Studio.",
-  );
+  assert.equal(result.states.at(-1)?.message, deletion);
 });

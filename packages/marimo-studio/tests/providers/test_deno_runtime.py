@@ -23,6 +23,7 @@ from marimo_studio.view_providers import (
 from marimo_studio.view_providers._builtin import _deno
 from marimo_studio.view_providers._builtin._deno import analysis as _deno_analysis
 from marimo_studio.view_providers._builtin._deno import cache as _deno_cache
+from marimo_studio.view_providers._builtin._deno import project as _deno_project
 from marimo_studio.view_providers._builtin._deno import runtime as _deno_runtime
 from marimo_studio.view_providers._builtin._deno.project import (
     copy_public_assets,
@@ -227,16 +228,20 @@ def test_public_assets_reject_case_equivalent_generated_paths(tmp_path: Path) ->
         copy_public_assets(work, output)
 
 
-def test_public_assets_stop_at_the_published_file_limit(tmp_path: Path) -> None:
+def test_public_assets_stop_at_the_published_file_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     work = tmp_path / "work"
     output = tmp_path / "output"
     (work / "public").mkdir(parents=True)
     (work / "public" / "logo.svg").write_text("public", encoding="utf-8")
     output.mkdir()
-    for index in range(4_097):
+    for index in range(3):
         (output / f"{index}.js").touch()
+    monkeypatch.setattr(_deno_project, "_MAX_TREE_ENTRIES", 2)
 
-    with pytest.raises(ValueError, match="more than 4096 files"):
+    with pytest.raises(ValueError, match="more than 2 files"):
         copy_public_assets(work, output)
 
 

@@ -202,12 +202,8 @@ def test_native_editor_transports_require_the_binding_capability(
     asyncio.run(middleware(scope, receive, send))
 
     assert delegated == []
-    assert sent == [
-        {
-            "type": "websocket.close",
-            "code": 1008,
-            "reason": "The editor binding capability is invalid.",
-        }
+    assert [(message["type"], message["code"]) for message in sent] == [
+        ("websocket.close", 1008)
     ]
 
 

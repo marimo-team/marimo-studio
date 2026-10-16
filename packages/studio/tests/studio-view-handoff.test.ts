@@ -122,10 +122,10 @@ describe("Studio view handoff lifecycle", () => {
     WorkspaceEventSource.instances[0]?.emit("change", JSON.stringify({ kind: "views" }));
 
     await vi.waitFor(() => expect(services.views.getSnapshot().current).toBe("report"));
-    expect(services.views.getSnapshot().selectionMessage).toEqual({
-      text: "View dashboard was removed. Showing report.",
-      state: "warning",
-    });
+    const message = services.views.getSnapshot().selectionMessage;
+    expect(message?.state).toBe("warning");
+    expect(message?.text).toContain("dashboard");
+    expect(message?.text).toMatch(/\bremoved\b/iu);
     await services.close();
   });
 

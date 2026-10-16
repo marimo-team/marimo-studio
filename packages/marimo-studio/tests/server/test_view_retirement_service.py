@@ -534,8 +534,8 @@ def test_rejected_retirement_fails_before_server_teardown(
     monkeypatch.setattr(retirement_service, "_RETIREMENT_SLOTS", slots)
 
     async def exercise() -> None:
-        with pytest.raises((WorkspaceGenerationConflictError, LastViewError)):
-            if rejection == "stale-owner":
+        if rejection == "stale-owner":
+            with pytest.raises(WorkspaceGenerationConflictError):
                 await _retire(
                     studio,
                     events,
@@ -544,7 +544,8 @@ def test_rejected_retirement_fails_before_server_teardown(
                     ),
                     commit=unexpected_commit,
                 )
-            else:
+        else:
+            with pytest.raises(LastViewError):
                 await _retire(studio, events, admit=reject, commit=unexpected_commit)
 
     asyncio.run(exercise())

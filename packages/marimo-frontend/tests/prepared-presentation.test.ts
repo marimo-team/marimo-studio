@@ -139,13 +139,11 @@ test("prepared presentations reject roots from another document", () => {
   const ownerDocument = document.implementation.createHTMLDocument("prepared-secondary");
   const mountedRoot = ownerDocument.createElement("div");
   ownerDocument.body.append(mountedRoot);
-  assert.throws(
-    () =>
-      mount({
-        root: mountedRoot,
-        presentation,
-        theme: stableTheme,
-      }),
-    /root in the current document/u,
+  assert.throws(() =>
+    mount({
+      root: mountedRoot,
+      presentation,
+      theme: stableTheme,
+    }),
   );
 });

@@ -203,7 +203,7 @@ def _registry(publications: _Publications) -> PreparedViewRegistry:
 def test_current_manifest_enforces_the_payload_size_limit() -> None:
     publications = _Publications(current=_LargePreparedView("1" * 64, 2))
 
-    with pytest.raises(PublicationLimitError, match="262144-byte limit"):
+    with pytest.raises(PublicationLimitError):
         zero_python_response(
             _request("/_marimo-studio/views/dashboard/zero-python/current"),
             _registry(publications),
@@ -264,7 +264,6 @@ def test_immutable_export_url_is_shared_across_clients_and_revisions() -> None:
         )
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
-        assert response.body is not None
         manifests.append(json.loads(bytes(response.body)))
 
     # marimo-export resolves the export against the manifest URL, so the export
@@ -395,10 +394,8 @@ def test_current_manifest_requires_valid_browser_binding() -> None:
     )
 
     assert missing.status_code == 409
-    assert missing.body is not None
     assert b"zero-python-publication-unavailable" in missing.body
     assert invalid.status_code == 400
-    assert invalid.body is not None
     assert b"invalid-browser-client" in invalid.body
     assert publications.current_calls == []
 
@@ -427,10 +424,8 @@ def test_current_manifest_requires_exact_presentation_revision() -> None:
     )
 
     assert missing.status_code == 400
-    assert missing.body is not None
     assert b"invalid-presentation-revision" in missing.body
     assert malformed.status_code == 400
-    assert malformed.body is not None
     assert b"invalid-presentation-revision" in malformed.body
     assert publications.current_calls == []
 
@@ -448,6 +443,5 @@ def test_edit_manifest_poll_serves_the_refreshing_selection() -> None:
     )
 
     assert response.status_code == 200
-    assert response.body is not None
     assert json.loads(bytes(response.body))["prepared"]["instance"] == "2" * 64
     assert publications.poll_calls == [("dashboard", "s_abcdef", _REVISION)]

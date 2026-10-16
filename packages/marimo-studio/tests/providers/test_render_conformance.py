@@ -152,13 +152,9 @@ def test_reads_of_one_target_in_one_render_accept_the_same_media_types(
     (conflict,) = _conflicts(_inspect(tmp_path, (render,)))
 
     assert conflict.source == _at(2)
-    assert conflict.message == (
-        "chart is read as image/png here and as application/pdf at index.html:1."
-    )
-    assert conflict.hint == (
-        "Give every read of one output in the render of report.typ "
-        "the same accept list."
-    )
+    for identifier in ("chart", "image/png", "application/pdf", "index.html:1"):
+        assert identifier in conflict.message
+    assert "report.typ" in conflict.hint
 
 
 def test_a_page_host_and_renders_may_read_one_target_in_different_forms(

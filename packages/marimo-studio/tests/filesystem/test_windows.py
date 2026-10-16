@@ -146,6 +146,8 @@ def test_handle_inspection_failure_reports_the_windows_error(
             share=windows._FILE_SHARE_ALL,
         )
 
-    assert str(raised.value) == "Could not inspect directory: view (Windows error 5)"
+    message = str(raised.value)
+    assert "view" in message
+    assert "Windows error 5" in message
     assert raised.value.errno is None
     assert kernel32.closed == [101]

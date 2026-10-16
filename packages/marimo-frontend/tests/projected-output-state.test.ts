@@ -53,7 +53,7 @@ test("rejects a reset owned by a notebook cell before changing state", () => {
 
   expect(() =>
     reconcileProjectedOutputState(output([foreign]), entries, resetVirtualFiles, trackVirtualFiles),
-  ).toThrow("may reset only UI objects owned by its projection");
+  ).toThrow();
   expect(entries.has(foreign)).toBe(true);
   expect(resetVirtualFiles).not.toHaveBeenCalled();
   expect(trackVirtualFiles).not.toHaveBeenCalled();

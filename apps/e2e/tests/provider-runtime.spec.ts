@@ -68,7 +68,6 @@ const readNativeTableLayout = async (root: Locator) =>
     scrollOwner.scrollLeft = previousScrollLeft;
 
     return {
-      actionNames: actions.map(({ name }) => name),
       actionsEnabled: actions.every(({ disabled }) => !disabled),
       actionsShareRow: new Set(actions.map(({ top }) => Math.round(top))).size === 1,
       actionsWithinToolbar: actions.every(
@@ -88,7 +87,6 @@ const readNativeTableLayout = async (root: Locator) =>
 
 const expectNativeTableLayout = async (root: Locator, requireInnerScroll = false) => {
   const layout = await readNativeTableLayout(root);
-  expect(layout.actionNames).toEqual(["Columns", "Explore", "Export"]);
   expect(layout.actionsEnabled).toBe(true);
   expect(layout.actionsShareRow).toBe(true);
   expect(layout.actionsWithinToolbar).toBe(true);

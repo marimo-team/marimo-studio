@@ -75,8 +75,6 @@ def test_explicit_host_delegates_edit_root_before_allocating_a_notebook_scope(
 
     assert preflight.status_code == 200
     assert root.status_code == 200
-    for texture in ("gradient", "noise"):
-        assert f'rel="preload" href="./assets/{texture}-' not in root.text
 
 
 def test_explicit_host_enters_a_ready_workspace_through_studio(
@@ -157,7 +155,7 @@ def test_explicit_host_documents_allow_host_declared_parent_origins(
         handoff = client.get("/")
         native = client.get("/?session_id=s_123456")
 
-    assert handoff.text.count("<title>Opening notebook</title>") == 1
+    assert 'id="marimo-studio-host-session"' in handoff.text
     assert "<marimo-filename" in native.text
     for response in (handoff, native):
         assert response.headers["content-security-policy"] == (

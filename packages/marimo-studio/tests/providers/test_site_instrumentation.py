@@ -329,18 +329,11 @@ def test_output_hosts_publish_the_media_types_they_accept(
 @pytest.mark.parametrize(
     ("accept", "problem"),
     [
-        (
-            "png",
-            "a page shows image/svg+xml, image/png, image/jpeg, image/gif, not png",
-        ),
+        ("png", "not png"),
         ("image/*", "not image/*"),
         ("image/png image/png", "'image/png' appears more than once"),
-        ("", "accept must list 1 to 32 media types"),
-        (
-            "image/svg+xml application/pdf",
-            "a page shows image/svg+xml, image/png, image/jpeg, image/gif, "
-            "not application/pdf",
-        ),
+        ("", "accept must list"),
+        ("image/svg+xml application/pdf", "not application/pdf"),
     ],
 )
 def test_an_invalid_accept_list_is_reported_at_its_host(
@@ -405,9 +398,8 @@ def test_hosts_of_one_output_accept_the_same_media_types(
     )
     assert conflict.severity == "error"
     assert conflict.source == SourceLocation(ENTRY, 5, 1)
-    assert conflict.message == (
-        "chart is read as marimo's output here and as image/svg+xml at index.html:4."
-    )
+    for detail in ("chart", "image/svg+xml", "index.html:4"):
+        assert detail in conflict.message
 
 
 def test_accept_conflicts_report_each_host_once() -> None:

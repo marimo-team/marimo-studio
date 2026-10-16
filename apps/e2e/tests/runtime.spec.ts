@@ -277,14 +277,14 @@ test("preserves native output state across HTML edits and replaces terminal fail
     "data-marimo-diagnostic-code",
     "projection-output-variable-not-found",
   );
-  await expect(wasmSummary).toContainText("does not resolve in this notebook");
+  await expect(wasmSummary).toContainText("missing_output");
   await activateServerPreview(page, browserDiagnostics);
   await expect(serverSummary).toHaveAttribute("data-state", "error");
   await expect(serverSummary).toHaveAttribute(
     "data-marimo-diagnostic-code",
     "projection-output-variable-not-found",
   );
-  await expect(serverSummary).toContainText("does not resolve in this notebook");
+  await expect(serverSummary).toContainText("missing_output");
 
   await page.getByLabel(/preview runtime$/).click();
   await page.getByRole("button", { name: /Browser/ }).click();
@@ -298,11 +298,15 @@ test("preserves native output state across HTML edits and replaces terminal fail
     .not.toBe(unavailableRevision);
   await waitForPreview(page, "wasm");
   await expect(wasmSummary).toHaveAttribute("data-state", "ready");
-  await expect(wasmSummary.locator("h3")).toHaveText("Current total: 42");
+  await expect(
+    wasmSummary.getByRole("heading", { name: "Current total: 42", exact: true }),
+  ).toBeVisible();
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
   await activateServerPreview(page, browserDiagnostics);
   await expect(serverSummary).toHaveAttribute("data-state", "ready");
-  await expect(serverSummary.locator("h3")).toHaveText("Current total: 42");
+  await expect(
+    serverSummary.getByRole("heading", { name: "Current total: 42", exact: true }),
+  ).toBeVisible();
   await expect(columns).toHaveAttribute("aria-expanded", "true");
   staleOutputs.recovered();
   await recoverRequestAbort(refreshedOutputs);
@@ -570,12 +574,13 @@ test("refreshes a popout view and preserves its public query across reload", asy
       target.searchParams.set("access_token", "private-token");
       globalThis.history.replaceState(globalThis.history.state, "", target);
     });
-    await expect(popout).toHaveURL(/\/dashboard\/\?file=notebook\.py&region=apac$/);
-    const publicUrl = new URL(popout.url());
-    expect(publicUrl.searchParams.get("file")).toBe("notebook.py");
-    expect(publicUrl.searchParams.get("region")).toBe("apac");
-    expect(publicUrl.searchParams.has("marimo_studio_server")).toBe(false);
-    expect(publicUrl.searchParams.has("access_token")).toBe(false);
+    await expect
+      .poll(() => [...new URL(popout.url()).searchParams].sort(([a], [b]) => a.localeCompare(b)))
+      .toEqual([
+        ["file", "notebook.py"],
+        ["region", "apac"],
+      ]);
+    expect(new URL(popout.url()).pathname).toMatch(/\/dashboard\/$/);
 
     const preReloadDocument = browserDiagnostics.expectActiveRequestAbort({
       origin: studioOrigin(),

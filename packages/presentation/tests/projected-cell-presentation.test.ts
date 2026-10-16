@@ -10,6 +10,12 @@ import type {
 
 import { ProjectedCellPresentation } from "@marimo-studio/marimo-frontend/cell-presentation";
 import { mountPreparedPresentation } from "@marimo-studio/marimo-frontend/prepared-presentation";
+import {
+  PROJECTED_OUTPUT_ACTIVE_OWNER_ATTRIBUTE,
+  PROJECTED_OUTPUT_OWNER_ATTRIBUTE,
+  PROJECTED_OUTPUT_SCOPE_ATTRIBUTE,
+  projectedOutputFunctionOwner,
+} from "@marimo-studio/marimo-frontend/projected-output-function-gate";
 import { act, createElement } from "react";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -69,6 +75,14 @@ const readyProjection = (): CellProjection => ({
   state: "ready",
 });
 
+const projectedOutput = (root: HTMLElement) => {
+  const wrapper = root.querySelector<HTMLElement>(`[${PROJECTED_OUTPUT_SCOPE_ATTRIBUTE}]`)!;
+  return {
+    active: () => wrapper.getAttribute(PROJECTED_OUTPUT_ACTIVE_OWNER_ATTRIBUTE),
+    output: () => wrapper.getAttribute(PROJECTED_OUTPUT_OWNER_ATTRIBUTE),
+  };
+};
+
 const mount = (consoleOutputs: CellConsoleOutput[], onSubmitStdin = vi.fn()) => {
   const root = document.createElement("div");
   document.body.append(root);
@@ -100,24 +114,22 @@ afterEach(async () => {
 
 test("projected cells omit editor affordances while retaining published channels", () => {
   const { root } = mount([consoleOutput("marimo-error", "calculation failed")]);
-  const projected = root.querySelector<HTMLElement>("[data-marimo-presentation='projected-cell']");
+  const projected = root.querySelector<HTMLElement>('[aria-label="Forecast parameters"]');
 
-  expect(projected?.getAttribute("aria-label")).toBe("Forecast parameters");
   expect(projected?.getAttribute("role")).toBe("group");
   expect(root.textContent).toContain("calculation failed");
   expect(root.textContent).toContain("published output");
   expect(root.querySelector("[contenteditable='true']")).toBeNull();
-  expect(root.querySelector("[data-testid='console-output-area']")?.getAttribute("tabindex")).toBe(
-    null,
-  );
 });
 
 test("projected stdin uses the host label and submits through the runtime callback", async () => {
   const onSubmitStdin = vi.fn();
   const { root } = mount([consoleOutput("stdin", "Your region?")], onSubmitStdin);
-  const input = root.querySelector<HTMLInputElement>("[data-testid='console-input']");
+  const input = root.querySelector<HTMLInputElement>(
+    'input[aria-label="Forecast parameters input"]',
+  );
 
-  expect(input?.getAttribute("aria-label")).toBe("Forecast parameters input");
+  expect(input).not.toBeNull();
   await act(async () => {
     if (!input) {
       throw new Error("Expected projected stdin to render an input");
@@ -159,10 +171,10 @@ test("projected cell functions follow the rendered cell generation", () => {
     render: render(first, readyProjection()),
   });
   mounted.push(handle);
-  const projected = root.querySelector<HTMLElement>("[data-marimo-studio-projected-output]")!;
+  const projected = projectedOutput(root);
 
-  expect(projected.dataset.marimoStudioActiveProjectionOwner).toBe('["revision-a",1]');
-  expect(projected.dataset.marimoStudioOutputProjectionOwner).toBe('["revision-a",1]');
+  expect(projected.active()).toBe(projectedOutputFunctionOwner("revision-a", 1));
+  expect(projected.output()).toBe(projectedOutputFunctionOwner("revision-a", 1));
 
   const running = readyProjection();
   running.loading = true;
@@ -178,8 +190,8 @@ test("projected cell functions follow the rendered cell generation", () => {
       running,
     ),
   );
-  expect(projected.dataset.marimoStudioActiveProjectionOwner).toBe('["revision-a",2]');
-  expect(projected.dataset.marimoStudioOutputProjectionOwner).toBe('["revision-a",1]');
+  expect(projected.active()).toBe(projectedOutputFunctionOwner("revision-a", 2));
+  expect(projected.output()).toBe(projectedOutputFunctionOwner("revision-a", 1));
 
   handle.render(
     render(
@@ -191,7 +203,7 @@ test("projected cell functions follow the rendered cell generation", () => {
       readyProjection(),
     ),
   );
-  expect(projected.dataset.marimoStudioOutputProjectionOwner).toBe('["revision-a",2]');
+  expect(projected.output()).toBe(projectedOutputFunctionOwner("revision-a", 2));
 });
 
 test("projected output functions distinguish live cell generations", () => {
@@ -217,8 +229,8 @@ test("projected output functions distinguish live cell generations", () => {
     }),
   });
   mounted.push(handle);
-  const projected = root.querySelector<HTMLElement>("[data-marimo-studio-projected-output]")!;
+  const projected = projectedOutput(root);
 
-  expect(projected.dataset.marimoStudioActiveProjectionOwner).toBe('["revision-a",2]');
-  expect(projected.dataset.marimoStudioOutputProjectionOwner).toBe('["revision-a",1]');
+  expect(projected.active()).toBe(projectedOutputFunctionOwner("revision-a", 2));
+  expect(projected.output()).toBe(projectedOutputFunctionOwner("revision-a", 1));
 });

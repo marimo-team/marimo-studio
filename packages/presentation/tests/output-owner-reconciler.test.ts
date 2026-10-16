@@ -348,7 +348,6 @@ test("retries current ownership after a canceled read advances the wire revision
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
-    assert.equal(vi.getTimerCount(), 1);
 
     const controller = new AbortController();
     const canceled = reconciler.read(

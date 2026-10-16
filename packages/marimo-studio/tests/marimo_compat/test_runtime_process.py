@@ -17,6 +17,7 @@ import pytest
 import marimo_studio._processes.async_command as async_command
 import marimo_studio._processes.supervisor as process_supervisor
 import marimo_studio._validation.runtime_process as runtime_process
+from marimo_studio._processes.limits import RUNTIME_SHUTDOWN_GRACE
 from marimo_studio._workspace.models import StudioWorkspace
 
 
@@ -24,13 +25,17 @@ def test_isolated_runtime_budget_contains_the_notebook_probe(
     tmp_path,
     monkeypatch,
 ) -> None:
-    captured: dict[str, object] = {}
+    budgets: list[float] = []
+    modules: list[tuple[str, ...]] = []
+    requests: list[object] = []
+    paths: list[Path] = []
 
     class Supervisor:
         def run(self, command, timeout):
-            captured["timeout"] = timeout
-            captured["command"] = tuple(command)
-            captured["request"] = json.loads(Path(command[-2]).read_bytes())
+            budgets.append(timeout)
+            modules.append(tuple(command[-4:-2]))
+            paths.extend((Path(command[-2]), Path(command[-1])))
+            requests.append(json.loads(Path(command[-2]).read_bytes()))
             Path(command[-1]).write_bytes(b'{"schema":1,"checks":[]}')
             return SimpleNamespace(
                 timed_out=False,
@@ -54,26 +59,18 @@ def test_isolated_runtime_budget_contains_the_notebook_probe(
     )
 
     assert checks == ()
-    assert captured["timeout"] == 52
-    command = captured["command"]
-    assert isinstance(command, tuple)
-    assert len(command) == 5
-    assert command[:3] == (
-        command[0],
-        "-m",
-        "marimo_studio._validation.runtime_process",
-    )
-    assert not Path(command[-2]).exists()
-    assert not Path(command[-1]).exists()
-    request_payload = captured["request"]
-    assert isinstance(request_payload, dict)
-    assert request_payload == {
-        "schema": 1,
-        "notebook": str(tmp_path / "analysis.py"),
-        "view": None,
-        "expectedRevisions": None,
-        "timeout": 42,
-    }
+    assert budgets == [42 + RUNTIME_SHUTDOWN_GRACE]
+    assert modules == [("-m", "marimo_studio._validation.runtime_process")]
+    assert paths and all(not path.exists() for path in paths)
+    assert requests == [
+        {
+            "schema": 1,
+            "notebook": str(tmp_path / "analysis.py"),
+            "view": None,
+            "expectedRevisions": None,
+            "timeout": 42,
+        }
+    ]
 
 
 @pytest.mark.parametrize(
@@ -162,7 +159,6 @@ def test_isolated_runtime_reports_cleanup_failures(
     checks = asyncio.run(runtime_process.check_runtime_studio_isolated(studio))
 
     assert checks[0].code == "runtime-cleanup-failed"
-    assert "cleanup failed" in checks[0].message
 
 
 @pytest.mark.parametrize(

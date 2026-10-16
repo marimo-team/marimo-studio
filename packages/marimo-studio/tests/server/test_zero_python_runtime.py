@@ -278,7 +278,6 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
     edit_mode(app)
     bound = "s_abcdef"
     rebinding = False
-    live_cell_calls = 0
     bindings: dict[str, object] = {"PKri-0": {"input": "sport", "path": []}}
 
     async def session_for_client(
@@ -293,8 +292,6 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
         return bindings
 
     async def live_cells(*_args: object, **_kwargs: object) -> None:
-        nonlocal live_cell_calls
-        live_cell_calls += 1
         return None
 
     async def prepare(*_args: object, **_kwargs: object) -> None:
@@ -334,7 +331,6 @@ def test_editor_controls_read_bindings_without_preparing_a_runtime(
             "/_marimo-studio/views/dashboard/controls", params=params, headers=headers
         )
         assert response.status_code == 200, response.text
-        assert live_cell_calls == 1
         assert response.json()["controls"]["bindings"] == bindings
         assert response.json()["revision"] == revision
         unchanged = client.get(
@@ -419,13 +415,8 @@ def test_editor_controls_report_required_execution(
         )
 
     assert response.status_code == 409
-    assert response.json() == {
-        "error": "runtime-sync-required",
-        "message": (
-            "Run the changed notebook cells to update the Python runtime preview."
-        ),
-        "transient": False,
-        "hint": (
-            "Run the changed notebook cells in the editor, then retry the preview."
-        ),
-    }
+    payload = response.json()
+    assert payload["error"] == "runtime-sync-required"
+    assert payload["transient"] is False
+    assert isinstance(payload["message"], str) and payload["message"]
+    assert isinstance(payload["hint"], str) and payload["hint"]

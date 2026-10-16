@@ -29,12 +29,12 @@ from hashlib import sha256
 from email.parser import BytesParser
 import json
 from pathlib import Path
-from packaging.requirements import Requirement
-from packaging.specifiers import SpecifierSet
-from packaging.utils import canonicalize_name
 from tarfile import open as open_tar
 from zipfile import ZipFile
 import sys
+
+sys.path.insert(0, "scripts")
+from distribution_metadata import declared_project, verify_metadata
 
 digest_path = Path(sys.argv[1])
 archives = tuple(Path(value) for value in sys.argv[2:])
@@ -49,9 +49,8 @@ expected = {
     for source in sources
 }
 package_root = root / "packages" / "marimo-studio"
-license_sources = {
-    "LICENSE": package_root / "LICENSE",
-}
+project = declared_project()
+license_sources = {name: package_root / name for name in project["license-files"]}
 license_bytes = {name: source.read_bytes() for name, source in license_sources.items()}
 editor_document = "marimo_studio/_compat/server/editor_document.js"
 editor_document_bytes = (package_root / "src" / editor_document).read_bytes()
@@ -71,43 +70,6 @@ def packaged(files, read, archive):
     }
 
 
-def verify_metadata(source, archive):
-    metadata = BytesParser().parsebytes(source)
-    if metadata["License-Expression"] != "Apache-2.0":
-        raise AssertionError(f"Distribution has the wrong license expression: {archive}")
-    if set(metadata.get_all("License-File") or ()) != set(license_sources):
-        raise AssertionError(f"Distribution has the wrong license files: {archive}")
-    if SpecifierSet(metadata["Requires-Python"] or "") != SpecifierSet(">=3.10,<3.15"):
-        raise AssertionError(f"Distribution has the wrong Python requirement: {archive}")
-    urls = dict(value.split(", ", 1) for value in metadata.get_all("Project-URL") or ())
-    if urls.get("Documentation Index") != "https://marimo-team.github.io/marimo-studio/llms.txt":
-        raise AssertionError(f"Distribution has the wrong documentation index: {archive}")
-    requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist") or ()]
-    by_name = {}
-    for requirement in requirements:
-        by_name.setdefault(canonicalize_name(requirement.name), []).append(requirement)
-    for name, specifier in {
-        "agent-plugins": ">=0.2.4",
-        "htpy": ">=26.5.1",
-        "marimo-export": ">=0.2.1",
-        "marimo-lens": ">=0.2.3",
-        "tree-sitter": ">=0.25.2",
-        "tree-sitter-javascript": ">=0.25.0",
-        "watchdog": ">=6.0.0",
-    }.items():
-        selected = by_name.get(canonicalize_name(name), [])
-        if len(selected) != 1 or str(selected[0].specifier) != specifier:
-            raise AssertionError(f"Distribution has the wrong {name} requirement: {archive}")
-
-    lens_marker = by_name["marimo-lens"][0].marker
-    if (
-        lens_marker is None
-        or not lens_marker.evaluate({"extra": "lens"})
-        or lens_marker.evaluate({"extra": ""})
-    ):
-        raise AssertionError(f"Distribution must expose Lens through its optional extra: {archive}")
-
-
 for path in archives:
     if path.suffix == ".whl":
         with ZipFile(path) as archive:
@@ -117,7 +79,7 @@ for path in archives:
             actual = packaged(names, archive.read, path)
             metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
             metadata_root = metadata_name.removesuffix("METADATA")
-            verify_metadata(archive.read(metadata_name), path)
+            verify_metadata(BytesParser().parsebytes(archive.read(metadata_name)), project, path)
             for relative, expected_bytes in license_bytes.items():
                 packaged_bytes = archive.read(f"{metadata_root}licenses/{relative}")
                 if packaged_bytes != expected_bytes:
@@ -138,7 +100,7 @@ for path in archives:
             distribution_root = names[0].split("/", 1)[0]
             if read(f"{distribution_root}/src/{editor_document}") != editor_document_bytes:
                 raise AssertionError(f"Editor document runtime differs: {path}")
-            verify_metadata(read(f"{distribution_root}/PKG-INFO"), path)
+            verify_metadata(BytesParser().parsebytes(read(f"{distribution_root}/PKG-INFO")), project, path)
             for relative, expected_bytes in license_bytes.items():
                 packaged_bytes = read(f"{distribution_root}/{relative}")
                 if packaged_bytes != expected_bytes:

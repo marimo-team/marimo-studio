@@ -106,12 +106,12 @@ def test_compiler_exports_render_reads_as_json_and_sized_media(
 
     outputs = cast(dict[str, object], compiled.spec.to_value()["outputs"])
     report = compiled.bindings.renders["main.typ"]
-    assert report.values == {"doubled": "value@0d17b34b:doubled"}
-    assert report.outputs == {"doubled": "output@0d17b34b:doubled"}
-    assert outputs["value@0d17b34b:doubled"] == {
-        "source": {"kind": "json", "selector": "doubled"}
-    }
-    assert outputs["output@0d17b34b:doubled"] == {
+    value = report.values["doubled"]
+    output = report.outputs["doubled"]
+    assert value != compiled.bindings.values["doubled"]
+    assert output != compiled.bindings.outputs["doubled"]
+    assert outputs[value] == {"source": {"kind": "json", "selector": "doubled"}}
+    assert outputs[output] == {
         "source": {"kind": "export", "selector": "doubled"},
         "exporter": {
             "name": "media",
@@ -148,7 +148,7 @@ def test_render_reads_in_the_page_form_share_the_page_output(
         "cell:cell-2",
         "output:doubled",
         "value:doubled",
-        "value@0d17b34b:doubled",
+        report.values["doubled"],
     }
 
 
@@ -192,11 +192,14 @@ def test_view_bindings_record_the_reads_of_each_render(
         "values": {"doubled": "value:doubled"},
         "renders": {},
     }
+    report = with_render.bindings.renders["main.typ"]
+    assert report.outputs["doubled"] != "output:doubled"
+    assert report.values["doubled"] != "value:doubled"
     assert with_render.bindings.to_dict()["renders"] == {
         "main.typ": {
             "cells": {"cell-2": "cell:cell-2"},
-            "outputs": {"doubled": "output@0d17b34b:doubled"},
-            "values": {"doubled": "value@0d17b34b:doubled"},
+            "outputs": {"doubled": report.outputs["doubled"]},
+            "values": {"doubled": report.values["doubled"]},
         }
     }
 

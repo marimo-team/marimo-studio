@@ -337,7 +337,7 @@ def test_render_failures_report_template_diagnostics(notebook: Path) -> None:
     assert response.status_code == 422
     assert response.json()["error"] == "render-failed"
     (diagnostic,) = response.json()["diagnostics"]
-    assert diagnostic["message"] == "assertion failed: doubled is too large"
+    assert "doubled is too large" in diagnostic["message"]
     assert diagnostic["source"]["path"] == "main.typ"
     assert diagnostic["source"]["line"] == 3
 
@@ -376,11 +376,8 @@ def test_a_render_the_view_does_not_declare_is_not_found(
         response = _post(client, view, {}, render=render)
 
     assert response.status_code == 404
-    assert response.json() == {
-        "error": "render-unknown",
-        "message": f"This view renders no file named {render!r}.",
-        "hint": f"Show a file the view renders: {declared}.",
-    }
+    assert response.json()["error"] == "render-unknown"
+    assert declared in response.json()["hint"]
 
 
 def test_posted_values_are_scoped_to_the_render_reads(notebook: Path) -> None:
@@ -416,7 +413,6 @@ def test_values_outside_json_numbers_fail_as_render_diagnostics(
     (diagnostic,) = response.json()["diagnostics"]
     assert diagnostic["code"] == "render-value-not-json"
     assert "doubled" in diagnostic["message"]
-    assert "NaN or infinity" in diagnostic["message"]
 
 
 @pytest.mark.parametrize(

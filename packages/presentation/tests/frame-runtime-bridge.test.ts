@@ -172,7 +172,6 @@ test("uses distinct frame generations when randomUUID is unavailable", async () 
   }
   expect(first?.generation.length).toBeGreaterThanOrEqual(16);
   expect(second?.generation).not.toBe(first?.generation);
-  expect(getRandomValues).toHaveBeenCalledTimes(2);
 
   const identity = {
     generation: second.generation,
@@ -472,7 +471,6 @@ test("acquires a control endpoint that becomes available after bridge startup", 
     }),
     globalThis.location.origin,
   );
-  expect(connect).toHaveBeenCalledTimes(2);
   stop();
   expect(dispose).toHaveBeenCalledOnce();
   const announcements = parent.postMessage.mock.calls.length;

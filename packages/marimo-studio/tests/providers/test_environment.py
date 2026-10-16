@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from importlib.metadata import version
+from importlib.metadata import metadata, version
 from pathlib import Path
 
 import pytest
+from packaging.specifiers import Specifier, SpecifierSet
 
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
@@ -22,6 +23,11 @@ from ..provider_test_support import (
     candidate,
     install_registry,
 )
+
+
+def _studio_python_bound(operators: set[str]) -> Specifier:
+    package = SpecifierSet(metadata("marimo-studio")["Requires-Python"] or "")
+    return next(item for item in package if item.operator in operators)
 
 
 def test_setup_normalizes_studio_constraints_and_preserves_notebook_body(
@@ -46,7 +52,8 @@ def test_setup_normalizes_studio_constraints_and_preserves_notebook_body(
     document = read_notebook_metadata(notebook_path)
 
     assert document is not None
-    assert document["requires-python"] == ">=3.12,<3.15"
+    upper = _studio_python_bound({"<", "<="})
+    assert document["requires-python"] == f">=3.12,{upper}"
     assert document["tool"]["marimo"]["runtime"]["auto_instantiate"] is True
     assert document["tool"]["marimo-studio"]["default"] == "finance"
     assert [
@@ -113,7 +120,8 @@ def test_setup_tightens_the_notebook_python_requirement(
 
     document = read_notebook_metadata(notebook_path)
     assert document is not None
-    assert document["requires-python"] == ">=3.10,<3.13"
+    lower = _studio_python_bound({">", ">="})
+    assert document["requires-python"] == f"{lower},<3.13"
 
 
 def test_setup_rejects_disjoint_python_requirements_before_mutation(

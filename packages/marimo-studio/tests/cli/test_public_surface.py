@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import get_args, get_type_hints
 
 import click
@@ -54,7 +55,7 @@ def test_python_and_cli_authoring_operations_stay_in_parity() -> None:
 
 
 def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
-    records = {
+    assert set(studio_authoring.__all__) >= {
         "BindingResult",
         "InspectionResult",
         "OutputRenderResult",
@@ -92,14 +93,15 @@ def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
         "doctor",
         "open_workspace",
     }
-    assert records == set(studio_authoring.__all__)
-    for name in records - {"StaticExportEvent", "StaticRuntime"}:
-        get_type_hints(getattr(studio_authoring, name))
+    for name in studio_authoring.__all__:
+        value = getattr(studio_authoring, name)
+        if inspect.isclass(value) or inspect.isfunction(value):
+            get_type_hints(value)
     assert set(get_args(studio_authoring.StaticRuntime)) == {"zero-python", "wasm"}
 
 
 def test_expected_errors_are_public() -> None:
-    assert set(studio_errors.__all__) == {
+    assert set(studio_errors.__all__) >= {
         "AgentRequestError",
         "BindingError",
         "CapabilityInputError",
@@ -135,5 +137,7 @@ def test_expected_errors_are_public() -> None:
         "WorkspaceGenerationConflictError",
         "WorkspaceMutationError",
     }
+    for name in studio_errors.__all__:
+        assert issubclass(getattr(studio_errors, name), studio_errors.MarimoStudioError)
     assert studio_errors.ViewDeletionError.code == "view-deletion-error"
     assert studio_errors.ViewInUseError.code == "view-in-use"

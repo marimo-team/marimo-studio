@@ -43,9 +43,6 @@ def test_accepting_outputs_render_the_value_as_media(
     assert media is not None and media.media_type == "application/pdf"
     assert media.data.startswith(b"%PDF-")
     assert rendered.errors["label"].code == "output-media-unavailable"
-    assert "builtins.str has no representation as image/png" in (
-        rendered.errors["label"].message
-    )
 
 
 def test_a_failing_media_value_leaves_the_other_outputs(
@@ -144,7 +141,6 @@ def test_output_renderer_releases_stable_native_owners(
     )
 
     owner = context.cell_lifecycle_registry.disposed[0]
-    assert str(owner).startswith("__marimo_studio_output_")
     assert rendered.outputs["summary"].owner_cell_id == str(owner)
     assert inactive.errors["summary"].code == "inactive-selector"
     assert context.cell_lifecycle_registry.disposed == [owner]

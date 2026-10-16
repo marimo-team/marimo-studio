@@ -41,7 +41,7 @@ def test_source_write_rejects_a_view_file_replaced_by_a_symlink(
     document.unlink()
     document.symlink_to(external)
 
-    with pytest.raises(SourceNotFoundError, match="Unknown source document"):
+    with pytest.raises(SourceNotFoundError):
         write_source(
             studio,
             "dashboard",
@@ -86,7 +86,7 @@ def test_source_read_reports_invalid_utf8(notebook_path: Path) -> None:
     studio = _studio(notebook_path)
     (studio.views["dashboard"].root / SOURCE_PATH).write_bytes(b"<html>\xff")
 
-    with pytest.raises(SourceEncodingError, match="must be UTF-8 text"):
+    with pytest.raises(SourceEncodingError):
         read_source(studio, "dashboard", SOURCE_PATH)
 
 

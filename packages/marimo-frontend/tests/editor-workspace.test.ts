@@ -71,6 +71,7 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   doc.body.innerHTML =
     '<aside id="agent">Agent conversation</aside><div id="app-chrome-body"><div id="app"><input value="unsaved draft"></div><div id="app-chrome-panel"></div></div>';
   const app = doc.getElementById("app")!;
+  const authoredStyle = app.style.cssText;
   const container = doc.getElementById("app-chrome-body")!;
   const developer = doc.getElementById("app-chrome-panel")!;
   container.getBoundingClientRect = () => new DOMRect(300, 0, 900, 800);
@@ -110,8 +111,7 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   workspace.placeNotebook({ left: 0, top: 0, width: 900, height: 800 });
   resized();
   workspace.close();
-  expect(app.style.width).toBe("");
-  expect(app.style.borderTop).toBe("");
+  expect(app.style.cssText).toBe(authoredStyle);
   expect(disconnect).toHaveBeenCalled();
   frame.remove();
   vi.unstubAllGlobals();
@@ -121,7 +121,9 @@ test("offers the installed extension only when a native notebook is ready and de
   document.body.replaceChildren();
   const unmount = vi.fn();
   let saveNotebook: (() => void) | undefined;
-  const mount = vi.fn((_target: HTMLElement, save: () => void) => {
+  let entry: HTMLElement | undefined;
+  const mount = vi.fn((target: HTMLElement, save: () => void) => {
+    entry = target;
     saveNotebook = save;
     return unmount;
   });
@@ -141,7 +143,7 @@ test("offers the installed extension only when a native notebook is ready and de
   close();
   close();
   expect(unmount).toHaveBeenCalledOnce();
-  expect(document.getElementById("marimo-studio-entry")).toBeNull();
+  expect(entry?.isConnected).toBe(false);
   expect(chrome.style.top).toBe("");
   document.body.replaceChildren();
 });

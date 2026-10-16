@@ -8,24 +8,27 @@ import socket
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
-from importlib.metadata import version
+from importlib.metadata import requires, version
 from pathlib import Path
 
 import uvicorn
+from packaging.requirements import Requirement
 
 publish_endpoint = runpy.run_path(str(Path(__file__).with_name("endpoint.py")))[
     "publish_endpoint"
 ]
 
-EXPECTED_MARIMO_VERSION = "0.25.1"
-
 
 def configure_editor_fixture() -> None:
+    declared = next(
+        requirement
+        for requirement in map(Requirement, requires("marimo-studio") or ())
+        if requirement.name == "marimo" and requirement.marker is None
+    )
     installed_version = version("marimo")
-    if installed_version != EXPECTED_MARIMO_VERSION:
+    if not declared.specifier.contains(installed_version, prereleases=True):
         raise RuntimeError(
-            f"E2E Marimo launcher expected version {EXPECTED_MARIMO_VERSION}, "
-            f"found {installed_version}"
+            f"E2E Marimo launcher requires {declared}, found {installed_version}"
         )
     if not os.environ.get("XDG_CONFIG_HOME"):
         raise RuntimeError("E2E Marimo requires an isolated XDG_CONFIG_HOME")

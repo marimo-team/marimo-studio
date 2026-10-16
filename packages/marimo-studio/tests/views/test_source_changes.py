@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import shutil
 from collections.abc import MutableMapping
 from dataclasses import replace
@@ -347,16 +346,21 @@ def test_windows_stamp_hashes_a_bounded_descriptor(
 ) -> None:
     source = tmp_path / "source.txt"
     source.write_bytes(b"first")
+    copy = tmp_path / "copy.txt"
+    copy.write_bytes(b"first")
+    other = tmp_path / "other.txt"
+    other.write_bytes(b"other")
 
     def reject_read_bytes(_path: Path) -> bytes:
         pytest.fail("Windows stamps must not allocate the complete file")
 
     monkeypatch.setattr(Path, "read_bytes", reject_read_bytes)
 
-    assert (
-        source_changes._path_stamp(source, content_hashing=True)
-        == hashlib.sha256(b"first").hexdigest()
-    )
+    def stamp(path: Path) -> object:
+        return source_changes._path_stamp(path, content_hashing=True)
+
+    assert stamp(source) == stamp(copy)
+    assert stamp(source) != stamp(other)
 
 
 @pytest.mark.supported_python
@@ -375,10 +379,11 @@ def test_windows_stamp_uses_metadata_for_an_oversized_sparse_file(
         lambda *_args, **_kwargs: pytest.fail("Oversized files must not be hashed"),
     )
 
-    stamp = source_changes._path_stamp(source, content_hashing=True)
+    before = source_changes._path_stamp(source, content_hashing=True)
+    with source.open("r+b") as stream:
+        stream.truncate(size + 1)
 
-    assert isinstance(stamp, tuple)
-    assert stamp[2] == size
+    assert source_changes._path_stamp(source, content_hashing=True) != before
 
 
 def test_changed_file_details_ignore_unadvertised_watch_root_files(

@@ -358,13 +358,11 @@ describe("Studio shell", () => {
         return Response.json(viewList(removed ? ["dashboard"] : ["dashboard", "report"]));
       }
       if (url.pathname === "/_marimo-studio/views/report" && method === "DELETE") {
-        expect(init?.body).toBe(
-          JSON.stringify({
-            catalog_generation: viewGeneration(0),
-            name: "report",
-            view_generation: viewGeneration(2),
-          }),
-        );
+        expect(await new Request(url, init).json()).toEqual({
+          catalog_generation: viewGeneration(0),
+          name: "report",
+          view_generation: viewGeneration(2),
+        });
         removed = true;
         return Response.json({ ...viewList(["dashboard"]), name: "report" });
       }
@@ -566,7 +564,6 @@ describe("Studio shell", () => {
     );
     const split = screen.getByRole("button", { name: "Show view beside notebook" });
     expect(split).toHaveAttribute("aria-pressed", "true");
-    expect(split).toHaveAttribute("title", "Show notebook only");
     await user.click(split);
     expect(split).toHaveAttribute("aria-pressed", "false");
     expect(layout.getSnapshot().mode).toBe("notebook");

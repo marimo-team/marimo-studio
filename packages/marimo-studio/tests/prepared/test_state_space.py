@@ -10,6 +10,7 @@ from marimo_studio._prepared.state_space import (
 from marimo_studio.errors import PublicationError
 
 _EXAMPLES = Path(__file__).resolve().parents[4] / "examples" / "studio"
+_EXAMPLE_STATES = sorted(_EXAMPLES.rglob("states.yaml"))
 
 
 def test_state_space_source_uses_the_view_states_file(tmp_path: Path) -> None:
@@ -145,18 +146,15 @@ def test_state_space_rejects_invalid_contracts(
         load_state_space_source(tmp_path)
 
 
+def test_example_views_declare_state_spaces() -> None:
+    assert _EXAMPLE_STATES
+
+
 @pytest.mark.parametrize(
-    "relative",
-    [
-        "athletes/field",
-        "athletes/overview",
-        "earthquakes/bulletin",
-        "earthquakes/operations",
-        "occupancy/monitor",
-        "occupancy/model-review",
-        "occupancy/pdf-report",
-    ],
+    "states",
+    _EXAMPLE_STATES,
+    ids=lambda path: path.parent.relative_to(_EXAMPLES).as_posix(),
 )
-def test_example_views_provide_valid_state_spaces(relative: str) -> None:
-    source = load_state_space_source(_EXAMPLES / relative)
+def test_example_views_provide_valid_state_spaces(states: Path) -> None:
+    source = load_state_space_source(states.parent)
     assert source.state_space is not None

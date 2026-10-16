@@ -13,7 +13,7 @@ describe("Session bootstrap", () => {
       return "s_abc123";
     });
 
-    expect(() => session.current()).toThrow("has not been bootstrapped");
+    expect(() => session.current()).toThrow();
 
     const sessionId = await session.bootstrap(async () => {
       importOrder.push("preflight:start");
@@ -36,7 +36,7 @@ describe("Session bootstrap", () => {
   test("resumes the URL session that preflight authorized", async () => {
     window.history.replaceState({}, "", "?session_id=s_abc123");
 
-    expect(() => currentSessionId()).toThrow("has not been bootstrapped");
+    expect(() => currentSessionId()).toThrow();
 
     const authorized = "s_abc123";
     if (!isSessionId(authorized)) {

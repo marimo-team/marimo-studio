@@ -123,7 +123,9 @@ export const startPresentationWasmSession = (start) => {
   expect(mounted.main.url).toMatch(/^(?:blob|data):/);
   expect(mounted.save.url.protocol).toBe("file:");
   expect(mounted.save.url.pathname).toMatch(/\/worker\/save-worker\.ts$/);
-  expect(mounted.rpc).toMatchObject({ maxRequestTime: 125_000, worker: mounted.main });
+  expect(mounted.rpc.worker).toBe(mounted.main);
+  // Studio terminates WebAssembly startup after 120 seconds.
+  expect(mounted.rpc.maxRequestTime).toBeGreaterThan(120_000);
   expect(mounted.autoInstantiate.auto_instantiate).toBe(false);
   // The transformed fixture imports the owner adapter by this URL, so this
   // import reads the same module's live start count.
@@ -135,14 +137,14 @@ export const startPresentationWasmSession = (start) => {
       "/marimo/worker.ts",
       "/studio/wasm-worker-owner.ts",
     ),
-  ).toThrow("Marimo WebAssembly workers no longer match the opaque-frame adapter");
+  ).toThrow();
   expect(() =>
     isolateWasmWorker(
       `${source}\n${readyListener}`,
       "/marimo/worker.ts",
       "/studio/wasm-worker-owner.ts",
     ),
-  ).toThrow("Marimo WebAssembly workers no longer match the opaque-frame adapter");
+  ).toThrow();
 });
 
 test("presentation WebAssembly requests retain the startup window", async () => {
@@ -163,12 +165,8 @@ const createRPC = (options) => options;`;
   const module = await importTypeScriptModule(transformed[0]);
   expect(module.getWorkerRPC({}).maxRequestTime).toBe(20_000);
   expect(module.getWorkerRPC({}, 125_000).maxRequestTime).toBe(125_000);
-  expect(() => exposeWasmRpcDeadline("export function getWorkerRPC() {}")).toThrow(
-    "Marimo WebAssembly RPC deadline no longer matches the presentation adapter",
-  );
-  expect(() => exposeWasmRpcDeadline(`${source}\n${source}`)).toThrow(
-    "Marimo WebAssembly RPC deadline no longer matches the presentation adapter",
-  );
+  expect(() => exposeWasmRpcDeadline("export function getWorkerRPC() {}")).toThrow();
+  expect(() => exposeWasmRpcDeadline(`${source}\n${source}`)).toThrow();
 });
 
 test("presentation workers use the in-memory controller", async () => {

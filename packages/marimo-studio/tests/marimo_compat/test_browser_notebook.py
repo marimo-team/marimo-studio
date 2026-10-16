@@ -244,9 +244,11 @@ def test_browser_notebook_places_its_bridge_after_cells_with_line_separators(
 ) -> None:
     import ast
 
+    import marimo
+
     source = (
         "import marimo\n\n"
-        '__generated_with = "0.25.1"\n'
+        f'__generated_with = "{marimo.__version__}"\n'
         "app = marimo.App()\n\n\n"
         "@app.cell\n"
         "def _():\n"

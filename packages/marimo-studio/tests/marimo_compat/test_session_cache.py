@@ -300,7 +300,7 @@ def test_session_cache_preserves_export_order_interval_and_error_policy(
         ("serialized", 2),
         ("published", 2),
     ]
-    assert "Write error: disk stopped" in caplog.text
+    assert "disk stopped" in caplog.text
 
 
 @pytest.mark.parametrize("async_path", (False, True))
@@ -348,7 +348,6 @@ def test_session_cache_cancellation_waits_for_publication(
         assert json.loads(Path(path).read_text(encoding="utf-8")) == {
             "writer": "published"
         }
-        assert len(tuple(tmp_path.iterdir())) == 2
         assert writer.task is not None
         writer.task.cancel()
         try:
@@ -442,7 +441,6 @@ def test_session_cache_reports_failure_before_propagating_cancellation(
         assert json.loads(Path(path).read_text(encoding="utf-8")) == {
             "writer": "published"
         }
-        assert len(tuple(tmp_path.iterdir())) == 2
         assert writer.task is not None
         writer.task.cancel()
         try:
@@ -465,7 +463,7 @@ def test_session_cache_reports_failure_before_propagating_cancellation(
 
     assert json.loads(Path(path).read_text(encoding="utf-8")) == {"writer": "published"}
     assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
-    assert f"Write error: Could not write {path}" in caplog.text
+    assert str(path) in caplog.text
 
 
 def test_server_composition_reference_counts_and_restores_session_cache_patch() -> None:

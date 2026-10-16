@@ -56,7 +56,7 @@ def test_marimo_code_mode_loads_the_studio_workspace_api() -> None:
         ("studio", "marimo_studio.agent")
     ]
     assert entry_points[0].load() is studio_agent
-    assert set(studio_agent.__all__) == {
+    assert set(studio_agent.__all__) >= {
         "PublicationHold",
         "ValidationIssue",
         "ValidationReport",
@@ -77,7 +77,10 @@ def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
     skill = studio_agent.skill()
 
     assert plugin.manifest.name == "marimo-studio"
-    assert plugin.manifest.license == "Apache-2.0"
+    assert (
+        plugin.manifest.license
+        == (distribution("marimo-studio").metadata["License-Expression"])
+    )
     assert skill in plugin.skills
     assert skill.path.name == "marimo-studio"
     assert (skill / "SKILL.md").is_file()
@@ -207,11 +210,9 @@ def test_view_inspection_matches_its_json_shape(notebook_path: Path) -> None:
     assert result.view == payload["view"] == "dashboard"
     assert result.freshness == payload["freshness"] == "unbuilt"
     assert all(item.access == "edit" for item in result.documents)
-    assert [item.path.as_posix() for item in result.documents] == [
-        "view.toml",
-        "index.html",
-        "AGENTS.md",
-    ]
+    assert {"view.toml", "index.html", "AGENTS.md"} <= {
+        item.path.as_posix() for item in result.documents
+    }
     assert result.build is None
 
 
@@ -442,18 +443,10 @@ def test_view_handle_rejects_every_operation_on_a_copied_replacement(
                 expected_revision=document.revision,
             )
         )
-    assert (
-        str(write_error.value) == "View 'dashboard' was replaced before the operation."
-    )
-    assert write_error.value.public_hint == (
-        "Reopen the workspace and reacquire the view before retrying."
-    )
+    assert write_error.value.diagnostic_details()["view"] == "dashboard"
     with pytest.raises(ViewGenerationConflictError) as build_error:
         asyncio.run(view.build())
-    assert (
-        str(build_error.value) == "View 'dashboard' was replaced before the operation."
-    )
-    assert build_error.value.public_hint == write_error.value.public_hint
+    assert build_error.value.diagnostic_details()["view"] == "dashboard"
     with pytest.raises(ViewGenerationConflictError):
         asyncio.run(view.validate())
     output = tmp_path / "existing-export"

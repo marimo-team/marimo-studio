@@ -170,7 +170,10 @@ def test_build_publishes_when_the_provider_cache_cannot_be_tagged(
 
     assert "<main" in document
     assert not (cache / "CACHEDIR.TAG").exists()
-    assert "Check that the directory is writable" in caplog.text
+    assert any(
+        record.levelno == logging.WARNING and str(cache) in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_build_request_receives_the_owner_cancellation(

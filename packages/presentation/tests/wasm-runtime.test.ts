@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { RuntimeInvoke } from "../src/runtime/runtime.tsx";
 import type { FunctionResult } from "../src/values/wasm.ts";
 
-import { createWasmInitialization } from "../src/runtime/initialization";
+import { createWasmInitialization, WASM_STARTUP_TIMEOUT_MS } from "../src/runtime/initialization";
 import { createObservedDeferred } from "../src/runtime/observed-deferred.ts";
 import { createWasmQueryWriter } from "../src/runtime/wasm-query.ts";
 
@@ -44,7 +44,7 @@ describe("WebAssembly runtime initialization", () => {
     const initialization = createWasmInitialization(terminateWorker);
     const waiting = initialization.wait(worker.promise, notebookInitialized);
 
-    await vi.advanceTimersByTimeAsync(119_999);
+    await vi.advanceTimersByTimeAsync(WASM_STARTUP_TIMEOUT_MS - 1);
     expect(notebookInitialized).not.toHaveBeenCalled();
     worker.resolve();
     await waiting;
@@ -61,11 +61,9 @@ describe("WebAssembly runtime initialization", () => {
     const terminateWorker = vi.fn();
     const initialization = createWasmInitialization(terminateWorker);
     const waiting = initialization.wait(Promise.resolve(), () => notebook.promise);
-    const rejected = expect(waiting).rejects.toThrow(
-      "WebAssembly runtime did not start within 120 seconds.",
-    );
+    const rejected = expect(waiting).rejects.toThrow(/did not start/);
 
-    await vi.advanceTimersByTimeAsync(120_000);
+    await vi.advanceTimersByTimeAsync(WASM_STARTUP_TIMEOUT_MS);
     await rejected;
     expect(terminateWorker).toHaveBeenCalledOnce();
 
@@ -81,9 +79,7 @@ describe("WebAssembly runtime initialization", () => {
     const notebookInitialized = vi.fn(async () => {});
     const initialization = createWasmInitialization();
     const waiting = initialization.wait(worker.promise, notebookInitialized, 10_000);
-    const rejected = expect(waiting).rejects.toThrow(
-      "WebAssembly runtime did not start within 10 seconds.",
-    );
+    const rejected = expect(waiting).rejects.toThrow(/did not start/);
 
     await vi.advanceTimersByTimeAsync(10_000);
     await rejected;
@@ -103,9 +99,7 @@ describe("WebAssembly runtime initialization", () => {
       () => new Promise<void>(() => {}),
       10_000,
     );
-    const rejected = expect(waiting).rejects.toThrow(
-      "WebAssembly runtime did not start within 10 seconds.",
-    );
+    const rejected = expect(waiting).rejects.toThrow(/did not start/);
 
     await vi.advanceTimersByTimeAsync(10_000);
     await rejected;
@@ -117,7 +111,7 @@ describe("WebAssembly runtime initialization", () => {
     const initialization = createWasmInitialization();
     const waiting = initialization.wait(worker.promise, notebookInitialized);
     const disposed = new DOMException("The runtime was disposed.", "AbortError");
-    const rejected = expect(waiting).rejects.toThrow("The runtime was disposed.");
+    const rejected = expect(waiting).rejects.toBe(disposed);
 
     initialization.abort(disposed);
     await rejected;

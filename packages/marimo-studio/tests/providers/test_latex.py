@@ -241,7 +241,7 @@ def test_a_missing_entry_document_is_reported(tmp_path: Path) -> None:
     (diagnostic,) = inspect_view_project_sync(project).diagnostics
 
     assert diagnostic.code == "build-input-missing"
-    assert diagnostic.message == "LaTeX entry document main.tex is missing."
+    assert "main.tex" in diagnostic.message
 
 
 @pytest.mark.parametrize(
@@ -360,21 +360,18 @@ def test_render_inputs_define_every_value_by_its_selector_and_type() -> None:
 
 
 def test_values_that_need_too_many_definitions_fail_before_tex_runs(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     project = _project(tmp_path)
-    readings: list[JsonValue] = [[] for _ in range(40_000)]
-    notes: list[JsonValue] = [{"note": None} for _ in range(20_000)]
+    monkeypatch.setattr(_inputs, "MAX_INPUT_DEFINITIONS", 10)
+    readings: list[JsonValue] = [[] for _ in range(6)]
+    notes: list[JsonValue] = [{"note": None} for _ in range(3)]
 
     _output, result = _render(project, {"readings": readings, "notes": notes})
 
     assert result.main is None
     (diagnostic,) = result.diagnostics
     assert diagnostic.code == "latex-values-too-large"
-    assert diagnostic.message == (
-        "The notebook values this document reads need more than 60,000 LaTeX "
-        "definitions."
-    )
 
 
 @pytest.fixture

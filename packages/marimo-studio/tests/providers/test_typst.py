@@ -453,7 +453,7 @@ def test_render_binds_notebook_values(
         assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
     else:
         (diagnostic,) = result.diagnostics
-        assert diagnostic.message == "assertion failed: n is not seven"
+        assert "n is not seven" in diagnostic.message
         assert diagnostic.source is not None
         assert (diagnostic.source.path, diagnostic.source.line) == (MAIN, 2)
 

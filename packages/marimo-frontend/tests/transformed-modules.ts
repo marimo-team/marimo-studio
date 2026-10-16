@@ -7,8 +7,35 @@ import { onTestFinished } from "vite-plus/test";
 
 export const lineEndingVariants = (source: string) => [source, source.replaceAll("\n", "\r\n")];
 
-export const importModule = async (source: string) =>
-  import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+let importedModules = 0;
+
+// Node caches data modules by URL, so each import gets a distinct URL and
+// evaluates with the current bindings.
+export const importModule = async (source: string) => {
+  importedModules += 1;
+  const unique = `${source}\n// module ${importedModules}\n`;
+  return import(`data:text/javascript;base64,${Buffer.from(unique).toString("base64")}`);
+};
+
+const bindingsKey = "__marimoStudioTransformedModuleBindings";
+
+// Data modules cannot resolve bare or virtual specifiers, so named imports
+// read their bindings from a test-owned global instead.
+export const importModuleWithBindings = async <Bindings extends object>(
+  source: string,
+  bindings: Bindings,
+) => {
+  Reflect.set(globalThis, bindingsKey, bindings);
+  onTestFinished(() => {
+    Reflect.deleteProperty(globalThis, bindingsKey);
+  });
+  return importModule(
+    source.replaceAll(
+      /import\s*\{([^}]*)\}\s*from\s*"[^"]+";/gu,
+      `const {$1} = globalThis.${bindingsKey};`,
+    ),
+  );
+};
 
 const compileTypeScript = async (source: string, loader = "ts") => {
   const transformed = await transformWithOxc(source, `fixture.${loader}`, {

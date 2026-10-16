@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from importlib.metadata import PackageNotFoundError
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -68,8 +69,8 @@ def test_sandboxed_kernel_launch_includes_the_running_studio(
 
     assert kernel.requirements == (marimo_runtime, f"-e {tmp_path}")
     assert app_host.requirements == (marimo_runtime, f"-e {tmp_path}")
-    layered = list(plan.argv[: plan.argv.index("--")])
-    assert layered[-2:] == ["--with-editable", str(tmp_path)]
+    layered = plan.argv[: plan.argv.index("--")]
+    assert ("--with-editable", str(tmp_path)) in pairwise(layered)
 
 
 def test_closed_adapter_restores_marimo_overlay(

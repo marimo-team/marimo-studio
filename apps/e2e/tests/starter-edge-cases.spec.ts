@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test";
-
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -32,21 +30,6 @@ const noDisplayView = {
 
 test.use({ services: ["studio", "static"] });
 
-const expectEmptyPreview = async (page: Page, candidate: typeof noDisplayView) => {
-  const preview = await waitForViewPreview(page, candidate.view);
-  await expect(preview.getByRole("heading", { name: candidate.heading })).toBeVisible({
-    timeout: 65_000,
-  });
-  await expect
-    .poll(() =>
-      preview.locator("html").evaluate(() => ({
-        diagnostics: globalThis.marimoStudio.diagnostics().length,
-        projections: document.querySelectorAll("[data-marimo-studio-instance]").length,
-      })),
-    )
-    .toEqual({ diagnostics: 0, projections: 0 });
-};
-
 test("builds, renders, and exports a view when no cell may display output", async ({
   browserDiagnostics,
   page,
@@ -65,11 +48,22 @@ test("builds, renders, and exports a view when no cell may display output", asyn
   );
 
   await page.goto(`/studio/${noDisplayView.view}/?file=no-display.py`);
-  await expectEmptyPreview(page, noDisplayView);
+  const preview = await waitForViewPreview(page, noDisplayView.view);
+  await expect(preview.getByRole("heading", { name: noDisplayView.heading })).toBeVisible({
+    timeout: 65_000,
+  });
+  await expect
+    .poll(() =>
+      preview.locator("html").evaluate(() => ({
+        diagnostics: globalThis.marimoStudio.diagnostics().length,
+        projections: document.querySelectorAll("[data-marimo-studio-instance]").length,
+      })),
+    )
+    .toEqual({ diagnostics: 0, projections: 0 });
 
   const staticPage = await page.context().newPage();
   await staticPage.goto(noDisplayStaticExportUrl());
-  await expect(staticPage.getByRole("heading", { name: "Empty Html" })).toBeVisible({
+  await expect(staticPage.getByRole("heading", { name: noDisplayView.heading })).toBeVisible({
     timeout: 65_000,
   });
   await staticPage.close();

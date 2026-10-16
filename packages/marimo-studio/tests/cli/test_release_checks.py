@@ -91,11 +91,11 @@ def test_release_checks_require_successful_runs_for_the_release_commit(
     assert completed.returncode == returncode
     assert message in f"{completed.stdout}{completed.stderr}"
     if state == "success":
-        assert calls.read_text(encoding="utf-8").splitlines() == [
+        assert sorted(calls.read_text(encoding="utf-8").splitlines()) == [
             f"ci.yml|main|{_COMMIT}|push",
             f"e2e.yml|main|{_COMMIT}|push",
-            f"platforms.yml|main|{_COMMIT}|push",
             f"pages.yml|main|{_COMMIT}|push",
+            f"platforms.yml|main|{_COMMIT}|push",
         ]
 
 
@@ -250,9 +250,8 @@ printf 'Documentation: https://example.test/pages\n'
     )
 
     assert completed.returncode == 0, completed.stderr
-    assert f"Commit:  {_COMMIT}" in completed.stdout
+    assert _COMMIT in completed.stdout
     assert "Documentation: https://example.test/pages" in completed.stdout
-    assert "Dry run complete" in completed.stdout
     commands = command_log.read_text(encoding="utf-8").splitlines()
     assert "fetch origin main --tags" in commands
     assert not any(command.startswith(("tag ", "push ")) for command in commands)

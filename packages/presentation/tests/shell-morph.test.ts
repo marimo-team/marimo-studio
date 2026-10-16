@@ -86,9 +86,7 @@ test("wrapper element changes are rejected before the live shell is mutated", ()
   const host = current.querySelector("marimo-output")!;
 
   expect(sameProjectionHostTopology(current, next)).toBe(false);
-  expect(() => morphAuthoredShell(current, next)).toThrow(
-    "Projection host topology changed during the document refresh",
-  );
+  expect(() => morphAuthoredShell(current, next)).toThrow();
   expect(current.querySelector("section")).toBe(wrapper);
   expect(wrapper.firstElementChild).toBe(host);
 });

@@ -417,9 +417,7 @@ def test_inactive_warmup_retries_a_superseded_view_after_the_foreground_settles(
         studio: Any = SimpleNamespace(views={"overview": object(), "gallery": object()})
         development = DevelopmentCoordinator()
         monkeypatch.setattr(dev_module, "_prepare_presentation", prepare)
-        monkeypatch.setattr(
-            development, "foreground_settled", foreground_settled, raising=False
-        )
+        monkeypatch.setattr(development, "foreground_settled", foreground_settled)
         try:
             await dev_module._prepare_inactive_presentations(
                 studio, "overview", development

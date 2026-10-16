@@ -167,7 +167,7 @@ def test_dependency_doctor_reports_undefined_marker_environment(tmp_path: Path) 
 
     assert result.exit_code == 1, result.output
     assert isinstance(result.exception, ConfigurationError)
-    assert "Invalid dependency: packaging; extras" in str(result.exception)
+    assert "packaging; extras" in str(result.exception)
 
 
 @pytest.mark.parametrize("dependency", ["broken >= !", 'broken; extras == "test"'])
@@ -193,14 +193,9 @@ def test_dependency_doctor_reports_invalid_installed_metadata_and_continues(
     assert result.exit_code == 1, result.output
     report = json.loads(result.stdout)
     assert report["installed"]["packaging"]
-    assert report["issues"] == [
-        {
-            "code": "invalid-dependency",
-            "message": (
-                f"broken-distribution declares an invalid dependency: {dependency}"
-            ),
-        }
-    ]
+    [issue] = report["issues"]
+    assert issue["code"] == "invalid-dependency"
+    assert dependency in issue["message"]
 
 
 def test_dependency_doctor_accepts_the_owning_project_package(
@@ -431,7 +426,7 @@ def test_dependency_doctor_flags_pixi_git_sources_for_verification(
     assert report["declarations"]["project"] == [
         "click @ git+https://github.com/pallets/click.git@8.1.7"
     ]
-    assert {
-        "code": "unverified-source",
-        "message": "Verify the installed source for click",
-    } in report["issues"]
+    unverified = next(
+        issue for issue in report["issues"] if issue["code"] == "unverified-source"
+    )
+    assert "click" in unverified["message"]

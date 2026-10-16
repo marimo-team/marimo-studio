@@ -274,17 +274,14 @@ def test_kernel_lifespan_rejects_retry_after_setup_failure(
         context._kernel._lifespan = aggregate
         with pytest.raises(RuntimeError, match="later lifespan failed"):
             await aggregate.__aenter__()
+        registered = [*context.function_registry.registered]
+        assert set(registered) == {"_marimo_studio"}
         with pytest.raises(RuntimeError, match="kernel lifespan setup failed"):
             await context._kernel._lifespan.__aenter__()
+        assert context.function_registry.registered == registered
 
     asyncio.run(exercise())
 
-    assert context.function_registry.registered == [
-        "_marimo_studio",
-        "_marimo_studio",
-        "_marimo_studio",
-        "_marimo_studio",
-    ]
     assert context.function_registry.deleted == ["_marimo_studio"]
 
 
@@ -387,12 +384,7 @@ default = "dashboard"
 
     async def exercise() -> None:
         async with _KernelBridgeLifespan():
-            assert context.function_registry.registered == [
-                "_marimo_studio",
-                "_marimo_studio",
-                "_marimo_studio",
-                "_marimo_studio",
-            ]
+            assert set(context.function_registry.registered) == {"_marimo_studio"}
 
     asyncio.run(exercise())
 
@@ -594,7 +586,11 @@ default = "dashboard"
     cache_activations: list[bool] = []
     current = _native_output_context()
     current.filename = str(notebook)
-    current._kernel = SimpleNamespace()
+
+    async def handle_message(_request: object) -> None:
+        return
+
+    current._kernel = SimpleNamespace(handle_message=handle_message)
     monkeypatch.setattr(runtime_context, "get_context", lambda: current)
     monkeypatch.setattr(
         kernel_context_module,
@@ -602,6 +598,7 @@ default = "dashboard"
         type(current),
     )
     monkeypatch.setattr(kernel_values_module, "is_owned_session", lambda: True)
+    ledgers: list[object] = []
 
     def activate_cache_compatibility() -> Any:
         cache_activations.append(True)
@@ -612,13 +609,11 @@ default = "dashboard"
         "keep_cached_cells_compatible",
         activate_cache_compatibility,
     )
-    lifespan = _KernelBridgeLifespan()
+    monkeypatch.setattr(kernel_values_module, "ObservationLedger", ledgers.append)
 
     async def exercise() -> None:
-        async with lifespan:
-            assert lifespan._output_renderer is None
-            assert lifespan._value_encoder is None
-            assert lifespan._observation_ledger is None
+        async with _KernelBridgeLifespan():
+            pass
 
     try:
         with current.install():
@@ -627,6 +622,8 @@ default = "dashboard"
         current.virtual_file_registry.shutdown()
 
     assert cache_activations == []
+    assert ledgers == []
+    assert current._kernel.handle_message is handle_message
 
 
 def test_shared_kernel_accepts_query_updates_from_each_consumer(

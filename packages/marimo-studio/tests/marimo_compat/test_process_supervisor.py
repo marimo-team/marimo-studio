@@ -151,12 +151,12 @@ def test_process_supervisor_bounds_stdout_and_stderr() -> None:
         (
             "stderr",
             "import sys; sys.stderr.buffer.write(b'x' * 2_100_000)",
-            16_000,
+            process_supervisor._MAX_ERROR_BYTES,
         ),
         (
             "stdout",
             "import os; os.write(1, b'x' * 2_100_000)",
-            2_000_000,
+            process_supervisor.MAX_PROCESS_STDOUT_BYTES,
         ),
     )
 

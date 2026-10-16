@@ -167,11 +167,7 @@ def write_marimohub_context(
 
 
 def load_standalone_project(root: Path) -> CatalogProject:
-    """Load a view project outside any catalog with its state inside it.
-
-    Studio 0.3 default catalogs keep each view's state in its ``.artifacts/``
-    directory, so these projects exercise that supported layout.
-    """
+    """Load a view project outside any catalog with its state inside it."""
     return load_view_project(root, locations=CatalogLocations.inside_views(root.parent))
 
 

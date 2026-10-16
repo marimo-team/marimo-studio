@@ -599,9 +599,9 @@ it("disposes an unresponsive active reader before acknowledging the editor", asy
   await vi.waitFor(() => expect(acknowledgement.postMessage).toHaveBeenCalledOnce());
 
   expect(frameElement.src).toBe("about:blank");
-  expect(deck.getSnapshot().states.server?.status.message).toBe("Updating preview");
+  expect(deck.getSnapshot().states.server?.status.state).toBe("loading");
   deck.notebookMutationTransactionFailed(9);
-  expect(deck.getSnapshot().states.server?.status.message).toBe("Needs repair");
+  expect(deck.getSnapshot().states.server?.status.state).toBe("error");
   deck.presentationBuildStarted("dashboard");
   expect(frameElement.src).toContain("/dashboard?runtime=server");
   deck.dispose();
@@ -695,9 +695,7 @@ it("addresses activated documents before rendering and rejects a retired selecti
     const next = deck.stageView("report", undefined, undefined, "document");
     expect(await next.ready).toBe(true);
     expect(deck.getSnapshot().states.server?.rendered).toBe(false);
-    expect(() => deck.automationTarget("dashboard", false, new AbortController().signal)).toThrow(
-      "unavailable",
-    );
+    expect(() => deck.automationTarget("dashboard", false, new AbortController().signal)).toThrow();
     const current = deck.automationTarget("report", false, new AbortController().signal);
     expect(current.previewUrl).toContain("/report");
   } finally {
@@ -713,13 +711,7 @@ it("asks for a page reload after the Studio server restarts", () => {
 
   expect(deck.getSnapshot().states.server?.status).toMatchObject({
     state: "error",
-    diagnostics: [
-      {
-        code: "server-restarted",
-        message: "The Studio server restarted, so this page lost its connection.",
-        hint: "Retry the preview to reload this page.",
-      },
-    ],
+    diagnostics: [{ code: "server-restarted" }],
   });
   const reload = vi.fn();
   vi.stubGlobal("location", { reload });

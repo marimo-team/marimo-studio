@@ -1158,19 +1158,15 @@ def test_isolated_provider_reports_incomplete_results_and_failures(
     with pytest.raises(ViewProjectError) as error:
         installed.inspect(inspection_request(_project(tmp_path, installed.key)))
 
-    detail = (
-        f"Provider process exited with status {status} "
-        "before returning a complete result. "
-        "Check the provider installation and retry."
-        if status is not None
-        else "ValueError: The custom analyzer failed."
-    )
+    message = str(error.value)
+    assert "'test-process/broken'" in message
+    assert "'dashboard'" in message
+    if status is None:
+        assert "ValueError: The custom analyzer failed." in message
+    else:
+        assert f"status {status}" in message
     if mode == "import-error":
-        detail += "\nModuleNotFoundError: No module named 'analyzer'"
-    assert str(error.value) == (
-        "View provider 'test-process/broken' could not inspect view 'dashboard': "
-        + detail
-    )
+        assert "ModuleNotFoundError: No module named 'analyzer'" in message
 
 
 @pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")

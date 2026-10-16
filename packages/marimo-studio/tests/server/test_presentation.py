@@ -308,7 +308,7 @@ def test_first_preview_reports_provider_failure_and_recovers_after_repair(
 
     async def exercise() -> None:
         try:
-            with pytest.raises(ViewProjectError, match="does not read") as failure:
+            with pytest.raises(ViewProjectError, match="'unknown'") as failure:
                 await presentation.display_snapshot_async("dashboard")
             assert failure.value.source == manifest
             assert not failure.value.transient

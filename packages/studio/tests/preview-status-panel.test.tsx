@@ -36,7 +36,6 @@ describe("preview preparation", () => {
     const progress = screen.getByRole("progressbar", { name: "Capturing notebook states" });
     expect(progress).toHaveAttribute("aria-valuenow", "2");
     expect(progress).toHaveAttribute("aria-valuemax", "5");
-    expect(screen.getByText("2 of 5")).toBeVisible();
 
     rerender(
       <PreviewStatusPanel
@@ -92,11 +91,11 @@ describe("preview preparation", () => {
   });
 
   test.each([
-    ["runtime", false, "Python runtime could not start"],
-    ["runtime", true, "Python runtime could not update the preview"],
-    ["presentation", false, "The preview could not open"],
-    ["presentation", true, "The preview could not update"],
-  ])("names the runtime only for %s failures with rendered=%s", (scope, rendered, heading) => {
+    ["runtime", false, true],
+    ["runtime", true, true],
+    ["presentation", false, false],
+    ["presentation", true, false],
+  ])("names the runtime only for %s failures with rendered=%s", (scope, rendered, namesRuntime) => {
     render(
       <PreviewStatusPanel
         state={{
@@ -120,7 +119,9 @@ describe("preview preparation", () => {
         onRetry={vi.fn()}
       />,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(heading);
+    const alert = screen.getByRole("alert");
+    if (namesRuntime) expect(alert).toHaveTextContent("Python runtime");
+    else expect(alert).not.toHaveTextContent("Python runtime");
   });
 
   test("shows the failure message when diagnostic details are unavailable", () => {

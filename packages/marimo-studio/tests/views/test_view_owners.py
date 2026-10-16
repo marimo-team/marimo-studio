@@ -328,7 +328,12 @@ def test_owner_catalog_removes_a_write_left_by_an_interrupted_process(
 
     assert current.view_generations == studio.view_generations
     assert not interrupted.exists()
-    assert "interrupted view owner write" in caplog.text
+    assert any(
+        record.name == "marimo.studio"
+        and record.levelno == logging.WARNING
+        and interrupted in (record.args or ())
+        for record in caplog.records
+    )
 
 
 def test_owner_catalog_asks_to_delete_a_preserved_previous_record(
@@ -342,11 +347,7 @@ def test_owner_catalog_asks_to_delete_a_preserved_previous_record(
     with pytest.raises(ConfigurationError) as raised:
         load_studio(notebook_path)
 
-    assert str(raised.value) == (
-        f"Studio kept a previous view owner record at {preserved} after an "
-        "interrupted change. Delete that file, then retry. Studio recreates "
-        "any owner record it needs."
-    )
+    assert str(preserved) in str(raised.value)
     preserved.unlink()
     assert load_studio(notebook_path).view_generations == studio.view_generations
 
@@ -412,7 +413,8 @@ def test_owner_record_is_outside_the_provider_project(notebook_path: Path) -> No
     studio = load_studio(notebook_path)
 
     owner = view_owner_path(studio.view_root, "dashboard")
-    assert owner.parent == studio.view_root / ".owners"
+    assert owner.is_file()
+    assert not owner.is_relative_to(studio.views["dashboard"].root)
 
 
 def test_view_creation_reports_the_durable_owner_write(notebook_path: Path) -> None:

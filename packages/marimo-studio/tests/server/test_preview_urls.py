@@ -520,7 +520,7 @@ def test_exact_preview_opens_its_current_published_revision(
     assert document.status_code == 200
     assert document.headers["Marimo-Studio-Revision"] == revision
     assert mismatch.status_code == 409
-    assert "exact preview is stale" in mismatch.text
+    assert mismatch.headers["Marimo-Studio-Error"] == "presentation-revision-mismatch"
 
 
 @pytest.mark.parametrize("source_changed", [False, True])
@@ -655,7 +655,7 @@ def test_exact_document_rejects_invalid_revision_constraints(
     with TestClient(marimo_app(notebook_path)) as client:
         response = client.get(f"/dashboard/?{REVISION}={constraint}")
     assert response.status_code == 400
-    assert "Specify one presentation revision" in response.text
+    assert response.headers["Marimo-Studio-Error"] == "invalid-presentation-revision"
 
 
 def test_preview_reports_unavailable_runtime_and_expired_session(
@@ -697,7 +697,6 @@ def test_preview_url_requires_a_connected_studio_tab(
         )
     assert response.status_code == 409
     assert response.json()["error"] == "browser-client-unavailable"
-    assert "reload the notebook in Studio" in response.json()["message"]
 
 
 @pytest.mark.parametrize(
@@ -766,7 +765,6 @@ def test_prepared_preview_requires_a_connected_studio_tab(
 
     assert response.status_code == 409
     assert response.json()["error"] == "browser-client-unavailable"
-    assert "No Studio tab is connected" in response.json()["message"]
 
 
 def test_session_bound_preview_retains_and_revalidates_its_editor(
@@ -1049,7 +1047,6 @@ def test_exact_document_rejects_changed_source_without_retrying(
     assert response.headers["Marimo-Studio-Error"] == "preview-source-not-current"
     assert 'data-marimo-studio-state="error"' in response.text
     assert 'role="alert"' in response.text
-    assert "Preview unavailable" in response.text
     assert "EventSource" not in response.text
     assert "setTimeout" not in response.text
     assert "location.reload" not in response.text

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { syncEditorQuery } from "../src/features/preview/query-remote";
+import { QuerySyncRejectedError, syncEditorQuery } from "../src/features/preview/query-remote";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -23,16 +23,14 @@ describe("editor query synchronization", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost:3000/_marimo-studio/query",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          clientId: "browser-client-1234",
-          operationId: "query-1",
-          query: "region=emea",
-          writeGeneration: 7,
-        }),
-      }),
+      expect.objectContaining({ method: "POST" }),
     );
+    expect(JSON.parse(fetch.mock.calls[0]?.[1].body)).toEqual({
+      clientId: "browser-client-1234",
+      operationId: "query-1",
+      query: "region=emea",
+      writeGeneration: 7,
+    });
     expect(result).toBe("accepted");
   });
 
@@ -199,7 +197,7 @@ describe("editor query synchronization", () => {
 
     await expect(
       syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
-    ).rejects.toThrow("The Studio server refused the query state.");
+    ).rejects.toBeInstanceOf(QuerySyncRejectedError);
   });
 
   it("keeps the server's reason and next step for a refused query", async () => {

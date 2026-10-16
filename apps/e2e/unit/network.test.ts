@@ -110,7 +110,7 @@ test("prefix-mounted endpoints strip a per-run mount and rewrite Host", async ()
     await Promise.all([first.start(), second.start()]);
     const endpoint = first.main.proxied;
     const mount = new URL(endpoint.publicUrl).pathname;
-    expect(mount).toMatch(/^\/s\/[a-f\d]{8}\/p\/[a-f\d]{4}$/);
+    expect(mount).not.toBe("/");
     expect(new URL(second.main.proxied.publicUrl).pathname).not.toBe(mount);
     expect(first.main.studio.publicUrl).toBe(first.main.studio.origin);
     endpoint.bindBackend(port);

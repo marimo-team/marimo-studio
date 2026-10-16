@@ -127,14 +127,12 @@ test("browser evidence reports deterministic diagnostic truncation", () => {
   const browser = toBrowserDiagnostics(diagnostics);
 
   assert.equal(browser.length, 200);
-  assert.deepEqual(browser[199], {
-    code: "browser-diagnostics-truncated",
-    severity: "error",
-    message: "6 additional browser diagnostics were omitted.",
-    hint: "Fix repeated rendered-view errors, then rerun validation.",
-    view: "dashboard",
-    scope: "presentation",
-  });
+  assert.equal(browser[198]?.code, "diagnostic-198");
+  assert.equal(browser[199]?.code, "browser-diagnostics-truncated");
+  assert.equal(browser[199]?.severity, "error");
+  assert.equal(browser[199]?.view, "dashboard");
+  assert.equal(browser[199]?.scope, "presentation");
+  assert.match(browser[199]?.message ?? "", /\b6\b/);
 });
 
 test("WASM readiness omits an unavailable session from its preview message", async () => {

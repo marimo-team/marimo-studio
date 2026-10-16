@@ -15,21 +15,17 @@ import { waitForViewPreview } from "./fixture.ts";
 import { test } from "./network-fixture.ts";
 import { closeFailedNotebookServer, startNotebookServer } from "./notebook-server.ts";
 
-const expectProcessTreeRootStopped = (server: ServerHandle): void => {
-  const groupRunning = processGroupIsRunning(server.processGroupId);
-  if (groupRunning !== undefined) {
-    expect(groupRunning).toBe(false);
-  }
-  expect(server.child.exitCode !== null || server.child.signalCode !== null).toBe(true);
-};
-
 const inventorySchema = z.object({ files: z.array(z.object({ sessionId: z.string() })) });
 const MULTI_SESSION_SHUTDOWN_TIMEOUT = 15_000;
 const MULTI_SESSION_PREVIEW_TIMEOUT = process.platform === "win32" ? 180_000 : 65_000;
 const MULTI_SESSION_TEST_TIMEOUT = process.platform === "win32" ? 300_000 : 150_000;
 
 const expectNotebookServerStopped = async (server: ServerHandle): Promise<void> => {
-  expectProcessTreeRootStopped(server);
+  const groupRunning = processGroupIsRunning(server.processGroupId);
+  if (groupRunning !== undefined) {
+    expect(groupRunning).toBe(false);
+  }
+  expect(server.child.exitCode !== null || server.child.signalCode !== null).toBe(true);
   expect(await portIsOpen(server.port)).toBe(false);
 };
 

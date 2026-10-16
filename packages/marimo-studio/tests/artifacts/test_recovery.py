@@ -174,7 +174,10 @@ def test_build_replaces_state_from_studio_0_3(
     assert rebuilt.build.phase == "published"
     assert rebuilt.artifact is not None
     assert rebuilt.build.diagnostics == ()
-    assert len(_studio_records(caplog, logging.INFO)) == 1
+    assert any(
+        repr(project.name) in message
+        for message in _studio_records(caplog, logging.INFO)
+    )
     assert _studio_records(caplog, logging.WARNING) == []
 
 
@@ -393,7 +396,7 @@ def test_state_recovery_rejects_recreated_project_after_old_build_lock(
     assert sentinel.read_text(encoding="utf-8") == "active\n"
 
 
-def test_damaged_build_state_errors_name_the_view_and_the_next_step(
+def test_damaged_build_state_errors_name_the_view_and_the_receipt(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -404,11 +407,8 @@ def test_damaged_build_state_errors_name_the_view_and_the_next_step(
         read_artifact_state(project, "development")
 
     message = str(raised.value)
-    assert message.startswith("Could not read artifact profile receipt")
-    assert message.endswith(
-        f"Build view {project.name!r} again to replace its damaged development "
-        "build state."
-    )
+    assert str(_profile_path(project, "development")) in message
+    assert repr(project.name) in message
 
 
 def test_a_missing_published_revision_asks_for_a_rebuild(tmp_path: Path) -> None:
@@ -419,10 +419,10 @@ def test_a_missing_published_revision_asks_for_a_rebuild(tmp_path: Path) -> None
     with pytest.raises(ConfigurationError) as raised:
         read_artifact_state(project, "development")
 
-    assert str(raised.value) == (
-        f"The published development build of view {project.name!r} is missing. "
-        "Build the view again."
-    )
+    message = str(raised.value)
+    assert repr(project.name) in message
+    assert "development" in message
+    assert "Build the view again" in message
 
 
 @pytest.mark.parametrize(

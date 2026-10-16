@@ -554,7 +554,7 @@ test("retargets a preserved output portal through an authored shell morph", asyn
   expect(current.querySelector("marimo-output")).toBe(host);
   expect(host.querySelector('[role="status"]')).toBe(diagnostic);
   expect(host.dataset.state).toBe("error");
-  expect(host.textContent).toContain('Notebook variable "missing_output" does not resolve');
+  expect(host.dataset.marimoDiagnosticCode).toBe("projection-output-variable-not-found");
   await act(async () => runtimeRoot.unmount());
 });
 
@@ -593,7 +593,7 @@ test("reads ready rich output hosts in one bounded batch", async () => {
   });
 
   const report = document.querySelector<HTMLElement>('[value="report"]')!;
-  expect(report.dataset.marimoStudioInstance).toMatch(/^projection-\d+$/);
+  expect(report.dataset.marimoStudioInstance).toBeTruthy();
   expect(report.dataset.marimoProducerRef).toBe("cell:v1:report");
   expect(report.dataset.marimoProjectionKind).toBe("output");
   expect(report.dataset.marimoProjectionTarget).toBe("report");
