@@ -38,7 +38,7 @@ if __name__ == "__main__":
 """
 
 
-def _view(notebook: Path, matrix: dict[str, list[JsonValue]]) -> None:
+def _view(notebook: Path, states: StateSpace) -> None:
     notebook.write_text(NOTEBOOK, encoding="utf-8")
     root = prepare_view(notebook).root
     document = root / "index.html"
@@ -51,8 +51,7 @@ def _view(notebook: Path, matrix: dict[str, list[JsonValue]]) -> None:
         encoding="utf-8",
     )
     root.joinpath("states.yaml").write_text(
-        json.dumps(StateSpace(default_state="matrix-000000", matrix=matrix).to_value()),
-        encoding="utf-8",
+        json.dumps(states.to_value()), encoding="utf-8"
     )
 
 
@@ -62,7 +61,18 @@ def test_preflight_warns_about_control_values_no_prepared_state_holds(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "analysis.py"
-    _view(notebook, {"level": [0, 0.5, 1], "region": [["north"], ["south"]]})
+    # The default state leaves both controls at their initial values.
+    _view(
+        notebook,
+        StateSpace(
+            default_state="initial",
+            states={
+                "initial": {},
+                "half": {"level": 0.5},
+                "full": {"level": 1, "region": ["south"]},
+            },
+        ),
+    )
 
     report = preflight_view(notebook, runtime="zero-python", prepare_timeout=120.0)
 
@@ -86,13 +96,11 @@ def test_preflight_is_quiet_when_prepared_states_cover_every_control_value(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "analysis.py"
-    _view(
-        notebook,
-        {
-            "level": [0, 0.25, 0.5, 0.75, 1],
-            "region": [["north"], ["south"], ["east"]],
-        },
-    )
+    matrix: dict[str, list[JsonValue]] = {
+        "level": [0, 0.25, 0.5, 0.75, 1],
+        "region": [["north"], ["south"], ["east"]],
+    }
+    _view(notebook, StateSpace(default_state="matrix-000000", matrix=matrix))
 
     report = preflight_view(notebook, runtime="zero-python", prepare_timeout=120.0)
 

@@ -38,23 +38,17 @@ def largest_sizes(placements: Iterable[tuple[str, Size]]) -> dict[str, Size]:
     """Return the largest size a document places each output at.
 
     A figure drawn at its largest placement stays legible where the document
-    shrinks it. Sizes compare by width, or by height when either places the
-    output by height alone, and a placement with a width wins otherwise.
+    shrinks it. The widest placement with a width wins, then the taller one at
+    that width. An output placed only by height takes its tallest placement.
     """
-    sizes: dict[str, Size] = {}
+    placed: dict[str, list[Size]] = {}
     for target, size in placements:
-        current = sizes.get(target)
-        if current is None or _larger(size, current):
-            sizes[target] = size
-    return sizes
+        placed.setdefault(target, []).append(size)
+    return {target: max(sizes, key=_extent) for target, sizes in placed.items()}
 
 
-def _larger(size: Size, other: Size) -> bool:
-    if size.width is not None and other.width is not None:
-        return size.width > other.width
-    if size.height is not None and other.height is not None:
-        return size.height > other.height
-    return size.width is not None
+def _extent(size: Size) -> tuple[bool, float, float]:
+    return (size.width is not None, size.width or 0, size.height or 0)
 
 
 @dataclass(frozen=True)

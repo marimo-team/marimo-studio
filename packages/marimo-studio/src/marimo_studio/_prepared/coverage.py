@@ -37,7 +37,11 @@ def uncovered_controls(export: NotebookExport) -> tuple[UncoveredControl, ...]:
         domain = binding.domain
         if binding.path or domain is None or binding.input in uncovered:
             continue
-        prepared = [state.inputs[binding.input] for state in states]
+        prepared = [
+            state.inputs[binding.input]
+            for state in states
+            if binding.input in state.inputs
+        ]
         if isinstance(domain, ControlRange):
             gap = _range_gap(domain, prepared)
         else:

@@ -605,6 +605,7 @@ def test_a_build_reports_the_largest_size_the_document_places_each_figure_at(
             r"\marimographics{occupancy_heatmap}"
             r"\marimographics{teaser_figure}"
             r"\marimographics[height=2in]{tall_figure}"
+            r"\marimographics{mixed_figure}"
             r'\marimographics{rows[0]["a long selector '
             r'that TeX breaks across log lines"]}'
         ),
@@ -613,6 +614,9 @@ def test_a_build_reports_the_largest_size_the_document_places_each_figure_at(
         "marimo-size:250.38007::occupancy_heatmap:",
         "marimo-size:465.47974:120:teaser_figure:",
         "marimo-size::144:tall_figure:",
+        "marimo-size::300:mixed_figure:",
+        "marimo-size:200:100:mixed_figure:",
+        "marimo-size:200::mixed_figure:",
         "marimo-size:513::occupancy_heatmap:",
         'marimo-size:216::rows[0]["a long selector that TeX breaks across log lines"]:',
         "marimo-size:0::unsized:",
@@ -625,6 +629,7 @@ def test_a_build_reports_the_largest_size_the_document_places_each_figure_at(
             "occupancy_heatmap": Size(513),
             "teaser_figure": Size(465.47974, 120),
             "tall_figure": Size(height=144),
+            "mixed_figure": Size(200, 100),
             'rows[0]["a long selector that TeX breaks across log lines"]': Size(216),
         }
     }
@@ -1116,6 +1121,7 @@ def test_options_that_resize_a_drawn_figure_warn(
     (
         "\\marimographics[width=1in, angle=90]{chart}",
         "\\marimographics[height=1in]{chart}",
+        "\\marimographics[height=1in, keepaspectratio]{chart}",
         "\\marimographics[width=2in, height=1in, keepaspectratio]{chart}",
         "\\marimocell[scale=0.5]{chart}",
     ),

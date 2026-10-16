@@ -485,11 +485,14 @@
                 \hbox_set:Nn \l__marimo_graphic_box
                   { \includegraphics [ width = \l__marimo_width_dim , #3 ] {#2} }
               }
-            \bool_lazy_and:nnT
-              { \l__marimo_keep_bool }
+            \bool_lazy_all:nT
               {
-                \dim_compare_p:nNn
-                  { \box_wd:N \l__marimo_graphic_box } < { \l__marimo_width_dim - 0.5pt }
+                { \l__marimo_keep_bool }
+                { \l__marimo_width_bool }
+                {
+                  \dim_compare_p:nNn
+                    { \box_wd:N \l__marimo_graphic_box } < { \l__marimo_width_dim - 0.5pt }
+                }
               }
               { \__marimo_resized:n { fitted } }
             \leavevmode \box_use_drop:N \l__marimo_graphic_box
