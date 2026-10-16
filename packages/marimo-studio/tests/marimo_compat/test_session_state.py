@@ -1471,7 +1471,7 @@ def test_control_bindings_resolve_a_shared_consumers_canonical_session(
     from contextlib import contextmanager
 
     from marimo_export import sessions as export_sessions
-    from marimo_export.index import ControlBinding
+    from marimo_export.index import ControlBinding, ControlRange
 
     session = SimpleNamespace(room=SimpleNamespace(main_consumer=None))
     manager = SimpleNamespace(sessions={"s_kernel": session})
@@ -1499,7 +1499,9 @@ def test_control_bindings_resolve_a_shared_consumers_canonical_session(
             manager.sessions["s_kernel"] = SimpleNamespace()
         return SimpleNamespace(
             control_bindings={
-                "scale-control": ControlBinding("scale", ()),
+                "scale-control": ControlBinding(
+                    "scale", (), domain=ControlRange(start=1, stop=3, step=1)
+                ),
             }
         )
 
