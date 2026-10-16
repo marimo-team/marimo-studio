@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
+import { buildSources } from "./build-metadata.ts";
 import { entryClosures } from "./entry-closures.ts";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,7 @@ export default defineConfig({
     postcss: marimo.postcss,
   },
   plugins: [
+    buildSources({ root: workspaceRoot, fileName: "build-sources.zero-python.json" }),
     entryClosures({
       entries: ["zero-python"],
       fileName: "entry-closures.zero-python.json",

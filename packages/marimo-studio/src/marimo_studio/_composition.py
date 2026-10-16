@@ -258,6 +258,7 @@ def create_code_mode_bridge() -> CodeModeBridge:
 def create_export_adapters() -> ExportAdapters:
     """Construct Marimo adapters for static browser export."""
     validate_marimo_release()
+    _assets.validate_runtime_sources()
     from marimo_studio._compat.static_export import static_runtime_config
 
     return ExportAdapters(

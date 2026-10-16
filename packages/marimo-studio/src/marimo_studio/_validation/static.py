@@ -12,6 +12,7 @@ from marimo_studio._composition import (
     create_worker_runtime_probe,
     marimo_release_identity,
 )
+from marimo_studio._delivery.assets import validate_runtime_sources
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.results import CheckResult
@@ -63,6 +64,7 @@ def _compatibility_details(*, passed: bool) -> dict[str, object]:
 def _compatibility_check() -> CheckResult:
     try:
         browser = create_browser_runtime_projector()
+        validate_runtime_sources()
     except MarimoStudioError as error:
         return CheckResult(
             "compatibility",
