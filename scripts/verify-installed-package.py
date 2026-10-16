@@ -21,27 +21,11 @@ import marimo_studio
 import marimo_studio.agent as studio_agent
 import marimo_studio.authoring as studio_authoring
 import tomlkit
+from distribution_metadata import declared_project, verify_metadata
 from marimo_studio._delivery.assets import runtime_assets_path
-from marimo_studio._release_checks import (
-    verify_browser_assets,
-    verify_distribution_metadata,
-)
-from packaging.specifiers import SpecifierSet
+from marimo_studio._release_checks import verify_browser_assets
 
 _DISTRIBUTION = "marimo-studio"
-_ENTRY_POINTS = {
-    ("console_scripts", "marimo-studio"),
-    ("marimo.agent.capability", "studio"),
-    ("marimo.kernel.lifespan", "marimo-studio"),
-    ("marimo.server.asgi.middleware", "marimo-studio"),
-    ("marimo_studio.view_provider", "latex"),
-    ("marimo_studio.view_provider", "notebook-kit"),
-    ("marimo_studio.view_provider", "quarto"),
-    ("marimo_studio.view_provider", "react"),
-    ("marimo_studio.view_provider", "svelte"),
-    ("marimo_studio.view_provider", "typst"),
-    ("marimo_studio.view_provider", "vanilla"),
-}
 _NOTEBOOK = """import marimo
 
 app = marimo.App()
@@ -77,15 +61,38 @@ def _arguments() -> argparse.Namespace:
 
 def _verify_entry_points() -> None:
     installed = distribution(_DISTRIBUTION)
+    project = declared_project()
+    declared = {("console_scripts", name) for name in project["scripts"]} | {
+        (group, name)
+        for group, points in project["entry-points"].items()
+        for name in points
+    }
     points = {(point.group, point.name): point for point in installed.entry_points}
-    if set(points) != _ENTRY_POINTS:
-        missing = sorted(_ENTRY_POINTS - set(points))
-        extra = sorted(set(points) - _ENTRY_POINTS)
+    if set(points) != declared:
+        missing = sorted(declared - set(points))
+        extra = sorted(set(points) - declared)
         raise AssertionError(
             f"Installed entry points differ: missing={missing}, extra={extra}"
         )
     for point in points.values():
         point.load()
+
+
+def _verify_metadata() -> None:
+    installed = distribution(_DISTRIBUTION)
+    project = declared_project()
+    verify_metadata(installed.metadata, project, "installed package")
+    for name in project["license-files"]:
+        matches = [
+            item
+            for item in installed.files or ()
+            if str(item).endswith(f".dist-info/licenses/{name}")
+        ]
+        if (
+            len(matches) != 1
+            or not Path(str(installed.locate_file(matches[0]))).read_bytes()
+        ):
+            raise AssertionError(f"Installed package license is missing: {name}")
 
 
 def _verify_public_imports(notebook: Path) -> None:
@@ -415,10 +422,6 @@ def main() -> None:
     installed_version = version(_DISTRIBUTION)
     marimo_export = distribution("marimo-export")
     marimo_export_version = marimo_export.version
-    if marimo_export_version not in SpecifierSet(">=0.2.1"):
-        raise AssertionError(
-            f"Installed marimo-export version is {marimo_export_version}, expected >=0.2.1"
-        )
     if marimo_export.read_text("direct_url.json") is not None:
         raise AssertionError("Installed marimo-export came from a direct source")
     if args.expected_version is not None and installed_version != args.expected_version:
@@ -438,7 +441,7 @@ def main() -> None:
     if not editor_document.is_file() or not editor_document.read_bytes():
         raise AssertionError("Installed editor document runtime is unavailable")
     _verify_agent_plugin(args.expected_plugin_digests)
-    verify_distribution_metadata(_DISTRIBUTION)
+    _verify_metadata()
     release = json.loads(
         resources.files("marimo_studio._compat")
         .joinpath("release.json")

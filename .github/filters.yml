@@ -108,6 +108,7 @@ browser_infra: &browser_infra
   - "apps/e2e/scripts/process-group.ts"
   - "apps/e2e/scripts/server-process.ts"
   - Makefile
+  - scripts/distribution_metadata.py
   - scripts/verify-dist.sh
   - scripts/write-dist-checksums.py
   - apps/e2e/playwright.merge.config.ts
@@ -140,6 +141,7 @@ platform_sensitive:
   - "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/**"
   - "packages/marimo-studio/tests/filesystem/**"
   - "packages/marimo-studio/tests/processes/**"
+  - "scripts/distribution_metadata.py"
   - "scripts/python-test.sh"
   - "scripts/verify-installed-wheel.sh"
   - "scripts/verify-installed-package.py"
@@ -250,6 +252,7 @@ distribution:
   - "skills/marimo-studio/**"
   - "apps/e2e/fixtures-provider/provider/**"
   - *publication_scripts
+  - "scripts/distribution_metadata.py"
   - "scripts/verify-dist.sh"
   - "scripts/verify-installed-wheel.sh"
   - "scripts/verify-installed-package.py"
@@ -271,6 +274,7 @@ installed_distribution:
   - "packages/marimo-studio/src/**"
   - *browser_assets
   - "apps/e2e/fixtures-provider/provider/**"
+  - "scripts/distribution_metadata.py"
   - "scripts/verify-installed-wheel.sh"
   - "scripts/verify-installed-package.py"
   - "scripts/verify-external-provider.py"

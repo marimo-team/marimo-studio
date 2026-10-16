@@ -42,7 +42,7 @@ notebook configuration
 | `_entrypoints.py`          | Marimo middleware and kernel plugin entry points                                |
 | `_compat`                  | Private Marimo Python imports and reversible integration                        |
 | `_hosts`                   | Notebook host contracts, such as marimohub's sandbox context                    |
-| `_release_checks`          | Browser asset budgets and package metadata checks                               |
+| `_release_checks`          | Browser asset budgets                                                           |
 | `packages/protocol`        | Serializable browser records                                                    |
 | `packages/runtime`         | Runtime registry and mounted-session interface                                  |
 | `packages/presentation`    | One published document and its mount lifecycle                                  |
