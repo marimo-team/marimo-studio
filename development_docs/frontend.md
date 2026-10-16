@@ -385,8 +385,8 @@ The build also writes `_static/build-sources.json` beside the browser
 directory. It records a digest of each workspace file that shapes the bundles:
 the bundled modules, the `package.json` and `src` tree of each workspace
 package they import, the Vite config files, and `pnpm-lock.yaml`. When a
-checkout serves its own build, `marimo edit` and `marimo-studio export`
-compare those digests and stop after a file changed since the build:
+checkout serves its own build, `marimo edit`, `create_asgi_app`, and
+`marimo-studio export` compare those digests and stop after a file changed since the build:
 
 ```text
 Error: Studio's browser assets do not match this checkout: packages/protocol/src/projections.ts changed since the last build. Run `make build` in /path/to/marimo-studio to rebuild them.

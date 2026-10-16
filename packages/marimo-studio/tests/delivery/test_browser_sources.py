@@ -12,7 +12,10 @@ from pathlib import Path
 import pytest
 
 import marimo_studio._delivery.assets as assets_module
+from marimo_studio import create_asgi_app
 from marimo_studio.errors import ProtocolError
+
+from ..app_helpers import published_dashboard
 
 OUTPUT = "packages/marimo-studio/src/marimo_studio/_static/browser"
 SOURCES = {
@@ -77,6 +80,23 @@ def test_checkout_rejects_assets_built_from_other_sources(checkout: Path) -> Non
     assert error.value.code == "protocol-error"
     assert "packages/protocol/src/projections.ts and 1 other file" in message
     assert f"Run `make build` in {checkout.resolve()}" in message
+
+
+def test_programmatic_app_rejects_assets_built_from_other_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, notebook_path: Path
+) -> None:
+    studio = published_dashboard(notebook_path)
+    (tmp_path / "checkout").mkdir()
+    browser = write_checkout(tmp_path / "checkout")
+    monkeypatch.setattr(assets_module, "runtime_assets_path", lambda: browser)
+    (tmp_path / "checkout/packages/protocol/src/projections.ts").write_text(
+        "export const site = 2;\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ProtocolError) as error:
+        create_asgi_app(studio.notebook)
+
+    assert "packages/protocol/src/projections.ts" in str(error.value)
 
 
 def test_crlf_checkout_matches_the_digest_of_its_lf_content(checkout: Path) -> None:

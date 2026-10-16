@@ -280,6 +280,7 @@ def programmatic_middleware(
     complete policy they pass to this boundary.
     """
     validate_marimo_release()
+    _assets.validate_runtime_sources()
     from marimo_studio._compat.server.programmatic import programmatic_middleware
 
     return programmatic_middleware(
