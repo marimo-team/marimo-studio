@@ -1795,7 +1795,7 @@ recommended = [
 
 [[package]]
 name = "marimo-export"
-version = "0.2.0"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-plugins" },
@@ -1807,13 +1807,14 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "packaging" },
+    { name = "psutil", marker = "sys_platform != 'android' and sys_platform != 'emscripten'" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/02/07/16245dfd26779de79f3dce25dff761c558b657e87f612dfdb2d025666712/marimo_export-0.2.0.tar.gz", hash = "sha256:11258dbfb412e0df19b55d7d7f2e1a2d74da737011a058583a30c6f5ae6171d2", size = 286423, upload-time = "2026-10-14T13:15:28.429Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0e/2d/7acf62cca3a109e4f20597662f73e52bae0b323954d9c4a6815f40df9cb6/marimo_export-0.2.1.tar.gz", hash = "sha256:8c85f62111fa1066072ce450a0a7533c8734f3bf43f0aac213d36449af69e618", size = 288337, upload-time = "2026-10-16T11:26:35.649Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/64/fb5b677a09bea525d4bee7cd8f8a42ad40ce5c4888082cedc291aa9e756e/marimo_export-0.2.0-py3-none-any.whl", hash = "sha256:0aa59cf3c42ca25e8b7754fa139f7c09d67d9392edba89426d01c05b01ce72dd", size = 371781, upload-time = "2026-10-14T13:15:27.209Z" },
+    { url = "https://files.pythonhosted.org/packages/77/b0/a446dd1e3e40eecaf5e0f0615fbbd10b42b1cbd8bd3dfd2ddd1ace1824ba/marimo_export-0.2.1-py3-none-any.whl", hash = "sha256:0154c994d62e3d43eee544d9502ef5a773123b190665e1fc86fa617c3a4ac01d", size = 373634, upload-time = "2026-10-16T11:26:34.526Z" },
 ]
 
 [[package]]

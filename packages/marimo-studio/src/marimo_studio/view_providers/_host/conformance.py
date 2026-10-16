@@ -123,9 +123,22 @@ _SOURCE_LANGUAGES = {
     ".css": "css",
     ".html": "html",
     ".js": "javascript",
+    ".json": "json",
     ".jsx": "javascriptreact",
+    ".lua": "lua",
+    ".markdown": "markdown",
+    ".md": "markdown",
+    ".py": "python",
+    ".qmd": "markdown",
+    ".scss": "scss",
+    ".svg": "xml",
+    ".tex": "latex",
+    ".toml": "toml",
     ".ts": "typescript",
     ".tsx": "typescriptreact",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
 }
 
 

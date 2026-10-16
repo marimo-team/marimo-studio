@@ -82,7 +82,11 @@ test("advertises semantic bindings for registered controls in the active snapsho
   const apply = vi.fn<ControlEndpoint["apply"]>(async () => {});
   const endpoint: ControlEndpoint = {
     controlBindings: () => ({
-      "current-control": { input: "sport", path: [] },
+      "current-control": {
+        input: "sport",
+        path: [],
+        domain: { kind: "options", values: ["aquatics", "athletics"] },
+      },
       "other-state-control": { input: "sport", path: [] },
     }),
     subscribeControlBindings: () => () => {},

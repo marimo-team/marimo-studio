@@ -102,7 +102,7 @@ export class InstalledWorkspace {
           "assert Version(version('marimo-lens')) >= Version('0.2.3')",
           "assert distribution('marimo-lens').read_text('direct_url.json') is None",
           "assert Path(marimo_lens.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())",
-          "assert version('marimo-export') == '0.2.0'",
+          "assert version('marimo-export') == '0.2.1'",
           "assert distribution('marimo-export').read_text('direct_url.json') is None",
         ].join("; "),
       ],

@@ -19,6 +19,7 @@ from marimo_studio.view_providers import (
     ProjectDiagnostic,
     ProjectionSite,
     ProviderAvailability,
+    ProviderError,
     ProviderInfo,
     ProviderStarter,
     Render,
@@ -387,6 +388,28 @@ def test_provider_diagnostics_locate_manifest_and_input_errors(
         )
     )
     assert result.diagnostics == (diagnostic,)
+
+
+def test_inspection_errors_open_their_python_source_with_python_language(
+    tmp_path: Path,
+) -> None:
+    provider = ProviderStub("example/html", "html")
+    provider.inspection_error = ProviderError(
+        "loader.py has no load().",
+        source=SourceLocation(PurePosixPath("loader.py"), 3, 1),
+    )
+    registry = ProviderRegistry((candidate("html", provider),))
+    installed = registry.get(registry.ids[0])
+    tmp_path.joinpath("loader.py").write_text("import json\n", encoding="utf-8")
+    project = ViewProject(
+        "dashboard", tmp_path, tmp_path / "view.toml", installed.key, {}
+    )
+
+    inspected = installed.inspect(inspection_request(project))
+
+    assert SourceDocument(PurePosixPath("loader.py"), "python", "edit") in (
+        inspected.documents
+    )
 
 
 def test_studio_adds_view_toml_and_guidance_to_every_inspection(

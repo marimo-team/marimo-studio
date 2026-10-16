@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { UIElementRegistry as MarimoUIElementRegistry } from "./upstream/controls.ts";
 
-import { losslessRecordSchema } from "./embedded-json.ts";
+import { type EmbeddedJsonValue, jsonValueSchema, losslessRecordSchema } from "./embedded-json.ts";
 
 type ControlValue = Parameters<MarimoUIElementRegistry["set"]>[1];
 type ControlMessage = Parameters<MarimoUIElementRegistry["broadcastMessage"]>[1];
@@ -34,9 +34,14 @@ export type ControlPathStep =
   | { readonly kind: "index"; readonly value: number }
   | { readonly kind: "key"; readonly value: string };
 
+export type ControlDomain =
+  | { readonly kind: "range"; readonly start: number; readonly stop: number; readonly step: number }
+  | { readonly kind: "options"; readonly values: readonly EmbeddedJsonValue[] };
+
 export interface ControlBinding {
   readonly input: string;
   readonly path: readonly ControlPathStep[];
+  readonly domain?: ControlDomain;
 }
 
 export type ControlBindings = Readonly<Record<string, ControlBinding>>;
@@ -71,14 +76,37 @@ const controlPathStepSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("index"), value: z.int().nonnegative() }),
   z.strictObject({ kind: z.literal("key"), value: z.string() }),
 ]);
+const controlDomainSchema = z.discriminatedUnion("kind", [
+  z
+    .strictObject({
+      kind: z.literal("range"),
+      start: z.number(),
+      stop: z.number(),
+      step: z.number().positive(),
+    })
+    .refine((range) => range.start <= range.stop, "Control range start exceeds stop"),
+  z.strictObject({ kind: z.literal("options"), values: z.array(jsonValueSchema).min(1) }),
+]);
 const controlBindingsSchema = losslessRecordSchema(
   z.string().min(1),
-  z.strictObject({ input: z.string().min(1), path: z.array(controlPathStepSchema) }),
+  z.strictObject({
+    input: z.string().min(1),
+    path: z.array(controlPathStepSchema),
+    domain: controlDomainSchema.optional(),
+  }),
 );
 
 export const parseControlBindings = (value: ControlBindings): ControlBindings => {
   const parsed = controlBindingsSchema.parse(value);
-  Object.values(parsed).forEach((binding) => Object.freeze(binding.path));
+  for (const binding of Object.values(parsed)) {
+    Object.freeze(binding.path);
+    if (binding.domain?.kind === "options") {
+      Object.freeze(binding.domain.values);
+    }
+    if (binding.domain) {
+      Object.freeze(binding.domain);
+    }
+  }
   Object.values(parsed).forEach(Object.freeze);
   return Object.freeze(parsed);
 };
