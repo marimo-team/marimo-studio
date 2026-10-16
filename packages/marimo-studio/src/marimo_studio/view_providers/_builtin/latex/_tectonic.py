@@ -371,23 +371,23 @@ def _warnings(
 def _output_sizes(log: str) -> dict[str, Size]:
     """Return the widest size the document places each output at."""
     sizes: dict[str, Size] = {}
+    widths: dict[str, float] = {}
     for line in _log_lines(log):
         # A record that follows a line TeX broke at exactly its limit joins
         # that line, so it is read from the end of the joined line.
         if (match := _SIZE.search(line)) is None:
             continue
         try:
-            size = Size(
-                float(match["width"]),
-                float(match["height"]) if match["height"] else None,
-            )
+            width = float(match["width"])
+            size = Size(width, float(match["height"]) if match["height"] else None)
         except ValueError:
             # A slot without width, or one wider than a figure can be drawn,
             # places the output at the size the notebook drew it.
             continue
         target = match["target"]
-        if target not in sizes or size.width > sizes[target].width:
+        if target not in widths or width > widths[target]:
             sizes[target] = size
+            widths[target] = width
     return sizes
 
 

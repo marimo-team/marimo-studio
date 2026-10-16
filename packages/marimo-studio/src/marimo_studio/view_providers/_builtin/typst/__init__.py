@@ -29,7 +29,6 @@ from collections.abc import Mapping
 from importlib import resources
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePosixPath
-from typing import cast
 
 from packaging.version import InvalidVersion, Version
 
@@ -173,18 +172,23 @@ def _run_typst(
 def _output_sizes(records: object) -> dict[str, Size]:
     """Return the widest size the document places each output at."""
     sizes: dict[str, Size] = {}
+    widths: dict[str, float] = {}
     for record in records if isinstance(records, list) else ():
         if not isinstance(record, dict) or not isinstance(record.get("target"), str):
             continue
+        # A slot without width, or one wider than a figure can be drawn,
+        # places the output at the size the notebook drew it.
+        width = record.get("width")
+        if not isinstance(width, (int, float)):
+            continue
         try:
-            size = Size(cast(float, record.get("width")), record.get("height"))
+            size = Size(width, record.get("height"))
         except (TypeError, ValueError):
-            # A slot without width, or one wider than a figure can be drawn,
-            # places the output at the size the notebook drew it.
             continue
         target = record["target"]
-        if target not in sizes or size.width > sizes[target].width:
+        if target not in widths or width > widths[target]:
             sizes[target] = size
+            widths[target] = width
     return sizes
 
 
