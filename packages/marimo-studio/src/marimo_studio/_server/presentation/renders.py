@@ -172,6 +172,9 @@ class RenderStore:
                 # its provider work has stopped.
                 job.work.cancel()
                 job.cancellation.cancel()
+                # No request reads the abandoned job's outcome, so asyncio
+                # would log its exception as never retrieved.
+                job.task.add_done_callback(_discard_outcome)
                 await asyncio.wait({job.task})
             raise
         except BaseException:
@@ -421,6 +424,11 @@ class RenderStore:
         self._executor.shutdown(wait=True, cancel_futures=True)
         if directory is not None:
             shutil.rmtree(directory, ignore_errors=True)
+
+
+def _discard_outcome(task: asyncio.Future[RenderBundle]) -> None:
+    if not task.cancelled():
+        task.exception()
 
 
 def _remove(roots: list[Path]) -> None:

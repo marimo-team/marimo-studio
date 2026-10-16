@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import os
 import subprocess
 import sys
@@ -323,6 +324,32 @@ def test_a_shared_render_stops_when_its_last_request_leaves(
     try:
         asyncio.run(exercise())
         assert renderer.cancelled.is_set()
+    finally:
+        store.close()
+
+
+def test_an_abandoned_render_leaves_nothing_in_the_asyncio_log(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    renderer = GatedRenderer()
+    store, presentation, snapshot = _store(monkeypatch, renderer)
+
+    async def exercise() -> None:
+        leaving = asyncio.create_task(
+            _render(store, presentation, snapshot, {"total": 1})
+        )
+        await asyncio.to_thread(renderer.started.wait, 15)
+        leaving.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await leaving
+
+    try:
+        asyncio.run(exercise())
+        # asyncio reports an unretrieved exception when its future is collected.
+        gc.collect()
+        assert renderer.cancelled.is_set()
+        assert [r.getMessage() for r in caplog.records if r.name == "asyncio"] == []
     finally:
         store.close()
 
