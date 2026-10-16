@@ -75,27 +75,23 @@ def test_heartbeat_repeats_the_latest_progress_and_stops_on_exit(
     stream = DiagnosticStream(
         format=output_format, command="view export", diagnostic_stream=output
     )
+    latest = StaticExportProgress.from_export(
+        ProgressEvent(
+            kind="state_started",
+            state="reviewed",
+            cache=CacheActivity(authored_hits=2),
+        ),
+        view="report",
+        runtime="zero-python",
+    )
     with activity(stream, phase="prepare", view="report", interval=0.01) as progress:
-        progress(
-            StaticExportProgress.from_export(
-                ProgressEvent(
-                    kind="state_started",
-                    state="reviewed",
-                    cache=CacheActivity(authored_hits=2),
-                ),
-                view="report",
-                runtime="zero-python",
-            )
-        )
+        progress(latest)
         assert observed.wait(2), "heartbeat did not arrive during active preparation"
     if not jsonl:
         heartbeat_line = next(
             line for line in output.getvalue().splitlines() if line.startswith("Still")
         )
-        assert heartbeat_line.split(" | ", 1)[1] == (
-            "State started: reviewed | authored 2 hit, 0 miss | "
-            "projections 0 hit, 0 miss"
-        )
+        assert heartbeat_line.split(" | ", 1)[1] == latest.format_message()
         return
     events = [json.loads(line) for line in output.getvalue().splitlines()]
     heartbeat = next(
@@ -103,7 +99,6 @@ def test_heartbeat_repeats_the_latest_progress_and_stops_on_exit(
     )
     assert heartbeat["details"]["state"] == "reviewed"
     assert heartbeat["details"]["cache"]["authored_hits"] == 2
-    assert "cell" not in heartbeat["details"]
     assert heartbeat["details"]["elapsed_seconds"] >= 0
 
 

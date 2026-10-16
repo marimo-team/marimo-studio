@@ -252,7 +252,7 @@ assert.equal(globalThis.__MARIMO_MOUNT_CONFIG__, retained);
         text=True,
     )
     assert unavailable.status_code == 400
-    assert "unavailable" in unavailable.text
+    assert unavailable.headers["Marimo-Studio-Error"] == "runtime-unavailable"
 
 
 def test_run_mode_builds_and_serves_the_production_profile(
@@ -328,9 +328,7 @@ def test_view_routes_name_missing_views_and_wrong_methods(
 
     assert missing_view.status_code == 404
     assert missing_view.json()["error"] == "view-not-found"
-    assert missing_view.json()["message"] == (
-        "View 'missing' does not exist. Available views: dashboard, executive."
-    )
+    assert missing_view.json()["available_views"] == ["dashboard", "executive"]
     assert wrong_method.status_code == 405
     assert wrong_method.headers["allow"] == "POST"
 
@@ -507,10 +505,6 @@ def test_runtime_injection_uses_structural_html_tags(
     assert response.status_code == 200
     assert '<script>const headMarker = "</head>";</script>' in response.text
     assert '<script>const bodyMarker = "</body>";</script>' in response.text
-    assert (
-        '<link data-marimo-studio-runtime rel="stylesheet" '
-        'crossorigin="anonymous" href="'
-    ) in response.text
     assert response.text.index("runtime.css") < response.text.index("const headMarker")
     assert response.text.index('id="marimo-runtime-root"') > response.text.index(
         "const bodyMarker"
@@ -552,7 +546,7 @@ def test_run_mode_serves_the_configured_wasm_runtime_and_source(
 
     assert unavailable.status_code == 400
     assert unavailable.json()["error"] == "runtime-unavailable"
-    assert '"runtime":"wasm"' in page.text
+    assert _presentation_wrapper_config(page.text)["runtime"] == "wasm"
     assert dashboard["runtime"]["id"] == "wasm"
     assert dashboard["runtime"]["instance"] == executive["runtime"]["instance"]
     code = dashboard["runtime"]["data"]["code"]

@@ -265,10 +265,7 @@ def test_zero_python_export_combines_view_and_reuses_publication(
 def test_wasm_export_rejects_prepare_timeout_before_loading_target(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(
-        ValueError,
-        match="prepare_timeout is only valid when runtime is 'zero-python'",
-    ):
+    with pytest.raises(ValueError, match="prepare_timeout"):
         export_view(
             tmp_path / "missing.py",
             tmp_path / "site",
@@ -285,10 +282,7 @@ def test_zero_python_export_rejects_invalid_prepare_timeout_before_loading_targe
     tmp_path: Path,
     prepare_timeout: object,
 ) -> None:
-    with pytest.raises(
-        ValueError,
-        match="prepare_timeout must be a finite positive number",
-    ):
+    with pytest.raises(ValueError, match="prepare_timeout"):
         export_view(
             tmp_path / "missing.py",
             tmp_path / "site",

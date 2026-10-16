@@ -132,31 +132,35 @@ def _arrow_descriptor(byte_length: int) -> dict[str, object]:
 def test_kernel_value_result_parser_bounds_arrow_values_per_value_and_per_read() -> (
     None
 ):
+    limits = ValueLimits(arrow_value_bytes=64, arrow_read_bytes=128)
     parsed = _parse_result(
         {
             "values": {
-                "first": _arrow_descriptor(64 * 1024 * 1024),
-                "second": _arrow_descriptor(64 * 1024 * 1024),
+                "first": _arrow_descriptor(64),
+                "second": _arrow_descriptor(64),
             },
             "errors": {},
-        }
+        },
+        limits=limits,
     )
 
     assert set(parsed.values) == {"first", "second"}
     with pytest.raises(ProjectionUnavailable, match="invalid encoded value"):
         _parse_result(
-            {"values": {"frame": _arrow_descriptor(64 * 1024 * 1024 + 1)}, "errors": {}}
+            {"values": {"frame": _arrow_descriptor(65)}, "errors": {}},
+            limits=limits,
         )
     with pytest.raises(ProjectionUnavailable, match="aggregate byte limit"):
         _parse_result(
             {
                 "values": {
-                    "first": _arrow_descriptor(64 * 1024 * 1024),
-                    "second": _arrow_descriptor(64 * 1024 * 1024),
+                    "first": _arrow_descriptor(64),
+                    "second": _arrow_descriptor(64),
                     "third": _arrow_descriptor(1),
                 },
                 "errors": {},
-            }
+            },
+            limits=limits,
         )
 
 
@@ -537,7 +541,9 @@ def test_render_reads_run_under_their_own_kernel_owner(operation: str) -> None:
     assert origin == "editor"
 
 
-def test_timed_out_session_barriers_retain_capacity_until_kernel_completion() -> None:
+def test_timed_out_session_barriers_retain_capacity_until_kernel_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from marimo._messaging.notification import (
         FunctionCallResultNotification,
         HumanReadableStatus,
@@ -560,20 +566,21 @@ def test_timed_out_session_barriers_retain_capacity_until_kernel_completion() ->
         def put_control_request(self, request: object, **__: object) -> None:
             self.calls.append((request, self.waiter))
 
+    monkeypatch.setattr(kernel_session_module, "MAX_SESSION_PROJECTION_WORK", 3)
     session = Session()
 
+    async def barrier() -> str:
+        with pytest.raises(ProjectionUnavailable) as raised:
+            await wait_for_session_barrier(
+                session,
+                consumer_id="editor",
+                timeout=0,
+            )
+        return raised.value.code
+
     async def exercise() -> None:
-        for _index in range(3):
-            with pytest.raises(ProjectionUnavailable) as raised:
-                await wait_for_session_barrier(
-                    session,
-                    consumer_id="editor",
-                    timeout=0,
-                )
-            assert raised.value.code == "read-timeout"
-        state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)
-        assert state is not None
-        assert state.active == 3
+        assert [await barrier() for _index in range(3)] == ["read-timeout"] * 3
+        assert await barrier() == "projection-work-limit"
         for request, waiter in session.calls:
             waiter.on_notification_sent(
                 session,
@@ -587,12 +594,9 @@ def test_timed_out_session_barriers_retain_capacity_until_kernel_completion() ->
                 ),
             )
         await asyncio.sleep(0)
-        assert state.active == 0
+        assert await barrier() == "read-timeout"
 
     asyncio.run(exercise())
-    state = kernel_session_module._SESSION_PROJECTION_WORK.get(session)
-    assert state is not None
-    assert state.active == 0
 
 
 def test_timed_out_projection_calls_cannot_grow_the_session_backlog(

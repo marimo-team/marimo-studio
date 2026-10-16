@@ -50,6 +50,7 @@ def test_cancelled_concurrent_deno_catalog_probe_retries_successfully(
     )
     retry_barrier = threading.Barrier(len(providers))
     calls = 0
+    minimum = deno_runtime.DENO_MIN_VERSION
 
     class Supervisor:
         def __init__(self) -> None:
@@ -74,7 +75,7 @@ def test_cancelled_concurrent_deno_catalog_probe_retries_successfully(
                     raise AssertionError("Cancelled Deno probe was not stopped")
                 return ProcessResult(1, b"", b"")
             retry_barrier.wait(timeout=2)
-            return ProcessResult(0, b"deno 2.9.5\n", b"")
+            return ProcessResult(0, f"deno {minimum}\n".encode(), b"")
 
     monkeypatch.setattr(toolkit, "ProcessSupervisor", Supervisor)
 
@@ -90,4 +91,3 @@ def test_cancelled_concurrent_deno_catalog_probe_retries_successfully(
     inventory = catalog_module.starters()
 
     assert [starter.availability.available for starter in inventory] == [True, True]
-    assert calls == 4

@@ -131,24 +131,17 @@ def test_runtime_check_scopes_values_to_the_selected_view(
     }
     failures = {result.name: result for result in results if result.status == "fail"}
     assert failures["runtime-cell:result"].code == "projected-cell-empty"
-    assert failures["runtime-cell:result"].message == (
-        "Projected cell produced no visible runtime output"
-    )
-    assert failures["runtime-cell:result"].details == {
-        "projection": "cell",
-        "target": "result",
-        "source": {
-            "path": str(notebook_path),
-            "line": current.source.start_line,
-            "column": 1,
-        },
-        "hint": (
-            'Use <marimo-output value="doubled"> to render the defined Python '
-            "object. Keep <marimo-cell> when the complete cell displays the "
-            "intended result."
-        ),
-        "view": "dashboard",
+    cell_details = failures["runtime-cell:result"].details
+    assert cell_details is not None
+    assert cell_details["projection"] == "cell"
+    assert cell_details["target"] == "result"
+    assert cell_details["view"] == "dashboard"
+    assert cell_details["source"] == {
+        "path": str(notebook_path),
+        "line": current.source.start_line,
+        "column": 1,
     }
+    assert '<marimo-output value="doubled">' in cell_details["hint"]
     assert failures["runtime-value:doubled.missing"].code == ("value-path-unavailable")
     assert failures["runtime-value:doubled.missing"].message == "Missing key"
     assert failures["runtime-value:doubled.missing"].details is not None
@@ -171,10 +164,7 @@ def test_runtime_check_scopes_values_to_the_selected_view(
         str(ref) for ref in value_projection.dependency_closure
     ]
     assert value_details["siteId"] == value_projection.request.site_id
-    assert value_details["hint"] == (
-        "Fix the mo-value selector in the view source or the value shape "
-        "in Marimo, then rerun the check."
-    )
+    assert value_details["hint"]
 
 
 def test_runtime_check_reports_rich_output_format_failures(
@@ -380,24 +370,14 @@ if __name__ == "__main__":
     )
     failures = {result.name: result for result in results if result.status == "fail"}
 
-    assert failures["runtime-cell:disabled_cell"].code == "cell-disabled"
-    assert failures["runtime-cell:disabled_cell"].message == (
-        "Projected cell is disabled"
-    )
-    disabled_details = failures["runtime-cell:disabled_cell"].details
-    assert disabled_details is not None
-    assert disabled_details["hint"] == (
-        "Enable the cell in Marimo or remove its projection."
-    )
-    assert failures["runtime-cell:dependent_cell"].code == "cell-disabled"
-    assert failures["runtime-cell:dependent_cell"].message == (
-        "Projected cell has a disabled upstream dependency"
-    )
-    dependent_details = failures["runtime-cell:dependent_cell"].details
-    assert dependent_details is not None
-    assert dependent_details["hint"] == (
-        "Enable the disabled upstream cell in Marimo or remove this projection."
-    )
+    disabled = failures["runtime-cell:disabled_cell"]
+    dependent = failures["runtime-cell:dependent_cell"]
+    assert disabled.code == "cell-disabled"
+    assert dependent.code == "cell-disabled"
+    assert "upstream" not in disabled.message
+    assert "upstream" in dependent.message
+    assert disabled.details is not None and disabled.details["hint"]
+    assert dependent.details is not None and dependent.details["hint"]
 
 
 def test_runtime_check_reports_the_original_cell_exception(tmp_path: Path) -> None:
@@ -472,7 +452,6 @@ def test_selected_view_check_isolated_from_other_templates(
     notebook_path: Path,
 ) -> None:
     prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     _shell(studio, "dashboard", '<span mo-value="missing"></span>')

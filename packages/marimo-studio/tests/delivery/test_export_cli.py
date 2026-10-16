@@ -11,6 +11,7 @@ from click.testing import CliRunner, Result
 import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
 from marimo_studio._cli.environment import SANDBOX_ENV
+from marimo_studio._delivery.export import DEFAULT_PREPARE_TIMEOUT
 from marimo_studio._workspace import load_studio
 
 from ..artifact_test_support import add_provider_outputs
@@ -188,33 +189,22 @@ def test_static_delivery_text_shows_each_issue_repair(
     issue = next(
         index for index, line in enumerate(lines) if "static-module-computed" in line
     )
-    assert lines[issue + 1].strip() == (
-        "repair Verify the computed module target is available after publication."
-    )
+    assert lines[issue + 1].strip().startswith("repair ")
 
 
-def test_export_help_explains_runtime_and_preparation_timeout() -> None:
-    result = CliRunner().invoke(cli, ["view", "export", "--help"])
-
-    assert result.exit_code == 0, result.output
-    help_text = " ".join(result.output.split())
-    assert "--runtime [zero-python|wasm]" in help_text
-    assert "zero-python selects the Prepared runtime" in help_text
-    assert "wasm selects the Browser runtime" in help_text
-    assert "--prepare-timeout SECONDS" in help_text
-    assert "Defaults to 30 seconds when omitted" in help_text
-
-
-def test_preflight_help_explains_runtime_and_preparation_timeout() -> None:
-    result = CliRunner().invoke(cli, ["view", "preflight", "--help"])
+@pytest.mark.parametrize("command", ("export", "preflight"))
+def test_static_delivery_help_explains_runtime_and_preparation_timeout(
+    command: str,
+) -> None:
+    result = CliRunner().invoke(cli, ["view", command, "--help"])
 
     assert result.exit_code == 0, result.output
     help_text = " ".join(result.output.split())
     assert "--runtime [zero-python|wasm]" in help_text
-    assert "zero-python selects the Prepared runtime and verifies" in help_text
-    assert "wasm selects the Browser runtime and verifies" in help_text
+    assert "Prepared runtime" in help_text
+    assert "Browser runtime" in help_text
     assert "--prepare-timeout SECONDS" in help_text
-    assert "Defaults to 30 seconds when omitted" in help_text
+    assert f"{DEFAULT_PREPARE_TIMEOUT:g} seconds" in help_text
 
 
 def test_wasm_export_rejects_prepare_timeout_before_resolving_target(

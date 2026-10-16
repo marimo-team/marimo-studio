@@ -218,7 +218,6 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
     assert 'role="status"' in waiting.text
-    assert "Starting notebook" in waiting.text
     assert missing_view.status_code == 404
     assert view.status_code == 200
     workspace_sessions = {

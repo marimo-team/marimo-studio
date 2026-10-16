@@ -45,38 +45,21 @@ def test_vanilla_publishes_direct_local_css_and_javascript(tmp_path: Path) -> No
     report = provider.build(provider_build_request(project, inspection, files))
 
     assert inspection.diagnostics == ()
-    assert [item.to_dict() for item in inspection.documents] == [
-        {
-            "path": "index.html",
-            "language": "html",
-            "access": "edit",
-            "label": None,
-        },
-        {
-            "path": "styles/app.css",
-            "language": "css",
-            "access": "edit",
-            "label": None,
-        },
-        {
-            "path": "scripts/app.js",
-            "language": "javascript",
-            "access": "edit",
-            "label": None,
-        },
-        {
-            "path": "AGENTS.md",
-            "language": "markdown",
-            "access": "edit",
-            "label": None,
-        },
+    assert [
+        (item.path.as_posix(), item.language, item.access)
+        for item in inspection.documents
+    ] == [
+        ("index.html", "html", "edit"),
+        ("styles/app.css", "css", "edit"),
+        ("scripts/app.js", "javascript", "edit"),
+        ("AGENTS.md", "markdown", "edit"),
     ]
-    assert [item.to_dict() for item in inspection.inputs] == [
-        {"path": "index.html", "kind": "file"},
-        {"path": "styles/app.css", "kind": "file"},
-        {"path": "scripts/app.js", "kind": "file"},
-        {"path": "view.toml", "kind": "file"},
-    ]
+    assert {item.path.as_posix() for item in inspection.inputs} == {
+        "index.html",
+        "styles/app.css",
+        "scripts/app.js",
+        "view.toml",
+    }
     assert report.document == PurePosixPath("index.html")
     assert (files / "styles" / "app.css").read_bytes() == styles.read_bytes()
     assert (files / "scripts" / "app.js").read_bytes() == script.read_bytes()
@@ -256,10 +239,10 @@ def test_vanilla_exposes_instructions_outside_the_build_inputs(tmp_path: Path) -
         "AGENTS.md",
         "DESIGN.md",
     ]
-    assert [item.to_dict() for item in inspection.inputs] == [
-        {"path": "index.html", "kind": "file"},
-        {"path": "view.toml", "kind": "file"},
-    ]
+    assert {item.path.as_posix() for item in inspection.inputs} == {
+        "index.html",
+        "view.toml",
+    }
     assert report.document == PurePosixPath("index.html")
     assert [
         path.relative_to(files).as_posix()

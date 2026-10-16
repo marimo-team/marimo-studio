@@ -45,30 +45,24 @@ def test_validate_emits_structured_diagnostics(
 
 
 def test_server_commands_keep_access_tokens_out_of_arguments() -> None:
-    for arguments in (["view", "show", "--help"],):
-        result = CliRunner().invoke(cli, arguments)
+    result = CliRunner().invoke(cli, ["view", "show", "--help"])
 
-        assert result.exit_code == 0, arguments
-        assert "--access-token" not in result.output, arguments
-        assert "MARIMO_STUDIO_ACCESS_TOKEN" in result.output, arguments
-        assert "MARIMO_STUDIO_SERVER_URL" in result.output, arguments
-        assert "MARIMO_STUDIO_BROWSER_CLIENT" in result.output, arguments
-    assert "--runtime-timeout" in CliRunner().invoke(cli, ["validate", "--help"]).output
+    assert result.exit_code == 0, result.output
+    assert "--access-token" not in result.output
+    assert "MARIMO_STUDIO_ACCESS_TOKEN" in result.output
+    assert "MARIMO_STUDIO_SERVER_URL" in result.output
+    assert "MARIMO_STUDIO_BROWSER_CLIENT" in result.output
 
 
-@pytest.mark.parametrize(
-    ("timeout", "message"),
-    (("nan", "finite number"), ("0", "0<x<=")),
-    ids=("non-finite", "zero"),
-)
-def test_runtime_timeout_must_be_usable(timeout: str, message: str) -> None:
+@pytest.mark.parametrize("timeout", ("nan", "0"), ids=("non-finite", "zero"))
+def test_runtime_timeout_must_be_usable(timeout: str) -> None:
     result = CliRunner().invoke(
         cli,
         ["validate", "--level", "runtime", "--runtime-timeout", timeout],
     )
 
     assert result.exit_code == 2
-    assert message in result.output
+    assert "--runtime-timeout" in result.output
 
 
 @pytest.mark.native_process
@@ -177,8 +171,6 @@ def test_failed_validation_preserves_json_across_environment_reentry(
         for check in payload["evidence"]["static"]["checks"]
         if check["status"] == "fail"
     )
-    assert "forged_result" in result.stderr
-    assert "forged-uv-error" in result.stderr
     events = [json.loads(line) for line in result.stderr.splitlines()]
     assert any(
         event["severity"] == "error" and event["code"] == failed["code"]

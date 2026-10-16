@@ -192,29 +192,31 @@ def test_selector_bounds_are_published_as_projection_policy(
         "value",
         None,
     )
+    policy = projection_policy()
+    steps = policy["maxPathSteps"]
+
     accepted = resolve_projection(
         graph,
         (site,),
-        _request(site, "doubled" + ".value" * 64),
+        _request(site, "doubled" + ".value" * steps),
     )
     assert accepted.selector is not None
-    assert len(accepted.selector.path) == 64
+    assert len(accepted.selector.path) == steps
     with pytest.raises(ProjectionResolutionError) as rejected:
         resolve_projection(
             graph,
             (site,),
-            _request(site, "doubled" + ".value" * 65),
+            _request(site, "doubled" + ".value" * (steps + 1)),
         )
     assert rejected.value.code == "projection-target-invalid"
-
-    assert projection_policy() == {
-        "maxActiveInstances": 512,
-        "maxUniqueCellTargets": 256,
-        "maxUniqueOutputTargets": 100,
-        "maxUniqueValueTargets": 100,
-        "maxTargetBytes": 4_096,
-        "maxPathSteps": 64,
-        "maxInstanceIdBytes": 256,
+    assert set(policy) == {
+        "maxActiveInstances",
+        "maxUniqueCellTargets",
+        "maxUniqueOutputTargets",
+        "maxUniqueValueTargets",
+        "maxTargetBytes",
+        "maxPathSteps",
+        "maxInstanceIdBytes",
     }
 
 
@@ -333,9 +335,8 @@ def test_stale_projection_host_gives_a_page_reload_step(notebook_path: Path) -> 
     site = _site("site-" + "a" * 64, "value", ("doubled",))
     with pytest.raises(ProjectionResolutionError) as raised:
         resolve_projection(graph, (), _request(site, "doubled"))
-    assert str(raised.value) == (
-        "This projection host belongs to an earlier build of the view. Reload the page."
-    )
+    assert raised.value.code == "projection-site-not-found"
+    assert "Reload the page" in str(raised.value)
 
 
 @pytest.mark.parametrize("targets", [(), ("doubled", "doubled"), ("",)])
@@ -345,8 +346,6 @@ def test_invalid_projection_hosts_name_the_source_and_repair_step(
     site = _site("site-" + "a" * 64, "value", targets)
     with pytest.raises(ProjectionResolutionError) as raised:
         validate_artifact_site(site)
-    assert str(raised.value) == (
-        "The value projection host at src/App.tsx:12:7 has invalid targets. "
-        "Choose non-empty, distinct targets within the 4,096-byte limit, "
-        "then rebuild the view."
-    )
+    assert raised.value.code == "projection-site-invalid"
+    assert "src/App.tsx:12:7" in str(raised.value)
+    assert "rebuild the view" in str(raised.value)

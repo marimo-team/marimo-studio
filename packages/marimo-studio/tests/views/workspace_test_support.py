@@ -46,8 +46,8 @@ def _delete_view_in_process(
 def _reject_manifestless_view_in_process(notebook: str, view_name: str) -> str:
     try:
         prepare_view(Path(notebook), view_name)
-    except ViewExistsError as error:
-        return str(error)
+    except ViewExistsError:
+        return "rejected"
     raise AssertionError("Manifestless view directory was adopted")
 
 

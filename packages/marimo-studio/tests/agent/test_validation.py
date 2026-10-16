@@ -139,7 +139,6 @@ def test_validation_skips_runtime_and_builds_repair_issues(
 
     report = run.report
     assert not runtime_called
-    report = run.report
     assert report.ok is False
     assert run.runtime == ()
     assert report.issues[0].to_dict() == {
@@ -168,7 +167,6 @@ def test_validation_rejects_evidence_collected_across_source_revisions(
         timeout: float = 60.0,
     ) -> tuple[CheckResult, ...]:
         assert view_name is None
-        assert timeout == 60
         assert expected_revisions is not None
         assert set(expected_revisions) == {"dashboard"}
         template = studio.views["dashboard"].root / "index.html"

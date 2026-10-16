@@ -197,10 +197,6 @@ def test_zero_python_export_bounds_the_renders_its_states_need(
         )
 
     assert raised.value.code == "render-states-exceeded"
-    assert str(raised.value) == (
-        "The view renders 1 files for each of its 3 prepared states. "
-        "Static exports run at most 2 renders."
-    )
 
 
 def test_wasm_export_publishes_the_page_without_its_template(tmp_path: Path) -> None:

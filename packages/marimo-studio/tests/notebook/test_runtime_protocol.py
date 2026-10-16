@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from marimo_studio._notebook.runtime_protocol import (
+    _MAX_JSON_DEPTH,
     _validate_json_depth,
     decode_runtime_response,
     load_runtime_request,
@@ -89,10 +90,10 @@ def test_runtime_protocol_rejects_excessive_nesting() -> None:
 
 
 def test_runtime_protocol_json_depth_has_an_explicit_boundary() -> None:
-    _validate_json_depth(_nested_value(64))
+    _validate_json_depth(_nested_value(_MAX_JSON_DEPTH))
 
-    with pytest.raises(ValueError, match="JSON exceeds 64 container levels"):
-        _validate_json_depth(_nested_value(65))
+    with pytest.raises(ValueError):
+        _validate_json_depth(_nested_value(_MAX_JSON_DEPTH + 1))
 
 
 def test_runtime_request_maps_excessive_nesting_to_a_protocol_error(
@@ -119,7 +120,7 @@ def test_runtime_request_maps_excessive_nesting_to_a_protocol_error(
     with pytest.raises(ProtocolError, match="request is invalid") as raised:
         load_runtime_request(request)
 
-    assert str(raised.value.__cause__) == "JSON exceeds 64 container levels"
+    assert "container levels" in str(raised.value.__cause__)
 
 
 def test_runtime_protocol_rejects_an_unbounded_timestamp() -> None:

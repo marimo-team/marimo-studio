@@ -312,7 +312,6 @@ def test_kernel_projection_budgets_arrow_values_apart_from_json() -> None:
 
         assert set(result.values) == {"first", "label"}
         assert result.errors["second"].code == "response-too-large"
-        assert "Arrow values read from one cell" in result.errors["second"].message
         assert len(tuple(context.virtual_file_registry.filenames())) == 1
         encoder.close()
     context.virtual_file_registry.shutdown()

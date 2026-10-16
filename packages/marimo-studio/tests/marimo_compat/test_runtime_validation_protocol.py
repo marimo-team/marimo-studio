@@ -89,7 +89,7 @@ def test_runtime_validation_request_rejects_malformed_payloads(
     request_path = tmp_path / "request.json"
     request_path.write_bytes(payload)
 
-    with pytest.raises(ProtocolError, match="Runtime validation request"):
+    with pytest.raises(ProtocolError):
         load_runtime_validation_request(request_path)
 
 

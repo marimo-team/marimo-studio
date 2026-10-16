@@ -220,12 +220,12 @@ def _refuse_opening_displaced_entries(monkeypatch: pytest.MonkeyPatch) -> None:
     open_handle = windows.open_file
 
     def refuse_descriptor(path: Any, *args: Any, **kwargs: Any) -> int:
-        if ".marimo-studio-aside-" in os.fspath(path):
+        if names.temporary_kind(Path(path).name) == "aside":
             raise error
         return open_descriptor(path, *args, **kwargs)
 
     def refuse_handle(path: Path, *args: Any, **kwargs: Any) -> int:
-        if path.name.startswith(".marimo-studio-aside-"):
+        if names.temporary_kind(path.name) == "aside":
             raise error
         return open_handle(path, *args, **kwargs)
 
@@ -485,7 +485,9 @@ def test_concurrent_versioned_writes_admit_one_writer(
             )
             winner = outcomes.index("won")
             assert (root / f"shared-{round_}.txt").read_bytes() == str(winner).encode()
-            assert [path.name for path in root.glob(".marimo-studio-*")] == []
+            assert not any(
+                names.is_temporary_name(path.name) for path in root.iterdir()
+            )
     finally:
         # Closing stdin releases writers still waiting on later rounds.
         results = [_finish(worker) for worker in workers]

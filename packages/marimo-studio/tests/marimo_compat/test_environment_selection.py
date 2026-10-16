@@ -63,11 +63,8 @@ def test_main_e2e_fixtures_bootstrap_their_saved_external_provider(
     ]
 
     assert len(external) == 1
-    assert str(external[0].specifier) == "==1.0.0"
     config = metadata["tool"]["marimo-studio"]
-    assert list(config["provider_dependencies"]) == [
-        "marimo-studio-e2e-provider==1.0.0"
-    ]
+    assert [Requirement(value) for value in config["provider_dependencies"]] == external
     target = _Target(notebook.parent, notebook)
     assert provider_bootstrap_required(target)
     command = environment_command(target, ["python", "-V"])

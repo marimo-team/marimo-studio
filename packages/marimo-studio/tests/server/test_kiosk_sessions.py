@@ -21,6 +21,7 @@ from starlette.websockets import WebSocketDisconnect
 
 import marimo_studio._compat.server.existing_session as existing_session_module
 from marimo_studio._compat.server.existing_session import (
+    _MAX_ROUTES,
     _PREVIEW_CONNECT_GRACE,
     PrivateExistingSessionAttachment,
 )
@@ -515,7 +516,7 @@ def test_fresh_unclaimed_routes_hold_capacity() -> None:
     manager.sessions["s_target"] = target
     adapter, handle = _open(manager)
     try:
-        for index in range(100):
+        for index in range(_MAX_ROUTES):
             assert adapter.attach(
                 _context(manager),
                 f"s_view{index:03d}",
@@ -547,7 +548,7 @@ def test_expired_unclaimed_routes_release_capacity() -> None:
     manager.sessions["s_target"] = target
     adapter, handle = _open(manager, clock=lambda: now)
     try:
-        for index in range(100):
+        for index in range(_MAX_ROUTES):
             assert adapter.attach(
                 _context(manager),
                 f"s_view{index:03d}",

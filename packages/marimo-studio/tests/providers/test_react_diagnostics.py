@@ -28,15 +28,9 @@ def test_react_type_error_identifies_authored_source(tmp_path: Path) -> None:
     assert diagnostic.source is not None
     assert diagnostic.source.path == PurePosixPath("src/Chart café.tsx")
     assert (diagnostic.source.line, diagnostic.source.column) == (4, 7)
-    assert diagnostic.message == (
-        "React provider could not type-check source: Check src/main.tsx\n"
-        "TS2451 [ERROR]: Cannot redeclare block-scoped variable 'VIEW_HEADING'.\n"
-        'const VIEW_HEADING = "React";\n'
-        "      ~~~~~~~~~~~~\n"
-        "    at src/Chart café.tsx:4:7\n\n"
-        "Found 1 error.\n\n"
-        "error: Type checking failed."
-    )
+    assert "Cannot redeclare block-scoped variable 'VIEW_HEADING'" in diagnostic.message
+    assert "at src/Chart café.tsx:4:7" in diagnostic.message
+    assert work.as_uri() not in diagnostic.message
 
 
 def test_react_type_error_maps_native_source_paths(tmp_path: Path) -> None:
@@ -71,9 +65,6 @@ def test_react_dependency_error_keeps_external_location_outside_source_catalog(
     diagnostic = _check_diagnostic(output, work, (PurePosixPath("src/App.tsx"),))
 
     assert diagnostic.source is None
-    assert diagnostic.message == (
-        "React provider could not type-check source: "
-        "TS2307 [ERROR]: Cannot find module 'missing-package'.\n"
-        f"    at {external}:2:1\n"
-        "    at node_modules/dependency/index.d.ts:3:1"
-    )
+    assert f"at {external}:2:1" in diagnostic.message
+    assert "at node_modules/dependency/index.d.ts:3:1" in diagnostic.message
+    assert f"{work.as_uri()}/" not in diagnostic.message

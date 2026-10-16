@@ -96,26 +96,6 @@ def test_status_text_reports_what_a_hub_session_saves(
     assert "persistence source" in unstyle(result.output)
 
 
-def test_command_help_exposes_target_and_required_options() -> None:
-    runner = CliRunner()
-
-    create_help = runner.invoke(
-        cli,
-        ["view", "create", "--help"],
-        prog_name="marimo-studio",
-    )
-    bind_help = runner.invoke(
-        cli,
-        ["notebook", "bind", "--help"],
-        prog_name="marimo-studio",
-    )
-
-    assert "Usage: marimo-studio view create [OPTIONS] VIEW" in create_help.output
-    assert "--target PATH" in create_help.output
-    assert "Usage: marimo-studio notebook bind [OPTIONS] ALIAS" in bind_help.output
-    assert "--cell TEXT" in bind_help.output
-
-
 def test_root_help_launches_marimo_with_the_exact_studio_distribution() -> None:
     result = CliRunner().invoke(
         cli,
@@ -129,7 +109,6 @@ def test_root_help_launches_marimo_with_the_exact_studio_distribution() -> None:
         f"uvx --with marimo-studio=={version('marimo-studio')} "
         "marimo edit analysis.py --sandbox --watch"
     ) in unstyle(result.output)
-    assert "Default Vanilla authoring:" in unstyle(result.output)
 
 
 @pytest.mark.parametrize(

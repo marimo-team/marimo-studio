@@ -195,7 +195,6 @@ def _projection_authorization_key() -> None:
 
 
 def test_kernel_authorization_uses_canonical_json() -> None:
-    initialize_projection_authorization_key()
     first = {"operation": "value", "arguments": {"target": "café", "index": 1}}
     reordered = {"arguments": {"index": 1, "target": "café"}, "operation": "value"}
 

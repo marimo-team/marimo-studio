@@ -67,8 +67,6 @@ def test_view_build_prints_build_warnings(
     )
 
     assert result.exit_code == 0, result.output
-    assert unstyle(result.output).splitlines() == [
-        "Built dashboard for development use (rev-1)",
-        "  warning projection-site-missing: "
-        "The built page dropped the host at index.html:4:7.",
-    ]
+    output = unstyle(result.output)
+    assert "warning projection-site-missing" in output
+    assert "The built page dropped the host at index.html:4:7." in output

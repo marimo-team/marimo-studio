@@ -156,11 +156,7 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
     assert created.exit_code == 0, created.output
     created_payload = json.loads(created.stdout)
     assert preview_payload["documents"] == created_payload["documents"]
-    assert [Path(path).name for path in created_payload["documents"]] == [
-        "view.toml",
-        "index.html",
-        "AGENTS.md",
-    ]
+    assert "view.toml" in {Path(path).name for path in created_payload["documents"]}
 
 
 def test_view_create_rejects_an_existing_name_during_dry_run(

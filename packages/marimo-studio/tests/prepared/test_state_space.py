@@ -146,17 +146,10 @@ def test_state_space_rejects_invalid_contracts(
 
 
 @pytest.mark.parametrize(
-    "relative",
-    [
-        "athletes/field",
-        "athletes/overview",
-        "earthquakes/bulletin",
-        "earthquakes/operations",
-        "occupancy/monitor",
-        "occupancy/model-review",
-        "occupancy/pdf-report",
-    ],
+    "states",
+    sorted(_EXAMPLES.rglob("states.yaml")),
+    ids=lambda path: path.parent.relative_to(_EXAMPLES).as_posix(),
 )
-def test_example_views_provide_valid_state_spaces(relative: str) -> None:
-    source = load_state_space_source(_EXAMPLES / relative)
+def test_example_views_provide_valid_state_spaces(states: Path) -> None:
+    source = load_state_space_source(states.parent)
     assert source.state_space is not None

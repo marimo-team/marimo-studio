@@ -83,18 +83,15 @@ def _cell(body: str, *, refs: str = "") -> str:
 
 
 @pytest.mark.parametrize(
-    ("source", "summary", "hint"),
+    ("source", "summary"),
     [
         (
             _APP + 'app._unparsable_cell(r"""\nx = (\n""", name="_")\n' + _RUN_GUARD,
             "The notebook cell at line 6 contains invalid code.",
-            "Fix the cell in Marimo, then save the notebook again.",
         ),
         (
             _APP + _cell("42x = 1\nreturn") + _RUN_GUARD,
             "Marimo cannot parse analysis.py near line 7.",
-            "Run `marimo check analysis.py` to see the problem, fix it, then save "
-            "the notebook again.",
         ),
         (
             _APP
@@ -102,8 +99,6 @@ def _cell(body: str, *, refs: str = "") -> str:
             + _cell("x = 2\nreturn (x,)")
             + _RUN_GUARD,
             "More than one notebook cell defines the same name.",
-            "Rename or remove the duplicate definition in Marimo, then save the "
-            "notebook again.",
         ),
         (
             _APP
@@ -111,19 +106,14 @@ def _cell(body: str, *, refs: str = "") -> str:
             + _cell("b = a\nreturn (b,)", refs="a")
             + _RUN_GUARD,
             "Notebook cells depend on each other in a cycle.",
-            "Remove one reference from the cycle in Marimo, then save the notebook "
-            "again.",
         ),
         (
             'print("hello")\n',
             "analysis.py is not a Marimo notebook.",
-            "Convert it with `marimo convert analysis.py -o analysis_marimo.py`, "
-            "then open the converted notebook.",
         ),
         (
             "",
             "analysis.py has no Marimo cells.",
-            "Add a cell in Marimo, then save the notebook again.",
         ),
     ],
     ids=["unparsable", "syntax", "duplicate", "cycle", "script", "empty"],
@@ -132,7 +122,6 @@ def test_inspection_names_the_notebook_source_problem(
     tmp_path: Path,
     source: str,
     summary: str,
-    hint: str,
 ) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text(source, encoding="utf-8")
@@ -141,7 +130,7 @@ def test_inspection_names_the_notebook_source_problem(
         inspect_notebook(notebook)
 
     assert raised.value.public_message() == summary
-    assert raised.value.public_hint == hint
+    assert raised.value.public_hint
 
 
 def test_inspection_waits_for_a_save_paused_partway_through_writing(
@@ -1210,10 +1199,9 @@ def test_inspecting_a_markdown_notebook_names_the_file_and_the_conversion(
     with pytest.raises(ConfigurationError) as raised:
         inspect_notebook(notebook)
 
-    assert str(raised.value) == (
-        f"Expected a Python marimo notebook: {notebook.resolve()}. "
-        "Convert other notebook formats with `marimo convert`."
-    )
+    message = str(raised.value)
+    assert str(notebook.resolve()) in message
+    assert "marimo convert" in message
 
 
 @pytest.mark.parametrize(

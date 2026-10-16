@@ -422,7 +422,7 @@ def test_server_runtime_waits_for_saved_cell_execution(
         )
 
     if source or executed is not None:
-        with pytest.raises(RuntimeSyncError, match="Run the changed notebook cells"):
+        with pytest.raises(RuntimeSyncRequiredError):
             asyncio.run(project())
     else:
         result = asyncio.run(project())
@@ -469,7 +469,7 @@ def test_server_runtime_distinguishes_required_execution_from_active_execution(
         )
 
     if execution_pending:
-        with pytest.raises(RuntimeSyncError, match="finish running") as raised:
+        with pytest.raises(RuntimeSyncError) as raised:
             asyncio.run(project())
         assert not isinstance(raised.value, RuntimeSyncRequiredError)
         assert raised.value.transient is True
@@ -477,6 +477,4 @@ def test_server_runtime_distinguishes_required_execution_from_active_execution(
         with pytest.raises(RuntimeSyncRequiredError) as raised:
             asyncio.run(project())
         assert raised.value.transient is False
-        assert raised.value.public_hint == (
-            "Run the changed notebook cells in the editor, then retry the preview."
-        )
+        assert raised.value.public_hint

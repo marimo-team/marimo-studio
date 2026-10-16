@@ -40,9 +40,9 @@ def test_export_progress_preserves_the_marimo_export_event() -> None:
             "message": "prepared",
         },
     }
-    assert progress.format_message() == (
-        "State finished: reviewed (2/3) | 0.250s | prepared"
-    )
+    message = progress.format_message()
+    assert "reviewed" in message
+    assert "2/3" in message
 
 
 def test_export_progress_serializes_a_studio_owned_step() -> None:

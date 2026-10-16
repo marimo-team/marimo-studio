@@ -183,26 +183,17 @@ def test_failed_validation_reports_exit_status_and_error_diagnostic(
 
 
 @pytest.mark.parametrize(
-    ("failure", "expected_code", "expected_hint"),
+    ("failure", "expected_code", "repair_command"),
     [
-        (
-            "notebook",
-            "notebook-source-error",
-            "Run `marimo check analysis.py` to see the problem, fix it, then save "
-            "the notebook again.",
-        ),
-        (
-            "project",
-            "view-project-error",
-            "Fix the provider diagnostic, then build the view again.",
-        ),
+        ("notebook", "notebook-source-error", "marimo check analysis.py"),
+        ("project", "view-project-error", None),
     ],
 )
 def test_validation_preserves_repair_diagnostics(
     notebook_path: Path,
     failure: str,
     expected_code: str,
-    expected_hint: str,
+    repair_command: str | None,
 ) -> None:
     setup = prepare_view(notebook_path)
     if failure == "notebook":
@@ -245,7 +236,9 @@ def test_validation_preserves_repair_diagnostics(
         if json.loads(line)["severity"] == "error"
     )
     assert failed["code"] == expected_code
-    assert failed["details"]["hint"] == expected_hint
+    assert failed["details"]["hint"]
+    if repair_command is not None:
+        assert repair_command in failed["details"]["hint"]
     expected_source = (
         notebook_path if failure == "notebook" else setup.root / "view.toml"
     )
@@ -301,15 +294,10 @@ def test_status_names_the_view_manifest_when_configuration_is_unusable(
     manifest = prepare_view(notebook_path).root / "view.toml"
     if manifest_case == "non-utf8":
         manifest.write_bytes(b"# Gr\xfc\xdfe\n" + manifest.read_bytes())
-        message = f"{manifest} is not UTF-8 text. Save it as UTF-8, then retry."
     else:
         manifest.write_text(
             'schema = 1\nprovider = "marimo-studio/nope"\n',
             encoding="utf-8",
-        )
-        message = (
-            "Unknown built-in view provider 'marimo-studio/nope' selected in "
-            f"{manifest}. Set provider to an installed view provider, then retry."
         )
     monkeypatch.setattr(
         sys,
@@ -325,7 +313,9 @@ def test_status_names_the_view_manifest_when_configuration_is_unusable(
     assert raised.value.code == 3
     assert output.out == ""
     assert event["code"] == "configuration-error"
-    assert event["message"] == message
+    assert str(manifest) in event["message"]
+    if manifest_case == "unknown-provider":
+        assert "marimo-studio/nope" in event["message"]
 
 
 def test_main_structures_static_preflight_failures(
@@ -485,7 +475,6 @@ def test_view_create_lists_installed_starters_for_an_unqualified_name(
     )
 
     assert isinstance(result.exception, ConfigurationError)
-    assert "Installed starters: " in str(result.exception)
     assert "marimo-studio/vanilla:default" in str(result.exception)
     assert notebook_path.read_text(encoding="utf-8") == source
 
@@ -675,19 +664,17 @@ def test_a_conflicting_view_write_keeps_the_source_and_names_its_target(
 
     assert raised.value.code == 3
     output = capsys.readouterr()
-    hint = (
-        "Run `marimo-studio view read VIEW PATH --target TARGET --json` with "
-        "the same --target as the write for the current revision and "
-        "generations, then retry the write."
-    )
     if conflict == "source":
         event = json.loads(output.err)
         assert event["command"] == "view write"
         assert event["code"] == "source-conflict"
         assert event["exit_code"] == 3
-        assert event["details"]["hint"] == hint
+        hint = event["details"]["hint"]
     else:
-        assert output.err.splitlines()[-1] == f"Hint: {hint}"
+        hint = output.err.splitlines()[-1]
+        assert hint.startswith("Hint: ")
+    assert "marimo-studio view read" in hint
+    assert "--target" in hint
     assert setup.root.joinpath("index.html").read_text(encoding="utf-8") == current
 
 

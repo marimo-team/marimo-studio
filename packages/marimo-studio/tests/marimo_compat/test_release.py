@@ -63,9 +63,8 @@ def test_same_version_source_drift_names_the_release_to_install(
         layout_module.assert_pinned_release()
 
     message = str(raised.value)
-    assert "server-context" in message
-    assert "get_session_by_file_key has different source code" in message
-    assert f"Install marimo=={layout_module.MARIMO_VERSION}" in message
+    assert "get_session_by_file_key" in message
+    assert f"marimo=={layout_module.MARIMO_VERSION}" in message
 
 
 def test_private_signature_drift_fails_before_adapter_construction(
@@ -172,10 +171,10 @@ def test_browser_execution_catalog_preserves_saved_notebook_cells(
     assert {
         cell.runtime_id: cell.code for cell in static.cells
     }.items() <= catalog.items()
+    assert projection.bootstrap_cell_id in catalog
     assert projection.bootstrap_cell_id not in {
         cell.runtime_id for cell in static.cells
     }
-    assert "_studio_projection_bridge_ready" in catalog[projection.bootstrap_cell_id]
 
 
 def test_browser_projection_bootstrap_executes_in_the_native_kernel(

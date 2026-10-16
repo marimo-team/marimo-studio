@@ -190,9 +190,8 @@ if __name__ == "__main__":
     plan = react_provider.create(starter, context)
 
     source = plan.files[PurePosixPath("src/App.tsx")].decode()
-    assert 'const NOTEBOOK_TITLE = "Evidence C#";' in source
+    assert '"Evidence C#"' in source
     assert [target.target for target in plan.cell_targets] == ["introduction"]
-    assert "<marimo-cell name={target} />" in source
 
 
 def test_output_cells_exclude_the_transitive_disabled_closure(

@@ -127,9 +127,10 @@ def test_view_inspect_human_output_includes_repair_and_retained_build(
     setup = prepare_view(notebook_path)
     built = CliRunner().invoke(
         cli,
-        ["view", "build", "dashboard", "--target", str(notebook_path)],
+        ["view", "build", "dashboard", "--target", str(notebook_path), "--json"],
     )
     assert built.exit_code == 0, built.output
+    revision = json.loads(built.stdout)["revision"]
     document = setup.root / "index.html"
     document.write_text(
         replace_app_shell(
@@ -146,9 +147,9 @@ def test_view_inspect_human_output_includes_repair_and_retained_build(
 
     output = unstyle(result.output)
     assert result.exit_code == 0, result.output
+    assert "projection-cell-not-found" in output
     assert "repair" in output
-    assert "Name the notebook cell" in output
-    assert "published development sha256:" in output
+    assert revision in output
 
 
 def test_view_read_and_write_share_revision_aware_source_contract(
@@ -394,7 +395,7 @@ def test_view_write_rejects_malformed_owner_generations_before_admission(
     )
 
     assert result.exit_code == 2
-    assert "64-character lowercase hexadecimal string" in result.output
+    assert flag in result.output
 
 
 def test_view_write_reports_a_missing_view_as_an_owner_conflict(

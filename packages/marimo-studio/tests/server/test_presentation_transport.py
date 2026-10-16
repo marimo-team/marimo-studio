@@ -15,7 +15,11 @@ from marimo_studio._server.presentation.access import (
 from marimo_studio._server.presentation.isolation import isolated_presentation_document
 from marimo_studio._server.presentation.ownership import studio_owned_request
 
-from .app_test_support import _presentation_wrapper_config
+from .app_test_support import (
+    _presentation_frame_sandbox,
+    _presentation_wrapper_config,
+    _PresentationFrameParser,
+)
 
 
 def test_capability_headers_sandbox_error_documents_without_overwriting_csp() -> None:
@@ -183,10 +187,9 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
         "runtime": "server",
         "runtimeExplicit": False,
     }
-    assert (
-        'id="marimo-studio-presentation" '
-        'src="../_marimo-studio/presentation/token/dashboard/"'
-    ) in document
+    frame = _PresentationFrameParser()
+    frame.feed(document)
+    assert frame.src == "../_marimo-studio/presentation/token/dashboard/"
     assert 'allow="clipboard-write; fullscreen *"' in document
 
 
@@ -210,8 +213,7 @@ def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() ->
     )
 
     assert "<iframe" not in document
-    assert 'data-marimo-studio-frame-blueprint=""' in document
-    assert 'data-frame-sandbox="allow-downloads allow-forms allow-modals ' in document
+    assert "allow-same-origin" not in _presentation_frame_sandbox(document)
     assert 'data-frame-allow="clipboard-write; fullscreen *"' in document
 
     config = _presentation_wrapper_config(document)

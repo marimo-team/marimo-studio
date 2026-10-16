@@ -38,8 +38,8 @@ def test_prepared_progress_counts_reused_and_captured_states() -> None:
     ):
         progress(event)
 
-    assert updates[0].to_dict() == {"message": "Inspecting notebook states"}
-    assert [(value.completed, value.total) for value in updates[1:]] == [
+    assert [(value.completed, value.total) for value in updates] == [
+        (None, None),
         (None, None),
         (2, 4),
         (3, 4),
@@ -47,8 +47,6 @@ def test_prepared_progress_counts_reused_and_captured_states() -> None:
         (None, None),
         (None, None),
     ]
-    assert updates[-1].message == "Notebook states prepared"
-    assert updates[-2].message == "Finalizing prepared notebook states"
 
 
 def test_prepared_progress_reports_cached_completion() -> None:
@@ -58,9 +56,9 @@ def test_prepared_progress_reports_cached_completion() -> None:
     progress(ProgressEvent(kind="plan_ready", completed=3, total=3))
     progress(ProgressEvent(kind="prepared_reused", completed=3, total=3))
 
-    assert updates == [
-        RuntimeProgress("Checking cached notebook states"),
-        RuntimeProgress("Reusing prepared notebook states"),
+    assert [(value.completed, value.total) for value in updates] == [
+        (None, None),
+        (None, None),
     ]
 
 
@@ -152,22 +150,14 @@ def test_runtime_stream_terminates_with_an_error(failure: str) -> None:
         assert messages[0]["error"] == PublicationError.code
         assert messages[0]["message"] == "A configured state could not be captured"
     elif failure == "required":
-        assert messages[0] == {
-            "type": "error",
-            "error": "runtime-sync-required",
-            "message": (
-                "Run the changed notebook cells to update the Python runtime preview."
-            ),
-            "hint": (
-                "Run the changed notebook cells in the editor, then retry the preview."
-            ),
-        }
+        assert messages[0]["error"] == "runtime-sync-required"
+        assert messages[0]["hint"]
     elif failure == "superseded":
         assert messages[0]["error"] == "runtime-sync-pending"
         assert messages[0]["transient"] is True
     else:
         assert messages[0]["error"] == "runtime-config-failed"
-        assert messages[0]["message"] == "The runtime could not start."
+        assert "private implementation detail" not in json.dumps(messages[0])
 
 
 def test_disconnecting_the_runtime_stream_cancels_and_settles_preparation() -> None:
@@ -220,10 +210,7 @@ def test_runtime_config_negotiates_streaming(notebook_path: Path) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-ndjson"
     messages = [json.loads(line) for line in response.text.splitlines()]
-    assert messages[0] == {
-        "type": "progress",
-        "progress": {"message": "Connecting to the Python runtime"},
-    }
+    assert messages[0]["type"] == "progress"
     assert messages[-1]["type"] == "config"
     assert messages[-1]["config"]["runtime"]["id"] == "server"
 

@@ -103,7 +103,6 @@ assert.deepEqual(calls.map((call) => call.changes), [
 assert.equal(calls[0].studioOperationId, calls[1].studioOperationId);
 assert.notEqual(calls[1].studioOperationId, calls[2].studioOperationId);
 assert.match(calls[0].studioOperationId, /^[A-Za-z0-9_-]{{16,128}}$/);
-assert.equal(calls[0].studioOperationId.length, calls[2].studioOperationId.length);
 assert.deepEqual(
   messages
     .filter(

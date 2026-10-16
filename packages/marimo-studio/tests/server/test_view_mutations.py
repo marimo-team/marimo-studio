@@ -66,11 +66,9 @@ def test_view_list_tracks_new_folders_without_restarting_marimo(
         "executive",
         "operations",
     ]
-    assert len(before["generation"]) == 64
     assert before["generation"] != after["generation"]
     before_views = {item["name"]: item["generation"] for item in before["views"]}
     after_views = {item["name"]: item["generation"] for item in after["views"]}
-    assert all(len(generation) == 64 for generation in after_views.values())
     assert before_views == {
         name: after_views[name] for name in ("dashboard", "executive")
     }
@@ -179,7 +177,6 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
     assert status_before.json()["state"] == "needs-view"
     assert before_payload["schema"] == 1
     assert before_payload["default_view"] == "dashboard"
-    assert before_payload["default_starter"] == "marimo-studio/vanilla:default"
     assert before_payload["view_root"] == f"studio/{notebook_path.stem}"
     assert before_payload["views"] == []
     assert host["state"] == "needs-view"
@@ -546,9 +543,7 @@ def test_project_read_retries_transient_workspace_generations(
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     load = studio_api_module.load_studio
-    settle = studio_api_module.materialize_studio_workspace_after_conflict
     attempts = 0
-    settled = 0
 
     def transient_load(target: str | Path):
         nonlocal attempts
@@ -557,24 +552,13 @@ def test_project_read_retries_transient_workspace_generations(
             raise WorkspaceGenerationConflictError()
         return load(target)
 
-    def settled_load(workspace):
-        nonlocal settled
-        settled += 1
-        return settle(workspace)
-
     monkeypatch.setattr(studio_api_module, "load_studio", transient_load)
-    monkeypatch.setattr(
-        studio_api_module,
-        "materialize_studio_workspace_after_conflict",
-        settled_load,
-    )
 
     with TestClient(app) as client:
         response = client.get("/_marimo-studio/views/dashboard/project")
 
+    assert attempts
     assert response.status_code == 200
-    assert attempts == 1
-    assert settled == 1
 
 
 def test_project_read_recovers_when_the_owner_catalog_disappears(

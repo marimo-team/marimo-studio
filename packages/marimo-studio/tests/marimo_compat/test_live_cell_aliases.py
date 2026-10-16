@@ -7,7 +7,7 @@ import weakref
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Event, RLock
+from threading import Event
 from typing import Any, cast
 
 import pytest
@@ -36,6 +36,7 @@ from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
 from marimo_studio.errors._internal import CompatibilityError
 
 from ..helpers import empty_notebook_source, replace_app_shell
+from .session_adapter_test_support import ObservedRLock as _ObservedRLock
 
 _DUPLICATE_CELL = """\
 @app.cell
@@ -67,21 +68,6 @@ class _Manager:
         self.sessions = {
             f"session-{index}": session for index, session in enumerate(sessions)
         }
-
-
-class _ObservedRLock:
-    def __init__(self) -> None:
-        self._lock = RLock()
-        self.contended = Event()
-
-    def __enter__(self) -> _ObservedRLock:
-        if not self._lock.acquire(blocking=False):
-            self.contended.set()
-            self._lock.acquire()
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self._lock.release()
 
 
 def _location(notebook: Path, manager: _Manager) -> ServerLocation:

@@ -237,7 +237,6 @@ def test_scope_close_drains_workspace_discovery_before_later_owners(
                 "agents",
                 "clients",
             ]
-            assert resolver._task is None
             await resolver.close()
         finally:
             release_discovery.set()

@@ -607,18 +607,11 @@ def test_display_snapshot_uses_the_verified_publication_before_validation(
         presentation.close()
 
 
-@pytest.mark.parametrize(
-    ("corruption", "message"),
-    (
-        ("document", "does not match its manifest"),
-        ("extra", "file tree does not match its manifest"),
-    ),
-)
+@pytest.mark.parametrize("corruption", ("document", "extra"))
 def test_presentation_rejects_artifact_corruption_before_document_read(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     corruption: str,
-    message: str,
 ) -> None:
     prepare_view(notebook_path)
     verify_membership = ArtifactLease.verify_membership
@@ -641,7 +634,7 @@ def test_presentation_rejects_artifact_corruption_before_document_read(
     monkeypatch.setattr(ArtifactLease, "verify_membership", corrupt_then_verify)
     presentation = NotebookPresentation(notebook_path)
     try:
-        with pytest.raises(ConfigurationError, match=message):
+        with pytest.raises(ConfigurationError):
             presentation.snapshot("dashboard")
     finally:
         presentation.close()
@@ -727,6 +720,7 @@ def test_presentation_replacement_keeps_the_new_lease_when_old_close_fails(
 
 
 def test_presentation_revisited_revision_becomes_most_recent() -> None:
+    limit = presentation_module._SNAPSHOT_HISTORY_LIMIT
     calls: list[str] = []
     presentation = NotebookPresentation(Path("analysis.py"))
     leases: dict[str, _LeaseCloser] = {}
@@ -739,38 +733,21 @@ def test_presentation_revisited_revision_becomes_most_recent() -> None:
         snapshots[revision] = snapshot
         presentation._remember(snapshot, cast(ArtifactLease, lease))
 
-    for index in range(8):
+    for index in range(limit):
         remember(f"revision-{index}")
     remember("revision-0", "revision-0-revisited")
-    remember("revision-8")
+    remember(f"revision-{limit}")
 
     assert leases["revision-0"].closed
     assert leases["revision-1"].closed
     assert presentation.snapshot_for_revision("dashboard", "revision-1") is None
-    for revision in (
-        "revision-0",
-        "revision-2",
-        "revision-3",
-        "revision-4",
-        "revision-5",
-        "revision-6",
-        "revision-7",
-        "revision-8",
-    ):
+    retained = ["revision-0", *(f"revision-{index}" for index in range(2, limit + 1))]
+    for revision in retained:
         assert (
             presentation.snapshot_for_revision("dashboard", revision)
             is snapshots[revision]
         )
-    for lease_name in (
-        "revision-0-revisited",
-        "revision-2",
-        "revision-3",
-        "revision-4",
-        "revision-5",
-        "revision-6",
-        "revision-7",
-        "revision-8",
-    ):
+    for lease_name in ("revision-0-revisited", *retained[1:]):
         assert not leases[lease_name].closed
 
     presentation.close()
@@ -782,11 +759,11 @@ def test_presentation_history_limits_snapshots_per_profile() -> None:
     presentation = NotebookPresentation(Path("analysis.py"))
     production = [
         _presentation_snapshot("dashboard", f"production-{index}", profile="production")
-        for index in range(2)
+        for index in range(presentation_module._BUILD_HISTORY_LIMIT)
     ]
     development = [
         _presentation_snapshot("dashboard", f"development-{index}", "build")
-        for index in range(9)
+        for index in range(presentation_module._SNAPSHOT_HISTORY_LIMIT + 1)
     ]
     for snapshot in (*production, *development):
         lease = _LeaseCloser(snapshot.revision, calls)

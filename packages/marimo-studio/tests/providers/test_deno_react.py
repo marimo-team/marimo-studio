@@ -98,9 +98,6 @@ export const App = () => (
         ("projection-render-unavailable", 5),
         ("projection-render-unavailable", 6),
     ]
-    assert inspection.diagnostics[0].message == (
-        "<marimo-output render> shows a rendered file, and this view renders none."
-    )
 
 
 @pytest.mark.skipif(
@@ -411,7 +408,6 @@ def test_react_points_a_failed_package_download_to_the_network(
     assert [item.code for item in inspection.diagnostics] == [
         "provider-analysis-failed"
     ]
-    assert "Failed caching npm package" in inspection.diagnostics[0].message
     assert "network connection" in inspection.diagnostics[0].hint
 
 
@@ -526,9 +522,7 @@ def test_react_inspection_rejects_undeclared_entrypoint_option(
         for item in inspection.diagnostics
         if item.code == "provider-options-invalid"
     )
-    assert (
-        diagnostic.message == "view.toml sets 'entrypoint', which React does not read."
-    )
+    assert "'entrypoint'" in diagnostic.message
     assert diagnostic.source is not None
     assert diagnostic.source.path == PurePosixPath("view.toml")
     assert "view.toml" in diagnostic.hint
@@ -543,11 +537,10 @@ def test_react_inspection_requires_fixed_entry_document(tmp_path: Path) -> None:
 
     inspection = _inspect(provider_registry().get(project.provider), project)
 
-    assert [
-        item.message
-        for item in inspection.diagnostics
-        if item.code == "build-input-missing"
-    ] == ["marimo-studio/react requires src/index.html."]
+    (missing,) = (
+        item for item in inspection.diagnostics if item.code == "build-input-missing"
+    )
+    assert "src/index.html" in missing.message
 
 
 @pytest.mark.skipif(

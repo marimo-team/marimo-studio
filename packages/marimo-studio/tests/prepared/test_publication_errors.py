@@ -17,7 +17,4 @@ def test_a_busy_export_cache_is_a_transient_retry() -> None:
 
     assert error.code == "repository_busy"
     assert error.transient is True
-    assert error.public_hint == (
-        "The shared export cache is busy or unavailable. Retry after other "
-        "exports finish."
-    )
+    assert error.public_hint

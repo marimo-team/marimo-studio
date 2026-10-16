@@ -42,7 +42,7 @@ def test_vanilla_starter_exposes_its_generated_notebook_cell(tmp_path: Path) -> 
     ]
 
 
-def test_vanilla_starter_loads_provider_owned_browser_dependencies(
+def test_vanilla_starter_pins_its_browser_dependencies_with_integrity(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -50,28 +50,12 @@ def test_vanilla_starter_loads_provider_owned_browser_dependencies(
 
     parser = _ScriptTags()
     parser.feed(source)
-    assert parser.tags[:2] == [
-        {
-            "src": "https://cdn.jsdelivr.net/npm/@unocss/runtime@66.10.5/uno.global.js",
-            "integrity": (
-                "sha384-iX+gEyr2u+Tmd8XxbySu2iimH7dOfTZn9xahADx38mJHYzAI2CJUCo5+"
-                "PPGOSU2b"
-            ),
-            "crossorigin": "anonymous",
-        },
-        {
-            "defer": None,
-            "src": (
-                "https://cdn.jsdelivr.net/npm/iconify-icon@3.0.3/"
-                "dist/iconify-icon.min.js"
-            ),
-            "integrity": (
-                "sha384-jypoV+nlFXLykSFUJkpVjPG/eid90inFxyvUI1corcUR778eMGexPBFz"
-                "NC94eOc+"
-            ),
-            "crossorigin": "anonymous",
-        },
-    ]
+    external = [tag for tag in parser.tags if tag.get("src")]
+    assert external
+    for tag in external:
+        assert (tag["src"] or "").startswith("https://"), tag
+        assert (tag.get("integrity") or "").startswith("sha384-"), tag
+        assert tag.get("crossorigin") == "anonymous", tag
 
 
 def test_vanilla_starter_builds_without_possible_output_cells(tmp_path: Path) -> None:
@@ -258,7 +242,6 @@ def test_vanilla_rejects_other_wildcard_values(tmp_path: Path, allow: str) -> No
     diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
 
     assert diagnostic.code == "projection-wildcard-invalid"
-    assert diagnostic.message == 'data-marimo-allow must be the literal "*".'
     assert diagnostic.source is not None
     assert diagnostic.source.line == 2
 

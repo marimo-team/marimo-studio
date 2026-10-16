@@ -429,8 +429,7 @@ def test_session_lifetime_close_rejects_late_acquisitions() -> None:
         closing = executor.submit(handle.close)
         assert manager.close_started.wait(timeout=2)
         assert not adapter.attach(_context(manager), "s_view01", "s_target")
-        adapter.claim_editor_lifetime(_context(late_manager))
-        assert late_manager not in cast(Any, adapter)._managers
+        assert adapter.claim_editor_lifetime(_context(late_manager)) is None
         assert other_adapter.claim_editor_lifetime(_context(manager)) is None
         assert not lifetime_module._accept_studio_session(
             manager,

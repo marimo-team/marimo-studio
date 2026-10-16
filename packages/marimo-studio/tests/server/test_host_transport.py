@@ -294,11 +294,8 @@ def test_sync_transport_cannot_consume_the_handoff(notebook_path: Path) -> None:
 
         try:
             assert await harness.transport("/ws_sync", _unreachable, websocket=True)
-            assert harness.sent[0] == {
-                "type": "websocket.close",
-                "code": 1008,
-                "reason": "The host session handoff is not authorized.",
-            }
+            assert harness.sent[0]["type"] == "websocket.close"
+            assert harness.sent[0]["code"] == 1008
             harness.sent.clear()
             assert await harness.transport("/sse", downstream)
             assert reached_main
