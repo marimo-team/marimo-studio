@@ -43,20 +43,12 @@ export const useOutputHost = ({
   runtimeCellId: string | undefined;
   selector: string;
 }): void => {
-  const output = projection?.output;
-  const mimetype = output?.mimetype;
+  const mimetype = projection?.output?.mimetype;
   const failureCode = failure?.code;
   const failureMessage = failure?.message;
   const failureHint = failure?.hint;
   const hasFailure = failure !== undefined;
   const hasProjection = projection !== undefined;
-
-  useLayoutEffect(() => {
-    host.marimoOutput = output;
-    return () => {
-      host.marimoOutput = undefined;
-    };
-  }, [host, output]);
 
   useLayoutEffect(() => {
     applyProjectionMetadata(host, binding.resolution, binding.projectionRevision);

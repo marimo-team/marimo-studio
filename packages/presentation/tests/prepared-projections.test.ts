@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { isValidElement } from "react";
 import { afterEach, beforeAll, test, vi } from "vite-plus/test";
 
-import type { MarimoOutputElement } from "../src/outputs/host.ts";
 import type { PreparedProjectionDependencies } from "../src/prepared/controller.tsx";
 import type {
   PreparedProjectionHandle,
@@ -342,38 +341,6 @@ test("prepared projections render values, native outputs, and a complete cell", 
   assert.deepEqual(controls, [{ objectId: "prepared-control", value: "west" }]);
 
   await Promise.all([handle.dispose(), handle.dispose()]);
-});
-
-test("prepared hosts keep media marimo cannot show for the render that reads it", async () => {
-  commitRuntimeConfig(config);
-  document.body.innerHTML = `
-    <div id="runtime"></div>
-    <marimo-output hidden value="report.output"></marimo-output>
-  `;
-  commitRuntimeConfig(withHostSites(config));
-  projectionHosts.connect();
-  const handle = mountPreparedProjections({
-    root: document.querySelector<HTMLElement>("#runtime")!,
-    presentation,
-    theme,
-  });
-  handles.push(handle);
-  const pdf = structuredClone(snapshot("pdf"));
-  Object.assign(pdf.outputs[0]!.output!, {
-    mimetype: "application/pdf",
-    data: "data:application/pdf;base64,JVBERi0=",
-  });
-
-  await handle.replace(pdf);
-  await settle();
-
-  const host = document.querySelector<MarimoOutputElement>("marimo-output")!;
-  assert.equal(host.dataset.state, "ready");
-  assert.equal(host.querySelector("img"), null);
-  assert.deepEqual(
-    { mimetype: host.marimoOutput?.mimetype, data: host.marimoOutput?.data },
-    { mimetype: "application/pdf", data: "data:application/pdf;base64,JVBERi0=" },
-  );
 });
 
 test("prepared hosts show only targets their site permits", async () => {

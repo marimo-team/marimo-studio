@@ -61,6 +61,14 @@ export function isRenderSource(path: string): boolean {
   );
 }
 
+// The image types a page output host may read instead of marimo's output.
+const PAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  "image/svg+xml",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+]);
+
 export const artifactSiteSchema = z
   .object({
     id: projectionSiteIdSchema,
@@ -88,11 +96,18 @@ export const artifactSiteSchema = z
       });
     }
     if (site.render === null) {
-      if (site.kind === "value" && site.accept.length > 0) {
+      if (site.kind !== "output" && site.accept.length > 0) {
         context.addIssue({
           code: "custom",
           path: ["accept"],
-          message: "Page value sites read JSON or Arrow",
+          message: "Only page output sites declare media types",
+        });
+      }
+      if (!site.accept.every((mediaType) => PAGE_MEDIA_TYPES.has(mediaType))) {
+        context.addIssue({
+          code: "custom",
+          path: ["accept"],
+          message: "Page output sites read SVG, PNG, JPEG, or GIF images",
         });
       }
       if (site.size !== null) {

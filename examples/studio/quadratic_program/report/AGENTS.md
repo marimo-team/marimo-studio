@@ -82,8 +82,8 @@ embedded TrueType text, and an Altair chart as a PDF:
   its container with `layout()`, so it places a block.
 - `marimo_output()` returns its `default`, `none` unless given, until the
   output is available, and when the notebook cell fails, the value has no
-  image form, or the image exceeds the runtime output limit. The view names
-  such an output beside the document.
+  image form, or the image exceeds the runtime output limit. The view then
+  notes `Showing the default for <selector>.` above the PDF.
 
 ## Place notebook cells
 

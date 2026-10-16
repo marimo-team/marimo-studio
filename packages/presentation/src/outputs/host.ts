@@ -1,5 +1,3 @@
-import type { RenderedOutput } from "@marimo-studio/protocol/output-read";
-
 import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
@@ -71,17 +69,7 @@ const releaseOutputHost = (host: MarimoOutputElement) => {
 export class MarimoOutputElement extends HTMLElement {
   static observedAttributes = ["value", "render", PROJECTION_SITE_ATTRIBUTE];
   private hasRendered = false;
-  private output?: RenderedOutput;
   private renderHost?: RenderHost;
-
-  /** The output a value host shows, as marimo rendered it. */
-  get marimoOutput(): RenderedOutput | undefined {
-    return this.output;
-  }
-
-  set marimoOutput(output: RenderedOutput | undefined) {
-    this.output = output;
-  }
 
   /** The rendered files a render host shows. */
   get marimoRender(): RenderRecord | undefined {

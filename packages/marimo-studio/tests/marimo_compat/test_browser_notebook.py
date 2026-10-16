@@ -356,3 +356,82 @@ def test_generated_browser_bridge_and_kernel_render_the_same_output_owner(
             renderer.close()
             context.cell_lifecycle_registry.dispose(CellId_t("bridge"), deletion=False)
         context.virtual_file_registry.shutdown()
+
+
+@pytest.mark.parametrize(
+    ("kind", "accept", "render", "valid"),
+    (
+        ("output", ["image/png"], None, True),
+        ("output", ["application/pdf"], None, False),
+        ("cell", ["image/png"], None, False),
+        ("value", ["application/json"], None, False),
+        ("value", ["application/json"], "main.typ", True),
+        ("cell", ["image/png"], "main.typ", True),
+        ("cell", [], "main.typ", False),
+    ),
+    ids=(
+        "page-output-image",
+        "page-output-pdf",
+        "page-cell-media",
+        "page-value-json",
+        "render-value-json",
+        "render-cell-image",
+        "render-cell-without-media",
+    ),
+)
+def test_generated_browser_bridge_admits_only_the_accept_lists_studio_publishes(
+    kind: str,
+    accept: list[str],
+    render: str | None,
+    valid: bool,
+) -> None:
+    from marimo._types.ids import CellId_t
+
+    from marimo_studio._compat.browser_notebook import _value_bridge
+
+    from .values_test_support import _native_output_context
+
+    class _App:
+        function: Any
+
+        def cell(self, *_args: object, **_kwargs: object):
+            def register(function: object) -> object:
+                self.function = function
+                return function
+
+            return register
+
+    app = _App()
+    exec(_value_bridge(), {"app": app})
+    context = _native_output_context()
+    site = {
+        "id": "site-summary",
+        "kind": kind,
+        "source": {"path": "index.html", "line": 1, "column": 1},
+        "targets": ["summary"],
+        "accept": accept,
+        "size": None,
+        "render": render,
+    }
+    try:
+        with context.install():
+            with context.with_cell_id(CellId_t("bridge")):
+                app.function()
+            configure = context.function_registry.namespaces[
+                "_marimo_studio_wasm"
+            ].functions["configure_projections"]
+            arguments = {
+                "revision": "revision-1",
+                "generation": 0,
+                "sites": [site],
+                "variables": ["summary"],
+            }
+            if valid:
+                configure(arguments)
+            else:
+                with pytest.raises(ValueError, match="A projection site is invalid"):
+                    configure(arguments)
+    finally:
+        with context.install():
+            context.cell_lifecycle_registry.dispose(CellId_t("bridge"), deletion=False)
+        context.virtual_file_registry.shutdown()

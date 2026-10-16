@@ -65,16 +65,16 @@ def project_payload(project: ViewProject) -> dict[str, object]:
 
 def provider_description_payload(
     info: ProviderInfo,
-    renders: bool,
+    can_render: bool,
 ) -> dict[str, object]:
-    return {"info": info.to_dict(), "renders": renders}
+    return {"info": info.to_dict(), "can_render": can_render}
 
 
 def provider_description_from_payload(value: object) -> tuple[ProviderInfo, bool]:
-    data = _record(value, {"info", "renders"}, "provider description")
-    if type(data["renders"]) is not bool:
+    data = _record(value, {"info", "can_render"}, "provider description")
+    if type(data["can_render"]) is not bool:
         raise ValueError("Provider render capability must be a boolean")
-    return _provider_info(data["info"]), data["renders"]
+    return _provider_info(data["info"]), data["can_render"]
 
 
 def _provider_info(value: object) -> ProviderInfo:

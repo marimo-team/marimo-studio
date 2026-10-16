@@ -5,10 +5,10 @@ import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import { isRenderSource } from "@marimo-studio/protocol/projections";
 import {
   renderIndexSchema,
-  renderResultSchema,
+  renderBundleSchema,
   type RenderIndex,
   type RenderRequest,
-  type RenderResult,
+  type RenderBundle,
 } from "@marimo-studio/protocol/render";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 import {
@@ -49,7 +49,7 @@ export interface RenderErrorDetail {
 }
 
 type Outcome =
-  | { readonly kind: "result"; readonly result: RenderResult }
+  | { readonly kind: "result"; readonly result: RenderBundle }
   | { readonly kind: "failure"; readonly diagnostics: readonly ProjectDiagnostic[] }
   | { readonly kind: "transient"; readonly diagnostics: readonly ProjectDiagnostic[] }
   | { readonly kind: "waiting" };
@@ -116,7 +116,7 @@ const fileUrl = (supportUrl: string, bundle: string, path: string): string =>
     ["renders", bundle, ...path.split("/")].map((segment) => encodeURIComponent(segment)).join("/"),
   );
 
-const renderRecord = (result: RenderResult, supportUrl: string): RenderRecord =>
+const renderRecord = (result: RenderBundle, supportUrl: string): RenderRecord =>
   Object.freeze({
     render: result.render,
     bundle: result.bundle,
@@ -455,7 +455,7 @@ export class RenderHost {
     }
     const payload = await responseJsonOrNull(response);
     if (response.ok) {
-      const parsed = renderResultSchema.safeParse(payload);
+      const parsed = renderBundleSchema.safeParse(payload);
       return parsed.success && parsed.data.render === this.source
         ? { kind: "result", result: parsed.data }
         : {

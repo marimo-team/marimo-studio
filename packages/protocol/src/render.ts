@@ -43,7 +43,7 @@ const bundlePathSchema = z
   .string()
   .refine(isRenderSource, { message: "Bundle paths are normalized relative paths" });
 
-export const renderFileSchema = z
+export const bundleFileSchema = z
   .object({
     path: bundlePathSchema,
     mediaType: z.string().min(1),
@@ -56,11 +56,11 @@ export const renderFileSchema = z
  * One render's bundle for the inputs it read. `main` and `preview` name files
  * in `files`, and `absent` lists the targets read without a current result.
  */
-export const renderResultSchema = z
+export const renderBundleSchema = z
   .object({
     render: renderSourceSchema,
     bundle: bundleIdSchema,
-    files: z.array(renderFileSchema).nonempty(),
+    files: z.array(bundleFileSchema).nonempty(),
     main: bundlePathSchema,
     preview: bundlePathSchema.nullable(),
     warnings: z.array(projectDiagnosticSchema),
@@ -102,12 +102,12 @@ export const renderResultSchema = z
 export const renderIndexSchema = z
   .object({
     schema: z.literal(1),
-    states: ownRecordSchema(z.string(), ownRecordSchema(renderSourceSchema, renderResultSchema)),
+    states: ownRecordSchema(z.string(), ownRecordSchema(renderSourceSchema, renderBundleSchema)),
   })
   .strict();
 
 export type RenderedMedia = z.infer<typeof renderedMediaSchema>;
 export type RenderRequest = z.infer<typeof renderRequestSchema>;
-export type RenderFile = z.infer<typeof renderFileSchema>;
-export type RenderResult = z.infer<typeof renderResultSchema>;
+export type BundleFile = z.infer<typeof bundleFileSchema>;
+export type RenderBundle = z.infer<typeof renderBundleSchema>;
 export type RenderIndex = z.infer<typeof renderIndexSchema>;

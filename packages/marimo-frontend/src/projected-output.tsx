@@ -129,8 +129,8 @@ export const toMarimoCellOutput = (output: MarimoCellOutputSnapshot): CellOutput
   return cellOutput;
 };
 
-// marimo displays only its own output types. Other media, such as the PDF a
-// hidden document host carries, holds no virtual files or controls.
+// marimo displays only its own output types. A value's `_mime_` can name any
+// other type, which holds no virtual files or controls and shows a note.
 const projectedCellOutput = (output: ProjectedOutputUpdate): CellOutput | undefined => {
   const channel = outputChannel(output.channel ?? "output");
   return isOutputMimetype(output.mimetype)

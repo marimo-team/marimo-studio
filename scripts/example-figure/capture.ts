@@ -57,7 +57,7 @@ const settleMs = Number(process.env.SETTLE_MS ?? 2000);
 // toolbar beside the cells. The page viewport matches the card.
 const notebookViewport = { height: 1000, width: 720 };
 const pageViewport = { height: 1000, width: 420 };
-// The document viewer lays a page out at up to 888 CSS pixels and paints it
+// The render host lays a PDF page out at up to 920 CSS pixels and paints it
 // at device pixel ratio 2.
 const reportViewport = { height: 1200, width: 1000 };
 const scale = 3;

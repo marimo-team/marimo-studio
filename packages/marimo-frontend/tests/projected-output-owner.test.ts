@@ -100,7 +100,7 @@ test("projected function callers carry active and rendered revisions", async () 
   await act(async () => root.unmount());
 });
 
-test("projected media that marimo cannot display names its type", async () => {
+test("a projected output in a type marimo cannot display names its type", async () => {
   const target = document.createElement("div");
   document.body.append(target);
   const root = createRoot(target);
@@ -112,7 +112,7 @@ test("projected media that marimo cannot display names its type", async () => {
         { store },
         createElement(ProjectedOutputArea, {
           output: {
-            ownerCellId: "document-figure",
+            ownerCellId: "custom-mime",
             channel: "output",
             mimetype: "application/pdf",
             data: "data:application/pdf;base64,JVBERi0=",

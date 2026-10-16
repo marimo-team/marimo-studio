@@ -521,7 +521,7 @@ def test_isolated_provider_round_trips_renders_sizes_and_render_results(
         )
     )
 
-    assert installed.renders
+    assert installed.can_render
     assert inspected == rendering_provider.inspect(inspection_request(project))
     assert built.output_sizes == {PurePosixPath("card.txt"): {"chart": Size(120.5, 80)}}
     assert request.template_root.joinpath("card.txt").read_text() == "Total\n\n"
