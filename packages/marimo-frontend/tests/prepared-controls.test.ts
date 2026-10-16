@@ -77,6 +77,43 @@ test("prepared UI value snapshots capture browser-local values", () => {
   assert.deepEqual(values.snapshot(), { [objectId]: "local draft" });
 });
 
+test("prepared control bindings keep the domains a notebook export declares", () => {
+  window._marimo_private_RuntimeState = {};
+  const bridge = installPreparedControlBridge({
+    onControlInput: () => {},
+    onPeerControlInput: () => {},
+  });
+  stop = bridge.dispose;
+  const bindings = {
+    [objectId]: {
+      input: "scale",
+      path: [],
+      domain: { kind: "range", start: 0, stop: 10, step: 0.5 },
+    },
+    [siblingObjectId]: {
+      input: "region",
+      path: [],
+      domain: { kind: "options", values: ["west", "east"] },
+    },
+  } as const;
+
+  bridge.updateControlBindings(bindings);
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(window._marimo_private_RuntimeState._controlBindings)),
+    bindings,
+  );
+  assert.throws(() =>
+    bridge.updateControlBindings({
+      [objectId]: {
+        input: "scale",
+        path: [],
+        domain: { kind: "range", start: 2, stop: 1, step: 1 },
+      },
+    }),
+  );
+});
+
 test("prepared controls satisfy the peer endpoint and restore its private sender", async () => {
   UI_ELEMENT_REGISTRY.set(objectId, "one");
   const userInputs: Array<{ objectId: string; value: unknown }> = [];

@@ -234,9 +234,12 @@ export const startFrameRuntimeBridge = (
         bindings === undefined
           ? undefined
           : Object.fromEntries(
-              controls.flatMap(({ objectId }) =>
-                Object.hasOwn(bindings, objectId) ? [[objectId, bindings[objectId]]] : [],
-              ),
+              // The editor matches controls by input and path, so a binding's
+              // domain stays inside the frame.
+              controls.flatMap(({ objectId }) => {
+                const binding = Object.hasOwn(bindings, objectId) ? bindings[objectId] : undefined;
+                return binding ? [[objectId, { input: binding.input, path: binding.path }]] : [];
+              }),
             );
       ready.controlMetadata = controlMetadataSchema.parse(
         activeBindings === undefined ? metadata : { ...metadata, bindings: activeBindings },
