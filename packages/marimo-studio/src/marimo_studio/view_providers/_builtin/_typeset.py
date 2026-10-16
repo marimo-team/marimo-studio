@@ -13,7 +13,7 @@ with ``write_media()``, and compiles the entry to PDF.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -26,11 +26,35 @@ from marimo_studio.view_providers import (
     RenderOutput,
     RenderValue,
     Representation,
+    Size,
     SourceDocument,
     SourceLocation,
     ViewProject,
     project_files,
 )
+
+
+def largest_sizes(placements: Iterable[tuple[str, Size]]) -> dict[str, Size]:
+    """Return the largest size a document places each output at.
+
+    A figure drawn at its largest placement stays legible where the document
+    shrinks it. Sizes compare by width, or by height when either places the
+    output by height alone, and a placement with a width wins otherwise.
+    """
+    sizes: dict[str, Size] = {}
+    for target, size in placements:
+        current = sizes.get(target)
+        if current is None or _larger(size, current):
+            sizes[target] = size
+    return sizes
+
+
+def _larger(size: Size, other: Size) -> bool:
+    if size.width is not None and other.width is not None:
+        return size.width > other.width
+    if size.height is not None and other.height is not None:
+        return size.height > other.height
+    return size.width is not None
 
 
 @dataclass(frozen=True)

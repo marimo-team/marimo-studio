@@ -285,7 +285,8 @@ def test_a_build_records_where_the_document_places_each_figure(
         "#set page(width: 300pt, height: auto, margin: 50pt)\n"
         '#marimo_output("chart", width: 40pt)\n'
         '#marimo_output("chart", width: 50% + 10pt, height: 1in)\n'
-        '#block(width: 120pt, marimo_output("wide"))\n',
+        '#block(width: 120pt, marimo_output("wide"))\n'
+        '#marimo_output("tall", height: 2in)\n',
     )
 
     with build_view_project_sync(project) as published:
@@ -298,6 +299,7 @@ def test_a_build_records_where_the_document_places_each_figure(
     assert sizes == {
         ("chart",): Size(110, 72),
         ("wide",): Size(120),
+        ("tall",): Size(height=144),
     }
 
 

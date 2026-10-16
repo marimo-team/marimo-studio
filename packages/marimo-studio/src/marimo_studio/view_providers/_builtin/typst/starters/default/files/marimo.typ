@@ -15,8 +15,8 @@
 // marimo_output("selector") places a notebook value, such as a matplotlib
 // figure or an Altair chart, as an image with image(). Studio renders it as a
 // PDF, or as SVG, PNG, JPEG, WebP, or GIF when the value has no PDF form, and
-// draws a figure at the width it is placed at, so its text keeps its point
-// size. Named arguments such as width, height, fit, and alt pass through to
+// draws a figure at the width, height, or both it is placed at, so its text
+// keeps its point size. Named arguments such as width, height, fit, and alt pass through to
 // image(). Outside Studio, or while the output is unavailable,
 // marimo_output() returns `default`.
 #let _outputs = json(bytes(sys.inputs.at("marimo-outputs", default: "{}")))
@@ -24,17 +24,22 @@
 // Studio's build queries these records for the size each output is placed at.
 #let _placed(selector, args, size) = {
   let width = args.at("width", default: auto)
-  let absolute = if width == auto {
-    size.width
-  } else if type(width) == ratio {
-    width * size.width
-  } else if type(width) == relative {
-    width.ratio * size.width + width.length
-  } else {
-    width
-  }
   let height = args.at("height", default: auto)
-  let record = (target: selector, width: absolute.to-absolute().pt())
+  let record = (target: selector)
+  // A height alone places the output by height, and its aspect ratio sets the
+  // width.
+  if width != auto or type(height) != length {
+    let absolute = if width == auto {
+      size.width
+    } else if type(width) == ratio {
+      width * size.width
+    } else if type(width) == relative {
+      width.ratio * size.width + width.length
+    } else {
+      width
+    }
+    record.insert("width", absolute.to-absolute().pt())
+  }
   if type(height) == length { record.insert("height", height.to-absolute().pt()) }
   [#metadata(record) <marimo-size>]
 }

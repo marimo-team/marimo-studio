@@ -40,6 +40,7 @@ from marimo_studio.view_providers import (
     probe_tool,
     project_path,
 )
+from marimo_studio.view_providers._builtin._typeset import largest_sizes
 from marimo_studio.view_providers._builtin.latex._sources import LANGUAGES
 
 TECTONIC_MIN_VERSION = "0.15"
@@ -76,7 +77,7 @@ _OVERFULL = re.compile(
     r"^Overfull \\[hv]box \((?P<amount>[0-9.]+)pt too (?:wide|high)\)"
 )
 _SIZE = re.compile(
-    r"marimo-size:(?P<width>[0-9.]+):(?P<height>[0-9.]*):(?P<target>.+):$"
+    r"marimo-size:(?P<width>[0-9.]*):(?P<height>[0-9.]*):(?P<target>.+):$"
 )
 # Tectonic prints a missing character as replacement characters, followed by
 # its code point, such as ("2013) or (U+2013).
@@ -369,26 +370,24 @@ def _warnings(
 
 
 def _output_sizes(log: str) -> dict[str, Size]:
-    """Return the widest size the document places each output at."""
-    sizes: dict[str, Size] = {}
-    widths: dict[str, float] = {}
+    """Return the largest size the document places each output at."""
+    placements: list[tuple[str, Size]] = []
     for line in _log_lines(log):
         # A record that follows a line TeX broke at exactly its limit joins
         # that line, so it is read from the end of the joined line.
         if (match := _SIZE.search(line)) is None:
             continue
         try:
-            width = float(match["width"])
-            size = Size(width, float(match["height"]) if match["height"] else None)
-        except ValueError:
-            # A slot without width, or one wider than a figure can be drawn,
+            size = Size(
+                float(match["width"]) if match["width"] else None,
+                float(match["height"]) if match["height"] else None,
+            )
+        except (TypeError, ValueError):
+            # A slot without a size, or one larger than a figure can be drawn,
             # places the output at the size the notebook drew it.
             continue
-        target = match["target"]
-        if target not in widths or width > widths[target]:
-            sizes[target] = size
-            widths[target] = width
-    return sizes
+        placements.append((match["target"], size))
+    return largest_sizes(placements)
 
 
 def _read(path: Path) -> str:

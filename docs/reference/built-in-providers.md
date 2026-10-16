@@ -422,9 +422,10 @@ as a PIL image's PNG.
 The build compiles the document once and measures the width at which each
 `marimo_output()` is placed, resolving `100%` against its container with
 [`layout()`](https://typst.app/docs/reference/layout/layout/), and its `height`
-when that is an absolute length. Studio then redraws a matplotlib figure or
-Altair chart at that size, so 7-point labels in the notebook print at 7 points.
-The notebook's `figsize` sets the aspect ratio. Because it measures its
+when that is an absolute length. `marimo_output("chart", height: 4cm)` records
+the height alone. Studio then redraws a matplotlib figure or Altair chart at
+that size, so 7-point labels in the notebook print at 7 points. The notebook's
+`figsize` sets the aspect ratio. Because it measures its
 container, `marimo_output()` places a block.
 
 An output that is unavailable, fails in the notebook, has no image form, or
@@ -553,12 +554,13 @@ with a macro parameter, such as `#1`, because it is computed.
 
 The build compiles the document once without values, and `\marimographics`
 logs the width at which it is placed, such as `\columnwidth`, and the height
-when `width=` and `height=` both give one. As with Typst, Studio redraws each
+when `width=` and `height=` both give one. `height=` alone logs only the
+height. As with Typst, Studio redraws each
 matplotlib figure or Altair chart at that size, and the ink reaches the edges
 of that width. Otherwise the notebook's `figsize` sets the aspect ratio. With `keepaspectratio`, `height=` caps the
-height, and a figure taller than the cap shrinks with its text. `height=`
-alone, `scale=`, `angle=` written before `width=`, and a cap that shrinks the
-figure resize its text, so `\marimographics` warns about them. An output placed
+height, and a figure taller than the cap shrinks with its text. `scale=`,
+`angle=` written before `width=`, and a cap that shrinks the figure resize its
+text, so `\marimographics` warns about them. An output placed
 without `width=`, `height=`, or `scale=` takes the line width. A figure inside
 a branch that needs a value, such as the true branch of `\IfMarimoTF`, is
 measured only when the build reaches it, so place figures outside such

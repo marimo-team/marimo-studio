@@ -29,6 +29,7 @@ from collections.abc import Mapping
 from importlib import resources
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 from packaging.version import InvalidVersion, Version
 
@@ -58,6 +59,7 @@ from marimo_studio.view_providers import (
 from marimo_studio.view_providers._builtin._typeset import (
     TypesetLanguage,
     inspect_typeset,
+    largest_sizes,
     write_media,
 )
 from marimo_studio.view_providers._builtin.typst._sources import (
@@ -170,26 +172,22 @@ def _run_typst(
 
 
 def _output_sizes(records: object) -> dict[str, Size]:
-    """Return the widest size the document places each output at."""
-    sizes: dict[str, Size] = {}
-    widths: dict[str, float] = {}
+    """Return the largest size the document places each output at."""
+    placements: list[tuple[str, Size]] = []
     for record in records if isinstance(records, list) else ():
         if not isinstance(record, dict) or not isinstance(record.get("target"), str):
             continue
-        # A slot without width, or one wider than a figure can be drawn,
-        # places the output at the size the notebook drew it.
-        width = record.get("width")
-        if not isinstance(width, (int, float)):
-            continue
         try:
-            size = Size(width, record.get("height"))
+            size = Size(
+                cast("float | None", record.get("width")),
+                cast("float | None", record.get("height")),
+            )
         except (TypeError, ValueError):
+            # A slot without a size, or one larger than a figure can be drawn,
+            # places the output at the size the notebook drew it.
             continue
-        target = record["target"]
-        if target not in widths or width > widths[target]:
-            sizes[target] = size
-            widths[target] = width
-    return sizes
+        placements.append((record["target"], size))
+    return largest_sizes(placements)
 
 
 class TypstProvider:
