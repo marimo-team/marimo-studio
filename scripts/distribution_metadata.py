@@ -21,13 +21,29 @@ def declared_project() -> dict[str, Any]:
     return tomlkit.parse(PYPROJECT.read_text(encoding="utf-8"))["project"].unwrap()
 
 
+_PLATFORMS = (
+    {"sys_platform": "linux", "platform_system": "Linux", "os_name": "posix"},
+    {"sys_platform": "darwin", "platform_system": "Darwin", "os_name": "posix"},
+    {"sys_platform": "win32", "platform_system": "Windows", "os_name": "nt"},
+)
+
+
 def _environments(project: dict[str, Any]) -> list[dict[str, str]]:
+    # Build backends rewrite markers, for example python_version into
+    # python_full_version, so markers are compared by evaluation over every
+    # supported Python minor, platform, and extra.
     supported = SpecifierSet(project["requires-python"])
-    pythons = [f"3.{minor}" for minor in range(40) if f"3.{minor}.0" in supported]
+    pythons = [f"3.{minor}" for minor in range(100) if f"3.{minor}.0" in supported]
     extras = ["", *project.get("optional-dependencies", {})]
     return [
-        {"python_version": python, "python_full_version": f"{python}.0", "extra": extra}
+        {
+            **platform,
+            "python_version": python,
+            "python_full_version": f"{python}.0",
+            "extra": extra,
+        }
         for python in pythons
+        for platform in _PLATFORMS
         for extra in extras
     ]
 
@@ -56,7 +72,6 @@ def verify_metadata(
     if urls != project["urls"]:
         raise AssertionError(f"Distribution has the wrong project URLs: {source}")
 
-    own = canonicalize_name(project["name"])
     environments = _environments(project)
     declared = [(Requirement(value), None) for value in project["dependencies"]] + [
         (Requirement(value), extra)
@@ -64,13 +79,9 @@ def verify_metadata(
         for value in values
     ]
     published = [
-        requirement
-        for requirement in map(Requirement, metadata.get_all("Requires-Dist") or ())
-        if canonicalize_name(requirement.name) != own
+        Requirement(value) for value in metadata.get_all("Requires-Dist") or ()
     ]
     for requirement, extra in declared:
-        if canonicalize_name(requirement.name) == own:
-            continue
         match = next(
             (
                 built
