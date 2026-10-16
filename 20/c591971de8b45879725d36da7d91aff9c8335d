@@ -1,0 +1,21 @@
+packages/marimo-studio/pyproject.toml
+  s_3e62cb8cf6b174::t_cd6a5413e4c37a 45
+development_docs/architecture.md
+  s_3e62cb8cf6b174::t_cd6a5413e4c37a 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "20c591971de8b45879725d36da7d91aff9c8335d",
+  "prompts": {},
+  "sessions": {
+    "s_3e62cb8cf6b174": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e74736a7-96e4-4270-89d5-8c9728fd8fd0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
