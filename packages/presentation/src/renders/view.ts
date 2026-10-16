@@ -31,18 +31,21 @@ interface Presented {
 }
 
 const PAGE_WIDTH = 920;
-const PAGE_GUTTER = 16;
+const PAGE_GUTTER = 24;
+const DESK = "color-mix(in srgb, CanvasText 7%, Canvas)";
 
 const STYLE = `
 :host { display: block; }
 :host([hidden]) { display: none; }
 .toolbar { display: flex; gap: 12px; align-items: center; justify-content: flex-end;
-  min-height: 1.4em; padding: 4px 0; font: 12px/1.4 system-ui, sans-serif;
+  min-height: 1.4em; padding: 10px ${PAGE_GUTTER}px; font: 12px/1.4 system-ui, sans-serif;
   color: color-mix(in srgb, CanvasText 68%, transparent); }
-.toolbar a { color: inherit; }
+.toolbar [role="status"] { margin-right: auto; }
+.toolbar a { color: inherit; text-underline-offset: 3px; }
+.toolbar a:hover { color: CanvasText; }
 .toolbar a[hidden] { display: none; }
-.problems { font: 13px/1.5 system-ui, sans-serif; }
-.problems article { margin-bottom: 8px; padding: 8px 12px; border-left: 3px solid #b45309;
+.problems { display: flow-root; padding: 0 ${PAGE_GUTTER}px; font: 13px/1.5 system-ui, sans-serif; }
+.problems article { margin-bottom: 10px; padding: 8px 12px; border-left: 3px solid #b45309;
   background: Canvas; color: CanvasText; }
 .problems article.warning { border-left-color: #a16207; }
 .problems p { margin: 0; }
@@ -50,9 +53,13 @@ const STYLE = `
 .content > :is(img, video) { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .content > audio { display: block; width: 100%; }
 .content > iframe { display: block; width: 100%; min-height: 480px; border: 0; }
-.content > .note { margin: 0; font: 13px/1.5 system-ui, sans-serif; }
-.pages { display: grid; gap: 16px; max-width: ${PAGE_WIDTH}px; margin: 0 auto;
-  padding: 4px ${PAGE_GUTTER}px 16px; background: color-mix(in srgb, CanvasText 7%, Canvas); }
+.content > .note { margin: 0; padding: 0 ${PAGE_GUTTER}px 12px; font: 13px/1.5 system-ui, sans-serif; }
+.pages { display: grid; grid-template-columns: minmax(0, ${PAGE_WIDTH}px); justify-content: center;
+  gap: ${PAGE_GUTTER}px; padding: ${PAGE_GUTTER}px; background: ${DESK}; }
+/* Pages lie on one desk with the toolbar and problems above them, which line
+   up with the page column. */
+:is(.toolbar, .problems):has(~ slot .pages) { background: ${DESK};
+  padding-inline: max(${PAGE_GUTTER}px, calc((100% - ${PAGE_WIDTH}px) / 2)); }
 .page { position: relative; width: 100%; background: white;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.16), 0 0 0 1px rgb(0 0 0 / 0.05); }
 .page canvas { display: block; width: 100%; height: 100%; }

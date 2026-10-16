@@ -81,7 +81,8 @@
   min-width: 0;
 }
 
-:where(marimo-cell, marimo-output):is(
+/* A render host reports loading in its own toolbar status. */
+:where(marimo-cell, marimo-output:not([render])):is(
     :not(:defined),
     [data-state="connecting"],
     [data-state="loading"]
