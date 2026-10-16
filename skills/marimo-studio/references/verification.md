@@ -80,6 +80,9 @@ Wait with the browser's native selector or predicate tools for
 presentation revision, which differs from the artifact's `build.revision`.
 Studio readiness covers its runtime, mounted projections, and uncaught errors
 from view scripts, which set the state to `error` and show their location.
+A failed build keeps the previous build `ready`, so compare the revision or
+check `marimoStudio.diagnostics()` for the build's error before trusting the
+content.
 Assert the application's intended result separately. After changing a control, wait for
 the dependent metric, text, and custom chart to update. The selected control
 value alone does not prove reactive completion.

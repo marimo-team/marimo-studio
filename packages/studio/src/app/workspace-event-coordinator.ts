@@ -6,6 +6,7 @@ import {
   parsePresentationBuild,
   parsePresentationChange,
   parseWorkspaceChange,
+  presentationBuildNotice,
   type EditorSessionBinding,
   type ActiveViewRequest,
   type PreviewAutomationTarget,
@@ -337,25 +338,13 @@ export class WorkspaceEventCoordinator {
       if (build?.phase === "building") {
         this.options.preview.presentationBuildStarted(view);
       } else if (build?.phase === "complete") {
-        if (build.revision === null || build.build.phase === "failed") {
-          const detail = build.build.diagnostics.find(({ severity }) => severity === "error");
+        const notice = presentationBuildNotice(build, view);
+        if (notice) {
           this.options.preview.presentationBuildCompleted(
             view,
             build.revision,
             notebookMutationGeneration,
-            {
-              scope: "presentation",
-              code:
-                detail?.code ??
-                (build.build.phase === "failed"
-                  ? "view-build-failed"
-                  : "view-publication-unavailable"),
-              severity: "error",
-              message: `${build.build.phase === "failed" ? "Latest build failed." : "Latest publication is unavailable."} Showing the previous build.${detail ? ` ${detail.message}` : ""}`,
-              hint: detail?.hint ?? "Fix the view source, then build it again.",
-              source: detail?.source ?? undefined,
-              view,
-            },
+            notice,
           );
         } else if (notebookMutationGeneration === undefined) {
           this.options.preview.presentationBuildCompleted(view, build.revision);

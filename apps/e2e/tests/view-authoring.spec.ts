@@ -414,15 +414,18 @@ test("publishes a framework edit and retains the last good view across a failed 
     .filter({ hasText: "React provider" });
   await expect(diagnostic).toContainText("Expected");
   await expect(diagnostic).toContainText("src/App.tsx");
-  await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "error");
+  await expect(preview.getByRole("alert")).toContainText(
+    "Latest build failed. Showing the previous build.",
+  );
+  await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
   await expect(preview.locator("html")).toHaveAttribute(
     "data-marimo-studio-revision",
     publishedRevision!,
   );
-  await expect(preview.getByRole("alert")).toContainText(
-    "Latest build failed. Showing the previous build.",
-  );
   await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: /could not (start|open|update)/ }),
+  ).toHaveCount(0);
 
   await editor.focus();
   await editor.press(selectAllShortcut);

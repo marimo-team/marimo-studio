@@ -466,6 +466,13 @@ Studio may run two renders of one view at once, each with its own template
 copy and output directory. Treat the request's results as untrusted data from
 the notebook a reader is viewing.
 
+When the results a render reads change while it runs, Studio renders the new
+results and stops the outdated render a few seconds later, unless a reader asks
+for the same results again first. Studio ends an installed provider's process.
+A provider running in Studio's process, such as one passed to
+`check_provider()`, stops at its next `request.runner` command or
+`request.cancellation` check.
+
 Return every file the reader receives in `RenderResult.files`, each with its
 media type, and name the file a reader opens and downloads in `main`. Name a
 companion that a page shows in its place, such as a video's poster image or a

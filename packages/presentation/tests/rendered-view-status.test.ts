@@ -109,34 +109,46 @@ test("publishes a startup error before rendered-view observers are attached", ()
   expect(document.documentElement.dataset.marimoStudioState).toBe("error");
 });
 
-test("a failed build stays visible across a successful document refresh until its own recovery", () => {
+const buildFailure = {
+  scope: "presentation",
+  severity: "error",
+  code: "view-build-failed",
+  message: "Latest build failed. Showing the previous build.",
+  hint: "Fix the source.",
+  view: "dashboard",
+} as const;
+
+test("a failed build keeps the page ready and shows its notice until the next build", () => {
   commitRuntimeConfig(runtimeConfig());
   startRenderedViewObserver(async () => {});
   setRuntimeConnectionState("ready");
+  const postMessage = vi.spyOn(globalThis.parent, "postMessage");
   const build = beginPresentationRefresh("build");
   expect(document.documentElement.dataset.marimoStudioState).toBe("loading");
-  setPresentationRefreshState(build, "error", {
-    scope: "presentation",
-    severity: "error",
-    code: "view-build-failed",
-    message: "Latest build failed. Showing the previous build.",
-    hint: "Fix the source.",
-    view: "dashboard",
-  });
+  setPresentationRefreshState(build, "ready", buildFailure);
   const refresh = beginPresentationRefresh("document");
   setPresentationRefreshState(refresh, "ready");
-  expect(document.documentElement.dataset.marimoStudioState).toBe("error");
-  expect(document.querySelector("[data-marimo-studio-diagnostic]")?.textContent).toContain(
-    "Latest build failed",
+
+  expect(document.documentElement.dataset.marimoStudioState).toBe("ready");
+  const notice = document.querySelector<HTMLElement>("[data-marimo-studio-diagnostic]")!;
+  expect(notice.hidden).toBe(false);
+  expect(notice.getAttribute("role")).toBe("alert");
+  expect(notice.textContent).toContain("Latest build failed");
+  expect(globalThis.marimoStudio.diagnostics()).toContainEqual(
+    expect.objectContaining({ code: "view-build-failed" }),
   );
-  expect(document.documentElement.dataset.marimoStudioRevision).toBe("presentation-revision");
+  expect(postMessage).not.toHaveBeenCalledWith(
+    expect.objectContaining({ type: "marimo-studio:view-error" }),
+    expect.anything(),
+  );
+
   const retry = beginPresentationRefresh("build");
   setPresentationRefreshState(retry, "ready");
   expect(document.documentElement.dataset.marimoStudioState).toBe("ready");
-  expect(document.querySelector<HTMLElement>("[data-marimo-studio-diagnostic]")?.hidden).toBe(true);
+  expect(notice.hidden).toBe(true);
 });
 
-test("disconnected updates remain visibly pending until recovery while build errors take precedence", () => {
+test("disconnected updates stay visible until recovery, then a failed build shows its notice", () => {
   commitRuntimeConfig(runtimeConfig());
   startRenderedViewObserver(async () => {});
   setRuntimeConnectionState("ready");
@@ -156,21 +168,15 @@ test("disconnected updates remain visibly pending until recovery while build err
   expect(host.getAttribute("role")).toBe("status");
   expect(host.textContent).toBe("Live updates disconnected. Reconnecting…");
   const build = beginPresentationRefresh("build");
-  setPresentationRefreshState(build, "error", {
-    scope: "presentation",
-    severity: "error",
-    code: "view-build-failed",
-    message: "Latest build failed. Showing the previous build.",
-    hint: "Fix the source.",
-    view: "dashboard",
-  });
-  expect(document.documentElement.dataset.marimoStudioState).toBe("error");
-  expect(host.getAttribute("role")).toBe("alert");
-  expect(host.textContent).toContain("Latest build failed");
-  setPresentationRefreshState(build, "ready");
+  setPresentationRefreshState(build, "ready", buildFailure);
+  expect(host.getAttribute("role")).toBe("status");
   expect(host.textContent).toBe("Live updates disconnected. Reconnecting…");
   setPresentationRefreshState(documentRefresh, "ready");
   setPresentationRefreshState(connection, "ready");
   expect(document.documentElement.dataset.marimoStudioState).toBe("ready");
+  expect(host.getAttribute("role")).toBe("alert");
+  expect(host.textContent).toContain("Latest build failed");
+  const retry = beginPresentationRefresh("build");
+  setPresentationRefreshState(retry, "ready");
   expect(host.hidden).toBe(true);
 });

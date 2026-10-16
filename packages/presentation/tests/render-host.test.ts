@@ -27,7 +27,7 @@ interface Call {
   readonly body: unknown;
 }
 
-type Reply = () => Response | Promise<Response>;
+type Reply = (signal?: AbortSignal) => Response | Promise<Response>;
 
 const json = (body: JsonValue, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -61,8 +61,17 @@ const bundle = (id: string, options: BundleOptions = {}) => ({
 
 const pending = () => {
   let resolve: (response: Response) => void = () => {};
+  const aborted = { value: false };
   const response = new Promise<Response>((settle) => (resolve = settle));
-  return { reply: () => response, resolve };
+  const reply: Reply = (signal) =>
+    new Promise<Response>((settle, reject) => {
+      signal?.addEventListener("abort", () => {
+        aborted.value = true;
+        reject(signal.reason);
+      });
+      void response.then(settle);
+    });
+  return { reply, resolve, aborted };
 };
 
 let calls: Call[] = [];
@@ -87,7 +96,7 @@ const stubFetch = () => {
       if (!next) {
         throw new Error(`Unexpected request to ${url}`);
       }
-      return next();
+      return next(init?.signal ?? undefined);
     }),
   );
 };
@@ -266,23 +275,51 @@ test("repeated failures report one error until a render succeeds again", async (
   ]);
 });
 
-test("notebook results during a render queue one more request, and a new bundle updates the host", async () => {
+test("notebook results during a render cancel it, and one request renders the burst", async () => {
   commitRuntimeConfig(runtimeConfig());
-  const first = pending();
-  renders.push(first.reply, () => json(bundle("b")));
+  renders.push(() => json(bundle("a")));
   const { host, shadow, events } = mount();
-  await vi.waitFor(() => expect(posts()).toHaveLength(1));
+  await vi.waitFor(() => expect(host.dataset.state).toBe("ready"));
+  const outdated = pending();
+  renders.push(outdated.reply, () => json(bundle("b")));
 
   notifyNotebookResults();
+  await vi.waitFor(() => expect(posts()).toHaveLength(2));
   notifyNotebookResults();
-  await vi.advanceTimersByTimeAsync(1_000);
-  expect(posts()).toHaveLength(1);
-  first.resolve(json(bundle("a")));
+  notifyNotebookResults();
 
+  expect(outdated.aborted.value).toBe(true);
+  expect(host.dataset.state).toBe("stale");
+  expect(shown(shadow)?.getAttribute("src")).toContain("a".repeat(64));
   await vi.waitFor(() => expect(shown(shadow)?.getAttribute("src")).toContain("b".repeat(64)));
-  expect(posts()).toHaveLength(2);
+  expect(posts()).toHaveLength(3);
   expect(host.dataset.state).toBe("ready");
   expect(events.map(({ type }) => type)).toEqual(["marimo-output-ready", "marimo-output-updated"]);
+});
+
+test("results that change faster than renders finish still show each finished render", async () => {
+  commitRuntimeConfig(runtimeConfig());
+  renders.push(() => json(bundle("a")));
+  const { host, shadow } = mount();
+  await vi.waitFor(() => expect(host.dataset.state).toBe("ready"));
+  const outdated = pending();
+  const replacement = pending();
+  renders.push(outdated.reply, replacement.reply, () => json(bundle("d")));
+
+  notifyNotebookResults();
+  await vi.waitFor(() => expect(posts()).toHaveLength(2));
+  notifyNotebookResults();
+  await vi.waitFor(() => expect(posts()).toHaveLength(3));
+  notifyNotebookResults();
+  await vi.advanceTimersByTimeAsync(1_000);
+
+  expect(outdated.aborted.value).toBe(true);
+  expect(replacement.aborted.value).toBe(false);
+  expect(posts()).toHaveLength(3);
+  replacement.resolve(json(bundle("c")));
+  await vi.waitFor(() => expect(shown(shadow)?.getAttribute("src")).toContain("c".repeat(64)));
+  await vi.waitFor(() => expect(shown(shadow)?.getAttribute("src")).toContain("d".repeat(64)));
+  expect(posts()).toHaveLength(4);
 });
 
 test("a transient conflict retries until the notebook settles", async () => {

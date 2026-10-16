@@ -186,6 +186,8 @@ export class RenderHost {
   private readonly view: RenderView;
   private record?: RenderRecord;
   private request?: AbortController;
+  // Set once a change stops a request, until a later request completes.
+  private superseded = false;
   private timer?: ReturnType<typeof setTimeout>;
   private queued = false;
   private running = false;
@@ -271,6 +273,7 @@ export class RenderHost {
     this.queued = false;
     this.request?.abort();
     this.request = undefined;
+    this.superseded = false;
     this.view.destroy();
     this.record = undefined;
     this.failing = false;
@@ -283,15 +286,20 @@ export class RenderHost {
   }
 
   /**
-   * Request the render again. A superseding request aborts the one in flight,
-   * and otherwise a request in flight queues one more after it.
+   * Request the render again. The request in flight read results the page
+   * has since replaced, so the first change stops it, and the server lets a
+   * new request with the same inputs continue its render. Later changes queue
+   * one request after the replacement, so changes that arrive faster than
+   * renders finish still show each finished render. A new revision always
+   * stops the request in flight.
    */
-  private schedule(supersede = false): void {
+  private schedule(revisionChanged = false): void {
     if (!this.active) {
       return;
     }
-    if (supersede) {
-      this.request?.abort();
+    if (this.request && (revisionChanged || !this.superseded)) {
+      this.request.abort();
+      this.superseded = true;
     }
     // Readiness waits for the pending request from the moment it is due, so
     // a reader that awaits the page never sees the previous bundle as current.
@@ -317,6 +325,10 @@ export class RenderHost {
         const transient = await this.attempt();
         if (transient === undefined) {
           retries = 0;
+          if (this.queued) {
+            // A change superseded the attempt, and more tend to follow it.
+            await sleep(RENDER_DELAY_MS);
+          }
           continue;
         }
         const delay = RETRY_DELAYS_MS[retries];
@@ -337,6 +349,8 @@ export class RenderHost {
   /** Request and show the render once. Returns diagnostics when a retry may succeed. */
   private async attempt(): Promise<readonly ProjectDiagnostic[] | undefined> {
     if (!hasRuntimeConfig() || readiness.snapshot().connection !== "ready") {
+      // The next request starts after reconnecting, and a change may stop it.
+      this.superseded = false;
       return undefined;
     }
     const config = getRuntimeConfig();
@@ -381,6 +395,9 @@ export class RenderHost {
     } finally {
       if (this.request === controller) {
         this.request = undefined;
+      }
+      if (!signal.aborted) {
+        this.superseded = false;
       }
     }
   }

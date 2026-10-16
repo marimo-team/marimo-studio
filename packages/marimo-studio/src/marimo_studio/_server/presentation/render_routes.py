@@ -8,9 +8,9 @@ page's own output hosts. Browser runtimes compute results in the reader's tab
 and post them, which Studio accepts only in edit mode.
 
 Each render belongs to its HTTP request. A client that aborts the request
-leaves the shared render job, which stops once no request waits on it. The
-response names the bundle's files, which the reader then fetches from the
-``renders/<bundle>/<path>`` route with byte ranges.
+leaves the shared render job, which stops after a short grace period once no
+request waits on it. The response names the bundle's files, which the reader
+then fetches from the ``renders/<bundle>/<path>`` route with byte ranges.
 """
 
 from __future__ import annotations

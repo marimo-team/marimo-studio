@@ -11,6 +11,7 @@ import {
   parsePresentationChange,
   parsePresentationRefreshBarrierResult,
   parseWorkspaceChange,
+  presentationBuildNotice,
 } from "../src/development-events.ts";
 import { parsePresentationBaseline, parseSourceChanges } from "../src/source-events.ts";
 
@@ -107,6 +108,57 @@ test("development event parsers accept the Python producer fixture", () => {
   for (const payload of fixture.editorSessionBindings) {
     assert.deepEqual(parseEditorSessionBinding(JSON.stringify(payload)), payload);
   }
+});
+
+test("a build that publishes nothing becomes a notice beside the previous build", () => {
+  const failure = {
+    code: "typst-compile-error",
+    severity: "error" as const,
+    message: "unclosed delimiter",
+    hint: "Close the delimiter.",
+    source: { path: "main.typ", line: 95, column: 14 },
+  };
+  assert.deepEqual(
+    presentationBuildNotice(
+      {
+        phase: "complete",
+        revision: "revision-1",
+        build: { phase: "failed", diagnostics: [failure] },
+      },
+      "paper",
+    ),
+    {
+      scope: "presentation",
+      code: "typst-compile-error",
+      severity: "error",
+      message: "Latest build failed. Showing the previous build. unclosed delimiter",
+      hint: "Close the delimiter.",
+      source: failure.source,
+      view: "paper",
+    },
+  );
+  assert.deepEqual(
+    presentationBuildNotice(
+      { phase: "complete", revision: null, build: { phase: "published", diagnostics: [] } },
+      "paper",
+    ),
+    {
+      scope: "presentation",
+      code: "view-publication-unavailable",
+      severity: "error",
+      message: "Latest publication is unavailable.",
+      hint: "Fix the view source, then build it again.",
+      source: undefined,
+      view: "paper",
+    },
+  );
+  assert.equal(
+    presentationBuildNotice(
+      { phase: "complete", revision: "revision-2", build: { phase: "published", diagnostics: [] } },
+      "paper",
+    ),
+    undefined,
+  );
 });
 
 test("development event parsers reject malformed browser contracts", () => {

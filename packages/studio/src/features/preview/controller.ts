@@ -382,6 +382,9 @@ export class PreviewController {
 
   presentationBuildCompleted(revision: string | null, diagnostic?: BrowserDiagnostic): void {
     this.admission.buildCompleted(revision, this.admissionOwner(), diagnostic);
+    if (this.admission.viewIsReady) {
+      this.showReadyStatus();
+    }
   }
 
   notebookMutationPending(generation: number, enterAdmission: boolean): Promise<() => boolean> {
@@ -791,14 +794,15 @@ export class PreviewController {
   };
 
   private showReadyStatus(): void {
-    const synchronization = [
+    const owned = [
+      ...(this.admission.buildFailure ? [this.admission.buildFailure] : []),
       ...(this.controlDiagnostic ? [this.controlDiagnostic] : []),
       ...(this.queryDiagnostic ? [this.queryDiagnostic] : []),
       ...(this.saveDiagnostic ? [this.saveDiagnostic] : []),
     ];
     // A preview may report as many diagnostics as a status holds, so its own
-    // list yields room to synchronization failures and a note of what it omits.
-    const room = MAX_RUNTIME_DIAGNOSTICS - synchronization.length;
+    // list yields room to Studio's own diagnostics and a note of what it omits.
+    const room = MAX_RUNTIME_DIAGNOSTICS - owned.length;
     const preview =
       this.diagnostics.length > room
         ? [
@@ -811,7 +815,7 @@ export class PreviewController {
             ),
           ]
         : this.diagnostics;
-    const diagnostics = [...preview, ...synchronization];
+    const diagnostics = [...preview, ...owned];
     let phase: RuntimeStatusPhase = "ready";
     if (this.queryPhase === "synchronizing") {
       phase = "synchronizing";

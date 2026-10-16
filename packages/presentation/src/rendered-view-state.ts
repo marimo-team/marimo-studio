@@ -81,7 +81,9 @@ export const renderedViewDiagnostics = (): readonly StudioDiagnostic[] => {
       configured: hasRuntimeConfig() ? getRuntimeDiagnostics() : [],
       hosts: projectionHosts.hosts(),
       runtime: snapshot.runtimeDiagnostic,
-      presentation: snapshot.presentationDiagnostic ? [snapshot.presentationDiagnostic] : [],
+      presentation: [snapshot.presentationDiagnostic, snapshot.presentationNotice].filter(
+        (diagnostic) => diagnostic !== undefined,
+      ),
       view,
     }),
   ];

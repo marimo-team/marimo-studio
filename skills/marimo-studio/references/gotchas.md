@@ -146,6 +146,12 @@ A view script threw. The page shows the built file and position, such as
 inside the HTML document. `marimoStudio.diagnostics()` lists it with the `view-script-error`
 code. Fix the view source, build the view, then reload the page.
 
+**The page shows `Latest build failed. Showing the previous build.`**
+The latest build failed, and the page keeps showing the previous build.
+`marimoStudio.diagnostics()` lists the build's first error, with its source
+location when it has one. Follow the diagnostic's hint, then build the view
+again.
+
 **Browser automation in the Studio tab cannot read the view.**
 The Studio tab renders the view in a sandboxed frame. Use frame-aware
 automation, or open the view's preview URL as in

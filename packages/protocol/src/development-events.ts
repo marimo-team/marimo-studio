@@ -4,7 +4,7 @@ import type { BrowserMessageInput } from "./frame-bridge.ts";
 import type { JsonValue } from "./runtime-config";
 
 import { jsonCodec } from "./json.ts";
-import { viewBuildStateSchema } from "./view-project.ts";
+import { type ProjectSourceLocation, viewBuildStateSchema } from "./view-project.ts";
 import { viewNameSchema } from "./views.ts";
 
 export const workspaceChangeKindSchema = z.enum(["project", "build", "presentation", "views"]);
@@ -68,6 +68,43 @@ export const parsePresentationBuild = (source: string): PresentationBuild | unde
   return "phase" in result.data
     ? { phase: "building" }
     : { phase: "complete", revision: result.data.revision, build: result.data.build };
+};
+
+/** The diagnostic of a build that published nothing, shown beside the previous publication. */
+export interface PresentationBuildNotice {
+  readonly scope: "presentation";
+  readonly code: string;
+  readonly severity: "error";
+  readonly message: string;
+  readonly hint: string;
+  readonly source?: ProjectSourceLocation;
+  readonly view: string;
+}
+
+/**
+ * Return the notice for a completed build of `view`, or `undefined` when the
+ * build published a revision.
+ */
+export const presentationBuildNotice = (
+  build: Extract<PresentationBuild, { phase: "complete" }>,
+  view: string,
+): PresentationBuildNotice | undefined => {
+  const failed = build.build.phase === "failed";
+  if (build.revision !== null && !failed) {
+    return undefined;
+  }
+  const detail = build.build.diagnostics.find(({ severity }) => severity === "error");
+  const outcome = failed ? "Latest build failed." : "Latest publication is unavailable.";
+  const shown = build.revision === null ? "" : " Showing the previous build.";
+  return {
+    scope: "presentation",
+    code: detail?.code ?? (failed ? "view-build-failed" : "view-publication-unavailable"),
+    severity: "error",
+    message: `${outcome}${shown}${detail ? ` ${detail.message}` : ""}`,
+    hint: detail?.hint ?? "Fix the view source, then build it again.",
+    source: detail?.source ?? undefined,
+    view,
+  };
 };
 
 const presentationChangeSchema = z.object({

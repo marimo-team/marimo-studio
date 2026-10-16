@@ -269,9 +269,11 @@ page's HTML holds one. A host with both `render` and
 `value` enters `error` with code `render-host-invalid`. A render
 host is part of the page and needs no projection site.
 
-Studio renders again whenever a result the render reads changes. The host
-keeps the last files on screen while new ones render, and shows render errors
-beside them. It shows the main file by its media type:
+Studio renders again whenever a result the render reads changes. The first
+change to those results during a render cancels it, and later changes wait for
+the replacement to finish, so results that change faster than renders finish
+still show. The host keeps the last files on screen while new ones render, and
+shows render errors beside them. It shows the main file by its media type:
 
 | Main file          | The host shows                                                   |
 | ------------------ | ---------------------------------------------------------------- |
@@ -395,6 +397,11 @@ the first one with its built file and position, such as
 `marimoStudio.diagnostics()` reports it with code `view-script-error`. Errors
 from Studio's runtime, notebook files, and remote scripts, and browser warnings
 such as ResizeObserver loop notices, leave the state unchanged.
+
+A failed build leaves the state as it was and keeps the previous build on
+screen. The page shows an alert that starts with `Latest build failed`, and
+`marimoStudio.diagnostics()` lists the build's first error, such as
+`view-build-failed`.
 
 Host state is the lifecycle contract for one mounted result.
 `marimo-studio:runtime-ready` fires on `document` when the notebook runtime
