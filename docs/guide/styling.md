@@ -97,9 +97,9 @@ marimo's theme.
 ## Size loading states
 
 `marimo-cell`, `<marimo-output value>`, and `[mo-value]` hosts show a skeleton
-while they connect and load. A render host, `<marimo-output render>`, shows its
-progress in its toolbar. Give a host the size of the final result so the page
-does not shift:
+while they connect and load. A render host, `<marimo-output render>`, shows the
+skeleton until Studio's runtime starts, then shows its progress in its toolbar.
+Give a host the size of the final result so the page does not shift:
 
 ```css
 marimo-output[value="revenue_chart"] {
