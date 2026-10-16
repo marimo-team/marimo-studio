@@ -38,8 +38,8 @@ notebook configuration
 | `_cli`                     | Command parsing, environment re-entry, diagnostics, output                      |
 | `_server`                  | HTTP policy, notebook scope, sessions, and coordination                         |
 | `errors`                   | Stable domain error codes and recovery details                                  |
-| `_composition.py`          | Concrete Python adapter construction                                            |
-| `_entrypoints.py`          | Marimo middleware and kernel plugin entry points                                |
+| `_composition.py`          | Concrete Python adapter construction and the kernel lifespan entry point        |
+| `_entrypoints.py`          | Marimo server middleware entry point                                            |
 | `_compat`                  | Private Marimo Python imports and reversible integration                        |
 | `_hosts`                   | Notebook host contracts, such as marimohub's sandbox context                    |
 | `_release_checks`          | Browser asset budgets                                                           |

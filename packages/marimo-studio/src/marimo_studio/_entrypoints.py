@@ -15,7 +15,6 @@ from marimo_studio._composition import (
     create_server_adapters,
     install_presentation_authorization,
 )
-from marimo_studio._composition import kernel_lifespan as kernel_lifespan
 from marimo_studio._server.middleware import PresentationMiddleware
 from marimo_studio._server.route_policy import EditRootOwner, StudioRoutePolicy
 from marimo_studio.errors import ConfigurationError
