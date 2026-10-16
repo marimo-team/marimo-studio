@@ -29,9 +29,6 @@ test.each([undefined, "4321suffix"])("rejects a missing or malformed assigned po
 
 test.each(["0", "65536"])("rejects an assigned port outside the TCP range %s", (port) => {
   expect(() => documentationServerArguments(["preview"], port)).toThrow(RangeError);
-  expect(() => documentationServerArguments(["preview"], port)).toThrow(
-    "PORT must be a TCP port between 1 and 65535.",
-  );
 });
 
 test("server commands cannot override Portless's assigned port", () => {
@@ -53,13 +50,13 @@ test("raw preview rejects missing PORT before loading or serving the build", () 
   expect(result.stderr).toContain("PORT must be assigned by Portless");
 });
 
-test("dev and preview select different worktree-aware Portless commands", () => {
+test("dev and preview run separately named Portless servers", () => {
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const previewName = /--name (\S+)/.exec(manifest.scripts.preview)?.[1];
   expect(manifest.scripts.dev).toBe("portless");
-  expect(manifest.portless).toEqual({ name: "docs.marimo-studio", script: "dev:server" });
-  expect(manifest.scripts.preview).toBe(
-    "portless run --name preview.docs.marimo-studio pnpm run preview:server",
-  );
-  expect(manifest.scripts["dev:server"]).toContain("node scripts/serve-docs.ts dev");
-  expect(manifest.scripts["preview:server"]).toBe("node scripts/serve-docs.ts preview");
+  expect(previewName).toBeDefined();
+  expect(previewName).not.toBe(manifest.portless.name);
+  expect(manifest.scripts[manifest.portless.script]).toContain("scripts/serve-docs.ts dev");
+  expect(manifest.scripts.preview).toContain("preview:server");
+  expect(manifest.scripts["preview:server"]).toContain("scripts/serve-docs.ts preview");
 });

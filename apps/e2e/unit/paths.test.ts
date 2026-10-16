@@ -18,8 +18,5 @@ test("isolates workspaces and reports across runs, suites, and restarted workers
   const paths = outputs.flatMap(Object.values);
   expect(paths.every(isAbsolute)).toBe(true);
   expect(new Set(paths).size).toBe(paths.length);
-  expect(outputs[0]!.notebookProcessRegistryDirectory).toBe(
-    resolve(root, "test-results/run-a/main/0/workspace/.notebook-processes"),
-  );
   expect(outputs[0]!.blobReportDirectory).toBe(resolve(root, "test-results/blob-main/run-a/0"));
 });

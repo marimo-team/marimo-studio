@@ -46,7 +46,7 @@ const createDashboard = async (page: Page, diagnostics: BrowserDiagnostics) => {
 const dashboardSourcePath = () => proxiedWorkspacePath("studio/notebook/dashboard/index.html");
 
 const proxiedPath = (suffix: string) =>
-  new RegExp(`^${new URL(proxiedUrl()).pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${suffix}$`);
+  new RegExp(`^${RegExp.escape(new URL(proxiedUrl()).pathname)}${suffix}$`);
 
 // Saves the dashboard through the Source editor, whose requests resolve
 // beneath the proxy prefix.

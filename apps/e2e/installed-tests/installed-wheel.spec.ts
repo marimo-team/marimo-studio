@@ -1,11 +1,11 @@
 import { expect, test as base } from "@playwright/test";
 
 import { readInstalledPackageNetwork } from "../scripts/installed-package-network.ts";
-
-const installedPackageNetwork = readInstalledPackageNetwork();
 import { expectFirstSaveRetirement } from "../tests/authoring-test-support.ts";
 import { observeBrowserContext } from "../tests/browser-diagnostics.ts";
 import { installPinnedPyodideAssets } from "../tests/pyodide-assets.ts";
+
+const installedPackageNetwork = readInstalledPackageNetwork();
 
 const test = base.extend<{ diagnostics: ReturnType<typeof observeBrowserContext> }>({
   diagnostics: [

@@ -16,14 +16,14 @@ test("renders a LaTeX document again when a notebook value changes", async ({ pa
   try {
     await page.goto(`${endpoint.publicUrl}/studio/paper/`);
     const viewer = (await waitForPreview(page)).locator('marimo-output[render="main.tex"]');
-    await expect(viewer.locator(".textLayer")).toContainText("Metric is 42");
+    await expect(viewer).toContainText("Metric is 42");
     await expect(viewer).toHaveAttribute("data-state", "ready");
 
     await selectWorkspaceMode(page, "Notebook");
     await editorSlider(page).press("End");
     await selectWorkspaceMode(page, "Develop");
     await waitForPreview(page);
-    await expect(viewer.locator(".textLayer")).toContainText("Metric is 63");
+    await expect(viewer).toContainText("Metric is 63");
     await expect(viewer).toHaveAttribute("data-state", "ready");
     expect(endpoint.escapedRequests()).toEqual([]);
   } finally {

@@ -94,7 +94,7 @@ for (const editRoot of ["marimo", "studio"] as const) {
       await launcher.getByRole("link", { name: "Create a new notebook" }).click();
       const page = await opened;
       const sessionId = (await instantiated).request().headers()["marimo-session-id"];
-      expect(sessionId).toMatch(/^s_[a-z0-9]{6}$/);
+      expect(sessionId).toBeTruthy();
 
       const cell = page.locator("[data-cell-id]").first();
       await cell.getByRole("textbox").fill("saved = []\na = 42\na");

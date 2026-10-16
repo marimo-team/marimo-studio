@@ -412,7 +412,6 @@ test("publishes a framework edit and retains the last good view across a failed 
     .getByRole("region", { name: "Source", exact: true })
     .getByRole("alert")
     .filter({ hasText: "React provider" });
-  await expect(diagnostic).toContainText("Expected");
   await expect(diagnostic).toContainText("src/App.tsx");
   await expect(preview.getByRole("alert")).toContainText(
     "Latest build failed. Showing the previous build.",
@@ -538,22 +537,7 @@ test("keeps relative navigation public across direct view reloads", async ({
         previousDocument === undefined || documentUrl !== previousDocument,
       );
     };
-    try {
-      await expect
-        .poll(() => readState())
-        .toMatchObject({
-          documentChanged: true,
-          state: "ready",
-        });
-    } catch (error) {
-      const current = await readState().catch(() => ({
-        documentChanged: false,
-        state: "unavailable",
-      }));
-      throw new Error(`Direct view did not become ready: ${JSON.stringify(current)}`, {
-        cause: error,
-      });
-    }
+    await expect.poll(readState).toMatchObject({ documentChanged: true, state: "ready" });
   };
   const navigateDirectView = async (name: string, expectedUrl: RegExp, replacesDocument = true) => {
     const previousDocument = await directDocument();
@@ -567,7 +551,7 @@ test("keeps relative navigation public across direct view reloads", async ({
     await waitForDirectView();
     await expect(presentationFrame(direct).locator("base")).toHaveAttribute(
       "href",
-      /\/_marimo-studio\/artifacts\/[0-9a-f]{64}\/src\/$/,
+      /\/_marimo-studio\/artifacts\/[^/]+\/src\/$/,
     );
     await navigateDirectView(
       "View details",

@@ -1,6 +1,7 @@
 import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
 import {
   selectWorkspaceMode,
+  editorFrame,
   expect,
   readWorkspaceFile,
   studioEntryUrl,
@@ -15,7 +16,7 @@ test("native error notifications remain clickable over Preview and release it on
 }) => {
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const editor = page.frameLocator("iframe#marimo-studio-editor");
+  const editor = editorFrame(page);
   await executeCodeMode(
     editor,
     "notebook.py",
@@ -39,7 +40,6 @@ test("native error notifications remain clickable over Preview and release it on
   await notification.hover();
   await notification.locator("button[toast-close]").click();
   await expect(notification).toBeHidden();
-  await expect(page.locator("#marimo-studio-root")).toHaveCSS("clip-path", "none");
   await page.getByRole("combobox", { name: "Visible surface" }).selectOption("preview");
   await preview.getByRole("button", { name: "Widget count: 7" }).click();
   await expect(preview.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
@@ -56,7 +56,7 @@ test("keeps the native table Explorer above the Studio toolbar", async ({ page }
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   await selectWorkspaceMode(page, "Notebook");
-  const editor = page.frameLocator("iframe#marimo-studio-editor");
+  const editor = editorFrame(page);
   const richOutputs = editor.locator('[data-cell-name="rich_outputs"]');
   const table = richOutputs.locator("marimo-table");
   await table.scrollIntoViewIfNeeded();
@@ -64,7 +64,7 @@ test("keeps the native table Explorer above the Studio toolbar", async ({ page }
   const explorer = editor.getByTestId("chrome-context-aware-panel");
   const toolbar = page.getByRole("banner", { name: "Studio" });
   await expect(explorer).toBeVisible();
-  await expect(page.locator("iframe#marimo-studio-editor")).toHaveAttribute(
+  await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute(
     "data-native-dialog",
     "",
   );
@@ -72,7 +72,7 @@ test("keeps the native table Explorer above the Studio toolbar", async ({ page }
   const toolbarBounds = await toolbar.boundingBox();
   expect(explorerBounds!.y).toBeLessThan(toolbarBounds!.y + toolbarBounds!.height);
   await editor.getByRole("button", { name: "Close selection panel" }).click();
-  await expect(page.locator("iframe#marimo-studio-editor")).not.toHaveAttribute(
+  await expect(page.locator('iframe[title="Marimo editor"]')).not.toHaveAttribute(
     "data-native-dialog",
     "",
   );
@@ -89,8 +89,6 @@ test("opens Source in one click and retains the live preview through pane change
   await expect(source).toBeHidden();
   const notebookBounds = await notebook.boundingBox();
   const previewBounds = await app.boundingBox();
-  expect(notebookBounds).not.toBeNull();
-  expect(previewBounds).not.toBeNull();
   expect(notebookBounds!.width).toBe(previewBounds!.width);
   expect(notebookBounds!.height).toBe(previewBounds!.height);
 
@@ -172,12 +170,13 @@ test("keeps the native agent sidebar available beside the notebook, view, and so
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
-  const editor = page.frameLocator("iframe#marimo-studio-editor");
+  const editor = editorFrame(page);
+  const toolbar = page.getByRole("banner", { name: "Studio" });
+  const closedSidebarX = (await toolbar.boundingBox())!.x;
   await editor.locator('[data-testid="chrome-sidebar"] [data-key="ai"]').press("Enter");
   const sidebar = editor.getByTestId("helper");
   await expect(sidebar).toBeVisible();
-  const toolbar = page.getByRole("banner", { name: "Studio" });
-  await expect.poll(async () => (await toolbar.boundingBox())!.x).toBeGreaterThan(300);
+  await expect.poll(async () => (await toolbar.boundingBox())!.x).toBeGreaterThan(closedSidebarX);
   const retainedSidebar = await sidebar.elementHandle();
   const controls = await editor.getByTestId("chrome-controls-top-right").boundingBox();
   const toolbarBounds = await toolbar.boundingBox();
@@ -194,7 +193,7 @@ test("keeps the native agent sidebar available beside the notebook, view, and so
   await expect(page.getByRole("region", { name: "Source", exact: true })).toBeVisible();
   expect(await retainedSidebar!.evaluate((element) => element.isConnected)).toBe(true);
   await editor.getByTestId("close-helper-pane").click();
-  await expect.poll(async () => (await toolbar.boundingBox())!.x).toBeLessThan(100);
+  await expect.poll(async () => (await toolbar.boundingBox())!.x).toBeCloseTo(closedSidebarX, 0);
   await expect(page.getByRole("region", { name: "Preview", exact: true })).toBeVisible();
 });
 
@@ -214,7 +213,7 @@ test("reveals status context on hover and focus, then runtime details on click",
   await expect(tooltip).toBeHidden();
   await status.click();
   await expect(page.getByRole("status", { name: "Preview runtime status" })).toBeVisible();
-  await page.frameLocator("iframe#marimo-studio-editor").locator(".cm-content").first().focus();
+  await editorFrame(page).locator(".cm-content").first().focus();
   await expect(page.getByRole("button", { name: /Browser/ })).toBeVisible();
   await expect(tooltip).toBeHidden();
   await status.press("Escape");

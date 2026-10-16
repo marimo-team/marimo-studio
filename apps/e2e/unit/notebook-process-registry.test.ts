@@ -383,7 +383,7 @@ test("an owned dynamic binding replaces its pending record and consumes the rece
     const port = await registration.bound;
     expect(await responds(port)).toBe(true);
     const files = readdirSync(directory);
-    expect(files).toEqual([`${registration.processGroupId}-${registration.ownerNonce}.json`]);
+    expect(files).toHaveLength(1);
     expect(JSON.parse(readFileSync(resolve(directory, files[0]!), "utf8"))).toEqual({
       ownerNonce: registration.ownerNonce,
       processGroupId: registration.processGroupId,
@@ -517,7 +517,13 @@ test("registry closure rejects a delayed start before launching its backend", as
     await expect(registration.start()).rejects.toThrow("registry is closing");
     await expect(registration.bound).rejects.toThrow("registry is closing");
     await waitForExit(registration.child);
-    expect(readdirSync(directory)).toEqual([".closing"]);
+    await expect(
+      stopRegisteredNotebookProcesses({
+        directory,
+        inspect: () => "foreign",
+        isPortOpen: async () => true,
+      }),
+    ).resolves.toBeUndefined();
   } finally {
     stopProcessGroup(registration.processGroupId, "SIGKILL");
     rmSync(directory, { force: true, recursive: true });

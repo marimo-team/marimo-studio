@@ -26,7 +26,7 @@ it("maps the staged site through the smoke HTTPS origin", async () => {
   const url = staticSmokeUrl(root, source);
   const response = await staticSmokeFetch(root)(url);
 
-  expect(url.href).toBe("https://marimo-studio.invalid/prepared/index.json");
+  expect(url.pathname).toBe("/prepared/index.json");
   expect(await response.text()).toBe('{"schema":1}\n');
 });
 

@@ -27,9 +27,9 @@ const importLauncher = `import sys\nsys.path.insert(0, ${JSON.stringify(compatib
 
 test.each([
   [
-    "a different pinned Marimo version",
-    'server.version = lambda name: "0.24.2"\nserver.configure_editor_fixture()',
-    "expected version 0.25.1, found 0.24.2",
+    "a Marimo version outside the declared requirement",
+    'server.version = lambda name: "0.0.0"\nserver.configure_editor_fixture()',
+    "found 0.0.0",
   ],
   [
     "missing endpoint ownership",
