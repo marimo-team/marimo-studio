@@ -52,7 +52,9 @@ The server and reverse proxy own authentication, public base paths,
 WebSockets, and framing. A host must forward every path beneath the notebook's
 public root, including `/studio/`, `/_marimo-studio/`, named views,
 revision-qualified artifacts, native HTTP routes, WebSockets, and server-sent
-event streams. Its framing policy must admit the outer host, the Studio
+event streams. Studio's live updates use WebSocket connections beneath
+`/_marimo-studio/`, including when marimo streams kernel messages over
+server-sent events. Its framing policy must admit the outer host, the Studio
 document, and Studio's nested native editor.
 
 Studio addresses its routes relative to the requested page, so the public root

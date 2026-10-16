@@ -168,7 +168,7 @@ const connectEvents = (): void => {
     },
     (wasReady) => {
       if (wasReady && !ownedByStudio) {
-        void recoverRejectedStream(eventsUrl);
+        recoverRejectedStream();
         return;
       }
       developmentClaim ??= beginPresentationRefresh("development");
@@ -184,46 +184,9 @@ const connectEvents = (): void => {
   );
 };
 
-// A rejected stream URL distinguishes a restarted server from a proxy that
-// answers while the server is away. Studio rejects a capability from an
-// earlier process with a readable 403. A proxy error carries no CORS grant.
-const probeStream = async (url: string): Promise<"accepted" | "rejected" | "unavailable"> => {
-  const request = new AbortController();
-  try {
-    const response = await fetch(url, { cache: "no-store", signal: request.signal });
-    if (response.ok) {
-      return "accepted";
-    }
-    return response.status === 403 ? "rejected" : "unavailable";
-  } catch {
-    return "unavailable";
-  } finally {
-    request.abort();
-  }
-};
-
 // The public view address assigns a fresh presentation session after a
 // restart, so a standalone page reloads it.
-const recoverRejectedStream = async (url: string): Promise<void> => {
-  developmentClaim ??= beginPresentationRefresh("development");
-  setPresentationRefreshState(developmentClaim, "loading", {
-    scope: "presentation",
-    severity: "warning",
-    code: "development-disconnected",
-    message: "Live updates disconnected. Reconnecting…",
-    hint: "Check that the Studio server is available.",
-    view: supportView(),
-  });
-  const schedule = new RefreshRetrySchedule();
-  let probe = await probeStream(url);
-  while (probe === "unavailable") {
-    await new Promise((resume) => setTimeout(resume, schedule.next()));
-    probe = await probeStream(url);
-  }
-  if (probe === "accepted") {
-    connectEvents();
-    return;
-  }
+const recoverRejectedStream = (): void => {
   externalRefreshGate.cancel();
   if (globalThis.parent === globalThis.window) {
     globalThis.location.reload();

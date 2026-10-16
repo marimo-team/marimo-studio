@@ -34,6 +34,10 @@ from marimo_studio._server.auth import (
     has_read_access,
 )
 from marimo_studio._server.editor_bridge import delegate_editor_request
+from marimo_studio._server.event_socket import (
+    is_event_socket_route,
+    serve_event_socket,
+)
 from marimo_studio._server.files import (
     file_response,
 )
@@ -249,6 +253,9 @@ class PresentationMiddleware:
         relative = self._adapters.server.relative_path(scope)
         if relative is None:
             await self.app(scope, receive, send)
+            return
+        if scope["type"] == "websocket" and is_event_socket_route(relative):
+            await serve_event_socket(self, scope, receive, send)
             return
         scope = with_request_path(scope, relative)
         mode = self._adapters.server.mode(scope)

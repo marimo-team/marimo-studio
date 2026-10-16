@@ -38,46 +38,49 @@ async def _disconnect_after_first_body(response: OwnedStreamingResponse) -> None
     )
 
 
+HEARTBEAT = '{"event":"heartbeat","data":{}}'
+
+
 def test_event_broker_bounds_control_and_coalesced_state() -> None:
     async def exercise() -> None:
         broker = dev._EventBroker(control_limit=2)
-        await broker.emit_control(b"control-1")
-        await broker.emit_control(b"control-2")
+        await broker.emit_control("control-1")
+        await broker.emit_control("control-2")
         blocked_started = asyncio.Event()
 
         async def emit_blocked_control() -> None:
             blocked_started.set()
-            await broker.emit_control(b"control-3")
+            await broker.emit_control("control-3")
 
         blocked = asyncio.create_task(emit_blocked_control())
         await asyncio.wait_for(blocked_started.wait(), timeout=1)
         assert not blocked.done()
 
-        assert await broker.receive() == b"control-1"
+        assert await broker.receive() == "control-1"
         await blocked
-        assert await broker.receive() == b"control-2"
-        assert await broker.receive() == b"control-3"
+        assert await broker.receive() == "control-2"
+        assert await broker.receive() == "control-3"
 
         for generation in range(2_000):
             await broker.emit_source(
                 "dashboard",
                 "project",
                 generation,
-                b"source-detail",
-                b"source-resync",
+                "source-detail",
+                "source-resync",
             )
             await broker.emit_publication(
                 "dashboard",
                 "build",
                 generation,
-                f"build-{generation}".encode(),
+                f"build-{generation}",
             )
-        await broker.emit_heartbeat(b": keepalive\n\n")
+        await broker.emit_heartbeat(HEARTBEAT)
 
         assert broker.retained_events <= 3
-        assert await broker.receive() == b"source-resync"
-        assert await broker.receive() == b"build-1999"
-        assert await broker.receive() == b": keepalive\n\n"
+        assert await broker.receive() == "source-resync"
+        assert await broker.receive() == "build-1999"
+        assert await broker.receive() == HEARTBEAT
 
     asyncio.run(exercise())
 
@@ -90,10 +93,10 @@ def test_event_broker_heartbeat_resets_the_idle_deadline(
         heartbeat_time = broker.last_activity + dev._HEARTBEAT_INTERVAL
         monkeypatch.setattr(dev.time, "monotonic", lambda: heartbeat_time)
 
-        await broker.emit_heartbeat(b": keepalive\n\n")
+        await broker.emit_heartbeat(HEARTBEAT)
 
         assert broker.last_activity == heartbeat_time
-        assert await broker.receive() == b": keepalive\n\n"
+        assert await broker.receive() == HEARTBEAT
 
     asyncio.run(exercise())
 

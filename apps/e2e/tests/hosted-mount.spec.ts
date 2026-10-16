@@ -17,7 +17,6 @@ import {
   labeledSlider,
   previewFrame,
   recoverRequestAbort,
-  recoverWorkspaceEventStream,
   studioServerToken,
   test,
   waitForPreview,
@@ -32,10 +31,6 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
   browserDiagnostics,
   page,
 }) => {
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    `${baseUrl()}/_marimo-studio/dev/events`,
-    1,
-  );
   await page.goto(`${baseUrl()}/studio/?access_token=${accessToken}`);
   await page.getByText("Add view", { exact: true }).click();
   await page.getByRole("radio", { name: /^HTML document/ }).check();
@@ -80,7 +75,6 @@ test("captures a fresh HTML view through an authenticated hosted mount", async (
   await expect(prepared.getByRole("heading", { name: "Hosted total: 42" })).toBeVisible();
   await expect(page.getByRole("status", { name: "View status" })).toContainText("Live");
   await recoverRequestAbort(retiredManifest);
-  await recoverWorkspaceEventStream(replacedWorkspaceStream);
 });
 
 test("keeps an agent preview URL live through an authenticated hosted mount", async ({
@@ -88,16 +82,11 @@ test("keeps an agent preview URL live through an authenticated hosted mount", as
   page,
   studioCli,
 }) => {
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    `${baseUrl()}/_marimo-studio/dev/events`,
-    1,
-  );
   await page.goto(`${baseUrl()}/studio/?access_token=${accessToken}`);
   await page.getByText("Add view", { exact: true }).click();
   await page.getByRole("radio", { name: /^HTML document/ }).check();
   await page.getByRole("button", { name: "Create view" }).click();
   await waitForPreview(page);
-  await recoverWorkspaceEventStream(replacedWorkspaceStream);
 
   // The CLI authenticates with its own credential. The URL carries no token,
   // and the browser reuses the session it already holds.
@@ -139,10 +128,6 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   browserDiagnostics,
   page,
 }) => {
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    `${baseUrl()}/_marimo-studio/dev/events`,
-    2,
-  );
   const interruptedDocumentTransaction = browserDiagnostics.expectRequestFailure({
     origin: hostedOrigin(),
     path: /^\/hosted\/(?:_marimo-studio\/editor\/)?api\/document\/transaction$/,
@@ -342,5 +327,4 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   interruptedDocumentTransactionLog.recovered();
   interruptedLensEvent.recovered();
   interruptedLensEventLog.recovered();
-  replacedWorkspaceStream.recovered();
 });

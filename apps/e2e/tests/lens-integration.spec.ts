@@ -13,8 +13,6 @@ import {
   expect,
   expectSupersededRenewalConfig,
   labeledSlider,
-  recoverWorkspaceEventStream,
-  studioOrigin,
   test,
   waitForPreview,
   waitForViewPreview,
@@ -129,10 +127,6 @@ test("a notebook's first view shares Marimo's automatic Lens with the preview", 
   page,
 }) => {
   const supersededConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const notebook = resolve(workspaceDirectory, "lens-onboarding.py");
   await writeWorkspaceFile(
     notebook,
@@ -224,7 +218,6 @@ shown.to_dict()
   await expect(
     preview.getByRole("button", { name: "Open selections, 1 open, 0 in history" }),
   ).toBeVisible();
-  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   supersededConfig.recovered();
 });
 

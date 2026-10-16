@@ -20,10 +20,6 @@ test("refreshes a projected cached view after the view catalog changes", async (
   browserDiagnostics,
   page,
 }) => {
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    2,
-  );
   await page.goto(studioEntryUrl);
 
   const dashboard = await waitForPreview(page);
@@ -85,5 +81,4 @@ test("refreshes a projected cached view after the view catalog changes", async (
     ),
   ).toBe(true);
   await recoverRequestAbort(abandonedHandoffs);
-  replacedWorkspaceStreams.recovered();
 });

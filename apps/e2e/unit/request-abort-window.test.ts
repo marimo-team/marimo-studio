@@ -157,19 +157,22 @@ test("an optional active window accepts its concrete old-request abort", () => {
   expect(window.diagnostics()).toEqual([]);
 });
 
-test("a required active window owns one live stream and rejects its successor", () => {
+test("a required active window owns one live request and rejects its successor", () => {
   const window = new ExactRequestAbortWindow(
     "GET",
     "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/dev\/events$/,
+    /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/config$/,
     1,
     true,
   );
   const current = request(
     "GET",
-    "/_marimo-studio/presentation/r.current/_marimo-studio/dev/events",
+    "/_marimo-studio/presentation/r.current/_marimo-studio/views/dashboard/config",
   );
-  const successor = request("GET", "/_marimo-studio/presentation/r.next/_marimo-studio/dev/events");
+  const successor = request(
+    "GET",
+    "/_marimo-studio/presentation/r.next/_marimo-studio/views/dashboard/config",
+  );
   window.recordStart(current);
   window.seal();
   expect(window.recordStart(successor)).toBe(false);

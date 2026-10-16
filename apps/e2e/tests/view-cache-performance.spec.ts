@@ -8,21 +8,21 @@ import { selectAllShortcut } from "./authoring-test-support.ts";
 import {
   captureProjectionRefresh,
   editorFrame,
-  expect,
-  expectEditorModelReplayRecovery,
   readWorkspaceFile,
+  recoverProjectionRefresh,
   recoverRequestAbort,
   recoverResponseTransition,
-  recoverWorkspaceEventStream,
   retireWorkspacePage,
+  test,
   studioEntryUrl,
   studioOrigin,
-  recoverProjectionRefresh,
-  test,
+  waitForEventSocketReady,
   waitForPreview,
   waitForViewPreview,
   workspaceNotebookPath,
   writeWorkspaceFile,
+  expect,
+  expectEditorModelReplayRecovery,
 } from "./fixture.ts";
 
 const generatedViews = ["report", "gallery"] as const;
@@ -58,16 +58,13 @@ test.afterAll(async () => {
 });
 
 const selectView = async (page: Page, view: string, heading: string) => {
-  const streamReady = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      response.status() === 200 &&
-      response.request().method() === "GET" &&
-      url.origin === studioOrigin() &&
+  const streamReady = waitForEventSocketReady(
+    page,
+    (url) =>
+      url.host === new URL(studioOrigin()).host &&
       url.pathname === "/_marimo-studio/dev/events" &&
-      url.searchParams.get("marimo_studio_view") === view
-    );
-  });
+      url.searchParams.get("marimo_studio_view") === view,
+  );
   await page.getByLabel("Switch view").click();
   const accessibleName = view === "dashboard" ? "dashboard, default" : view;
   await page.getByRole("button", { name: accessibleName, exact: true }).click();
@@ -98,10 +95,6 @@ test("reuses isolated named-view documents after their cold load", async ({
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
 
-  const streamChanges = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    4,
-  );
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin(),
     method: "POST",
@@ -125,7 +118,6 @@ test("reuses isolated named-view documents after their cold load", async ({
     }),
   ).toHaveValue("gallery notes");
   await recoverRequestAbort(abandonedHandoffs);
-  await recoverWorkspaceEventStream(streamChanges);
 
   await retireWorkspacePage(page, browserDiagnostics);
 });
@@ -158,10 +150,6 @@ test("reloads a cached sibling after notebook state changes", async ({
     required: false,
     status: 204,
   });
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    4,
-  );
   await selectView(page, "report", "Report");
   const report = await waitForPreview(page);
   await expect(report.locator('[mo-value="metric"]')).toHaveText("42");
@@ -190,7 +178,6 @@ test("reloads a cached sibling after notebook state changes", async ({
   await expect(reloadedReport.locator('[mo-value="metric"]')).toHaveText("44");
   await recoverResponseTransition(dashboardProjectRefresh);
   await recoverRequestAbort(abandonedHandoffs);
-  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   await editorModelRecovery.ready(page);
   await retireWorkspacePage(page, browserDiagnostics);
   editorModelRecovery.recovered();

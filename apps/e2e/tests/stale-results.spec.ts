@@ -61,10 +61,6 @@ test("cancels one client's held old-view request without changing the peer view"
     ),
   );
   const origin = e2eNetwork.main.collaborationPeer.origin;
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", origin).href,
-    1,
-  );
   const entry = `${origin}/?file=notebook.py`;
   const firstServer = startNotebookServer({
     command: "edit",
@@ -194,7 +190,6 @@ test("cancels one client's held old-view request without changing the peer view"
       "retained",
     );
     heldRequestAbort.recovered();
-    replacedWorkspaceStream.recovered();
   } finally {
     await secondDiagnostics.close();
     expect(secondDiagnostics.messages, "unexpected second-client diagnostics").toEqual([]);
@@ -209,10 +204,6 @@ test("cancels a held old-view request without changing current or cached view st
   page,
   studioCli,
 }) => {
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    5,
-  );
   await studioCli.addWorkspaceView(workspaceNotebookPath, "slow-report");
   await studioCli.addWorkspaceView(workspaceNotebookPath, "next-report");
   await writeWorkspaceFile(
@@ -346,5 +337,4 @@ test("cancels a held old-view request without changing current or cached view st
   heldRequestAbort.recovered();
   await recoverRequestAbort(completedHandoffs);
   supersededValueReads.recovered();
-  replacedWorkspaceStreams.recovered();
 });

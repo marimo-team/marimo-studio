@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createStudioServices } from "../src/app/services.ts";
 import { viewList } from "./fixtures.ts";
 import { deferred, studioBootstrap as bootstrap, studioFrames } from "./studio-test-support.ts";
-import { EventSourceStub as WorkspaceEventSource } from "./workspace-event-test-support.ts";
+import { WebSocketStub as WorkspaceEventSocket } from "./workspace-event-test-support.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -13,29 +13,28 @@ afterEach(() => {
 describe("Studio view handoff lifecycle", () => {
   it("suspends the old agent target before a committed view becomes current", async () => {
     let agentTarget: "dashboard" | "unavailable" | "report" = "dashboard";
-    class EventSourceStub {
-      static instances: EventSourceStub[] = [];
-      readonly listeners = new Map<string, EventListener>();
+    class WebSocketStub extends EventTarget {
+      static instances: WebSocketStub[] = [];
 
       constructor(readonly url: string) {
-        EventSourceStub.instances.push(this);
+        super();
+        WebSocketStub.instances.push(this);
       }
-
-      addEventListener(type: string, listener: EventListener): void {
-        this.listeners.set(type, listener);
-      }
-
       emit(type: string, data: string): void {
         if (type === "ready" && this.url.includes("marimo_studio_view=report")) {
           agentTarget = "report";
         }
-        this.listeners.get(type)?.(new MessageEvent(type, { data }));
+        this.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({ event: type, data: JSON.parse(data) }),
+          }),
+        );
       }
 
       close(): void {}
     }
 
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("WebSocket", WebSocketStub);
     const handoffResponse = deferred<Response>();
     const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
@@ -61,7 +60,7 @@ describe("Studio view handoff lifecycle", () => {
     expect(await services.views.choose("report")).toBe(false);
     expect(services.views.getSnapshot().current).toBe("dashboard");
     expect(agentTarget).toBe("dashboard");
-    expect(EventSourceStub.instances).toHaveLength(1);
+    expect(WebSocketStub.instances).toHaveLength(1);
     const requestedHandoff = () =>
       request.mock.calls.some(([input]) => {
         let url: string;
@@ -80,15 +79,15 @@ describe("Studio view handoff lifecycle", () => {
     await vi.waitFor(() => expect(requestedHandoff()).toBe(true));
     expect(services.views.getSnapshot().current).toBe("dashboard");
     expect(agentTarget).toBe("unavailable");
-    expect(EventSourceStub.instances).toHaveLength(1);
+    expect(WebSocketStub.instances).toHaveLength(1);
 
     handoffResponse.resolve(new Response(null, { status: 204 }));
     expect(await choosing).toBe(true);
     expect(services.views.getSnapshot().current).toBe("report");
     expect(agentTarget).toBe("unavailable");
-    expect(EventSourceStub.instances).toHaveLength(2);
+    expect(WebSocketStub.instances).toHaveLength(2);
 
-    EventSourceStub.instances[1]?.emit(
+    WebSocketStub.instances[1]?.emit(
       "ready",
       JSON.stringify({ schema: 1, view: "report", revision: "revision-report" }),
     );
@@ -97,8 +96,8 @@ describe("Studio view handoff lifecycle", () => {
   });
 
   it("leaves a view removed elsewhere for the default view and says why", async () => {
-    WorkspaceEventSource.instances = [];
-    vi.stubGlobal("EventSource", WorkspaceEventSource);
+    WorkspaceEventSocket.instances = [];
+    vi.stubGlobal("WebSocket", WorkspaceEventSocket);
     const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
       if (url.pathname === "/_marimo-studio/views") {
@@ -119,7 +118,7 @@ describe("Studio view handoff lifecycle", () => {
       rollback: vi.fn(async () => undefined),
     });
 
-    WorkspaceEventSource.instances[0]?.emit("change", JSON.stringify({ kind: "views" }));
+    WorkspaceEventSocket.instances[0]?.emit("change", JSON.stringify({ kind: "views" }));
 
     await vi.waitFor(() => expect(services.views.getSnapshot().current).toBe("report"));
     const message = services.views.getSnapshot().selectionMessage;
@@ -133,31 +132,30 @@ describe("Studio view handoff lifecycle", () => {
     vi.useFakeTimers();
     let handoffActive = false;
     let deleteAttempts = 0;
-    class EventSourceStub {
-      static instances: EventSourceStub[] = [];
-      readonly listeners = new Map<string, EventListener>();
+    class WebSocketStub extends EventTarget {
+      static instances: WebSocketStub[] = [];
       closed = false;
 
       constructor(readonly url: string) {
-        EventSourceStub.instances.push(this);
-        if (EventSourceStub.instances.length > 1 && url.includes("marimo_studio_view=dashboard")) {
+        super();
+        WebSocketStub.instances.push(this);
+        if (WebSocketStub.instances.length > 1 && url.includes("marimo_studio_view=dashboard")) {
           handoffActive = false;
         }
       }
-
-      addEventListener(type: string, listener: EventListener): void {
-        this.listeners.set(type, listener);
-      }
-
       emit(type: string, data: string): void {
-        this.listeners.get(type)?.(new MessageEvent(type, { data }));
+        this.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({ event: type, data: JSON.parse(data) }),
+          }),
+        );
       }
 
       close(): void {
         this.closed = true;
       }
     }
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("WebSocket", WebSocketStub);
     let holdAcquisition = true;
     const request = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
@@ -198,16 +196,16 @@ describe("Studio view handoff lifecycle", () => {
       return selected;
     });
 
-    for (let timerWave = 0; timerWave < 8 && EventSourceStub.instances.length < 2; timerWave += 1) {
+    for (let timerWave = 0; timerWave < 8 && WebSocketStub.instances.length < 2; timerWave += 1) {
       await vi.runOnlyPendingTimersAsync();
     }
-    expect(EventSourceStub.instances).toHaveLength(2);
+    expect(WebSocketStub.instances).toHaveLength(2);
     expect(deleteAttempts).toBeGreaterThan(1);
-    expect(EventSourceStub.instances[0]?.closed).toBe(true);
+    expect(WebSocketStub.instances[0]?.closed).toBe(true);
     expect(handoffActive).toBe(false);
     expect(dashboardSettled).toBe(false);
 
-    EventSourceStub.instances[1]?.emit(
+    WebSocketStub.instances[1]?.emit(
       "ready",
       JSON.stringify({ schema: 1, view: "dashboard", revision: "revision-dashboard" }),
     );
@@ -223,14 +221,14 @@ describe("Studio view handoff lifecycle", () => {
     async (cleanupStatus) => {
       let acquisitionBlocked = true;
       let handoffActive = cleanupStatus === 409;
-      class EventSourceStub {
-        static instances: EventSourceStub[] = [];
-        readonly listeners = new Map<string, EventListener>();
+      class WebSocketStub extends EventTarget {
+        static instances: WebSocketStub[] = [];
 
         constructor(readonly url: string) {
-          EventSourceStub.instances.push(this);
+          super();
+          WebSocketStub.instances.push(this);
           if (
-            EventSourceStub.instances.length > 1 &&
+            WebSocketStub.instances.length > 1 &&
             (url.includes("marimo_studio_view=dashboard") ||
               url.includes("marimo_studio_view=report"))
           ) {
@@ -238,18 +236,17 @@ describe("Studio view handoff lifecycle", () => {
             handoffActive = false;
           }
         }
-
-        addEventListener(type: string, listener: EventListener): void {
-          this.listeners.set(type, listener);
-        }
-
         emit(type: string, data: string): void {
-          this.listeners.get(type)?.(new MessageEvent(type, { data }));
+          this.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify({ event: type, data: JSON.parse(data) }),
+            }),
+          );
         }
 
         close(): void {}
       }
-      vi.stubGlobal("EventSource", EventSourceStub);
+      vi.stubGlobal("WebSocket", WebSocketStub);
       const request = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const url = new URL(input instanceof Request ? input.url : String(input), location.href);
         if (url.pathname === "/_marimo-studio/views") {
@@ -277,10 +274,10 @@ describe("Studio view handoff lifecycle", () => {
       await services.start(document.createElement("iframe"), studioFrames());
 
       const rejected = services.views.choose("report");
-      await vi.waitFor(() => expect(EventSourceStub.instances).toHaveLength(2));
+      await vi.waitFor(() => expect(WebSocketStub.instances).toHaveLength(2));
       expect(acquisitionBlocked).toBe(false);
       expect(handoffActive).toBe(false);
-      EventSourceStub.instances[1]?.emit(
+      WebSocketStub.instances[1]?.emit(
         "ready",
         JSON.stringify({ schema: 1, view: "dashboard", revision: "revision-dashboard" }),
       );
@@ -289,13 +286,13 @@ describe("Studio view handoff lifecycle", () => {
       expect(await services.views.choose("report")).toBe(true);
       expect(services.views.getSnapshot().current).toBe("report");
       expect(handoffActive).toBe(false);
-      expect(EventSourceStub.instances).toHaveLength(3);
+      expect(WebSocketStub.instances).toHaveLength(3);
       await services.close();
     },
   );
 
   it("saves Source edits typed while the target view stages before it commits", async () => {
-    vi.stubGlobal("EventSource", WorkspaceEventSource);
+    vi.stubGlobal("WebSocket", WorkspaceEventSocket);
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -335,24 +332,23 @@ describe("Studio view handoff lifecycle", () => {
     const events: string[] = [];
     const previewCanSettle = deferred<void>();
     let handoffActive = false;
-    class EventSourceStub {
-      static instances: EventSourceStub[] = [];
+    class WebSocketStub extends EventTarget {
+      static instances: WebSocketStub[] = [];
 
       constructor(readonly url: string) {
-        EventSourceStub.instances.push(this);
+        super();
+        WebSocketStub.instances.push(this);
         if (url.includes("marimo_studio_view=report")) {
           handoffActive = false;
           events.push("report-stream-promoted");
         }
       }
 
-      addEventListener(): void {}
-
       close(): void {
         events.push("stream-closed");
       }
     }
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("WebSocket", WebSocketStub);
     let holdFirstPost = true;
     const request = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
@@ -429,20 +425,19 @@ describe("Studio view handoff lifecycle", () => {
     let handoffActive = false;
     let holdAcquisition = true;
     let deleteAttempts = 0;
-    class EventSourceStub {
+    class WebSocketStub extends EventTarget {
       constructor(readonly url: string) {
+        super();
         if (url.includes("marimo_studio_view=report")) {
           handoffActive = false;
         }
       }
 
-      addEventListener(): void {}
-
       close(): void {
         handoffActive = false;
       }
     }
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("WebSocket", WebSocketStub);
     const request = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
       if (url.pathname === "/_marimo-studio/views") {
@@ -522,21 +517,20 @@ describe("Studio view handoff lifecycle", () => {
 
   it("restores an agent-owned view after activation acknowledgement is rejected", async () => {
     globalThis.history.replaceState({}, "", "/studio/dashboard/");
-    class ActivationEventSourceStub {
-      static instances: ActivationEventSourceStub[] = [];
-      readonly listeners = new Map<string, EventListener>();
+    class ActivationWebSocketStub extends EventTarget {
+      static instances: ActivationWebSocketStub[] = [];
       closed = false;
 
       constructor(readonly url: string) {
-        ActivationEventSourceStub.instances.push(this);
+        super();
+        ActivationWebSocketStub.instances.push(this);
       }
-
-      addEventListener(type: string, listener: EventListener): void {
-        this.listeners.set(type, listener);
-      }
-
       emit(type: string, data: string): void {
-        this.listeners.get(type)?.(new MessageEvent(type, { data }));
+        this.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({ event: type, data: JSON.parse(data) }),
+          }),
+        );
       }
 
       close(): void {
@@ -544,7 +538,7 @@ describe("Studio view handoff lifecycle", () => {
       }
     }
 
-    vi.stubGlobal("EventSource", ActivationEventSourceStub);
+    vi.stubGlobal("WebSocket", ActivationWebSocketStub);
     const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
       if (url.pathname === "/_marimo-studio/views") {
@@ -573,7 +567,7 @@ describe("Studio view handoff lifecycle", () => {
       rollback: vi.fn(async () => undefined),
     });
 
-    ActivationEventSourceStub.instances[0]?.emit(
+    ActivationWebSocketStub.instances[0]?.emit(
       "activate",
       JSON.stringify({ schema: 1, generation: 9, view: "report" }),
     );
@@ -588,9 +582,9 @@ describe("Studio view handoff lifecycle", () => {
         .getSnapshot()
         .frames.some(({ active, view }) => active && view === "dashboard"),
     ).toBe(true);
-    expect(ActivationEventSourceStub.instances).toHaveLength(3);
-    expect(ActivationEventSourceStub.instances[1]?.closed).toBe(true);
-    expect(ActivationEventSourceStub.instances[2]?.url).toContain("marimo_studio_view=dashboard");
+    expect(ActivationWebSocketStub.instances).toHaveLength(3);
+    expect(ActivationWebSocketStub.instances[1]?.closed).toBe(true);
+    expect(ActivationWebSocketStub.instances[2]?.url).toContain("marimo_studio_view=dashboard");
     expect(
       request.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("active-view-handoffs"),

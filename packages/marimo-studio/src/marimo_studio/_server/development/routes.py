@@ -1,4 +1,4 @@
-"""Adapt source and agent lifecycle events to Studio's SSE protocol."""
+"""Adapt source and agent lifecycle events to Studio's event socket frames."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ class _PresentationRequest:
 class _CoalescedEvent:
     generation: int
     sequence: int
-    event: bytes
+    event: str
 
 
 class DevelopmentStreamCleanupError(RuntimeError):
@@ -155,11 +155,11 @@ class _EventBroker:
         if control_limit < 1:
             raise ValueError("Control event limit must be positive")
         self._condition = asyncio.Condition()
-        self._control: deque[bytes | _ProducerFailure] = deque()
+        self._control: deque[str | _ProducerFailure] = deque()
         self._control_limit = control_limit
         self._source: dict[tuple[str, str], _CoalescedEvent] = {}
         self._publication: dict[tuple[str, str], _CoalescedEvent] = {}
-        self._heartbeat: bytes | None = None
+        self._heartbeat: str | None = None
         self._sequence = count()
         self._observed_failures: set[int] = set()
         self.last_activity = time.monotonic()
@@ -175,7 +175,7 @@ class _EventBroker:
 
     async def emit_control(
         self,
-        event: bytes | _ProducerFailure,
+        event: str | _ProducerFailure,
     ) -> None:
         async with self._condition:
             await self._condition.wait_for(
@@ -193,8 +193,8 @@ class _EventBroker:
         view: str,
         kind: str,
         generation: int,
-        event: bytes,
-        resync: bytes,
+        event: str,
+        resync: str,
     ) -> None:
         async with self._condition:
             key = (view, kind)
@@ -215,7 +215,7 @@ class _EventBroker:
         view: str,
         kind: str,
         generation: int,
-        event: bytes,
+        event: str,
     ) -> None:
         async with self._condition:
             key = (view, kind)
@@ -230,13 +230,13 @@ class _EventBroker:
             self.last_activity = time.monotonic()
             self._condition.notify_all()
 
-    async def emit_heartbeat(self, event: bytes) -> None:
+    async def emit_heartbeat(self, event: str) -> None:
         async with self._condition:
             self._heartbeat = event
             self.last_activity = time.monotonic()
             self._condition.notify_all()
 
-    async def receive(self) -> bytes | _ProducerFailure:
+    async def receive(self) -> str | _ProducerFailure:
         async with self._condition:
             await self._condition.wait_for(lambda: self.retained_events > 0)
             if self._control:
@@ -263,9 +263,8 @@ class _EventBroker:
         return id(error) in self._observed_failures
 
 
-def _encode(kind: str, payload: dict[str, object]) -> bytes:
-    body = json.dumps(payload, separators=(",", ":"))
-    return f"event: {kind}\ndata: {body}\n\n".encode()
+def _encode(kind: str, payload: dict[str, object]) -> str:
+    return json.dumps({"event": kind, "data": payload}, separators=(",", ":"))
 
 
 async def change_events(
@@ -278,8 +277,8 @@ async def change_events(
     stream_generation: int | None = None,
     active_view: str | None = None,
     development: DevelopmentCoordinator | None = None,
-) -> AsyncGenerator[bytes, None]:
-    """Yield source and agent events until the client disconnects."""
+) -> AsyncGenerator[str, None]:
+    """Yield source and agent event frames until the client disconnects."""
     should_stop = stop_requested or (lambda: False)
     selected_view = view_name or active_view
     browser = _browser_events(
@@ -609,7 +608,7 @@ async def _produce_heartbeats(
     while not should_stop():
         await asyncio.sleep(1)
         if time.monotonic() - broker.last_activity >= _HEARTBEAT_INTERVAL:
-            await broker.emit_heartbeat(b": keepalive\n\n")
+            await broker.emit_heartbeat(_encode("heartbeat", {}))
 
 
 async def _presentation_events(
@@ -619,7 +618,7 @@ async def _presentation_events(
     development: DevelopmentCoordinator | None,
     *,
     previous_revision: str | None = None,
-) -> AsyncIterator[tuple[str, bytes]]:
+) -> AsyncIterator[tuple[str, str]]:
     yield (
         "build",
         _encode(

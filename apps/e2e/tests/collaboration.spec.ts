@@ -92,10 +92,6 @@ test("synchronizes one notebook while each tab selects its view", async ({
   page,
   studioCli,
 }) => {
-  const replacedEventStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    3,
-  );
   const supersededRenewalConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
   const notebook = await readWorkspaceFile(workspaceNotebookPath);
   await writeWorkspaceFile(
@@ -259,7 +255,6 @@ if __name__ == "__main__":`,
       firstPreview.getByRole("button", { name: "Select a target", exact: true }),
     ).toBeVisible();
     await waitForPreview(page);
-    replacedEventStreams.recovered();
     await recoverRequestAbort(supersededDashboardConfig);
     supersededRenewalConfig.recovered();
   } finally {

@@ -29,7 +29,7 @@ def test_opaque_edit_repair_uses_a_view_scoped_capability_stream(
         **_options: object,
     ) -> Any:
         events_scope.update(workspace=workspace, view=view_name)
-        yield b"event: ready\ndata: {}\n\n"
+        yield '{"event":"ready","data":{}}'
 
     monkeypatch.setattr(
         "marimo_studio._server.support.change_events",
@@ -50,15 +50,16 @@ def test_opaque_edit_repair_uses_a_view_scoped_capability_stream(
             },
         )
         views = client.get("/_marimo-studio/views")
-        encoded_events = re.search(r'new EventSource\(("[^"]+")\)', repair.text)
+        encoded_events = re.search(r'new URL\(("[^"]+"),location\.href\)', repair.text)
         assert encoded_events is not None
-        events = client.get(json.loads(encoded_events.group(1)))
+        with client.websocket_connect(json.loads(encoded_events.group(1))) as socket:
+            events = socket.receive_json()
 
     assert repair.status_code == 500
     assert views.status_code == 200
     assert isinstance(views.json()["views"], list)
     assert "/_marimo-studio/presentation/" in repair.text
     assert "/_marimo-studio/dev/events" in repair.text
-    assert events.status_code == 200
+    assert events["event"] == "ready"
     assert events_scope == {"workspace": None, "view": "dashboard"}
     assert str(_session_manager(app).skew_protection_token) not in repair.text

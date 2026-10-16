@@ -317,8 +317,8 @@ def test_presentation_stream_serves_the_generation_after_a_superseded_one(
             routes._request_presentation(requests, routes._PresentationRequest(2))
             while True:
                 event = await broker.receive()
-                assert isinstance(event, bytes)
-                payload = json.loads(event.split(b"data: ", 1)[1])
+                assert isinstance(event, str)
+                payload = json.loads(event)["data"]
                 if payload["kind"] == "presentation":
                     return payload
         finally:

@@ -42,7 +42,7 @@ writable too, for Studio's `.owners/` records and `.locks/` files. See
 Terminate [TLS](https://developer.mozilla.org/en-US/docs/Glossary/TLS) at the
 proxy, forward HTTP and
 [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
-connections so live notebook updates arrive, and restrict the upstream port to
+connections so live notebook and Studio updates arrive, and restrict the upstream port to
 trusted local or private-network clients. Studio builds every URL from the
 requested path, so the proxy may rewrite `Host`.
 

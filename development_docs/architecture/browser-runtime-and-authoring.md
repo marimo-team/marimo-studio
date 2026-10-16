@@ -469,6 +469,30 @@ preserving the view and workspace selection.
 
 ## Workspace events
 
+Studio sends development events over WebSocket connections at its `dev/events`
+routes. Each text frame carries one event:
+
+```json
+{ "event": "change", "data": { "kind": "views" } }
+```
+
+The server sends a `heartbeat` event after 15 idle seconds so that proxies keep
+the socket open.
+
+Every Studio tab and standalone view page keeps its event socket open.
+Browsers allow six HTTP/1.1 connections per host and port, so an open HTTP
+stream per tab would leave later tabs on the same server waiting for a
+connection. WebSocket connections use a separate browser pool.
+
+The handshake follows the HTTP `GET` policy of the event route. When that
+policy answers with an HTTP response instead, the server accepts the socket
+and closes it with `4000` plus the response status, because browsers hide the
+status of a refused handshake. `4204` marks a URL from an earlier server
+process: `StudioHost` reloads the page, and the workspace coordinator marks
+Preview as needing repair. Every other close reconnects with backoff, which
+resets after the next `ready` event. A standalone view page stops after `4403`
+or `4204` and reconnects after any other close.
+
 The `change` event has four kinds:
 
 - `project` carries source changes to the Source controller.
@@ -489,8 +513,8 @@ client, stream generation, and active view before reserving client state.
 Stream replacement has two phases on both sides. The server reserves a
 candidate lease while it prepares the source subscription and presentation
 baseline, then promotes the highest valid generation before sending `ready`.
-The browser keeps the current `EventSource` authoritative until the candidate
-sends `ready`, then installs its baseline and closes the previous stream.
+The browser keeps the current event socket authoritative until the candidate
+sends `ready`, then installs its baseline and closes the previous socket.
 Callbacks from stale generations cannot change workspace state.
 
 ## Preview deck

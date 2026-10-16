@@ -10,10 +10,8 @@ import {
   previewFrame,
   readWorkspaceFile,
   recoverProjectionRefresh,
-  recoverWorkspaceEventStream,
   restoreWorkspace,
   studioEntryUrl,
-  studioOrigin,
   test,
   waitForPreview,
   workspaceNotebookPath,
@@ -26,14 +24,13 @@ const originalMetricSource =
   'metric = scale.value * 21\nresponsive_value = "responsive" * 80\nmetric';
 
 declare global {
-  var __studioEventSourceCount: number | undefined;
-  var __studioEventSources: EventSource[] | undefined;
   var __studioWebSocketObservations: WebSocketObservation[] | undefined;
 }
 
 interface WebSocketObservation {
   documentUrl: string;
   socketUrl: string;
+  opened?: boolean;
   closeCode?: number;
   closeReason?: string;
 }
@@ -65,17 +62,6 @@ const waitForMetricSource = () =>
     })
     .toBe(true);
 
-const eventSourceCount = async (page: Page): Promise<number> =>
-  (
-    await Promise.all(
-      page
-        .frames()
-        .map((frame) =>
-          frame.evaluate(() => globalThis.__studioEventSourceCount ?? 0).catch(() => 0),
-        ),
-    )
-  ).reduce((total, count) => total + count, 0);
-
 const webSocketObservations = async (page: Page): Promise<WebSocketObservation[]> =>
   (
     await Promise.all(
@@ -92,24 +78,20 @@ const webSocketObservations = async (page: Page): Promise<WebSocketObservation[]
 const isEditorSocket = (observation: WebSocketObservation): boolean =>
   new URL(observation.documentUrl).pathname.includes("/_marimo-studio/editor/");
 
+const isWorkspaceEventSocket = (observation: WebSocketObservation): boolean =>
+  new URL(observation.socketUrl).pathname === "/_marimo-studio/dev/events";
+
+const workspaceEventSockets = async (page: Page): Promise<WebSocketObservation[]> =>
+  (await webSocketObservations(page)).filter(isWorkspaceEventSocket);
+
 playwrightTest(
   "a fresh Studio tab starts after the server restarts with a stale tab open",
   async ({ context, page }, testInfo) => {
     await restoreWorkspace();
     await installPinnedPyodideAssets(context);
     await context.addInitScript(() => {
-      const NativeEventSource = globalThis.EventSource;
       const NativeWebSocket = globalThis.WebSocket;
-      globalThis.__studioEventSourceCount = 0;
-      globalThis.__studioEventSources = [];
       globalThis.__studioWebSocketObservations = [];
-      globalThis.EventSource = class extends NativeEventSource {
-        constructor(url: string | URL, eventSourceInitDict?: EventSourceInit) {
-          super(url, eventSourceInitDict);
-          globalThis.__studioEventSourceCount = (globalThis.__studioEventSourceCount ?? 0) + 1;
-          globalThis.__studioEventSources?.push(this);
-        }
-      };
       globalThis.WebSocket = class extends NativeWebSocket {
         constructor(url: string | URL, protocols: string | string[] = []) {
           super(url, protocols);
@@ -118,6 +100,9 @@ playwrightTest(
             socketUrl: this.url,
           };
           globalThis.__studioWebSocketObservations?.push(observation);
+          this.addEventListener("open", () => {
+            observation.opened = true;
+          });
           this.addEventListener("close", (event) => {
             observation.closeCode = event.code;
             observation.closeReason = event.reason;
@@ -136,22 +121,27 @@ playwrightTest(
       await server.waitUntilReady(editServerUrl());
       await page.goto(editServerUrl());
       await waitForPreview(page);
-      await playwrightExpect.poll(() => eventSourceCount(page)).toBe(1);
+      await playwrightExpect
+        .poll(async () =>
+          (await workspaceEventSockets(page)).map((observation) => observation.opened === true),
+        )
+        .toEqual([true]);
       await playwrightExpect
         .poll(async () => (await webSocketObservations(page)).some(isEditorSocket))
         .toBe(true);
-      await playwrightExpect
-        .poll(() =>
-          page.evaluate(
-            () => globalThis.__studioEventSources?.[0]?.readyState === EventSource.OPEN,
-          ),
-        )
-        .toBe(true);
 
       const openSockets = (await webSocketObservations(page)).filter(
-        (observation) => observation.closeCode === undefined,
+        (observation) =>
+          observation.closeCode === undefined && !isWorkspaceEventSocket(observation),
       );
       playwrightExpect(openSockets.length).toBeGreaterThan(0);
+      // The stale tab reconnects while the server restarts.
+      const refusedReconnects = diagnostics.expectConsole({
+        type: "error",
+        text: /^WebSocket connection to '[^']+\/_marimo-studio\/dev\/events\?[^']*' failed: /,
+        count: 5,
+        required: false,
+      });
       const shutdownWarnings = diagnostics.expectConsole({
         type: "warning",
         text: /^WebSocket closed 1000 MARIMO_SHUTDOWN$/,
@@ -162,11 +152,11 @@ playwrightTest(
       server = startEditServer();
       servers.push(server);
       await server.waitUntilReady(editServerUrl());
+      // The stale tab reconnects with its old event URL, and the restarted
+      // server closes that socket as retired: 4000 + 204.
       await playwrightExpect
-        .poll(() =>
-          page.evaluate(
-            () => globalThis.__studioEventSources?.[0]?.readyState === EventSource.CLOSED,
-          ),
+        .poll(async () =>
+          (await workspaceEventSockets(page)).some((observation) => observation.closeCode === 4204),
         )
         .toBe(true);
       await playwrightExpect
@@ -185,8 +175,11 @@ playwrightTest(
       await current.goto(editServerUrl());
       const preview = await waitForPreview(current);
       await playwrightExpect(preview.getByText("Projected total:")).toBeVisible();
-      await playwrightExpect.poll(() => eventSourceCount(current)).toBe(1);
+      await playwrightExpect
+        .poll(async () => (await workspaceEventSockets(current)).length)
+        .toBe(1);
       shutdownWarnings.recovered();
+      refusedReconnects.recovered();
       await diagnostics.close();
       diagnosticsClosed = true;
       playwrightExpect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
@@ -217,10 +210,6 @@ test("restores value and function output hosts after their notebook values retur
 }) => {
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    2,
-  );
   const value = preview.locator('[mo-value="metric"]');
   const peerOutput = preview.locator('marimo-output[value="rich_table"]');
   const currentViewRevision = () =>
@@ -270,7 +259,6 @@ test("restores value and function output hosts after their notebook values retur
       "ready",
     );
     await recoverProjectionRefresh(restoredMetricRefresh, page);
-    await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   } finally {
     if (!restored) {
       const source = await readWorkspaceFile(workspaceNotebookPath);

@@ -6,6 +6,12 @@ import {
   type PresentationRefreshBarrierResult,
 } from "@marimo-studio/protocol/development-events";
 import {
+  EVENT_SOCKET_FORBIDDEN,
+  EVENT_SOCKET_RETIRED,
+  eventSocketUrl,
+  parseStudioEvent,
+} from "@marimo-studio/protocol/event-socket";
+import {
   parsePreviewMessage,
   type NavigateViewMessage,
   type PresentationRefreshMessage,
@@ -25,6 +31,7 @@ import {
   setActiveDocumentLifecycleId,
 } from "./document-lifecycle-id.ts";
 import { isStudioParentMessage, postToStudioParent } from "./parent-bridge.ts";
+import { RefreshRetrySchedule } from "./presentation-refresh.ts";
 import { studioOwned } from "./studio-ownership.ts";
 import { viewNavigationForUrl } from "./view-navigation.ts";
 
@@ -76,16 +83,33 @@ export const bindFragmentRestores = (): (() => void) => {
   return () => globalThis.removeEventListener("message", listener);
 };
 
-// EventSource closes for good when the server rejects the stream. A network
-// failure keeps it reconnecting.
-const EVENT_SOURCE_CLOSED = 2;
+// The server closes the socket with EVENT_SOCKET_FORBIDDEN or
+// EVENT_SOCKET_RETIRED when it no longer accepts this page. Any other close
+// leaves the subscription worth reopening.
+const rejected = (code: number): boolean =>
+  code === EVENT_SOCKET_FORBIDDEN || code === EVENT_SOCKET_RETIRED;
+
+const SOCKET_CONNECTING = 0;
+
+// Closing a socket before its handshake completes logs a browser error, so a
+// connecting socket closes once it opens.
+const closeSocket = (socket: WebSocket): void => {
+  if (socket.readyState === SOCKET_CONNECTING) {
+    socket.addEventListener("open", () => socket.close(), { once: true });
+    return;
+  }
+  socket.close();
+};
 
 export class DevelopmentEvents {
-  private source: EventSource | undefined;
+  private source: WebSocket | undefined;
+  private retry: ReturnType<typeof setTimeout> | undefined;
+  private readonly reconnects = new RefreshRetrySchedule();
 
   /**
-   * Subscribe to development events. `onRejected` runs when the server refuses
-   * the stream, with whether this stream was ready before.
+   * Subscribe to development events and reopen the socket after a network
+   * failure. `onRejected` runs when the server refuses the page, with whether
+   * this subscription was ready before.
    */
   connect(
     url: string,
@@ -96,46 +120,56 @@ export class DevelopmentEvents {
     onRejected: (wasReady: boolean) => void = onDisconnected,
   ): void {
     this.close();
-    const source = new EventSource(url);
-    this.source = source;
+    this.reconnects.reset();
     let wasReady = false;
-    const current = (operation: () => void) => {
-      if (this.source === source) {
-        operation();
-      }
-    };
-    source.addEventListener("ready", (event) => {
-      const baseline =
-        event instanceof MessageEvent ? parsePresentationBaseline(event.data) : undefined;
-      current(() => {
-        wasReady = true;
-        onReady(baseline?.revision);
-      });
-    });
-    source.addEventListener("error", () =>
-      current(() =>
-        source.readyState === EVENT_SOURCE_CLOSED ? onRejected(wasReady) : onDisconnected(),
-      ),
-    );
-    source.addEventListener("change", (event) => {
-      if (!(event instanceof MessageEvent)) {
-        return;
-      }
-      const data = event.data;
-      const change = parseWorkspaceChange(data);
-      if (change === "presentation") {
-        current(onPresentation);
-      } else if (change === "build") {
-        const build = parsePresentationBuild(data);
-        if (build) {
-          current(() => onBuild(build));
+    const open = () => {
+      const source = new WebSocket(eventSocketUrl(url, globalThis.location.href));
+      this.source = source;
+      const current = (operation: () => void) => {
+        if (this.source === source) {
+          operation();
         }
-      }
-    });
+      };
+      source.addEventListener("message", (message) => {
+        const frame = parseStudioEvent(message.data);
+        if (frame?.event === "ready") {
+          const baseline = parsePresentationBaseline(frame.data);
+          current(() => {
+            wasReady = true;
+            this.reconnects.reset();
+            onReady(baseline?.revision);
+          });
+        } else if (frame?.event === "change") {
+          const change = parseWorkspaceChange(frame.data);
+          const build = change === "build" ? parsePresentationBuild(frame.data) : undefined;
+          if (change === "presentation") {
+            current(onPresentation);
+          } else if (build) {
+            current(() => onBuild(build));
+          }
+        }
+      });
+      source.addEventListener("close", (event) =>
+        current(() => {
+          this.source = undefined;
+          if (rejected(event.code)) {
+            onRejected(wasReady);
+            return;
+          }
+          onDisconnected();
+          this.retry = setTimeout(open, this.reconnects.next());
+        }),
+      );
+    };
+    open();
   }
 
   close(): void {
-    this.source?.close();
+    clearTimeout(this.retry);
+    this.retry = undefined;
+    if (this.source) {
+      closeSocket(this.source);
+    }
     this.source = undefined;
   }
 }

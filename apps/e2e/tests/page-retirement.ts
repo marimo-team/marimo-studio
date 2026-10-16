@@ -30,10 +30,6 @@ export class ExactPageRetirementWitness<Owner extends object> {
     return true;
   }
 
-  owned(): readonly Owner[] {
-    return [...this.owners];
-  }
-
   diagnostics(): string[] {
     const messages: string[] = [];
     if (this.invalidRecovery) {

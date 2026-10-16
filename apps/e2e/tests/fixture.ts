@@ -7,6 +7,7 @@ import {
   type FrameLocator,
   type Locator,
   type Page,
+  type WebSocket,
 } from "@playwright/test";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -41,7 +42,6 @@ import {
   type ProjectionRefreshCapture,
   type RequestAbortCapture,
   type ResponseTransitionCapture,
-  type WorkspaceEventStreamCapture,
 } from "./browser-diagnostics.ts";
 import { test as base } from "./network-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
@@ -63,7 +63,6 @@ export {
   type ProjectionRefreshCapture,
   type RequestAbortCapture,
   type ResponseTransitionCapture,
-  type WorkspaceEventStreamCapture,
 } from "./browser-diagnostics.ts";
 
 const dashboardDirectory = resolve(workspaceDirectory, "studio/notebook/dashboard");
@@ -237,6 +236,27 @@ export const presentationFrame = (page: Page): FrameLocator =>
 export const previewFrame = (page: Page, runtime = "server"): FrameLocator =>
   page.frameLocator(`iframe[data-preview-runtime-frame="${runtime}"]`);
 
+// Studio admits an event socket before it sends `ready`, so a test that
+// depends on the admitted stream waits for that frame.
+export const waitForEventSocketReady = (
+  page: Page,
+  matches: (url: URL) => boolean,
+): Promise<WebSocket> =>
+  new Promise((resolve) => {
+    const onSocket = (socket: WebSocket) => {
+      if (!matches(new URL(socket.url()))) {
+        return;
+      }
+      socket.on("framereceived", ({ payload }) => {
+        if (String(payload).startsWith('{"event":"ready"')) {
+          page.off("websocket", onSocket);
+          resolve(socket);
+        }
+      });
+    };
+    page.on("websocket", onSocket);
+  });
+
 export const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") => {
   const frame = page.locator(`iframe[data-preview-runtime-frame="${runtime}"]`);
   await expect(frame).not.toHaveAttribute("inert");
@@ -403,17 +423,10 @@ export const expectPreviewRevisionSwap = async (
     errorText: "net::ERR_ABORTED",
     required: false,
   });
-  const retiredStream = diagnostics.expectActiveRequestAbort({
-    origin,
-    method: "GET",
-    path: new RegExp(`${reads}dev/events$`),
-    status: 200,
-  });
   return async () => {
     staleReads.recovered();
     staleManifest.recovered();
     retiredReads.recovered();
-    await recoverRequestAbort(retiredStream);
   };
 };
 
@@ -424,13 +437,6 @@ export const recoverResponseTransition = async (
   if (!capture.recovered()) {
     throw new Error("The response transition changed while recovery was committing.");
   }
-};
-
-export const recoverWorkspaceEventStream = async (
-  capture: WorkspaceEventStreamCapture,
-): Promise<void> => {
-  await expect.poll(() => capture.ready(), { timeout: 10_000 }).toBe(true);
-  capture.recovered();
 };
 
 interface SessionAdmin {

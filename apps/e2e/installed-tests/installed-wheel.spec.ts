@@ -231,10 +231,6 @@ test("provides Studio before the first save in an environment with the installed
   retiredSave.recovered();
   await page.getByText("Add view", { exact: true }).click();
   await page.getByRole("radio", { name: /^HTML document/ }).check();
-  const replaced = diagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", installedPackageNetwork.fresh.origin).href,
-    1,
-  );
   await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Show view beside notebook" })).toHaveAttribute(
     "aria-pressed",
@@ -244,5 +240,4 @@ test("provides Studio before the first save in an environment with the installed
   await expect(preview.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   fallback.recovered();
   description.recovered();
-  replaced.recovered();
 });

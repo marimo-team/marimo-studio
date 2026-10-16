@@ -11,7 +11,6 @@ import {
   recoverRequestAbort,
   recoverResponseTransition,
   recoverProjectionRefresh,
-  recoverWorkspaceEventStream,
   retireWorkspacePage,
   studioOrigin,
   test,
@@ -92,10 +91,6 @@ test("keeps the active preview usable after a manifestless creation conflict", a
     count: 1,
     status: 204,
   });
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const identity = await preview.locator("html").evaluate(() => globalThis.marimoStudio.identity());
   const conflict = resolve(workspaceNotebookPath, "../studio/notebook/blocked");
   const sentinel = resolve(conflict, "public/sentinel.js");
@@ -126,7 +121,6 @@ test("keeps the active preview usable after a manifestless creation conflict", a
     labeledSlider(recovered.locator('marimo-cell[name="controls"]'), /^Scale/),
   ).toBeVisible();
   await recoverRequestAbort(abandonedHandoff);
-  await recoverWorkspaceEventStream(replacedWorkspaceStream);
   await retireWorkspacePage(page, browserDiagnostics);
   supersededPresentation.recovered();
 });

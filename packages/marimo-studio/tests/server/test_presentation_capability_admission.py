@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
 from starlette.requests import Request
@@ -59,7 +59,7 @@ def test_preview_event_subscription_survives_publication_with_renewal_authority(
         **_options: object,
     ) -> Any:
         subscribed.append(view_name)
-        yield b"event: ready\ndata: {}\n\n"
+        yield '{"event":"ready","data":{}}'
 
     monkeypatch.setattr("marimo_studio._server.support.change_events", scoped_events)
     with TestClient(app) as client:
@@ -72,7 +72,8 @@ def test_preview_event_subscription_survives_publication_with_renewal_authority(
             f"{root}_marimo-studio/views/dashboard/dev/events"
             f"?marimo_studio_server={instance}"
         )
-        assert client.get(events).status_code == 200
+        with client.websocket_connect(events) as socket:
+            assert socket.receive_json()["event"] == "ready"
 
         document = studio.views["dashboard"].root / "index.html"
         document.write_text(
@@ -89,7 +90,8 @@ def test_preview_event_subscription_survives_publication_with_renewal_authority(
             refreshed.headers["Marimo-Studio-Revision"]
             != presentation.headers["Marimo-Studio-Revision"]
         )
-        assert client.get(events).status_code == 200
+        with client.websocket_connect(events) as socket:
+            assert socket.receive_json()["event"] == "ready"
         assert subscribed == ["dashboard", "dashboard"]
 
         for target in (
@@ -169,7 +171,7 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
         **options: object,
     ) -> Any:
         events_scope.update(view=view_name, client_id=options.get("client_id"))
-        yield b"event: ready\ndata: {}\n\n"
+        yield '{"event":"ready","data":{}}'
 
     async def session_target(
         _registry: StudioClientRegistry,
@@ -238,14 +240,17 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
             headers={"Marimo-Session-Id": runtime_session_id},
             json={},
         )
-        events = client.get(
-            f"{capability_root}_marimo-studio/dev/events",
-            params={
+        events_query = urlencode(
+            {
                 "marimo_studio_server": server_instance_id(server_token),
                 "marimo_studio_client": "browser-client-1234",
                 "marimo_studio_connection": "1",
-            },
+            }
         )
+        with client.websocket_connect(
+            f"{capability_root}_marimo-studio/dev/events?{events_query}"
+        ) as socket:
+            events = socket.receive_json()
         source = client.get(
             f"{capability_root}_marimo-studio/views/dashboard/source/index.html"
         )
@@ -315,7 +320,7 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
     assert native_request.status_code == 200
     assert native_request.headers["access-control-allow-origin"] == "null"
     assert stdin_values == ["ok"]
-    assert events.status_code == 200
+    assert events["event"] == "ready"
     assert events_scope == {"view": "dashboard", "client_id": None}
     assert runtime_config.headers["access-control-allow-origin"] == "null"
     assert "serverToken" not in payload["runtime"]["data"]

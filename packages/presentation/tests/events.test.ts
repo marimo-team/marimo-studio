@@ -25,21 +25,26 @@ globalThis.__MARIMO_MOUNT_CONFIG__ = {
   replay: false,
 };
 
-class EventSourceStub extends EventTarget {
-  static instances: EventSourceStub[] = [];
+class WebSocketStub extends EventTarget {
+  static instances: WebSocketStub[] = [];
   closed = false;
 
   constructor(readonly url: string) {
     super();
-    EventSourceStub.instances.push(this);
+    WebSocketStub.instances.push(this);
   }
 
   close(): void {
     this.closed = true;
   }
 
-  emit(type: string, data?: string): void {
-    this.dispatchEvent(data === undefined ? new Event(type) : new MessageEvent(type, { data }));
+  receive(event: string, data: JsonValue = {}): void {
+    this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ event, data }) }));
+  }
+
+  /** Close the socket from the server side, or with 1006 for a network failure. */
+  drop(code = 1006): void {
+    this.dispatchEvent(new CloseEvent("close", { code }));
   }
 }
 
@@ -53,73 +58,74 @@ interface CyclicPresentationProbe {
 }
 
 beforeEach(() => {
-  EventSourceStub.instances = [];
-  vi.stubGlobal("EventSource", EventSourceStub);
+  WebSocketStub.instances = [];
+  vi.stubGlobal("WebSocket", WebSocketStub);
   document.body.replaceChildren();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   globalThis.history.replaceState({}, "", "/");
   vi.unstubAllGlobals();
 });
 
 test("closed development streams ignore late events", () => {
+  vi.useFakeTimers();
   const ready = vi.fn();
   const changed = vi.fn();
   const disconnected = vi.fn();
   const events = new DevelopmentEvents();
   events.connect("/first", ready, changed, undefined, disconnected);
-  const first = EventSourceStub.instances[0];
+  const first = WebSocketStub.instances[0];
 
   events.connect("/second", ready, changed, undefined, disconnected);
-  const second = EventSourceStub.instances[1];
-  first?.emit("ready");
-  first?.emit("error");
+  const second = WebSocketStub.instances[1];
+  first?.receive("ready");
+  first?.drop();
   expect(disconnected).not.toHaveBeenCalled();
-  first?.emit("change", JSON.stringify({ kind: "project" }));
+  first?.receive("change", { kind: "project" });
 
   assert.equal(first?.closed, true);
   assert.equal(ready.mock.calls.length, 0);
   assert.equal(changed.mock.calls.length, 0);
 
-  second?.emit("error");
+  second?.drop();
   expect(disconnected).toHaveBeenCalledOnce();
-  second?.emit(
-    "ready",
-    JSON.stringify({ schema: 1, view: "dashboard", revision: "revision-next" }),
-  );
+  vi.advanceTimersToNextTimer();
+  const reopened = WebSocketStub.instances[2];
+  expect(reopened?.url).toBe("ws://localhost:3000/second");
+  reopened?.receive("ready", { schema: 1, view: "dashboard", revision: "revision-next" });
   expect(ready).toHaveBeenLastCalledWith("revision-next");
-  second?.emit("change", JSON.stringify({ kind: "presentation" }));
+  reopened?.receive("change", { kind: "presentation" });
   assert.equal(ready.mock.calls.length, 1);
   assert.deepEqual(changed.mock.calls, [[]]);
 
   events.close();
-  second?.emit("ready");
-  assert.equal(second?.closed, true);
+  reopened?.receive("ready");
+  assert.equal(reopened?.closed, true);
   assert.equal(ready.mock.calls.length, 1);
 });
 
 test("a rejected development stream reports whether it was ready", () => {
+  vi.useFakeTimers();
   const disconnected = vi.fn();
   const rejected = vi.fn();
   const events = new DevelopmentEvents();
   events.connect("/events", vi.fn(), vi.fn(), undefined, disconnected, rejected);
-  const source = EventSourceStub.instances[0]!;
 
-  Object.assign(source, { readyState: 0 });
-  source.emit("error");
-  source.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "r1" }));
-  Object.assign(source, { readyState: 2 });
-  source.emit("error");
+  WebSocketStub.instances[0]!.drop();
+  vi.advanceTimersToNextTimer();
+  const reopened = WebSocketStub.instances[1]!;
+  reopened.receive("ready", { schema: 1, view: "dashboard", revision: "r1" });
+  reopened.drop(4403);
 
   expect(disconnected).toHaveBeenCalledOnce();
   expect(rejected.mock.calls).toEqual([[true]]);
 
   events.connect("/events", vi.fn(), vi.fn(), undefined, disconnected, rejected);
-  const fresh = EventSourceStub.instances[1]!;
-  Object.assign(fresh, { readyState: 2 });
-  fresh.emit("error");
+  WebSocketStub.instances[2]!.drop(4204);
   expect(rejected.mock.calls).toEqual([[true], [false]]);
+  expect(WebSocketStub.instances).toHaveLength(3);
 });
 
 test("embedded same-view links delegate query and hash navigation to Studio", () => {

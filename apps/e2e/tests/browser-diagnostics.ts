@@ -26,7 +26,6 @@ import {
   BrowserRequestOwners,
   ExactRequestAbortWitness,
   IdempotentReadRecovery,
-  WorkspaceEventStreamReplacementWindow,
   abortedResponseCompleted,
   isIdempotentReadRequest,
   requestAbortsRetiredByDocument,
@@ -60,10 +59,6 @@ export interface BrowserDiagnostics {
   expectActiveRequestAbort(expectation: BrowserActiveRequestAbortExpectation): RequestAbortCapture;
   expectRequestAbort(expectation: BrowserRequestAbortExpectation): RequestAbortCapture;
   expectRequestFailure(expectation: BrowserRequestFailureExpectation): BrowserResponseRecovery;
-  expectWorkspaceEventStreamReplacement(
-    eventsUrl: string,
-    count?: number,
-  ): WorkspaceEventStreamCapture;
 }
 
 export interface BrowserDiagnosticsScope extends BrowserDiagnostics {
@@ -86,10 +81,6 @@ export const expectSupersededRenewalConfig = (
 
 export interface BrowserResponseRecovery {
   recovered(): void;
-}
-
-export interface WorkspaceEventStreamCapture extends BrowserResponseRecovery {
-  ready(): boolean;
 }
 
 export interface ProjectionRefreshCapture {
@@ -181,7 +172,6 @@ interface PendingRequestAbort {
 
 interface PageDiagnostics {
   captureRequestAbortWindow(window: ExactRequestAbortWindow<Request>): void;
-  captureWorkspaceEventStream(window: WorkspaceEventStreamReplacementWindow): void;
   pendingRequestAborts: Set<PendingRequestAbort>;
   expectFrameRetirement(frame: Frame): BrowserResponseRecovery;
   expectPageRetirement(): BrowserResponseRecovery;
@@ -218,7 +208,6 @@ const observePageDiagnostics = (
   expectedRequestAborts: Set<ExactRequestAbortWindow<Request>>,
   futureRequestAborts: Set<ExactRequestAbortWindow<Request>>,
   expectedRequestFailures: TrackedRequestFailure[],
-  workspaceEventStreamReplacements: Set<WorkspaceEventStreamReplacementWindow>,
 ): PageDiagnostics => {
   const activeRequests = new Set<Request>();
   let nextOwnerId = 0;
@@ -264,13 +253,11 @@ const observePageDiagnostics = (
     responseTransitions.forEach((window) => window.recordStart(request, owner, start));
     futureRequestAborts.forEach((window) => window.recordStart(request));
     projectionReadWindows.forEach((window) => window.recordStart(request, owner, start));
-    workspaceEventStreamReplacements.forEach((window) => window.recordStart(request, owner));
     requestRecovery.recordStart(request, owner);
   };
   const onPageError = (error: Error) => messages.push(`pageerror: ${error.message}`);
   const terminalizeSpecializedRequest = (request: Request) => {
     projectionReadWindows.forEach((window) => window.recordFailure(request));
-    workspaceEventStreamReplacements.forEach((window) => window.recordFailure(request));
   };
   const terminalizeRequest = (request: Request) => {
     requestRecovery.recordFailure(request);
@@ -334,9 +321,6 @@ const observePageDiagnostics = (
       projectionReadWindows.forEach((window) => {
         captured = window.recordAbort(request) || captured;
       });
-      workspaceEventStreamReplacements.forEach((window) => {
-        captured = window.recordAbort(request) || captured;
-      });
       if (captured) {
         terminalizeRequest(request);
         return;
@@ -397,7 +381,6 @@ const observePageDiagnostics = (
     if (status === undefined) {
       requestRecovery.recordFailure(request);
       projectionReadWindows.forEach((window) => window.recordFailure(request));
-      workspaceEventStreamReplacements.forEach((window) => window.recordFailure(request));
       return;
     }
     const owner = requestOwners.get(request) ?? frameLessOwner;
@@ -405,7 +388,6 @@ const observePageDiagnostics = (
     projectionReadWindows.forEach((window) => window.recordResponse(request, owner, start, status));
     if (status >= 400) {
       requestRecovery.recordFailure(request);
-      workspaceEventStreamReplacements.forEach((window) => window.recordFailure(request));
       return;
     }
     const recoveredStart = requestRecovery.recordSuccess(request);
@@ -429,9 +411,6 @@ const observePageDiagnostics = (
     const responseError = response.headers()["marimo-studio-error"];
     responseErrors.set(response.request(), responseError);
     expectedRequestAborts.forEach((window) =>
-      window.recordResponse(response.request(), response.status()),
-    );
-    workspaceEventStreamReplacements.forEach((window) =>
       window.recordResponse(response.request(), response.status()),
     );
     let capturedTransition = false;
@@ -469,17 +448,6 @@ const observePageDiagnostics = (
         window.recordActive(request, responseStatuses.get(request)),
       );
     },
-    captureWorkspaceEventStream: (window) => {
-      activeRequests.forEach((request) => {
-        const owner = requestOwners.get(request) ?? frameLessOwner;
-        if (window.recordStart(request, owner)) {
-          const status = responseStatuses.get(request);
-          if (status !== undefined) {
-            window.recordResponse(request, status);
-          }
-        }
-      });
-    },
     pendingRequestAborts,
     frameRetirements,
     pageRetirements,
@@ -503,7 +471,6 @@ const observePageDiagnostics = (
             retirement.invalidRecovery = true;
             return;
           }
-          workspaceEventStreamReplacements.forEach((window) => window.retireOwner(owner));
           retirement.isRecovered = true;
         },
       };
@@ -530,11 +497,7 @@ const observePageDiagnostics = (
         recovered: () => {
           stop();
           pageRetirementCleanups.delete(retirement);
-          if (retirement.recover(page.isClosed())) {
-            retirement.owned().forEach((owner) => {
-              workspaceEventStreamReplacements.forEach((window) => window.retireOwner(owner));
-            });
-          }
+          retirement.recover(page.isClosed());
         },
       };
     },
@@ -624,7 +587,6 @@ export const observeBrowserContext = (context: BrowserContext): BrowserDiagnosti
   const expectedRequestAborts = new Set<ExactRequestAbortWindow<Request>>();
   const futureRequestAborts = new Set<ExactRequestAbortWindow<Request>>();
   const expectedRequestFailures: TrackedRequestFailure[] = [];
-  const workspaceEventStreamReplacements = new Set<WorkspaceEventStreamReplacementWindow>();
   const pages = new Map<Page, PageDiagnostics>();
   const observe = (page: Page): void => {
     if (pages.has(page)) return;
@@ -640,7 +602,6 @@ export const observeBrowserContext = (context: BrowserContext): BrowserDiagnosti
         expectedRequestAborts,
         futureRequestAborts,
         expectedRequestFailures,
-        workspaceEventStreamReplacements,
       ),
     );
   };
@@ -761,17 +722,6 @@ export const observeBrowserContext = (context: BrowserContext): BrowserDiagnosti
         },
       };
     },
-    expectWorkspaceEventStreamReplacement: (eventsUrl, count) => {
-      const replacement = new WorkspaceEventStreamReplacementWindow(eventsUrl, count);
-      workspaceEventStreamReplacements.add(replacement);
-      pages.forEach((page) => page.captureWorkspaceEventStream(replacement));
-      return {
-        ready: () => replacement.readyToRecover(),
-        recovered: () => {
-          replacement.recover();
-        },
-      };
-    },
     close: async () => {
       context.off("page", observe);
       const observedPages = [...pages.values()];
@@ -830,10 +780,6 @@ export const observeBrowserContext = (context: BrowserContext): BrowserDiagnosti
       });
       expectedRequestAborts.clear();
       futureRequestAborts.clear();
-      workspaceEventStreamReplacements.forEach((replacement) => {
-        messages.push(...replacement.diagnostics());
-      });
-      workspaceEventStreamReplacements.clear();
       for (const item of expectedConsole) {
         const cardinality = expectedCardinality(item.count);
         if (item.required !== false && item.seen !== cardinality) {
