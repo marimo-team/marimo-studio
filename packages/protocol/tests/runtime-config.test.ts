@@ -140,6 +140,14 @@ test("render reads name their render, JSON value accept list, and measured outpu
           size: { width: 250.38, height: null },
           render: "main.typ",
         },
+        {
+          ...symbolicRuntimeFields.sites[0],
+          id: "site-tall-output",
+          kind: "output",
+          accept: ["application/pdf"],
+          size: { width: null, height: 144 },
+          render: "main.typ",
+        },
       ],
     }),
     configUrl,
@@ -147,10 +155,11 @@ test("render reads name their render, JSON value accept list, and measured outpu
 
   assert.deepEqual(
     parsed.sites.map((site) => site.render),
-    ["main.typ", "main.typ"],
+    ["main.typ", "main.typ", "main.typ"],
   );
   assert.deepEqual(parsed.sites[0]?.accept, ["application/json"]);
   assert.deepEqual(parsed.sites[1]?.size, { width: 250.38, height: null });
+  assert.deepEqual(parsed.sites[2]?.size, { width: null, height: 144 });
 });
 
 test("runtime configuration resolves the Python delivery fixture beneath a proxy prefix", () => {
@@ -268,6 +277,17 @@ test("runtime configuration rejects malformed contracts", () => {
           kind: "output",
           accept: ["application/pdf"],
           size: { width: 0, height: null },
+          render: "main.typ",
+        },
+      ],
+    }),
+    runtimeConfig({
+      sites: [
+        {
+          ...symbolicRuntimeFields.sites[0],
+          kind: "output",
+          accept: ["application/pdf"],
+          size: { width: null, height: null },
           render: "main.typ",
         },
       ],

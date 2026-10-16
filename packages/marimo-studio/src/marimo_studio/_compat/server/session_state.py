@@ -1151,8 +1151,13 @@ class PrivateSessionState:
                 server_token=context.server_token,
             ) as client:
                 observation = client.session(str(canonical_id)).observe_inputs()
+                # Control sync replays values by input and path. A control's
+                # reachable values stay with prepared exports.
                 return {
-                    object_id: binding.to_value()
+                    object_id: {
+                        "input": binding.input,
+                        "path": [step.to_value() for step in binding.path],
+                    }
                     for object_id, binding in observation.control_bindings.items()
                 }
 

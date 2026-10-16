@@ -28,15 +28,15 @@
 %   Repeats body for each item anywhere else, with the same #1 and #2.
 % \marimographics[<graphicx options>]{<selector>}
 %   Places a notebook output, such as a matplotlib figure, with
-%   \includegraphics. Studio draws it at the width and height it is placed
-%   at, so its text keeps its point size.
+%   \includegraphics. Studio draws it at the width, height, or both it is
+%   placed at, so its text keeps its point size.
 % \marimocell[<graphicx options>]{<cell name>}
 %   Places a named cell's image output as marimo shows it.
 % \marimosetup{missing=<text>, null=<text>}
 %   Sets what a read typesets while Studio has no value for it (\textbf{??})
 %   and for a null value (an em dash in the surrounding face).
 \NeedsTeXFormat{LaTeX2e}[2020/10/01]
-\ProvidesExplPackage{marimo}{2026/10/09}{0.4.0}
+\ProvidesExplPackage{marimo}{2026/10/16}{0.5.0}
   {Notebook values, outputs, and cells from marimo Studio}
 \RequirePackage{amstext}
 \RequirePackage{graphicx}
@@ -86,11 +86,6 @@
   {
     scale~resizes~the~output~that~Studio~draws~at~its~measured~size,~so~its~
     text~loses~its~point~size.~Give~width,~or~width~and~height,~instead.
-  }
-\msg_new:nnn { marimo } { height-only }
-  {
-    height~alone~resizes~the~output~that~Studio~draws~at~the~line~width,~so~
-    its~text~loses~its~point~size.~Give~width,~or~width~and~height,~instead.
   }
 \msg_new:nnn { marimo } { fitted }
   {
@@ -389,9 +384,10 @@
 % \marimographics logs the size it places each output at, which Studio reads
 % from the compile its build runs, so the figure arrives drawn at that size.
 % The line holds the width, and the height when width and height fix the
-% shape. Otherwise the notebook's aspect ratio sets the height, as it does for
-% \includegraphics with height alone or with keepaspectratio. keepaspectratio
-% caps the height, so a drawn output that the cap shrinks warns.
+% shape. Height alone logs only the height, and the notebook's aspect ratio
+% sets the width. Otherwise the aspect ratio sets the height, as it does for
+% \includegraphics with keepaspectratio. keepaspectratio caps the height, so a
+% drawn output that the cap shrinks warns.
 \dim_new:N \l__marimo_width_dim
 \dim_new:N \l__marimo_height_dim
 \bool_new:N \l__marimo_drawn_bool
@@ -400,6 +396,7 @@
 \bool_new:N \l__marimo_scale_bool
 \bool_new:N \l__marimo_turned_bool
 \bool_new:N \l__marimo_shaped_bool
+\bool_new:N \l__marimo_tall_bool
 \box_new:N \l__marimo_graphic_box
 \keys_define:nn { marimo / graphics }
   {
@@ -434,10 +431,11 @@
     \bool_set_false:N \l__marimo_scale_bool
     \bool_set_false:N \l__marimo_turned_bool
     \keys_set:nn { marimo / graphics } {#1}
-    \bool_lazy_and:nnT
-      { ! \l__marimo_width_bool }
-      { \dim_compare_p:nNn { \l__marimo_height_dim } > { \c_zero_dim } }
-      { \__marimo_resized:n { height-only } }
+    \bool_set:Nn \l__marimo_tall_bool
+      {
+        ! \l__marimo_width_bool && ! \l__marimo_scale_bool
+        && \dim_compare_p:nNn { \l__marimo_height_dim } > { \c_zero_dim }
+      }
     \bool_set:Nn \l__marimo_shaped_bool
       {
         \l__marimo_width_bool && ! \l__marimo_keep_bool
@@ -451,8 +449,10 @@
       \__marimo_graphics_keys:n {#1}
       \iow_log:x
         {
-          marimo-size: \dim_to_decimal_in_bp:n { \l__marimo_width_dim } :
-          \bool_if:NT \l__marimo_shaped_bool
+          marimo-size:
+          \bool_if:NF \l__marimo_tall_bool
+            { \dim_to_decimal_in_bp:n { \l__marimo_width_dim } } :
+          \bool_if:nT { \l__marimo_shaped_bool || \l__marimo_tall_bool }
             { \dim_to_decimal_in_bp:n { \l__marimo_height_dim } } :
           \tl_trim_spaces_apply:nN {#2} \tl_to_str:n :
         }
@@ -485,11 +485,14 @@
                 \hbox_set:Nn \l__marimo_graphic_box
                   { \includegraphics [ width = \l__marimo_width_dim , #3 ] {#2} }
               }
-            \bool_lazy_and:nnT
-              { \l__marimo_keep_bool }
+            \bool_lazy_all:nT
               {
-                \dim_compare_p:nNn
-                  { \box_wd:N \l__marimo_graphic_box } < { \l__marimo_width_dim - 0.5pt }
+                { \l__marimo_keep_bool }
+                { \l__marimo_width_bool }
+                {
+                  \dim_compare_p:nNn
+                    { \box_wd:N \l__marimo_graphic_box } < { \l__marimo_width_dim - 0.5pt }
+                }
               }
               { \__marimo_resized:n { fitted } }
             \leavevmode \box_use_drop:N \l__marimo_graphic_box

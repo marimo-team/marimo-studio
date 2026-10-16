@@ -797,7 +797,7 @@ BuildResult(
     output_sizes: Mapping[PurePosixPath, Mapping[str, Size]] = {},
 )
 
-Size(width: float, height: float | None = None)
+Size(width: float | None = None, height: float | None = None)
 
 RenderRequest(
     source: PurePosixPath,
@@ -830,8 +830,9 @@ intermediate files, and `cache_root` persists between builds. Return
 `BuildResult.output_sizes` maps a render's source, then an output target the
 render reads, to the
 [`Size`](https://marimo-team.github.io/marimo-export/reference/python/values#size),
-in points, at which the template places it: its width, and its height when the
-template sets one. Studio then draws a matplotlib figure or a Vega-Lite chart
+in points, at which the template places it: its width, its height, or both. A
+size with only a height keeps the figure's aspect ratio, as an image placed by
+height does. Studio then draws a matplotlib figure or a Vega-Lite chart
 at that size for every render, so its text keeps the point size the notebook
 set. A target without a size arrives at the size the notebook drew it. A size
 for a target the render does not read fails provider conformance. The LaTeX

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Literal
@@ -11,6 +12,8 @@ from marimo_studio._artifacts.limits import ARTIFACT_OUTPUT_BUDGET
 from marimo_studio._delivery.portability import ProjectionPortability, StaticRuntime
 from marimo_studio._filesystem.errors import ConcurrentChangeError
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._prepared.coverage import UncoveredControl
+from marimo_studio._prepared.state_space import STATE_SPACE_FILE
 from marimo_studio.view_providers import SourceLocation
 from marimo_studio.view_providers._css_resources import css_resource_urls
 from marimo_studio.view_providers._document import HTMLDocumentParser
@@ -363,6 +366,38 @@ def _css_issues(
     return issues, len(resources)
 
 
+def uncovered_control_issues(
+    uncovered: tuple[UncoveredControl, ...],
+) -> tuple[StaticPreflightIssue, ...]:
+    """Warn about control values that no prepared state holds."""
+    issues: list[StaticPreflightIssue] = []
+    for control in uncovered:
+        examples = ", ".join(
+            json.dumps(value, default=dict) for value in control.examples
+        )
+        more = "" if control.missing == len(control.examples) else ", ..."
+        issues.append(
+            StaticPreflightIssue(
+                "prepared-states-skip-control-values",
+                "warning",
+                (
+                    f"The prepared states skip {control.missing} "
+                    f"{'value' if control.missing == 1 else 'values'} that the "
+                    f"control for {control.input!r} can send: {examples}{more}. "
+                    "A reader who picks one keeps the previous display."
+                ),
+                SourceLocation(PurePosixPath(STATE_SPACE_FILE), 1, 1),
+                reference=control.input,
+                hint=(
+                    f"List the skipped values for {control.input!r} in "
+                    f"{STATE_SPACE_FILE}, or give the control a step its "
+                    "prepared values cover."
+                ),
+            )
+        )
+    return tuple(issues)
+
+
 def preflight_static_bundle(
     root: Path,
     *,
@@ -370,8 +405,12 @@ def preflight_static_bundle(
     runtime: StaticRuntime,
     document: PurePosixPath,
     projections: tuple[ProjectionPortability, ...],
+    prepared_issues: tuple[StaticPreflightIssue, ...] = (),
 ) -> StaticPreflightReport:
-    """Verify local browser references in the exact staged export tree."""
+    """Verify local browser references in the exact staged export tree.
+
+    ``prepared_issues`` adds what the prepared states leave out.
+    """
     tree = FileTree(root)
     inventory = tree.regular_files(root, max_entries=ARTIFACT_OUTPUT_BUDGET.max_files)
     sizes = {
@@ -379,7 +418,7 @@ def preflight_static_bundle(
         for path, size in inventory
     }
     available = frozenset(sizes)
-    issues: list[StaticPreflightIssue] = []
+    issues: list[StaticPreflightIssue] = list(prepared_issues)
     inspected_files = 0
     references = 0
     consumed_bytes = 0

@@ -596,7 +596,7 @@ def test_a_build_compiles_once_within_the_build_budget(
     assert compiles == [120.0]
 
 
-def test_a_build_reports_the_widest_size_the_document_places_each_figure_at(
+def test_a_build_reports_the_largest_size_the_document_places_each_figure_at(
     tmp_path: Path, stand_in: None
 ) -> None:
     project = _project(
@@ -604,6 +604,8 @@ def test_a_build_reports_the_widest_size_the_document_places_each_figure_at(
         _document(
             r"\marimographics{occupancy_heatmap}"
             r"\marimographics{teaser_figure}"
+            r"\marimographics[height=2in]{tall_figure}"
+            r"\marimographics{mixed_figure}"
             r'\marimographics{rows[0]["a long selector '
             r'that TeX breaks across log lines"]}'
         ),
@@ -611,6 +613,10 @@ def test_a_build_reports_the_widest_size_the_document_places_each_figure_at(
     log = _tex_log(
         "marimo-size:250.38007::occupancy_heatmap:",
         "marimo-size:465.47974:120:teaser_figure:",
+        "marimo-size::144:tall_figure:",
+        "marimo-size::300:mixed_figure:",
+        "marimo-size:200:100:mixed_figure:",
+        "marimo-size:200::mixed_figure:",
         "marimo-size:513::occupancy_heatmap:",
         'marimo-size:216::rows[0]["a long selector that TeX breaks across log lines"]:',
         "marimo-size:0::unsized:",
@@ -622,6 +628,8 @@ def test_a_build_reports_the_widest_size_the_document_places_each_figure_at(
         MAIN: {
             "occupancy_heatmap": Size(513),
             "teaser_figure": Size(465.47974, 120),
+            "tall_figure": Size(height=144),
+            "mixed_figure": Size(200, 100),
             'rows[0]["a long selector that TeX breaks across log lines"]': Size(216),
         }
     }
@@ -1044,7 +1052,7 @@ def test_a_build_records_where_the_document_places_each_figure(
     } == {
         ("chart",): (pytest.approx(216), pytest.approx(72)),
         ("table_figure",): (pytest.approx(288), None),
-        ("strip",): (pytest.approx(288), None),
+        ("strip",): (None, pytest.approx(72)),
         ("fitted",): (pytest.approx(216), None),
     }
 
@@ -1089,7 +1097,6 @@ def test_images_are_placed_at_their_width_and_aspect_ratio(
 @pytest.mark.parametrize(
     ("options", "warning"),
     (
-        ("height=1in", "height alone resizes the output"),
         ("scale=0.5", "scale resizes the output"),
         ("angle=90, width=1in", "angle turns the output"),
     ),
@@ -1113,6 +1120,8 @@ def test_options_that_resize_a_drawn_figure_warn(
     "body",
     (
         "\\marimographics[width=1in, angle=90]{chart}",
+        "\\marimographics[height=1in]{chart}",
+        "\\marimographics[height=1in, keepaspectratio]{chart}",
         "\\marimographics[width=2in, height=1in, keepaspectratio]{chart}",
         "\\marimocell[scale=0.5]{chart}",
     ),

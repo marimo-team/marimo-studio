@@ -1875,7 +1875,7 @@ requires-dist = [
     { name = "deno", marker = "extra == 'deno'", specifier = ">=2.9.5" },
     { name = "htpy", specifier = ">=26.5.1" },
     { name = "marimo", specifier = "==0.25.1" },
-    { name = "marimo-export", specifier = ">=0.2.0" },
+    { name = "marimo-export", specifier = ">=0.2.1" },
     { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.2.3" },
     { name = "marimo-studio", extras = ["deno", "lens"], marker = "extra == 'recommended'", editable = "packages/marimo-studio" },
     { name = "markupsafe", specifier = ">=3" },

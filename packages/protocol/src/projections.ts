@@ -80,8 +80,14 @@ export const artifactSiteSchema = z
     // accepts application/json, which reads tables as rows.
     accept: z.array(acceptedMediaTypeSchema).max(32),
     // The size a render places an output at, which the runtime draws a
-    // figure at.
-    size: z.object({ width: pointsSchema, height: pointsSchema.nullable() }).strict().nullable(),
+    // figure at. A size without a width places the output by height.
+    size: z
+      .object({ width: pointsSchema.nullable(), height: pointsSchema.nullable() })
+      .strict()
+      .refine(({ width, height }) => width !== null || height !== null, {
+        message: "A size has a width, a height, or both",
+      })
+      .nullable(),
     // The source of the render that reads this target, or null for a host on
     // the page.
     render: renderSourceSchema.nullable(),

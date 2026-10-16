@@ -182,7 +182,7 @@ def _size(value: object, label: str) -> Size | None:
     data = _object(value, {"width", "height"}, label)
     width, height = data["width"], data["height"]
     try:
-        return Size(cast(float, width), cast("float | None", height))
+        return Size(cast("float | None", width), cast("float | None", height))
     except (TypeError, ValueError) as error:
         _invalid(f"{label} is invalid: {error}")
 
