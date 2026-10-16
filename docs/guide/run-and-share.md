@@ -129,8 +129,11 @@ states:
 
 A control change loads a complete prepared state, so its values and results
 change together. A combination that was not prepared keeps the previous
-display. Filtering a table that is already in the browser needs no prepared
-state, so keep that logic in view code. A policy may list at most 10,000
+display. Export and preflight warn with `prepared-states-skip-control-values`
+when the prepared values skip a value that a slider, number, dropdown, radio,
+checkbox, or switch on the page can send, such as a slider step between two
+listed values. Filtering a table that is already in the browser needs no
+prepared state, so keep that logic in view code. A policy may list at most 10,000
 states. Pass a larger `--prepare-timeout SECONDS` when a large state set takes
 longer to prepare.
 

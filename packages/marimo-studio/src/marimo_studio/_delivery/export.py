@@ -57,6 +57,7 @@ from marimo_studio._delivery.ports import ExportAdapters
 from marimo_studio._delivery.preflight import (
     StaticPreflightReport,
     preflight_static_bundle,
+    uncovered_control_issues,
 )
 from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._delivery.renders import write_static_renders
@@ -67,6 +68,7 @@ from marimo_studio._delivery.runtime_config import (
 )
 from marimo_studio._delivery.urls import SUPPORT_PATH, relative_url
 from marimo_studio._filesystem.files import FileTree
+from marimo_studio._prepared.coverage import uncovered_controls
 from marimo_studio._prepared.static import (
     StaticPublication,
     StaticPublicationSource,
@@ -1007,6 +1009,13 @@ def _export_to_delivery(
                 runtime=runtime,
                 document=artifact.document,
                 projections=portability,
+                prepared_issues=(
+                    ()
+                    if publication is None
+                    else uncovered_control_issues(
+                        uncovered_controls(publication.prepared.open())
+                    )
+                ),
             )
             _emit_progress(
                 progress,
