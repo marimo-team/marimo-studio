@@ -20,6 +20,7 @@ from marimo_studio._delivery.urls import (
 from marimo_studio._server.event_socket import (
     EVENT_SOCKET_SCOPE_KEY,
     EventSocketResponse,
+    is_event_socket_route,
 )
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.streaming import StreamingResponseCleanupError
@@ -138,3 +139,19 @@ def test_event_socket_reports_owner_cleanup_failure_after_client_disconnect() ->
         "websocket.accept",
         "websocket.send",
     ]
+
+
+@pytest.mark.parametrize(
+    ("relative", "expected"),
+    [
+        ("/_marimo-studio/dev/events", True),
+        ("/_marimo-studio/views/dashboard/dev/events", True),
+        ("/_marimo-studio/presentation/d.cap/_marimo-studio/dev/events", True),
+        ("/_marimo-studio-extra/dev/events", False),
+        ("/_marimo-studio/dev/events/more", False),
+    ],
+)
+def test_event_socket_routes_stay_inside_the_studio_namespace(
+    relative: str, expected: bool
+) -> None:
+    assert is_event_socket_route(relative) is expected

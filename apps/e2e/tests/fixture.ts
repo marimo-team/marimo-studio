@@ -257,6 +257,21 @@ export const waitForEventSocketReady = (
     page.on("websocket", onSocket);
   });
 
+// Records the page's Studio event sockets so a test can check that stream
+// replacement leaves exactly one socket open.
+export const trackEventSockets = (page: Page, matches: (url: URL) => boolean) => {
+  const sockets: WebSocket[] = [];
+  page.on("websocket", (socket) => {
+    if (matches(new URL(socket.url()))) {
+      sockets.push(socket);
+    }
+  });
+  return {
+    opened: () => sockets.length,
+    open: () => sockets.filter((socket) => !socket.isClosed()).length,
+  };
+};
+
 export const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") => {
   const frame = page.locator(`iframe[data-preview-runtime-frame="${runtime}"]`);
   await expect(frame).not.toHaveAttribute("inert");

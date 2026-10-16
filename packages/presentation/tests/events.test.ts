@@ -128,6 +128,23 @@ test("a rejected development stream reports whether it was ready", () => {
   expect(WebSocketStub.instances).toHaveLength(3);
 });
 
+test("a removed view rejects the development stream while server errors reconnect", () => {
+  vi.useFakeTimers();
+  const disconnected = vi.fn();
+  const rejected = vi.fn();
+  const events = new DevelopmentEvents();
+  events.connect("/events", vi.fn(), vi.fn(), undefined, disconnected, rejected);
+
+  WebSocketStub.instances[0]!.drop(4500);
+  expect(disconnected).toHaveBeenCalledOnce();
+  vi.advanceTimersToNextTimer();
+  WebSocketStub.instances[1]!.drop(4404);
+
+  expect(rejected.mock.calls).toEqual([[false]]);
+  vi.runAllTimers();
+  expect(WebSocketStub.instances).toHaveLength(2);
+});
+
 test("embedded same-view links delegate query and hash navigation to Studio", () => {
   setActiveDocumentLifecycleId(7);
   globalThis.history.replaceState(

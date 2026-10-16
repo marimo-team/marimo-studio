@@ -6,6 +6,7 @@ import {
   studioEntryUrl,
   studioOrigin,
   test,
+  trackEventSockets,
   waitForPreview,
 } from "./fixture.ts";
 
@@ -20,6 +21,10 @@ test("refreshes a projected cached view after the view catalog changes", async (
   browserDiagnostics,
   page,
 }) => {
+  const workspaceSockets = trackEventSockets(
+    page,
+    (url) => url.pathname === "/_marimo-studio/dev/events",
+  );
   await page.goto(studioEntryUrl);
 
   const dashboard = await waitForPreview(page);
@@ -74,6 +79,9 @@ test("refreshes a projected cached view after the view catalog changes", async (
     throw new Error("The cached dashboard preview frame did not reactivate");
   }
   expect(refreshedIdentity.revision).not.toBe(initialIdentity.revision);
+  // Each view switch replaces the workspace event socket and retires the old one.
+  expect(workspaceSockets.opened()).toBeGreaterThanOrEqual(3);
+  await expect.poll(workspaceSockets.open).toBe(1);
   expect(
     await page.evaluate(
       ([before, after]) => before === after,

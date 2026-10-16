@@ -34,7 +34,7 @@ _INTERNAL_ERROR_CLOSE = 1011
 
 def is_event_socket_route(relative: str) -> bool:
     """Return whether a Studio-relative path names an event stream."""
-    return relative.startswith(SUPPORT_PATH) and relative.endswith(_EVENTS_SUFFIX)
+    return relative.startswith(f"{SUPPORT_PATH}/") and relative.endswith(_EVENTS_SUFFIX)
 
 
 async def serve_event_socket(

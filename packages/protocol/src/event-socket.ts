@@ -27,8 +27,6 @@ export const parseStudioEvent = (frame: string): StudioEvent | undefined => {
 export const EVENT_SOCKET_REJECTED = 4000;
 /** The event URL was issued by an earlier server process. */
 export const EVENT_SOCKET_RETIRED = EVENT_SOCKET_REJECTED + 204;
-/** The server refuses the capability that the event URL carries. */
-export const EVENT_SOCKET_FORBIDDEN = EVENT_SOCKET_REJECTED + 403;
 
 /** Return the WebSocket address of an HTTP event route. */
 export const eventSocketUrl = (url: string, base?: string): string => {

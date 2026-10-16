@@ -6,7 +6,7 @@ import {
   type PresentationRefreshBarrierResult,
 } from "@marimo-studio/protocol/development-events";
 import {
-  EVENT_SOCKET_FORBIDDEN,
+  EVENT_SOCKET_REJECTED,
   EVENT_SOCKET_RETIRED,
   eventSocketUrl,
   parseStudioEvent,
@@ -83,11 +83,12 @@ export const bindFragmentRestores = (): (() => void) => {
   return () => globalThis.removeEventListener("message", listener);
 };
 
-// The server closes the socket with EVENT_SOCKET_FORBIDDEN or
-// EVENT_SOCKET_RETIRED when it no longer accepts this page. Any other close
-// leaves the subscription worth reopening.
+// The server closes the socket with EVENT_SOCKET_RETIRED or a 4xx status when
+// it no longer accepts this page, for example after the view was removed.
+// Network drops and server errors leave the subscription worth reopening.
 const rejected = (code: number): boolean =>
-  code === EVENT_SOCKET_FORBIDDEN || code === EVENT_SOCKET_RETIRED;
+  code === EVENT_SOCKET_RETIRED ||
+  (code >= EVENT_SOCKET_REJECTED + 400 && code < EVENT_SOCKET_REJECTED + 500);
 
 const SOCKET_CONNECTING = 0;
 

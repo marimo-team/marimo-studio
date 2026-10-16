@@ -490,8 +490,9 @@ and closes it with `4000` plus the response status, because browsers hide the
 status of a refused handshake. `4204` marks a URL from an earlier server
 process: `StudioHost` reloads the page, and the workspace coordinator marks
 Preview as needing repair. Every other close reconnects with backoff, which
-resets after the next `ready` event. A standalone view page stops after `4403`
-or `4204` and reconnects after any other close.
+resets after the next `ready` event. A standalone view page stops after
+`4204` or any `4xx` close, such as `4404` for a removed view, and reconnects
+after network drops and server errors.
 
 The `change` event has four kinds:
 
