@@ -269,9 +269,10 @@ page's HTML holds one. A host with both `render` and
 `value` enters `error` with code `render-host-invalid`. A render
 host is part of the page and needs no projection site.
 
-Studio renders again whenever a result the render reads changes. The host
-keeps the last files on screen while new ones render, and shows render errors
-beside them. It shows the main file by its media type:
+Studio renders again whenever a result the render reads changes. A change to
+those results during a render cancels it. The host keeps the last files on
+screen while new ones render, and shows render errors beside them. It shows
+the main file by its media type:
 
 | Main file          | The host shows                                                   |
 | ------------------ | ---------------------------------------------------------------- |

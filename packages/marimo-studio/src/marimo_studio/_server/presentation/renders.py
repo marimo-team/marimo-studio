@@ -1,9 +1,13 @@
 """Own render workers, shared render jobs, and rendered bundles.
 
 Renders run on two owned worker threads. Requests for the same render of the
-same artifact revision with the same inputs share one job, and cancelling one
-request cancels the job only after every request waiting on it has left. Each
-finished render becomes an immutable bundle on disk, stored once by content.
+same artifact revision with the same inputs share one job. Once every request
+waiting on a job has left, queued work never starts, and running work continues
+for a short grace period and then stops. A page cancels its render whenever the
+notebook's results change, so a new request with unchanged inputs continues the
+job instead of starting over.
+Each finished render becomes an immutable bundle on disk, stored once by
+content.
 
 A reader's session holds the bundle it currently shows for each render, so
 media requests and downloads keep working while other readers render. The
@@ -23,6 +27,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
+from functools import partial
 from pathlib import Path, PurePosixPath
 
 from marimo_studio._server.presentation.service import (
@@ -51,6 +56,8 @@ _RESULTS_KEPT = 4_096
 # Verified templates kept on disk, one per recently rendered artifact revision.
 _TEMPLATES_KEPT = 8
 _RENDER_WORKERS = 2
+# Covers the page's request delay and a prompt capture of unchanged inputs.
+_ABANDONED_GRACE_SECONDS = 1.0
 
 # (view, artifact revision, render key)
 _JobKey = tuple[str, str, bytes]
@@ -68,6 +75,8 @@ class _Job:
     task: asyncio.Future[RenderBundle]
     cancellation: ProviderCancellation
     waiters: int = 0
+    # Stops the job once its grace period ends without a new request.
+    abandoned: asyncio.TimerHandle | None = None
 
 
 @dataclass
@@ -79,8 +88,14 @@ class _Stored:
 class RenderStore:
     """Own render workers, shared render jobs, and rendered bundles."""
 
-    def __init__(self, *, max_bytes: int = _STORE_MAX_BYTES) -> None:
+    def __init__(
+        self,
+        *,
+        max_bytes: int = _STORE_MAX_BYTES,
+        abandoned_grace: float = _ABANDONED_GRACE_SECONDS,
+    ) -> None:
         self._lock = threading.Lock()
+        self._abandoned_grace = abandoned_grace
         self._directory: Path | None = None
         self._max_bytes = max_bytes
         self._bytes = 0
@@ -151,40 +166,33 @@ class RenderStore:
                     cancellation := ProviderCancellation(),
                 )
                 job = _Job(work, asyncio.wrap_future(work), cancellation)
+                job.task.add_done_callback(partial(self._settled, key, job))
                 self._jobs[key] = job
             job.waiters += 1
+            if job.abandoned is not None:
+                job.abandoned.cancel()
+                job.abandoned = None
         try:
             bundle = await asyncio.shield(job.task)
         except asyncio.CancelledError:
             # Closing the store cancels queued work, which the reader sees as a
             # transient result. Otherwise this request was cancelled, and the
-            # job stops once no other request waits on it. A later request for
-            # the same inputs starts a new job.
+            # job stops after its grace period once no request waits on it.
             if job.task.cancelled():
                 raise RenderUnavailable("Rendering has stopped") from None
             with self._lock:
                 job.waiters -= 1
-                last = job.waiters == 0
-                if last and self._jobs.get(key) is job:
-                    del self._jobs[key]
-            if last:
-                # A queued job never starts. A running one returns only after
-                # its provider work has stopped.
-                job.work.cancel()
-                job.cancellation.cancel()
-                # No request reads the abandoned job's outcome, so asyncio
-                # would log its exception as never retrieved.
-                job.task.add_done_callback(_discard_outcome)
-                await asyncio.wait({job.task})
+                # Queued work never starts, and running work continues for
+                # its grace period.
+                if job.waiters == 0 and not job.work.cancel():
+                    job.abandoned = asyncio.get_running_loop().call_later(
+                        self._abandoned_grace, self._stop_abandoned, key, job
+                    )
             raise
         except BaseException:
             with self._lock:
                 job.waiters -= 1
             raise
-        finally:
-            with self._lock:
-                if job.task.done() and self._jobs.get(key) is job:
-                    del self._jobs[key]
         with self._lock:
             job.waiters -= 1
             self._hold_locked(holder, view, source, bundle.id)
@@ -192,6 +200,30 @@ class RenderStore:
         if evicted:
             await asyncio.to_thread(_remove, evicted)
         return bundle
+
+    def _stop_abandoned(self, key: _JobKey, job: _Job) -> None:
+        """Stop the provider work of a job no request rejoined in its grace."""
+        with self._lock:
+            if job.waiters > 0:
+                return
+            job.abandoned = None
+            if self._jobs.get(key) is job:
+                del self._jobs[key]
+        job.cancellation.cancel()
+
+    def _settled(
+        self, key: _JobKey, job: _Job, task: asyncio.Future[RenderBundle]
+    ) -> None:
+        """Retire a finished job. Its bundle stays in the results."""
+        if not task.cancelled():
+            # A job that no request awaits ends without an unread error.
+            task.exception()
+        with self._lock:
+            if job.abandoned is not None:
+                job.abandoned.cancel()
+                job.abandoned = None
+            if self._jobs.get(key) is job:
+                del self._jobs[key]
 
     def file(
         self,
@@ -424,11 +456,6 @@ class RenderStore:
         self._executor.shutdown(wait=True, cancel_futures=True)
         if directory is not None:
             shutil.rmtree(directory, ignore_errors=True)
-
-
-def _discard_outcome(task: asyncio.Future[RenderBundle]) -> None:
-    if not task.cancelled():
-        task.exception()
 
 
 def _remove(roots: list[Path]) -> None:
