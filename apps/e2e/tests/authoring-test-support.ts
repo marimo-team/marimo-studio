@@ -59,7 +59,7 @@ export const executeCodeMode = async (
     { code, file, sessionId },
   );
   expect(result.ok, result.text).toBe(true);
-  expect(JSON.parse(result.text)).toMatchObject({ success: true });
+  expect(result.text).toContain('"success": true');
 };
 
 export const captureRetiringProjectionReads = (

@@ -201,10 +201,10 @@ def test_static_delivery_help_explains_runtime_and_preparation_timeout(
     assert result.exit_code == 0, result.output
     help_text = " ".join(result.output.split())
     assert "--runtime [zero-python|wasm]" in help_text
-    assert "Prepared runtime" in help_text
-    assert "Browser runtime" in help_text
+    assert "zero-python selects the Prepared runtime" in help_text
+    assert "wasm selects the Browser runtime" in help_text
     assert "--prepare-timeout SECONDS" in help_text
-    assert f"{DEFAULT_PREPARE_TIMEOUT:g} seconds" in help_text
+    assert f"Defaults to {DEFAULT_PREPARE_TIMEOUT:g} seconds" in help_text
 
 
 def test_wasm_export_rejects_prepare_timeout_before_resolving_target(

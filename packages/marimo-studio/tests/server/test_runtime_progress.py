@@ -151,12 +151,14 @@ def test_runtime_stream_terminates_with_an_error(failure: str) -> None:
         assert messages[0]["message"] == "A configured state could not be captured"
     elif failure == "required":
         assert messages[0]["error"] == "runtime-sync-required"
-        assert messages[0]["hint"]
+        assert isinstance(messages[0]["message"], str) and messages[0]["message"]
+        assert isinstance(messages[0]["hint"], str) and messages[0]["hint"]
     elif failure == "superseded":
         assert messages[0]["error"] == "runtime-sync-pending"
         assert messages[0]["transient"] is True
     else:
         assert messages[0]["error"] == "runtime-config-failed"
+        assert isinstance(messages[0]["message"], str) and messages[0]["message"]
         assert "private implementation detail" not in json.dumps(messages[0])
 
 

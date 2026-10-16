@@ -43,12 +43,16 @@ const renderMenus = () => {
   return { onWorkspaceAction };
 };
 
-it("restores trigger focus after Escape closes a disclosure menu", async () => {
+it("keeps the disclosure trigger keyboard-operable and restores its focus after Escape", async () => {
   const user = userEvent.setup();
   renderMenus();
   const trigger = screen.getByLabelText("Python preview runtime");
   const details = trigger.closest("details");
 
+  await user.tab();
+  expect(trigger).toHaveFocus();
+  // jsdom omits the browser's Enter and Space toggling of a details summary.
+  expect(details?.querySelector(":scope > summary")).toBe(trigger);
   await user.click(trigger);
   const option = screen.getByRole("button", { name: /Browser/ });
   option.focus();

@@ -398,7 +398,8 @@ def test_hosts_of_one_output_accept_the_same_media_types(
     )
     assert conflict.severity == "error"
     assert conflict.source == SourceLocation(ENTRY, 5, 1)
-    assert "index.html:4" in conflict.message
+    for detail in ("chart", "image/svg+xml", "index.html:4"):
+        assert detail in conflict.message
 
 
 def test_accept_conflicts_report_each_host_once() -> None:

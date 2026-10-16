@@ -215,7 +215,8 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     const response = await fetch(url);
     return await response.json();
   }, `${baseUrl()}/_marimo-studio/status`);
-  expect(before).toMatchObject({
+  expect(before).toEqual({
+    schema: expect.any(Number),
     state: "needs-view",
     default_view: "dashboard",
     views: [],
@@ -231,7 +232,8 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     const response = await fetch(url);
     return await response.json();
   }, `${baseUrl()}/_marimo-studio/status`);
-  expect(after).toMatchObject({
+  expect(after).toEqual({
+    schema: expect.any(Number),
     state: "ready",
     default_view: "dashboard",
     views: ["dashboard"],

@@ -147,6 +147,7 @@ it("keeps a disconnected receiver unready after an unchanged transaction", () =>
   expect(admission.buildUnchanged("active")).toBe(true);
 
   expect(admission.isReady).toBe(false);
+  expect(admission.receiverPresent).toBe(false);
   expect(admission.snapshot.view).toBe("waiting");
   expect(effects.ready).not.toHaveBeenCalled();
 });

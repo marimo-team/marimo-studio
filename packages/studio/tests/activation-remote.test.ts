@@ -12,6 +12,13 @@ const preview = {
   frameSelector: "iframe[data-test-preview]",
 };
 
+const requests = (fetch: { mock: { calls: Parameters<JsonFetch>[] } }) =>
+  fetch.mock.calls.map(([url, init]) => ({
+    url,
+    method: init.method,
+    body: JSON.parse(init.body),
+  }));
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -34,16 +41,13 @@ it("acknowledges an activation with its browser identity", async () => {
     new AbortController().signal,
   );
 
-  expect(fetch).toHaveBeenCalledWith(
-    expect.stringContaining("/_marimo-studio/activations/9/ack"),
-    expect.objectContaining({ method: "POST" }),
-  );
-  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
-    schema: 2,
-    clientId: "browser-client-1234",
-    view: "report",
-    ...preview,
-  });
+  expect(requests(fetch)).toEqual([
+    {
+      url: expect.stringContaining("/_marimo-studio/activations/9/ack"),
+      method: "POST",
+      body: { schema: 2, clientId: "browser-client-1234", view: "report", ...preview },
+    },
+  ]);
 });
 
 it("binds an activation acknowledgement to its observed view owner", async () => {
@@ -72,18 +76,20 @@ it("binds an activation acknowledgement to its observed view owner", async () =>
     new AbortController().signal,
   );
 
-  expect(fetch).toHaveBeenCalledWith(
-    expect.stringContaining("/_marimo-studio/activations/10/ack"),
-    expect.anything(),
-  );
-  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
-    schema: 2,
-    clientId: "browser-client-1234",
-    view: "report",
-    ...preview,
-    catalogGeneration: "a".repeat(64),
-    viewGeneration: "b".repeat(64),
-  });
+  expect(requests(fetch)).toEqual([
+    {
+      url: expect.stringContaining("/_marimo-studio/activations/10/ack"),
+      method: "POST",
+      body: {
+        schema: 2,
+        clientId: "browser-client-1234",
+        view: "report",
+        ...preview,
+        catalogGeneration: "a".repeat(64),
+        viewGeneration: "b".repeat(64),
+      },
+    },
+  ]);
 });
 
 it("acknowledges a catalog-owned absent view name", async () => {
@@ -108,18 +114,20 @@ it("acknowledges a catalog-owned absent view name", async () => {
     new AbortController().signal,
   );
 
-  expect(fetch).toHaveBeenCalledWith(
-    expect.stringContaining("/_marimo-studio/activations/11/ack"),
-    expect.anything(),
-  );
-  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
-    schema: 2,
-    clientId: "browser-client-1234",
-    view: "report",
-    ...preview,
-    catalogGeneration: "a".repeat(64),
-    viewGeneration: null,
-  });
+  expect(requests(fetch)).toEqual([
+    {
+      url: expect.stringContaining("/_marimo-studio/activations/11/ack"),
+      method: "POST",
+      body: {
+        schema: 2,
+        clientId: "browser-client-1234",
+        view: "report",
+        ...preview,
+        catalogGeneration: "a".repeat(64),
+        viewGeneration: null,
+      },
+    },
+  ]);
 });
 
 it("retries when an activation acknowledgement body stalls", async () => {

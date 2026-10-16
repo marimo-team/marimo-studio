@@ -105,4 +105,5 @@ test.each([
 ])("a refresh %s", (_case, cause, severity, code) => {
   const diagnostic = refreshDiagnostic(cause, "dashboard");
   assert.deepEqual({ severity: diagnostic.severity, code: diagnostic.code }, { severity, code });
+  assert.ok(diagnostic.hint?.trim());
 });

@@ -515,6 +515,7 @@ def test_projection_waits_while_notebook_execution_is_pending(
 
     assert response.status_code == 409
     assert response.json()["error"] == "runtime-sync-pending"
+    assert response.json()["message"]
     assert response.json()["transient"] is True
     assert calls == []
 
@@ -704,6 +705,7 @@ def test_projection_reports_required_execution(
 
     assert response.status_code == 409
     assert response.json()["error"] == "runtime-sync-required"
+    assert response.json()["message"]
     assert response.json()["transient"] is False
     assert response.json()["hint"]
     assert calls == []

@@ -55,6 +55,44 @@ def test_python_and_cli_authoring_operations_stay_in_parity() -> None:
 
 
 def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
+    assert set(studio_authoring.__all__) >= {
+        "BindingResult",
+        "InspectionResult",
+        "OutputRenderResult",
+        "ProjectionPortability",
+        "PublicationHold",
+        "ProviderDiagnostic",
+        "ProviderReport",
+        "RenderedOutput",
+        "RuntimeCell",
+        "RuntimeOutput",
+        "RuntimeProbe",
+        "Starter",
+        "StaticExportEvent",
+        "StaticExportProgress",
+        "StaticExportResult",
+        "StaticExportStep",
+        "StaticPreflightIssue",
+        "StaticPreflightReport",
+        "StaticRuntime",
+        "StudioDiagnostic",
+        "StudioOverview",
+        "ValidationIssue",
+        "ValidationReport",
+        "ValueReadError",
+        "ValueReadResult",
+        "View",
+        "ViewBuild",
+        "ViewCatalog",
+        "ViewDocument",
+        "ViewInspection",
+        "ViewOverview",
+        "ViewSourceChanges",
+        "ViewSourceFile",
+        "Workspace",
+        "doctor",
+        "open_workspace",
+    }
     for name in studio_authoring.__all__:
         value = getattr(studio_authoring, name)
         if inspect.isclass(value) or inspect.isfunction(value):
@@ -63,6 +101,42 @@ def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
 
 
 def test_expected_errors_are_public() -> None:
+    assert set(studio_errors.__all__) >= {
+        "AgentRequestError",
+        "BindingError",
+        "CapabilityInputError",
+        "ConfigurationError",
+        "DependencyError",
+        "InvalidViewNameError",
+        "LastViewError",
+        "MarimoStudioError",
+        "NotebookSourceError",
+        "ProtocolError",
+        "ProviderNotFoundError",
+        "PublicationError",
+        "PublicationHeldError",
+        "PublicationLimitError",
+        "PublicationUnavailableError",
+        "RuntimeConfigTooLargeError",
+        "RuntimeSelectionError",
+        "RuntimeTimeoutError",
+        "SourceConflictError",
+        "SourceEncodingError",
+        "SourceNotFoundError",
+        "SourceTooLargeError",
+        "SourceValidationError",
+        "StarterNotFoundError",
+        "StaticExportError",
+        "ViewDeletionError",
+        "ViewExistsError",
+        "ViewGenerationConflictError",
+        "ViewInUseError",
+        "ViewNotFoundError",
+        "ViewProjectError",
+        "ViewRenameError",
+        "WorkspaceGenerationConflictError",
+        "WorkspaceMutationError",
+    }
     for name in studio_errors.__all__:
         assert issubclass(getattr(studio_errors, name), studio_errors.MarimoStudioError)
     assert studio_errors.ViewDeletionError.code == "view-deletion-error"

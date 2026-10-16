@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { syncEditorQuery } from "../src/features/preview/query-remote";
+import { QuerySyncRejectedError, syncEditorQuery } from "../src/features/preview/query-remote";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -197,7 +197,7 @@ describe("editor query synchronization", () => {
 
     await expect(
       syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(QuerySyncRejectedError);
   });
 
   it("keeps the server's reason and next step for a refused query", async () => {

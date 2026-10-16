@@ -55,6 +55,7 @@ test("terminal Marimo connections preserve their diagnostic", () => {
   });
   assert.equal(startup.code, "kernel-startup-error");
   assert.match(startup.message, /Failed to start kernel sandbox/);
+  assert.ok(startup.hint.trim());
 
   const disconnected = runtimeConnectionDiagnostic({
     code: "KERNEL_DISCONNECTED",
@@ -62,4 +63,5 @@ test("terminal Marimo connections preserve their diagnostic", () => {
   });
   assert.equal(disconnected.code, "kernel-disconnected");
   assert.match(disconnected.message, /not authorized/);
+  assert.ok(disconnected.hint.trim());
 });

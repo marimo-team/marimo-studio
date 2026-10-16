@@ -1,3 +1,4 @@
+import { hostSessionConfigSchema } from "@marimo-studio/protocol/host-session";
 import { parseMountConfig } from "@marimo-studio/protocol/runtime-config";
 import { expect } from "@playwright/test";
 import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -94,7 +95,7 @@ for (const editRoot of ["marimo", "studio"] as const) {
       await launcher.getByRole("link", { name: "Create a new notebook" }).click();
       const page = await opened;
       const sessionId = (await instantiated).request().headers()["marimo-session-id"];
-      expect(sessionId).toBeTruthy();
+      expect(hostSessionConfigSchema.shape.session.safeParse(sessionId).success).toBe(true);
 
       const cell = page.locator("[data-cell-id]").first();
       await cell.getByRole("textbox").fill("saved = []\na = 42\na");

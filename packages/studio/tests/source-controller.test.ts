@@ -369,7 +369,7 @@ it("keeps unsaved source visible when the view owner is replaced", async () => {
   source.replaceView("react");
 
   expect(source.getSnapshot()).toMatchObject({
-    inspection: { phase: "unavailable" },
+    inspection: { phase: "unavailable", message: expect.stringMatching(/\S/u) },
     documents: [{ content: "stale buffered source", loaded: true }],
   });
   expect(remote.inspections).toEqual(["react"]);

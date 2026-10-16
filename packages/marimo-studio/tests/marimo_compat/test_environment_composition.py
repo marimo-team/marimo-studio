@@ -10,6 +10,7 @@ from typing import cast
 import pytest
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 from marimo_studio._cli.environment import environment_command
 from marimo_studio._compat.environment import inline_environment_flags
@@ -157,7 +158,7 @@ build-backend = "uv_build"
     deno = next(
         requirement
         for requirement in map(Requirement, requires("marimo-studio") or ())
-        if requirement.name == "deno"
+        if canonicalize_name(requirement.name) == "deno"
     )
     assert studio_version == version("marimo-studio")
     assert deno.specifier.contains(deno_version)

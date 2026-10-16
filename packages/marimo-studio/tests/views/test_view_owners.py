@@ -328,7 +328,12 @@ def test_owner_catalog_removes_a_write_left_by_an_interrupted_process(
 
     assert current.view_generations == studio.view_generations
     assert not interrupted.exists()
-    assert any(record.levelno == logging.WARNING for record in caplog.records)
+    assert any(
+        record.name == "marimo.studio"
+        and record.levelno == logging.WARNING
+        and interrupted in (record.args or ())
+        for record in caplog.records
+    )
 
 
 def test_owner_catalog_asks_to_delete_a_preserved_previous_record(

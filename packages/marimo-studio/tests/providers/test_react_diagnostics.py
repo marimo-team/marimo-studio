@@ -65,6 +65,8 @@ def test_react_dependency_error_keeps_external_location_outside_source_catalog(
     diagnostic = _check_diagnostic(output, work, (PurePosixPath("src/App.tsx"),))
 
     assert diagnostic.source is None
+    assert "TS2307" in diagnostic.message
+    assert "'missing-package'" in diagnostic.message
     assert f"at {external}:2:1" in diagnostic.message
     assert "at node_modules/dependency/index.d.ts:3:1" in diagnostic.message
     assert f"{work.as_uri()}/" not in diagnostic.message

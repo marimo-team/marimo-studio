@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from importlib.metadata import metadata
+from importlib.metadata import distribution, metadata
 
 import pytest
 from packaging.requirements import Requirement
 
 from marimo_studio.view_providers._host import provider_registry
+from marimo_studio.view_providers._host.registry import ENTRY_POINT_GROUP
 
 pytestmark = pytest.mark.supported_python
 
@@ -19,7 +20,14 @@ def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
         if item.distribution == "marimo-studio"
     )
 
-    assert diagnostics
+    declared = {
+        entry_point.name
+        for entry_point in distribution("marimo-studio").entry_points.select(
+            group=ENTRY_POINT_GROUP
+        )
+    }
+    assert declared
+    assert {item.registration for item in diagnostics} == declared
     for item in diagnostics:
         assert item.provider_key == f"marimo-studio/{item.registration}"
 

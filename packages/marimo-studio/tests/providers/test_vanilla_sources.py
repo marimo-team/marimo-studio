@@ -54,11 +54,11 @@ def test_vanilla_publishes_direct_local_css_and_javascript(tmp_path: Path) -> No
         ("scripts/app.js", "javascript", "edit"),
         ("AGENTS.md", "markdown", "edit"),
     ]
-    assert {item.path.as_posix() for item in inspection.inputs} == {
-        "index.html",
-        "styles/app.css",
-        "scripts/app.js",
-        "view.toml",
+    assert {(item.path.as_posix(), item.kind) for item in inspection.inputs} == {
+        ("index.html", "file"),
+        ("styles/app.css", "file"),
+        ("scripts/app.js", "file"),
+        ("view.toml", "file"),
     }
     assert report.document == PurePosixPath("index.html")
     assert (files / "styles" / "app.css").read_bytes() == styles.read_bytes()
@@ -239,9 +239,9 @@ def test_vanilla_exposes_instructions_outside_the_build_inputs(tmp_path: Path) -
         "AGENTS.md",
         "DESIGN.md",
     ]
-    assert {item.path.as_posix() for item in inspection.inputs} == {
-        "index.html",
-        "view.toml",
+    assert {(item.path.as_posix(), item.kind) for item in inspection.inputs} == {
+        ("index.html", "file"),
+        ("view.toml", "file"),
     }
     assert report.document == PurePosixPath("index.html")
     assert [

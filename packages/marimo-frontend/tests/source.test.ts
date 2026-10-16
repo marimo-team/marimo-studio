@@ -1,7 +1,9 @@
+import corepackManifest from "corepack/package.json" with { type: "json" };
 import { execFile } from "node:child_process";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { expect, onTestFinished, test } from "vite-plus/test";
 
@@ -85,7 +87,8 @@ test("source metadata validates the prepared checkout contract", () => {
 test("package preparation invokes the workspace Corepack through Node", () => {
   const invocation = pnpmInvocation(["install", "--frozen-lockfile"]);
   expect(invocation.command).toBe(process.execPath);
-  expect(invocation.args[0]).toMatch(/[/\\]corepack[/\\]/);
+  const corepackRoot = dirname(createRequire(import.meta.url).resolve("corepack/package.json"));
+  expect(invocation.args[0]).toBe(resolve(corepackRoot, corepackManifest.bin.corepack));
   expect(invocation.args.slice(1)).toEqual(["pnpm", "install", "--frozen-lockfile"]);
 });
 

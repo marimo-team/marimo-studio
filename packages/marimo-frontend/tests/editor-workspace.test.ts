@@ -71,6 +71,7 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   doc.body.innerHTML =
     '<aside id="agent">Agent conversation</aside><div id="app-chrome-body"><div id="app"><input value="unsaved draft"></div><div id="app-chrome-panel"></div></div>';
   const app = doc.getElementById("app")!;
+  const authoredStyle = app.style.cssText;
   const container = doc.getElementById("app-chrome-body")!;
   const developer = doc.getElementById("app-chrome-panel")!;
   container.getBoundingClientRect = () => new DOMRect(300, 0, 900, 800);
@@ -110,7 +111,7 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   workspace.placeNotebook({ left: 0, top: 0, width: 900, height: 800 });
   resized();
   workspace.close();
-  expect(app.style.width).toBe("");
+  expect(app.style.cssText).toBe(authoredStyle);
   expect(disconnect).toHaveBeenCalled();
   frame.remove();
   vi.unstubAllGlobals();

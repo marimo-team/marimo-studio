@@ -422,6 +422,7 @@ def test_a_missing_published_revision_asks_for_a_rebuild(tmp_path: Path) -> None
     message = str(raised.value)
     assert repr(project.name) in message
     assert "development" in message
+    assert "Build the view again" in message
 
 
 @pytest.mark.parametrize(

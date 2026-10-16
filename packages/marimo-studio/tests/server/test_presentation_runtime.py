@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import threading
 import time
 from collections.abc import MutableMapping
@@ -59,6 +60,7 @@ def test_presentation_publishes_default_and_view_owned_lens_scopes(
         dashboard = client.get(_presentation_fallback_url(client.get("/")))
         executive = client.get(_presentation_fallback_url(client.get("/executive/")))
     assert dashboard.text.count("data-marimo-lens-scope=") == 1
+    assert re.search(r'data-marimo-lens-scope="[^"\s][^"]*"', dashboard.text)
     assert 'data-marimo-lens-scope=".card, header"' in executive.text
     assert executive.text.count("data-marimo-lens-scope=") == 1
 
@@ -259,7 +261,14 @@ def test_edit_view_keeps_last_good_artifact_during_source_repairs(
         project = client.get("/_marimo-studio/views/dashboard/project").json()
 
     assert page.status_code == 200
-    assert "allow-same-origin" not in _presentation_frame_sandbox(page.text)
+    sandbox = _presentation_frame_sandbox(page.text)
+    assert {
+        "allow-downloads",
+        "allow-forms",
+        "allow-modals",
+        "allow-pointer-lock",
+    } <= sandbox
+    assert "allow-same-origin" not in sandbox
     assert 'id="app-shell"' in presentation.text
     assert project["build"]["phase"] == "stale"
     assert project["build"]["diagnostics"][0]["code"] == "entry-document-invalid"

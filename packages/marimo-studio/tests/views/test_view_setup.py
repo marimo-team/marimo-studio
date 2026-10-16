@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
@@ -91,7 +92,7 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
     assert f"marimo-studio=={version('marimo-studio')}" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
-    assert "Dashboard" in document_source
+    assert re.search(r"<h1[^>]*>\s*Dashboard\s*</h1>", document_source)
     assert set(document["tool"]["marimo-studio"]["cells"]) == {"cell-2"}
     assert set(resolve_studio(studio).aliases) == {"cell-2"}
     assert '<marimo-cell name="cell-2"></marimo-cell>' in document_source

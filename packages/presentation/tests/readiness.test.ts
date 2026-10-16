@@ -131,6 +131,7 @@ test("browser evidence reports deterministic diagnostic truncation", () => {
   assert.equal(browser[199]?.code, "browser-diagnostics-truncated");
   assert.equal(browser[199]?.severity, "error");
   assert.equal(browser[199]?.view, "dashboard");
+  assert.equal(browser[199]?.scope, "presentation");
   assert.match(browser[199]?.message ?? "", /\b6\b/);
 });
 

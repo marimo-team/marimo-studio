@@ -835,7 +835,7 @@ describe("feature controller lifecycle", () => {
 
     expect(remote.remove).not.toHaveBeenCalled();
     expect(controller.getSnapshot().current).toBe("dashboard");
-    expect(controller.getSnapshot().removeError).toBeTypeOf("string");
+    expect(controller.getSnapshot().removeError).toMatch(/\S/u);
     controller.dispose();
   });
 

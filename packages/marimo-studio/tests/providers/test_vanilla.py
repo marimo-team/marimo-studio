@@ -51,7 +51,9 @@ def test_vanilla_starter_pins_its_browser_dependencies_with_integrity(
     parser = _ScriptTags()
     parser.feed(source)
     external = [tag for tag in parser.tags if tag.get("src")]
-    assert external
+    sources = [tag["src"] or "" for tag in external]
+    assert any("/@unocss/runtime@" in src for src in sources), sources
+    assert any("/iconify-icon@" in src for src in sources), sources
     for tag in external:
         assert (tag["src"] or "").startswith("https://"), tag
         assert (tag.get("integrity") or "").startswith("sha384-"), tag

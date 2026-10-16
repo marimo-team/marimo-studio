@@ -124,7 +124,8 @@ export const startPresentationWasmSession = (start) => {
   expect(mounted.save.url.protocol).toBe("file:");
   expect(mounted.save.url.pathname).toMatch(/\/worker\/save-worker\.ts$/);
   expect(mounted.rpc.worker).toBe(mounted.main);
-  expect(mounted.rpc.maxRequestTime).toBeGreaterThan(20_000);
+  // Studio terminates WebAssembly startup after 120 seconds.
+  expect(mounted.rpc.maxRequestTime).toBeGreaterThan(120_000);
   expect(mounted.autoInstantiate.auto_instantiate).toBe(false);
   // The transformed fixture imports the owner adapter by this URL, so this
   // import reads the same module's live start count.

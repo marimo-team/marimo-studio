@@ -593,7 +593,7 @@ test("reads ready rich output hosts in one bounded batch", async () => {
   });
 
   const report = document.querySelector<HTMLElement>('[value="report"]')!;
-  expect(report.dataset.marimoStudioInstance).toBeDefined();
+  expect(report.dataset.marimoStudioInstance).toBeTruthy();
   expect(report.dataset.marimoProducerRef).toBe("cell:v1:report");
   expect(report.dataset.marimoProjectionKind).toBe("output");
   expect(report.dataset.marimoProjectionTarget).toBe("report");

@@ -210,7 +210,7 @@ def test_view_inspection_matches_its_json_shape(notebook_path: Path) -> None:
     assert result.view == payload["view"] == "dashboard"
     assert result.freshness == payload["freshness"] == "unbuilt"
     assert all(item.access == "edit" for item in result.documents)
-    assert {"view.toml", "index.html"} <= {
+    assert {"view.toml", "index.html", "AGENTS.md"} <= {
         item.path.as_posix() for item in result.documents
     }
     assert result.build is None

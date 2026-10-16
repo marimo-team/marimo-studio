@@ -487,15 +487,15 @@ def test_a_build_returns_the_sizes_each_render_measured(tmp_path: Path) -> None:
     (
         (
             {PurePosixPath("slides.typ"): {}},
-            "slides.typ.*not a render source",
+            r"slides\.typ.*not a render source",
         ),
         (
             {"report.typ": {"figure": Size(250.38)}},
-            "report.typ.*not a render source",
+            r"report\.typ.*not a render source",
         ),
         (
             {_REPORT: {"chart": Size(250.38)}},
-            "'chart'.*not an output the render of report.typ reads",
+            r"'chart'.*not an output the render of report\.typ reads",
         ),
         ({_REPORT: {"figure": 250.38}}, "or gave it no Size"),
         (None, "output_sizes as a mapping"),

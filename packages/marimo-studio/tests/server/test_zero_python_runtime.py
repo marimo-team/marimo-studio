@@ -415,6 +415,8 @@ def test_editor_controls_report_required_execution(
         )
 
     assert response.status_code == 409
-    assert response.json()["error"] == "runtime-sync-required"
-    assert response.json()["transient"] is False
-    assert response.json()["hint"]
+    payload = response.json()
+    assert payload["error"] == "runtime-sync-required"
+    assert payload["transient"] is False
+    assert isinstance(payload["message"], str) and payload["message"]
+    assert isinstance(payload["hint"], str) and payload["hint"]

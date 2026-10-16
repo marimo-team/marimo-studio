@@ -145,8 +145,8 @@ def test_an_unregistered_client_handoff_explains_how_to_recover(
     assert response.status_code == 409
     payload = response.json()
     assert payload["error"] == "active-view-handoff-refused"
-    assert payload["message"]
-    assert payload["hint"]
+    assert isinstance(payload["message"], str) and payload["message"]
+    assert isinstance(payload["hint"], str) and payload["hint"]
 
 
 @pytest.mark.parametrize(

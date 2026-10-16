@@ -152,7 +152,8 @@ def test_reads_of_one_target_in_one_render_accept_the_same_media_types(
     (conflict,) = _conflicts(_inspect(tmp_path, (render,)))
 
     assert conflict.source == _at(2)
-    assert "index.html:1" in conflict.message
+    for identifier in ("chart", "image/png", "application/pdf", "index.html:1"):
+        assert identifier in conflict.message
     assert "report.typ" in conflict.hint
 
 

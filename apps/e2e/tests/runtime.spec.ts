@@ -575,8 +575,11 @@ test("refreshes a popout view and preserves its public query across reload", asy
       globalThis.history.replaceState(globalThis.history.state, "", target);
     });
     await expect
-      .poll(() => Object.fromEntries(new URL(popout.url()).searchParams))
-      .toEqual({ file: "notebook.py", region: "apac" });
+      .poll(() => [...new URL(popout.url()).searchParams].sort(([a], [b]) => a.localeCompare(b)))
+      .toEqual([
+        ["file", "notebook.py"],
+        ["region", "apac"],
+      ]);
     expect(new URL(popout.url()).pathname).toMatch(/\/dashboard\/$/);
 
     const preReloadDocument = browserDiagnostics.expectActiveRequestAbort({

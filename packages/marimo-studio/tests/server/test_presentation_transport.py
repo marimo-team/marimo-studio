@@ -213,7 +213,9 @@ def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() ->
     )
 
     assert "<iframe" not in document
-    assert "allow-same-origin" not in _presentation_frame_sandbox(document)
+    sandbox = _presentation_frame_sandbox(document)
+    assert "allow-scripts" in sandbox
+    assert "allow-same-origin" not in sandbox
     assert 'data-frame-allow="clipboard-write; fullscreen *"' in document
 
     config = _presentation_wrapper_config(document)

@@ -17,6 +17,7 @@ import pytest
 import marimo_studio._processes.async_command as async_command
 import marimo_studio._processes.supervisor as process_supervisor
 import marimo_studio._validation.runtime_process as runtime_process
+from marimo_studio._processes.limits import RUNTIME_SHUTDOWN_GRACE
 from marimo_studio._workspace.models import StudioWorkspace
 
 
@@ -25,12 +26,14 @@ def test_isolated_runtime_budget_contains_the_notebook_probe(
     monkeypatch,
 ) -> None:
     budgets: list[float] = []
+    modules: list[tuple[str, ...]] = []
     requests: list[object] = []
     paths: list[Path] = []
 
     class Supervisor:
         def run(self, command, timeout):
             budgets.append(timeout)
+            modules.append(tuple(command[-4:-2]))
             paths.extend((Path(command[-2]), Path(command[-1])))
             requests.append(json.loads(Path(command[-2]).read_bytes()))
             Path(command[-1]).write_bytes(b'{"schema":1,"checks":[]}')
@@ -56,7 +59,8 @@ def test_isolated_runtime_budget_contains_the_notebook_probe(
     )
 
     assert checks == ()
-    assert len(budgets) == 1 and budgets[0] > 42
+    assert budgets == [42 + RUNTIME_SHUTDOWN_GRACE]
+    assert modules == [("-m", "marimo_studio._validation.runtime_process")]
     assert paths and all(not path.exists() for path in paths)
     assert requests == [
         {

@@ -7,8 +7,15 @@ import { onTestFinished } from "vite-plus/test";
 
 export const lineEndingVariants = (source: string) => [source, source.replaceAll("\n", "\r\n")];
 
-export const importModule = async (source: string) =>
-  import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+let importedModules = 0;
+
+// Node caches data modules by URL, so each import gets a distinct URL and
+// evaluates with the current bindings.
+export const importModule = async (source: string) => {
+  importedModules += 1;
+  const unique = `${source}\n// module ${importedModules}\n`;
+  return import(`data:text/javascript;base64,${Buffer.from(unique).toString("base64")}`);
+};
 
 const bindingsKey = "__marimoStudioTransformedModuleBindings";
 

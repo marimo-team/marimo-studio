@@ -200,6 +200,6 @@ it.each([
   await screen.findByRole("radio", { name: /HTML/ });
 
   const create = screen.getByRole("button", { name: "Create" });
-  expect(create).toHaveAccessibleDescription(warns ? expect.stringMatching(/\S/u) : "");
+  expect(create).toHaveAccessibleDescription(warns ? expect.stringMatching(/\bsession\b/iu) : "");
   controller.dispose();
 });

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -393,7 +394,7 @@ def test_isolated_probe_does_not_expose_worker_stderr(
         )
 
     message = str(raised.value)
-    assert "7" in message
+    assert re.search(r"\bstatus 7\b", message)
     for secret in ("sk-release-secret", "sk-another-secret", "password"):
         assert secret not in message
 

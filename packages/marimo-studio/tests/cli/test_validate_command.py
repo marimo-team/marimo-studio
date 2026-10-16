@@ -54,6 +54,13 @@ def test_server_commands_keep_access_tokens_out_of_arguments() -> None:
     assert "MARIMO_STUDIO_BROWSER_CLIENT" in result.output
 
 
+def test_validate_help_lists_the_runtime_timeout_option() -> None:
+    result = CliRunner().invoke(cli, ["validate", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "--runtime-timeout" in result.output
+
+
 @pytest.mark.parametrize("timeout", ("nan", "0"), ids=("non-finite", "zero"))
 def test_runtime_timeout_must_be_usable(timeout: str) -> None:
     result = CliRunner().invoke(

@@ -126,6 +126,6 @@ test("a projected output in a type marimo cannot display names its type", async 
     );
   });
 
-  expect(target.textContent).toContain("application/pdf");
+  expect(target.querySelector('[role="status"]')?.textContent).toContain("application/pdf");
   await act(async () => root.unmount());
 });

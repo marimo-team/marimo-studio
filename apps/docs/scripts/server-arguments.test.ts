@@ -57,6 +57,6 @@ test("dev and preview run separately named Portless servers", () => {
   expect(previewName).toBeDefined();
   expect(previewName).not.toBe(manifest.portless.name);
   expect(manifest.scripts[manifest.portless.script]).toContain("scripts/serve-docs.ts dev");
-  expect(manifest.scripts.preview).toContain("preview:server");
+  expect(manifest.scripts.preview).toMatch(/^portless run .*\bpreview:server$/);
   expect(manifest.scripts["preview:server"]).toContain("scripts/serve-docs.ts preview");
 });

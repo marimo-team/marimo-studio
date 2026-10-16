@@ -524,6 +524,12 @@ test("registry closure rejects a delayed start before launching its backend", as
         isPortOpen: async () => true,
       }),
     ).resolves.toBeUndefined();
+    expect(() =>
+      registerNotebookProcess(
+        { ownerNonce: createNotebookProcessOwnerNonce(), port: null, processGroupId: 123456 },
+        { directory },
+      ),
+    ).toThrow("registry is closing");
   } finally {
     stopProcessGroup(registration.processGroupId, "SIGKILL");
     rmSync(directory, { force: true, recursive: true });

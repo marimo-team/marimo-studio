@@ -139,7 +139,9 @@ test("browser connections retain the Studio startup window", async () => {
     3,
   );
   expect(socket.options).toMatchObject({ maxRetries: 3, startClosed: true });
-  expect(socket.options.connectionTimeout).toBeGreaterThan(10_000);
+  // A slow handshake gets 30 seconds inside the 60-second unclaimed preview route.
+  expect(socket.options.connectionTimeout).toBeGreaterThanOrEqual(30_000);
+  expect(socket.options.connectionTimeout).toBeLessThan(60_000);
   expect(() => extendWebSocketConnectionTimeout("connectionTimeout: 4_000,")).toThrow();
 });
 

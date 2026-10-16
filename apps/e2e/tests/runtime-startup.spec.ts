@@ -343,7 +343,7 @@ test("keeps rendered content visible while replacement preparation reports progr
     const metric = preview.locator('strong[mo-value="metric"]');
     await expect(metric).toHaveText("42");
     const outputBox = await metric.boundingBox();
-    const panelBox = await panel.boundingBox();
+    const panelBox = await panel.locator("..").boundingBox();
     expect(panelBox!.y).toBeGreaterThan(outputBox!.y + outputBox!.height);
     await preview
       .locator("html")
