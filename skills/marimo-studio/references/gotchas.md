@@ -147,9 +147,10 @@ inside the HTML document. `marimoStudio.diagnostics()` lists it with the `view-s
 code. Fix the view source, build the view, then reload the page.
 
 **The page shows `Latest build failed. Showing the previous build.`**
-The latest build failed, and the page keeps the previous build `ready`.
-`marimoStudio.diagnostics()` lists the build's first error with its source
-location. Fix the view source, then build the view again.
+The latest build failed, and the page keeps showing the previous build.
+`marimoStudio.diagnostics()` lists the build's first error, with its source
+location when it has one. Follow the diagnostic's hint, then build the view
+again.
 
 **Browser automation in the Studio tab cannot read the view.**
 The Studio tab renders the view in a sandboxed frame. Use frame-aware

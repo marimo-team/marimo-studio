@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import os
 import subprocess
 import sys
@@ -210,7 +211,6 @@ async def _stopped(pid: int) -> None:
 def test_an_abandoned_render_stops_its_provider_command_after_its_grace(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     marker = tmp_path / "render-pid"
     store, presentation, snapshot = _store(monkeypatch, SlowRenderer(marker))
@@ -227,8 +227,6 @@ def test_an_abandoned_render_stops_its_provider_command_after_its_grace(
 
     try:
         asyncio.run(exercise())
-        # The stopped job ends with an error that no request reads.
-        assert "never retrieved" not in caplog.text
     finally:
         store.close()
 
@@ -341,6 +339,32 @@ def test_a_shared_render_stops_when_its_last_request_leaves(
         store.close()
 
 
+def test_an_abandoned_render_leaves_nothing_in_the_asyncio_log(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    renderer = GatedRenderer()
+    store, presentation, snapshot = _store(monkeypatch, renderer)
+
+    async def exercise() -> None:
+        leaving = asyncio.create_task(
+            _render(store, presentation, snapshot, {"total": 1})
+        )
+        await asyncio.to_thread(renderer.started.wait, 15)
+        leaving.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await leaving
+        assert await asyncio.to_thread(renderer.cancelled.wait, 15)
+
+    try:
+        asyncio.run(exercise())
+        # asyncio reports an unretrieved exception when its future is collected.
+        gc.collect()
+        assert [r.getMessage() for r in caplog.records if r.name == "asyncio"] == []
+    finally:
+        store.close()
+
+
 def test_a_request_within_the_grace_continues_the_abandoned_render(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -402,6 +426,40 @@ def test_an_abandoned_render_that_has_not_started_never_runs(
     try:
         asyncio.run(exercise())
         assert renderer.calls == 2
+    finally:
+        store.close()
+
+
+def test_an_abandoned_render_that_finishes_keeps_the_store_in_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    renderer = GatedRenderer()
+    store, presentation, snapshot = _store(
+        monkeypatch, renderer, max_bytes=1, abandoned_grace=30
+    )
+
+    async def exercise() -> RenderBundle:
+        renderer.gate.set()
+        first = await _render(store, presentation, snapshot, {"total": 1})
+        renderer.gate.clear()
+        renderer.started.clear()
+        leaving = asyncio.create_task(
+            _render(store, presentation, snapshot, {"total": 2})
+        )
+        await asyncio.to_thread(renderer.started.wait, 15)
+        leaving.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await leaving
+        renderer.gate.set()
+        deadline = time.monotonic() + 15
+        while store.file("card", first.id, OUTPUT) is not None:
+            assert time.monotonic() < deadline, "The finished render kept every bundle"
+            await asyncio.sleep(0.01)
+        return first
+
+    try:
+        first = asyncio.run(exercise())
+        assert store.file("card", first.id, OUTPUT) is None
     finally:
         store.close()
 

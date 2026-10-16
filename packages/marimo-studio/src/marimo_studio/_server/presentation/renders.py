@@ -56,8 +56,8 @@ _RESULTS_KEPT = 4_096
 # Verified templates kept on disk, one per recently rendered artifact revision.
 _TEMPLATES_KEPT = 8
 _RENDER_WORKERS = 2
-# Covers the page's request delay and a prompt capture of unchanged inputs.
-_ABANDONED_GRACE_SECONDS = 1.0
+# Covers the page's request delay and every retry of the route's input capture.
+_ABANDONED_GRACE_SECONDS = 2.0
 
 # (view, artifact revision, render key)
 _JobKey = tuple[str, str, bytes]
@@ -184,10 +184,14 @@ class RenderStore:
                 job.waiters -= 1
                 # Queued work never starts, and running work continues for
                 # its grace period.
-                if job.waiters == 0 and not job.work.cancel():
-                    job.abandoned = asyncio.get_running_loop().call_later(
-                        self._abandoned_grace, self._stop_abandoned, key, job
-                    )
+                if job.waiters == 0:
+                    if job.work.cancel():
+                        if self._jobs.get(key) is job:
+                            del self._jobs[key]
+                    else:
+                        job.abandoned = asyncio.get_running_loop().call_later(
+                            self._abandoned_grace, self._stop_abandoned, key, job
+                        )
             raise
         except BaseException:
             with self._lock:
@@ -383,10 +387,12 @@ class RenderStore:
         """Store a finished bundle once by content, or discard it.
 
         A render can finish after close() or after every request left, and
-        then its files are discarded.
+        then its files are discarded. Storing a bundle keeps the store within
+        its byte budget, also for a render no request waits on anymore.
         """
         discard = bundle.root
         result = None
+        evicted: list[Path] = []
         with self._lock:
             if self._closed or cancelled:
                 stored = None
@@ -405,8 +411,12 @@ class RenderStore:
                 self._results.move_to_end(key)
                 while len(self._results) > _RESULTS_KEPT:
                     self._results.popitem(last=False)
+                # Requests prune the holds of ended sessions, so every hold
+                # counts as live here.
+                evicted = self._evict_locked(lambda _session: True, keep=bundle.id)
         if discard is not None:
             shutil.rmtree(discard, ignore_errors=True)
+        _remove(evicted)
         return result
 
     def _evict_locked(self, alive: Callable[[str], bool], *, keep: str) -> list[Path]:

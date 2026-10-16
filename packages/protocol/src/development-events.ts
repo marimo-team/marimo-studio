@@ -94,11 +94,13 @@ export const presentationBuildNotice = (
     return undefined;
   }
   const detail = build.build.diagnostics.find(({ severity }) => severity === "error");
+  const outcome = failed ? "Latest build failed." : "Latest publication is unavailable.";
+  const shown = build.revision === null ? "" : " Showing the previous build.";
   return {
     scope: "presentation",
     code: detail?.code ?? (failed ? "view-build-failed" : "view-publication-unavailable"),
     severity: "error",
-    message: `${failed ? "Latest build failed." : "Latest publication is unavailable."} Showing the previous build.${detail ? ` ${detail.message}` : ""}`,
+    message: `${outcome}${shown}${detail ? ` ${detail.message}` : ""}`,
     hint: detail?.hint ?? "Fix the view source, then build it again.",
     source: detail?.source ?? undefined,
     view,

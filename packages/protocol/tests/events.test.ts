@@ -146,7 +146,7 @@ test("a build that publishes nothing becomes a notice beside the previous build"
       scope: "presentation",
       code: "view-publication-unavailable",
       severity: "error",
-      message: "Latest publication is unavailable. Showing the previous build.",
+      message: "Latest publication is unavailable.",
       hint: "Fix the view source, then build it again.",
       source: undefined,
       view: "paper",

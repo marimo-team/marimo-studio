@@ -349,6 +349,8 @@ export class RenderHost {
   /** Request and show the render once. Returns diagnostics when a retry may succeed. */
   private async attempt(): Promise<readonly ProjectDiagnostic[] | undefined> {
     if (!hasRuntimeConfig() || readiness.snapshot().connection !== "ready") {
+      // The next request starts after reconnecting, and a change may stop it.
+      this.superseded = false;
       return undefined;
     }
     const config = getRuntimeConfig();
