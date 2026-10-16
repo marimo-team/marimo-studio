@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path, PurePosixPath
+from typing import TypeGuard
 
 from marimo_studio.errors import ProtocolError
 from marimo_studio.errors._internal import CompatibilityError
 
+_BUILD_SOURCES = "build-sources.json"
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 _ENTRY_CLOSURES = "entry-closures.json"
 _FORBIDDEN_ZERO_PYTHON_PART = re.compile(
     r"(?:^|[^a-z0-9])"
@@ -156,6 +160,87 @@ def validate_runtime_marimo_release(
             "The packaged browser runtime does not match the pinned Marimo "
             f"release. Observed {observed!r}, expected {expected!r}."
         )
+
+
+def validate_runtime_sources() -> None:
+    """Reject a source checkout's browser assets once their sources changed.
+
+    The browser build records digests of the files that shaped it in
+    ``build-sources.json`` beside the served asset directory, together with
+    that directory's path in the workspace. Assets elsewhere, such as an
+    installed package, are not compared. Digests cover content with LF line
+    endings, so assets built on one platform match a checkout that Git
+    converted to CRLF.
+    """
+    root = runtime_assets_path()
+    path = root.parent / _BUILD_SOURCES
+    invalid = ProtocolError(
+        f"Invalid browser build sources at {path}. Run `make build` to rewrite them."
+    )
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError) as error:
+        raise invalid from error
+    output = payload.get("output") if isinstance(payload, dict) else None
+    if not _is_relative_posix(output):
+        raise invalid
+    browser = root.resolve()
+    parts = PurePosixPath(output).parts
+    if browser.parts[-len(parts) :] != parts:
+        return
+    workspace = browser.parents[len(parts) - 1]
+    if not (workspace / "pnpm-workspace.yaml").is_file():
+        return
+    sources = payload.get("files")
+    if not (
+        type(payload.get("schema")) is int
+        and payload["schema"] == 1
+        and isinstance(sources, dict)
+        and all(
+            _is_relative_posix(source)
+            and isinstance(digest, str)
+            and _SHA256.fullmatch(digest) is not None
+            for source, digest in sources.items()
+        )
+    ):
+        raise invalid
+    changed = [
+        source
+        for source, digest in sources.items()
+        if _file_sha256(workspace / source) != digest
+    ]
+    if changed:
+        others = len(changed) - 1
+        files = changed[0] + (
+            ""
+            if others == 0
+            else f" and {others} other file{'s' if others > 1 else ''}"
+        )
+        raise ProtocolError(
+            "Studio's browser assets do not match this checkout: "
+            f"{files} changed since the last build. "
+            f"Run `make build` in {workspace} to rebuild them."
+        )
+
+
+def _is_relative_posix(value: object) -> TypeGuard[str]:
+    if not isinstance(value, str) or not value or "\\" in value:
+        return False
+    path = PurePosixPath(value)
+    return (
+        not path.is_absolute()
+        and path.as_posix() == value
+        and all(part not in {".", ".."} for part in path.parts)
+    )
+
+
+def _file_sha256(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+    except OSError:
+        return None
 
 
 def runtime_marimo_version() -> str:

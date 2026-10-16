@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
-import { buildMetadata } from "./build-metadata.ts";
+import { buildMetadata, buildSources } from "./build-metadata.ts";
 import { entryClosures } from "./entry-closures.ts";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,7 @@ export default defineConfig({
   plugins: [
     ...marimo.plugins,
     buildMetadata(),
+    buildSources({ root: workspaceRoot, fileName: "build-sources.runtime.json" }),
     entryClosures({ entries: ["runtime"], fileName: "entry-closures.runtime.json" }),
   ],
   worker: {

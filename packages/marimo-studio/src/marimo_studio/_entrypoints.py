@@ -15,7 +15,7 @@ from marimo_studio._composition import (
     create_server_adapters,
     install_presentation_authorization,
 )
-from marimo_studio._composition import kernel_lifespan as kernel_lifespan
+from marimo_studio._delivery.assets import validate_runtime_sources
 from marimo_studio._server.middleware import PresentationMiddleware
 from marimo_studio._server.route_policy import EditRootOwner, StudioRoutePolicy
 from marimo_studio.errors import ConfigurationError
@@ -57,6 +57,7 @@ else:
     try:
         _security_policy = create_security_policy()
         _route_policy = route_policy_from_environment(os.environ)
+        validate_runtime_sources()
     except (ConfigurationError, RuntimeError) as error:
         raise click.ClickException(str(error)) from None
     _presentation_authorization_handle = install_presentation_authorization()
