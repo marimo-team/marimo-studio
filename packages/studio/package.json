@@ -15,6 +15,14 @@
     "@codemirror/lang-css": "catalog:",
     "@codemirror/lang-html": "catalog:",
     "@codemirror/lang-javascript": "catalog:",
+    "@codemirror/lang-json": "catalog:",
+    "@codemirror/lang-markdown": "catalog:",
+    "@codemirror/lang-python": "catalog:",
+    "@codemirror/lang-sass": "catalog:",
+    "@codemirror/lang-xml": "catalog:",
+    "@codemirror/lang-yaml": "catalog:",
+    "@codemirror/language": "catalog:",
+    "@codemirror/legacy-modes": "catalog:",
     "@codemirror/state": "catalog:",
     "@marimo-studio/protocol": "workspace:*",
     "@uiw/react-codemirror": "catalog:",
@@ -24,7 +32,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@codemirror/language": "catalog:",
     "@testing-library/dom": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",

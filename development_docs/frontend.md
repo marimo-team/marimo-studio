@@ -229,9 +229,10 @@ contains one editor and one horizontally scrollable tab strip.
 Provider order is the tab order. The controller retains dirty documents if a
 new inspection drops their path, which keeps unsaved work recoverable.
 
-The shipped editor loads syntax modes for HTML, CSS, JavaScript, JSX,
-TypeScript, and TSX. JSON, Markdown, Svelte, text, TOML, XML, and external
-language IDs use the plain-text mode.
+The shipped editor loads syntax modes for HTML, CSS, SCSS, JavaScript, JSX,
+TypeScript, TSX, JSON, Markdown, Python, XML, YAML, LaTeX, Lua, and TOML.
+BibTeX, Svelte, Typst, text, and external language IDs use the plain-text
+mode.
 
 When adding a language:
 
