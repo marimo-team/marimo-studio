@@ -11,28 +11,28 @@ import {
 } from "./authoring-test-support.ts";
 import {
   captureProjectionRefresh,
-  recoverProjectionRefresh,
   dashboardHtmlPath,
   editorFrame,
-  expect,
-  expectEditorModelReplayRecovery,
-  expectSupersededRenewalConfig,
   labeledSlider,
   plainDashboardHtmlPath,
-  presentationFrame,
-  previewFrame,
   readWorkspaceFile,
+  recoverProjectionRefresh,
   recoverRequestAbort,
-  recoverWorkspaceEventStream,
+  presentationFrame,
   retireWorkspacePage,
+  previewFrame,
+  test,
   studioEntryUrl,
   studioOrigin,
-  test,
+  waitForEventSocketReady,
   waitForPreview,
   waitForViewPreview,
   workspaceNotebookPath,
   writeDashboardSource,
   writeViewSource,
+  expect,
+  expectEditorModelReplayRecovery,
+  expectSupersededRenewalConfig,
 } from "./fixture.ts";
 
 test("routes directory notebooks by Studio configuration", async ({ browserDiagnostics, page }) => {
@@ -41,10 +41,6 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
     text: /^No filename provided, using fallback$/,
     count: 1,
   });
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const retiredPlainHealth = browserDiagnostics.expectRequestFailure({
     origin: studioOrigin(),
     method: "GET",
@@ -75,15 +71,10 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
   ).toBeVisible();
   directoryLandingFilenameFallback.recovered();
   retiredPlainHealth.recovered();
-  await recoverWorkspaceEventStream(replacedWorkspaceStream);
 });
 
 test("activates Studio after the first view is created", async ({ browserDiagnostics, page }) => {
   const supersededConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const instantiated = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -131,21 +122,13 @@ shown.to_dict()
   await waitForPreview(page);
   await expect(preview.locator("#papers")).toHaveText("3877 papers", { timeout: 65_000 });
   await recoverProjectionRefresh(refreshedProjections, page);
-  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   supersededConfig.recovered();
 });
 
-test("switches existing views from code mode before kernel rendering resumes", async ({
-  browserDiagnostics,
-  page,
-}) => {
+test("switches existing views from code mode before kernel rendering resumes", async ({ page }) => {
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const sessionId = await studioEditorSessionId(page);
-  const replacements = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    2,
-  );
   await executeCodeMode(
     editorFrame(page),
     "notebook.py",
@@ -163,7 +146,6 @@ assert first.preview_url and second.preview_url
   const preview = await waitForPreview(page);
   await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
   expect(await studioEditorSessionId(page)).toBe(sessionId);
-  await recoverWorkspaceEventStream(replacements);
 });
 
 test("refreshes Python projections after code-mode cell edits and creation", async ({
@@ -264,17 +246,12 @@ test("offers Studio on a fresh notebook and preserves its session through first-
   await expect(page.getByText("Add view", { exact: true })).toBeVisible();
   await page.getByText("Add view", { exact: true }).click();
 
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
   expect(await studioEditorSessionId(page)).toBe(sessionId);
   retiredSave.recovered();
   await expect(editorFrame(page).locator(".cm-content").first()).toContainText("saved = True");
   await waitForPreview(page);
-  replacedWorkspaceStream.recovered();
 });
 
 test("keeps first-view creation available after reloading its route", async ({
@@ -285,10 +262,6 @@ test("keeps first-view creation available after reloading its route", async ({
   await expect(page.getByText("Add view", { exact: true })).toBeVisible();
   await page.getByText("Add view", { exact: true }).click();
   await expect(editorFrame(page).getByText("Native Marimo notebook").first()).toBeVisible();
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const frameElement = await page.locator("iframe#marimo-studio-editor").elementHandle();
   if (!frameElement) {
     throw new Error("The initializing editor element is unavailable.");
@@ -305,7 +278,6 @@ test("keeps first-view creation available after reloading its route", async ({
   await expect(page.getByText("Add view", { exact: true })).toBeVisible();
   await page.getByText("Add view", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Create view", exact: true })).toBeEnabled();
-  await recoverWorkspaceEventStream(replacedWorkspaceStream);
   retirement.recovered();
 });
 
@@ -489,10 +461,6 @@ test("keeps relative navigation public across direct view reloads", async ({
     required: false,
     status: 204,
   });
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   await page.goto(`${studioEntryUrl}&region=eu`);
   await waitForPreview(page);
 
@@ -569,7 +537,6 @@ test("keeps relative navigation public across direct view reloads", async ({
     await waitForDirectView(previousDocument);
     await expect(presentationFrame(direct).getByRole("heading", { name: "Qa View" })).toBeVisible();
     await recoverRequestAbort(abandonedHandoff);
-    replacedWorkspaceStream.recovered();
   } finally {
     await direct.close();
   }
@@ -578,10 +545,6 @@ test("keeps relative navigation public across direct view reloads", async ({
 test("creates a view and removes its files", async ({ browserDiagnostics, page }) => {
   test.setTimeout(180_000);
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    2,
-  );
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin(),
     method: "POST",
@@ -590,14 +553,10 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
     required: false,
     status: 204,
   });
-  const initialWorkspaceStream = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      response.status() === 200 &&
-      response.request().resourceType() === "eventsource" &&
-      url.pathname === "/_marimo-studio/dev/events"
-    );
-  });
+  const initialWorkspaceStream = waitForEventSocketReady(
+    page,
+    (url) => url.pathname === "/_marimo-studio/dev/events",
+  );
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   await initialWorkspaceStream;
@@ -646,7 +605,6 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   ).toBeVisible();
   await recoverRequestAbort(abandonedHandoffs);
   await recoverRequestAbort(supersededDashboardRenewal);
-  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   await editorModelRecovery.ready(page);
   await retireWorkspacePage(page, browserDiagnostics);
   editorModelRecovery.recovered();

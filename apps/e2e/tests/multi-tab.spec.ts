@@ -1,10 +1,11 @@
+import type { Page } from "@playwright/test";
+
 import {
   editorFrame,
   expect,
   expectPreviewInteractive,
   labeledSlider,
   recoverRequestAbort,
-  recoverWorkspaceEventStream,
   sessionInventorySchema,
   studioEntryUrl,
   studioOrigin,
@@ -104,18 +105,42 @@ test("shares one native kernel across Studio tabs and views", async ({
     await recoverRequestAbort(controls);
     await expect(third.locator('[mo-value="metric"]')).toHaveText("63");
 
-    const replacedStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-      `${studioOrigin()}/_marimo-studio/dev/events`,
-    );
     await page.reload();
     const reloaded = await waitForPreview(page);
     await expect(reloaded.getByRole("button", { name: "Widget count: 10" })).toBeVisible();
     await expect(reloaded.locator('[mo-value="metric"]')).toHaveText("63");
-    await recoverWorkspaceEventStream(replacedStream);
   } finally {
     await peer.close();
     const retired = browserDiagnostics.expectPageRetirement(otherView);
     await otherView.close();
     retired.recovered();
+  }
+});
+
+// Chromium allows six HTTP/1.1 connections per host and port. Every open tab
+// keeps its Studio event stream, so this opens more tabs than that limit.
+test("loads every Studio tab when more tabs than the connection limit stay open", async ({
+  page,
+  browserDiagnostics,
+}) => {
+  test.setTimeout(180_000);
+  const peers: Page[] = [];
+  try {
+    await page.goto(studioEntryUrl);
+    await waitForPreview(page);
+    for (let index = 0; index < 7; index += 1) {
+      const peer = await page.context().newPage();
+      peers.push(peer);
+      await peer.goto(studioEntryUrl);
+      const preview = await waitForPreview(peer);
+      await expectPreviewInteractive(peer, "server");
+      await expect(preview.locator('[mo-value="metric"]')).toHaveText(/^\d+$/);
+    }
+  } finally {
+    for (const peer of peers) {
+      const retired = browserDiagnostics.expectPageRetirement(peer);
+      await peer.close();
+      retired.recovered();
+    }
   }
 });

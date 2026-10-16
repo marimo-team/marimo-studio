@@ -82,28 +82,20 @@ const viewGenerationConflictResponse = () =>
     { status: 409 },
   );
 
-class EventSourceStub {
+class WebSocketStub {
   addEventListener(): void {}
   close(): void {}
 }
 
-class ClosingEventSource {
-  static readonly CLOSED = 2;
-  static streams: ClosingEventSource[] = [];
-  readonly listeners = new Map<string, (event: Event) => void>();
-  readyState = 1;
+class ClosingWebSocket extends EventTarget {
+  static sockets: ClosingWebSocket[] = [];
 
   constructor() {
-    ClosingEventSource.streams.push(this);
+    super();
+    ClosingWebSocket.sockets.push(this);
   }
 
-  addEventListener(type: string, listener: (event: Event) => void): void {
-    this.listeners.set(type, listener);
-  }
-
-  close(): void {
-    this.readyState = ClosingEventSource.CLOSED;
-  }
+  close(): void {}
 }
 
 const trustedEditorSource =
@@ -133,28 +125,31 @@ const sourceProject = {
   build: unbuiltView,
   artifact: null,
 };
-let activationListener: ((event: Event) => void) | undefined;
+const activationSockets: EventTarget[] = [];
 
-class ActivationEventSource {
-  addEventListener(type: string, listener: (event: Event) => void): void {
-    if (type === "activate") {
-      activationListener = listener;
-    }
+class ActivationWebSocket extends EventTarget {
+  constructor() {
+    super();
+    activationSockets.push(this);
   }
+
   close(): void {}
 }
 
 const useActivationEvents = () => {
-  activationListener = undefined;
-  vi.stubGlobal("EventSource", ActivationEventSource);
+  activationSockets.length = 0;
+  vi.stubGlobal("WebSocket", ActivationWebSocket);
 };
 
 const activateFirstView = async () => {
-  await vi.waitFor(() => expect(activationListener).toBeDefined());
+  await vi.waitFor(() => expect(activationSockets).toHaveLength(1));
   await act(async () => {
-    activationListener?.(
-      new MessageEvent("activate", {
-        data: JSON.stringify({ schema: 1, generation: 7, view: "dashboard" }),
+    activationSockets[0]?.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({
+          event: "activate",
+          data: { schema: 1, generation: 7, view: "dashboard" },
+        }),
       }),
     );
   });
@@ -209,7 +204,7 @@ const activationRequest = (
   });
 
 it("retries first-view authoring options after a transient inventory failure", async () => {
-  vi.stubGlobal("EventSource", EventSourceStub);
+  vi.stubGlobal("WebSocket", WebSocketStub);
   let inventories = 0;
   vi.stubGlobal(
     "fetch",
@@ -267,15 +262,11 @@ it.each([
 ] as const)(
   "keeps the first view reachable after a %s closes its event stream",
   async (_cause, serverRestarted) => {
-    ClosingEventSource.streams = [];
-    vi.stubGlobal("EventSource", ClosingEventSource);
+    ClosingWebSocket.sockets = [];
+    vi.stubGlobal("WebSocket", ClosingWebSocket);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) =>
-        serverRestarted && input instanceof URL && input.pathname === "/_marimo-studio/dev/events"
-          ? new Response(null, { status: 204 })
-          : Response.json(viewList([], "dashboard", [starter])),
-      ),
+      vi.fn(async () => Response.json(viewList([], "dashboard", [starter]))),
     );
     const editorFrame = document.createElement("iframe");
     document.body.append(editorFrame);
@@ -288,21 +279,20 @@ it.each([
         brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
       />,
     );
-    await vi.waitFor(() => expect(ClosingEventSource.streams).toHaveLength(1));
+    await vi.waitFor(() => expect(ClosingWebSocket.sockets).toHaveLength(1));
     const reload = vi.fn();
     vi.stubGlobal("location", { reload });
-    const closed = ClosingEventSource.streams[0]!;
-    closed.readyState = ClosingEventSource.CLOSED;
-    closed.listeners.get("error")?.(new Event("error"));
+    ClosingWebSocket.sockets[0]!.dispatchEvent(
+      new CloseEvent("close", { code: serverRestarted ? 4204 : 1006 }),
+    );
 
     if (serverRestarted) {
       await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
-      expect(ClosingEventSource.streams).toHaveLength(1);
+      expect(ClosingWebSocket.sockets).toHaveLength(1);
     } else {
-      await vi.waitFor(() => expect(ClosingEventSource.streams).toHaveLength(2), {
+      await vi.waitFor(() => expect(ClosingWebSocket.sockets).toHaveLength(2), {
         timeout: 3_000,
       });
-      expect(ClosingEventSource.streams[1]?.listeners.has("activate")).toBe(true);
       expect(reload).not.toHaveBeenCalled();
     }
     unmount();
@@ -310,8 +300,50 @@ it.each([
   },
 );
 
+it("backs off while the server keeps rejecting the event socket", async () => {
+  ClosingWebSocket.sockets = [];
+  vi.stubGlobal("WebSocket", ClosingWebSocket);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(viewList([], "dashboard", [starter]))),
+  );
+  const editorFrame = document.createElement("iframe");
+  document.body.append(editorFrame);
+  const { unmount } = render(
+    <StudioHost
+      host={host}
+      editorFrame={editorFrame}
+      editorSource={editorFrame.src}
+      publishBootstrap={vi.fn()}
+      brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+    />,
+  );
+  await vi.waitFor(() => expect(ClosingWebSocket.sockets).toHaveLength(1));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    // Studio accepts a rejected handshake before it closes the socket.
+    const reject = (socket: ClosingWebSocket) => {
+      socket.dispatchEvent(new Event("open"));
+      socket.dispatchEvent(new CloseEvent("close", { code: 4403 }));
+    };
+    reject(ClosingWebSocket.sockets[0]!);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(ClosingWebSocket.sockets).toHaveLength(2);
+
+    reject(ClosingWebSocket.sockets[1]!);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(ClosingWebSocket.sockets).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(ClosingWebSocket.sockets).toHaveLength(3);
+  } finally {
+    vi.useRealTimers();
+    unmount();
+    editorFrame.remove();
+  }
+});
+
 it("refreshes first-view ownership after a create conflict", async () => {
-  vi.stubGlobal("EventSource", EventSourceStub);
+  vi.stubGlobal("WebSocket", WebSocketStub);
   const initialGeneration = viewGeneration(10);
   const replacementGeneration = viewGeneration(11);
   const catalogGenerations = [initialGeneration, replacementGeneration, replacementGeneration];
@@ -366,7 +398,7 @@ it("refreshes first-view ownership after a create conflict", async () => {
 });
 
 it("replaces an in-flight catalog retry after a create conflict", async () => {
-  vi.stubGlobal("EventSource", EventSourceStub);
+  vi.stubGlobal("WebSocket", WebSocketStub);
   const initialGeneration = viewGeneration(20);
   const staleGeneration = viewGeneration(21);
   const currentGeneration = viewGeneration(22);
@@ -443,7 +475,7 @@ it("replaces an in-flight catalog retry after a create conflict", async () => {
 });
 
 it("shows first-view starter documents and unavailable recovery", async () => {
-  vi.stubGlobal("EventSource", EventSourceStub);
+  vi.stubGlobal("WebSocket", WebSocketStub);
   const unavailable = {
     ...componentStarter,
     documents: ["src/App.tsx", "src/theme.css"],
@@ -482,7 +514,7 @@ it.each([
 ] as const)(
   "warns before creating views that a %s hub session discards",
   async (persistence, next) => {
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("WebSocket", WebSocketStub);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => Response.json({ ...viewList([], "dashboard"), persistence })),
@@ -507,7 +539,7 @@ it.each([
 );
 
 it("opens an already-created first view after a bootstrap retry", async () => {
-  vi.stubGlobal("EventSource", EventSourceStub);
+  vi.stubGlobal("WebSocket", WebSocketStub);
   const { editorFrame, editorWindow } = mountActiveEditor("?region=eu");
   const publicHost = { ...host, urls: { ...host.urls, editor: editorFrame.src } };
   const configured = {

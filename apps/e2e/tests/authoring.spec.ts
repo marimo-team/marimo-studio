@@ -13,26 +13,27 @@ import {
   studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
-  selectWorkspaceMode,
   captureProjectionRefresh,
   dashboardCssPath,
   dashboardHtmlPath,
   editorFrame,
   editorSlider,
-  expect,
-  expectSupersededRenewalConfig,
-  previewFrame,
   readWorkspaceFile,
-  recoverRequestAbort,
   recoverProjectionRefresh,
+  recoverRequestAbort,
+  previewFrame,
+  selectWorkspaceMode,
+  test,
   studioEntryUrl,
   studioOrigin,
-  test,
+  waitForEventSocketReady,
   waitForPreview,
   workspaceCreatedViewHtmlPath,
   workspaceNotebookPath,
   writeDashboardSource,
   writeWorkspaceFile,
+  expect,
+  expectSupersededRenewalConfig,
 } from "./fixture.ts";
 
 test("reuses a warm view artifact with current notebook changes", async ({
@@ -56,10 +57,6 @@ test("reuses a warm view artifact with current notebook changes", async ({
 
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    2,
-  );
   await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
   // A superseded warm build can write a cancelled receipt before the published one.
   await expect
@@ -103,7 +100,6 @@ test("reuses a warm view artifact with current notebook changes", async ({
 
   expect(await readWorkspaceFile(receiptPath)).toBe(warmedReceipt);
   await recoverRequestAbort(abandonedHandoff);
-  replacedWorkspaceStreams.recovered();
 });
 
 test("keeps browser and disk source edits in sync", async ({ browserDiagnostics, page }) => {
@@ -219,10 +215,6 @@ test("keeps configured aliases attached to edited notebook cells", async ({
 
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const currentRevision = async () => {
     const response = await page.request.get(
       "/_marimo-studio/views/dashboard/config?file=notebook.py&runtime=server",
@@ -261,7 +253,6 @@ mo.vstack([scale, fail_outputs])`);
   await recoverProjectionRefresh(aliasRefresh, page);
   expect(await studioCli.checkWorkspace()).toBe(true);
   supersededRenewal.recovered();
-  replacedWorkspaceStream.recovered();
 });
 
 test("keeps view feedback current while cells are added, edited, moved, and deleted", async ({
@@ -270,10 +261,6 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
 }) => {
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    4,
-  );
   const originalView = await readWorkspaceFile(dashboardHtmlPath);
   await selectWorkspaceMode(page, "Notebook");
   const editor = editorFrame(page);
@@ -402,7 +389,6 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
     )
     .toEqual([]);
   await recoverProjectionRefresh(repairedSourceRefresh, page);
-  replacedWorkspaceStreams.recovered();
 });
 
 test("shows progress while an edited notebook cell runs", async ({
@@ -421,10 +407,6 @@ test("shows progress while an edited notebook cell runs", async ({
   );
   await waitForPreview(page);
   await expect(preview.locator("#slow-value")).toHaveText("7");
-  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const slowRefresh = await captureProjectionRefresh(page, browserDiagnostics);
 
   const cell = editorFrame(page).locator('[data-cell-name="slow_metric"]');
@@ -453,7 +435,6 @@ slow_metric`);
   await recoverProjectionRefresh(slowRefresh, page);
   await expect(runtimeTrigger).toHaveAttribute("data-state", "ready");
   await expect(runtimeTrigger).toContainText("Live");
-  replacedWorkspaceStream.recovered();
 });
 
 test("keeps Source tabs and the editor reachable at narrow widths", async ({ page }) => {
@@ -502,7 +483,6 @@ test("keeps Source tabs and the editor reachable at narrow widths", async ({ pag
 });
 
 test("shows an agent-requested page and records its rendered revision", async ({
-  browserDiagnostics,
   page,
   studioCli,
 }) => {
@@ -520,10 +500,6 @@ test("shows an agent-requested page and records its rendered revision", async ({
 
   const sessionId = (await sessionRequest).headers()["marimo-session-id"];
   const clientId = await studioClientId(page);
-  const replacedEventStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const activated = await studioCli.activateWorkspaceView("qa-view", clientId);
   expect(activated).toMatchObject({
     client_id: clientId,
@@ -545,7 +521,6 @@ test("shows an agent-requested page and records its rendered revision", async ({
   ).toBeVisible();
   await expect(page.getByLabel("Switch view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
-  replacedEventStream.recovered();
   const refreshed = await studioCli.activateWorkspaceView("qa-view", clientId);
   expect(refreshed.preview_url).not.toBe(activated.preview_url);
   await expect(page.locator(refreshed.frame_selector)).toHaveCount(1);
@@ -607,10 +582,6 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
   studioCli,
 }) => {
   test.setTimeout(60_000);
-  const replacedEventStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    1,
-  );
   const timedOutAcknowledgement = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin(),
     method: "POST",
@@ -669,7 +640,6 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
     preview.getByRole("heading", { name: "Slow Activation", exact: true }),
   ).toBeVisible();
   await recoverRequestAbort(timedOutAcknowledgement);
-  replacedEventStream.recovered();
 });
 
 test("retains mounted browser evidence after the native editor reconnects", async ({ page }) => {
@@ -722,8 +692,8 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
     const exactUrl = await studioCli.previewWorkspaceView("checkpoint-view", "server", true);
     const checkpoint = new URL(exactUrl).searchParams.get("marimo_studio_revision");
     expect(checkpoint).toBeTruthy();
-    const liveEvents = live.waitForRequest((request) =>
-      new URL(request.url()).pathname.endsWith("/_marimo-studio/views/checkpoint-view/dev/events"),
+    const liveEvents = waitForEventSocketReady(live, (url) =>
+      url.pathname.endsWith("/_marimo-studio/views/checkpoint-view/dev/events"),
     );
     await live.goto(liveUrl);
     await exact.goto(exactUrl);
@@ -740,13 +710,7 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
     // through its capability document.
     const exactPath = new RegExp(`^${RegExp.escape(new URL(exact.url()).pathname)}$`);
     const exactDocumentPath = /^\/_marimo-studio\/presentation\/d\.[^/]+\/checkpoint-view\/$/;
-    const liveStream = await liveEvents;
-    const retiredLiveStream = browserDiagnostics.expectActiveRequestAbort({
-      origin: studioOrigin(),
-      method: "GET",
-      path: new RegExp(`^${RegExp.escape(new URL(liveStream.url()).pathname)}$`),
-      status: 200,
-    });
+    await liveEvents;
     const staleOutputs = [live, exact].map((target) =>
       captureRetiringProjectionReads(target.mainFrame(), checkpoint!, browserDiagnostics),
     );
@@ -773,7 +737,6 @@ test("advances a live preview while an exact checkpoint stays visibly stale", as
     await expect(exact.locator("html")).toHaveAttribute("data-marimo-studio-state", "error");
     await expect(exact.locator("html")).toHaveAttribute("data-marimo-studio-revision", checkpoint!);
     await expect(exact.getByRole("alert")).toContainText("This exact preview is stale");
-    await recoverRequestAbort(retiredLiveStream);
     staleRefresh.recovered();
     staleConsole.recovered();
 

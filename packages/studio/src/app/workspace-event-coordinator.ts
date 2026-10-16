@@ -1,3 +1,4 @@
+import type { JsonValue } from "@marimo-studio/protocol/json";
 import type { BrowserDiagnostic } from "@marimo-studio/protocol/runtime-status";
 
 import {
@@ -11,6 +12,11 @@ import {
   type ActiveViewRequest,
   type PreviewAutomationTarget,
 } from "@marimo-studio/protocol/development-events";
+import {
+  EVENT_SOCKET_RETIRED,
+  eventSocketUrl,
+  parseStudioEvent,
+} from "@marimo-studio/protocol/event-socket";
 import { WORKSPACE_STREAM_QUERY_PARAM } from "@marimo-studio/protocol/query";
 import {
   parsePresentationBaseline,
@@ -85,32 +91,33 @@ export const workspaceEventsUrl = (eventsUrl: string, activeView?: string): stri
   return url.href;
 };
 
-// EventSource retries network errors itself, but a non-200 or non-stream
-// response closes it for good. The server answers a stream URL issued by an
-// earlier server process with 204. A proxy error or an expired sign-in closes
-// the stream the same way. A probe without a stream generation tells them
-// apart and opens no stream on a live server.
+// The server closes a socket opened from a URL issued by an earlier server
+// process with EVENT_SOCKET_RETIRED. Every other close, including a proxy
+// error or an expired sign-in, leaves the stream worth reconnecting.
 export const watchWorkspaceStreamClosure = (
-  stream: EventSource,
-  streamUrl: string,
+  stream: WebSocket,
   closed: (retired: boolean) => void,
 ): void => {
-  stream.addEventListener("error", () => {
-    if (stream.readyState !== EventSource.CLOSED) {
-      return;
-    }
-    const probe = new URL(streamUrl);
-    probe.searchParams.delete(WORKSPACE_STREAM_QUERY_PARAM);
-    void fetch(probe, { cache: "no-store" }).then(
-      (response) => closed(response.status === 204),
-      () => closed(false),
-    );
-  });
+  stream.addEventListener("close", (event) => closed(event.code === EVENT_SOCKET_RETIRED));
+};
+
+export const openWorkspaceEvents = (url: string): WebSocket => new WebSocket(eventSocketUrl(url));
+
+const SOCKET_CONNECTING = 0;
+
+// Closing a socket before its handshake completes logs a browser error, so a
+// connecting socket closes once it opens. Its owner ignores later events.
+export const closeWorkspaceEvents = (socket: WebSocket | undefined): void => {
+  if (socket?.readyState === SOCKET_CONNECTING) {
+    socket.addEventListener("open", () => socket.close(), { once: true });
+    return;
+  }
+  socket?.close();
 };
 
 export class WorkspaceEventCoordinator {
-  private events: EventSource | undefined;
-  private pendingEvents: EventSource | undefined;
+  private events: WebSocket | undefined;
+  private pendingEvents: WebSocket | undefined;
   private stopViews: (() => void) | undefined;
   private connectionGeneration = 0;
   private currentView: string;
@@ -154,9 +161,9 @@ export class WorkspaceEventCoordinator {
     this.stopViews?.();
     this.stopViews = undefined;
     this.connectionGeneration += 1;
-    this.pendingEvents?.close();
+    closeWorkspaceEvents(this.pendingEvents);
     this.pendingEvents = undefined;
-    this.events?.close();
+    closeWorkspaceEvents(this.events);
     this.events = undefined;
   }
 
@@ -170,9 +177,9 @@ export class WorkspaceEventCoordinator {
     ) {
       throw new Error("The committed Studio view changed before recovery.");
     }
-    this.pendingEvents?.close();
+    closeWorkspaceEvents(this.pendingEvents);
     this.pendingEvents = undefined;
-    this.events?.close();
+    closeWorkspaceEvents(this.events);
     this.events = undefined;
     const owner = new AbortController();
     const cancel = () => owner.abort(signal.reason);
@@ -228,10 +235,9 @@ export class WorkspaceEventCoordinator {
     const view = this.currentView;
     let streamMutationGeneration = notebookMutationGeneration;
     const previous = this.events;
-    this.pendingEvents?.close();
+    closeWorkspaceEvents(this.pendingEvents);
     this.options.preview.presentationBuildStarted(view);
-    const streamUrl = workspaceEventsUrl(this.options.eventsUrl, view);
-    const events = new EventSource(streamUrl);
+    const events = openWorkspaceEvents(workspaceEventsUrl(this.options.eventsUrl, view));
     this.pendingEvents = previous === undefined ? undefined : events;
     if (previous === undefined) {
       this.events = events;
@@ -252,25 +258,24 @@ export class WorkspaceEventCoordinator {
       }
       operation();
     };
-    events.addEventListener("ready", (event) =>
+    const ready = (data: JsonValue) =>
       pending(() => {
         if (this.pendingEvents === events) {
           this.pendingEvents = undefined;
           this.events = events;
-          previous?.close();
+          closeWorkspaceEvents(previous);
         }
         this.reconnects.reset();
         this.refreshInventory();
         this.options.source.reconcile();
-        const baseline = parsePresentationBaseline(this.data(event));
+        const baseline = parsePresentationBaseline(data);
         this.options.preview.presentationBaseline(
           view,
           baseline?.view === view ? baseline.revision : null,
         );
         connectionReady?.();
-      }),
-    );
-    watchWorkspaceStreamClosure(events, streamUrl, (retired) =>
+      });
+    watchWorkspaceStreamClosure(events, (retired) =>
       pending(() => {
         if (retired) {
           this.options.preview.serverRestarted();
@@ -282,29 +287,32 @@ export class WorkspaceEventCoordinator {
         );
       }),
     );
-    events.addEventListener("change", (event) =>
-      current(() => {
-        if (this.workspaceChanged(view, this.data(event), streamMutationGeneration)) {
-          streamMutationGeneration = undefined;
-        }
-      }),
-    );
-    events.addEventListener("activate", (event) =>
-      current(() => {
-        const payload = parseActiveViewRequest(this.data(event));
-        if (payload) {
-          this.requestActivation(payload, true);
-        }
-      }),
-    );
-    events.addEventListener("session", (event) =>
-      current(() => {
-        const binding = parseEditorSessionBinding(this.data(event));
-        if (binding) {
-          this.options.preview.editorSessionChanged(binding);
-        }
-      }),
-    );
+    events.addEventListener("message", (message) => {
+      const frame = parseStudioEvent(message.data);
+      if (frame?.event === "ready") {
+        ready(frame.data);
+      } else if (frame?.event === "change") {
+        current(() => {
+          if (this.workspaceChanged(view, frame.data, streamMutationGeneration)) {
+            streamMutationGeneration = undefined;
+          }
+        });
+      } else if (frame?.event === "activate") {
+        current(() => {
+          const payload = parseActiveViewRequest(frame.data);
+          if (payload) {
+            this.requestActivation(payload, true);
+          }
+        });
+      } else if (frame?.event === "session") {
+        current(() => {
+          const binding = parseEditorSessionBinding(frame.data);
+          if (binding) {
+            this.options.preview.editorSessionChanged(binding);
+          }
+        });
+      }
+    });
   }
 
   private readonly refreshInventory = (): void => {
@@ -317,7 +325,7 @@ export class WorkspaceEventCoordinator {
 
   private workspaceChanged(
     view: string,
-    data: string,
+    data: JsonValue,
     notebookMutationGeneration?: number,
   ): boolean {
     const kind = parseWorkspaceChange(data);
@@ -522,10 +530,6 @@ export class WorkspaceEventCoordinator {
 
   private isCurrentActivation(generation: number, signal: AbortSignal): boolean {
     return !this.disposed && !signal.aborted && generation === this.latestActivation;
-  }
-
-  private data(event: Event): string {
-    return event instanceof MessageEvent ? String(event.data) : "";
   }
 }
 

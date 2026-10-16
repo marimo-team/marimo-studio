@@ -3,13 +3,11 @@ import { z } from "zod";
 import type { BrowserMessageInput } from "./frame-bridge.ts";
 import type { JsonValue } from "./runtime-config";
 
-import { jsonCodec } from "./json.ts";
 import { type ProjectSourceLocation, viewBuildStateSchema } from "./view-project.ts";
 import { viewNameSchema } from "./views.ts";
 
 export const workspaceChangeKindSchema = z.enum(["project", "build", "presentation", "views"]);
 const workspaceChangeSchema = z.object({ kind: workspaceChangeKindSchema });
-const workspaceChangeCodec = jsonCodec(workspaceChangeSchema);
 
 export type WorkspaceChangeKind = z.infer<typeof workspaceChangeKindSchema>;
 
@@ -34,8 +32,8 @@ export const parseActivationAckResponse = (
   return result.success ? result.data : undefined;
 };
 
-export const parseWorkspaceChange = (source: string): WorkspaceChangeKind | undefined => {
-  const result = workspaceChangeCodec.safeDecode(source);
+export const parseWorkspaceChange = (payload: JsonValue): WorkspaceChangeKind | undefined => {
+  const result = workspaceChangeSchema.safeParse(payload);
   return result.success ? result.data.kind : undefined;
 };
 
@@ -50,7 +48,6 @@ const presentationBuildSchema = z.union([
     revision: z.string().min(1).nullable(),
   }),
 ]);
-const presentationBuildCodec = jsonCodec(presentationBuildSchema);
 
 export type PresentationBuild =
   | { readonly phase: "building" }
@@ -60,8 +57,8 @@ export type PresentationBuild =
       readonly build: Pick<z.infer<typeof viewBuildStateSchema>, "phase" | "diagnostics">;
     };
 
-export const parsePresentationBuild = (source: string): PresentationBuild | undefined => {
-  const result = presentationBuildCodec.safeDecode(source);
+export const parsePresentationBuild = (payload: JsonValue): PresentationBuild | undefined => {
+  const result = presentationBuildSchema.safeParse(payload);
   if (!result.success) {
     return undefined;
   }
@@ -112,12 +109,11 @@ const presentationChangeSchema = z.object({
   view: viewNameSchema,
   revision: z.string().min(1),
 });
-const presentationChangeCodec = jsonCodec(presentationChangeSchema);
 
 export const parsePresentationChange = (
-  source: string,
+  payload: JsonValue,
 ): { readonly view: string; readonly revision: string } | undefined => {
-  const result = presentationChangeCodec.safeDecode(source);
+  const result = presentationChangeSchema.safeParse(payload);
   return result.success ? { view: result.data.view, revision: result.data.revision } : undefined;
 };
 
@@ -136,7 +132,6 @@ const activeViewSchema = z.union([
     .extend({ catalogGeneration: ownerGenerationSchema, viewGeneration: ownerGenerationSchema })
     .strict(),
 ]);
-const activeViewCodec = jsonCodec(activeViewSchema);
 
 export type ViewActivationOwner =
   | { readonly kind: "absent"; readonly catalogGeneration: string }
@@ -153,8 +148,8 @@ export interface ActiveViewRequest {
   readonly owner?: ViewActivationOwner;
 }
 
-export const parseActiveViewRequest = (source: string): ActiveViewRequest | undefined => {
-  const result = activeViewCodec.safeDecode(source);
+export const parseActiveViewRequest = (payload: JsonValue): ActiveViewRequest | undefined => {
+  const result = activeViewSchema.safeParse(payload);
   if (!result.success) {
     return undefined;
   }
@@ -185,12 +180,11 @@ const editorSessionBindingSchema = z
     replaced: z.boolean(),
   })
   .strict();
-const editorSessionBindingCodec = jsonCodec(editorSessionBindingSchema);
 
 export type EditorSessionBinding = z.infer<typeof editorSessionBindingSchema>;
 
-export const parseEditorSessionBinding = (source: string): EditorSessionBinding | undefined => {
-  const result = editorSessionBindingCodec.safeDecode(source);
+export const parseEditorSessionBinding = (payload: JsonValue): EditorSessionBinding | undefined => {
+  const result = editorSessionBindingSchema.safeParse(payload);
   return result.success ? result.data : undefined;
 };
 

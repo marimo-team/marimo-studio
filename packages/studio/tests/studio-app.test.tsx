@@ -416,11 +416,10 @@ describe("Studio shell", () => {
   });
 
   it("loads authoring options without waiting for the workspace event stream", async () => {
-    class EventSourceWithoutReady {
-      addEventListener(): void {}
+    class WebSocketWithoutReady extends EventTarget {
       close(): void {}
     }
-    vi.stubGlobal("EventSource", EventSourceWithoutReady);
+    vi.stubGlobal("WebSocket", WebSocketWithoutReady);
     const request = vi.fn(async () => Response.json(viewList(["dashboard", "report"])));
     vi.stubGlobal("fetch", request);
     const services = createStudioServices(bootstrap);
@@ -441,15 +440,15 @@ describe("Studio shell", () => {
   });
 
   it("reconciles the workspace stream only when an editor reload abandons a mutation", async () => {
-    const eventSources: Array<{ close: () => void }> = [];
-    class EventSourceStub {
+    const eventSockets: Array<{ close: () => void }> = [];
+    class WebSocketStub extends EventTarget {
       constructor() {
-        eventSources.push(this);
+        super();
+        eventSockets.push(this);
       }
-      addEventListener(): void {}
       close(): void {}
     }
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("WebSocket", WebSocketStub);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => Response.json(viewList(["dashboard", "report"]))),
@@ -469,22 +468,21 @@ describe("Studio shell", () => {
     buildStarted.mockClear();
 
     fireEvent.load(editor);
-    expect(eventSources).toHaveLength(1);
+    expect(eventSockets).toHaveLength(1);
     expect(buildStarted).not.toHaveBeenCalled();
 
     fireEvent.load(editor);
     expect(reload).toHaveBeenCalledTimes(2);
-    expect(eventSources).toHaveLength(2);
+    expect(eventSockets).toHaveLength(2);
     expect(buildStarted).toHaveBeenCalledWith("dashboard");
     services.dispose();
   });
 
   it("acknowledges host promotion before source hydration finishes", async () => {
-    class EventSourceStub {
-      addEventListener(): void {}
+    class WebSocketStub extends EventTarget {
       close(): void {}
     }
-    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal("WebSocket", WebSocketStub);
     const request = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
       return url.pathname.endsWith("/activations/12/ack")

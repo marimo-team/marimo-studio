@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -222,7 +223,7 @@ def test_source_cleanup_failure_still_disconnects_browser(
             active_view="dashboard",
             development=cast(Any, Development()),
         )
-        assert (await anext(stream)).startswith(b"event: ready")
+        assert json.loads(await anext(stream))["event"] == "ready"
         assert await clients.select_target(client_id="browser-client-1234")
 
         with pytest.raises(Exception, match="source watcher close failed"):
@@ -275,7 +276,7 @@ def test_cancelled_source_cleanup_still_disconnects_browser(
             active_view="dashboard",
             development=cast(Any, Development()),
         )
-        assert (await anext(stream)).startswith(b"event: ready")
+        assert json.loads(await anext(stream))["event"] == "ready"
         assert await clients.select_target(client_id="browser-client-1234")
 
         closing = asyncio.create_task(stream.aclose())
@@ -444,7 +445,7 @@ def test_prompt_warmup_cleanup_failure_fails_the_stream_immediately(
             active_view="dashboard",
             development=cast(Any, Development()),
         )
-        assert (await anext(stream)).startswith(b"event: ready")
+        assert json.loads(await anext(stream))["event"] == "ready"
         with pytest.raises(
             ProcessCleanupError,
             match="prompt warmup process survived",
@@ -542,9 +543,9 @@ def test_cancellation_while_a_producer_stops_still_disconnects_browser(
             active_view="dashboard",
             development=cast(Any, Development()),
         )
-        assert (await anext(stream)).startswith(b"event: ready")
+        assert json.loads(await anext(stream))["event"] == "ready"
         assert await clients.select_target(client_id="browser-client-1234")
-        assert (await anext(stream)).startswith(b"event: change")
+        assert json.loads(await anext(stream))["event"] == "change"
         await asyncio.wait_for(subscription.polling.wait(), timeout=1)
 
         closing = asyncio.create_task(stream.aclose())
@@ -571,7 +572,7 @@ def test_a_stream_for_a_retiring_view_ends_without_an_error(
 ) -> None:
     studio = configured(notebook_path)
 
-    async def exercise() -> list[bytes]:
+    async def exercise() -> list[str]:
         development = DevelopmentCoordinator()
         try:
             async with development.retiring_view("dashboard"):

@@ -273,6 +273,11 @@ removed from the public query comparison.
 - Missing read or edit authority returns 401 or 403 with a stable error code.
 - Invalid presentation capabilities return 403 and WebSockets close with
   policy code 1008.
+- Event sockets at `dev/events` close with `4000` plus the HTTP status of the
+  rejecting route, for example `4403` for an invalid workspace capability.
+  Like marimo's own sockets, they skip `Origin` checks. A handshake needs the
+  server instance id from an authorized page, and the workspace stream also
+  needs its signed client capability.
 - Disconnected request bodies return 499. Oversized bodies return 413.
 - ASGI shutdown closes notebook scopes, runtimes, native session state, and the
   application-owned adapter group while preserving the first cleanup failure.

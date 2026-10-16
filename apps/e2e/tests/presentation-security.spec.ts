@@ -5,22 +5,23 @@ import { workspaceDirectory } from "../scripts/paths.ts";
 import {
   dashboardHtmlPath,
   dashboardManifestPath,
-  expect,
   observeBrowserContext,
+  readWorkspaceFile,
+  recoverRequestAbort,
+  recoverResponseTransition,
   presentationFrame,
   presentationMount,
   PREVIEW_TIMEOUT,
   previewFrame,
-  readWorkspaceFile,
-  recoverRequestAbort,
-  recoverResponseTransition,
+  test,
   studioEntryUrl,
   studioOrigin,
-  test,
+  waitForEventSocketReady,
   waitForPreview,
   workspaceNotebookPath,
   writeDashboardSource,
   writeWorkspaceFile,
+  expect,
 } from "./fixture.ts";
 import { startNotebookServer } from "./notebook-server.ts";
 
@@ -347,19 +348,8 @@ test("keeps standalone navigation inside server-authored route authority", async
 });
 
 test("rejects an untrusted authored workspace stream before client state changes", async ({
-  browserDiagnostics,
   page,
 }) => {
-  const refused = browserDiagnostics.expectConsole({
-    type: "error",
-    text: /\/_marimo-studio\/dev\/events.*blocked by CORS policy/,
-  });
-  const closed = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin(),
-    path: /^\/_marimo-studio\/dev\/events$/,
-    method: "GET",
-    errorText: "net::ERR_FAILED",
-  });
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const source = await readWorkspaceFile(dashboardHtmlPath);
@@ -379,25 +369,30 @@ test("rejects an untrusted authored workspace stream before client state changes
   expect(denied.status()).toBe(403);
   expect(await denied.json()).toMatchObject({ error: "workspace-events-forbidden" });
 
-  await preview.locator("html").evaluate(async (_html, eventsUrl) => {
-    await new Promise<void>((resolve, reject) => {
-      const untrusted = new EventSource(eventsUrl);
-      const timeout = globalThis.setTimeout(() => {
-        untrusted.close();
-        reject(new Error("The untrusted workspace stream did not settle"));
-      }, 5_000);
-      untrusted.onopen = () => {
-        globalThis.clearTimeout(timeout);
-        untrusted.close();
-        reject(new Error("The untrusted workspace stream opened"));
-      };
-      untrusted.onerror = () => {
-        globalThis.clearTimeout(timeout);
-        untrusted.close();
-        resolve();
-      };
-    });
-  }, target);
+  const closeCode = await preview.locator("html").evaluate(
+    (_html, eventsUrl) =>
+      new Promise<number>((resolve, reject) => {
+        const socketUrl = new URL(eventsUrl);
+        socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
+        const untrusted = new WebSocket(socketUrl);
+        const timeout = globalThis.setTimeout(() => {
+          untrusted.close();
+          reject(new Error("The untrusted workspace stream did not settle"));
+        }, 5_000);
+        untrusted.onmessage = () => {
+          globalThis.clearTimeout(timeout);
+          untrusted.close();
+          reject(new Error("The untrusted workspace stream delivered an event"));
+        };
+        untrusted.onclose = (event) => {
+          globalThis.clearTimeout(timeout);
+          resolve(event.code);
+        };
+      }),
+    target,
+  );
+  // Studio closes a refused event socket with 4000 + the route's HTTP status.
+  expect(closeCode).toBe(4403);
 
   await writeDashboardSource(
     page,
@@ -412,8 +407,6 @@ test("rejects an untrusted authored workspace stream before client state changes
     { timeout: 65_000 },
   );
   await expect(page.getByLabel("Switch view")).toContainText("dashboard");
-  refused.recovered();
-  closed.recovered();
 });
 
 test("keeps authored scripts inside presentation authority", async ({
@@ -584,13 +577,6 @@ test("repairs an opaque preview through its scoped event stream", async ({
     count: 1,
     required: false,
   });
-  const closedRepairStream = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin(),
-    method: "GET",
-    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/dev\/events$/,
-    count: 1,
-    status: 200,
-  });
   const manifest = await readWorkspaceFile(dashboardManifestPath);
   const projectRepair = browserDiagnostics.expectResponseTransition(page, {
     origin: studioOrigin(),
@@ -616,13 +602,9 @@ test("repairs an opaque preview through its scoped event stream", async ({
         return response.status();
       })
       .toBe(500);
-    const scopedEvents = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.status() === 200 &&
-        /\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/dev\/events$/.test(url.pathname)
-      );
-    });
+    const scopedEvents = waitForEventSocketReady(page, (url) =>
+      /\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/dev\/events$/.test(url.pathname),
+    );
     const frame = page.locator('iframe[data-preview-runtime-frame="server"]');
     await frame.evaluate((element: HTMLIFrameElement) => {
       element.setAttribute("src", element.src);
@@ -645,7 +627,6 @@ test("repairs an opaque preview through its scoped event stream", async ({
     failedDocument.recovered();
     await recoverResponseTransition(projectRepair);
     await recoverRequestAbort(supersededDocument);
-    await recoverRequestAbort(closedRepairStream);
   } finally {
     await writeWorkspaceFile(dashboardManifestPath, manifest);
   }

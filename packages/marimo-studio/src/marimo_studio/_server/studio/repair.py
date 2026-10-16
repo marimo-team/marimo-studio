@@ -103,9 +103,12 @@ def repair_document(
                                 else ""
                             )
                             + (
-                                "const events=new EventSource("
-                                f"{events});"
-                                "events.addEventListener('change',()=>location.reload());"
+                                f"const url=new URL({events},location.href);"
+                                "url.protocol=url.protocol==='https:'?'wss:':'ws:';"
+                                "const events=new WebSocket(url);"
+                                "events.addEventListener('message',(message)=>{"
+                                "if(JSON.parse(message.data).event==='change')"
+                                "location.reload();});"
                                 "addEventListener('pagehide',()=>events.close(),{once:true});"
                                 "setTimeout(()=>location.reload(),3000);"
                                 if recoverable

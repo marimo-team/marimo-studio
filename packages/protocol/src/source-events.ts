@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { jsonCodec } from "./json.ts";
+import type { JsonValue } from "./json.ts";
+
 import { sourceDocumentPathSchema } from "./source-documents.ts";
 import { viewNameSchema } from "./views.ts";
 
@@ -14,7 +15,6 @@ const sourceChangesSchema = z.object({
     .array(sourceFileChangeSchema.optional().catch(undefined))
     .transform((files) => files.filter((file): file is SourceFileChange => file !== undefined)),
 });
-const sourceChangesCodec = jsonCodec(sourceChangesSchema);
 
 export type SourceFileChange = z.infer<typeof sourceFileChangeSchema>;
 
@@ -25,16 +25,15 @@ const presentationBaselineSchema = z
     revision: z.string().min(1).nullable(),
   })
   .strict();
-const presentationBaselineCodec = jsonCodec(presentationBaselineSchema);
 
 export type PresentationBaseline = z.infer<typeof presentationBaselineSchema>;
 
-export const parsePresentationBaseline = (source: string): PresentationBaseline | undefined => {
-  const result = presentationBaselineCodec.safeDecode(source);
+export const parsePresentationBaseline = (payload: JsonValue): PresentationBaseline | undefined => {
+  const result = presentationBaselineSchema.safeParse(payload);
   return result.success ? result.data : undefined;
 };
 
-export const parseSourceChanges = (source: string): SourceFileChange[] => {
-  const result = sourceChangesCodec.safeDecode(source);
+export const parseSourceChanges = (payload: JsonValue): SourceFileChange[] => {
+  const result = sourceChangesSchema.safeParse(payload);
   return result.success ? result.data.files : [];
 };

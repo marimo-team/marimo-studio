@@ -71,12 +71,11 @@ const fixture = JSON.parse(
 
 test("development event parsers accept the Python producer fixture", () => {
   for (const payload of fixture.sourceChanges) {
-    const source = JSON.stringify(payload);
-    assert.deepEqual(parseSourceChanges(source), payload.files);
-    assert.equal(parseWorkspaceChange(source), payload.kind);
+    assert.deepEqual(parseSourceChanges(payload), payload.files);
+    assert.equal(parseWorkspaceChange(payload), payload.kind);
   }
   for (const payload of fixture.presentationBaselines) {
-    assert.deepEqual(parsePresentationBaseline(JSON.stringify(payload)), payload);
+    assert.deepEqual(parsePresentationBaseline(payload), payload);
   }
   for (const payload of fixture.presentationBuilds) {
     const expected =
@@ -87,26 +86,24 @@ test("development event parsers accept the Python producer fixture", () => {
             revision: payload.revision,
             build: { phase: payload.build.phase, diagnostics: payload.build.diagnostics },
           };
-    const source = JSON.stringify(payload);
-    assert.deepEqual(parsePresentationBuild(source), expected);
-    assert.equal(parseWorkspaceChange(source), payload.kind);
+    assert.deepEqual(parsePresentationBuild(payload), expected);
+    assert.equal(parseWorkspaceChange(payload), payload.kind);
   }
   for (const payload of fixture.presentationChanges) {
-    const source = JSON.stringify(payload);
-    assert.deepEqual(parsePresentationChange(source), {
+    assert.deepEqual(parsePresentationChange(payload), {
       view: payload.view,
       revision: payload.revision,
     });
-    assert.equal(parseWorkspaceChange(source), payload.kind);
+    assert.equal(parseWorkspaceChange(payload), payload.kind);
   }
   for (const payload of fixture.activeViewRequests) {
-    assert.deepEqual(parseActiveViewRequest(JSON.stringify(payload)), payload);
+    assert.deepEqual(parseActiveViewRequest(payload), payload);
   }
   for (const payload of fixture.activationAcknowledgements) {
     assert.deepEqual(parseActivationAckResponse(payload), payload);
   }
   for (const payload of fixture.editorSessionBindings) {
-    assert.deepEqual(parseEditorSessionBinding(JSON.stringify(payload)), payload);
+    assert.deepEqual(parseEditorSessionBinding(payload), payload);
   }
 });
 
@@ -158,50 +155,47 @@ test("a build that publishes nothing becomes a notice beside the previous build"
 });
 
 test("development event parsers reject malformed browser contracts", () => {
-  assert.equal(parseWorkspaceChange('{"kind":"html"}'), undefined);
+  assert.equal(parseWorkspaceChange({ kind: "html" }), undefined);
   assert.equal(parseWorkspaceChange("invalid"), undefined);
-  assert.equal(parsePresentationBuild('{"kind":"project"}'), undefined);
-  assert.equal(parsePresentationChange('{"kind":"presentation"}'), undefined);
-  assert.equal(parsePresentationBaseline('{"schema":1,"view":"dashboard"}'), undefined);
-  assert.equal(parseActiveViewRequest('{"schema":1,"view":""}'), undefined);
+  assert.equal(parsePresentationBuild({ kind: "project" }), undefined);
+  assert.equal(parsePresentationChange({ kind: "presentation" }), undefined);
+  assert.equal(parsePresentationBaseline({ schema: 1, view: "dashboard" }), undefined);
+  assert.equal(parseActiveViewRequest({ schema: 1, view: "" }), undefined);
   assert.equal(
-    parseActiveViewRequest(
-      JSON.stringify({
-        schema: 1,
-        generation: 1,
-        view: "report",
-        catalogGeneration: "a".repeat(64),
-      }),
-    ),
+    parseActiveViewRequest({
+      schema: 1,
+      generation: 1,
+      view: "report",
+      catalogGeneration: "a".repeat(64),
+    }),
     undefined,
   );
   assert.equal(parseActivationAckResponse({ schema: 1, outcome: "unknown" }), undefined);
   assert.equal(
-    parseEditorSessionBinding(
-      '{"schema":1,"generation":0,"sessionId":"s_reconnected","replaced":false}',
-    ),
+    parseEditorSessionBinding({
+      schema: 1,
+      generation: 0,
+      sessionId: "s_reconnected",
+      replaced: false,
+    }),
     undefined,
   );
 
   assert.deepEqual(
-    parseSourceChanges(
-      JSON.stringify({
-        files: [
-          { path: "../outside.ts", revision: "ignored" },
-          { path: "index.html", revision: 42 },
-        ],
-      }),
-    ),
+    parseSourceChanges({
+      files: [
+        { path: "../outside.ts", revision: "ignored" },
+        { path: "index.html", revision: 42 },
+      ],
+    }),
     [],
   );
   const retained = fixture.sourceChanges[0]?.files[0];
   assert.ok(retained);
   assert.deepEqual(
-    parseSourceChanges(
-      JSON.stringify({
-        files: [retained, { path: "../outside.ts", revision: "ignored" }],
-      }),
-    ),
+    parseSourceChanges({
+      files: [retained, { path: "../outside.ts", revision: "ignored" }],
+    }),
     [retained],
   );
   assert.deepEqual(parseSourceChanges("invalid"), []);
@@ -211,15 +205,13 @@ test("active view requests discriminate absent and present owners", () => {
   const catalogGeneration = "a".repeat(64);
   const viewGeneration = "b".repeat(64);
   assert.deepEqual(
-    parseActiveViewRequest(
-      JSON.stringify({
-        schema: 1,
-        generation: 1,
-        view: "report",
-        catalogGeneration,
-        viewGeneration: null,
-      }),
-    ),
+    parseActiveViewRequest({
+      schema: 1,
+      generation: 1,
+      view: "report",
+      catalogGeneration,
+      viewGeneration: null,
+    }),
     {
       schema: 1,
       generation: 1,
@@ -228,15 +220,13 @@ test("active view requests discriminate absent and present owners", () => {
     },
   );
   assert.deepEqual(
-    parseActiveViewRequest(
-      JSON.stringify({
-        schema: 1,
-        generation: 2,
-        view: "report",
-        catalogGeneration,
-        viewGeneration,
-      }),
-    ),
+    parseActiveViewRequest({
+      schema: 1,
+      generation: 2,
+      view: "report",
+      catalogGeneration,
+      viewGeneration,
+    }),
     {
       schema: 1,
       generation: 2,

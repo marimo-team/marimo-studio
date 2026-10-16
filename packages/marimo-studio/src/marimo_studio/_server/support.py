@@ -36,6 +36,7 @@ from marimo_studio._server.auth import (
 from marimo_studio._server.auth import error_response as auth_error_response
 from marimo_studio._server.control_config_api import control_config_response
 from marimo_studio._server.development.routes import change_events
+from marimo_studio._server.event_socket import EventSocketResponse
 from marimo_studio._server.files import file_response
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScope
@@ -69,7 +70,6 @@ from marimo_studio._server.runtime.routes import (
 )
 from marimo_studio._server.security import DEFAULT_SECURITY_POLICY, SecurityPolicy
 from marimo_studio._server.server_instance import server_instance_id
-from marimo_studio._server.streaming import OwnedStreamingResponse
 from marimo_studio._server.studio.document import studio_bootstrap_payload
 from marimo_studio._server.studio.editor_capability import (
     editor_binding_capability_matches,
@@ -602,7 +602,7 @@ def events_response(
     *,
     server: ServerGateway,
 ) -> Response:
-    """Stream source and notebook changes until the server shuts down."""
+    """Send source and notebook changes over the requesting event socket."""
     if request.query_params.get(SERVER_INSTANCE_QUERY_PARAM) != server_instance_id(
         context.server_token
     ):
@@ -668,7 +668,7 @@ def events_response(
             status_code=404,
             headers=NO_STORE,
         )
-    return OwnedStreamingResponse(
+    return EventSocketResponse(
         change_events(
             studio,
             view_name,
@@ -680,6 +680,4 @@ def events_response(
             active_view=active_view,
             development=notebook_scope.development,
         ),
-        media_type="text/event-stream",
-        headers={**NO_STORE, "X-Accel-Buffering": "no"},
     )

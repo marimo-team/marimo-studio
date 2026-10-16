@@ -15,7 +15,6 @@ import {
   previewFrame,
   readWorkspaceFile,
   recoverRequestAbort,
-  recoverWorkspaceEventStream,
   staticExportUrl,
   studioEntryUrl,
   studioOrigin,
@@ -97,10 +96,6 @@ test("mounts the Copilot editor extension only while GitHub completion is enable
     count: 2,
     required: false,
   });
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin()).href,
-    2,
-  );
   const loadSession = async (navigate: () => Promise<void>) => {
     const sessionRequest = page.waitForRequest(
       (request) =>
@@ -149,7 +144,6 @@ test("mounts the Copilot editor extension only while GitHub completion is enable
       await saveCopilot(false, currentSessionId);
     }
   }
-  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   closedCopilotTransport.recovered();
 });
 
@@ -534,13 +528,6 @@ test("refreshes a popout view and preserves its public query across reload", asy
       <a href="?region=apac">APAC</a>
       <p>Region: <strong id="popout-region" mo-value='query_params["region"]'></strong></p>`,
     );
-    const retiredDevelopmentStream = browserDiagnostics.expectActiveRequestAbort({
-      origin: studioOrigin(),
-      method: "GET",
-      path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/dev\/events$/,
-      count: 1,
-      status: 200,
-    });
     const refreshedProjectionReads = browserDiagnostics.expectRequestAbort({
       origin: studioOrigin(),
       method: "POST",
@@ -600,7 +587,6 @@ test("refreshes a popout view and preserves its public query across reload", asy
     await expect(rendered.locator("#popout-region")).toHaveText("apac");
     await expect(rendered.locator('strong[mo-value="metric"]')).toHaveText("42");
     await recoverRequestAbort(preReloadDocument);
-    await recoverRequestAbort(retiredDevelopmentStream);
   } finally {
     if (!popout.isClosed()) {
       const retirement = browserDiagnostics.expectPageRetirement(popout);

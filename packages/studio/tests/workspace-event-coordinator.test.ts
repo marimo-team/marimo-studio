@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
-import { deferred, EventSourceStub, setup } from "./workspace-event-test-support.ts";
+import { deferred, WebSocketStub, setup } from "./workspace-event-test-support.ts";
 
 beforeEach(() => {
-  EventSourceStub.instances = [];
-  vi.stubGlobal("EventSource", EventSourceStub);
+  WebSocketStub.instances = [];
+  vi.stubGlobal("WebSocket", WebSocketStub);
 });
 
 afterEach(() => {
@@ -14,26 +14,26 @@ afterEach(() => {
 
 it("reconnects the workspace stream after a committed view selection", async () => {
   const { coordinator, model } = setup();
-  expect(EventSourceStub.instances).toHaveLength(1);
-  expect(EventSourceStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
+  expect(WebSocketStub.instances).toHaveLength(1);
+  expect(WebSocketStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
   const firstGeneration = Number(
-    new URL(EventSourceStub.instances[0]!.url).searchParams.get("marimo_studio_connection"),
+    new URL(WebSocketStub.instances[0]!.url).searchParams.get("marimo_studio_connection"),
   );
 
   await model.views.choose("report", "preserve");
 
-  expect(EventSourceStub.instances).toHaveLength(2);
-  expect(EventSourceStub.instances[0]?.closed).toBe(false);
-  expect(EventSourceStub.instances[1]?.url).toContain("marimo_studio_view=report");
+  expect(WebSocketStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances[0]?.closed).toBe(false);
+  expect(WebSocketStub.instances[1]?.url).toContain("marimo_studio_view=report");
   const replacementGeneration = Number(
-    new URL(EventSourceStub.instances[1]!.url).searchParams.get("marimo_studio_connection"),
+    new URL(WebSocketStub.instances[1]!.url).searchParams.get("marimo_studio_connection"),
   );
   expect(replacementGeneration).toBeGreaterThan(firstGeneration);
-  EventSourceStub.instances[1]?.emit(
+  WebSocketStub.instances[1]?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "report", revision: "presentation-v2" }),
   );
-  expect(EventSourceStub.instances[0]?.closed).toBe(true);
+  expect(WebSocketStub.instances[0]?.closed).toBe(true);
   coordinator.dispose();
 });
 
@@ -46,13 +46,13 @@ it("keeps the committed stream authoritative while a view is still preparing", a
   await vi.waitFor(() => expect(model.views.getSnapshot().selecting).toBe("report"));
 
   expect(model.views.getSnapshot().current).toBe("dashboard");
-  expect(EventSourceStub.instances).toHaveLength(1);
-  expect(EventSourceStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
+  expect(WebSocketStub.instances).toHaveLength(1);
+  expect(WebSocketStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
 
   selection.resolve(true);
   expect(await choosing).toBe(true);
-  expect(EventSourceStub.instances).toHaveLength(2);
-  expect(EventSourceStub.instances[1]?.url).toContain("marimo_studio_view=report");
+  expect(WebSocketStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances[1]?.url).toContain("marimo_studio_view=report");
   coordinator.dispose();
 });
 
@@ -61,7 +61,7 @@ it("keeps agent acknowledgement behind target preparation and committed stream o
   const selection = deferred<boolean>();
   model.deferNextSelection(selection.promise);
 
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 7, view: "report" }),
   );
@@ -69,8 +69,8 @@ it("keeps agent acknowledgement behind target preparation and committed stream o
 
   expect(model.views.getSnapshot().current).toBe("dashboard");
   expect(acknowledge).not.toHaveBeenCalled();
-  expect(EventSourceStub.instances).toHaveLength(1);
-  expect(EventSourceStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
+  expect(WebSocketStub.instances).toHaveLength(1);
+  expect(WebSocketStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
 
   selection.resolve(true);
   await vi.waitFor(() =>
@@ -82,8 +82,8 @@ it("keeps agent acknowledgement behind target preparation and committed stream o
   );
   expect(model.views.getSnapshot().current).toBe("report");
   expect(preview.presentationStreamAbandoned).toHaveBeenCalledWith("dashboard");
-  expect(EventSourceStub.instances).toHaveLength(2);
-  expect(EventSourceStub.instances[1]?.url).toContain("marimo_studio_view=report");
+  expect(WebSocketStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances[1]?.url).toContain("marimo_studio_view=report");
   coordinator.dispose();
 });
 
@@ -98,18 +98,18 @@ it("keeps the committed stream after a prepared view is rejected", async () => {
 
   expect(await choosing).toBe(false);
   expect(model.views.getSnapshot()).toMatchObject({ current: "dashboard", selecting: undefined });
-  expect(EventSourceStub.instances).toHaveLength(1);
-  expect(EventSourceStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
+  expect(WebSocketStub.instances).toHaveLength(1);
+  expect(WebSocketStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
   coordinator.dispose();
 });
 
 it("retains the current stream until a slow replacement is ready", async () => {
   const { coordinator, model, preview } = setup();
-  const current = EventSourceStub.instances[0]!;
+  const current = WebSocketStub.instances[0]!;
   current.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
 
   await model.views.choose("report", "preserve");
-  const replacement = EventSourceStub.instances[1]!;
+  const replacement = WebSocketStub.instances[1]!;
 
   expect(current.closed).toBe(false);
   current.emit(
@@ -128,7 +128,7 @@ it("retains the current stream until a slow replacement is ready", async () => {
 
 it("recovers the committed view through a higher-generation ready stream", async () => {
   const { coordinator } = setup();
-  const current = EventSourceStub.instances[0]!;
+  const current = WebSocketStub.instances[0]!;
   current.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
   const owner = new AbortController();
   let recovered = false;
@@ -138,8 +138,8 @@ it("recovers the committed view through a higher-generation ready stream", async
   });
 
   expect(current.closed).toBe(true);
-  expect(EventSourceStub.instances).toHaveLength(2);
-  const replacement = EventSourceStub.instances[1]!;
+  expect(WebSocketStub.instances).toHaveLength(2);
+  const replacement = WebSocketStub.instances[1]!;
   expect(replacement.url).toContain("marimo_studio_view=dashboard");
   expect(recovered).toBe(false);
 
@@ -157,7 +157,7 @@ it("bounds a committed-view recovery that never becomes ready", async () => {
   const rejected = expect(recovery).rejects.toMatchObject({ name: "TimeoutError" });
 
   await Promise.resolve();
-  expect(EventSourceStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances).toHaveLength(2);
   await vi.runAllTimersAsync();
 
   await rejected;
@@ -166,22 +166,22 @@ it("bounds a committed-view recovery that never becomes ready", async () => {
 
 it("routes project, build, presentation, and view events to their owners", async () => {
   const { coordinator, model, preview, source } = setup();
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "dashboard", revision: "presentation-v1" }),
   );
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "change",
     JSON.stringify({
       kind: "project",
       files: [{ path: "src/app.css", revision: "sha256:next" }],
     }),
   );
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "change",
     JSON.stringify({ kind: "build", phase: "building", files: [] }),
   );
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "change",
     JSON.stringify({
       kind: "build",
@@ -190,7 +190,7 @@ it("routes project, build, presentation, and view events to their owners", async
       files: [],
     }),
   );
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "change",
     JSON.stringify({
       kind: "presentation",
@@ -199,7 +199,7 @@ it("routes project, build, presentation, and view events to their owners", async
       files: [],
     }),
   );
-  EventSourceStub.instances[0]?.emit("change", JSON.stringify({ kind: "views", files: [] }));
+  WebSocketStub.instances[0]?.emit("change", JSON.stringify({ kind: "views", files: [] }));
 
   await vi.waitFor(() => expect(model.refreshInventory).toHaveBeenCalledTimes(2));
   expect(source.reconcile).toHaveBeenCalledTimes(4);
@@ -215,13 +215,13 @@ it("routes project, build, presentation, and view events to their owners", async
 
 it("fences mutation reconciliation across ready baselines and view changes", async () => {
   const { coordinator, model, preview } = setup();
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "dashboard", revision: "presentation-v1" }),
   );
 
   coordinator.reconcileNotebookMutation(7);
-  const reconciliation = EventSourceStub.instances[1];
+  const reconciliation = WebSocketStub.instances[1];
   expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard");
   reconciliation?.emit(
     "ready",
@@ -244,7 +244,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
 
   coordinator.reconcileNotebookMutation(8);
   await model.views.choose("report", "preserve");
-  const switched = EventSourceStub.instances.at(-1);
+  const switched = WebSocketStub.instances.at(-1);
   expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("report");
   switched?.emit(
     "ready",
@@ -270,7 +270,7 @@ it("fences mutation reconciliation across ready baselines and view changes", asy
 it("consumes a stream mutation tag after its first completed build", () => {
   const { coordinator, preview } = setup();
   coordinator.reconcileNotebookMutation(7);
-  const stream = EventSourceStub.instances[1]!;
+  const stream = WebSocketStub.instances[1]!;
   stream.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
   preview.presentationBuildStarted.mockClear();
   preview.presentationBuildCompleted.mockClear();
@@ -315,16 +315,16 @@ it("consumes a stream mutation tag after its first completed build", () => {
 
 it("replaces a tagged mutation stream with an ordinary editor-reload reconciliation", () => {
   const { coordinator, preview } = setup();
-  const original = EventSourceStub.instances[0]!;
+  const original = WebSocketStub.instances[0]!;
   original.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
   coordinator.reconcileNotebookMutation(7);
-  const tagged = EventSourceStub.instances[1]!;
+  const tagged = WebSocketStub.instances[1]!;
   preview.presentationBaseline.mockClear();
   preview.presentationBuildCompleted.mockClear();
 
   coordinator.reconcileEditorReload();
 
-  const replacement = EventSourceStub.instances[2]!;
+  const replacement = WebSocketStub.instances[2]!;
   expect(tagged.closed).toBe(true);
   expect(original.closed).toBe(false);
   expect(preview.presentationBuildStarted).toHaveBeenLastCalledWith("dashboard");
@@ -361,7 +361,7 @@ it("replaces a tagged mutation stream with an ordinary editor-reload reconciliat
 
 it("refreshes inventory before reconciling a selected manifest generation", async () => {
   const { coordinator, model, source } = setup();
-  const events = EventSourceStub.instances[0];
+  const events = WebSocketStub.instances[0];
 
   events?.emit("change", JSON.stringify({ kind: "views", files: [] }));
   events?.emit("change", JSON.stringify({ kind: "project", files: [] }));
@@ -376,7 +376,7 @@ it("refreshes inventory before reconciling a selected manifest generation", asyn
 
 it("ignores callbacks from a replaced stream", async () => {
   const { coordinator, model } = setup();
-  const stale = EventSourceStub.instances[0];
+  const stale = WebSocketStub.instances[0];
   await model.views.choose("report", "preserve");
 
   stale?.emit("change");
@@ -386,26 +386,22 @@ it("ignores callbacks from a replaced stream", async () => {
   coordinator.dispose();
 });
 
-const closedStream = (status: number) => {
+const closedStream = () => {
   vi.useFakeTimers();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(null, { status })),
-  );
   return setup();
 };
 
-it("replaces a stream the browser closed and resumes its events", async () => {
-  const { coordinator, source } = closedStream(502);
-  const closed = EventSourceStub.instances[0]!;
+it("replaces a closed event socket and resumes its events", async () => {
+  const { coordinator, source } = closedStream();
+  const closed = WebSocketStub.instances[0]!;
   closed.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
 
   closed.fail();
-  expect(EventSourceStub.instances).toHaveLength(1);
+  expect(WebSocketStub.instances).toHaveLength(1);
   await vi.advanceTimersByTimeAsync(1_000);
 
-  expect(EventSourceStub.instances).toHaveLength(2);
-  const replacement = EventSourceStub.instances[1]!;
+  expect(WebSocketStub.instances).toHaveLength(2);
+  const replacement = WebSocketStub.instances[1]!;
   expect(replacement.url).toContain("marimo_studio_view=dashboard");
   replacement.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v2" }));
   replacement.emit(
@@ -419,37 +415,48 @@ it("replaces a stream the browser closed and resumes its events", async () => {
 });
 
 it("backs off while a replacement stream keeps closing", async () => {
-  const { coordinator } = closedStream(502);
+  const { coordinator } = closedStream();
 
-  EventSourceStub.instances[0]!.fail();
+  WebSocketStub.instances[0]!.fail();
   await vi.advanceTimersByTimeAsync(1_000);
-  EventSourceStub.instances[1]!.fail();
+  WebSocketStub.instances[1]!.fail();
   await vi.advanceTimersByTimeAsync(1_000);
-  expect(EventSourceStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances).toHaveLength(2);
   await vi.advanceTimersByTimeAsync(1_000);
-  expect(EventSourceStub.instances).toHaveLength(3);
+  expect(WebSocketStub.instances).toHaveLength(3);
 
   coordinator.dispose();
-  EventSourceStub.instances[2]!.fail();
+  WebSocketStub.instances[2]!.fail();
   await vi.advanceTimersByTimeAsync(60_000);
-  expect(EventSourceStub.instances).toHaveLength(3);
+  expect(WebSocketStub.instances).toHaveLength(3);
 });
 
 it("reports a server restart and stops reconnecting to the earlier process", async () => {
-  // The server answers a stream URL from an earlier process with 204.
-  const { coordinator, preview } = closedStream(204);
+  const { coordinator, preview } = closedStream();
 
-  EventSourceStub.instances[0]!.fail();
+  WebSocketStub.instances[0]!.fail(4204);
   await vi.advanceTimersByTimeAsync(60_000);
 
   expect(preview.serverRestarted).toHaveBeenCalledOnce();
-  expect(EventSourceStub.instances).toHaveLength(1);
+  expect(WebSocketStub.instances).toHaveLength(1);
   coordinator.dispose();
+});
+
+it("closes a connecting event socket once its handshake completes", () => {
+  const { coordinator } = setup();
+  const connecting = WebSocketStub.instances[0]!;
+  Object.assign(connecting, { readyState: 0 });
+
+  coordinator.dispose();
+  expect(connecting.closed).toBe(false);
+
+  connecting.dispatchEvent(new Event("open"));
+  expect(connecting.closed).toBe(true);
 });
 
 it("forwards build source locations to the presentation diagnostic", () => {
   const { coordinator, preview } = setup();
-  const stream = EventSourceStub.instances[0]!;
+  const stream = WebSocketStub.instances[0]!;
   stream.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
   const source = { path: "src/App.tsx", line: 12, column: 4 };
   stream.emit(

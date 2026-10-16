@@ -17,7 +17,6 @@ import {
   proxiedUrl,
   proxiedWorkspacePath,
   recoverRequestAbort,
-  recoverWorkspaceEventStream,
   test,
   waitForPreview,
   WASM_PREVIEW_TIMEOUT,
@@ -28,18 +27,13 @@ import {
 // browser fixture fails the test when any request leaves that prefix.
 test.use({ services: ["proxied"] });
 
-const createDashboard = async (page: Page, diagnostics: BrowserDiagnostics) => {
-  // Opening the first view replaces the host's workspace event stream.
-  const replacedStream = diagnostics.expectWorkspaceEventStreamReplacement(
-    `${proxiedUrl()}_marimo-studio/dev/events`,
-  );
+const createDashboard = async (page: Page) => {
   await page.goto(proxiedUrl());
   await page.getByText("Add view", { exact: true }).click();
   await page.getByRole("radio", { name: /^HTML document/ }).check();
   await page.getByRole("button", { name: "Create view" }).click();
   await expect(page).toHaveURL(`${proxiedUrl()}studio/dashboard/`);
   const preview = await waitForPreview(page);
-  await recoverWorkspaceEventStream(replacedStream);
   return preview;
 };
 
@@ -107,7 +101,7 @@ test("creates, edits, and previews a view beneath a stripped proxy prefix", asyn
   browserDiagnostics,
   page,
 }) => {
-  await createDashboard(page, browserDiagnostics);
+  await createDashboard(page);
   const preview = previewFrame(page);
   await expect(editorSlider(page, /^Proxied scale/)).toHaveAttribute("aria-valuenow", "2");
 
@@ -140,7 +134,7 @@ test("switches preview runtimes beneath a stripped proxy prefix", async ({
   browserDiagnostics,
   page,
 }) => {
-  await createDashboard(page, browserDiagnostics);
+  await createDashboard(page);
   await replaceDashboardSource(page, browserDiagnostics);
 
   // A retained Prepared frame keeps polling its publication, so Browser starts
@@ -185,7 +179,7 @@ for (const runtime of ["server", "wasm", "zero-python"] as const) {
     page,
     studioCli,
   }) => {
-    await createDashboard(page, browserDiagnostics);
+    await createDashboard(page);
     const timeout = runtime === "wasm" ? WASM_PREVIEW_TIMEOUT : 65_000;
 
     const url = await studioCli.previewView(

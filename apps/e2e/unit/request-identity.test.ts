@@ -6,7 +6,6 @@ import {
   browserRequestIdentity,
   ExactRequestAbortWitness,
   IdempotentReadRecovery,
-  WorkspaceEventStreamReplacementWindow,
   isIdempotentReadRequest,
   requestAbortsRetiredByDocument,
 } from "../tests/request-identity.ts";
@@ -29,18 +28,6 @@ const request = ({
   resourceType: () => resourceType,
   url: () => url,
 });
-
-const workspaceEventRequest = (
-  generation: number,
-  options: Pick<RequestOptions, "method" | "resourceType" | "url"> = {},
-) =>
-  request({
-    method: options.method ?? "GET",
-    resourceType: options.resourceType ?? "eventsource",
-    url:
-      options.url ??
-      `http://127.0.0.1:4321/_marimo-studio/dev/events?marimo_studio_connection=${generation}&marimo_studio_view=dashboard`,
-  });
 
 const presentationDocument = (revision: string, view = "dashboard", lifecycle = 1) =>
   request({
@@ -347,136 +334,6 @@ test.each([
   ["POST", false],
 ] as const)("classifies %s recovery as idempotent: %s", (method, expected) => {
   expect(isIdempotentReadRequest(request({ method }))).toBe(expected);
-});
-
-test.each([
-  "backfilled stream with successor ready before abort",
-  "backfilled stream aborted before successor readiness",
-] as const)("proves a workspace stream replacement for a %s", (ordering) => {
-  const owner = { id: 1 };
-  const replacement = new WorkspaceEventStreamReplacementWindow(
-    "http://127.0.0.1:4321/_marimo-studio/dev/events",
-  );
-  const previous = workspaceEventRequest(1);
-  const current = workspaceEventRequest(2);
-  expect(replacement.recordStart(previous, owner)).toBe(true);
-  replacement.recordResponse(previous, 200);
-  expect(replacement.recordStart(current, owner)).toBe(true);
-
-  if (ordering === "backfilled stream with successor ready before abort") {
-    replacement.recordResponse(current, 200);
-    expect(replacement.recordAbort(previous)).toBe(true);
-  } else {
-    expect(replacement.recordAbort(previous)).toBe(true);
-    replacement.recordResponse(current, 200);
-  }
-
-  expect(replacement.readyToRecover()).toBe(true);
-  expect(replacement.recover()).toBe(true);
-  expect(replacement.diagnostics()).toEqual([]);
-});
-
-test("workspace stream replacement rejects an extra reconnect generation", () => {
-  const owner = { id: 1 };
-  const replacement = new WorkspaceEventStreamReplacementWindow(
-    "http://127.0.0.1:4321/_marimo-studio/dev/events",
-    1,
-  );
-  const first = workspaceEventRequest(1);
-  const second = workspaceEventRequest(2);
-  const third = workspaceEventRequest(3);
-  replacement.recordStart(first, owner);
-  replacement.recordResponse(first, 200);
-  replacement.recordStart(second, owner);
-  replacement.recordResponse(second, 200);
-  replacement.recordAbort(first);
-  replacement.recordStart(third, owner);
-  replacement.recordResponse(third, 200);
-  replacement.recordAbort(second);
-
-  expect(replacement.recover()).toBe(false);
-});
-
-test("workspace stream replacement rejects an extra live survivor", () => {
-  const owner = { id: 1 };
-  const replacement = new WorkspaceEventStreamReplacementWindow(
-    "http://127.0.0.1:4321/_marimo-studio/dev/events",
-    1,
-  );
-  const first = workspaceEventRequest(1);
-  const second = workspaceEventRequest(2);
-  const duplicate = workspaceEventRequest(3);
-  replacement.recordStart(first, owner);
-  replacement.recordResponse(first, 200);
-  replacement.recordStart(second, owner);
-  replacement.recordResponse(second, 200);
-  replacement.recordAbort(first);
-  replacement.recordStart(duplicate, owner);
-  replacement.recordResponse(duplicate, 200);
-
-  expect(replacement.recover()).toBe(false);
-});
-
-test("workspace stream replacement permits an exactly retired owner", () => {
-  const firstOwner = { id: 1 };
-  const retiredOwner = { id: 2 };
-  const replacement = new WorkspaceEventStreamReplacementWindow(
-    "http://127.0.0.1:4321/_marimo-studio/dev/events",
-    2,
-  );
-  const firstOld = workspaceEventRequest(1);
-  const firstCurrent = workspaceEventRequest(2);
-  const retiredOld = workspaceEventRequest(3);
-  const retiredCurrent = workspaceEventRequest(4);
-  for (const [old, current, owner] of [
-    [firstOld, firstCurrent, firstOwner],
-    [retiredOld, retiredCurrent, retiredOwner],
-  ] as const) {
-    replacement.recordStart(old, owner);
-    replacement.recordResponse(old, 200);
-    replacement.recordStart(current, owner);
-    replacement.recordResponse(current, 200);
-    replacement.recordAbort(old);
-  }
-
-  expect(replacement.retireOwner(retiredOwner)).toBe(true);
-  expect(replacement.recover()).toBe(true);
-  expect(replacement.diagnostics()).toEqual([]);
-});
-
-test("workspace stream replacement stays bound to its exact route and owner", () => {
-  const owner = { id: 1 };
-  const replacement = new WorkspaceEventStreamReplacementWindow(
-    "http://127.0.0.1:4321/_marimo-studio/dev/events",
-  );
-  const previous = workspaceEventRequest(1);
-  const otherRoute = workspaceEventRequest(2, {
-    url: "http://127.0.0.1:4321/mounted/_marimo-studio/dev/events?marimo_studio_connection=2",
-  });
-  const otherOwner = workspaceEventRequest(3);
-  replacement.recordStart(previous, owner);
-  replacement.recordResponse(previous, 200);
-  expect(replacement.recordStart(otherRoute, owner)).toBe(false);
-  expect(replacement.recordStart(otherOwner, { id: 2 })).toBe(true);
-  replacement.recordResponse(otherOwner, 200);
-  expect(replacement.recordAbort(previous)).toBe(true);
-
-  expect(replacement.recover()).toBe(false);
-});
-
-test("workspace stream replacement rejects a missing generation", () => {
-  const replacement = new WorkspaceEventStreamReplacementWindow(
-    "http://127.0.0.1:4321/_marimo-studio/dev/events",
-  );
-  expect(
-    replacement.recordStart(
-      workspaceEventRequest(1, {
-        url: "http://127.0.0.1:4321/_marimo-studio/dev/events",
-      }),
-      { id: 1 },
-    ),
-  ).toBe(true);
-  expect(replacement.recover()).toBe(false);
 });
 
 test("output snapshots recover across revisions only for the same frame and inventory", () => {

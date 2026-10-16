@@ -7,6 +7,7 @@
     "./runtime-status": "./src/runtime-status.ts",
     "./development-events": "./src/development-events.ts",
     "./errors": "./src/errors.ts",
+    "./event-socket": "./src/event-socket.ts",
     "./frame-bridge": "./src/frame-bridge.ts",
     "./host-session": "./src/host-session.ts",
     "./json": "./src/json.ts",

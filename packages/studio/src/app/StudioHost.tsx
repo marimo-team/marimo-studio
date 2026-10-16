@@ -4,6 +4,7 @@ import {
   parseActiveViewRequest,
   type ActiveViewRequest,
 } from "@marimo-studio/protocol/development-events";
+import { parseStudioEvent } from "@marimo-studio/protocol/event-socket";
 import {
   EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
   publicNotebookQuery,
@@ -28,7 +29,12 @@ import { StudioThemeProvider, useResolvedStudioTheme } from "../shared/theme.tsx
 import { useControllerSnapshot } from "../shared/useControllerSnapshot.ts";
 import { StudioRoutes } from "./routes.ts";
 import { StudioApp, type StudioOptions } from "./StudioApp.tsx";
-import { watchWorkspaceStreamClosure, workspaceEventsUrl } from "./workspace-event-coordinator.ts";
+import {
+  closeWorkspaceEvents,
+  openWorkspaceEvents,
+  watchWorkspaceStreamClosure,
+  workspaceEventsUrl,
+} from "./workspace-event-coordinator.ts";
 
 interface StudioHostProps extends StudioOptions {
   editorFrame: HTMLIFrameElement;
@@ -269,14 +275,12 @@ export const StudioHost = ({
       return;
     }
     const reconnects = new RetrySchedule();
-    let events: EventSource;
+    let events: WebSocket;
     let reconnect: ReturnType<typeof setTimeout> | undefined;
     const connect = () => {
-      const streamUrl = workspaceEventsUrl(host.urls.events);
-      const stream = new EventSource(streamUrl);
+      const stream = openWorkspaceEvents(workspaceEventsUrl(host.urls.events));
       events = stream;
-      stream.addEventListener("open", () => reconnects.reset());
-      watchWorkspaceStreamClosure(stream, streamUrl, (retired) => {
+      watchWorkspaceStreamClosure(stream, (retired) => {
         if (events !== stream || closed) {
           return;
         }
@@ -287,10 +291,15 @@ export const StudioHost = ({
         }
         reconnect = setTimeout(connect, reconnects.next());
       });
-      stream.addEventListener("activate", (event) => {
-        const payload = parseActiveViewRequest(
-          event instanceof MessageEvent ? String(event.data) : "",
-        );
+      stream.addEventListener("message", (message) => {
+        const frame = parseStudioEvent(message.data);
+        // A rejected handshake also opens before it closes, so only an
+        // admitted stream's `ready` event resets the backoff.
+        if (frame?.event === "ready") {
+          reconnects.reset();
+        }
+        const payload =
+          frame?.event === "activate" ? parseActiveViewRequest(frame.data) : undefined;
         if (payload) {
           void openWorkspace(payload.view, payload);
         }
@@ -301,7 +310,7 @@ export const StudioHost = ({
     return () => {
       closed = true;
       clearTimeout(reconnect);
-      events.close();
+      closeWorkspaceEvents(events);
     };
   }, [bootstrap, host.urls.events, openWorkspace]);
 

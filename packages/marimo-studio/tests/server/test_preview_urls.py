@@ -1047,7 +1047,7 @@ def test_exact_document_rejects_changed_source_without_retrying(
     assert response.headers["Marimo-Studio-Error"] == "preview-source-not-current"
     assert 'data-marimo-studio-state="error"' in response.text
     assert 'role="alert"' in response.text
-    assert "EventSource" not in response.text
+    assert "WebSocket" not in response.text
     assert "setTimeout" not in response.text
     assert "location.reload" not in response.text
     assert "retry-after" not in response.headers

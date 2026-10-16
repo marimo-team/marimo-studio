@@ -2,11 +2,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 import { ViewActivationAcknowledgementError } from "../src/app/activation-remote.ts";
 import { WorkspaceEventCoordinator } from "../src/app/workspace-event-coordinator.ts";
-import { deferred, EventSourceStub, setup } from "./workspace-event-test-support.ts";
+import { deferred, WebSocketStub, setup } from "./workspace-event-test-support.ts";
 
 beforeEach(() => {
-  EventSourceStub.instances = [];
-  vi.stubGlobal("EventSource", EventSourceStub);
+  WebSocketStub.instances = [];
+  vi.stubGlobal("WebSocket", WebSocketStub);
 });
 
 afterEach(() => {
@@ -18,7 +18,7 @@ it("selects and then acknowledges an agent activation", async () => {
   model.replaceViews(["dashboard", "report"]);
   model.ensureAvailable.mockResolvedValue(true);
 
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 7, view: "report" }),
   );
@@ -47,7 +47,7 @@ it("acknowledges an activation with one parsed view owner", async () => {
   const catalogGeneration = "a".repeat(64);
   const viewGeneration = "b".repeat(64);
 
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "activate",
     JSON.stringify({
       schema: 1,
@@ -76,7 +76,7 @@ it("acknowledges an activation with one parsed view owner", async () => {
 it("refreshes an already active view before acknowledging its activation", async () => {
   const { acknowledge, coordinator, model, preview } = setup();
 
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 8, view: "dashboard" }),
   );
@@ -113,7 +113,7 @@ it("acknowledges host promotion without reloading the starting preview", async (
       expect.any(AbortSignal),
     ),
   );
-  EventSourceStub.instances[0]?.emit("activate", JSON.stringify(activation));
+  WebSocketStub.instances[0]?.emit("activate", JSON.stringify(activation));
   await Promise.resolve();
 
   expect(acknowledge).toHaveBeenCalledOnce();
@@ -125,16 +125,16 @@ it("retries a failed host-promotion acknowledgement after replay", async () => {
   const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   const activation = { schema: 1, generation: 8, view: "dashboard" } as const;
   const { acknowledge, coordinator } = setup(undefined, activation, true);
-  await vi.waitFor(() => expect(EventSourceStub.instances).toHaveLength(2));
+  await vi.waitFor(() => expect(WebSocketStub.instances).toHaveLength(2));
 
-  EventSourceStub.instances[1]?.emit(
+  WebSocketStub.instances[1]?.emit(
     "ready",
     JSON.stringify({ schema: 1, view: "dashboard", revision: "v2" }),
   );
-  EventSourceStub.instances[1]?.emit("activate", JSON.stringify(activation));
+  WebSocketStub.instances[1]?.emit("activate", JSON.stringify(activation));
   await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledTimes(2));
 
-  expect(EventSourceStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances).toHaveLength(2);
   warning.mockRestore();
   coordinator.dispose();
 });
@@ -149,25 +149,25 @@ it("backs off replaying an activation the browser keeps declining", async () => 
     .mockResolvedValueOnce(false);
   const activation = JSON.stringify({ schema: 1, generation: 5, view: "report" });
   const replay = (stream: number) => {
-    const events = EventSourceStub.instances[stream]!;
+    const events = WebSocketStub.instances[stream]!;
     events.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
     events.emit("activate", activation);
   };
 
   replay(0);
   await vi.advanceTimersByTimeAsync(0);
-  expect(EventSourceStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances).toHaveLength(2);
   replay(1);
   await vi.advanceTimersByTimeAsync(999);
-  expect(EventSourceStub.instances).toHaveLength(2);
+  expect(WebSocketStub.instances).toHaveLength(2);
   await vi.advanceTimersByTimeAsync(1);
-  expect(EventSourceStub.instances).toHaveLength(3);
+  expect(WebSocketStub.instances).toHaveLength(3);
   replay(2);
   await vi.advanceTimersByTimeAsync(1_999);
-  expect(EventSourceStub.instances).toHaveLength(3);
+  expect(WebSocketStub.instances).toHaveLength(3);
 
   await vi.advanceTimersByTimeAsync(1);
-  expect(EventSourceStub.instances).toHaveLength(4);
+  expect(WebSocketStub.instances).toHaveLength(4);
   replay(3);
   await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledOnce());
   expect(model.views.getSnapshot().current).toBe("report");
@@ -185,22 +185,22 @@ it("a declined activation's pending replay leaves a newer activation able to ret
   );
   const older = { schema: 1, generation: 5, view: "report" } as const;
   const newer = { schema: 1, generation: 6, view: "analysis" } as const;
-  const replay = (events: EventSourceStub, activation: typeof older | typeof newer) => {
+  const replay = (events: WebSocketStub, activation: typeof older | typeof newer) => {
     events.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "v1" }));
     events.emit("activate", JSON.stringify(activation));
   };
   // The server replays its pending activation once on each new stream.
   let replayed = 0;
   const replayNewStreams = (activation: typeof older | typeof newer) => {
-    EventSourceStub.instances.slice(replayed).forEach((events) => replay(events, activation));
-    replayed = EventSourceStub.instances.length;
+    WebSocketStub.instances.slice(replayed).forEach((events) => replay(events, activation));
+    replayed = WebSocketStub.instances.length;
   };
 
   replayNewStreams(older);
   await vi.advanceTimersByTimeAsync(0);
   replayNewStreams(older);
   await vi.advanceTimersByTimeAsync(10);
-  EventSourceStub.instances.at(-1)?.emit("activate", JSON.stringify(newer));
+  WebSocketStub.instances.at(-1)?.emit("activate", JSON.stringify(newer));
   await vi.advanceTimersByTimeAsync(1_000);
   replayNewStreams(newer);
   analysis.resolve(false);
@@ -222,7 +222,7 @@ it("restores the previous view after terminal acknowledgement failure", async ()
     new ViewActivationAcknowledgementError("rejected", "activation rejected"),
   );
 
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 9, view: "report" }),
   );
@@ -248,12 +248,12 @@ it("keeps the selected view while an acknowledgement outcome is uncertain", asyn
     new ViewActivationAcknowledgementError("uncertain", "response body was lost"),
   );
 
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 9, view: "report" }),
   );
 
-  await vi.waitFor(() => expect(EventSourceStub.instances).toHaveLength(2));
+  await vi.waitFor(() => expect(WebSocketStub.instances).toHaveLength(2));
   expect(model.views.getSnapshot().current).toBe("report");
   expect(acknowledge).toHaveBeenCalledOnce();
   warning.mockRestore();
@@ -266,7 +266,7 @@ it("releases a timed-out activation so the same generation can replay", async ()
   const stalled = deferred<boolean>();
   model.ensureAvailable.mockReturnValueOnce(stalled.promise).mockResolvedValueOnce(true);
   const activation = { schema: 1, generation: 14, view: "report" } as const;
-  const events = EventSourceStub.instances[0]!;
+  const events = WebSocketStub.instances[0]!;
 
   events.emit("activate", JSON.stringify(activation));
   await vi.waitFor(() => expect(model.ensureAvailable).toHaveBeenCalledOnce());
@@ -275,8 +275,8 @@ it("releases a timed-out activation so the same generation can replay", async ()
   await Promise.resolve();
   expect(acknowledge).not.toHaveBeenCalled();
 
-  await vi.waitFor(() => expect(EventSourceStub.instances).toHaveLength(2));
-  const replay = EventSourceStub.instances[1]!;
+  await vi.waitFor(() => expect(WebSocketStub.instances).toHaveLength(2));
+  const replay = WebSocketStub.instances[1]!;
   replay.emit("ready", JSON.stringify({ schema: 1, view: "dashboard", revision: "revision-2" }));
   replay.emit("activate", JSON.stringify(activation));
   await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledOnce());
@@ -292,7 +292,7 @@ it("releases a timed-out activation so the same generation can replay", async ()
 it("does not acknowledge a failed or malformed activation", async () => {
   const { acknowledge, coordinator, model } = setup();
   model.choose.mockResolvedValue(false);
-  const events = EventSourceStub.instances[0];
+  const events = WebSocketStub.instances[0];
   events?.emit("activate", JSON.stringify({ schema: 1, generation: 2, view: "report" }));
   events?.emit("activate", '{"schema":1,"view":""}');
   await Promise.resolve();
@@ -314,7 +314,7 @@ it("lets the newest activation generation own selection and acknowledgement", as
     }
     return Promise.resolve(true);
   });
-  const events = EventSourceStub.instances[0];
+  const events = WebSocketStub.instances[0];
   events?.emit("activate", JSON.stringify({ schema: 1, generation: 10, view: "report" }));
   events?.emit("activate", JSON.stringify({ schema: 1, generation: 11, view: "analysis" }));
 
@@ -390,7 +390,7 @@ it("cancels an older selection before a newer unavailable activation settles", a
     acknowledge,
   });
   coordinator.start();
-  const events = EventSourceStub.instances[0];
+  const events = WebSocketStub.instances[0];
   events?.emit("activate", JSON.stringify({ schema: 1, generation: 20, view: "report" }));
   await vi.waitFor(() =>
     expect(choose).toHaveBeenCalledWith(
@@ -422,7 +422,7 @@ it("forwards validated session replacement evidence", () => {
     sessionId: "s_reconnected",
     replaced: true,
   } as const;
-  const events = EventSourceStub.instances[0];
+  const events = WebSocketStub.instances[0];
   events?.emit("session", JSON.stringify(binding));
   events?.emit("session", JSON.stringify({ ...binding, generation: 0 }));
 
@@ -438,13 +438,13 @@ it("aborts pending acknowledgement and blocks events after disposal", async () =
     signal = activeSignal;
     await new Promise<void>(() => {});
   });
-  EventSourceStub.instances[0]?.emit(
+  WebSocketStub.instances[0]?.emit(
     "activate",
     JSON.stringify({ schema: 1, generation: 9, view: "report" }),
   );
   await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledOnce());
 
-  const events = EventSourceStub.instances.at(-1);
+  const events = WebSocketStub.instances.at(-1);
   coordinator.dispose();
   events?.emit("change");
 

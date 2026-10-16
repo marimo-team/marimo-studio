@@ -14,36 +14,30 @@ export const deferred = <T>() => {
   return { promise, resolve };
 };
 
-export class EventSourceStub {
-  static readonly CLOSED = 2;
-  static instances: EventSourceStub[] = [];
-  readonly listeners = new Map<string, EventListener>();
-  readyState = 1;
+export class WebSocketStub extends EventTarget {
+  static instances: WebSocketStub[] = [];
   closed = false;
 
   constructor(readonly url: string) {
-    EventSourceStub.instances.push(this);
+    super();
+    WebSocketStub.instances.push(this);
   }
 
-  addEventListener(type: string, listener: EventListener): void {
-    this.listeners.set(type, listener);
-  }
-
-  emit(type: string, data?: string): void {
-    this.listeners.get(type)?.(
-      data === undefined ? new Event(type) : new MessageEvent(type, { data }),
+  /** Deliver one server event frame whose payload is the JSON text `data`. */
+  emit(event: string, data?: string): void {
+    const payload: unknown = data === undefined ? {} : JSON.parse(data);
+    this.dispatchEvent(
+      new MessageEvent("message", { data: JSON.stringify({ event, data: payload }) }),
     );
   }
 
-  /** Fail the connection the way a browser does for a non-200 or non-stream response. */
-  fail(): void {
-    this.readyState = EventSourceStub.CLOSED;
-    this.emit("error");
+  /** Close the socket from the server side, or with 1006 for a network failure. */
+  fail(code = 1006): void {
+    this.dispatchEvent(new CloseEvent("close", { code }));
   }
 
   close(): void {
     this.closed = true;
-    this.readyState = EventSourceStub.CLOSED;
   }
 }
 

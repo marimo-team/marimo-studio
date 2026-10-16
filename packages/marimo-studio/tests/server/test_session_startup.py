@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 import pytest
 from starlette.middleware import Middleware
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 import marimo_studio._compat.server.session_state as session_state_module
 from marimo_studio._compat.server.existing_session import (
@@ -515,13 +516,17 @@ def test_stale_development_stream_stops_reconnecting(
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
 
-    with TestClient(app) as client:
-        response = client.get(
-            "/_marimo-studio/views/dashboard/dev/events",
-            params={SERVER_INSTANCE_QUERY_PARAM: "stale-server"},
-        )
+    with (
+        TestClient(app) as client,
+        client.websocket_connect(
+            "/_marimo-studio/views/dashboard/dev/events"
+            f"?{SERVER_INSTANCE_QUERY_PARAM}=stale-server"
+        ) as socket,
+        pytest.raises(WebSocketDisconnect) as closed,
+    ):
+        socket.receive_text()
 
-    assert response.status_code == 204
+    assert closed.value.code == 4204
 
 
 def test_a_first_run_longer_than_the_instantiation_timeout_keeps_starting(

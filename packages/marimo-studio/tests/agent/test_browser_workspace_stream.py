@@ -33,7 +33,7 @@ def test_change_stream_delivers_agent_view_activation(
     monkeypatch.setattr(dev.asyncio, "sleep", poll_immediately)
     stopping = False
 
-    async def collect() -> tuple[bytes, bytes, bytes]:
+    async def collect() -> tuple[str, str, str]:
         nonlocal stopping
         client_id = "browser-client-1234"
         stream = dev.change_events(
@@ -62,16 +62,16 @@ def test_change_stream_delivers_agent_view_activation(
 
     ready, activated, session = asyncio.run(collect())
 
-    assert ready == b"event: ready\ndata: {}\n\n"
-    assert activated.startswith(b"event: activate\n")
-    assert json.loads(activated.split(b"data: ", 1)[1]) == {
+    assert ready == '{"event":"ready","data":{}}'
+    assert json.loads(activated)["event"] == "activate"
+    assert json.loads(activated)["data"] == {
         "schema": 1,
         "generation": 1,
         "view": "executive",
         "catalogGeneration": "a" * 64,
         "viewGeneration": None,
     }
-    assert json.loads(session.split(b"data: ", 1)[1]) == {
+    assert json.loads(session)["data"] == {
         "schema": 1,
         "generation": 1,
         "sessionId": "s_123456",
@@ -87,7 +87,7 @@ def test_workspace_stream_prepares_inactive_views_after_active_readiness(
     studio = configured(notebook_path)
     events: list[str] = []
 
-    async def exercise() -> tuple[bytes, list[dict[str, object]]]:
+    async def exercise() -> tuple[str, list[dict[str, object]]]:
         stopping = False
         inactive_started = asyncio.Event()
         inactive_cancelled = asyncio.Event()
@@ -171,9 +171,9 @@ def test_workspace_stream_prepares_inactive_views_after_active_readiness(
             and any(event.get("kind") == "presentation" for event in active_events)
         ):
             event = await asyncio.wait_for(anext(stream), timeout=1)
-            active_events.append(json.loads(event.split(b"data: ", 1)[1]))
+            active_events.append(json.loads(event)["data"])
 
-        async def next_event() -> bytes:
+        async def next_event() -> str:
             return await anext(stream)
 
         pending = asyncio.create_task(next_event())
@@ -186,9 +186,7 @@ def test_workspace_stream_prepares_inactive_views_after_active_readiness(
 
     ready, active_events = asyncio.run(exercise())
 
-    assert json.loads(ready.split(b"data: ", 1)[1]) == {
-        "revision": "dashboard-baseline"
-    }
+    assert json.loads(ready)["data"] == {"revision": "dashboard-baseline"}
     assert next(event for event in active_events if "build" in event) == {
         "schema": 1,
         "kind": "build",
@@ -234,7 +232,7 @@ def test_change_stream_registers_a_browser_before_the_first_view() -> None:
             client_id=client_id,
             stream_generation=1,
         )
-        assert await anext(stream) == b"event: ready\ndata: {}\n\n"
+        assert await anext(stream) == '{"event":"ready","data":{}}'
         target = await clients.select_target(client_id=client_id)
         assert target.active_view is None
         stopping = True

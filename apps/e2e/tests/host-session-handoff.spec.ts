@@ -19,7 +19,6 @@ import {
   editorFrame,
   previewFrame,
   recoverRequestAbort,
-  recoverWorkspaceEventStream,
   waitForPreview,
 } from "./fixture.ts";
 import { test } from "./network-fixture.ts";
@@ -76,9 +75,6 @@ for (const editRoot of ["marimo", "studio"] as const) {
       errorText: "net::ERR_ABORTED",
       required: false,
     });
-    const workspaceStream = diagnostics.expectWorkspaceEventStreamReplacement(
-      `${server.serverUrl}/_marimo-studio/dev/events`,
-    );
     let diagnosticsClosed = false;
     let stopped = false;
     try {
@@ -149,7 +145,6 @@ for (const editRoot of ["marimo", "studio"] as const) {
         await takeover.click();
         await expect(takeover).toHaveCount(0);
       }
-      await recoverWorkspaceEventStream(workspaceStream);
       await waitForPreview(page);
       // Replacing a preview document can cancel the retiring document's model
       // notification. The replacement establishes fresh model state on its own

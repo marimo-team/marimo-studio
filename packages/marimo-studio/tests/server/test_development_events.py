@@ -34,8 +34,8 @@ _FIXTURE = (
 )
 
 
-def _event_payload(event: bytes) -> dict[str, object]:
-    return cast(dict[str, object], json.loads(event.split(b"data: ", 1)[1]))
+def _event_payload(event: str) -> dict[str, object]:
+    return cast(dict[str, object], json.loads(event)["data"])
 
 
 async def _source_event(change: SourceChange) -> dict[str, object]:
@@ -44,15 +44,15 @@ async def _source_event(change: SourceChange) -> dict[str, object]:
             return change
 
     class Broker:
-        event: bytes | None = None
+        event: str | None = None
 
         async def emit_source(
             self,
             _view: str,
             _kind: str,
             _generation: int,
-            event: bytes,
-            _resync: bytes,
+            event: str,
+            _resync: str,
         ) -> None:
             self.event = event
 
@@ -248,7 +248,7 @@ def test_control_events_preempt_a_blocked_presentation_build(
             )
 
     async def exercise() -> tuple[
-        bytes,
+        str,
         bool,
         bool,
         ActivationAckOutcome | None,
@@ -264,14 +264,14 @@ def test_control_events_preempt_a_blocked_presentation_build(
             active_view="dashboard",
             development=cast(Any, development),
         )
-        next_event: asyncio.Task[bytes] | None = None
+        next_event: asyncio.Task[str] | None = None
         acknowledged: ActivationAckOutcome | None = None
         try:
             await anext(stream)
             building = await anext(stream)
-            assert json.loads(building.split(b"data: ", 1)[1])["phase"] == "building"
+            assert json.loads(building)["data"]["phase"] == "building"
 
-            async def receive() -> bytes:
+            async def receive() -> str:
                 return await anext(stream)
 
             next_event = asyncio.create_task(receive())
@@ -284,8 +284,8 @@ def test_control_events_preempt_a_blocked_presentation_build(
             delivered_before_build = bool(done)
             if delivered_before_build:
                 event = await next_event
-                payload = json.loads(event.split(b"data: ", 1)[1])
-                if event.startswith(b"event: activate"):
+                payload = json.loads(event)["data"]
+                if json.loads(event)["event"] == "activate":
                     acknowledged = await agents.acknowledge_activation(
                         client_id,
                         cast(int, payload["generation"]),
@@ -296,7 +296,7 @@ def test_control_events_preempt_a_blocked_presentation_build(
                     )
                     await agents.wait_for_activation(activation, timeout=5)
             else:
-                event = b""
+                event = ""
             return (
                 event,
                 delivered_before_build,
@@ -315,7 +315,7 @@ def test_control_events_preempt_a_blocked_presentation_build(
     )
 
     assert delivered_before_build
-    assert event.startswith(b"event: activate")
+    assert json.loads(event)["event"] == "activate"
     assert not build_finished
     assert acknowledged is ActivationAckOutcome.APPLIED
 
@@ -535,7 +535,7 @@ def test_blocked_baseline_keeps_browser_unavailable_to_activation(
         assert raised.value.code == "browser-client-unavailable"
 
         development.release_baseline.set()
-        assert (await ready).startswith(b"event: ready")
+        assert json.loads(await ready)["event"] == "ready"
         assert (
             await clients.select_target(client_id="browser-client-1234")
         ).active_view == "dashboard"

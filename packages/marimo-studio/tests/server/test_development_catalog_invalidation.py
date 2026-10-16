@@ -12,8 +12,8 @@ from marimo_studio._server.development.coordinator import SourcePoll
 from ..app_helpers import configured
 
 
-def _payload(event: bytes) -> dict[str, object]:
-    return cast(dict[str, object], json.loads(event.split(b"data: ", 1)[1]))
+def _payload(event: str) -> dict[str, object]:
+    return cast(dict[str, object], json.loads(event)["data"])
 
 
 def test_view_catalog_change_publishes_current_presentation(
