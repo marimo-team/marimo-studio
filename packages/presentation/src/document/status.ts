@@ -33,10 +33,10 @@ export const supportView = (supportUrl = getSupportUrl()): string => {
   }
 };
 
-export const showDiagnostic = (
+const displayDiagnostic = (
   detail: PresentationDiagnostic,
-  state: "error" | "waiting" = "error",
-): void => {
+  state: "error" | "waiting",
+): HTMLElement => {
   const host = diagnosticHost();
   host.textContent = detail.message;
   if (detail.hint) {
@@ -47,6 +47,14 @@ export const showDiagnostic = (
   host.dataset.state = state;
   host.setAttribute("role", state === "waiting" ? "status" : "alert");
   host.hidden = state === "waiting" && studioOwned();
+  return host;
+};
+
+export const showDiagnostic = (
+  detail: PresentationDiagnostic,
+  state: "error" | "waiting" = "error",
+): void => {
+  const host = displayDiagnostic(detail, state);
   const message: ViewSyncPendingMessage | ViewErrorMessage = {
     type: state === "waiting" ? "marimo-studio:view-sync-pending" : "marimo-studio:view-error",
     runtime: runtimeId(),
@@ -59,6 +67,15 @@ export const showDiagnostic = (
     publishedDiagnostics.set(host, serialized);
     postToStudioParent(message);
   }
+};
+
+/**
+ * Show a problem beside a working presentation, such as a failed build that
+ * keeps the previous one. The page stays usable, so Studio receives no view
+ * error for it.
+ */
+export const showNotice = (detail: PresentationDiagnostic): void => {
+  publishedDiagnostics.delete(displayDiagnostic(detail, "error"));
 };
 
 export const clearDiagnostic = (): void => {

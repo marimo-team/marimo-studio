@@ -396,6 +396,11 @@ the first one with its built file and position, such as
 from Studio's runtime, notebook files, and remote scripts, and browser warnings
 such as ResizeObserver loop notices, leave the state unchanged.
 
+A failed build keeps the previous build on screen and the state `ready`. The
+page shows an alert that starts with `Latest build failed`, and
+`marimoStudio.diagnostics()` lists the build's first error, such as
+`view-build-failed`.
+
 Host state is the lifecycle contract for one mounted result.
 `marimo-studio:runtime-ready` fires on `document` when the notebook runtime
 reaches its ready boundary, and `marimo-studio:idle` fires when the

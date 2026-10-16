@@ -9,7 +9,7 @@ import type { RuntimeStateApi } from "./runtime-state.ts";
 
 import { documentLifecycleEnvelope } from "./document/document-lifecycle-id.ts";
 import { postToStudioParent } from "./document/parent-bridge.ts";
-import { clearDiagnostic, showDiagnostic } from "./document/status.ts";
+import { clearDiagnostic, showDiagnostic, showNotice } from "./document/status.ts";
 import { studioOwned } from "./document/studio-ownership.ts";
 import { projectionHosts } from "./projections/host-runtime.ts";
 import { toBrowserDiagnostic } from "./readiness-diagnostics.ts";
@@ -92,7 +92,11 @@ const publishReady = (): void => {
 };
 
 const publishCommittedViewError = (): void => {
-  const diagnostic = renderedViewDiagnostics().find(({ severity }) => severity === "error");
+  // A notice sits beside a working page, so it never explains a page error.
+  const notice = readiness.snapshot().presentationNotice;
+  const diagnostic = renderedViewDiagnostics().find(
+    (item) => item.severity === "error" && item !== notice,
+  );
   if (!diagnostic) {
     return;
   }
@@ -116,6 +120,8 @@ const publish = (snapshot: ReadinessSnapshot, previous: ReadinessSnapshot): void
       snapshot.presentationDiagnostic,
       snapshot.presentation === "loading" ? "waiting" : "error",
     );
+  } else if (snapshot.presentationNotice) {
+    showNotice(snapshot.presentationNotice);
   } else {
     clearDiagnostic();
   }

@@ -91,6 +91,38 @@ describe("preview preparation", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
+  test.each([
+    ["runtime", false, "Python runtime could not start"],
+    ["runtime", true, "Python runtime could not update the preview"],
+    ["presentation", false, "The preview could not open"],
+    ["presentation", true, "The preview could not update"],
+  ])("names the runtime only for %s failures with rendered=%s", (scope, rendered, heading) => {
+    render(
+      <PreviewStatusPanel
+        state={{
+          ...starting(),
+          rendered,
+          status: {
+            state: "error",
+            message: "Needs repair",
+            diagnostics: [
+              {
+                code: "notebook-source-error",
+                view: "report",
+                scope,
+                severity: "error",
+                message: "More than one notebook cell defines the same name.",
+                hint: "Rename one of the definitions.",
+              },
+            ],
+          },
+        }}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(heading);
+  });
+
   test("shows the failure message when diagnostic details are unavailable", () => {
     render(
       <PreviewStatusPanel

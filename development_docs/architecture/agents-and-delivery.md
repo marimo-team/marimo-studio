@@ -163,8 +163,9 @@ require a current published build, and navigation rejects a different revision.
 The presentation document exposes `data-marimo-studio-state` for Studio's
 runtime and projection lifecycle, and `data-marimo-studio-revision` for the
 committed presentation. Revision changes at the presentation commit boundary.
-A failed replacement retains the previous committed revision. These values
-serve ordinary DOM queries and browser predicates.
+A failed replacement retains the previous committed revision. A failed build
+leaves the state `ready` and adds its error to `marimoStudio.diagnostics()`.
+These values serve ordinary DOM queries and browser predicates.
 
 Agents finish code-mode execution before waiting on the browser, so notebook
 execution can proceed. Browser tools own tab selection, waits, screenshots,

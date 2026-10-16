@@ -1,4 +1,3 @@
-import type { PresentationBuild } from "@marimo-studio/protocol/development-events";
 import type {
   NavigateViewMessage,
   ReceiverReadyMessage,
@@ -10,9 +9,12 @@ import {
   cancelProjectedOutputFunctionTransition,
   completeProjectedOutputFunctionTransition,
 } from "@marimo-studio/marimo-frontend/projected-output-function-gate";
+import {
+  presentationBuildNotice,
+  type PresentationBuild,
+} from "@marimo-studio/protocol/development-events";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
-import type { PresentationDiagnostic } from "./diagnostics.ts";
 import type {
   PresentationRevisionController,
   PresentationRevisionPolicy,
@@ -115,26 +117,18 @@ const observeBuild = (build: PresentationBuild): void => {
     return;
   }
   buildClaim ??= beginPresentationRefresh("build");
-  if (build.revision === null || build.build.phase === "failed") {
+  const notice = presentationBuildNotice(build, supportView());
+  if (notice) {
     externalRefreshGate.refresh("settled");
-    const detail = build.build.diagnostics.find(({ severity }) => severity === "error");
-    const diagnostic: PresentationDiagnostic = {
-      scope: "presentation",
-      code:
-        detail?.code ??
-        (build.build.phase === "failed" ? "view-build-failed" : "view-publication-unavailable"),
-      severity: "error",
-      message: `${build.build.phase === "failed" ? "Latest build failed." : "Latest publication is unavailable."} Showing the previous build.${detail ? ` ${detail.message}` : ""}`,
-      hint: detail?.hint ?? "Fix the view source, then build it again.",
-      source: detail?.source ?? undefined,
-      view: supportView(),
-    };
-    setPresentationRefreshState(buildClaim, "error", diagnostic);
-    console.error("marimo-studio build error", diagnostic.message);
+    // The previous build stays on screen and usable, so the failure is a notice.
+    setPresentationRefreshState(buildClaim, "ready", notice);
+    console.error("marimo-studio build error", notice.message);
     return;
   }
-  pendingBuildRevision = build.revision;
-  settleBuild();
+  if (build.revision !== null) {
+    pendingBuildRevision = build.revision;
+    settleBuild();
+  }
 };
 
 const settleBuild = (): void => {
@@ -276,7 +270,8 @@ const revisionPolicy: PresentationRevisionPolicy = {
     console.error("marimo-studio presentation refresh error", error);
   },
   onReady: (operation) => {
-    if (!readiness.snapshot().presentationDiagnostic) {
+    const { presentationDiagnostic, presentationNotice } = readiness.snapshot();
+    if (!presentationDiagnostic && !presentationNotice) {
       clearDiagnostic();
     }
     presentationRefreshState.complete(operation.target);
@@ -414,13 +409,8 @@ const startDevelopmentReload = async (): Promise<void> => {
         buildClaim ??= beginPresentationRefresh("build");
         setPresentationRefreshState(
           buildClaim,
-          diagnostic ? "error" : "ready",
-          diagnostic
-            ? {
-                ...diagnostic,
-                scope: "presentation",
-              }
-            : undefined,
+          "ready",
+          diagnostic ? { ...diagnostic, scope: "presentation" } : undefined,
         );
         if (!diagnostic) {
           buildClaim = undefined;

@@ -478,6 +478,30 @@ it("resets document ownership and records terminal failure explicitly", () => {
   expect(admission.snapshot.presentation.build).toBe("settled");
 });
 
+it("keeps a failed build across a notebook change that leaves the view unchanged", () => {
+  const { admission, effects } = admitted();
+  const failure: BrowserDiagnostic = {
+    ...diagnostic,
+    severity: "error",
+    code: "view-build-failed",
+    message: "Latest build failed. Showing the previous build.",
+  };
+  admission.buildStarted("active");
+  admission.buildCompleted(null, "active", failure);
+  effects.postMessage.mockClear();
+
+  admission.buildStarted("active", false);
+  expect(admission.buildUnchanged("active")).toBe(true);
+
+  expect(admission.buildFailure).toBe(failure);
+  expect(admission.isReady).toBe(true);
+  expect(effects.postMessage).toHaveBeenCalledWith({
+    type: "marimo-studio:presentation-refresh",
+    phase: "settled",
+    diagnostic: failure,
+  });
+});
+
 it("forwards a failed build to its retained frame and clears it on the next successful build", () => {
   const { admission, effects } = admitted();
   const failure: BrowserDiagnostic = {

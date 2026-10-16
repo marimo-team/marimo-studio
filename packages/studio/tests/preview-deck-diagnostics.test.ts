@@ -446,6 +446,12 @@ it.each([false, true])(
     });
     if (repaired) expect(previewWindow.postMessage).not.toHaveBeenCalledWith(failedRefresh, "*");
     else expect(previewWindow.postMessage).toHaveBeenCalledWith(failedRefresh, "*");
+    const state = deck.getSnapshot().states.server!;
+    expect(state.rendered).toBe(true);
+    expect(state.status.state).toBe(repaired ? "ready" : "warning");
+    expect(state.status.diagnostics.map(({ code }) => code)).toEqual(
+      repaired ? [] : ["view-build-failed"],
+    );
     deck.dispose();
   },
 );

@@ -98,6 +98,11 @@ export class PreviewAdmission {
     return this.receiver.phase === "ready";
   }
 
+  /** The failure of the latest build, while the previous publication stays on screen. */
+  get buildFailure(): BrowserDiagnostic | undefined {
+    return this.buildDiagnostic;
+  }
+
   get viewIsReady(): boolean {
     return this.view === "ready";
   }
@@ -177,7 +182,11 @@ export class PreviewAdmission {
     const wasAdmitted = this.isInteractive;
     this.clearLocalizedFailure();
     this.localizedCommitPending = false;
-    this.buildDiagnostic = undefined;
+    // A notebook change leaves the view source as it was, so a failed build
+    // stays failed until the next build.
+    if (notifyPresentation) {
+      this.buildDiagnostic = undefined;
+    }
     this.build = "pending";
     this.gate = "pending";
     this.admittedRevision = null;

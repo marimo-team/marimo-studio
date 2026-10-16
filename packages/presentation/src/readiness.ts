@@ -17,6 +17,9 @@ export interface ReadinessSnapshot {
   readonly settled: boolean;
   readonly runtimeDiagnostic?: RuntimeDiagnostic;
   readonly presentationDiagnostic?: PresentationDiagnostic;
+  // A problem beside a working presentation, such as a failed build that
+  // keeps the previous publication on screen.
+  readonly presentationNotice?: PresentationDiagnostic;
 }
 
 interface Deferred {
@@ -69,6 +72,7 @@ export class ReadinessController {
   private presentation: PresentationRefreshState = "ready";
   private runtimeDiagnostic: RuntimeDiagnostic | undefined;
   private presentationDiagnostic: PresentationDiagnostic | undefined;
+  private presentationNotice: PresentationDiagnostic | undefined;
   // A view script failure belongs to the whole document. Observer restarts
   // keep it, and the next document starts without it.
   private fault: PresentationDiagnostic | undefined;
@@ -169,12 +173,15 @@ export class ReadinessController {
   }
 
   private updatePresentation(): void {
+    const owners = [...this.presentationOwners.values()];
+    this.presentationNotice = owners.find(
+      ({ state, diagnostic }) => state === "ready" && diagnostic !== undefined,
+    )?.diagnostic;
     if (this.fault) {
       this.presentation = "error";
       this.presentationDiagnostic = this.fault;
       return;
     }
-    const owners = [...this.presentationOwners.values()];
     const failed = owners.find(({ state }) => state === "error");
     if (failed) {
       this.presentation = "error";
@@ -211,6 +218,7 @@ export class ReadinessController {
       settled,
       runtimeDiagnostic: this.runtimeDiagnostic,
       presentationDiagnostic: this.presentationDiagnostic,
+      presentationNotice: this.presentationNotice,
     };
     if (hasDocument(globalThis)) {
       globalThis.document.documentElement.dataset.marimoStudioState = page;
