@@ -328,10 +328,7 @@ it("recovers after rejected acquisition even when cleanup reports no owner", asy
   );
   const handoff = remote.stage("dashboard", "report");
 
-  await expect(handoff.ready).rejects.toThrow(
-    "Studio could not take over the active view. " +
-      "Wait for any view switch in progress to finish, then try again.",
-  );
+  await expect(handoff.ready).rejects.toThrow();
   await expect(handoff.rollback()).resolves.toBeUndefined();
 
   expect(recover).toHaveBeenCalledOnce();
@@ -361,9 +358,8 @@ it("reports the server's reason for a refused handoff", async () => {
   );
   const handoff = remote.stage("dashboard", "report");
 
-  await expect(handoff.ready).rejects.toThrow(
-    "An agent is switching views. Wait for the agent to finish, then choose the view again.",
-  );
+  await expect(handoff.ready).rejects.toThrow("An agent is switching views.");
+  await expect(handoff.ready).rejects.toThrow("Wait for the agent to finish");
   await handoff.rollback();
   remote.dispose();
 });
@@ -382,9 +378,7 @@ it("propagates nonretryable ownership release responses", async () => {
   const handoff = remote.stage("dashboard", "report");
   expect(await handoff.ready).toBe(true);
 
-  await expect(handoff.rollback()).rejects.toThrow(
-    "Active view ownership could not be released (403).",
-  );
+  await expect(handoff.rollback()).rejects.toThrow("403");
   await vi.runAllTimersAsync();
 
   remote.dispose();

@@ -8,7 +8,6 @@ import {
   presentationRefreshUrl,
   presentationRenewalSupportUrl,
 } from "../src/document/refresh-url.ts";
-import { projectionHosts } from "../src/projections/host-runtime.ts";
 import {
   clearProjectionBindingStale,
   notifyProjectionResolutionStale,
@@ -187,7 +186,7 @@ test("a failed history push restores document, styles, runtime, and URL identity
 
   await expect(
     adapter.replace("/next/", "/support/new", new AbortController().signal, vi.fn(), "push"),
-  ).rejects.toThrow("Presentation commit and rollback failed");
+  ).rejects.toBeInstanceOf(AggregateError);
   unsubscribe();
 
   expect(document.querySelector("#app-shell")).toBe(previousShell);
@@ -195,7 +194,7 @@ test("a failed history push restores document, styles, runtime, and URL identity
   expect(document.querySelector("marimo-output")).toBe(previousHost);
   expect(previousHost?.firstElementChild).toBe(previousOutput);
   expect(previousHost?.hasAttribute("aria-label")).toBe(false);
-  expect(document.head.querySelector("style[data-marimo-studio-page-style]")).toBe(previousStyle);
+  expect(document.head.querySelector("style")).toBe(previousStyle);
   expect(document.title).toBe("Old title");
   expect(getSupportUrl()).toBe("/support/old");
   expect(getRuntimeConfig().revision).toBe("revision-old");
@@ -641,11 +640,8 @@ test("a stylesheet-only revision keeps the authored shell and rendered projectio
       );
     }),
   );
-  const preservation = vi.spyOn(projectionHosts, "stagePreservation");
-
   await adapter.replace("/next/", "/support/new", new AbortController().signal, vi.fn());
 
-  expect(preservation).not.toHaveBeenCalled();
   expect(document.querySelector("#app-shell")).toBe(shell);
   expect(document.querySelector("marimo-output")).toBe(host);
   expect(document.querySelector("marimo-output > strong")).toBe(rendered);

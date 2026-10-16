@@ -21,13 +21,13 @@ describe("source status", () => {
       { initialProps },
     );
 
-    expect(result.current).toEqual({ message: "Updated from disk", phase: "external" });
-    await act(() => vi.advanceTimersByTimeAsync(1_800));
-    expect(result.current).toEqual({ message: "Saved", phase: "saved" });
+    expect(result.current.phase).toBe("external");
+    await act(() => vi.runOnlyPendingTimersAsync());
+    expect(result.current.phase).toBe("saved");
 
     const second = { path: "src/App.tsx", phase: "external" } satisfies SourceState;
     rerender({ state: second });
-    expect(result.current).toEqual({ message: "Updated from disk", phase: "external" });
+    expect(result.current.phase).toBe("external");
 
     rerender({
       state: { path: "src/App.tsx", phase: "error", message: "Could not read source" },

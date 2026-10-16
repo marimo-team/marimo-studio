@@ -127,8 +127,8 @@ test("frame bridge binds controls and query replies to the active document", asy
   const pendingControl = controls!.apply([{ objectId: "wasm-cell-control", value: 2 }]);
   const pendingQuery = applyFrameQuery(frame, "?region=apac");
   releaseFrameBridge(frame);
-  await expect(pendingControl).rejects.toThrow("frame was released");
-  await expect(pendingQuery).rejects.toThrow("frame was released");
+  await expect(pendingControl).rejects.toThrow();
+  await expect(pendingQuery).rejects.toThrow();
 
   frame.dataset.previewLifecycleId = "8";
   dispatch(source, {

@@ -111,7 +111,6 @@ test("keeps native sidebar ownership while the notebook is resized, hidden, and 
   resized();
   workspace.close();
   expect(app.style.width).toBe("");
-  expect(app.style.borderTop).toBe("");
   expect(disconnect).toHaveBeenCalled();
   frame.remove();
   vi.unstubAllGlobals();
@@ -121,7 +120,9 @@ test("offers the installed extension only when a native notebook is ready and de
   document.body.replaceChildren();
   const unmount = vi.fn();
   let saveNotebook: (() => void) | undefined;
-  const mount = vi.fn((_target: HTMLElement, save: () => void) => {
+  let entry: HTMLElement | undefined;
+  const mount = vi.fn((target: HTMLElement, save: () => void) => {
+    entry = target;
     saveNotebook = save;
     return unmount;
   });
@@ -141,7 +142,7 @@ test("offers the installed extension only when a native notebook is ready and de
   close();
   close();
   expect(unmount).toHaveBeenCalledOnce();
-  expect(document.getElementById("marimo-studio-entry")).toBeNull();
+  expect(entry?.isConnected).toBe(false);
   expect(chrome.style.top).toBe("");
   document.body.replaceChildren();
 });

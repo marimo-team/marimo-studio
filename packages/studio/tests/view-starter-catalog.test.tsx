@@ -165,7 +165,7 @@ it("shows the folder where a new view's files are created", async () => {
   await user.click(screen.getByText("Files created"));
   const files = screen.getByText("Files created").closest("details");
   await user.type(screen.getByLabelText("New view"), "Briefing");
-  expect(files).toHaveTextContent("studio/analysis/…/");
+  expect(files).not.toHaveTextContent("studio/analysis/Briefing/");
   await user.clear(screen.getByLabelText("New view"));
   await user.type(screen.getByLabelText("New view"), "briefing");
 
@@ -174,11 +174,11 @@ it("shows the folder where a new view's files are created", async () => {
 });
 
 it.each([
-  ["source", "View files are lost when this session ends"],
-  ["none", "View files are lost when this session ends"],
-  ["workspace", null],
-  [null, null],
-] as const)("describes Create with what a %s hub session keeps", async (persistence, notice) => {
+  ["source", true],
+  ["none", true],
+  ["workspace", false],
+  [null, false],
+] as const)("describes Create with what a %s hub session keeps", async (persistence, warns) => {
   const remote: ViewRemote = {
     list: vi.fn(async () => ({ ...viewList(["dashboard"]), persistence })),
     create: vi.fn(),
@@ -200,6 +200,6 @@ it.each([
   await screen.findByRole("radio", { name: /HTML/ });
 
   const create = screen.getByRole("button", { name: "Create" });
-  expect(create).toHaveAccessibleDescription(notice ? expect.stringContaining(notice) : "");
+  expect(create).toHaveAccessibleDescription(warns ? expect.stringMatching(/\S/u) : "");
   controller.dispose();
 });

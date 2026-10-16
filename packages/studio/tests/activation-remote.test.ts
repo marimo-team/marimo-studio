@@ -36,16 +36,14 @@ it("acknowledges an activation with its browser identity", async () => {
 
   expect(fetch).toHaveBeenCalledWith(
     expect.stringContaining("/_marimo-studio/activations/9/ack"),
-    expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({
-        schema: 2,
-        clientId: "browser-client-1234",
-        view: "report",
-        ...preview,
-      }),
-    }),
+    expect.objectContaining({ method: "POST" }),
   );
+  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
+    schema: 2,
+    clientId: "browser-client-1234",
+    view: "report",
+    ...preview,
+  });
 });
 
 it("binds an activation acknowledgement to its observed view owner", async () => {
@@ -76,17 +74,16 @@ it("binds an activation acknowledgement to its observed view owner", async () =>
 
   expect(fetch).toHaveBeenCalledWith(
     expect.stringContaining("/_marimo-studio/activations/10/ack"),
-    expect.objectContaining({
-      body: JSON.stringify({
-        schema: 2,
-        clientId: "browser-client-1234",
-        view: "report",
-        ...preview,
-        catalogGeneration: "a".repeat(64),
-        viewGeneration: "b".repeat(64),
-      }),
-    }),
+    expect.anything(),
   );
+  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
+    schema: 2,
+    clientId: "browser-client-1234",
+    view: "report",
+    ...preview,
+    catalogGeneration: "a".repeat(64),
+    viewGeneration: "b".repeat(64),
+  });
 });
 
 it("acknowledges a catalog-owned absent view name", async () => {
@@ -113,17 +110,16 @@ it("acknowledges a catalog-owned absent view name", async () => {
 
   expect(fetch).toHaveBeenCalledWith(
     expect.stringContaining("/_marimo-studio/activations/11/ack"),
-    expect.objectContaining({
-      body: JSON.stringify({
-        schema: 2,
-        clientId: "browser-client-1234",
-        view: "report",
-        ...preview,
-        catalogGeneration: "a".repeat(64),
-        viewGeneration: null,
-      }),
-    }),
+    expect.anything(),
   );
+  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
+    schema: 2,
+    clientId: "browser-client-1234",
+    view: "report",
+    ...preview,
+    catalogGeneration: "a".repeat(64),
+    viewGeneration: null,
+  });
 });
 
 it("retries when an activation acknowledgement body stalls", async () => {

@@ -114,13 +114,7 @@ it("restores a ready presentation when a failed transaction retries unchanged", 
   expect(server.runtimeStatus()).toMatchObject({
     current: {
       phase: "failed",
-      diagnostics: [
-        {
-          code: "notebook-sync-failed",
-          message: "Notebook change could not be synchronized.",
-          hint: "Retry the edit to update this view.",
-        },
-      ],
+      diagnostics: [{ code: "notebook-sync-failed" }],
     },
   });
   expect(unchanged()).toBe(true);

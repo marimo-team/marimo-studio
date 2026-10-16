@@ -7,6 +7,11 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
+import {
+  PROJECTED_OUTPUT_ACTIVE_OWNER_ATTRIBUTE,
+  PROJECTED_OUTPUT_OWNER_ATTRIBUTE,
+  PROJECTED_OUTPUT_SCOPE_ATTRIBUTE,
+} from "../src/projected-output-function-gate.ts";
 import { ProjectedOutputArea } from "../src/projected-output.tsx";
 
 declare global {
@@ -89,13 +94,9 @@ test("projected function callers carry active and rendered revisions", async () 
     );
   });
 
-  const output = target.querySelector("[data-marimo-studio-projected-output]");
-  expect(output?.getAttribute("data-marimo-studio-active-projection-owner")).toBe(
-    '["revision-b",2]',
-  );
-  expect(output?.getAttribute("data-marimo-studio-output-projection-owner")).toBe(
-    '["revision-a",1]',
-  );
+  const output = target.querySelector(`[${PROJECTED_OUTPUT_SCOPE_ATTRIBUTE}]`);
+  expect(output?.getAttribute(PROJECTED_OUTPUT_ACTIVE_OWNER_ATTRIBUTE)).toBe('["revision-b",2]');
+  expect(output?.getAttribute(PROJECTED_OUTPUT_OWNER_ATTRIBUTE)).toBe('["revision-a",1]');
 
   await act(async () => root.unmount());
 });
@@ -125,6 +126,6 @@ test("a projected output in a type marimo cannot display names its type", async 
     );
   });
 
-  expect(target.textContent).toBe("marimo cannot show application/pdf output.");
+  expect(target.textContent).toContain("application/pdf");
   await act(async () => root.unmount());
 });

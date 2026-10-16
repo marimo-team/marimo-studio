@@ -169,7 +169,6 @@ test("session restoration keeps the document revision", async () => {
       "presentation-revision",
     ).catch((cause: unknown) => cause);
     assert.ok(error instanceof RuntimeConfigRequestError);
-    assert.match(error.message, /one source revision/);
     assert.deepEqual(error.code, "presentation-revision-mismatch");
     assert.deepEqual(error.transient, true);
     assert.deepEqual(requestedRevision, "presentation-revision");

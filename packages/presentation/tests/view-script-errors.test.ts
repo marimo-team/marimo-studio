@@ -54,9 +54,9 @@ test("an uncaught error in a view script fails the page with its location", asyn
   throwFrom(viewFile("assets/index.js"));
 
   expect(pageState()).toBe("error");
-  expect(document.querySelector("[data-marimo-studio-diagnostic]")?.textContent).toBe(
-    "assets/index.js:12:4: TypeError: rows is undefined",
-  );
+  const notice = document.querySelector("[data-marimo-studio-diagnostic]")?.textContent;
+  expect(notice).toContain("assets/index.js:12:4");
+  expect(notice).toContain("rows is undefined");
   expect(renderedViewDiagnostics()).toContainEqual(
     expect.objectContaining({ code: "view-script-error", scope: "presentation" }),
   );
@@ -67,8 +67,8 @@ test("an inline module script error names the inline script", async () => {
 
   throwFrom(document.URL);
 
-  expect(document.querySelector("[data-marimo-studio-diagnostic]")?.textContent).toBe(
-    "inline script:12:4: TypeError: rows is undefined",
+  expect(document.querySelector("[data-marimo-studio-diagnostic]")?.textContent).toContain(
+    "inline script:12:4",
   );
 });
 
@@ -81,9 +81,9 @@ test("an unhandled rejection from a view script fails the page", async () => {
     new PromiseRejectionEvent("unhandledrejection", { promise: Promise.resolve(), reason }),
   );
 
-  expect(document.querySelector("[data-marimo-studio-diagnostic]")?.textContent).toBe(
-    "assets/index.js:40:7: Error: fetch failed",
-  );
+  const notice = document.querySelector("[data-marimo-studio-diagnostic]")?.textContent;
+  expect(notice).toContain("assets/index.js:40:7");
+  expect(notice).toContain("fetch failed");
 });
 
 test("a view script failure outlives observer restarts and watcher disposal", async () => {

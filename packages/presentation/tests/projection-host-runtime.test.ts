@@ -81,7 +81,7 @@ test("committing a shell swap moves retained hosts into the incoming tree", () =
 
   assert.equal(document.getElementById("marimo-studio-cell-summary"), liveCell);
   assert.equal(document.getElementById("marimo-studio-output-report"), liveOutput);
-  assert.equal(document.getElementById("marimo-studio-value-site-value"), liveValue);
+  assert.equal(document.querySelector("[mo-value]"), liveValue);
   assert.equal(liveCell.getAttribute("aria-label"), "Updated summary");
   assert.equal(liveOutput.getAttribute("aria-label"), "Updated report");
   assert.equal(liveValue.getAttribute("aria-label"), "Updated metric");

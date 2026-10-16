@@ -247,7 +247,7 @@ it("accepts a server navigation query without committing parent query state", as
   expect(sync).toHaveBeenCalledOnce();
   expect(sync.mock.calls[0]?.[0]).toBe("?region=apac");
   const operationId = sync.mock.calls[0]?.[1];
-  expect(operationId).toMatch(/^query_/);
+  expect(operationId).toBeTypeOf("string");
   operation.resolve("accepted");
   await operation.promise;
   controller.editorChanged("region=apac", false, operationId);

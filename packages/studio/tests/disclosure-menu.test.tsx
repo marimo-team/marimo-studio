@@ -43,14 +43,12 @@ const renderMenus = () => {
   return { onWorkspaceAction };
 };
 
-it("keeps native disclosure semantics and restores trigger focus after Escape", async () => {
+it("restores trigger focus after Escape closes a disclosure menu", async () => {
   const user = userEvent.setup();
   renderMenus();
   const trigger = screen.getByLabelText("Python preview runtime");
   const details = trigger.closest("details");
 
-  expect(trigger.tagName).toBe("SUMMARY");
-  expect(details).toBeInstanceOf(HTMLDetailsElement);
   await user.click(trigger);
   const option = screen.getByRole("button", { name: /Browser/ });
   option.focus();

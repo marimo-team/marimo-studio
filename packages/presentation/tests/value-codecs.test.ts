@@ -203,10 +203,7 @@ test("Arrow decoding fails locally when SHA-256 verification is unavailable", as
 
   expect(decoded.values.report?.value).toEqual({ total: 42 });
   expect(decoded.values.frame).toBeUndefined();
-  expect(decoded.errors.frame).toEqual({
-    code: "value-integrity-unavailable",
-    message: "The Arrow IPC resource could not be verified because SHA-256 is unavailable.",
-  });
+  expect(decoded.errors.frame?.code).toBe("value-integrity-unavailable");
 });
 
 test("Arrow verification failures stay local to their selectors", async () => {

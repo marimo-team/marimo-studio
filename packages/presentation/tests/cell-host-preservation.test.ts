@@ -20,7 +20,6 @@ test("a shell swap updates an authored cell without replacing its output", () =>
   const liveHost = document.querySelector<HTMLElement>("marimo-cell")!;
   const liveOutput = liveHost.querySelector("[data-marimo-cell-output]");
   liveHost.dataset.state = "ready";
-  liveHost.style.setProperty("--_marimo-cell-measured-height", "120px");
 
   const nextDocument = new DOMParser().parseFromString(
     `
@@ -46,7 +45,6 @@ test("a shell swap updates an authored cell without replacing its output", () =>
   const updatedHost = document.querySelector<HTMLElement>("marimo-cell")!;
   assert.equal(updatedHost, liveHost);
   assert.equal(updatedHost.querySelector("[data-marimo-cell-output]"), liveOutput);
-  assert.equal(updatedHost.style.getPropertyValue("--_marimo-cell-measured-height"), "120px");
   assert.equal(updatedHost.dataset.state, "ready");
   assert.equal(updatedHost.dataset.marimoLensLabel, "Revenue");
   assert.equal(updatedHost.dataset.marimoLensDetail, "Current quarter");

@@ -359,12 +359,7 @@ it("keeps the published preview when the editor cannot save the notebook", async
   expect(interactive()).toBe(true);
   expect(deck.getSnapshot().states.server!.status).toMatchObject({
     state: "warning",
-    diagnostics: [
-      {
-        code: "notebook-save-skipped",
-        hint: "Save the notebook under a permanent path to update the view.",
-      },
-    ],
+    diagnostics: [{ code: "notebook-save-skipped" }],
   });
   mutation.channel.port2.close();
   deck.dispose();

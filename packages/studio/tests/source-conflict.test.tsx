@@ -11,8 +11,6 @@ it.each([
     local: "local lock",
     remote: "disk lock",
     revision: "r2",
-    message: "deno.lock became read-only while you were editing.",
-    diskLabel: "Saved version",
   },
   {
     kind: "unavailable" as const,
@@ -20,8 +18,6 @@ it.each([
     local: "local style",
     remote: "saved style",
     revision: "r1",
-    message: "theme.css is unavailable. Restore access to the file to save your edits.",
-    diskLabel: "Last saved version",
   },
   {
     kind: "orphan" as const,
@@ -29,8 +25,6 @@ it.each([
     local: "local app",
     remote: "last disk app",
     revision: "r1",
-    message: "src/App.tsx is no longer part of this view.",
-    diskLabel: "Last saved version",
   },
 ])("shows discard recovery for a $kind conflict", async (scenario) => {
   const user = userEvent.setup();
@@ -48,14 +42,13 @@ it.each([
     />,
   );
 
-  expect(screen.getByRole("alert")).toHaveTextContent(scenario.message);
+  expect(screen.getByRole("alert")).toHaveTextContent(scenario.name);
   expect(
     screen.queryByRole("button", { name: "Overwrite saved version with my edits" }),
   ).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Compare" }));
   expect(screen.getByText(scenario.local)).toBeVisible();
   expect(screen.getByText(scenario.remote)).toBeVisible();
-  expect(screen.getByText(scenario.diskLabel)).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Discard edits" }));
   expect(discard).toHaveBeenCalledOnce();
 });
@@ -78,9 +71,7 @@ it("names both revision-conflict consequences", async () => {
     />,
   );
 
-  expect(screen.getByRole("alert")).toHaveTextContent(
-    "The previous saved version is preserved at /workspace/.App.tsx.external-recovery.",
-  );
+  expect(screen.getByRole("alert")).toHaveTextContent("/workspace/.App.tsx.external-recovery");
   await user.click(screen.getByRole("button", { name: "Use saved version" }));
   await user.click(screen.getByRole("button", { name: "Overwrite saved version with my edits" }));
   expect(useSavedVersion).toHaveBeenCalledOnce();

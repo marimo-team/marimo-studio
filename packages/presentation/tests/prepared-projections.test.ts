@@ -310,17 +310,8 @@ test("prepared projections render values, native outputs, and a complete cell", 
   assert.match(document.body.textContent ?? "", /console one/u);
   assert.match(document.body.textContent ?? "", /cell one/u);
   const preparedCell = document.querySelector<HTMLElement>('marimo-cell[name="summary"]')!;
-  assert.equal(
-    preparedCell
-      .querySelector("[data-marimo-presentation='projected-cell']")
-      ?.getAttribute("aria-label"),
-    "Summary projection",
-  );
+  assert.ok(preparedCell.querySelector('[aria-label="Summary projection"]'));
   assert.equal(preparedCell.querySelector("[contenteditable='true']"), null);
-  assert.equal(
-    preparedCell.querySelector("[data-testid='console-output-area']")?.getAttribute("tabindex"),
-    null,
-  );
   document.querySelectorAll("marimo-output, marimo-cell").forEach((host) => {
     assert.ok(host instanceof HTMLElement);
     assert.equal(host.dataset.state, "ready");

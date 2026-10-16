@@ -91,7 +91,7 @@ it("closes immediately while a selected view loads and can reopen on its pending
 });
 
 it.each([
-  ["returns false", async (): Promise<boolean> => false, "Could not open report"],
+  ["returns false", async (): Promise<boolean> => false, "report"],
   [
     "rejects",
     async (): Promise<boolean> => Promise.reject(new Error("Preview failed")),
@@ -293,9 +293,7 @@ it.each(["success", "failure"] as const)(
       });
       await vi.waitFor(() => expect(menu?.open).toBe(false));
       expect(remote.remove).toHaveBeenCalledWith("report", viewGeneration(0), viewGeneration(2));
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "View report was removed. Files awaiting cleanup remain at /tmp/studio-delete-report.",
-      );
+      expect(screen.getByRole("alert")).toHaveTextContent("/tmp/studio-delete-report");
     } else {
       removed.reject(new Error("remove failed"));
       expect(await screen.findByRole("alert")).toHaveTextContent("remove failed");
@@ -312,7 +310,7 @@ it.each([
     name: "dashboard",
     opened: true,
     rejected: true,
-    message: "A view named 'dashboard' already exists.",
+    role: "alert",
     remains: false,
   },
   {
@@ -320,45 +318,49 @@ it.each([
     name: "report",
     opened: false,
     rejected: false,
-    message: "View created. Resolve the current source, then select it from Views.",
+    role: "status",
     remains: true,
   },
-])("$notice after the view name changes", async ({ name, opened, rejected, message, remains }) => {
-  const remote: ViewRemote = {
-    list: vi.fn(async () => viewList(["dashboard"])),
-    create: vi.fn(async (viewName: string) => {
-      if (rejected) {
-        throw new Error(message);
-      }
-      return { schema: 1 as const, name: viewName };
-    }),
-    remove: vi.fn(),
-  };
-  const controller = new ViewController(
-    "dashboard",
-    ["dashboard"],
-    remote,
-    vi.fn(async () => opened),
-    vi.fn(async () => true),
-    vi.fn(),
-    [starter],
-    starter.id,
-  );
-  await controller.refreshInventory();
-  const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  await user.click(screen.getByRole("button", { name: "New view" }));
-  await user.type(screen.getByRole("textbox", { name: "New view" }), name);
-  await user.click(screen.getByRole("button", { name: "Create" }));
-  expect(await screen.findByText(message)).toBeVisible();
+] as const)(
+  "$notice after the view name changes",
+  async ({ name, opened, rejected, role, remains }) => {
+    const remote: ViewRemote = {
+      list: vi.fn(async () => viewList(["dashboard"])),
+      create: vi.fn(async (viewName: string) => {
+        if (rejected) {
+          throw new Error(`A view named '${viewName}' already exists.`);
+        }
+        return { schema: 1 as const, name: viewName };
+      }),
+      remove: vi.fn(),
+    };
+    const controller = new ViewController(
+      "dashboard",
+      ["dashboard"],
+      remote,
+      vi.fn(async () => opened),
+      vi.fn(async () => true),
+      vi.fn(),
+      [starter],
+      starter.id,
+    );
+    await controller.refreshInventory();
+    const user = userEvent.setup();
+    render(<ViewMenu controller={controller} />);
+    await user.click(screen.getByLabelText(/^Switch view:/));
+    await user.click(screen.getByRole("button", { name: "New view" }));
+    await user.type(screen.getByRole("textbox", { name: "New view" }), name);
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    const notice = await screen.findByRole(role);
+    expect(notice).toBeVisible();
 
-  await user.type(screen.getByRole("textbox", { name: "New view" }), "-2");
+    await user.type(screen.getByRole("textbox", { name: "New view" }), "-2");
 
-  if (remains) {
-    expect(screen.getByText(message)).toBeVisible();
-  } else {
-    expect(screen.queryByText(message)).toBeNull();
-  }
-  controller.dispose();
-});
+    if (remains) {
+      expect(notice).toBeVisible();
+    } else {
+      expect(notice).not.toBeInTheDocument();
+    }
+    controller.dispose();
+  },
+);

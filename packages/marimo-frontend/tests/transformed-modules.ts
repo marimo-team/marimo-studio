@@ -10,6 +10,26 @@ export const lineEndingVariants = (source: string) => [source, source.replaceAll
 export const importModule = async (source: string) =>
   import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 
+const bindingsKey = "__marimoStudioTransformedModuleBindings";
+
+// Data modules cannot resolve bare or virtual specifiers, so named imports
+// read their bindings from a test-owned global instead.
+export const importModuleWithBindings = async <Bindings extends object>(
+  source: string,
+  bindings: Bindings,
+) => {
+  Reflect.set(globalThis, bindingsKey, bindings);
+  onTestFinished(() => {
+    Reflect.deleteProperty(globalThis, bindingsKey);
+  });
+  return importModule(
+    source.replaceAll(
+      /import\s*\{([^}]*)\}\s*from\s*"[^"]+";/gu,
+      `const {$1} = globalThis.${bindingsKey};`,
+    ),
+  );
+};
+
 const compileTypeScript = async (source: string, loader = "ts") => {
   const transformed = await transformWithOxc(source, `fixture.${loader}`, {
     jsx: { pragma: "createElement", runtime: "classic" },

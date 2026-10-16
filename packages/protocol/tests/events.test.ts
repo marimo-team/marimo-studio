@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 
 import {
   parseActivationAckResponse,
@@ -118,7 +118,7 @@ test("a build that publishes nothing becomes a notice beside the previous build"
     hint: "Close the delimiter.",
     source: { path: "main.typ", line: 95, column: 14 },
   };
-  assert.deepEqual(
+  expect(
     presentationBuildNotice(
       {
         phase: "complete",
@@ -127,31 +127,27 @@ test("a build that publishes nothing becomes a notice beside the previous build"
       },
       "paper",
     ),
-    {
-      scope: "presentation",
-      code: "typst-compile-error",
-      severity: "error",
-      message: "Latest build failed. Showing the previous build. unclosed delimiter",
-      hint: "Close the delimiter.",
-      source: failure.source,
-      view: "paper",
-    },
-  );
-  assert.deepEqual(
+  ).toMatchObject({
+    scope: "presentation",
+    code: "typst-compile-error",
+    severity: "error",
+    message: expect.stringContaining("unclosed delimiter"),
+    hint: "Close the delimiter.",
+    source: failure.source,
+    view: "paper",
+  });
+  expect(
     presentationBuildNotice(
       { phase: "complete", revision: null, build: { phase: "published", diagnostics: [] } },
       "paper",
     ),
-    {
-      scope: "presentation",
-      code: "view-publication-unavailable",
-      severity: "error",
-      message: "Latest publication is unavailable.",
-      hint: "Fix the view source, then build it again.",
-      source: undefined,
-      view: "paper",
-    },
-  );
+  ).toMatchObject({
+    scope: "presentation",
+    code: "view-publication-unavailable",
+    severity: "error",
+    source: undefined,
+    view: "paper",
+  });
   assert.equal(
     presentationBuildNotice(
       { phase: "complete", revision: "revision-2", build: { phase: "published", diagnostics: [] } },

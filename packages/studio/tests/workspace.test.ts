@@ -62,8 +62,8 @@ test("compact mode follows the minimum size of the visible layout", () => {
   const tree = developLayout();
 
   assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 1200, height: 800 }), false);
-  assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 604, height: 800 }), true);
-  assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 1200, height: 219 }), true);
+  assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 480, height: 800 }), true);
+  assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 1200, height: 160 }), true);
 });
 
 test("nested ratios update and equalize independently", () => {

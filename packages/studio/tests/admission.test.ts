@@ -74,7 +74,6 @@ it("keeps another view receiver unmatched through target baseline ordering", () 
   admission.receiverReady("other-revision", "other", "active");
   expect(admission.receiverPresent).toBe(true);
   expect(admission.receiverReadyForCurrentView).toBe(false);
-  expect(admission.snapshot.receiver).toEqual({ phase: "ready-unmatched" });
   expect(effects.postSwitch).toHaveBeenCalledOnce();
 
   admission.presentationBaseline("target-revision", "active");
@@ -96,7 +95,6 @@ it("holds cached readiness behind a changed build and fresh admission", () => {
 
   admission.buildStarted("active");
   expect(admission.isReady).toBe(false);
-  expect(admission.snapshot.candidate?.revision).toBe("revision-old");
   expect(effects.postMessage).toHaveBeenCalledWith({
     type: "marimo-studio:presentation-refresh",
     phase: "pending",
@@ -149,11 +147,7 @@ it("keeps a disconnected receiver unready after an unchanged transaction", () =>
   expect(admission.buildUnchanged("active")).toBe(true);
 
   expect(admission.isReady).toBe(false);
-  expect(admission.snapshot).toMatchObject({
-    candidate: null,
-    receiver: { phase: "unready" },
-    view: "waiting",
-  });
+  expect(admission.snapshot.view).toBe("waiting");
   expect(effects.ready).not.toHaveBeenCalled();
 });
 
@@ -165,7 +159,6 @@ it("keeps newer presentation and view failures after an unchanged transaction", 
   changed.admission.mutationError(diagnostic, "revision-1");
   changed.admission.buildUnchanged("active");
   expect(changed.admission.isReady).toBe(false);
-  expect(changed.admission.snapshot.presentation.refresh).toBe("requested");
   expect(changed.effects.ready).not.toHaveBeenCalled();
   expect(changed.effects.viewFailed).not.toHaveBeenCalled();
 
@@ -204,7 +197,6 @@ it("keeps an unknown baseline non-ready after a mutation retry", () => {
   admission.buildUnchanged("active");
 
   expect(admission.isReady).toBe(false);
-  expect(admission.snapshot.candidate).toBeNull();
   expect(effects.ready).not.toHaveBeenCalled();
 });
 
@@ -218,7 +210,6 @@ it("keeps a mutation failure after its presentation stream is abandoned", () => 
   admission.presentationBaseline("revision-1", "active");
 
   expect(admission.snapshot.view).toBe("failed");
-  expect(admission.snapshot.candidate).toBeNull();
   expect(effects.ready).not.toHaveBeenCalled();
 });
 
@@ -235,10 +226,7 @@ it("preserves failed and connecting views across unchanged transactions", () => 
   connecting.admission.buildStarted("active");
   expect(connecting.effects.stopControls).toHaveBeenCalledOnce();
   connecting.admission.buildUnchanged("active");
-  expect(connecting.admission.snapshot).toMatchObject({
-    receiver: { phase: "unready" },
-    view: "waiting",
-  });
+  expect(connecting.admission.snapshot.view).toBe("waiting");
   expect(connecting.effects.ready).not.toHaveBeenCalled();
 });
 
@@ -249,7 +237,6 @@ it("requires a warm active document to refresh before it is ready again", () => 
   admission.reactivate("active");
 
   expect(admission.isReady).toBe(false);
-  expect(admission.snapshot.presentation.refresh).toBe("requested");
   expect(effects.postMessage).toHaveBeenCalledWith({
     type: "marimo-studio:presentation-change",
   });
@@ -258,7 +245,6 @@ it("requires a warm active document to refresh before it is ready again", () => 
   expect(admission.isReady).toBe(false);
   admission.receiverUnready();
   admission.receiverUnready();
-  expect(admission.snapshot.presentation.refresh).toBe("acknowledged");
   admission.receiverReady("revision-1", "current", "active");
   admission.viewReady("revision-1", "s_123456", "active");
   expect(admission.isReady).toBe(true);

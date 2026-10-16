@@ -8,7 +8,12 @@ import {
   silenceMissingPresentationCellScroll,
   stabilizeDataTableHeaderRefs,
 } from "../src/vite.ts";
-import { importModule, importTypeScriptModule, lineEndingVariants } from "./transformed-modules.ts";
+import {
+  importModule,
+  importModuleWithBindings,
+  importTypeScriptModule,
+  lineEndingVariants,
+} from "./transformed-modules.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -111,8 +116,9 @@ export function warnAboutOtherFailure() {
   expect(module.readWarnings()).toEqual([["another focus failure"]]);
 });
 
-test("browser connections retain the Studio startup window", () => {
-  const source = `new ReconnectingWebSocket(urlProvider, undefined, {
+test("browser connections retain the Studio startup window", async () => {
+  const source = `export const connect = (ReconnectingWebSocket, urlProvider, MAX_RETRIES) =>
+  new ReconnectingWebSocket(urlProvider, undefined, {
       maxRetries: MAX_RETRIES,
       startClosed: true,
       connectionTimeout: 10_000,
@@ -120,16 +126,27 @@ test("browser connections retain the Studio startup window", () => {
 
   const transformed = lineEndingVariants(source).map(extendWebSocketConnectionTimeout);
   expect(transformed[0]).toBe(transformed[1]);
-  expect(transformed[0]).toContain("connectionTimeout: 30_000");
-  expect(transformed[0]).not.toContain("connectionTimeout: 10_000");
-  expect(() => extendWebSocketConnectionTimeout("connectionTimeout: 4_000,")).toThrow(
-    "Marimo WebSocket connection timeout no longer matches the Studio adapter",
+  const module = await importModule(transformed[0]);
+  const socket = module.connect(
+    class {
+      constructor(
+        _url: string,
+        _protocols: undefined,
+        readonly options: { connectionTimeout: number },
+      ) {}
+    },
+    "ws://example.test",
+    3,
   );
+  expect(socket.options).toMatchObject({ maxRetries: 3, startClosed: true });
+  expect(socket.options.connectionTimeout).toBeGreaterThan(10_000);
+  expect(() => extendWebSocketConnectionTimeout("connectionTimeout: 4_000,")).toThrow();
 });
 
-test("projected plugin function calls carry their rendering host", () => {
+test("projected plugin function calls carry their rendering host", async () => {
   const source = `import { Provider } from "jotai";
-async function invoke(hostElement, parsedArgs, key, namespace) {
+const FUNCTIONS_REGISTRY = { request: async (request) => request };
+export async function invoke(hostElement, parsedArgs, key, namespace) {
           const response = await FUNCTIONS_REGISTRY.request({
             args: parsedArgs,
             functionName: key,
@@ -140,21 +157,30 @@ async function invoke(hostElement, parsedArgs, key, namespace) {
 
   const transformed = lineEndingVariants(source).map(scopeProjectedOutputFunctionRequests);
   expect(transformed[0]).toBe(transformed[1]);
-  expect(transformed[0]).toContain(
-    'import { runProjectedOutputFunctionRequest } from "marimo-studio:projected-output-function-gate";',
+  const runProjectedOutputFunctionRequest = vi.fn(
+    <Result>(_host: { readonly id: string }, send: () => Promise<Result>) => send(),
   );
-  expect(transformed[0]).toContain("runProjectedOutputFunctionRequest(\n            hostElement,");
-  expect(() => scopeProjectedOutputFunctionRequests('import { Provider } from "jotai";')).toThrow(
-    "Marimo function requests no longer match the projected output adapter",
-  );
-  expect(() => scopeProjectedOutputFunctionRequests(`${source}\n${source}`)).toThrow(
-    "Marimo function requests no longer match the projected output adapter",
-  );
+  const module = await importModuleWithBindings(transformed[0], {
+    Provider: {},
+    runProjectedOutputFunctionRequest,
+  });
+  const host = { id: "projected-table" };
+  await expect(module.invoke(host, { value: 1 }, "lookup", "table")).resolves.toEqual({
+    args: { value: 1 },
+    functionName: "lookup",
+    namespace: "table",
+  });
+  expect(runProjectedOutputFunctionRequest).toHaveBeenCalledOnce();
+  expect(runProjectedOutputFunctionRequest).toHaveBeenCalledWith(host, expect.any(Function));
+  expect(() => scopeProjectedOutputFunctionRequests('import { Provider } from "jotai";')).toThrow();
+  expect(() => scopeProjectedOutputFunctionRequests(`${source}\n${source}`)).toThrow();
 });
 
-test("projected function cancellations bypass request error reporting", () => {
+test("projected function cancellations bypass request error reporting", async () => {
   const source = `import { useAtomValue } from "jotai";
-async function request(keyString, handler, args) {
+export const reported = [];
+const report = (error) => reported.push(error);
+export async function request(keyString, handler, args) {
       try {
         return await handler(...args);
       } catch (error) {
@@ -165,12 +191,27 @@ async function request(keyString, handler, args) {
 
   const transformed = lineEndingVariants(source).map(classifyProjectedOutputFunctionErrors);
   expect(transformed[0]).toBe(transformed[1]);
-  expect(transformed[0]).toContain("classifyProjectedOutputFunctionRequest(operation)");
-  expect(transformed[0]).toContain("if (isProjectedOutputFunctionAbort(error))");
+  const abort = new Error("cancelled");
+  const classifyProjectedOutputFunctionRequest = vi.fn(
+    <Result>(operation: Promise<Result>) => operation,
+  );
+  const module = await importModuleWithBindings(transformed[0], {
+    useAtomValue: () => undefined,
+    classifyProjectedOutputFunctionRequest,
+    isProjectedOutputFunctionAbort: (error: Error) => error === abort,
+  });
+
+  await expect(module.request("sendFunctionRequest", async () => "sent", [])).resolves.toBe("sent");
+  await expect(module.request("sendStdin", async () => "stdin", [])).resolves.toBe("stdin");
+  expect(classifyProjectedOutputFunctionRequest).toHaveBeenCalledOnce();
+  await expect(module.request("sendFunctionRequest", () => Promise.reject(abort), [])).rejects.toBe(
+    abort,
+  );
+  const failure = new Error("kernel failure");
+  await module.request("sendFunctionRequest", () => Promise.reject(failure), []);
+  expect(module.reported).toEqual([failure]);
   expect(() =>
     classifyProjectedOutputFunctionErrors('import { useAtomValue } from "jotai";'),
-  ).toThrow("Marimo request errors no longer match the projected output adapter");
-  expect(() => classifyProjectedOutputFunctionErrors(`${source}\n${source}`)).toThrow(
-    "Marimo request errors no longer match the projected output adapter",
-  );
+  ).toThrow();
+  expect(() => classifyProjectedOutputFunctionErrors(`${source}\n${source}`)).toThrow();
 });
