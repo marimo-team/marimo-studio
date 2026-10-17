@@ -155,7 +155,7 @@ def _label(label: str | None) -> str | None:
     text = None if label is None else label.strip()
     if not text:
         return None
-    encoded = text.encode("utf-16-le")
+    encoded = text.encode("utf-16-le", "surrogatepass")
     if len(encoded) <= 2 * MAX_REGION_LABEL:
         return text
     return encoded[: 2 * (MAX_REGION_LABEL - 1)].decode("utf-16-le", "ignore") + "…"
@@ -891,9 +891,10 @@ class ProviderConformance:
     def _region(self, value: object) -> RenderRegion:
         """Check the shape and size of one region.
 
-        Studio checks what a region means on admission. A long label is cut
-        short and only the first reads are kept, so a provider's regions stay
-        within the size of one response.
+        A region of another type fails conformance, as any malformed record
+        does. Studio checks what a well-formed region means on admission. A
+        long label is cut short and only the first reads are kept, so one
+        region stays small.
         """
         if not isinstance(value, RenderRegion) or not isinstance(value.rect, Rect):
             raise conformance_error(
@@ -936,7 +937,8 @@ class ProviderConformance:
         reads = [
             read.strip()
             for read in value.reads
-            if read.strip() and len(read.encode("utf-8")) <= MAX_REGION_READ
+            if read.strip()
+            and len(read.encode("utf-8", "surrogatepass")) <= MAX_REGION_READ
         ]
         return replace(
             value,

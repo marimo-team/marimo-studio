@@ -106,6 +106,7 @@
 // such as "rows[0]". marimo_region() places body in a box, which keeps it in
 // its paragraph and on one page.
 #let marimo_region(..args, label: none) = {
+  assert(args.pos().len() >= 2, message: "marimo_region() takes one or more selectors, then its body")
   let (..reads, body) = args.pos()
   _located(reads, body, label: label)
 }

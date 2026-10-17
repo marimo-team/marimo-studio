@@ -616,6 +616,8 @@ export class RenderHost {
       record.absent.length > 0 ? `Showing the default for ${record.absent.join(", ")}.` : "",
     );
     this.setState("ready");
+    // Listeners of the events below find the bundle's regions in place.
+    this.showRegions();
     if (previous?.bundle !== record.bundle) {
       this.host.dispatchEvent(
         new CustomEvent(previous ? "marimo-output-updated" : "marimo-output-ready", {
@@ -625,7 +627,6 @@ export class RenderHost {
         }),
       );
     }
-    this.showRegions();
   }
 
   /** Report `diagnostics`, keeping the last bundle on screen. */

@@ -316,8 +316,9 @@ def test_provider_check_runs_inside_a_running_event_loop(
     assert PurePosixPath("index.html") in view.published
 
 
-# Render the card with regions: three Studio can show, one of them without the
-# read the render does not read, and two Studio cannot.
+# Render the card with regions: two Studio can show, one with reads the render
+# does not read, one with a long label that holds a lone surrogate, and three
+# Studio cannot.
 LOCATED = """
 from marimo_studio.view_providers import Rect, RenderRegion
 
@@ -332,14 +333,19 @@ def located(self, request):
             RenderRegion(
                 card,
                 Rect(0.1, 0.2, 0.5, 0.25),
-                reads=("metric",),
+                reads=("metric", "missing", "\\udc00"),
                 source=at,
                 label="Metric",
             ),
-            RenderRegion(card, Rect(0, 0, 1, 1.0004), reads=("report.rows[0]",)),
+            RenderRegion(
+                card,
+                Rect(0, 0, 1, 1.0004),
+                reads=("report.rows[0]",),
+                label="Row \\ud800" + "r" * 300,
+            ),
             RenderRegion(card, Rect(0.5, 0.5, 0.6, 0.1), reads=("metric",)),
             RenderRegion(card, Rect(0, 0, 1, 1), reads=("missing",)),
-            RenderRegion(card, Rect(0, 0, 1, 1), page=1),
+            RenderRegion(card, Rect(0, 0, 1, 1), reads=("metric",), page=1),
         ),
     )
 
@@ -385,23 +391,13 @@ def test_render_regions_keep_what_studio_can_show(
             "start": None,
             "end": None,
             "source": {"path": "page.md", "line": 2, "column": 1},
-            "label": None,
-        },
-        {
-            "file": "card.svg",
-            "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
-            "reads": [],
-            "page": None,
-            "start": None,
-            "end": None,
-            "source": None,
-            "label": None,
+            "label": "Row " + "r" * 250 + "…",
         },
     ]
     (warning,) = rendered.warnings
-    assert "left out 2 regions" in warning
+    assert "left out 3 regions" in warning
     assert "inside the surface" in warning
-    assert "left out 1 read that the render does not read" in warning
+    assert "left out 2 reads that the render does not read" in warning
 
 
 # Render the card with one region per pixel of a 70 by 60 grid.

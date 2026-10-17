@@ -512,7 +512,9 @@ can point at a chart inside a PDF, or at a shape in one frame of a video, and
 follow it to the cells that computed it:
 
 ```python
-from marimo_studio.view_providers import Rect, RenderRegion
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import Rect, RenderFile, RenderRegion, RenderResult
 
 RenderResult(
     files=(RenderFile(PurePosixPath("report.pdf"), "application/pdf"),),
@@ -540,7 +542,7 @@ top left corner. The other fields are keyword arguments:
 
 | Field             | Meaning                                                                                                 | Default                                               |
 | ----------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `reads`           | Targets the part shows, as declared in `inspect()`, optionally narrowed by `.field` and `[index]` steps | `()`                                                  |
+| `reads`           | Targets the part shows, as declared in `inspect()`, optionally narrowed by `.field` and `[index]` steps | Required, at least one                                |
 | `page`            | The PDF page, counted from 1. Required for a PDF                                                        | `None`                                                |
 | `start` and `end` | The seconds of a video during which the part shows                                                      | The whole video                                       |
 | `source`          | Where the render's source places the part, shown as the selection's rendering source                    | The source line where the render reads its first read |
@@ -561,9 +563,12 @@ RenderRegion(
 ```
 
 Regions are evidence beside the files, and the files publish whatever the
-regions hold. Studio leaves out a region whose file the render did not publish
-or whose rectangle leaves its surface, and a read that names a result the
-render does not read, with one `render-regions-invalid` warning. A render
+regions hold. Studio leaves out a region whose file the render did not publish,
+whose rectangle leaves its surface, or that names no result the render reads.
+It removes each read that names a result the render does not read and keeps
+the region. One `render-regions-invalid` warning reports both. A region that
+is not a `RenderRegion` with a `Rect` fails provider conformance, as any
+malformed record does. A render
 keeps its first 4,096 regions and warns with `render-regions-limited` about
 the rest. Each region keeps its first 64 reads, and Studio shortens a label to
 256 characters. The built-in Typst and LaTeX providers return a region for
@@ -895,7 +900,7 @@ RenderRegion(
     file: PurePosixPath,
     rect: Rect,
     *,
-    reads: tuple[str, ...] = (),
+    reads: tuple[str, ...],
     page: int | None = None,
     start: float | None = None,
     end: float | None = None,

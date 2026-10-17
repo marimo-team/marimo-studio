@@ -67,7 +67,7 @@ const STYLE = `
   gap: ${PAGE_GUTTER}px; padding: ${PAGE_GUTTER}px; background: ${DESK}; }
 /* Pages lie on one desk with the toolbar and problems above them, which line
    up with the page column. */
-:is(.toolbar, .problems):has(~ slot .pages) { background: ${DESK};
+:is(.toolbar, .problems):has(~ .content .pages) { background: ${DESK};
   padding-inline: max(${PAGE_GUTTER}px, calc((100% - ${PAGE_WIDTH}px) / 2)); }
 .page { position: relative; width: 100%; background: white;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.16), 0 0 0 1px rgb(0 0 0 / 0.05); }

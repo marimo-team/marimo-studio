@@ -74,11 +74,24 @@ const sourceElement = (producer: ReadProducer, slot?: string): HTMLElement => {
 
 const pixels = (value: string) => Number.parseFloat(value) || 0;
 
+/** Return the offset `object-position` gives one axis of a picture with `free` spare pixels. */
+const position = (value: string | undefined, free: number): number => {
+  if (value?.endsWith("%")) {
+    return (free * Number.parseFloat(value)) / 100;
+  }
+  if (value?.endsWith("px")) {
+    return Number.parseFloat(value);
+  }
+  return free / 2;
+};
+
 /**
- * Return the viewport box of the picture an element shows: its content box,
- * narrowed by `object-fit` to the image or video frame inside it.
+ * Return the viewport boxes of an element's content and of the picture it
+ * shows inside, which `object-fit` and `object-position` size and place. A
+ * picture that `cover` or `none` makes larger than the content shows only
+ * where the two overlap.
  */
-const pictureBox = (element: HTMLElement): DOMRect => {
+const pictureBox = (element: HTMLElement) => {
   const rect = element.getBoundingClientRect();
   const style = getComputedStyle(element);
   const left = rect.left + pixels(style.borderLeftWidth) + pixels(style.paddingLeft);
@@ -95,6 +108,7 @@ const pictureBox = (element: HTMLElement): DOMRect => {
     pixels(style.borderBottomWidth) -
     pixels(style.paddingTop) -
     pixels(style.paddingBottom);
+  const frame = new DOMRect(left, top, width, height);
   let natural: [number, number] | undefined;
   if (element instanceof HTMLVideoElement && element.videoWidth > 0) {
     natural = [element.videoWidth, element.videoHeight];
@@ -102,7 +116,7 @@ const pictureBox = (element: HTMLElement): DOMRect => {
     natural = [element.naturalWidth, element.naturalHeight];
   }
   if (!natural || style.objectFit === "fill" || width <= 0 || height <= 0) {
-    return new DOMRect(left, top, width, height);
+    return { frame, picture: frame };
   }
   const [naturalWidth, naturalHeight] = natural;
   const fit = style.objectFit === "cover" ? Math.max : Math.min;
@@ -113,12 +127,16 @@ const pictureBox = (element: HTMLElement): DOMRect => {
     scale = Math.min(scale, 1);
   }
   const shown = [naturalWidth * scale, naturalHeight * scale] as const;
-  return new DOMRect(
-    left + (width - shown[0]) / 2,
-    top + (height - shown[1]) / 2,
-    shown[0],
-    shown[1],
-  );
+  const [x, y] = style.objectPosition.split(" ");
+  return {
+    frame,
+    picture: new DOMRect(
+      left + position(x, width - shown[0]),
+      top + position(y, height - shown[1]),
+      shown[0],
+      shown[1],
+    ),
+  };
 };
 
 const absolute = (url: string) => new URL(url, document.baseURI).href;
@@ -277,12 +295,19 @@ export class RenderRegions {
     this.frame = 0;
     const origin = this.anchor.getBoundingClientRect();
     for (const layer of this.layers) {
-      const picture = pictureBox(layer.surface.element);
+      const { frame, picture } = pictureBox(layer.surface.element);
+      const hidden = [
+        frame.top - picture.top,
+        picture.right - frame.right,
+        picture.bottom - frame.bottom,
+        frame.left - picture.left,
+      ].map((value) => `${Math.max(0, value)}px`);
       Object.assign(layer.element.style, {
         left: `${picture.left - origin.left}px`,
         top: `${picture.top - origin.top}px`,
         width: `${picture.width}px`,
         height: `${picture.height}px`,
+        clipPath: `inset(${hidden.join(" ")})`,
       });
       this.showTime(layer);
     }

@@ -1440,7 +1440,8 @@ def test_render_locates_figures_cells_and_regions_on_their_pages(
         _document(
             "\\noindent\\marimographics[width=8cm]{chart}\n"
             "\\newpage\n"
-            "Rooms \\marimoregion[Rooms]{summary.rooms}{\\marimovalue{summary.rooms}} "
+            'Rooms \\marimoregion[Rooms | in use]{summary.rooms, rows["a,b"]}'
+            "{\\marimovalue{summary.rooms}} "
             "and \\marimocell[width=4cm]{plot}"
         ),
     )
@@ -1450,6 +1451,7 @@ def test_render_locates_figures_cells_and_regions_on_their_pages(
     )
 
     assert result.diagnostics == ()
+    assert len(result.regions) == 3
     regions = {region.reads[0]: region for region in result.regions}
     figure, rooms, plot = regions["chart"], regions["summary.rooms"], regions["plot"]
     assert (figure.file, figure.page, figure.reads) == (
@@ -1460,7 +1462,12 @@ def test_render_locates_figures_cells_and_regions_on_their_pages(
     # A letter page is 8.5 by 11 inches, and the figure is 8cm by 4cm.
     assert figure.rect.width == pytest.approx(8 / 2.54 / 8.5, abs=1e-3)
     assert figure.rect.height == pytest.approx(4 / 2.54 / 11, abs=1e-3)
-    assert (rooms.page, rooms.reads) == (2, ("summary.rooms",))
+    # Selectors split at commas outside quoted keys, and the label keeps its |.
+    assert (rooms.page, rooms.reads, rooms.label) == (
+        2,
+        ("summary.rooms", 'rows["a,b"]'),
+        "Rooms | in use",
+    )
     assert (plot.page, plot.reads) == (2, ("plot",))
     assert plot.rect.width == pytest.approx(4 / 2.54 / 8.5, abs=1e-3)
     assert rooms.rect.y == pytest.approx(

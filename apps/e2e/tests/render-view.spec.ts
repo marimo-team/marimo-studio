@@ -139,11 +139,15 @@ test("traces a figure inside a Typst PDF to the cell that computed it", async ({
     "data-marimo-lens-cell-id",
     (await source.getAttribute("data-marimo-lens-cell-id")) ?? "",
   );
-  // The figure is 10cm wide on a 12cm page.
-  const page1 = await viewer.locator(".page").first().boundingBox();
-  const box = await region.boundingBox();
-  expect(box!.width / page1!.width).toBeCloseTo(10 / 12, 2);
-  expect(box!.x).toBeGreaterThan(page1!.x);
+  // The figure is 10cm wide on a 12cm page. Layers follow their page once it
+  // has laid out, so the measurement waits for both.
+  const measure = async () => {
+    const page1 = await viewer.locator(".page").first().boundingBox();
+    const box = await region.boundingBox();
+    return page1 && box ? { width: box.width / page1.width, inset: box.x - page1.x } : null;
+  };
+  await expect.poll(async () => (await measure())?.width ?? 0).toBeCloseTo(10 / 12, 2);
+  expect((await measure())?.inset).toBeGreaterThan(0);
 });
 
 test("embeds a notebook figure in a Typst document in the browser runtime", async ({

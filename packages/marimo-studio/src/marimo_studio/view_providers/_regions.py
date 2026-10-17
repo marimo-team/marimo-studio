@@ -2,9 +2,10 @@
 
 A region ties a rectangle on one surface of a rendered file to the notebook
 results it shows. Studio keeps each region whose file, surface, and rectangle
-it can check, with the reads the render reads, and reports the rest as one
-warning, so a render with stray regions still publishes its files. A region
-without a source takes the source of the first read it shows.
+it can check and that names a result the render reads, keeps only those
+reads, and reports the rest as one warning, so a render with stray regions
+still publishes its files. A region without a source takes the source of the
+first read it shows.
 """
 
 from __future__ import annotations
@@ -150,6 +151,8 @@ def _admit(
         return rect, 0
     known = [(read, _read(read, reads)) for read in dict.fromkeys(region.reads)]
     shown = [(read, item) for read, item in known if item is not None]
+    if not shown:
+        return "it names no result the render reads", 0
     source = region.source or next((item.source for _, item in shown), None)
     return (
         replace(

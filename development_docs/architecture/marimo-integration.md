@@ -532,7 +532,7 @@ projection's authored source location. Authored descriptions take precedence and
 remain owned by the author through projection updates and teardown.
 
 Render hosts publish their bundle's regions through the same contract.
-`RenderRegions` appends one layer per surface to the host's light DOM, because
+`RenderRegions` appends one layer per surface with regions to the host's light DOM, because
 Lens accepts targets in the document tree only, and the shadow root shows the
 layers above the presentation through the `marimo-regions` slot. A layer
 follows the picture box of its surface: a stock PDF page, image, or video, or
@@ -542,7 +542,8 @@ hidden children carry `data-marimo-lens-cell-id` and the region's narrowed
 `data-marimo-lens-selector`, resolved through the render's read sites with the
 ordinary projection resolution. The host names its own sources with
 `data-marimo-lens-inputs`, which Lens takes as the complete input set, so the
-whole file traces to every read without adding up the regions' sources, and
+whole file traces to the producers of its reads, up to Lens's 64 sources,
+without adding up the regions' sources, and
 sets `data-marimo-lens-context` so a region's snapshot crops the host. Region
 boxes keep `pointer-events: none`, and Lens enables them while it is armed.
 

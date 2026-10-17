@@ -3,7 +3,7 @@
 Studio renders a private copy of a view's template with the notebook results
 one render reads. The provider lists the files it wrote, and Studio copies
 exactly those into a bundle it owns. A bundle's ID is the digest of its files,
-media types, and roles, so identical output shares one bundle.
+media types, roles, and regions, so identical output shares one bundle.
 """
 
 from __future__ import annotations

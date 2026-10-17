@@ -265,8 +265,9 @@ kind, the rectangle, the time span, and each read, which must name a read
 target or narrow a value or output target with selector steps. A region
 without a source takes the source of its first read's read site, so providers
 locate parts on the page and the read sites own source lines. Studio drops a
-region that fails and reports one `render-regions-invalid` warning, so lineage
-never blocks publication. Admitted regions travel in the bundle record to live
+region that fails a check or names no read target, removes the unmatched
+reads of a region it keeps, and reports both in one `render-regions-invalid`
+warning, so lineage never blocks publication. Admitted regions travel in the bundle record to live
 hosts and static export indexes alike.
 
 `_server/presentation/renders.py::RenderStore` owns live render workers and

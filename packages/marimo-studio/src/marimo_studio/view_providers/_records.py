@@ -507,18 +507,19 @@ class RenderRegion:
     region without ``start`` begins with the first frame, and one without
     ``end`` lasts until the video ends.
 
-    ``reads`` names the notebook results the part shows. Each is a target the
-    render reads, optionally narrowed by ``.field`` and ``[index]`` steps, such
-    as ``"joint[2][3]"`` for one cell of the ``joint`` table. ``source`` is the
-    project line that placed the part. Without it, Studio uses the line where
-    the render reads its first result. ``label`` names the part for people
-    and agents, and defaults to its first read.
+    ``reads`` names the notebook results the part shows, at least one. Each is
+    a target the render reads, optionally narrowed by ``.field`` and
+    ``[index]`` steps, such as ``"joint[2][3]"`` for one cell of the ``joint``
+    table. ``source`` is the project line that placed the part. Without it,
+    Studio uses the line where the render reads its first result. ``label``
+    names the part for people and agents. Lens shows the first read when it
+    is unset.
     """
 
     file: PurePosixPath
     rect: Rect
     _: KW_ONLY
-    reads: tuple[str, ...] = ()
+    reads: tuple[str, ...]
     page: int | None = None
     start: float | None = None
     end: float | None = None

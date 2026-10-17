@@ -233,7 +233,7 @@ assert tuple(field.name for field in fields(providers.BuildResult)) == (
     "document", "diagnostics", "output_sizes",
 )
 assert tuple(field.name for field in fields(providers.RenderResult)) == (
-    "files", "main", "preview", "diagnostics",
+    "files", "main", "preview", "diagnostics", "regions",
 )
 assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",
